@@ -1,20 +1,27 @@
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 const breadcrumbs = {
-  '/': 'Dashboard',
-  '/models': 'Models',
-  '/fitting': 'Size & Fitting',
-  '/fittings': 'Fittings',
-  '/tasques': 'Tasques',
-  '/temps': 'Temps',
-  '/fitxers': 'Fitxers',
-  '/poms': 'POMs & Grading',
-  '/ia': 'IA',
-  '/configuracio': 'Configuració',
+  '/':              'Dashboard',
+  '/models':        'Models',
+  '/models/nou':    'Nou model',
+  '/fitting':       'Size & Fitting',
+  '/fittings':      'Fittings',
+  '/tasques':       'Tasques',
+  '/tasques/kanban':'Kanban',
+  '/temps':         'Temps',
+  '/fitxers':       'Fitxers',
+  '/poms':          'POMs',
+  '/poms/grading':  'Grading',
+  '/poms/sizes':    'Size Systems',
+  '/avisos':        'Avisos',
+  '/ia':            'IA',
+  '/configuracio':  'Configuració',
+  '/perfil':        'El meu perfil',
 }
 
 export default function Topbar() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const title = breadcrumbs[pathname] || 'Fhort Textile Tech'
 
   return (
@@ -37,43 +44,52 @@ export default function Topbar() {
         <strong style={{color: 'var(--charcoal)', fontWeight: 500}}>{title}</strong>
       </div>
       <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.8rem'}}>
-        <button style={{
-          width: 32, height: 32,
-          border: '0.5px solid #e4e4e2',
-          borderRadius: 8,
-          background: 'none',
-          cursor: 'pointer',
-          color: 'var(--gray)',
-          fontSize: 17,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
+        <button
+          onClick={() => navigate('/avisos')}
+          style={{
+            width: 32, height: 32,
+            border: '0.5px solid #e4e4e2',
+            borderRadius: 8,
+            background: 'none',
+            cursor: 'pointer',
+            color: 'var(--gray)',
+            fontSize: 17,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
           <i className="ti ti-bell" />
         </button>
-        <button style={{
-          width: 32, height: 32,
-          border: '0.5px solid #e4e4e2',
-          borderRadius: 8,
-          background: 'none',
-          cursor: 'pointer',
-          color: 'var(--gray)',
-          fontSize: 17,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <i className="ti ti-search" />
+        <button
+          onClick={() => navigate('/perfil')}
+          style={{
+            width: 32, height: 32,
+            border: '0.5px solid #e4e4e2',
+            borderRadius: 8,
+            background: 'none',
+            cursor: 'pointer',
+            color: 'var(--gray)',
+            fontSize: 17,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <i className="ti ti-user" />
         </button>
-        <button style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: 'var(--gold)',
-          color: 'white',
-          border: 'none',
-          borderRadius: 8,
-          padding: '0 0.9rem',
-          height: 32,
-          fontSize: 12,
-          fontWeight: 500,
-          cursor: 'pointer',
-          fontFamily: 'var(--font)',
-        }}>
+        <button
+          onClick={() => navigate('/models/nou')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'var(--gold)',
+            color: 'white',
+            border: 'none',
+            borderRadius: 8,
+            padding: '0 0.9rem',
+            height: 32,
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontFamily: 'var(--font)',
+          }}
+        >
           <i className="ti ti-plus" style={{fontSize: 15}} />
           Nou model
         </button>

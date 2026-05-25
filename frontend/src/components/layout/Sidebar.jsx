@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import useAuthStore from '../../store/auth'
+import { pomAlerts } from '../../api/endpoints'
 
 const Logo = () => (
   <svg viewBox="0 0 222.7 79.76" xmlns="http://www.w3.org/2000/svg" style={{width: 130, height: 'auto'}}>
@@ -23,25 +25,38 @@ const Logo = () => (
 
 const navItems = [
   { section: 'Principal', items: [
-    { to: '/', label: 'Dashboard', icon: 'ti-layout-dashboard' },
-    { to: '/models', label: 'Models', icon: 'ti-shirt' },
+    { to: '/',        label: 'Dashboard',     icon: 'ti-layout-dashboard' },
+    { to: '/models',  label: 'Models',        icon: 'ti-shirt' },
     { to: '/fitting', label: 'Size & Fitting', icon: 'ti-ruler-2' },
-    { to: '/fittings', label: 'Fittings', icon: 'ti-git-branch' },
+    { to: '/avisos',  label: 'Avisos',        icon: 'ti-alert-triangle', badgeKey: 'alerts' },
   ]},
   { section: 'Tècnic', items: [
-    { to: '/tasques', label: 'Tasques', icon: 'ti-checklist' },
-    { to: '/temps', label: 'Temps', icon: 'ti-clock' },
-    { to: '/fitxers', label: 'Fitxers', icon: 'ti-file-upload' },
+    { to: '/tasques',         label: 'Tasques',    icon: 'ti-checklist' },
+    { to: '/tasques/kanban',  label: 'Kanban',     icon: 'ti-layout-kanban' },
+    { to: '/temps',           label: 'Temps',      icon: 'ti-clock' },
+    { to: '/fitxers',         label: 'Fitxers',    icon: 'ti-file-upload' },
   ]},
   { section: 'Sistema', items: [
-    { to: '/poms', label: 'POMs & Grading', icon: 'ti-arrows-maximize' },
-    { to: '/ia', label: 'IA', icon: 'ti-sparkles' },
-    { to: '/configuracio', label: 'Configuració', icon: 'ti-settings' },
+    { to: '/poms',           label: 'POMs',          icon: 'ti-ruler-2' },
+    { to: '/poms/grading',   label: 'Grading',       icon: 'ti-arrows-maximize' },
+    { to: '/poms/sizes',     label: 'Size Systems',  icon: 'ti-resize' },
+    { to: '/ia',             label: 'IA',            icon: 'ti-sparkles' },
+    { to: '/configuracio',   label: 'Configuració',  icon: 'ti-settings' },
+    { to: '/perfil',         label: 'El meu perfil', icon: 'ti-user' },
   ]},
 ]
 
 export default function Sidebar() {
   const logout = useAuthStore(s => s.logout)
+  const [alertsPending, setAlertsPending] = useState(0)
+
+  useEffect(() => {
+    pomAlerts.list({ estat: 'Pendent', page_size: 1 })
+      .then(res => setAlertsPending(res.data.count || 0))
+      .catch(() => {})
+  }, [])
+
+  const badges = { alerts: alertsPending }
 
   return (
     <aside style={{
@@ -78,29 +93,42 @@ export default function Sidebar() {
             }}>
               {group.section}
             </div>
-            {group.items.map(item => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                style={({ isActive }) => ({
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '0.6rem 1rem',
-                  margin: '1px 0.5rem',
-                  borderRadius: 8,
-                  color: isActive ? 'var(--gold-l)' : 'rgba(255,255,255,0.45)',
-                  background: isActive ? 'rgba(194,122,42,0.15)' : 'none',
-                  textDecoration: 'none',
-                  fontSize: 12,
-                  transition: 'all 0.15s',
-                })}
-              >
-                <i className={`ti ${item.icon}`} style={{fontSize: 17}} />
-                {item.label}
-              </NavLink>
-            ))}
+            {group.items.map(item => {
+              const badge = item.badgeKey ? badges[item.badgeKey] : null
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  style={({ isActive }) => ({
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '0.6rem 1rem',
+                    margin: '1px 0.5rem',
+                    borderRadius: 8,
+                    color: isActive ? 'var(--gold-l)' : 'rgba(255,255,255,0.45)',
+                    background: isActive ? 'rgba(194,122,42,0.15)' : 'none',
+                    textDecoration: 'none',
+                    fontSize: 12,
+                    transition: 'all 0.15s',
+                  })}
+                >
+                  <i className={`ti ${item.icon}`} style={{fontSize: 17}} />
+                  <span style={{flex: 1}}>{item.label}</span>
+                  {badge > 0 && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 500,
+                      padding: '1px 7px', borderRadius: 10,
+                      background: 'var(--err)', color: 'white',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}>
+                      {badge}
+                    </span>
+                  )}
+                </NavLink>
+              )
+            })}
           </div>
         ))}
       </div>
