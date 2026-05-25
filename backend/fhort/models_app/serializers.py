@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Contracte, LiniaContracte, Model, ModelFitxer
+from .models import Contracte, LiniaContracte, Model, ModelFitxer, ModelServei
 
 
 class ModelFitxerSerializer(serializers.ModelSerializer):
@@ -65,3 +65,20 @@ class ModelDetailSerializer(serializers.ModelSerializer):
         model = Model
         fields = '__all__'
         read_only_fields = ('codi_intern', 'data_entrada')
+
+
+
+# Sprint 1C — ModelServei
+class ModelServeiSerializer(serializers.ModelSerializer):
+    servei_nom = serializers.CharField(source='servei.nom', read_only=True)
+    servei_grup = serializers.CharField(source='servei.grup', read_only=True)
+
+    class Meta:
+        model = ModelServei
+        fields = [
+            'id', 'model', 'servei', 'servei_nom', 'servei_grup',
+            'nom_servei', 'grup', 'slots_base', 'contractat', 'ampliat',
+            'estat_autoritzacio', 'autoritzat_per', 'data_autoritzacio',
+            'linia_addicional',
+        ]
+        read_only_fields = ['nom_servei', 'grup', 'slots_base']
