@@ -49,3 +49,18 @@ try:
     urlpatterns = _sprint2_paths + urlpatterns
 except Exception as _e:
     pass
+
+
+
+# Sprint 3 — grading views
+try:
+    from fhort.pom.grading_views import tancar_base_view, regenerar_talles_view, taula_mesures_view
+    from django.urls import path as _path3
+    _sprint3_paths = [
+        _path3('size-fittings/<int:sf_id>/tancar-base/', tancar_base_view),
+        _path3('size-fittings/<int:sf_id>/regenerar-talles/', regenerar_talles_view),
+        _path3('size-fittings/<int:sf_id>/taula-mesures/', taula_mesures_view),
+    ]
+    urlpatterns = _sprint3_paths + urlpatterns
+except Exception as _e3:
+    pass
