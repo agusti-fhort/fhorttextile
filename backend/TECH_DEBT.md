@@ -68,7 +68,14 @@ class POMMaster(models.Model):
 
 **Opció C**: canviar tot el codi del servei perquè usi els noms reals. Més canvis però sense afegir abstraccions.
 
-## 3. SizeFitting — `estat_mesures` no existeix
+## 3. SizeFitting — `estat_mesures` no existeix — ✅ RESOLT
+
+**Resolt seguint Opció A** (adaptar codi al schema). 8 substitucions backend
++ 4 frontend. Resposta JSON inclou ambdues claus: `estat` (Django key,
+canonical) + `estat_display` (label llegible). Verificat amb serializer:
+`estat='BaseTancada'`, `estat_display='Base tancada'`.
+
+Detalls del context original (mantenir per referència):
 
 SizeFitting real té només `estat` amb choices: `Pendent, BaseOberta, BaseTancada, TallesGenerades, Tancat`.
 
@@ -154,9 +161,9 @@ Sense migració però amb 9 punts de canvi.
 ## Pla suggerit (en ordre)
 
 1. ~~**#5 ModelTasca.fase/gate**~~ — ✅ RESOLT
-2. **#3 SizeFitting.estat_mesures** — bloca el signal post-create de Model (no es generen SFs automàticament).
+2. ~~**#3 SizeFitting.estat_mesures**~~ — ✅ RESOLT
 3. **#1 GradingRule fields** — 3 substitucions concretes (`actiu`, `logica`, `increment`).
 4. **#2 POMMaster fields** — opció A (properties) és la més ràpida; opció C la més neta.
-5. **#4 Signal sincronitzar_size_fitting** — un cop resolt #3, revisar el bloc.
+5. **#4 Signal sincronitzar_size_fitting** — auto-creació SF ara ja crearà el camp `estat` correctament; cal verificar que la resta del bloc (camps copiats com `garment_group_id` etc.) funciona o cal netejar.
 
 Tots aquests punts es poden tractar en un sol PR `chore: align grading/tasks services with schema`. Cap requereix nous models ni migracions a banda del que ja està commited (excepte opció A del #5 si es trien camps denormalitzats).

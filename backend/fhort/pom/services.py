@@ -108,7 +108,7 @@ def generar_graded_specs(size_fitting_id: int) -> int:
 
     # Marcar SF
     SizeFitting.objects.filter(pk=size_fitting_id).update(
-        estat_mesures='Talles generades'
+        estat='TallesGenerades'
     )
 
     logger.info(f"Grading generat per SF {size_fitting_id}: {created} specs")
@@ -128,16 +128,16 @@ def tancar_base(size_fitting_id: int, user_id: int | None = None) -> int:
     if sf.base_tancada:
         raise ValueError("La talla base ja està tancada.")
 
-    if sf.estat_mesures not in ('Talla base oberta', 'Pendent'):
+    if sf.estat not in ('BaseOberta', 'Pendent'):
         raise ValueError(
-            f"L'estat actual '{sf.estat_mesures}' no permet tancar la base."
+            f"L'estat actual '{sf.get_estat_display()}' no permet tancar la base."
         )
 
     # Tancar base
     SizeFitting.objects.filter(pk=size_fitting_id).update(
         base_tancada=True,
         data_tancament_base=timezone.now(),
-        estat_mesures='Talla base tancada',
+        estat='BaseTancada',
     )
 
     # Generar talles

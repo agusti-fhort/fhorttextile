@@ -251,7 +251,7 @@ function TabSF({ model, token }) {
     <div>
       <Section title="Estat">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-          <EstatBadge estat={sf.estat_mesures} size="md" />
+          <EstatBadge estat={sf.estat_display} size="md" />
           {sf.base_tancada && (
             <span style={{ fontSize: 11, color: '#4a9a4a', fontFamily: 'IBM Plex Mono, monospace' }}>
               ✓ Base tancada
@@ -268,7 +268,7 @@ function TabSF({ model, token }) {
               {action ? '...' : '⬛ Tancar base'}
             </button>
           )}
-          {sf.estat_mesures === 'Talla base tancada' && (
+          {sf.estat === 'BaseTancada' && (
             <button
               onClick={() => doAction(`/api/v1/size-fittings/${sf.id}/regenerar-talles/`)}
               disabled={!!action}
@@ -277,7 +277,7 @@ function TabSF({ model, token }) {
               {action ? '...' : '⚡ Generar talles'}
             </button>
           )}
-          {sf.estat_mesures === 'Talles generades' && (
+          {sf.estat === 'TallesGenerades' && (
             <button
               onClick={() => doAction(`/api/v1/size-fittings/${sf.id}/crear-fitting/`, 'POST', { tipus: 'Proto' })}
               disabled={!!action}

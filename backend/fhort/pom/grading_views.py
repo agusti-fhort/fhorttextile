@@ -139,7 +139,8 @@ def taula_mesures_view(request, sf_id):
         return Response({
             'sf_id': sf_id,
             'codi_model': model.codi_intern,
-            'estat_mesures': sf.estat_mesures,
+            'estat': sf.estat,
+            'estat_display': sf.get_estat_display(),
             'base_tancada': sf.base_tancada,
             'base_size': model.base_size_label,
             'size_run': size_run,

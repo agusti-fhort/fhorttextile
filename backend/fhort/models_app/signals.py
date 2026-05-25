@@ -93,7 +93,7 @@ def sincronitzar_size_fitting(sender, instance, created, **kwargs):
         if not SizeFitting.objects.filter(model=instance).exists():
             sf = SizeFitting.objects.create(
                 model=instance,
-                estat_mesures='Pendent',
+                estat='Pendent',
                 base_tancada=False,
             )
             # Copiar camps del model al SF

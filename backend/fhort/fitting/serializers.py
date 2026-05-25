@@ -15,6 +15,7 @@ from .models import (
 class SizeFittingSerializer(serializers.ModelSerializer):
     model_codi = serializers.CharField(source='model.codi_intern', read_only=True)
     creat_per_nom = serializers.CharField(source='creat_per.nom_complet', read_only=True)
+    estat_display = serializers.CharField(source='get_estat_display', read_only=True)
 
     class Meta:
         model = SizeFitting

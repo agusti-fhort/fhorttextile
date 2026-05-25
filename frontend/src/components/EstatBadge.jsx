@@ -13,10 +13,10 @@ const ESTAT_CONFIG = {
   'Normal':             { bg: '#1a2a1a', text: '#4a8a4a', border: '#2a4a2a' },
   'Alta':               { bg: '#2a2a1a', text: '#c27a2a', border: '#3a3a1a' },
   'Urgent':             { bg: '#2a1a1a', text: '#cc4444', border: '#4a2020' },
-  // SF estats
+  // SF estats (display labels — coincideix amb get_estat_display())
   'Pendent':            { bg: '#1a1a1a', text: '#444', border: '#2a2a2a' },
-  'Talla base oberta':  { bg: '#1a1a2a', text: '#5a7aaa', border: '#2a2a5a' },
-  'Talla base tancada': { bg: '#1a2a2a', text: '#2a8a8a', border: '#1a4a4a' },
+  'Base oberta':        { bg: '#1a1a2a', text: '#5a7aaa', border: '#2a2a5a' },
+  'Base tancada':       { bg: '#1a2a2a', text: '#2a8a8a', border: '#1a4a4a' },
   'Talles generades':   { bg: '#1a2a1a', text: '#4a9a6a', border: '#2a5a3a' },
   // Tasca estats
   'Feta':               { bg: '#1a2a1a', text: '#4a9a4a', border: '#2a5a2a' },

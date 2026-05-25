@@ -26,9 +26,9 @@ def crear_fitting(size_fitting_id: int, tipus: str, user_id: int | None = None) 
 
     sf = SizeFitting.objects.select_related('model').get(pk=size_fitting_id)
 
-    if sf.estat_mesures not in ('Talles generades', 'Tancat'):
+    if sf.estat not in ('TallesGenerades', 'Tancat'):
         raise ValueError(
-            f"Cal generar les talles primer (estat actual: '{sf.estat_mesures}'). "
+            f"Cal generar les talles primer (estat actual: '{sf.get_estat_display()}'). "
             "Tanca la base i genera les talles amb el botó corresponent."
         )
 
