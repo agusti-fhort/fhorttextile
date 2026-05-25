@@ -19,7 +19,23 @@ quan es cridin amb dades reals fins que aquests punts es resolguin.
 | Lectura/escriptura de `SizeFitting.estat_mesures` | ✗ | tot el flow de SF |
 | `models_app.signals.sincronitzar_size_fitting` | ✗ | auto-creació SF al crear Model |
 
-## 1. GradingRule — fields amb noms diferents
+## 1. GradingRule — fields amb noms diferents — ✅ RESOLT
+
+**Resolt seguint Opció A**. 3 substitucions a `pom/services.py`:
+- `is_active` → `actiu` (al filter de `_load_grading_rules`)
+- `rule.grading_type` → `rule.logica` (al `_apply_rule`)
+- `rule.increment_cm or 0` → `float(rule.increment) if rule.increment else 0.0`
+  (DecimalField necessita conversió per a math amb floats)
+
+Camp `increment_above_xl` no existeix al model — el `getattr` ja gestionava
+el fallback. Mantinguda la lògica STEP, ara amb `float()` explícit al
+fallback també per consistència de tipus.
+
+Test post-fix amb mock: LINEAR (54.5), FIXED (45.0), ZERO (0.0), STEP (56.0)
+i confirmat amb GradingRule real a la BD (`logica=LINEAR, increment=0.7500,
+actiu=True`).
+
+Detalls del context original (mantenir per referència):
 
 | Codi servei espera | Schema real té | Punts d'ús |
 |---|---|---|
@@ -162,7 +178,7 @@ Sense migració però amb 9 punts de canvi.
 
 1. ~~**#5 ModelTasca.fase/gate**~~ — ✅ RESOLT
 2. ~~**#3 SizeFitting.estat_mesures**~~ — ✅ RESOLT
-3. **#1 GradingRule fields** — 3 substitucions concretes (`actiu`, `logica`, `increment`).
+3. ~~**#1 GradingRule fields**~~ — ✅ RESOLT
 4. **#2 POMMaster fields** — opció A (properties) és la més ràpida; opció C la més neta.
 5. **#4 Signal sincronitzar_size_fitting** — auto-creació SF ara ja crearà el camp `estat` correctament; cal verificar que la resta del bloc (camps copiats com `garment_group_id` etc.) funciona o cal netejar.
 

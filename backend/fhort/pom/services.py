@@ -204,7 +204,7 @@ def _load_grading_rules(rule_set_id: int) -> dict:
     try:
         from fhort.pom.models import GradingRule
         return {r.pom_id: r for r in GradingRule.objects.filter(
-            rule_set_id=rule_set_id, is_active=True
+            rule_set_id=rule_set_id, actiu=True
         )}
     except Exception as e:
         logger.warning(f"No s'han pogut carregar GradingRules: {e}")
@@ -276,16 +276,23 @@ def _get_or_create_grading_version(sf):
 
 
 def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int):
-    """Aplica la regla de grading i retorna (graded_value, grading_type_applied)."""
-    grading_type = rule.grading_type
-    increment = rule.increment_cm or 0
+    """Aplica la regla de grading i retorna (graded_value, grading_type_applied).
+
+    Camps Django reals: rule.logica (was grading_type), rule.increment (DecimalField,
+    was increment_cm). El camp increment_above_xl no existeix al model — getattr
+    fallback al increment normal per STEP.
+    """
+    grading_type = rule.logica
+    increment = float(rule.increment) if rule.increment else 0.0
 
     if grading_type == 'LINEAR':
         return base_val + (steps * increment), 'LINEAR'
 
     elif grading_type == 'STEP':
-        # Per a talles grans (>= base + 2 passos), pot aplicar increment diferent
-        increment_above = getattr(rule, 'increment_above_xl', None) or increment
+        # Per a talles grans (>= base + 2 passos), pot aplicar increment diferent.
+        # increment_above_xl no existeix al model — fallback al increment normal.
+        increment_above = getattr(rule, 'increment_above_xl', None)
+        increment_above = float(increment_above) if increment_above else increment
         if steps > 2:
             return base_val + (2 * increment) + ((steps - 2) * increment_above), 'STEP'
         return base_val + (steps * increment), 'STEP'
