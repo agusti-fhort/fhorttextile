@@ -64,3 +64,22 @@ try:
     urlpatterns = _sprint3_paths + urlpatterns
 except Exception as _e3:
     pass
+
+
+
+# Sprint 4 — fitting wizard
+try:
+    from fhort.fitting.fitting_views import (
+        crear_fitting_view, tancar_fitting_view,
+        anullar_fitting_view, llistat_fittings_view,
+    )
+    from django.urls import path as _path4
+    _sprint4_paths = [
+        _path4('size-fittings/<int:sf_id>/crear-fitting/', crear_fitting_view),
+        _path4('size-fittings/<int:sf_id>/fittings/', llistat_fittings_view),
+        _path4('fittings/<int:fitting_id>/tancar/', tancar_fitting_view),
+        _path4('fittings/<int:fitting_id>/anullar/', anullar_fitting_view),
+    ]
+    urlpatterns = _sprint4_paths + urlpatterns
+except Exception as _e4:
+    pass

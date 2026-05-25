@@ -40,13 +40,13 @@ def generar_graded_specs(size_fitting_id: int) -> int:
 
     # Validacions prèvies
     if not model.grading_rule_set_id:
-        raise ValueError(f"El model {model.codi} no té Grading Rule Set assignat.")
+        raise ValueError(f"El model {model.codi_intern} no té Grading Rule Set assignat.")
     if not model.size_system_id:
-        raise ValueError(f"El model {model.codi} no té Size System assignat.")
+        raise ValueError(f"El model {model.codi_intern} no té Size System assignat.")
     if not model.size_run_model:
-        raise ValueError(f"El model {model.codi} no té size_run_model definit.")
+        raise ValueError(f"El model {model.codi_intern} no té size_run_model definit.")
     if not model.base_size_label:
-        raise ValueError(f"El model {model.codi} no té base_size_label definit.")
+        raise ValueError(f"El model {model.codi_intern} no té base_size_label definit.")
 
     # Parse del run de talles (separador ·)
     size_run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
@@ -68,7 +68,7 @@ def generar_graded_specs(size_fitting_id: int) -> int:
 
     if not base_measurements:
         raise ValueError(
-            f"No hi ha BaseMeasurements per al model {model.codi}. "
+            f"No hi ha BaseMeasurements per al model {model.codi_intern}. "
             "Cal entrar les mesures de la talla base primer."
         )
 

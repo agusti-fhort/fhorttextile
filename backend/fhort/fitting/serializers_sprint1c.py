@@ -17,3 +17,6 @@ if SessioFitting:
                 'hora_fi', 'durada_hores', 'lloc', 'tipus', 'temporada',
                 'any', 'responsable', 'estat', 'notes',
             ]
+
+
+# SFFittingLiniaUpdateSerializer viu a fhort/fitting/serializers.py (canonical)

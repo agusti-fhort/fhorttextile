@@ -148,6 +148,16 @@ class Model(models.Model):
     slots_reals_confeccio = models.FloatField(null=True, blank=True, default=0)
     # --- Fi Sprint 1A ---
 
+    # --- Sprint 3/4: configuració de talles per al grading ---
+    size_run_model = models.CharField(
+        max_length=200, null=True, blank=True,
+        help_text="Talles del model separades per · o ; (p.ex. 'XS·S·M·L·XL')",
+    )
+    base_size_label = models.CharField(
+        max_length=20, null=True, blank=True,
+        help_text="Etiqueta de la talla base (ha de coincidir amb un valor de size_run_model)",
+    )
+
     class Meta:
         verbose_name = 'Model'
         verbose_name_plural = 'Models'
