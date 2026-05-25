@@ -4,6 +4,21 @@ import useAuthStore from './store/auth'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Models from './pages/Models'
+import POMs from './pages/POMs'
+import Tasques from './pages/Tasques'
+import ModelDetall from './pages/ModelDetall'
+import SizeFittingLlista from './pages/SizeFittingLlista'
+import SizeFittingDetall from './pages/SizeFittingDetall'
+import FittingDetall from './pages/FittingDetall'
+import GradingRuleSets from './pages/GradingRuleSets'
+import SizeSystems from './pages/SizeSystems'
+import NouModel from './pages/NouModel'
+import NouSizeFitting from './pages/NouSizeFitting'
+import KanbanTasques from './pages/KanbanTasques'
+import Temps from './pages/Temps'
+import Avisos from './pages/Avisos'
+import Configuracio from './pages/Configuracio'
+import PerfilUsuari from './pages/PerfilUsuari'
 import Shell from './components/layout/Shell'
 
 function ProtectedRoute({ children }) {
@@ -29,14 +44,24 @@ export default function App() {
         }>
           <Route index element={<Dashboard />} />
           <Route path="models" element={<Models />} />
-          <Route path="fitting" element={<Dashboard />} />
+          <Route path="models/nou" element={<NouModel />} />
+          <Route path="models/:id" element={<ModelDetall />} />
+          <Route path="models/:id/nou-sf" element={<NouSizeFitting />} />
+          <Route path="fitting" element={<SizeFittingLlista />} />
+          <Route path="fitting/:id" element={<SizeFittingDetall />} />
+          <Route path="fitting/:sfId/fitting/:id" element={<FittingDetall />} />
           <Route path="fittings" element={<Dashboard />} />
-          <Route path="tasques" element={<Dashboard />} />
-          <Route path="temps" element={<Dashboard />} />
+          <Route path="tasques" element={<Tasques />} />
+          <Route path="tasques/kanban" element={<KanbanTasques />} />
+          <Route path="temps" element={<Temps />} />
           <Route path="fitxers" element={<Dashboard />} />
-          <Route path="poms" element={<Dashboard />} />
+          <Route path="poms" element={<POMs />} />
+          <Route path="poms/grading" element={<GradingRuleSets />} />
+          <Route path="poms/sizes" element={<SizeSystems />} />
           <Route path="ia" element={<Dashboard />} />
-          <Route path="configuracio" element={<Dashboard />} />
+          <Route path="avisos" element={<Avisos />} />
+          <Route path="configuracio" element={<Configuracio />} />
+          <Route path="perfil" element={<PerfilUsuari />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
