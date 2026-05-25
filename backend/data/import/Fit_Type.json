@@ -1,0 +1,32 @@
+[
+  {
+    "name": "RLX",
+    "fit_code": "RLX",
+    "name_en": "Relaxed / Oversized",
+    "name_cat": "Relaxat / Oversized",
+    "ease_description": "Fit ample. Ease augmentat. Grading més gran entre talles.",
+    "display_order": 3,
+    "is_active": 1,
+    "notes": null
+  },
+  {
+    "name": "SLM",
+    "fit_code": "SLM",
+    "name_en": "Slim",
+    "name_cat": "Entallat",
+    "ease_description": "Fit ajustat al cos. Ease reduït. Toleràncies més estretes.",
+    "display_order": 2,
+    "is_active": 1,
+    "notes": null
+  },
+  {
+    "name": "REG",
+    "fit_code": "REG",
+    "name_en": "Regular",
+    "name_cat": "Regular",
+    "ease_description": "Fit estàndard. Ease normal per a ús quotidià.",
+    "display_order": 1,
+    "is_active": 1,
+    "notes": null
+  }
+]

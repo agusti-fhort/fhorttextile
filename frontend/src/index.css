@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+:root {
+  --gold:      #c27a2a;
+  --gold-l:    #c68338;
+  --gold-pale: #f5e6d0;
+  --charcoal:  #1d1d1b;
+  --gray:      #868685;
+  --gray-l:    #f0f0f0;
+  --white:     #ffffff;
+  --ok:        #3b6d11;
+  --ok-bg:     #eaf3de;
+  --warn:      #854f0b;
+  --warn-bg:   #faeeda;
+  --err:       #a32d2d;
+  --err-bg:    #fcebeb;
+  --gate:      #534ab7;
+  --gate-bg:   #eeedfe;
+}
+
+* { font-family: 'IBM Plex Mono', monospace; box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--gray-l);
+  color: var(--charcoal);
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "name": "SWIMWEAR",
+    "group_code": "SWIMWEAR",
+    "name_en": "Swimwear",
+    "name_cat": "Bany",
+    "display_order": 6,
+    "grading_logic_note": "Grading específic: copa, entrecuix i obertura de cama. Mesures en estat relaxat.",
+    "garment_types_included": "Banyador / bikini peça",
+    "is_active": 1
+  },
+  {
+    "name": "OUTERWEAR",
+    "group_code": "OUTERWEAR",
+    "name_en": "Outerwear",
+    "name_cat": "Roba exterior",
+    "display_order": 5,
+    "grading_logic_note": "Grading estructurat. Pit +0.5cm extra vs tops. Longitud CB preferida.",
+    "garment_types_included": "Xaqueta / blazer · Abric / coat · Gabardina / trench · Anorak / parka · Americana / suit · Peça pell / cuir",
+    "is_active": 1
+  },
+  {
+    "name": "DRESSES-FULL",
+    "group_code": "DRESSES-FULL",
+    "name_en": "Dresses & Full Length",
+    "name_cat": "Vestits i cos sencer",
+    "display_order": 4,
+    "grading_logic_note": "Grading compost: combina lògica tops + bottoms. Pit, cintura i maluc creixen.",
+    "garment_types_included": "Vestit simple / camisero · Vestit estructurat · Mono / jumpsuit",
+    "is_active": 1
+  },
+  {
+    "name": "BOTTOMS",
+    "group_code": "BOTTOMS",
+    "name_en": "Bottoms",
+    "name_cat": "Inferiors",
+    "display_order": 3,
+    "grading_logic_note": "Grading per cintura i maluc. Inseam ZERO. Rise gradeja per separat.",
+    "garment_types_included": "Falda simple · Shorts / bermuda · Pantaló tela / wide leg · Vaquers / denim",
+    "is_active": 1
+  },
+  {
+    "name": "TOPS-WOVEN",
+    "group_code": "TOPS-WOVEN",
+    "name_en": "Tops — Woven",
+    "name_cat": "Tops — Teixit pla",
+    "display_order": 2,
+    "grading_logic_note": "Grading per pit i espatlla. Coll i puny graden diferent del cos.",
+    "garment_types_included": "Camisa / brusa · Chaleco teixit · Banyador / bikini peça",
+    "is_active": 1
+  },
+  {
+    "name": "TOPS-KNIT",
+    "group_code": "TOPS-KNIT",
+    "name_en": "Tops — Knitwear",
+    "name_cat": "Tops — Punt",
+    "display_order": 1,
+    "grading_logic_note": "Grading per circumferència pit relaxat. Longituds creixen menys que en teixit pla.",
+    "garment_types_included": "Camiseta / top bàsic · Top estructurat / cos · Sudadera / sweatshirt · Jersei / punt simple · Càrdigan · Xandall peça / legging · Pijama conjunt (2 peces)",
+    "is_active": 1
+  }
+]

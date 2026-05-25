@@ -1,0 +1,132 @@
+[
+  {
+    "name": "CAT-PL",
+    "category_code": "CAT-PL",
+    "name_en": "Placement",
+    "name_cat": "Posicionament",
+    "body_area": "BOTH",
+    "description": "Mesures de posicionament: etiquetes, logos, butxaques.",
+    "display_order": 13,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-JK",
+    "category_code": "CAT-JK",
+    "name_en": "Jacket / Coat",
+    "name_cat": "Xaqueta / Abric",
+    "body_area": "UPPER",
+    "description": "POMs específics de roba exterior estructurada.",
+    "display_order": 12,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-CD",
+    "category_code": "CAT-CD",
+    "name_en": "Closure / Detail",
+    "name_cat": "Tancament / Detall",
+    "body_area": "BOTH",
+    "description": "Mesures de cremalleres, botons, plecs, caputxa.",
+    "display_order": 11,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-SW",
+    "category_code": "CAT-SW",
+    "name_en": "Swimwear-specific",
+    "name_cat": "Específic de bany",
+    "body_area": "BOTH",
+    "description": "POMs exclusius de bany i llenceria.",
+    "display_order": 10,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-KN",
+    "category_code": "CAT-KN",
+    "name_en": "Knitwear-specific",
+    "name_cat": "Específic de punt",
+    "body_area": "BOTH",
+    "description": "POMs exclusius de teixits de punt.",
+    "display_order": 9,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-HM",
+    "category_code": "CAT-HM",
+    "name_en": "Hem / Finish",
+    "name_cat": "Baix / Acabat",
+    "body_area": "BOTH",
+    "description": "Mesures del baix de la peça.",
+    "display_order": 8,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-SK",
+    "category_code": "CAT-SK",
+    "name_en": "Skirt / Dress length",
+    "name_cat": "Longitud faldilla / vestit",
+    "body_area": "FULL",
+    "description": "Longituds de faldilles i vestits.",
+    "display_order": 7,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-RI",
+    "category_code": "CAT-RI",
+    "name_en": "Rise",
+    "name_cat": "Cavall",
+    "body_area": "LOWER",
+    "description": "Mesures de cavall: davanter, posterior, total.",
+    "display_order": 6,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-WB",
+    "category_code": "CAT-WB",
+    "name_en": "Waistband",
+    "name_cat": "Cinturó / Cintura",
+    "body_area": "LOWER",
+    "description": "Mesures del cinturó: ample relaxat, estès, alçada.",
+    "display_order": 5,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-LB",
+    "category_code": "CAT-LB",
+    "name_en": "Lower body",
+    "name_cat": "Part inferior del cos",
+    "body_area": "LOWER",
+    "description": "Mesures de la part inferior: maluc, cuixa, genoll.",
+    "display_order": 4,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-CL",
+    "category_code": "CAT-CL",
+    "name_en": "Collar / Neckline",
+    "name_cat": "Coll / Escot",
+    "body_area": "UPPER",
+    "description": "Mesures de coll i escot: ample, alçada, caiguda.",
+    "display_order": 3,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-SL",
+    "category_code": "CAT-SL",
+    "name_en": "Sleeve",
+    "name_cat": "Màniga",
+    "body_area": "UPPER",
+    "description": "Mesures de màniga: longitud, amplada bíceps, colze, puny.",
+    "display_order": 2,
+    "is_active": 1
+  },
+  {
+    "name": "CAT-UB",
+    "category_code": "CAT-UB",
+    "name_en": "Upper body",
+    "name_cat": "Part superior del cos",
+    "body_area": "UPPER",
+    "description": "Mesures de la part superior: pit, espatlla, esquena, escot.",
+    "display_order": 1,
+    "is_active": 1
+  }
+]
