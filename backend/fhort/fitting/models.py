@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 
 class SizeFitting(models.Model):
@@ -245,3 +246,61 @@ class POMAlert(models.Model):
 
     def __str__(self):
         return f'{self.model.codi_intern} · {self.pom.codi_client} ({self.tipus})'
+
+
+
+class SessioFitting(models.Model):
+    """
+    Sessió de fitting cross-model. Un dia amb un client on es revisen
+    múltiples models en la mateixa sessió presencial.
+    """
+    client = models.ForeignKey(
+        'tenants.Client',
+        on_delete=models.PROTECT,
+        related_name='sessions_fitting',
+        null=True, blank=True,
+    )
+    data_sessio = models.DateField()
+    hora_inici = models.TimeField(null=True, blank=True)
+    hora_fi = models.TimeField(null=True, blank=True)
+    durada_hores = models.FloatField(null=True, blank=True)
+    lloc = models.CharField(max_length=200, null=True, blank=True)
+    tipus = models.CharField(
+        max_length=20,
+        choices=[
+            ('Proto', 'Proto'),
+            ('Fit Sample', 'Fit Sample'),
+            ('Size Set', 'Size Set'),
+            ('PP Sample', 'PP Sample'),
+            ('Mixt', 'Mixt'),
+        ],
+    )
+    temporada = models.CharField(max_length=10, null=True, blank=True)
+    any = models.IntegerField(null=True, blank=True)
+    responsable = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='sessions_responsable',
+    )
+    estat = models.CharField(
+        max_length=20,
+        choices=[
+            ('Planificada', 'Planificada'),
+            ('Confirmada', 'Confirmada'),
+            ('Realitzada', 'Realitzada'),
+            ('Anul·lada', 'Anul·lada'),
+        ],
+        default='Planificada',
+    )
+    notes = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-data_sessio']
+        verbose_name = 'Sessió de fitting'
+        verbose_name_plural = 'Sessions de fitting'
+
+    def __str__(self):
+        client_str = str(self.client) if self.client else 'sense client'
+        return f"SF-{client_str}-{self.any}-{self.temporada}"

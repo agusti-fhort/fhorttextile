@@ -8,22 +8,22 @@ from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import ModelTasca, TascaCataleg, TimerEntrada
+from .models import ModelTasca, Tasca, TimerEntrada
 from .serializers import (
     ModelTascaSerializer,
-    TascaCatalegSerializer,
+    TascaSerializer,
     TimerEntradaSerializer,
 )
 
 
-class TascaCatalegViewSet(viewsets.ModelViewSet):
+class TascaViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-    serializer_class = TascaCatalegSerializer
-    queryset = TascaCataleg.objects.select_related('tasca_global').all()
+    serializer_class = TascaSerializer
+    queryset = Tasca.objects.select_related('tasca_global').all()
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['activa', 'tasca_global']
-    ordering_fields = ['ordre']
-    ordering = ['ordre']
+    filterset_fields = ['activa', 'is_active', 'tasca_global', 'fase', 'gate']
+    ordering_fields = ['ordre', 'ordre_base']
+    ordering = ['ordre_base', 'ordre']
 
 
 class ModelTascaViewSet(viewsets.ModelViewSet):

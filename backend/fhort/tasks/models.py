@@ -1,7 +1,9 @@
 from django.db import models
 
 
-class TascaCataleg(models.Model):
+class Tasca(models.Model):
+    """Catàleg de tasques (tenant). Fusiona TascaCataleg legacy + metadades de procés."""
+    # --- Legacy TascaCataleg ---
     tasca_global = models.ForeignKey(
         'pom.TascaGlobal',
         on_delete=models.SET_NULL,
@@ -10,19 +12,63 @@ class TascaCataleg(models.Model):
         related_name='catalegs_tenant',
     )
     nom_custom = models.CharField(max_length=200, null=True, blank=True)
-    minuts_estandard = models.PositiveIntegerField()
+    minuts_estandard = models.PositiveIntegerField(null=True, blank=True)
     activa = models.BooleanField(default=True)
     ordre = models.PositiveIntegerField(default=0)
 
+    # --- Sprint 1B: metadades de procés ---
+    nom_tasca = models.CharField(max_length=200, null=True, blank=True)
+    tipus_tasca = models.CharField(
+        max_length=20,
+        choices=[
+            ('Interna', 'Interna'),
+            ('Externa', 'Externa'),
+            ('Validació', 'Validació'),
+        ],
+        default='Interna',
+    )
+    fase = models.CharField(
+        max_length=20,
+        choices=[
+            ('Disseny', 'Disseny'),
+            ('Tècnic', 'Tècnic'),
+            ('Prototip', 'Prototip'),
+            ('Mostres', 'Mostres'),
+            ('Preproducció', 'Preproducció'),
+            ('Producció', 'Producció'),
+        ],
+        default='Disseny',
+    )
+    ordre_base = models.IntegerField(default=0)
+    slots_base = models.FloatField(
+        default=0.0,
+        help_text="Referència orientativa. Els slots reals vénen de la tipologia del model.",
+    )
+    facturable = models.BooleanField(
+        default=True,
+        help_text="Els gates i tasques de validació no son facturables.",
+    )
+    bloqueja_model = models.BooleanField(default=False)
+    gate = models.BooleanField(default=False)
+    resultat_gate = models.CharField(
+        max_length=20,
+        choices=[('OK', 'OK'), ('NO OK', 'NO OK'), ('EXCEPCIÓ', 'EXCEPCIÓ')],
+        null=True, blank=True,
+    )
+    notes = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
     class Meta:
-        verbose_name = 'Catàleg de tasca (tenant)'
-        verbose_name_plural = 'Catàlegs de tasca (tenant)'
-        ordering = ['ordre']
+        verbose_name = 'Tasca (catàleg tenant)'
+        verbose_name_plural = 'Tasques (catàleg tenant)'
+        ordering = ['ordre_base', 'ordre']
 
     def __str__(self):
+        if self.nom_tasca:
+            return f"[{self.fase}] {self.nom_tasca}"
         if self.nom_custom:
             return self.nom_custom
-        return self.tasca_global.codi if self.tasca_global_id else f'TascaCataleg#{self.pk}'
+        return self.tasca_global.codi if self.tasca_global_id else f'Tasca#{self.pk}'
 
 
 class ModelTasca(models.Model):
@@ -39,7 +85,7 @@ class ModelTasca(models.Model):
     ]
 
     model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='tasques')
-    tasca = models.ForeignKey(TascaCataleg, on_delete=models.PROTECT, related_name='instancies')
+    tasca = models.ForeignKey(Tasca, on_delete=models.PROTECT, related_name='instancies')
     ordre = models.PositiveIntegerField(default=0)
     estat = models.CharField(max_length=20, choices=ESTAT_CHOICES, default='Pendent')
     responsable = models.ForeignKey(
@@ -153,3 +199,55 @@ class TimerEntrada(models.Model):
 
     def __str__(self):
         return f'{self.tecnic} · {self.model_tasca} · {self.inici:%Y-%m-%d %H:%M}'
+
+
+
+class PaquetServei(models.Model):
+    """Paquet de serveis oferts. Agrupa tasques que s'apliquen juntes."""
+    nom = models.CharField(max_length=200, unique=True)
+    actiu = models.BooleanField(default=True)
+    grup = models.CharField(
+        max_length=50,
+        choices=[
+            ('Patronatge', 'Patronatge'),
+            ('Tech Pack', 'Tech Pack'),
+            ('Mostres', 'Mostres'),
+            ('Producció', 'Producció'),
+        ],
+        null=True, blank=True,
+    )
+    multiplicador = models.FloatField(null=True, blank=True)
+    slots_base = models.FloatField(null=True, blank=True)
+    ordre_popup = models.IntegerField(null=True, blank=True)
+    descripcio = models.TextField(null=True, blank=True)
+    notes_comercials = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['ordre_popup', 'nom']
+        verbose_name = 'Paquet de servei'
+        verbose_name_plural = 'Paquets de servei'
+
+    def __str__(self):
+        return self.nom
+
+
+class PaquetServeiTasca(models.Model):
+    """Relació entre PaquetServei i Tasca. Defineix l'ordre i si és opcional."""
+    paquet = models.ForeignKey(
+        PaquetServei, on_delete=models.CASCADE, related_name='tasques',
+    )
+    tasca = models.ForeignKey(
+        Tasca, on_delete=models.CASCADE, related_name='paquets',
+    )
+    ordre = models.IntegerField()
+    opcional = models.BooleanField(default=False)
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['ordre']
+        unique_together = [['paquet', 'tasca']]
+        verbose_name = 'Tasca de paquet'
+        verbose_name_plural = 'Tasques de paquet'
+
+    def __str__(self):
+        return f"{self.paquet.nom} — {self.tasca.nom_tasca} (#{self.ordre})"

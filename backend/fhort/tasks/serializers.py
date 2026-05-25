@@ -1,15 +1,15 @@
 from rest_framework import serializers
 
-from .models import ModelTasca, TascaCataleg, TimerEntrada
+from .models import ModelTasca, Tasca, TimerEntrada
 
 
-class TascaCatalegSerializer(serializers.ModelSerializer):
+class TascaSerializer(serializers.ModelSerializer):
     tasca_global_codi = serializers.CharField(source='tasca_global.codi', read_only=True)
     tasca_global_nom = serializers.CharField(source='tasca_global.nom_ca', read_only=True)
     es_gate = serializers.BooleanField(source='tasca_global.es_gate', read_only=True)
 
     class Meta:
-        model = TascaCataleg
+        model = Tasca
         fields = '__all__'
 
 
@@ -26,6 +26,8 @@ class ModelTascaSerializer(serializers.ModelSerializer):
     def get_tasca_nom(self, obj):
         if not obj.tasca_id:
             return None
+        if obj.tasca.nom_tasca:
+            return obj.tasca.nom_tasca
         if obj.tasca.nom_custom:
             return obj.tasca.nom_custom
         if obj.tasca.tasca_global_id:

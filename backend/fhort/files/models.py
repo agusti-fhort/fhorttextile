@@ -63,3 +63,4 @@ class FitxerVersio(models.Model):
 
     def __str__(self):
         return f'{self.nom_original} v{self.versio}'
+
