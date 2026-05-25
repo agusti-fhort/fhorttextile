@@ -104,7 +104,13 @@ Té dos problemes (un derivat del #3):
 
 **Acció**: arreglar el #3 i revisar el bloc. Probable que altres camps copiats també no existeixin al SizeFitting.
 
-## 5. ModelTasca.fase / ModelTasca.gate no existeixen
+## 5. ModelTasca.fase / ModelTasca.gate no existeixen — ✅ RESOLT
+
+**Resolt al commit posterior** seguint Opció B. Smoke test post-fix:
+- `GET /api/v1/models/50/resum-tasques/` → 200 `{"model_id":50,"per_estat":{},"total":0}`
+- `POST /api/v1/model-tasques/999/processar-gate/` → 404 `{"error":"Tasca no trobada"}`
+
+Detalls del context original (mantenir per referència històrica):
 
 Detectat al smoke test (commit `4ef2594`): `GET /api/v1/models/50/resum-tasques/` retorna **500 FieldError**:
 
@@ -147,7 +153,7 @@ Sense migració però amb 9 punts de canvi.
 
 ## Pla suggerit (en ordre)
 
-1. **#5 ModelTasca.fase/gate** — el més blocant: cap flow de tasques funciona fins que es resolgui. Confirmat al smoke test.
+1. ~~**#5 ModelTasca.fase/gate**~~ — ✅ RESOLT
 2. **#3 SizeFitting.estat_mesures** — bloca el signal post-create de Model (no es generen SFs automàticament).
 3. **#1 GradingRule fields** — 3 substitucions concretes (`actiu`, `logica`, `increment`).
 4. **#2 POMMaster fields** — opció A (properties) és la més ràpida; opció C la més neta.

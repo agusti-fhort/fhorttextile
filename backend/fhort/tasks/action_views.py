@@ -42,7 +42,7 @@ def processar_gate_view(request, tasca_id):
     except ModelTasca.DoesNotExist:
         return Response({'error': 'Tasca no trobada'}, status=404)
 
-    if not mt.gate:
+    if not mt.es_gate:
         return Response({'error': 'Aquesta tasca no és un gate'}, status=400)
 
     mt.estat = 'Feta'
@@ -69,7 +69,7 @@ def resum_tasques_view(request, model_id):
     ModelTasca = _get_model_tasca()
 
     tasques = ModelTasca.objects.filter(model_id=model_id).values(
-        'estat', 'fase', 'gate'
+        'estat', 'tasca__fase', 'tasca__gate'
     )
 
     resum = {}

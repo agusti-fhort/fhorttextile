@@ -34,7 +34,7 @@ def after_save_model_tasca(sender, instance, **kwargs):
     recalcular_fase_actual(instance.model_id)
 
     # Si acaba de passar a Feta i és un gate, desbloqueja
-    if instance.estat == 'Feta' and instance.gate:
+    if instance.estat == 'Feta' and instance.es_gate:
         processar_gate(instance.pk)
 
 

@@ -80,16 +80,14 @@ def generar_tasques_model(model_id: int) -> int:
     for t in totes_tasques:
         mt = ModelTasca.objects.create(
             model=model,
-            tasca_ref=t['tasca_ref'],
-            nom_tasca=t['nom_tasca'],
-            fase=t['fase'],
-            tipus_tasca=t['tipus_tasca'],
+            tasca=t['tasca_ref'],
             ordre=str(t['ordre_base']),
-            gate=t['gate'],
+            es_gate=t['gate'],
             slots_base=t['slots_base'],
             estat=t['estat'],
             paquet_origen=t['paquet_origen'],
             responsable=model.responsable,
+            # nom_tasca/fase/tipus_tasca viuen a Tasca (FK), no duplicats aquí
         )
         creades.append(mt)
 
@@ -115,7 +113,7 @@ def recalcular_fase_actual(model_id: int, excloure_tasca_id: int | None = None) 
     from fhort.models_app.models import Model
     ModelTasca = _get_model_tasca()
 
-    qs = ModelTasca.objects.filter(model_id=model_id)
+    qs = ModelTasca.objects.filter(model_id=model_id).select_related('tasca')
     if excloure_tasca_id:
         qs = qs.exclude(pk=excloure_tasca_id)
 
@@ -133,14 +131,14 @@ def recalcular_fase_actual(model_id: int, excloure_tasca_id: int | None = None) 
         nova_fase = 'Nou'
     else:
         fase_activa = next(
-            (t.fase for t in tasques if t.estat in ('Pendent', 'En curs')),
+            (t.tasca.fase for t in tasques if t.estat in ('Pendent', 'En curs')),
             None
         )
         if fase_activa:
             nova_fase = fase_activa
         else:
             totes_fetes = all(t.estat in ('Feta', 'Bloquejada') for t in tasques)
-            nova_fase = 'Tancat' if totes_fetes else (tasques[0].fase or 'Nou')
+            nova_fase = 'Tancat' if totes_fetes else (tasques[0].tasca.fase or 'Nou')
 
     nova_fase = nova_fase or 'Nou'
     Model.objects.filter(pk=model_id).update(fase_actual=nova_fase)
@@ -160,7 +158,7 @@ def processar_gate(model_tasca_id: int) -> int:
     except ModelTasca.DoesNotExist:
         return 0
 
-    if not mt.gate or mt.estat != 'Feta':
+    if not mt.es_gate or mt.estat != 'Feta':
         return 0
 
     # Tasques Bloquejades posteriors a aquest gate
@@ -185,7 +183,7 @@ def processar_gate(model_tasca_id: int) -> int:
         t.estat = 'Pendent'
         t.save(update_fields=['estat'])
         desblocades += 1
-        if t.gate:  # Para al proper gate
+        if t.es_gate:  # Para al proper gate
             break
 
     recalcular_fase_actual(mt.model_id)
