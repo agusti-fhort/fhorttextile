@@ -68,6 +68,25 @@ class ModelTasca(models.Model):
     gate_data = models.DateTimeField(null=True, blank=True)
     gate_notes = models.TextField(null=True, blank=True)
 
+    # --- Sprint 1A: camps nous ---
+    paquet_origen = models.CharField(max_length=200, null=True, blank=True)
+    slots_base = models.FloatField(null=True, blank=True, default=0)
+    slots_reals = models.FloatField(null=True, blank=True, default=0)
+    hores_reals = models.FloatField(null=True, blank=True, default=0)
+    cost_real = models.FloatField(null=True, blank=True, default=0)
+    tipus_encarrec = models.CharField(
+        max_length=20,
+        choices=[
+            ('Proto', 'Proto'), ('Fit Sample', 'Fit Sample'),
+            ('Size Set', 'Size Set'), ('PP Sample', 'PP Sample'),
+            ('TOP Sample', 'TOP Sample'), ('Producció', 'Producció'),
+        ],
+        null=True, blank=True,
+    )
+    color_codi = models.CharField(max_length=20, null=True, blank=True)
+    item_ref = models.CharField(max_length=100, null=True, blank=True)
+    # --- Fi Sprint 1A ---
+
     class Meta:
         verbose_name = 'Tasca de model'
         verbose_name_plural = 'Tasques de model'

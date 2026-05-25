@@ -41,6 +41,11 @@ class SizeFitting(models.Model):
 
     notes = models.TextField(null=True, blank=True)
 
+    # --- Sprint 1A: camps nous ---
+    base_tancada = models.BooleanField(default=False)
+    data_tancament_base = models.DateTimeField(null=True, blank=True)
+    # --- Fi Sprint 1A ---
+
     class Meta:
         verbose_name = 'Size & Fitting'
         verbose_name_plural = 'Size & Fittings'

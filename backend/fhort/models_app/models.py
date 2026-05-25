@@ -139,6 +139,14 @@ class Model(models.Model):
 
     observacions = models.TextField(null=True, blank=True)
 
+    # --- Sprint 1A: camps nous (fase_actual ja existeix amb FASE_CHOICES) ---
+    familia = models.CharField(max_length=100, null=True, blank=True)
+    slots_prev_tecnics = models.FloatField(null=True, blank=True, default=0)
+    slots_prev_confeccio = models.FloatField(null=True, blank=True, default=0)
+    slots_reals_tecnic = models.FloatField(null=True, blank=True, default=0)
+    slots_reals_confeccio = models.FloatField(null=True, blank=True, default=0)
+    # --- Fi Sprint 1A ---
+
     class Meta:
         verbose_name = 'Model'
         verbose_name_plural = 'Models'

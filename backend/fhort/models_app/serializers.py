@@ -27,6 +27,12 @@ class ModelListSerializer(serializers.ModelSerializer):
             'responsable',
             'prioritat',
             'data_objectiu',
+            # Sprint 1A
+            'familia',
+            'slots_prev_tecnics',
+            'slots_prev_confeccio',
+            'slots_reals_tecnic',
+            'slots_reals_confeccio',
         )
 
     def get_garment_type(self, obj):
