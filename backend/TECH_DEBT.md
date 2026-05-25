@@ -104,11 +104,53 @@ Té dos problemes (un derivat del #3):
 
 **Acció**: arreglar el #3 i revisar el bloc. Probable que altres camps copiats també no existeixin al SizeFitting.
 
+## 5. ModelTasca.fase / ModelTasca.gate no existeixen
+
+Detectat al smoke test (commit `4ef2594`): `GET /api/v1/models/50/resum-tasques/` retorna **500 FieldError**:
+
+```
+Cannot resolve keyword 'fase' into field. Choices are: color_codi, cost_real,
+data_limit, es_gate, estat, gate_data, gate_notes, gate_revisat_per, hores_reals,
+id, item_ref, minuts_assignats, minuts_reals, model, ordre, paquet_origen,
+responsable, resultat_gate, slots_base, slots_reals, tasca, timers, tipus_encarrec
+```
+
+`ModelTasca` té `es_gate` (boolean) però **no té `fase` ni `gate`** com a camps directes. Aquests viuen a `Tasca` (el catàleg) i s'haurien d'accedir via la FK `model_tasca.tasca.fase` / `.tasca.gate` — o copiats com a camps denormalitzats a la creació.
+
+**Punts d'ús (sistemàtic — afecta tot el flow de tasques):**
+
+| Fitxer:línia | Codi actual | Què passa |
+|---|---|---|
+| [tasks/action_views.py:45](fhort/tasks/action_views.py#L45) | `if not mt.gate:` | AttributeError quan es crida `processar-gate` |
+| [tasks/action_views.py:72](fhort/tasks/action_views.py#L72) | `.values('estat', 'fase', 'gate')` | FieldError 500 (✗ confirmat al smoke test) |
+| [tasks/services.py:85](fhort/tasks/services.py#L85) | `ModelTasca.objects.create(... fase=t['fase'] ...)` | TypeError al crear ModelTasca (kwargs invàlids) |
+| [tasks/services.py:88](fhort/tasks/services.py#L88) | `ModelTasca.objects.create(... gate=t['gate'] ...)` | igual — la generació de tasques peta abans d'arribar a BD |
+| [tasks/services.py:136](fhort/tasks/services.py#L136) | `(t.fase for t in tasques if ...)` | AttributeError dins `recalcular_fase_actual` |
+| [tasks/services.py:143](fhort/tasks/services.py#L143) | `tasques[0].fase` | AttributeError |
+| [tasks/services.py:163](fhort/tasks/services.py#L163) | `if not mt.gate or mt.estat != 'Feta':` | AttributeError dins `processar_gate` |
+| [tasks/services.py:188](fhort/tasks/services.py#L188) | `if t.gate:` | AttributeError |
+| [tasks/signals.py:37](fhort/tasks/signals.py#L37) | `if instance.estat == 'Feta' and instance.gate:` | AttributeError al `post_save` |
+
+Tot el flow de tasques (generar, recalcular fase, processar gate) està **trencat fins que es resolgui**. L'únic motiu pel qual no s'ha vist fins ara és que no hi ha ModelTasca creats a la BD.
+
+**Opció A (simplest, denormalitza)**: afegir `fase` i `gate` com a camps a `ModelTasca`, copiar-los des de `Tasca` a `generar_tasques_model`. ModelTasca ja té `es_gate` que duplica `tasca.gate` — afegir-hi `fase` (CharField, choices) i renombrar referències `mt.gate` → `mt.es_gate`. Una migració.
+
+**Opció B (canonical Django)**: substituir tots els accessos:
+- `mt.gate` → `mt.tasca.gate` (Python) o `mt.es_gate` si volem evitar JOIN
+- `mt.fase` → `mt.tasca.fase` (Python) o `'tasca__fase'` (queryset)
+- `.values('estat', 'fase', 'gate')` → `.values('estat', 'tasca__fase', 'tasca__gate')`
+- `ModelTasca.objects.create(fase=..., gate=...)` → eliminar aquests kwargs (la info ja viu via FK a tasca_ref)
+
+Sense migració però amb 9 punts de canvi.
+
+**Recomanació**: B + mantenir `es_gate` existent com a denormalització actual. El que el sprint2 anomenava `gate` ja existeix com a `es_gate`. Per a `fase` no hi ha denormalització actual — el query `'tasca__fase'` és la via natural.
+
 ## Pla suggerit (en ordre)
 
-1. **#3 SizeFitting.estat_mesures** — el més bloquejant. Sense això el signal post-create de Model no fa res i res no podrà generar SF automàticament.
-2. **#1 GradingRule fields** — 3 substitucions concretes (`actiu`, `logica`, `increment`).
-3. **#2 POMMaster fields** — opció A (properties) és la més ràpida; opció C la més neta.
-4. **#4 Signal** — un cop resolts els altres, revisar el contingut.
+1. **#5 ModelTasca.fase/gate** — el més blocant: cap flow de tasques funciona fins que es resolgui. Confirmat al smoke test.
+2. **#3 SizeFitting.estat_mesures** — bloca el signal post-create de Model (no es generen SFs automàticament).
+3. **#1 GradingRule fields** — 3 substitucions concretes (`actiu`, `logica`, `increment`).
+4. **#2 POMMaster fields** — opció A (properties) és la més ràpida; opció C la més neta.
+5. **#4 Signal sincronitzar_size_fitting** — un cop resolt #3, revisar el bloc.
 
-Tots aquests punts es poden tractar en un sol PR `chore: align grading services with schema`. Cap requereix nous models ni migracions a banda del que ja està commited.
+Tots aquests punts es poden tractar en un sol PR `chore: align grading/tasks services with schema`. Cap requereix nous models ni migracions a banda del que ja està commited (excepte opció A del #5 si es trien camps denormalitzats).
