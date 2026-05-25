@@ -34,3 +34,18 @@ except Exception:
 # model-fitxers ja registrat a fhort.models_app.urls
 
 urlpatterns = router.urls
+
+
+
+# Sprint 2 — action views
+try:
+    from fhort.tasks.action_views import generar_tasques_view, processar_gate_view, resum_tasques_view
+    from django.urls import path as _path
+    _sprint2_paths = [
+        _path('models/<int:model_id>/generar-tasques/', generar_tasques_view),
+        _path('models/<int:model_id>/resum-tasques/', resum_tasques_view),
+        _path('model-tasques/<int:tasca_id>/processar-gate/', processar_gate_view),
+    ]
+    urlpatterns = _sprint2_paths + urlpatterns
+except Exception as _e:
+    pass
