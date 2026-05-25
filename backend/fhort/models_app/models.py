@@ -265,3 +265,26 @@ class ModelServei(models.Model):
 
     def __str__(self):
         return f"{self.model.codi} — {self.nom_servei or self.servei.nom}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 3 — Motor de grading
+# ─────────────────────────────────────────────────────────────────────────────
+
+class BaseMeasurement(models.Model):
+    """Mesures de la talla base introduïdes per al Model abans de generar talles."""
+    model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='base_measurements')
+    pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='base_measurements')
+    base_value_cm = models.FloatField()
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Mesura base'
+        verbose_name_plural = 'Mesures base'
+        unique_together = [('model', 'pom')]
+        ordering = ['model', 'pom']
+
+    def __str__(self):
+        return f'{self.model} · {self.pom.codi_client} = {self.base_value_cm}cm'

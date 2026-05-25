@@ -56,8 +56,7 @@ def taula_mesures_view(request, sf_id):
     Format: { poms: [...], talles: [...], cells: {pom_id: {talla: value}} }
     """
     try:
-        from fhort.fitting.models import SizeFitting
-        from fhort.pom.models import GradedSpec
+        from fhort.fitting.models import SizeFitting, GradedSpec
 
         sf = SizeFitting.objects.select_related('model').get(pk=sf_id)
         model = sf.model
@@ -70,7 +69,7 @@ def taula_mesures_view(request, sf_id):
         # GradedSpecs actius
         grading_version = None
         try:
-            from fhort.pom.models import GradingVersion
+            from fhort.fitting.models import GradingVersion
             grading_version = GradingVersion.objects.filter(
                 size_fitting=sf, is_active=True
             ).last()
@@ -109,7 +108,7 @@ def taula_mesures_view(request, sf_id):
         # BaseMeasurements si no hi ha grading
         if not grading_version:
             try:
-                from fhort.pom.models import BaseMeasurement
+                from fhort.models_app.models import BaseMeasurement
                 base_ms = BaseMeasurement.objects.filter(
                     model=model, is_active=True
                 ).select_related('pom')

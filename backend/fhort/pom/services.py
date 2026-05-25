@@ -229,7 +229,7 @@ def _load_grading_exceptions(rule_set_id: int) -> dict:
 def _load_base_measurements(model_id: int) -> dict:
     """Retorna {pom_id: base_value_cm}."""
     try:
-        from fhort.pom.models import BaseMeasurement
+        from fhort.models_app.models import BaseMeasurement
         return {
             bm.pom_id: bm.base_value_cm
             for bm in BaseMeasurement.objects.filter(
@@ -244,7 +244,7 @@ def _load_base_measurements(model_id: int) -> dict:
 def _get_or_create_grading_version(sf):
     """Obté o crea la GradingVersion activa per al SizeFitting."""
     try:
-        from fhort.pom.models import GradingVersion
+        from fhort.fitting.models import GradingVersion
         version = GradingVersion.objects.filter(
             size_fitting=sf, is_active=True
         ).last()
@@ -310,7 +310,7 @@ def _upsert_graded_spec(
 ):
     """Crea o actualitza un GradedSpec."""
     try:
-        from fhort.pom.models import GradedSpec
+        from fhort.fitting.models import GradedSpec
         GradedSpec.objects.update_or_create(
             grading_version_id=grading_version_id,
             pom_id=pom_id,

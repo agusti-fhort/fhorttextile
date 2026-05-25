@@ -299,3 +299,52 @@ class GradingRule(models.Model):
 
     def __str__(self):
         return f'{self.rule_set.nom} · {self.pom.codi_client} ({self.logica})'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 3 — Motor de grading (dades de catàleg compartides amb tenants)
+# BaseMeasurement viu a models_app (FK Model), GradedSpec viu a fitting (FK GradingVersion).
+# ─────────────────────────────────────────────────────────────────────────────
+
+class GradingException(models.Model):
+    """Override puntual per (POM, talla) dins d'un GradingRuleSet."""
+    rule_set = models.ForeignKey(GradingRuleSet, on_delete=models.CASCADE, related_name='exceptions')
+    pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='grading_exceptions')
+    size_label = models.CharField(max_length=20)
+    value_cm = models.FloatField()
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Excepció de grading'
+        verbose_name_plural = 'Excepcions de grading'
+        unique_together = [('rule_set', 'pom', 'size_label')]
+
+    def __str__(self):
+        return f'{self.rule_set.nom} · {self.pom.codi_client} @ {self.size_label}'
+
+
+class ClientMesuraPerfil(models.Model):
+    """Estadística Welford online per (client, garment_type, POM, talla).
+
+    Acumula mean/M2 sense guardar valors individuals. Es va actualitzant
+    cada vegada que un fitting es tanca i una línia ha estat modificada.
+    """
+    client = models.ForeignKey('tenants.Client', on_delete=models.CASCADE, related_name='mesures_perfil')
+    garment_type = models.ForeignKey(GarmentType, on_delete=models.CASCADE, related_name='mesures_perfil')
+    pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='mesures_perfil')
+    talla = models.CharField(max_length=20)
+    n_mostres = models.PositiveIntegerField(default=0)
+    mitjana = models.FloatField(default=0.0)
+    m2_acum = models.FloatField(default=0.0)   # Welford running M2
+    desviacio = models.FloatField(default=0.0)
+    darrera_actualitzacio = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Perfil mesures client'
+        verbose_name_plural = 'Perfils mesures client'
+        unique_together = [('client', 'garment_type', 'pom', 'talla')]
+        ordering = ['client', 'garment_type', 'pom', 'talla']
+
+    def __str__(self):
+        return f'{self.client_id} · gt{self.garment_type_id} · {self.pom.codi_client} @ {self.talla} (n={self.n_mostres})'

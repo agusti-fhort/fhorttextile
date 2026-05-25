@@ -59,15 +59,20 @@ class SizeFitting(models.Model):
 
 class GradingVersion(models.Model):
     size_fitting = models.ForeignKey(SizeFitting, on_delete=models.CASCADE, related_name='grading_versions')
-    nom = models.CharField(max_length=100)
+    nom = models.CharField(max_length=100, blank=True, default='')
     aprovada = models.BooleanField(default=False)
     data = models.DateTimeField(auto_now_add=True)
     creat_per = models.ForeignKey(
         'accounts.UserProfile',
         on_delete=models.PROTECT,
         related_name='grading_versions_creades',
+        null=True, blank=True,
     )
     notes = models.TextField(null=True, blank=True)
+
+    # Sprint 3 — motor de grading
+    version_number = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = 'Versió de grading'
@@ -304,3 +309,103 @@ class SessioFitting(models.Model):
     def __str__(self):
         client_str = str(self.client) if self.client else 'sense client'
         return f"SF-{client_str}-{self.any}-{self.temporada}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 4 — Fitting wizard (paral·lel a Fitting/FittingLine simples)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SFFitting(models.Model):
+    """Sessió de wizard de fitting: tracking de modificacions vs GradedSpec."""
+    TIPUS_CHOICES = [
+        ('Proto', 'Proto'),
+        ('Sample', 'Sample'),
+        ('PPS', 'PPS'),
+    ]
+    ESTAT_CHOICES = [
+        ('Obert', 'Obert'),
+        ('Tancat', 'Tancat'),
+        ('Anullat', 'Anul·lat'),
+    ]
+
+    size_fitting = models.ForeignKey(SizeFitting, on_delete=models.CASCADE, related_name='sf_fittings')
+    fitting_num = models.PositiveIntegerField()
+    tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES)
+    estat = models.CharField(max_length=20, choices=ESTAT_CHOICES, default='Obert')
+    responsable = models.ForeignKey(
+        'accounts.UserProfile',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='sf_fittings_responsable',
+    )
+    data_creacio = models.DateTimeField(auto_now_add=True)
+    data_tancament = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'SF Fitting (wizard)'
+        verbose_name_plural = 'SF Fittings (wizard)'
+        unique_together = [('size_fitting', 'fitting_num')]
+        ordering = ['size_fitting', 'fitting_num']
+
+    def __str__(self):
+        return f'{self.size_fitting.codi} · SF#{self.fitting_num} ({self.tipus})'
+
+
+class SFFittingLinia(models.Model):
+    """Línia d'un SFFitting: (POM, talla) amb valor_vigent (GradedSpec) i valor_nou (introduït)."""
+    ESTAT_CELLA_CHOICES = [
+        ('Pendent', 'Pendent'),
+        ('OK', 'OK'),
+        ('Modificat', 'Modificat'),
+    ]
+
+    fitting = models.ForeignKey(SFFitting, on_delete=models.CASCADE, related_name='linies')
+    pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='sf_fitting_linies')
+    nom_pom = models.CharField(max_length=200)
+    talla = models.CharField(max_length=20)
+    valor_vigent = models.FloatField()
+    valor_nou = models.FloatField(null=True, blank=True)
+    estat_cella = models.CharField(max_length=20, choices=ESTAT_CELLA_CHOICES, default='Pendent')
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Línia SF Fitting'
+        verbose_name_plural = 'Línies SF Fitting'
+        ordering = ['fitting', 'pom', 'talla']
+
+    def __str__(self):
+        return f'{self.fitting} · {self.nom_pom} @ {self.talla}'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 3 — Output del motor de grading (per GradingVersion)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class GradedSpec(models.Model):
+    """Mesura generada per (GradingVersion, POM, talla) — output del motor de grading."""
+    GRADING_TYPE_CHOICES = [
+        ('LINEAR', 'Linear'),
+        ('STEP', 'Step'),
+        ('FIXED', 'Fixed'),
+        ('ZERO', 'Zero'),
+        ('EXCEPTION', 'Exception'),
+    ]
+    grading_version = models.ForeignKey(
+        GradingVersion, on_delete=models.CASCADE, related_name='graded_specs',
+    )
+    pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='graded_specs')
+    size_label = models.CharField(max_length=20)
+    graded_value_cm = models.FloatField()
+    grading_type_applied = models.CharField(max_length=20, choices=GRADING_TYPE_CHOICES)
+    increment_applied_cm = models.FloatField(default=0.0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = 'Spec generat'
+        verbose_name_plural = 'Specs generats'
+        unique_together = [('grading_version', 'pom', 'size_label')]
+        ordering = ['grading_version', 'pom', 'size_label']
+
+    def __str__(self):
+        return f'v{self.grading_version_id} · {self.pom.codi_client} @ {self.size_label} = {self.graded_value_cm}cm'
