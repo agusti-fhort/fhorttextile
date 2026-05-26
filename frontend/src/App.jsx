@@ -62,6 +62,8 @@ export default function App() {
           <Route path="poms/grading" element={<GradingRuleSets />} />
           <Route path="poms/sizes" element={<SizeSystems />} />
           <Route path="configuracio/garment-types" element={<Configuracio />} />
+          <Route path="configuracio/size-systems" element={<Configuracio />} />
+          <Route path="configuracio/grading" element={<Configuracio />} />
           <Route path="avisos" element={<Avisos />} />
           <Route path="configuracio" element={<Configuracio />} />
           <Route path="perfil" element={<PerfilUsuari />} />

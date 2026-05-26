@@ -5,6 +5,8 @@ import { FaseStepper } from "../components/FaseStepper"
 import { EstatBadge } from "../components/EstatBadge"
 import { TaulaMesures } from "../components/TaulaMesures"
 import { KanbanTasquesModel } from "../components/KanbanTasquesModel"
+import { TallaBaseWizard } from "../components/TallaBaseWizard"
+import { DesignFreezePanel } from "../components/DesignFreezePanel"
 
 const API = import.meta.env.VITE_API_URL || ""
 const TABS = ["Model", "Mesures", "Size & Fitting", "Fitxers", "Servei", "Control"]
@@ -250,13 +252,13 @@ function TabMesures({ model, token, onSave }) {
   )
 }
 
-function TabSF({ model, token }) {
+function TabSF({ model, token, refresh }) {
   const [sf, setSF] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [action, setAction] = useState(null)
 
   useEffect(() => {
     if (!model?.id) return
+    setLoading(true)
     fetch(`${API}/api/v1/size-fittings/?model=${model.id}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -269,80 +271,43 @@ function TabSF({ model, token }) {
       .catch(() => setLoading(false))
   }, [model?.id])
 
-  const doAction = async (endpoint, method = 'POST', body = {}) => {
-    setAction(endpoint)
-    try {
-      const r = await fetch(`${API}${endpoint}`, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-      const d = await r.json()
-      if (d.error) alert(d.error)
-      else {
-        // Refrescar SF
-        const r2 = await fetch(`${API}/api/v1/size-fittings/${sf.id}/`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        setSF(await r2.json())
-      }
-    } catch (e) {
-      alert(`Error: ${e}`)
-    }
-    setAction(null)
-  }
-
-  if (loading) return <div style={{ color: 'var(--text-main)', fontSize: 12 }}>Carregant SF...</div>
-  if (!sf) return <div style={{ color: 'var(--text-main)', fontSize: 12 }}>No hi ha Size & Fitting per a aquest model.</div>
+  if (loading) return <div style={{ color: 'var(--text-muted)', fontSize: 12, fontFamily: 'IBM Plex Mono, monospace' }}>Carregant SF...</div>
 
   return (
     <div>
-      <Section title="Estat">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-          <EstatBadge estat={sf.estat_display} size="md" />
-          {sf.base_tancada && (
-            <span style={{ fontSize: 11, color: '#4a9a4a', fontFamily: 'IBM Plex Mono, monospace' }}>
-              ✓ Base tancada
-            </span>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-          {!sf.base_tancada && (
-            <button
-              onClick={() => doAction(`/api/v1/size-fittings/${sf.id}/tancar-base/`)}
-              disabled={!!action}
-              style={{ ...btnSecondary, color: '#4a7aaa', borderColor: '#2a3a5a' }}
-            >
-              {action ? '...' : '⬛ Tancar base'}
-            </button>
-          )}
-          {sf.estat === 'BaseTancada' && (
-            <button
-              onClick={() => doAction(`/api/v1/size-fittings/${sf.id}/regenerar-talles/`)}
-              disabled={!!action}
-              style={{ ...btnSecondary, color: '#4a9a4a', borderColor: '#2a4a2a' }}
-            >
-              {action ? '...' : '⚡ Generar talles'}
-            </button>
-          )}
-          {sf.estat === 'TallesGenerades' && (
-            <button
-              onClick={() => doAction(`/api/v1/size-fittings/${sf.id}/crear-fitting/`, 'POST', { tipus: 'Proto' })}
-              disabled={!!action}
-              style={{ ...btnSecondary, color: '#c27a2a', borderColor: '#4a3010' }}
-            >
-              {action ? '...' : '+ Nou fitting'}
-            </button>
-          )}
-        </div>
-      </Section>
+      <DesignFreezePanel model={model} token={token} onApproved={refresh} />
 
-      <Section title="Taula de mesures">
-        <TaulaMesures sfId={sf.id} token={token} />
-      </Section>
+      {sf && (
+        <>
+          <Section title="Configuració de tallatge">
+            <FieldRow label="Size system">{sf.size_system_nom || model.size_system_nom || "—"}</FieldRow>
+            <FieldRow label="Talla base" mono>{model.base_size_label || "—"}</FieldRow>
+            <FieldRow label="Run de talles" mono>{model.size_run_model || "—"}</FieldRow>
+            <FieldRow label="Grading">{model.grading_rule_set_nom || "—"}</FieldRow>
+          </Section>
+
+          <Section title="Mesures talla base">
+            <TallaBaseWizard
+              model={model}
+              sfId={sf.id}
+              token={token}
+              onComplete={() => { refresh && refresh() }}
+            />
+          </Section>
+
+          {(sf.estat === "TallesGenerades" || sf.estat === "BaseTancada") && (
+            <Section title="Taula de mesures per talla">
+              <TaulaMesures sfId={sf.id} token={token} />
+            </Section>
+          )}
+        </>
+      )}
+
+      {!sf && (
+        <div style={{ color: 'var(--text-muted)', fontSize: 12, fontFamily: 'IBM Plex Mono, monospace', padding: '12px 0' }}>
+          No hi ha Size & Fitting per a aquest model.
+        </div>
+      )}
     </div>
   )
 }
@@ -635,7 +600,7 @@ export default function ModelDetall() {
       <div style={{ minHeight: 400 }}>
         {tab === 0 && <TabModel model={model} token={token} onSave={refresh} />}
         {tab === 1 && <TabMesures model={model} token={token} onSave={refresh} />}
-        {tab === 2 && <TabSF model={model} token={token} />}
+        {tab === 2 && <TabSF model={model} token={token} refresh={refresh} />}
         {tab === 3 && <TabFitxers model={model} token={token} />}
         {tab === 4 && <TabServei model={model} token={token} />}
         {tab === 5 && <TabControl model={model} token={token} onUpdate={refresh} />}

@@ -1,265 +1,240 @@
-import { useState, useEffect } from 'react'
-import { models, alerts, poms } from '../api/endpoints'
 
-function StatCard({ icon, label, value, sub, subColor }) {
+import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
+import { EstatBadge } from "../components/EstatBadge"
+import { FaseStepper } from "../components/FaseStepper"
+
+const API = import.meta.env.VITE_API_URL || ""
+
+function KPICard({ label, value, sub, color = "#c27a2a", onClick }) {
   return (
-    <div style={{
-      background: 'var(--white)',
-      border: '0.5px solid #e4e4e2',
-      borderRadius: 12,
-      padding: '1.2rem 1.4rem',
-    }}>
-      <div style={{
-        fontSize: 11, color: 'var(--gray)',
-        marginBottom: '0.5rem',
-        display: 'flex', alignItems: 'center', gap: 6,
-      }}>
-        <i className={`ti ${icon}`} style={{fontSize: 14, color: 'var(--gold)'}} />
-        {label}
-      </div>
-      <div style={{fontSize: '2rem', fontWeight: 500, color: 'var(--charcoal)', lineHeight: 1, marginBottom: '0.3rem'}}>
-        {value}
-      </div>
-      {sub && (
-        <div style={{fontSize: 11, color: subColor || 'var(--gray)', fontWeight: 300}}>
-          {sub}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AlertItem({ alert }) {
-  const colors = {
-    desviacio:      { bg: 'var(--warn-bg)', color: 'var(--warn)', icon: 'ti-ruler-2' },
-    fora_rang:      { bg: 'var(--err-bg)',  color: 'var(--err)',  icon: 'ti-alert-triangle' },
-    manca_mesura:   { bg: 'var(--gate-bg)', color: 'var(--gate)', icon: 'ti-question-mark' },
-    conflicte:      { bg: 'var(--warn-bg)', color: 'var(--warn)', icon: 'ti-git-merge' },
-  }
-  const c = colors[alert.tipus] || colors.desviacio
-
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'flex-start', gap: '0.8rem',
-      padding: '0.8rem 1.2rem',
-      borderBottom: '0.5px solid var(--gray-l)',
-    }}>
-      <div style={{
-        width: 30, height: 30, borderRadius: 7,
-        background: c.bg, color: c.color,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 16, flexShrink: 0,
-      }}>
-        <i className={`ti ${c.icon}`} />
-      </div>
-      <div style={{flex: 1}}>
-        <strong style={{display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 2}}>
-          {alert.tipus?.replace('_', ' ')} — POM {alert.pom_codi || alert.pom}
-        </strong>
-        <span style={{fontSize: 11, color: 'var(--gray)', fontWeight: 300}}>
-          Detectat: {alert.valor_detectat} · Esperat: {alert.valor_esperat}
-        </span>
-      </div>
-      <span style={{fontSize: 10, color: 'var(--gray)', flexShrink: 0}}>
-        {alert.estat}
-      </span>
+    <div
+      onClick={onClick}
+      style={{
+        background: "#fff", border: "1px solid #e0d5c5", borderRadius: 8,
+        padding: "18px 20px", cursor: onClick ? "pointer" : "default",
+        transition: "all .1s", flex: 1, minWidth: 140,
+      }}
+      onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = color)}
+      onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = "#e0d5c5")}
+    >
+      <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace", marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 32, fontWeight: 600, color, fontFamily: "IBM Plex Mono, monospace", lineHeight: 1 }}>{value ?? "—"}</div>
+      {sub && <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace", marginTop: 6 }}>{sub}</div>}
     </div>
   )
 }
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ total: 0, en_curs: 0, tancats: 0 })
-  const [alertsList, setAlertsList] = useState([])
-  const [pomCount, setPomCount] = useState(0)
+  const navigate = useNavigate()
+  const token = localStorage.getItem("token")
+  const [stats, setStats] = useState({})
+  const [recents, setRecents] = useState([])
+  const [avisos, setAvisos] = useState([])
+  const [me, setMe] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([
-      models.list({ page_size: 1 }),
-      models.list({ estat: 'EnCurs', page_size: 1 }),
-      models.list({ estat: 'Tancat', page_size: 1 }),
-      alerts.list({ estat: 'Pendent', page_size: 5 }),
-      poms.list({ page_size: 1 }),
-    ]).then(([all, enCurs, tancats, alertsRes, pomsRes]) => {
-      setStats({
-        total: all.data.count,
-        en_curs: enCurs.data.count,
-        tancats: tancats.data.count,
-      })
-      setAlertsList(alertsRes.data.results || [])
-      setPomCount(pomsRes.data.count)
-    }).finally(() => setLoading(false))
-  }, [])
+    const headers = { Authorization: `Bearer ${token}` }
+    Promise.allSettled([
+      fetch(`${API}/api/v1/models/?limit=100`, { headers }).then(r => r.json()),
+      fetch(`${API}/api/v1/models/?estat=En+curs&ordering=-darrera_activitat&limit=5`, { headers }).then(r => r.json()),
+      fetch(`${API}/api/v1/pom-alerts/?estat=Obert&limit=100`, { headers }).then(r => r.json()),
+      fetch(`${API}/api/v1/me/`, { headers }).then(r => r.json()),
+    ]).then(([allRes, recentsRes, avisosRes, meRes]) => {
+      // Stats
+      if (allRes.status === "fulfilled") {
+        const all = allRes.value
+        const items = Array.isArray(all) ? all : (all.results || [])
+        const total = all.count || items.length
+        const enCurs = items.filter(m => m.estat === "En curs").length
+        const tallesGen = items.filter(m => m.fase_actual === "Prototip" || m.fase_actual === "Mostres").length
+        setStats({ total, enCurs, tallesGen })
+      }
+      // Recents
+      if (recentsRes.status === "fulfilled") {
+        const d = recentsRes.value
+        setRecents(Array.isArray(d) ? d : (d.results || []))
+      }
+      // Avisos
+      if (avisosRes.status === "fulfilled") {
+        const d = avisosRes.value
+        setAvisos(Array.isArray(d) ? d : (d.results || []))
+      }
+      // Me
+      if (meRes.status === "fulfilled") setMe(meRes.value)
+
+      setLoading(false)
+    })
+  }, [token])
+
+  const hora = new Date().getHours()
+  const salutacio = hora < 13 ? "Bon dia" : hora < 20 ? "Bona tarda" : "Bona nit"
 
   return (
-    <div>
-      <div style={{marginBottom: '1.5rem'}}>
-        <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>Dashboard</h1>
-        <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
-          Resum general del sistema
-        </p>
+    <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
+      {/* Salutació */}
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 500, color: "#1d1d1b", margin: "0 0 4px" }}>
+          {salutacio}{me ? `, ${me.full_name?.split(" ")[0] || me.username}` : ""}.
+        </h1>
+        <div style={{ fontSize: 13, color: "#868685", fontFamily: "IBM Plex Mono, monospace" }}>
+          {new Date().toLocaleDateString("ca-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+        </div>
       </div>
 
-      {/* Stats */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: '1rem',
-        marginBottom: '1.5rem',
-      }}>
-        <StatCard
-          icon="ti-shirt"
-          label="Models actius"
-          value={loading ? '—' : stats.en_curs}
-          sub="En curs"
-          subColor="var(--warn)"
+      {/* KPIs */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
+        <KPICard
+          label="Total models"
+          value={loading ? "…" : stats.total}
+          sub="al sistema"
+          onClick={() => navigate("/models")}
         />
-        <StatCard
-          icon="ti-circle-check"
-          label="Models tancats"
-          value={loading ? '—' : stats.tancats}
-          sub="Completats"
-          subColor="var(--ok)"
+        <KPICard
+          label="En curs"
+          value={loading ? "…" : stats.enCurs}
+          sub="models actius"
+          color="#3b7a9a"
+          onClick={() => navigate("/models?estat=En+curs")}
         />
-        <StatCard
-          icon="ti-ruler-2"
-          label="POMs al catàleg"
-          value={loading ? '—' : pomCount}
-          sub="Master data"
+        <KPICard
+          label="Avisos oberts"
+          value={loading ? "…" : avisos.length}
+          sub="desviacions POM"
+          color={avisos.length > 0 ? "#a32d2d" : "#868685"}
+          onClick={() => navigate("/avisos")}
         />
-        <StatCard
-          icon="ti-alert-triangle"
-          label="Avisos POM"
-          value={loading ? '—' : alertsList.length}
-          sub="Pendents de revisió"
-          subColor={alertsList.length > 0 ? 'var(--err)' : 'var(--ok)'}
+        <KPICard
+          label="En prototip/mostres"
+          value={loading ? "…" : stats.tallesGen}
+          sub="models en fase crítica"
+          color="#854f0b"
         />
       </div>
 
-      {/* Grid principal */}
-      <div style={{display: 'grid', gridTemplateColumns: '1fr 340px', gap: '1.2rem'}}>
-
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, alignItems: "start" }}>
         {/* Models recents */}
-        <div style={{
-          background: 'var(--white)',
-          border: '0.5px solid #e4e4e2',
-          borderRadius: 12,
-          overflow: 'hidden',
-        }}>
+        <div>
           <div style={{
-            padding: '1rem 1.4rem',
-            borderBottom: '0.5px solid #e4e4e2',
-            display: 'flex', alignItems: 'center', gap: '0.8rem',
+            fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
+            textTransform: "uppercase", color: "#c27a2a",
+            fontFamily: "IBM Plex Mono, monospace", marginBottom: 12,
           }}>
-            <i className="ti ti-shirt" style={{fontSize: 18, color: 'var(--gold)'}} />
-            <span style={{fontSize: 14, fontWeight: 500}}>Models recents</span>
-            <span style={{fontSize: 11, color: 'var(--gray)', marginLeft: 'auto'}}>
-              {stats.total} en total
-            </span>
+            Models actius recents
           </div>
           {loading ? (
-            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-              Carregant...
-            </div>
-          ) : stats.total === 0 ? (
-            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-              Encara no hi ha models. Crea el primer amb "Nou model".
+            <div style={{ color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
+          ) : recents.length === 0 ? (
+            <div style={{
+              padding: "20px", border: "1px dashed #e0d5c5", borderRadius: 8,
+              textAlign: "center", color: "#868685", fontSize: 12,
+              fontFamily: "IBM Plex Mono, monospace",
+            }}>
+              Sense models en curs.{" "}
+              <span
+                onClick={() => navigate("/models/nou")}
+                style={{ color: "#c27a2a", cursor: "pointer", textDecoration: "underline" }}
+              >
+                Crea el primer
+              </span>
             </div>
           ) : (
-            <ModelsList />
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {recents.map(m => (
+                <div
+                  key={m.id}
+                  onClick={() => navigate(`/models/${m.id}`)}
+                  style={{
+                    border: "1px solid #e0d5c5", borderRadius: 8, padding: "12px 16px",
+                    cursor: "pointer", background: "#fff",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#fdf9f5"; e.currentTarget.style.borderColor = "#c27a2a" }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#e0d5c5" }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <div>
+                      <span style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: 12, fontWeight: 700, color: "#c27a2a", marginRight: 10 }}>
+                        {m.codi_intern || m.codi_client}
+                      </span>
+                      <span style={{ fontSize: 13, color: "#1d1d1b" }}>{m.nom_prenda}</span>
+                    </div>
+                    <EstatBadge estat={m.estat} size="xs" />
+                  </div>
+                  {m.fase_actual && (
+                    <div style={{ transform: "scale(0.85)", transformOrigin: "left center" }}>
+                      <FaseStepper faseActual={m.fase_actual} />
+                    </div>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={() => navigate("/models")}
+                style={{
+                  padding: "8px", border: "1px dashed #e0d5c5", borderRadius: 8,
+                  background: "none", color: "#c27a2a", cursor: "pointer",
+                  fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+                }}
+              >
+                Veure tots els models →
+              </button>
+            </div>
           )}
         </div>
 
         {/* Avisos */}
-        <div style={{
-          background: 'var(--white)',
-          border: '0.5px solid #e4e4e2',
-          borderRadius: 12,
-          overflow: 'hidden',
-        }}>
+        <div>
           <div style={{
-            padding: '1rem 1.2rem',
-            borderBottom: '0.5px solid #e4e4e2',
-            display: 'flex', alignItems: 'center', gap: '0.8rem',
+            fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
+            textTransform: "uppercase", color: "#c27a2a",
+            fontFamily: "IBM Plex Mono, monospace", marginBottom: 12,
           }}>
-            <i className="ti ti-alert-triangle" style={{fontSize: 18, color: 'var(--gold)'}} />
-            <span style={{fontSize: 14, fontWeight: 500}}>Avisos POM</span>
-            <span style={{fontSize: 11, color: 'var(--gray)', marginLeft: 'auto'}}>
-              {alertsList.length} pendents
-            </span>
+            Avisos POM
           </div>
-          {alertsList.length === 0 ? (
-            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-              <i className="ti ti-circle-check" style={{fontSize: 24, color: 'var(--ok)', display: 'block', marginBottom: 8}} />
-              Cap avís pendent
+          {loading ? (
+            <div style={{ color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
+          ) : avisos.length === 0 ? (
+            <div style={{
+              padding: "16px", border: "1px solid #e0d5c5", borderRadius: 8,
+              textAlign: "center", color: "#3b6d11", fontSize: 12,
+              fontFamily: "IBM Plex Mono, monospace", background: "#f0f9f0",
+            }}>
+              ✓ Sense avisos oberts
             </div>
           ) : (
-            <div>
-              {alertsList.map(a => <AlertItem key={a.id} alert={a} />)}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {avisos.slice(0, 6).map(a => (
+                <div
+                  key={a.id}
+                  onClick={() => navigate("/avisos")}
+                  style={{
+                    padding: "8px 12px", border: "1px solid #f09595", borderRadius: 6,
+                    background: "#fff5f5", cursor: "pointer",
+                    fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+                  }}
+                >
+                  <div style={{ color: "#a32d2d", fontWeight: 500, marginBottom: 2 }}>
+                    {a.pom_codi || a.pom} — {a.model_codi || a.model}
+                  </div>
+                  <div style={{ color: "#868685" }}>{a.missatge || a.message || "Desviació detectada"}</div>
+                </div>
+              ))}
+              {avisos.length > 6 && (
+                <button
+                  onClick={() => navigate("/avisos")}
+                  style={{
+                    padding: "6px", border: "1px dashed #f09595", borderRadius: 6,
+                    background: "none", color: "#a32d2d", cursor: "pointer",
+                    fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+                  }}
+                >
+                  +{avisos.length - 6} avisos més →
+                </button>
+              )}
             </div>
           )}
         </div>
-
       </div>
     </div>
-  )
-}
-
-function ModelsList() {
-  const [data, setData] = useState([])
-
-  useEffect(() => {
-    models.list({ page_size: 8, ordering: '-data_entrada' })
-      .then(res => setData(res.data.results))
-  }, [])
-
-  const estatColor = {
-    'Nou':       'var(--gray)',
-    'EnCurs':    'var(--warn)',
-    'EnRevisió': 'var(--gate)',
-    'Tancat':    'var(--ok)',
-  }
-
-  return (
-    <table style={{width: '100%', borderCollapse: 'collapse'}}>
-      <thead>
-        <tr>
-          {['Codi', 'Prenda', 'Estat', 'Fase'].map(h => (
-            <th key={h} style={{
-              padding: '0.7rem 1rem',
-              fontSize: 10, letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              color: 'var(--gray)', fontWeight: 400,
-              borderBottom: '0.5px solid #e4e4e2',
-              textAlign: 'left',
-            }}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {data.map((m, i) => (
-          <tr key={m.id}
-            style={{borderBottom: i < data.length-1 ? '0.5px solid var(--gray-l)' : 'none', cursor: 'pointer'}}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--gray-l)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'none'}
-          >
-            <td style={{padding: '0.7rem 1rem'}}>
-              <span style={{fontSize: 11, color: 'var(--gold)', fontWeight: 500}}>{m.codi_intern}</span>
-            </td>
-            <td style={{padding: '0.7rem 1rem', fontSize: 12}}>{m.nom_prenda}</td>
-            <td style={{padding: '0.7rem 1rem'}}>
-              <span style={{
-                fontSize: 11, padding: '2px 7px', borderRadius: 5,
-                color: estatColor[m.estat] || 'var(--gray)',
-                background: 'var(--gray-l)',
-              }}>{m.estat}</span>
-            </td>
-            <td style={{padding: '0.7rem 1rem', fontSize: 11, color: 'var(--gate)'}}>
-              {m.fase_actual || '—'}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   )
 }

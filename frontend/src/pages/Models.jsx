@@ -1,157 +1,170 @@
-import { useState, useEffect } from 'react'
-import { models } from '../api/endpoints'
 
-const estatColors = {
-  'Nou':        { bg: 'var(--gray-l)',   color: 'var(--gray)'  },
-  'EnCurs':     { bg: 'var(--warn-bg)',  color: 'var(--warn)'  },
-  'EnRevisió':  { bg: 'var(--gate-bg)', color: 'var(--gate)'  },
-  'Tancat':     { bg: 'var(--ok-bg)',    color: 'var(--ok)'    },
-}
+import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
+import { EstatBadge } from "../components/EstatBadge"
+import { FaseStepper } from "../components/FaseStepper"
 
-const faseIcons = {
-  'Proto':    'ti-scissors',
-  'Fit':      'ti-user-check',
-  'SizeSet':  'ti-arrows-maximize',
-  'PP':       'ti-checklist',
-  'TOP':      'ti-circle-check',
-}
+const API = import.meta.env.VITE_API_URL || ""
 
-function EstatBadge({ estat }) {
-  const style = estatColors[estat] || estatColors['Nou']
-  return (
-    <span style={{
-      ...style,
-      fontSize: 11, padding: '3px 8px',
-      borderRadius: 6, fontWeight: 400,
-      whiteSpace: 'nowrap',
-    }}>
-      {estat}
-    </span>
-  )
-}
+const FASES = ["Nou", "Disseny", "Tècnic", "Prototip", "Mostres", "Preproducció", "Producció", "Tancat"]
 
 export default function Models() {
-  const [data, setData] = useState([])
+  const navigate = useNavigate()
+  const token = localStorage.getItem("token")
+  const [models, setModels] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [search, setSearch] = useState('')
-  const [count, setCount] = useState(0)
+  const [cerca, setCerca] = useState("")
+  const [filtreFase, setFiltreFase] = useState("")
+  const [filtreEstat, setFiltreEstat] = useState("")
+  const [total, setTotal] = useState(0)
 
   useEffect(() => {
     setLoading(true)
-    models.list({ search })
-      .then(res => {
-        setData(res.data.results)
-        setCount(res.data.count)
+    const params = new URLSearchParams()
+    if (cerca) params.set("search", cerca)
+    if (filtreFase) params.set("fase_actual", filtreFase)
+    if (filtreEstat) params.set("estat", filtreEstat)
+    params.set("ordering", "-data_entrada")
+    params.set("limit", "50")
+
+    fetch(`${API}/api/v1/models/?${params}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(d => {
+        const results = Array.isArray(d) ? d : (d.results || [])
+        setModels(results)
+        setTotal(d.count || results.length)
+        setLoading(false)
       })
-      .catch(() => setError('Error carregant models'))
-      .finally(() => setLoading(false))
-  }, [search])
+      .catch(() => setLoading(false))
+  }, [token, cerca, filtreFase, filtreEstat])
 
   return (
-    <div>
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: '1.5rem',
-      }}>
+    <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>Models</h1>
-          <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
-            {count} models en total
-          </p>
+          <h1 style={{ fontSize: 18, fontFamily: "IBM Plex Mono, monospace", color: "#1d1d1b", fontWeight: 500, margin: 0 }}>
+            Models
+          </h1>
+          <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace", marginTop: 2 }}>
+            {total} models
+          </div>
         </div>
-        <input
-          placeholder="Cercar per codi, nom..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{
-            background: 'var(--white)',
-            border: '0.5px solid #e4e4e2',
-            borderRadius: 8,
-            padding: '8px 14px',
-            fontSize: 12,
-            fontFamily: 'var(--font)',
-            width: 240,
-            outline: 'none',
-          }}
-        />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => navigate("/models/nou-des-de-fitxer")} style={{
+            padding: "7px 14px", borderRadius: 4, fontSize: 11, cursor: "pointer",
+            background: "#fff", color: "#868685", border: "1px solid #e0d5c5",
+            fontFamily: "IBM Plex Mono, monospace",
+          }}>
+            ⬆ Des de fitxer
+          </button>
+          <button onClick={() => navigate("/models/nou")} style={{
+            padding: "7px 16px", borderRadius: 4, fontSize: 11, cursor: "pointer",
+            background: "#f5e6d0", color: "#c27a2a", border: "1px solid #c27a2a",
+            fontFamily: "IBM Plex Mono, monospace", fontWeight: 600,
+          }}>
+            + Nou model
+          </button>
+        </div>
       </div>
 
-      <div style={{
-        background: 'var(--white)',
-        border: '0.5px solid #e4e4e2',
-        borderRadius: 12,
-        overflow: 'hidden',
-      }}>
-        {loading ? (
-          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-            Carregant...
-          </div>
-        ) : error ? (
-          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--err)', fontSize: 13}}>
-            {error}
-          </div>
-        ) : data.length === 0 ? (
-          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-            No hi ha models encara.
-          </div>
-        ) : (
-          <table style={{width: '100%', borderCollapse: 'collapse'}}>
-            <thead>
-              <tr>
-                {['Codi intern', 'Ref. client', 'Prenda', 'Fase', 'Estat', 'Responsable'].map(h => (
-                  <th key={h} style={{
-                    padding: '0.7rem 1rem',
-                    fontSize: 10, letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                    color: 'var(--gray)', fontWeight: 400,
-                    borderBottom: '0.5px solid #e4e4e2',
-                    textAlign: 'left', whiteSpace: 'nowrap',
-                  }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((m, i) => (
-                <tr key={m.id} style={{
-                  borderBottom: i < data.length - 1 ? '0.5px solid var(--gray-l)' : 'none',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--gray-l)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                >
-                  <td style={{padding: '0.75rem 1rem'}}>
-                    <span style={{fontSize: 11, color: 'var(--gold)', fontWeight: 500}}>
-                      {m.codi_intern}
-                    </span>
-                  </td>
-                  <td style={{padding: '0.75rem 1rem', fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
-                    {m.codi_client || '—'}
-                  </td>
-                  <td style={{padding: '0.75rem 1rem', fontSize: 13, fontWeight: 400}}>
-                    {m.nom_prenda}
-                  </td>
-                  <td style={{padding: '0.75rem 1rem'}}>
-                    {m.fase_actual ? (
-                      <span style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--gate)'}}>
-                        <i className={`ti ${faseIcons[m.fase_actual] || 'ti-point'}`} style={{fontSize: 14}} />
-                        {m.fase_actual}
-                      </span>
-                    ) : <span style={{color: 'var(--gray)', fontSize: 12}}>—</span>}
-                  </td>
-                  <td style={{padding: '0.75rem 1rem'}}>
-                    <EstatBadge estat={m.estat} />
-                  </td>
-                  <td style={{padding: '0.75rem 1rem', fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
-                    {m.responsable || '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Filtres */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <input
+          value={cerca}
+          onChange={e => setCerca(e.target.value)}
+          placeholder="Cerca per codi o nom..."
+          style={{
+            padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
+            fontSize: 12, fontFamily: "IBM Plex Mono, monospace", flex: 1, minWidth: 200,
+            background: "#fff", color: "#1d1d1b",
+          }}
+        />
+        <select value={filtreFase} onChange={e => setFiltreFase(e.target.value)} style={{
+          padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
+          fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
+        }}>
+          <option value="">Totes les fases</option>
+          {FASES.map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <select value={filtreEstat} onChange={e => setFiltreEstat(e.target.value)} style={{
+          padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
+          fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
+        }}>
+          <option value="">Tots els estats</option>
+          {["Nou", "En curs", "Bloquejat", "Tancat"].map(e => <option key={e} value={e}>{e}</option>)}
+        </select>
+        {(cerca || filtreFase || filtreEstat) && (
+          <button onClick={() => { setCerca(""); setFiltreFase(""); setFiltreEstat("") }} style={{
+            padding: "6px 12px", border: "1px solid #e0d5c5", borderRadius: 4,
+            fontSize: 11, fontFamily: "IBM Plex Mono, monospace", cursor: "pointer",
+            background: "#fff", color: "#868685",
+          }}>× Netejar</button>
         )}
       </div>
+
+      {/* Llistat */}
+      {loading ? (
+        <div style={{ color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace", padding: "20px 0" }}>
+          Carregant models...
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {models.map(m => (
+            <div
+              key={m.id}
+              onClick={() => navigate(`/models/${m.id}`)}
+              style={{
+                border: "1px solid #e0d5c5", borderRadius: 8, padding: "14px 18px",
+                cursor: "pointer", background: "#fff", transition: "all .1s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#fdf9f5"; e.currentTarget.style.borderColor = "#c27a2a" }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#e0d5c5" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                    <span style={{
+                      fontFamily: "IBM Plex Mono, monospace", fontSize: 13,
+                      fontWeight: 700, color: "#c27a2a",
+                    }}>{m.codi_intern || m.codi_client}</span>
+                    <span style={{ fontSize: 13, color: "#1d1d1b", fontWeight: 500 }}>{m.nom_prenda}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace" }}>
+                    {m.temporada}{m.any ? ` ${m.any}` : ""}
+                    {m.garment_type_nom && ` · ${m.garment_type_nom}`}
+                    {m.responsable_nom && ` · ${m.responsable_nom}`}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                  <EstatBadge estat={m.prioritat} size="xs" />
+                  <EstatBadge estat={m.estat} size="xs" />
+                </div>
+              </div>
+              {m.fase_actual && (
+                <div style={{ transform: "scale(0.9)", transformOrigin: "left center", marginTop: 4 }}>
+                  <FaseStepper faseActual={m.fase_actual} />
+                </div>
+              )}
+              {m.design_freeze_at && (
+                <div style={{ fontSize: 10, color: "#3b6d11", fontFamily: "IBM Plex Mono, monospace", marginTop: 4 }}>
+                  ✓ Design Freeze aprovat
+                </div>
+              )}
+            </div>
+          ))}
+          {models.length === 0 && (
+            <div style={{
+              textAlign: "center", padding: "40px 0",
+              color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace",
+            }}>
+              {cerca || filtreFase || filtreEstat ? "Sense resultats amb aquest filtre." : "Sense models. Crea el primer!"}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

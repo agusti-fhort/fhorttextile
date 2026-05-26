@@ -1,235 +1,299 @@
-import { useState, useEffect } from 'react'
-import { poms, sizeSystems, me } from '../api/endpoints'
-import Card from '../components/ui/Card'
-import Badge from '../components/ui/Badge'
 
-const TABS = [
-  { key: 'perfil',   label: 'Perfil',   icon: 'ti-building' },
-  { key: 'poms',     label: 'POMs',     icon: 'ti-ruler-2' },
-  { key: 'talles',   label: 'Talles',   icon: 'ti-arrows-maximize' },
-  { key: 'usuaris',  label: 'Usuaris',  icon: 'ti-users' },
+import { useState, useEffect } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
+
+const API = import.meta.env.VITE_API_URL || ""
+
+const SECCIONS = [
+  { label: "General", path: "/configuracio" },
+  { label: "Garment Types", path: "/configuracio/garment-types" },
+  { label: "Size Systems", path: "/configuracio/size-systems" },
+  { label: "Grading Rules", path: "/configuracio/grading" },
 ]
 
-export default function Configuracio() {
-  const [tab, setTab] = useState('perfil')
-
+function TabNav({ current }) {
+  const navigate = useNavigate()
   return (
-    <div>
-      <div style={{marginBottom: '1.5rem'}}>
-        <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>Configuració</h1>
-        <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
-          Paràmetres del tenant
-        </p>
-      </div>
-
-      <div style={{
-        display: 'flex', gap: 4, marginBottom: '1.2rem',
-        borderBottom: '0.5px solid #e4e4e2',
-      }}>
-        {TABS.map(t => {
-          const active = tab === t.key
-          return (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              style={{
-                background: 'none',
-                border: 'none',
-                borderBottom: active ? '2px solid var(--gold)' : '2px solid transparent',
-                color: active ? 'var(--charcoal)' : 'var(--gray)',
-                padding: '10px 18px',
-                fontSize: 12,
-                cursor: 'pointer',
-                fontFamily: 'var(--font)',
-                fontWeight: active ? 500 : 400,
-                display: 'flex', alignItems: 'center', gap: 6,
-                marginBottom: -1,
-              }}
-            >
-              <i className={`ti ${t.icon}`} style={{fontSize: 14}} />
-              {t.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {tab === 'perfil'  && <TabPerfil />}
-      {tab === 'poms'    && <TabPoms />}
-      {tab === 'talles'  && <TabTalles />}
-      {tab === 'usuaris' && <TabUsuaris />}
+    <div style={{ display: "flex", borderBottom: "1px solid #e0d5c5", marginBottom: 24 }}>
+      {SECCIONS.map(s => (
+        <button key={s.path} onClick={() => navigate(s.path)} style={{
+          padding: "8px 18px", background: "none", border: "none",
+          borderBottom: current === s.path ? "2px solid #c27a2a" : "2px solid transparent",
+          color: current === s.path ? "#c27a2a" : "#868685",
+          fontFamily: "IBM Plex Mono, monospace", fontSize: 12, cursor: "pointer",
+          fontWeight: current === s.path ? 600 : 400,
+        }}>{s.label}</button>
+      ))}
     </div>
   )
 }
 
-function TabPerfil() {
-  const [profile, setProfile] = useState(null)
+function SeccioGeneral({ token }) {
+  const [me, setMe] = useState(null)
   useEffect(() => {
-    me.get().then(res => setProfile(res.data)).catch(() => {})
-  }, [])
+    fetch(`${API}/api/v1/me/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json()).then(setMe).catch(() => {})
+  }, [token])
 
   return (
-    <Card title="Perfil del tenant" icon="ti-building">
-      {[
-        ['Tenant',  profile?.tenant_nom || profile?.tenant || 'FHORT'],
-        ['Unitats', 'cm'],
-        ['Idioma',  'Català'],
-      ].map(([k, v]) => (
-        <div key={k} style={{
-          display: 'flex', justifyContent: 'space-between',
-          padding: '0.6rem 0', borderBottom: '0.5px solid var(--gray-l)',
-          fontSize: 12,
-        }}>
-          <span style={{color: 'var(--gray)', fontWeight: 300}}>{k}</span>
-          <span style={{fontWeight: 400}}>{v}</span>
+    <div style={{ maxWidth: 480 }}>
+      <div style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: 12, marginBottom: 24 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 12 }}>
+          Compte
         </div>
-      ))}
-    </Card>
+        {me && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[
+              ["Usuari", me.username],
+              ["Nom complet", me.full_name || me.nom_complet],
+              ["Email", me.email],
+              ["Rol", me.rol_nom || "—"],
+            ].map(([label, val]) => (
+              <div key={label} style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 8, padding: "5px 0", borderBottom: "1px solid #f5ede0" }}>
+                <span style={{ color: "#868685" }}>{label}</span>
+                <span style={{ color: "#1d1d1b" }}>{val || "—"}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: 12 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 12 }}>
+          Tenant
+        </div>
+        <div style={{ padding: "10px 14px", background: "#fdf9f5", border: "1px solid #e0d5c5", borderRadius: 6, color: "#868685", fontSize: 11 }}>
+          Configuració avançada del tenant disponible properament.
+        </div>
+      </div>
+    </div>
   )
 }
 
-function TabPoms() {
-  const [data, setData] = useState([])
-  const [total, setTotal] = useState(0)
+function GarmentTypes({ token }) {
+  const [types, setTypes] = useState([])
+  const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    poms.list({ page_size: 500 })
-      .then(res => {
-        setData(res.data.results || [])
-        setTotal(res.data.count || 0)
-      })
-      .finally(() => setLoading(false))
-  }, [])
+    Promise.all([
+      fetch(`${API}/api/v1/garment-types/`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch(`${API}/api/v1/garment-groups/`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ]).then(([t, g]) => {
+      setTypes(Array.isArray(t) ? t : (t.results || []))
+      setGroups(Array.isArray(g) ? g : (g.results || []))
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [token])
 
-  const perCategoria = data.reduce((acc, p) => {
-    const c = p.categoria || 'Sense categoria'
-    acc[c] = (acc[c] || 0) + 1
+  if (loading) return <div style={{ color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
+
+  const byGroup = types.reduce((acc, t) => {
+    const g = t.garment_group_nom || t.garment_group || "Altres"
+    if (!acc[g]) acc[g] = []
+    acc[g].push(t)
     return acc
   }, {})
 
   return (
-    <Card title={`Catàleg POM (${total})`} icon="ti-ruler-2">
-      {loading ? (
-        <div style={{fontSize: 13, color: 'var(--gray)'}}>Carregant...</div>
-      ) : (
-        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem'}}>
-          {Object.entries(perCategoria).map(([cat, n]) => (
-            <div key={cat} style={{
-              padding: '1rem 1.2rem',
-              border: '0.5px solid var(--gray-l)',
-              borderRadius: 8,
-            }}>
-              <div style={{fontSize: 11, color: 'var(--gray)', marginBottom: 4}}>{cat}</div>
-              <div style={{fontSize: 22, fontWeight: 500, color: 'var(--gold)'}}>{n}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
-  )
-}
-
-function TabTalles() {
-  const [data, setData] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    sizeSystems.list({ page_size: 100 })
-      .then(res => setData(res.data.results || []))
-      .finally(() => setLoading(false))
-  }, [])
-
-  return (
-    <Card title={`Size Systems (${data.length})`} icon="ti-arrows-maximize" padding={0}>
-      {loading ? (
-        <div style={{padding: '2rem', fontSize: 13, color: 'var(--gray)', textAlign: 'center'}}>
-          Carregant...
-        </div>
-      ) : data.length === 0 ? (
-        <div style={{padding: '2rem', fontSize: 13, color: 'var(--gray)', textAlign: 'center'}}>
-          Sense Size Systems
-        </div>
-      ) : data.map((s, i) => (
-        <div key={s.id} style={{
-          padding: '0.9rem 1.4rem',
-          borderBottom: i < data.length - 1 ? '0.5px solid var(--gray-l)' : 'none',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <div>
-            <div style={{fontSize: 13, fontWeight: 500}}>{s.nom}</div>
-            <div style={{fontSize: 11, color: 'var(--gray)'}}>Codi: {s.codi || '—'}</div>
+    <div>
+      <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace", marginBottom: 16 }}>
+        {types.length} tipus de prenda · {groups.length} grups
+      </div>
+      {Object.entries(byGroup).map(([group, items]) => (
+        <div key={group} style={{ marginBottom: 20 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
+            textTransform: "uppercase", color: "#c27a2a",
+            fontFamily: "IBM Plex Mono, monospace", marginBottom: 8,
+            padding: "4px 0", borderBottom: "1px solid #e0d5c5",
+          }}>{group}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8 }}>
+            {items.map(t => (
+              <div key={t.id} style={{
+                padding: "8px 12px", border: "1px solid #e0d5c5", borderRadius: 6,
+                fontFamily: "IBM Plex Mono, monospace", fontSize: 12,
+                background: "#fdf9f5",
+              }}>
+                <div style={{ color: "#1d1d1b", fontWeight: 500 }}>{t.nom_ca || t.nom || t.name}</div>
+                {t.nom_en && t.nom_en !== t.nom_ca && (
+                  <div style={{ color: "#868685", fontSize: 11 }}>{t.nom_en}</div>
+                )}
+              </div>
+            ))}
           </div>
-          <Badge variant={s.actiu ? 'ok' : 'gray'}>{s.actiu ? 'Actiu' : 'Inactiu'}</Badge>
         </div>
       ))}
-    </Card>
+    </div>
   )
 }
 
-function TabUsuaris() {
-  const [me_data, setMe] = useState(null)
-  useEffect(() => {
-    me.get().then(res => setMe(res.data)).catch(() => {})
-  }, [])
+function SizeSystems({ token }) {
+  const [systems, setSystems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [obert, setObert] = useState(null)
 
-  const users = me_data ? [me_data] : []
+  useEffect(() => {
+    fetch(`${API}/api/v1/size-systems/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { setSystems(Array.isArray(d) ? d : (d.results || [])); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [token])
+
+  if (loading) return <div style={{ color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
 
   return (
-    <Card title={`Usuaris (${users.length})`} icon="ti-users" padding={0}>
-      {users.length === 0 ? (
-        <div style={{padding: '2rem', fontSize: 13, color: 'var(--gray)', textAlign: 'center'}}>
-          Sense usuaris
+    <div>
+      <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace", marginBottom: 16 }}>
+        {systems.length} sistemes de tallatge
+      </div>
+      {systems.map(s => (
+        <div key={s.id} style={{ marginBottom: 8, border: "1px solid #e0d5c5", borderRadius: 6, overflow: "hidden" }}>
+          <div
+            onClick={() => setObert(obert === s.id ? null : s.id)}
+            style={{
+              padding: "10px 16px", cursor: "pointer", background: "#fdf9f5",
+              display: "flex", alignItems: "center", gap: 12,
+              fontFamily: "IBM Plex Mono, monospace",
+            }}
+          >
+            <span style={{ fontSize: 13, color: "#1d1d1b", fontWeight: 600, flex: 1 }}>{s.nom || s.name}</span>
+            <span style={{ fontSize: 11, color: "#868685" }}>{s.tipus || s.type || ""}</span>
+            <span style={{ color: "#c27a2a" }}>{obert === s.id ? "▴" : "▾"}</span>
+          </div>
+          {obert === s.id && (
+            <div style={{ padding: "8px 16px 12px", background: "#fff", fontFamily: "IBM Plex Mono, monospace", fontSize: 12 }}>
+              <div style={{ color: "#868685", fontSize: 11, marginBottom: 8 }}>Talles del sistema:</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {(s.size_definitions || s.sizes || []).map((sd, i) => (
+                  <span key={i} style={{
+                    padding: "3px 10px", borderRadius: 4, fontSize: 11,
+                    background: "#f5e6d0", color: "#c27a2a", border: "1px solid #e0c8a0",
+                  }}>
+                    {sd.label || sd.size_label || sd}
+                  </span>
+                ))}
+                {(!s.size_definitions && !s.sizes) && (
+                  <span style={{ color: "#868685", fontSize: 11 }}>Talles no carregades</span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-      ) : (
-        <table style={{width: '100%', borderCollapse: 'collapse'}}>
-          <thead>
-            <tr>
-              {['Nom', 'Rol', 'Cost/h', 'Estat'].map(h => (
-                <th key={h} style={hStyle}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u, i) => (
-              <tr key={u.id} style={{
-                borderBottom: i < users.length - 1 ? '0.5px solid var(--gray-l)' : 'none',
-              }}>
-                <td style={{padding: '0.75rem 1rem', fontSize: 13}}>
-                  <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
-                    <span style={{
-                      width: 28, height: 28, borderRadius: '50%',
-                      background: u.color_avatar || 'var(--gold)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'white', fontSize: 11, fontWeight: 500,
-                    }}>
-                      {(u.nom_complet || u.username || '?').slice(0, 2).toUpperCase()}
-                    </span>
-                    {u.nom_complet || u.username}
-                  </div>
-                </td>
-                <td style={{padding: '0.75rem 1rem', fontSize: 12, color: 'var(--gray)'}}>
-                  {u.rol_nom || '—'}
-                </td>
-                <td style={{padding: '0.75rem 1rem', fontSize: 12, fontVariantNumeric: 'tabular-nums'}}>
-                  {u.cost_hora != null ? `${u.cost_hora} €` : '—'}
-                </td>
-                <td style={{padding: '0.75rem 1rem'}}>
-                  <Badge variant={u.actiu ? 'ok' : 'gray'}>{u.actiu ? 'Actiu' : 'Inactiu'}</Badge>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </Card>
+      ))}
+    </div>
   )
 }
 
-const hStyle = {
-  padding: '0.7rem 1rem',
-  fontSize: 10, letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-  color: 'var(--gray)', fontWeight: 400,
-  borderBottom: '0.5px solid #e4e4e2',
-  textAlign: 'left', whiteSpace: 'nowrap',
+function GradingRules({ token }) {
+  const [sets, setSets] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [obert, setObert] = useState(null)
+  const [rules, setRules] = useState({})
+
+  useEffect(() => {
+    fetch(`${API}/api/v1/grading-rule-sets/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { setSets(Array.isArray(d) ? d : (d.results || [])); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [token])
+
+  const loadRules = async (setId) => {
+    if (rules[setId]) return
+    try {
+      const r = await fetch(`${API}/api/v1/grading-rules/?rule_set=${setId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const d = await r.json()
+      setRules(prev => ({ ...prev, [setId]: Array.isArray(d) ? d : (d.results || []) }))
+    } catch (e) {}
+  }
+
+  const handleOpen = (id) => {
+    const nou = obert === id ? null : id
+    setObert(nou)
+    if (nou) loadRules(nou)
+  }
+
+  if (loading) return <div style={{ color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
+
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace", marginBottom: 16 }}>
+        {sets.length} conjunts de regles de grading
+      </div>
+      {sets.map(s => (
+        <div key={s.id} style={{ marginBottom: 8, border: "1px solid #e0d5c5", borderRadius: 6, overflow: "hidden" }}>
+          <div
+            onClick={() => handleOpen(s.id)}
+            style={{
+              padding: "10px 16px", cursor: "pointer", background: "#fdf9f5",
+              display: "flex", alignItems: "center", gap: 12,
+              fontFamily: "IBM Plex Mono, monospace",
+            }}
+          >
+            <span style={{ fontSize: 13, color: "#1d1d1b", fontWeight: 600, flex: 1 }}>{s.nom || s.name}</span>
+            <span style={{ fontSize: 11, color: "#868685" }}>{s.garment_type_nom || ""}</span>
+            <span style={{ color: "#c27a2a" }}>{obert === s.id ? "▴" : "▾"}</span>
+          </div>
+          {obert === s.id && (
+            <div style={{ padding: "8px 16px 12px", background: "#fff" }}>
+              {!rules[s.id] ? (
+                <div style={{ color: "#868685", fontSize: 11, fontFamily: "IBM Plex Mono, monospace" }}>Carregant regles...</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, fontFamily: "IBM Plex Mono, monospace" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #e0d5c5" }}>
+                      {["POM", "Tipus", "Increment", "Actiu"].map(h => (
+                        <th key={h} style={{ textAlign: "left", padding: "4px 8px", color: "#868685", fontWeight: 600 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rules[s.id].map(r => (
+                      <tr key={r.id} style={{ borderBottom: "1px solid #f5ede0" }}>
+                        <td style={{ padding: "4px 8px", color: "#c27a2a" }}>{r.pom_codi || r.pom}</td>
+                        <td style={{ padding: "4px 8px", color: "#1d1d1b" }}>{r.logica || r.grading_type}</td>
+                        <td style={{ padding: "4px 8px", color: "#1d1d1b" }}>{r.increment} cm</td>
+                        <td style={{ padding: "4px 8px" }}>
+                          <span style={{ color: r.actiu ? "#3b6d11" : "#868685" }}>{r.actiu ? "✓" : "—"}</span>
+                        </td>
+                      </tr>
+                    ))}
+                    {rules[s.id].length === 0 && (
+                      <tr><td colSpan={4} style={{ padding: "8px", color: "#868685" }}>Sense regles</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function Configuracio() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const token = localStorage.getItem("token")
+  const current = location.pathname
+
+  // Redirigir sub-rutes desconegudes a general
+  useEffect(() => {
+    if (!SECCIONS.find(s => s.path === current)) navigate("/configuracio")
+  }, [current, navigate])
+
+  return (
+    <div style={{ padding: "24px", maxWidth: 960, margin: "0 auto" }}>
+      <h1 style={{ fontSize: 18, fontFamily: "IBM Plex Mono, monospace", color: "#1d1d1b", marginBottom: 20, fontWeight: 500 }}>
+        Configuració
+      </h1>
+      <TabNav current={current} />
+      {current === "/configuracio" && <SeccioGeneral token={token} />}
+      {current === "/configuracio/garment-types" && <GarmentTypes token={token} />}
+      {current === "/configuracio/size-systems" && <SizeSystems token={token} />}
+      {current === "/configuracio/grading" && <GradingRules token={token} />}
+    </div>
+  )
 }
