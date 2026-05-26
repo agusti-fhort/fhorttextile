@@ -130,7 +130,29 @@ Codi servei usa `estat_mesures` amb valors literals: `'Pendent', 'Talla base obe
 
 **Opció B**: afegir camp `estat_mesures` separat al SizeFitting. Permet dos cicles d'estat (un de mesures, un d'aprovació). Més invasiu i confús.
 
-## 4. models_app.signals.sincronitzar_size_fitting
+## 4. models_app.signals.sincronitzar_size_fitting — ✅ RESOLT
+
+Senyal netejat + descoberts i corregits bugs col·laterals del pre_save:
+
+- **fields_to_copy loop eliminat** (no servia: els camps `garment_type_id`,
+  `garment_group_id`, `grading_rule_set_id`, etc. no existeixen al SizeFitting;
+  viuen al Model i s'accedeixen via `sf.model.X`).
+- **Create funcional**: auto `numero=1`, auto `codi={model.codi_intern}-SF1`,
+  default `tipus='Proto'`, `creat_per_id=instance.responsable_id`.
+- **Skip si Model.responsable és None** (creat_per requerit + PROTECT a SizeFitting).
+- **Pre_save signal `generar_codi_model` arreglat de pas** (era trencat des
+  de sprint2): `instance.client_id` → `getattr(instance, 'client_id', None)`
+  amb fallback a `codi_client` CharField; SQL crua amb `"any"` quoted
+  (paraula reservada PostgreSQL); set `codi_intern` només si no està definit.
+
+Verificat end-to-end: crear un Model amb `responsable` set genera un SizeFitting
+amb `codi=TEST...-SF1, numero=1, tipus=Proto, estat=Pendent`.
+
+Bonus afegit al sprint d'aquest fix: `Model.darrera_activitat` + signal
+`actualitzar_darrera_activitat` (post_save, queryset.update() per bypassar
+recursió de signals).
+
+Detalls del context original (mantenir per referència):
 
 Aquest signal crea automàticament un SizeFitting quan es crea un Model.
 Té dos problemes (un derivat del #3):
@@ -195,6 +217,10 @@ Sense migració però amb 9 punts de canvi.
 2. ~~**#3 SizeFitting.estat_mesures**~~ — ✅ RESOLT
 3. ~~**#1 GradingRule fields**~~ — ✅ RESOLT
 4. ~~**#2 POMMaster fields**~~ — ✅ RESOLT
-5. **#4 Signal sincronitzar_size_fitting** — auto-creació SF ara ja crearà el camp `estat` correctament; cal verificar que la resta del bloc (camps copiats com `garment_group_id` etc.) funciona o cal netejar.
+5. ~~**#4 Signal sincronitzar_size_fitting**~~ — ✅ RESOLT
+
+**Tots els 5 punts del TECH_DEBT inicial resolts.** El flow end-to-end de
+creació de Model → auto-SF → grading → fitting wizard hauria de ser viable
+ara amb dades reals. Pendent: cobertura de tests d'integració.
 
 Tots aquests punts es poden tractar en un sol PR `chore: align grading/tasks services with schema`. Cap requereix nous models ni migracions a banda del que ja està commited (excepte opció A del #5 si es trien camps denormalitzats).

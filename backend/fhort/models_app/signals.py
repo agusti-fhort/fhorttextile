@@ -30,35 +30,42 @@ def generar_codi_model(sender, instance, **kwargs):
     if instance.pk:  # Ja existeix, no regenerar el codi
         return
 
-    if not instance.client_id or not instance.any or not instance.temporada:
-        return  # Sense dades suficients, la validació ho aturarà
+    # Model real no té camp 'client' (FK); usa codi_client (CharField) directament.
+    # Defensiu: si camps no hi son o estan buits, sortim sense fer res.
+    client_id = getattr(instance, 'client_id', None)
+    codi_client_raw = getattr(instance, 'codi_client', None)
+    if not (client_id or codi_client_raw) or not getattr(instance, 'any', None) or not getattr(instance, 'temporada', None):
+        return
 
-    # Llegir codi client
-    try:
-        from fhort.accounts.models import Client
-        client = Client.objects.get(pk=instance.client_id)
-        codi_client = getattr(client, 'codi_client', None) or getattr(client, 'code', None)
-        if not codi_client:
-            # Intenta des del Customer linked
-            codi_client = str(client)[:3].upper()
-    except Exception:
-        codi_client = None
+    # Codi client: del camp directe (si existeix), o via FK client (si el schema l'afegeix més endavant)
+    codi_client = codi_client_raw
+    if not codi_client and client_id:
+        try:
+            from fhort.accounts.models import Client
+            client = Client.objects.get(pk=client_id)
+            codi_client = getattr(client, 'codi_client', None) or getattr(client, 'code', None)
+            if not codi_client:
+                codi_client = str(client)[:3].upper()
+        except Exception:
+            codi_client = None
 
     if not codi_client:
         return
 
     codi_client = codi_client.strip().upper()
 
-    # MAX sequencial per client + any + temporada
+    # MAX sequencial per (codi_client, any, temporada)
+    # Si el schema futur afegeix un FK 'client', migrar a client_id; per ara
+    # usem codi_client (CharField) que és la chave de negoci real al Model.
     from django.db import connection
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT MAX(sequencial)
             FROM models_app_model
-            WHERE client_id = %s
-              AND any = %s
+            WHERE codi_client = %s
+              AND "any" = %s
               AND temporada = %s
-        """, [instance.client_id, instance.any, instance.temporada])
+        """, [codi_client, instance.any, instance.temporada])
         row = cursor.fetchone()
 
     seguent = 1 if (not row or row[0] is None) else int(row[0]) + 1
@@ -67,14 +74,21 @@ def generar_codi_model(sender, instance, **kwargs):
     seq4 = str(seguent).zfill(4)
 
     instance.sequencial = seguent
-    instance.codi = f"{codi_client}-{any2}-{instance.temporada}-{seq4}"
+    # Model no té camp 'codi' (té 'codi_intern'). Generem codi_intern si està buit
+    # — si l'usuari ja l'ha proporcionat (com a roholi8r9k), no el sobreescrivim.
+    if not getattr(instance, 'codi_intern', None):
+        instance.codi_intern = f"{codi_client}-{any2}-{instance.temporada}-{seq4}"
 
 
 @receiver(post_save)
 def sincronitzar_size_fitting(sender, instance, created, **kwargs):
     """
     Crea automàticament el Size & Fitting quan es crea un Model nou.
-    Equivalent al Server Script 'Model - After Insert · Crear SF'.
+    Camps de configuració (garment_type, size_system, etc.) NO es dupliquen
+    al SF: viuen al Model i s'accedeixen via la FK sf.model.X.
+
+    Skip si Model.responsable és None (creat_per és required + PROTECT
+    al SizeFitting). En aquest cas l'SF es pot crear manualment més tard.
     """
     try:
         Model = _get_model_class()
@@ -87,32 +101,42 @@ def sincronitzar_size_fitting(sender, instance, created, **kwargs):
     if not created:
         return
 
-    # Crear SF si no existeix
+    if not instance.responsable_id:
+        return  # No podem crear SF sense creat_per
+
     try:
         from fhort.fitting.models import SizeFitting
-        if not SizeFitting.objects.filter(model=instance).exists():
-            sf = SizeFitting.objects.create(
-                model=instance,
-                estat='Pendent',
-                base_tancada=False,
-            )
-            # Copiar camps del model al SF
-            fields_to_copy = [
-                'garment_type_id', 'garment_group_id', 'grading_rule_set_id',
-                'size_system_id', 'base_size_label', 'size_run_model',
-            ]
-            update_fields = {}
-            for f in fields_to_copy:
-                val = getattr(instance, f, None)
-                if val is not None:
-                    sf_field = f.replace('_id', '')
-                    try:
-                        setattr(sf, f, val)
-                        update_fields[f] = val
-                    except Exception:
-                        pass
-            if update_fields:
-                SizeFitting.objects.filter(pk=sf.pk).update(**update_fields)
+        if SizeFitting.objects.filter(model=instance).exists():
+            return
+        numero = 1
+        codi = f"{instance.codi_intern}-SF{numero}"
+        SizeFitting.objects.create(
+            model=instance,
+            numero=numero,
+            codi=codi,
+            tipus='Proto',
+            estat='Pendent',
+            base_tancada=False,
+            creat_per_id=instance.responsable_id,
+        )
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"No s'ha pogut crear SF per {instance}: {e}")
+
+
+@receiver(post_save)
+def actualitzar_darrera_activitat(sender, instance, **kwargs):
+    """
+    A cada save d'un Model, actualitza darrera_activitat = now().
+    Usa queryset.update() per bypassar signals → cap recursió infinita.
+    """
+    try:
+        Model = _get_model_class()
+    except Exception:
+        return
+
+    if sender is not Model:
+        return
+
+    from django.utils import timezone
+    Model.objects.filter(pk=instance.pk).update(darrera_activitat=timezone.now())

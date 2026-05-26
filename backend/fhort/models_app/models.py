@@ -158,6 +158,9 @@ class Model(models.Model):
         help_text="Etiqueta de la talla base (ha de coincidir amb un valor de size_run_model)",
     )
 
+    # Última activitat (s'actualitza a cada save via signal post_save)
+    darrera_activitat = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         verbose_name = 'Model'
         verbose_name_plural = 'Models'
