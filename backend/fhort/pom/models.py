@@ -17,6 +17,18 @@ class POMGlobal(models.Model):
     unitat = models.CharField(max_length=4, choices=UNITAT_CHOICES, default='cm')
     actiu = models.BooleanField(default=True)
 
+
+
+    # Sprint S1 — ISO 8559-1 linkage
+    body_measure_iso = models.ForeignKey(
+        'BodyMeasurementISO',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='poms_globals',
+        help_text="Mesura corporal ISO 8559-1 equivalent"
+    )
+    # Fi Sprint S1
+
     class Meta:
         verbose_name = 'POM global'
         verbose_name_plural = 'POMs globals'
@@ -199,6 +211,30 @@ class SizeSystem(models.Model):
     descripcio = models.TextField(blank=True)
     actiu = models.BooleanField(default=True)
 
+
+
+    # Sprint S1
+    target = models.ForeignKey(
+        'Target', null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='size_systems',
+    )
+    base_unit = models.CharField(
+        max_length=20, blank=True,
+        choices=[
+            ('ALPHA','Alpha (XS/S/M/L...)'),
+            ('NUMERIC_EU','Numeric EU (34/36/38...)'),
+            ('NUMERIC_US','Numeric US (0/2/4...)'),
+            ('CM_HEIGHT','CM Height (50/56/62...)'),
+            ('MONTHS','Months (0M/3M/6M...)'),
+            ('AGE_YEARS','Age Years (6Y/8Y...)'),
+        ],
+        help_text="Tipus de designacio de talles"
+    )
+    norma_ref = models.CharField(max_length=50, blank=True,
+        help_text="Ex: ISO 8559-2, ASTM D5585")
+    # Fi Sprint S1
+
     class Meta:
         verbose_name = 'Sistema de talles'
         verbose_name_plural = 'Sistemes de talles'
@@ -212,6 +248,24 @@ class SizeDefinition(models.Model):
     etiqueta = models.CharField(max_length=30)
     ordre = models.PositiveIntegerField(default=0)
     valor_numeric = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+
+
+
+    # Sprint S1 — mesures corporals de referencia
+    body_height_cm  = models.DecimalField(max_digits=5, decimal_places=1,
+                        null=True, blank=True,
+                        help_text="Alcada corporal de referencia (ISO 8559-1)")
+    body_bust_cm    = models.DecimalField(max_digits=5, decimal_places=1,
+                        null=True, blank=True,
+                        help_text="Perimetre pit (bust/chest) corporal")
+    body_waist_cm   = models.DecimalField(max_digits=5, decimal_places=1,
+                        null=True, blank=True)
+    body_hip_cm     = models.DecimalField(max_digits=5, decimal_places=1,
+                        null=True, blank=True)
+    age_months_min  = models.IntegerField(null=True, blank=True,
+                        help_text="Mesos minim per a baby/kids sizes")
+    age_months_max  = models.IntegerField(null=True, blank=True)
+    # Fi Sprint S1
 
     class Meta:
         verbose_name = 'Talla'
@@ -253,6 +307,20 @@ class GarmentType(models.Model):
     grup = models.CharField(max_length=40)
     actiu = models.BooleanField(default=True)
 
+
+
+    # Sprint S1 — target i construccio
+    targets_recomanats = models.ManyToManyField(
+        'Target',
+        blank=True,
+        related_name='garment_types',
+    )
+    construccio_habitual = models.CharField(
+        max_length=50, blank=True,
+        help_text="Ex: WOVEN, KNIT, BOTH, STRETCH_KNIT"
+    )
+    # Fi Sprint S1
+
     class Meta:
         verbose_name = 'Tipus garment (tenant)'
         verbose_name_plural = 'Tipus garment (tenant)'
@@ -287,8 +355,39 @@ class GradingRuleSet(models.Model):
         blank=True,
         related_name='grading_rule_sets',
     )
-    size_system = models.ForeignKey(SizeSystem, on_delete=models.PROTECT, related_name='grading_rule_sets')
+    size_system = models.ForeignKey(SizeSystem, on_delete=models.PROTECT, null=True, blank=True, related_name='grading_rule_sets')
     actiu = models.BooleanField(default=True)
+
+
+
+    # Sprint S1 — target, construccio, versioning
+    target = models.ForeignKey(
+        'Target', null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='grading_rule_sets',
+    )
+    construction = models.ForeignKey(
+        'ConstructionType', null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='grading_rule_sets',
+    )
+    fit_type = models.ForeignKey(
+        'FitType', null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='grading_rule_sets',
+    )
+    is_system_default = models.BooleanField(default=False,
+        help_text="True = ve del seed data estandard ISO")
+    parent_version = models.ForeignKey(
+        'self', null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='versions',
+        help_text="NULL = original estandard. Apunta al pare si es versio client."
+    )
+    version_number = models.IntegerField(default=1)
+    codi_sistema = models.CharField(max_length=50, blank=True,
+        help_text="Codi de referencia — ex: EU_WOVEN_WOMAN_REGULAR")
+    # Fi Sprint S1
 
     class Meta:
         verbose_name = 'Joc de regles grading'
@@ -377,3 +476,180 @@ class ClientMesuraPerfil(models.Model):
 
     def __str__(self):
         return f'{self.client_id} · gt{self.garment_type_id} · {self.pom.codi_client} @ {self.talla} (n={self.n_mostres})'
+
+
+
+# =============================================================================
+# SPRINT S1 — Nous models globals (schema public)
+# Afegit a fhort/pom/models.py
+# =============================================================================
+
+class FitType(models.Model):
+    """Tipus de fit (Slim / Regular / Loose / Oversized). Schema public."""
+    CODI_CHOICES = [
+        ('SLIM','Slim'),
+        ('REGULAR','Regular'),
+        ('RELAXED','Relaxed'),
+        ('LOOSE','Loose'),
+        ('OVERSIZED','Oversized'),
+    ]
+    codi          = models.CharField(max_length=20, unique=True, choices=CODI_CHOICES)
+    nom_en        = models.CharField(max_length=100)
+    nom_cat       = models.CharField(max_length=100, blank=True)
+    nom_es        = models.CharField(max_length=100, blank=True)
+    descripcio_en = models.TextField(blank=True)
+    display_order = models.IntegerField(default=0)
+
+    # Sprint S1 — ease fields
+    ease_bust_cm  = models.DecimalField(max_digits=5, decimal_places=1,
+                       null=True, blank=True,
+                       help_text="Ease estandar pit en cm")
+    ease_waist_cm = models.DecimalField(max_digits=5, decimal_places=1,
+                       null=True, blank=True)
+    ease_hip_cm   = models.DecimalField(max_digits=5, decimal_places=1,
+                       null=True, blank=True)
+    ease_thigh_cm = models.DecimalField(max_digits=5, decimal_places=1,
+                       null=True, blank=True)
+    client_definible = models.BooleanField(default=False,
+                       help_text="Si True, el client pot crear instancies propies")
+
+    class Meta:
+        ordering = ['display_order']
+
+    def __str__(self):
+        return self.nom_en
+
+
+class Target(models.Model):
+    """Poblacio objectiu d'una peca de vestir. Schema public."""
+    CODI_CHOICES = [
+        ('WOMAN','Woman'),('MAN','Man'),('UNISEX_ADULT','Unisex Adult'),
+        ('BABY_GIRL','Baby Girl'),('BABY_BOY','Baby Boy'),('BABY_UNISEX','Baby Unisex'),
+        ('TODDLER_GIRL','Toddler Girl'),('TODDLER_BOY','Toddler Boy'),
+        ('GIRL','Girl'),('BOY','Boy'),
+        ('TEEN_GIRL','Teen Girl'),('TEEN_BOY','Teen Boy'),
+        ('MATERNITY','Maternity'),
+    ]
+    PRIMARY_DIM_CHOICES = [
+        ('BUST','Bust girth'),('CHEST','Chest girth'),
+        ('HEIGHT_CM','Height (cm)'),('WAIST','Waist girth'),
+    ]
+    codi            = models.CharField(max_length=20, unique=True, choices=CODI_CHOICES)
+    nom_en          = models.CharField(max_length=100)
+    nom_cat         = models.CharField(max_length=100, blank=True)
+    nom_es          = models.CharField(max_length=100, blank=True)
+    age_min_months  = models.IntegerField(null=True, blank=True)
+    age_max_months  = models.IntegerField(null=True, blank=True)
+    primary_dimension = models.CharField(max_length=20, choices=PRIMARY_DIM_CHOICES, default='BUST')
+    display_order   = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order']
+
+    def __str__(self):
+        return self.nom_en
+
+    @property
+    def is_adult(self):
+        return self.age_min_months is None
+
+    @property
+    def is_baby(self):
+        return self.age_max_months is not None and self.age_max_months <= 36
+
+
+class ConstructionType(models.Model):
+    """Tipus de construccio de teixit. Determina grading i tolerancies."""
+    CODI_CHOICES = [
+        ('WOVEN','Woven (Pla)'),
+        ('KNIT','Knit (Punt Jersey)'),
+        ('STRETCH_KNIT','Stretch Knit (Punt Elastic)'),
+        ('TECHNICAL','Technical'),
+    ]
+    codi                    = models.CharField(max_length=20, unique=True, choices=CODI_CHOICES)
+    nom_en                  = models.CharField(max_length=100)
+    nom_cat                 = models.CharField(max_length=100, blank=True)
+    nom_es                  = models.CharField(max_length=100, blank=True)
+    mesures_en_mitja        = models.BooleanField(default=False,
+                                help_text="Knit specs typically use HALF measurements")
+    tolerancia_critica_cm   = models.DecimalField(max_digits=4, decimal_places=2, default=0.6)
+    tolerancia_secundaria_cm= models.DecimalField(max_digits=4, decimal_places=2, default=0.6)
+    display_order           = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order']
+
+    def __str__(self):
+        return self.nom_en
+
+
+class BodyMeasurementISO(models.Model):
+    """Mesures corporals definides per ISO 8559-1:2017. Schema public."""
+    CATEGORIA_CHOICES = [
+        ('VERTICAL','Vertical measurements (§5.1)'),
+        ('WIDTH_DEPTH','Widths and depths (§5.2)'),
+        ('GIRTH','Girth / circumference (§5.3)'),
+        ('SURFACE','Surface measurements (§5.4)'),
+        ('HAND_FOOT','Hand and foot (§5.5)'),
+        ('OTHER','Other (§5.6)'),
+        ('CALCULATED','Calculated (§5.7)'),
+    ]
+    codi_iso        = models.CharField(max_length=20, blank=True,
+                        help_text="Referencia ISO 8559-1 — ex: 5.3.4")
+    codi_intern     = models.CharField(max_length=50, unique=True,
+                        help_text="Codi FHORT intern — ex: BUST_GIRTH")
+    nom_en          = models.CharField(max_length=200,
+                        help_text="Nom EN (idioma de treball)")
+    nom_cat         = models.CharField(max_length=200, blank=True)
+    nom_es          = models.CharField(max_length=200, blank=True)
+    categoria       = models.CharField(max_length=20, choices=CATEGORIA_CHOICES)
+    htm_en          = models.TextField(blank=True,
+                        help_text="How To Measure — instruccions completes EN")
+    figura_iso      = models.CharField(max_length=20, blank=True,
+                        help_text="Figura de la norma — ex: Fig. 62")
+    es_primaria_iso = models.BooleanField(default=False,
+                        help_text="Es dimensio primaria per designacio de talla (ISO 8559-2)")
+    actiu           = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['categoria', 'codi_iso']
+
+    def __str__(self):
+        return f"{self.codi_iso} — {self.nom_en}"
+
+
+class SizingProfile(models.Model):
+    """
+    Perfil de sizing: combinacio target+garment+construction+fit -> size_system+grading.
+    Es el cor del SizingProfileWizard.
+    Schema public (global) — els tenants poden crear versions propies via parent_profile.
+    """
+    target           = models.ForeignKey('Target', on_delete=models.PROTECT,
+                         related_name='sizing_profiles')
+    garment_type     = models.ForeignKey('GarmentType', on_delete=models.PROTECT,
+                         related_name='sizing_profiles')
+    construction     = models.ForeignKey('ConstructionType', on_delete=models.PROTECT,
+                         related_name='sizing_profiles')
+    fit_type         = models.ForeignKey('FitType', on_delete=models.PROTECT,
+                         related_name='sizing_profiles')
+    size_system      = models.ForeignKey('SizeSystem', on_delete=models.PROTECT,
+                         related_name='sizing_profiles')
+    grading_rule_set = models.ForeignKey('GradingRuleSet', on_delete=models.PROTECT,
+                         related_name='sizing_profiles')
+    is_default       = models.BooleanField(default=True,
+                         help_text="El sistema suggereix aquest perfil per defecte")
+    parent_profile   = models.ForeignKey('self', null=True, blank=True,
+                         on_delete=models.SET_NULL, related_name='versions',
+                         help_text="NULL = perfil estandard. Apunta al pare si es versio client.")
+    version          = models.IntegerField(default=1)
+    modified_by_id   = models.IntegerField(null=True, blank=True,
+                         help_text="ID de l'usuari que ha modificat (cross-schema)")
+    modified_at      = models.DateTimeField(null=True, blank=True)
+    notes            = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['target__display_order', 'garment_type__nom_client']
+
+    def __str__(self):
+        return (f"{self.target.nom_en} | {self.garment_type.nom_en} | "
+                f"{self.construction.nom_en} | {self.fit_type.nom_en}")

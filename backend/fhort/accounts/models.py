@@ -21,3 +21,28 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return self.nom_complet or self.user.get_username()
+
+
+# Sprint S1 — Configuracio per tenant
+class TenantConfig(models.Model):
+    """Configuracio global del tenant. Una sola instancia per tenant."""
+    UNITAT_CHOICES = [('CM','Centimetres (EU)'),('INCH','Inches (US)')]
+    NORMA_CHOICES  = [('ISO_8559','ISO 8559 (EU)'),('ASTM_D13','ASTM D13 (US)')]
+
+    unitat_mesura    = models.CharField(max_length=10, choices=UNITAT_CHOICES, default='CM')
+    norma_referencia = models.CharField(max_length=20, choices=NORMA_CHOICES, default='ISO_8559')
+    nom_empresa      = models.CharField(max_length=200, blank=True)
+    logo_url         = models.URLField(blank=True)
+    creat_at         = models.DateTimeField(auto_now_add=True)
+    actualitzat_at   = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Tenant Configuration"
+
+    def __str__(self):
+        return f"Config — {self.unitat_mesura} | {self.norma_referencia}"
+
+    @classmethod
+    def get_or_create_default(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
