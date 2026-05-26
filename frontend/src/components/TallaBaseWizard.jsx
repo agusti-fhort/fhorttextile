@@ -244,7 +244,7 @@ export function TallaBaseWizard({ model, sfId, token, onComplete }) {
         } else {
           // Suggerits per garment_type
           const gt = model.garment_type || ''
-          const r2 = await fetch(`${API}/api/v1/poms/suggerits/${gt ? `?garment_type=${gt}` : ''}`, {
+          const r2 = await fetch(`${API}/api/v1/poms/suggerits-v2/${gt ? `?garment_type=${gt}` : ''}`, {
             headers: { Authorization: `Bearer ${token}` }
           })
           const d2 = await r2.json()

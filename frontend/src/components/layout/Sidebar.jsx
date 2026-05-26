@@ -68,6 +68,7 @@ const navGroups = [
     ]},
     { labelKey: 'nav.configuracio', icon: 'ti-settings', children: [
       { to: '/configuracio/garment-types', labelKey: 'nav.garment_types' },
+      { to: '/garment-pom-map',            labelKey: 'nav.garment_pom_map' },
       { to: '/configuracio',               labelKey: 'nav.configuracio_general' },
       { to: '/perfil',                     labelKey: 'nav.perfil' },
     ]},
