@@ -36,4 +36,15 @@ try:
 except Exception:
     _sprint7_model_paths = []
 
-urlpatterns = _sprint6_paths + _sprint7_model_paths + router.urls
+# Sprint 8 — xat IA d'extracció. Paths abans del router per evitar
+# col·lisió amb 'models/<pk>/' del ModelViewSet detail.
+try:
+    from .chat_views import chat_extraccio_view, iniciar_chat_extraccio_view
+    _sprint8_paths = [
+        path('models/chat-extraccio/',          chat_extraccio_view),
+        path('models/iniciar-chat-extraccio/',  iniciar_chat_extraccio_view),
+    ]
+except Exception:
+    _sprint8_paths = []
+
+urlpatterns = _sprint6_paths + _sprint7_model_paths + _sprint8_paths + router.urls

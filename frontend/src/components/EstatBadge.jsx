@@ -1,31 +1,32 @@
 
+// Paleta tema clar amb alt contrast (text llegible sobre fons)
 const ESTAT_CONFIG = {
   // Model estats
-  'Nou':                { bg: '#1a1a2a', text: '#5a5aaa', border: '#2a2a4a' },
-  "Pendent d'inputs":  { bg: '#2a2a1a', text: '#8a7a2a', border: '#3a3a1a' },
-  'Preparat':           { bg: '#1a2a1a', text: '#4a9a4a', border: '#2a4a2a' },
-  'En curs':            { bg: '#1a1a2a', text: '#4a7aaa', border: '#2a3a5a' },
-  'En revisió':         { bg: '#2a1a2a', text: '#8a4a9a', border: '#4a2a5a' },
-  'Bloquejat':          { bg: '#2a1a1a', text: '#9a3a3a', border: '#5a2a2a' },
-  'Tancat':             { bg: '#1a1a1a', text: '#5a5a5a', border: '#2a2a2a' },
+  'Nou':                { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  "Pendent d'inputs":   { bg: '#f0dfc0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Preparat':           { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  'En curs':            { bg: '#c27a2a', text: '#1d1d1b', border: '#c27a2a' },
+  'En revisió':         { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Bloquejat':          { bg: '#f0f0f0', text: '#868685', border: '#e0d5c5' },
+  'Tancat':             { bg: '#1d1d1b', text: '#ffffff', border: '#1d1d1b' },
   // Prioritat
-  'Baixa':              { bg: '#1a1a1a', text: '#5a5a5a', border: '#2a2a2a' },
-  'Normal':             { bg: '#1a2a1a', text: '#4a8a4a', border: '#2a4a2a' },
-  'Alta':               { bg: '#2a2a1a', text: '#c27a2a', border: '#3a3a1a' },
-  'Urgent':             { bg: '#2a1a1a', text: '#cc4444', border: '#4a2020' },
+  'Baixa':              { bg: '#f0f0f0', text: '#868685', border: '#e0d5c5' },
+  'Normal':             { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Alta':               { bg: '#c27a2a', text: '#1d1d1b', border: '#c27a2a' },
+  'Urgent':             { bg: '#a32d2d', text: '#ffffff', border: '#a32d2d' },
   // SF estats (display labels — coincideix amb get_estat_display())
-  'Pendent':            { bg: '#1a1a1a', text: '#444', border: '#2a2a2a' },
-  'Base oberta':        { bg: '#1a1a2a', text: '#5a7aaa', border: '#2a2a5a' },
-  'Base tancada':       { bg: '#1a2a2a', text: '#2a8a8a', border: '#1a4a4a' },
-  'Talles generades':   { bg: '#1a2a1a', text: '#4a9a6a', border: '#2a5a3a' },
+  'Pendent':            { bg: '#f0dfc0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Base oberta':        { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Base tancada':       { bg: '#c27a2a', text: '#1d1d1b', border: '#c27a2a' },
+  'Talles generades':   { bg: '#1d1d1b', text: '#ffffff', border: '#1d1d1b' },
   // Tasca estats
-  'Feta':               { bg: '#1a2a1a', text: '#4a9a4a', border: '#2a5a2a' },
-  'Bloquejada':         { bg: '#2a1a1a', text: '#7a3a3a', border: '#4a2020' },
+  'Feta':               { bg: '#1d1d1b', text: '#ffffff', border: '#1d1d1b' },
+  'Bloquejada':         { bg: '#f0f0f0', text: '#868685', border: '#e0d5c5' },
 }
 
 export function EstatBadge({ estat, size = 'sm' }) {
   if (!estat) return null
-  const config = ESTAT_CONFIG[estat] || { bg: '#1a1a2a', text: '#666', border: '#222' }
+  const config = ESTAT_CONFIG[estat] || { bg: '#f0f0f0', text: '#868685', border: '#e0d5c5' }
   const fontSize = size === 'xs' ? 10 : size === 'sm' ? 11 : 12
 
   return (
