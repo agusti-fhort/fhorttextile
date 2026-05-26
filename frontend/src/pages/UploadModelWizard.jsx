@@ -155,8 +155,14 @@ export default function UploadModelWizard() {
     setLoadingMsg("")
   }
 
+  // Step 2 (Design Freeze) ocupa amplada completa per al split report+xat;
+  // la resta de steps queden estrets per llegibilitat.
+  const wrapperStyle = step === 2
+    ? { padding: "24px", maxWidth: 1200, margin: "0 auto" }
+    : { padding: "24px", maxWidth: 640, margin: "0 auto" }
+
   return (
-    <div style={{ padding: "24px", maxWidth: 640, margin: "0 auto" }}>
+    <div style={wrapperStyle}>
       <button onClick={() => navigate(-1)} style={{
         background: "none", border: "none", color: 'var(--text-main)', cursor: "pointer",
         fontSize: 11, fontFamily: "IBM Plex Mono, monospace", marginBottom: 20,
@@ -262,19 +268,25 @@ export default function UploadModelWizard() {
         </div>
       )}
 
-      {/* Step 2 — Design Freeze + xat IA */}
+      {/* Step 2 — Design Freeze + xat IA (wrapperStyle a 1200px amplada) */}
       {step === 2 && result && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20, height: 500 }}>
-          {/* Columna esquerra: report extracció */}
-          <div style={{ overflowY: 'auto' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) minmax(420px, 480px)',
+          gap: 20,
+          height: 'calc(100vh - 280px)',
+          minHeight: 500,
+        }}>
+          {/* Columna esquerra: report extracció (full width, scroll vertical) */}
+          <div style={{ overflowY: 'auto', minWidth: 0 }}>
             <DesignFreezeReport
               result={result}
               onConfirm={handleConfirm}
               onReject={() => { setStep(0); setResult(null) }}
             />
           </div>
-          {/* Columna dreta: xat IA */}
-          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          {/* Columna dreta: xat IA (mínim 420px) */}
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', minWidth: 420 }}>
             <XatExtraccio
               extraccio={result?.extracted}
               fileBase64={fileBase64}

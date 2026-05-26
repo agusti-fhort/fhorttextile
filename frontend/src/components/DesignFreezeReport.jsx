@@ -29,23 +29,23 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
   return (
     <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 12 }}>
 
-      {/* Resultat gate */}
+      {/* Resultat gate — fons negre, label "PASS" en gold, "RETORNAT" en blanc */}
       <div style={{
         padding: '10px 16px',
         borderRadius: 6,
         marginBottom: 16,
-        background: pass ? '#1a2a1a' : '#2a1a1a',
-        border: `1px solid ${pass ? '#2a4a2a' : '#4a2020'}`,
+        background: '#1d1d1b',
+        border: '1px solid #1d1d1b',
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
-        <span style={{ fontSize: 18 }}>{pass ? '✓' : '✗'}</span>
+        <span style={{ fontSize: 18, color: pass ? '#c27a2a' : '#ffffff' }}>{pass ? '✓' : '✗'}</span>
         <div>
-          <div style={{ fontWeight: 600, color: pass ? '#4a9a4a' : '#cc4444', fontSize: 13 }}>
-            Design Freeze — {pass ? 'PASS' : 'RETORNAT'}
+          <div style={{ fontWeight: 600, color: '#ffffff', fontSize: 13 }}>
+            Design Freeze — <span style={{ color: pass ? '#c27a2a' : '#ffffff' }}>{pass ? 'PASS' : 'RETORNAT'}</span>
           </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{filename}</div>
+          <div style={{ color: '#868685', fontSize: 11 }}>{filename}</div>
         </div>
-        <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>
+        <div style={{ marginLeft: 'auto', fontSize: 11, color: '#868685' }}>
           {extracted?.document_type?.replace('_', ' ')}
         </div>
       </div>
