@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({})
   const [recents, setRecents] = useState([])
   const [avisos, setAvisos] = useState([])
+  const [avisosSummary, setAvisosSummary] = useState(null)
   const [me, setMe] = useState(null)
   const [loading, setLoading] = useState(true)
   const [onboarding, setOnboarding] = useState(null)
@@ -44,7 +45,9 @@ export default function Dashboard() {
     Promise.allSettled([
       fetch(`${API}/api/v1/models/?limit=100`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/models/?estat=En+curs&ordering=-darrera_activitat&limit=5`, { headers }).then(r => r.json()),
-      fetch(`${API}/api/v1/pom-alerts/?estat=Obert&limit=100`, { headers }).then(r => r.json()),
+      fetch(`${API}/api/v1/alerts/summary/?dies=30`, { headers })
+        .then(r => r.ok ? r.json() : Promise.reject(r))
+        .catch(() => fetch(`${API}/api/v1/pom-alerts/?estat=Obert&limit=100`, { headers }).then(r => r.json())),
       fetch(`${API}/api/v1/me/`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/onboarding-status/`, { headers }).then(r => r.ok ? r.json() : null),
     ]).then(([allRes, recentsRes, avisosRes, meRes, onbRes]) => {
@@ -65,7 +68,12 @@ export default function Dashboard() {
       // Avisos
       if (avisosRes.status === "fulfilled") {
         const d = avisosRes.value
-        setAvisos(Array.isArray(d) ? d : (d.results || []))
+        const items = Array.isArray(d) ? d : (d.results || d.items || [])
+        setAvisos(items)
+        // Resum nou format (S11): { oberts, resolts, top_poms, ... }
+        if (d && typeof d === 'object' && !Array.isArray(d) && (d.oberts != null || d.top_poms)) {
+          setAvisosSummary(d)
+        }
       }
       // Me
       if (meRes.status === "fulfilled") setMe(meRes.value)
@@ -239,6 +247,26 @@ export default function Dashboard() {
           }}>
             Avisos POM
           </div>
+          {avisosSummary && (
+            <div style={{
+              marginBottom: 10, padding: "8px 10px",
+              border: "1px solid #e0d5c5", borderRadius: 6,
+              background: "#fff", fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+            }}>
+              <div style={{ display: "flex", gap: 12, marginBottom: 6 }}>
+                <span style={{ color: "#a32d2d" }}>● {avisosSummary.oberts ?? 0} oberts</span>
+                <span style={{ color: "#3b6d11" }}>● {avisosSummary.resolts ?? 0} resolts</span>
+                <span style={{ color: "#868685" }}>· {avisosSummary.dies ?? 30}d</span>
+              </div>
+              {avisosSummary.top_poms?.length > 0 && (
+                <div style={{ color: "#868685", fontSize: 10 }}>
+                  Top: {avisosSummary.top_poms.slice(0, 3).map(p =>
+                    `${p.pom_codi || p.pom} (${p.count})`
+                  ).join(" · ")}
+                </div>
+              )}
+            </div>
+          )}
           {loading ? (
             <div style={{ color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
           ) : avisos.length === 0 ? (

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { pomAlerts } from '../api/endpoints'
+import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 
-const ESTATS = ['Pendent', 'Acceptat', 'Corregit']
+const ESTATS = ['Pendent', 'Acceptat', 'Corregit', 'Tots']
 
 const tipusMeta = {
   desviacio:    { variant: 'warn', icon: 'ti-ruler-2',        label: 'Desviació' },
@@ -26,7 +27,8 @@ export default function Avisos() {
 
   const load = () => {
     setLoading(true)
-    pomAlerts.list({ estat, page_size: 200 })
+    const params = estat === 'Tots' ? { page_size: 200 } : { estat, page_size: 200 }
+    pomAlerts.list(params)
       .then(res => setData(res.data.results || []))
       .finally(() => setLoading(false))
   }
@@ -43,6 +45,18 @@ export default function Avisos() {
     }
   }
 
+  const resoldre = async (id) => {
+    setUpdating(id)
+    try {
+      // S11 endpoint nou; fallback al PATCH si encara no està desplegat
+      await client.post(`/api/v1/alerts/${id}/resoldre/`)
+        .catch(() => pomAlerts.update(id, { estat: 'Corregit' }))
+      load()
+    } finally {
+      setUpdating(null)
+    }
+  }
+
   return (
     <div>
       <div style={{
@@ -52,7 +66,7 @@ export default function Avisos() {
         <div>
           <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>Avisos POM</h1>
           <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
-            {data.length} avisos {estat.toLowerCase()}s
+            {data.length} avisos {estat === 'Tots' ? 'en total' : estat.toLowerCase() + 's'}
           </p>
         </div>
         <div style={{display: 'flex', gap: '0.5rem'}}>
@@ -127,21 +141,23 @@ export default function Avisos() {
                       {(a.data_creacio || a.created_at || '').slice(0, 10)}
                     </td>
                     <td style={{padding: '0.5rem 1rem', textAlign: 'right'}}>
-                      {a.estat === 'Pendent' && (
+                      {a.estat !== 'Corregit' && (
                         <div style={{display: 'flex', gap: 6, justifyContent: 'flex-end'}}>
+                          {a.estat === 'Pendent' && (
+                            <button
+                              disabled={updating === a.id}
+                              onClick={() => updateEstat(a.id, 'Acceptat')}
+                              style={btnStyle('var(--gate)')}
+                            >
+                              Acceptar
+                            </button>
+                          )}
                           <button
                             disabled={updating === a.id}
-                            onClick={() => updateEstat(a.id, 'Acceptat')}
-                            style={btnStyle('var(--gate)')}
-                          >
-                            Acceptar
-                          </button>
-                          <button
-                            disabled={updating === a.id}
-                            onClick={() => updateEstat(a.id, 'Corregit')}
+                            onClick={() => resoldre(a.id)}
                             style={btnStyle('var(--ok)')}
                           >
-                            Corregit
+                            Resoldre
                           </button>
                         </div>
                       )}

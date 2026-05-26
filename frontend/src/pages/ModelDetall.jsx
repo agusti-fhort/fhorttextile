@@ -511,6 +511,24 @@ function TabServei({ model, token }) {
 function TabControl({ model, token, onUpdate }) {
   const [generant, setGenerant] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [alertsCount, setAlertsCount] = useState(null)
+
+  useEffect(() => {
+    if (!model?.id) return
+    fetch(`${API}/api/v1/models/${model.id}/alerts/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return
+        const items = Array.isArray(d) ? d : (d.results || [])
+        const oberts = typeof d.oberts === 'number'
+          ? d.oberts
+          : items.filter(a => a.estat !== 'Corregit').length
+        setAlertsCount(oberts)
+      })
+      .catch(() => {})
+  }, [model?.id, token])
 
   const generarTasques = async () => {
     setGenerant(true)
@@ -535,6 +553,32 @@ function TabControl({ model, token, onUpdate }) {
 
   return (
     <div>
+      {alertsCount != null && alertsCount > 0 && (
+        <a
+          href={`/avisos?model=${model?.id}`}
+          style={{
+            marginBottom: 14, padding: '10px 14px', borderRadius: 6,
+            background: '#fff5f5', border: '1px solid #f0c0c0',
+            display: 'flex', alignItems: 'center', gap: 10,
+            fontFamily: 'IBM Plex Mono, monospace', fontSize: 12,
+            textDecoration: 'none',
+          }}
+        >
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            minWidth: 24, height: 24, borderRadius: 12, padding: '0 8px',
+            background: '#a32d2d', color: '#fff', fontWeight: 600, fontSize: 11,
+          }}>
+            {alertsCount}
+          </span>
+          <span style={{ color: '#a32d2d', fontWeight: 500 }}>
+            {alertsCount === 1 ? 'alerta oberta' : 'alertes obertes'}
+          </span>
+          <span style={{ color: '#868685', flex: 1 }}>
+            requereixen revisió
+          </span>
+        </a>
+      )}
       <Section title="Estat del model">
         <div style={{ marginBottom: 12 }}>
           <FaseStepper faseActual={model?.fase_actual || 'Nou'} />
@@ -581,7 +625,82 @@ function TabControl({ model, token, onUpdate }) {
           onGenerarTasques={generarTasques}
         />
       </Section>
+
+      <FittingHistorySection modelId={model?.id} token={token} />
     </div>
+  )
+}
+
+function FittingHistorySection({ modelId, token }) {
+  const [history, setHistory] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (!modelId) return
+    setLoading(true)
+    fetch(`${API}/api/v1/models/${modelId}/fitting-history/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then(d => {
+        setHistory(Array.isArray(d) ? d : (d.results || []))
+        setLoading(false)
+      })
+      .catch(() => { setError('No s\'ha pogut carregar l\'historial'); setLoading(false) })
+  }, [modelId, token])
+
+  return (
+    <Section title="Historial de fittings">
+      {loading ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: 12, fontFamily: 'IBM Plex Mono, monospace' }}>
+          Carregant historial...
+        </div>
+      ) : error ? (
+        <div style={{ color: '#a32d2d', fontSize: 12 }}>{error}</div>
+      ) : history.length === 0 ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: 12, fontFamily: 'IBM Plex Mono, monospace' }}>
+          Cap fitting registrat per a aquest model.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {history.map((h, i) => {
+            const pass = h.pass ?? h.ok_count
+            const fail = h.fail ?? h.fail_count
+            const total = h.total ?? ((pass ?? 0) + (fail ?? 0))
+            return (
+              <div key={h.id || i} style={{
+                padding: '8px 12px', borderRadius: 5,
+                background: '#fdf9f5', border: '1px solid #e0d5c5',
+                display: 'flex', alignItems: 'center', gap: 12,
+                fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
+              }}>
+                <span style={{ color: '#868685', minWidth: 90 }}>
+                  {h.data || h.data_fitting || h.created_at || '—'}
+                </span>
+                <span style={{ color: '#c27a2a', fontWeight: 500, flex: 1 }}>
+                  Fitting #{h.numero ?? h.id}
+                </span>
+                {total > 0 && (
+                  <>
+                    {(pass ?? 0) > 0 && (
+                      <span style={{ color: '#3b6d11' }}>✓ {pass}</span>
+                    )}
+                    {(fail ?? 0) > 0 && (
+                      <span style={{ color: '#a32d2d' }}>✗ {fail}</span>
+                    )}
+                    <span style={{ color: '#868685' }}>/ {total}</span>
+                  </>
+                )}
+                {h.estat && (
+                  <span style={{ color: '#868685', fontSize: 10 }}>{h.estat}</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Section>
   )
 }
 
