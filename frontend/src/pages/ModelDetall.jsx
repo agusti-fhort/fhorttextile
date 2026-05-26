@@ -8,6 +8,7 @@ import { TaulaMesures } from "../components/TaulaMesures"
 import { KanbanTasquesModel } from "../components/KanbanTasquesModel"
 import { TallaBaseWizard } from "../components/TallaBaseWizard"
 import { DesignFreezePanel } from "../components/DesignFreezePanel"
+import { SizingProfileWizard } from "../components/SizingProfileWizard"
 
 const API = import.meta.env.VITE_API_URL || ""
 const TABS = ["Model", "Mesures", "Size & Fitting", "Fitxers", "Servei", "Control"]
@@ -181,6 +182,9 @@ function TabMesures({ model, token, onSave }) {
   const [gGroups, setGGroups] = useState([])
   const [garmentGroup, setGarmentGroup] = useState('')
   const [saving, setSaving] = useState(false)
+  const [showSizingWizard, setShowSizingWizard] = useState(false)
+  const [sizingSaving, setSizingSaving] = useState(false)
+  const [sizingError, setSizingError] = useState(null)
 
   useEffect(() => {
     if (!token) return
@@ -211,6 +215,34 @@ function TabMesures({ model, token, onSave }) {
     setSaving(false)
   }
 
+  const saveSizing = async (result) => {
+    setSizingSaving(true)
+    setSizingError(null)
+    try {
+      const r = await fetch(`${API}/api/v1/models/${model.id}/`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          size_system: result.size_system_id,
+          grading_rule_set: result.grading_rule_set_id,
+          base_size_label: result.base_size_label,
+          size_run_model: result.size_run_model,
+        }),
+      })
+      if (r.ok) {
+        const d = await r.json()
+        onSave && onSave(d)
+        setShowSizingWizard(false)
+      } else {
+        const d = await r.json().catch(() => ({}))
+        setSizingError(d.detail || 'Error guardant la configuració de talles')
+      }
+    } catch (e) {
+      setSizingError(String(e))
+    }
+    setSizingSaving(false)
+  }
+
   return (
     <div>
       <Section title="Tipus de prenda">
@@ -230,17 +262,36 @@ function TabMesures({ model, token, onSave }) {
         <FieldRow label="Fit Type">{model?.fit_type_nom || model?.fit_type}</FieldRow>
       </Section>
       <Section title="Sistema de talla">
-        <FieldRow label="Size System">{model?.size_system_nom || model?.size_system}</FieldRow>
-        <FieldRow label="Talla base" mono>{model?.base_size_label}</FieldRow>
-        <FieldRow label="Run de talles" mono>{model?.size_run_model}</FieldRow>
+        <FieldRow label="Size System">{model?.size_system_nom || model?.size_system || '—'}</FieldRow>
+        <FieldRow label="Talla base" mono>{model?.base_size_label || '—'}</FieldRow>
+        <FieldRow label="Run de talles" mono>{model?.size_run_model || '—'}</FieldRow>
         <FieldRow label="Núm. talles">{
           model?.size_run_model
             ? model.size_run_model.split('·').filter(s => s.trim()).length
             : '—'
         }</FieldRow>
-      </Section>
-      <Section title="Grading">
-        <FieldRow label="Grading Rule Set">{model?.grading_rule_set_nom || model?.grading_rule_set}</FieldRow>
+        <FieldRow label="Grading">{model?.grading_rule_set_nom || model?.grading_rule_set || '—'}</FieldRow>
+        <div style={{ marginTop: 8 }}>
+          {!showSizingWizard ? (
+            <button onClick={() => setShowSizingWizard(true)} style={btnSecondary} disabled={sizingSaving}>
+              {model?.size_system ? 'Reconfigurar talles' : 'Configurar talles'}
+            </button>
+          ) : (
+            <div style={{
+              marginTop: 8, padding: '1rem',
+              border: '1px solid #e0d5c5', borderRadius: 6,
+              background: '#fff',
+            }}>
+              <SizingProfileWizard
+                onComplete={saveSizing}
+                onCancel={() => setShowSizingWizard(false)}
+              />
+            </div>
+          )}
+          {sizingError && (
+            <div style={{ marginTop: 8, color: '#a32d2d', fontSize: 11 }}>{sizingError}</div>
+          )}
+        </div>
       </Section>
       {dirty && (
         <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>

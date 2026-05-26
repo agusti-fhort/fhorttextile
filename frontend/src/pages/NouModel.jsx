@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { models, garmentTypes, garmentGroups, sizeSystems, gradingRuleSets } from '../api/endpoints'
+import { models, garmentTypes, garmentGroups } from '../api/endpoints'
+import { SizingProfileWizard } from '../components/SizingProfileWizard'
 
 const TAB_KEYS = ['model', 'mesures', 'fitting', 'fitxers', 'servei', 'control']
 const TABS_DISABLED_ON_CREATE = new Set(['fitting', 'fitxers', 'servei', 'control'])
@@ -51,16 +52,14 @@ export default function NouModel() {
 
   const [gTypes, setGTypes] = useState([])
   const [gGroups, setGGroups] = useState([])
-  const [ssList, setSsList] = useState([])
-  const [grsList, setGrsList] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [showWizard, setShowWizard] = useState(false)
+  const [sizingResult, setSizingResult] = useState(null)
 
   useEffect(() => {
     garmentTypes.list({ page_size: 200 }).then(r => setGTypes(r.data.results || [])).catch(() => {})
     garmentGroups.list({ page_size: 200 }).then(r => setGGroups(r.data.results || [])).catch(() => {})
-    sizeSystems.list({ page_size: 200 }).then(r => setSsList(r.data.results || [])).catch(() => {})
-    gradingRuleSets.list({ page_size: 200 }).then(r => setGrsList(r.data.results || [])).catch(() => {})
   }, [])
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -261,21 +260,60 @@ export default function NouModel() {
               <Select value={form.fit_type} onChange={v => setField('fit_type', v)}
                 options={FIT_TYPES.map(f => ({ value: f, label: f }))} />
             </Field>
-            <Field label={t('model.fields.size_system')}>
-              <Select value={form.size_system} onChange={v => setField('size_system', v)}
-                options={[{ value: '', label: '—' }, ...ssList.map(s => ({ value: s.id, label: `${s.codi} · ${s.nom}` }))]} />
-            </Field>
 
-            <Field label={t('model.fields.base_size_label')}>
-              <Input value={form.base_size_label} onChange={v => setField('base_size_label', v)} placeholder="M" />
-            </Field>
-            <Field label={t('model.fields.grading_rule_set')}>
-              <Select value={form.grading_rule_set} onChange={v => setField('grading_rule_set', v)}
-                options={[{ value: '', label: '—' }, ...grsList.map(g => ({ value: g.id, label: g.nom }))]} />
-            </Field>
+            <Field label="Configuració de talles" span={2}>
+              {!showWizard && !sizingResult && (
+                <button type="button" onClick={() => setShowWizard(true)} style={btnSecondary}>
+                  <i className="ti ti-plus" style={{fontSize: 14}} />
+                  Configurar talles
+                </button>
+              )}
 
-            <Field label={t('model.fields.size_run_model')} span={2} hint={t('model.fields.size_run_help')}>
-              <Input value={form.size_run_model} onChange={v => setField('size_run_model', v)} placeholder="XS·S·M·L·XL" />
+              {showWizard && (
+                <div style={{
+                  marginTop: 8, padding: '1rem',
+                  border: '0.5px solid #e4e4e2', borderRadius: 8,
+                  background: 'var(--white)',
+                }}>
+                  <SizingProfileWizard
+                    onComplete={(result) => {
+                      setSizingResult(result)
+                      setShowWizard(false)
+                      setForm(f => ({
+                        ...f,
+                        size_system: result.size_system_id,
+                        grading_rule_set: result.grading_rule_set_id,
+                        base_size_label: result.base_size_label,
+                        size_run_model: result.size_run_model,
+                      }))
+                    }}
+                    onCancel={() => setShowWizard(false)}
+                  />
+                </div>
+              )}
+
+              {sizingResult && !showWizard && (
+                <div style={{
+                  padding: '0.8rem 1rem',
+                  border: '0.5px solid #e4e4e2', borderRadius: 8,
+                  background: 'var(--white)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  gap: 12,
+                }}>
+                  <div>
+                    <div style={{fontSize: 13, fontWeight: 500}}>
+                      {sizingResult.size_system_nom} · {sizingResult.base_size_label} ★
+                    </div>
+                    <div style={{fontSize: 11, color: 'var(--gray)', fontWeight: 300, marginTop: 2, fontVariantNumeric: 'tabular-nums'}}>
+                      {sizingResult.size_run_model}
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setShowWizard(true)} style={btnSecondary}>
+                    <i className="ti ti-edit" style={{fontSize: 14}} />
+                    Canviar
+                  </button>
+                </div>
+              )}
             </Field>
           </Grid>
         )}
