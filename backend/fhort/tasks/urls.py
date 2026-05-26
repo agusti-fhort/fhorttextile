@@ -146,3 +146,23 @@ try:
 except Exception as _e_s4:
     import logging
     logging.getLogger(__name__).error(f"Sprint S4 URLs: {_e_s4}")
+
+# Sprint S6 — HTM + CM/INCH unificats
+try:
+    from fhort.pom.s6_views import (
+        pom_htm_view,
+        base_measurements_with_units_view,
+        graded_specs_with_units_view,
+        fitting_lines_with_units_view,
+    )
+    from django.urls import path as _p_s6
+    _s6_paths = [
+        _p_s6('v1/poms/<int:pom_id>/htm/', pom_htm_view),
+        _p_s6('v1/models/<int:model_id>/base-measurements-units/', base_measurements_with_units_view),
+        _p_s6('v1/size-fittings/<int:sf_id>/graded-specs-units/', graded_specs_with_units_view),
+        _p_s6('v1/fittings/<int:fitting_id>/lines-units/', fitting_lines_with_units_view),
+    ]
+    urlpatterns = _s6_paths + urlpatterns
+except Exception as _e_s6:
+    import logging
+    logging.getLogger(__name__).error(f"Sprint S6 URLs: {_e_s6}")
