@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import LanguageSwitcher from './LanguageSwitcher'
+import { UnitToggle } from '../UnitToggle'
 
 const PATH_TO_KEY = {
   '/':                          'nav.dashboard',
@@ -52,6 +53,7 @@ export default function Topbar() {
         <strong style={{color: 'var(--charcoal)', fontWeight: 500}}>{title}</strong>
       </div>
       <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.8rem'}}>
+        <UnitToggle />
         <LanguageSwitcher />
         <button
           onClick={() => navigate('/avisos')}
