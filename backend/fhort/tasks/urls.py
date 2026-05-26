@@ -157,10 +157,10 @@ try:
     )
     from django.urls import path as _p_s6
     _s6_paths = [
-        _p_s6('v1/poms/<int:pom_id>/htm/', pom_htm_view),
-        _p_s6('v1/models/<int:model_id>/base-measurements-units/', base_measurements_with_units_view),
-        _p_s6('v1/size-fittings/<int:sf_id>/graded-specs-units/', graded_specs_with_units_view),
-        _p_s6('v1/fittings/<int:fitting_id>/lines-units/', fitting_lines_with_units_view),
+        _p_s6('poms/<int:pom_id>/htm/', pom_htm_view),
+        _p_s6('models/<int:model_id>/base-measurements-units/', base_measurements_with_units_view),
+        _p_s6('size-fittings/<int:sf_id>/graded-specs-units/', graded_specs_with_units_view),
+        _p_s6('fittings/<int:fitting_id>/lines-units/', fitting_lines_with_units_view),
     ]
     urlpatterns = _s6_paths + urlpatterns
 except Exception as _e_s6:
