@@ -67,11 +67,11 @@ def poms_suggerits_view(request):
     try:
         from fhort.pom.models import POMMaster, GarmentPOMMap, GarmentType
 
-        # Intentar carregar des de GarmentPOMMap
+        # Intentar carregar des de GarmentPOMMap (no té flag is_active al schema;
+        # cada entrada del mapping es considera vàlida per al seu garment_type).
         if garment_type_id:
             mapped_pom_ids = GarmentPOMMap.objects.filter(
                 garment_type_id=garment_type_id,
-                is_active=True,
             ).values_list('pom_id', flat=True)
 
             if mapped_pom_ids:
@@ -277,6 +277,8 @@ def confirmar_talla_base_view(request, model_id):
             'estat_sf': sf.estat,
         })
 
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
     except Exception as e:
         import logging
         logging.getLogger(__name__).exception("Error confirmant talla base")
