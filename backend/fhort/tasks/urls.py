@@ -119,3 +119,30 @@ try:
 except Exception as _e_s2:
     import logging
     logging.getLogger(__name__).error(f"Sprint S2 URLs: {_e_s2}")
+
+# Sprint S4 — Versioning + CM/INCH + Historial
+try:
+    from fhort.pom.s4_views import (
+        update_grading_rule_with_history_view,
+        grading_rule_history_view,
+        sizing_profile_versions_view,
+        grading_rules_with_units_view,
+        restore_version_view,
+    )
+    from django.urls import path as _p_s4
+    _s4_paths = [
+        _p_s4('v1/grading-rule-sets/<int:rule_set_id>/regles/<str:pom_codi>/editar/',
+               update_grading_rule_with_history_view),
+        _p_s4('v1/grading-rule-sets/<int:rule_set_id>/historial/',
+               grading_rule_history_view),
+        _p_s4('v1/grading-rule-sets/<int:rule_set_id>/regles/',
+               grading_rules_with_units_view),
+        _p_s4('v1/sizing-profiles/<int:profile_id>/versions/',
+               sizing_profile_versions_view),
+        _p_s4('v1/sizing-profiles/<int:profile_id>/restaurar/',
+               restore_version_view),
+    ]
+    urlpatterns = _s4_paths + urlpatterns
+except Exception as _e_s4:
+    import logging
+    logging.getLogger(__name__).error(f"Sprint S4 URLs: {_e_s4}")

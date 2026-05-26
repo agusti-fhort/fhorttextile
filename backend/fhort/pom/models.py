@@ -653,3 +653,32 @@ class SizingProfile(models.Model):
     def __str__(self):
         return (f"{self.target.nom_en} | {self.garment_type.nom_en} | "
                 f"{self.construction.nom_en} | {self.fit_type.nom_en}")
+
+
+class GradingRuleHistory(models.Model):
+    """
+    Historial de canvis en una GradingRule.
+    Registra qui ha canviat quin POM, de quin valor a quin, i quan.
+    """
+    rule_set        = models.ForeignKey('GradingRuleSet', on_delete=models.CASCADE,
+                        related_name='history')
+    pom             = models.ForeignKey('POMGlobal', on_delete=models.SET_NULL,
+                        null=True, related_name='rule_history')
+    pom_codi        = models.CharField(max_length=20, blank=True,
+                        help_text="Codi POM cached per si el POM s'elimina")
+    valor_anterior  = models.DecimalField(max_digits=6, decimal_places=2)
+    valor_nou       = models.DecimalField(max_digits=6, decimal_places=2)
+    logica_anterior = models.CharField(max_length=20, blank=True)
+    logica_nova     = models.CharField(max_length=20, blank=True)
+    modificat_per_id = models.IntegerField(null=True, blank=True,
+                        help_text="ID usuari cross-schema")
+    modificat_per_nom = models.CharField(max_length=200, blank=True)
+    modificat_at    = models.DateTimeField(auto_now_add=True)
+    nota            = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ['-modificat_at']
+
+    def __str__(self):
+        return (f"{self.pom_codi}: {self.valor_anterior} → {self.valor_nou} "
+                f"({self.modificat_at.strftime('%Y-%m-%d %H:%M')})")
