@@ -1,380 +1,310 @@
-import { useState, useEffect, useMemo } from 'react'
-import client from '../api/client'
-import SizeSetCard from '../components/SizeSetCard'
-import SizeSetDetail from '../components/SizeSetDetail'
 
-// ─────────────────────────────────────────────────────────────
-// Mock data — estructura preparada per substituir per API real
-// (GET /api/v1/targets/  ·  GET /api/v1/sizing-profiles/)
-// ─────────────────────────────────────────────────────────────
-const MOCK_TARGETS = [
-  { code: 'woman',        en: 'Woman',        ca: 'Dona',           icon: 'ti-user' },
-  { code: 'man',          en: 'Man',          ca: 'Home',           icon: 'ti-user' },
-  { code: 'baby_girl',    en: 'Baby Girl',    ca: 'Nadó nena',      icon: 'ti-baby-carriage' },
-  { code: 'baby_boy',     en: 'Baby Boy',     ca: 'Nadó nen',       icon: 'ti-baby-carriage' },
-  { code: 'baby_unisex',  en: 'Baby Unisex',  ca: 'Nadó unisex',    icon: 'ti-baby-carriage' },
-  { code: 'toddler_girl', en: 'Toddler Girl', ca: 'Nena petita',    icon: 'ti-mood-kid' },
-  { code: 'toddler_boy',  en: 'Toddler Boy',  ca: 'Nen petit',      icon: 'ti-mood-kid' },
-  { code: 'girl',         en: 'Girl',         ca: 'Nena',           icon: 'ti-mood-smile' },
-  { code: 'boy',          en: 'Boy',          ca: 'Nen',            icon: 'ti-mood-smile' },
-  { code: 'teen_girl',    en: 'Teen Girl',    ca: 'Adolescent noia', icon: 'ti-friends' },
-  { code: 'teen_boy',     en: 'Teen Boy',     ca: 'Adolescent noi', icon: 'ti-friends' },
-  { code: 'unisex',       en: 'Unisex',       ca: 'Unisex',         icon: 'ti-users' },
-  { code: 'maternity',    en: 'Maternity',    ca: 'Maternitat',     icon: 'ti-heart' },
-]
+import { useState, useEffect } from "react"
+import { useNavigate, useSearchParams } from "react-router-dom"
+import useAuthStore from "../store/auth"
+import { SizeSetCard } from "../components/SizeSetCard"
+import { SizeSetDetail } from "../components/SizeSetDetail"
 
-const CONSTRUCTIONS = [
-  { code: 'woven',        label: 'Woven' },
-  { code: 'knit',         label: 'Knit' },
-  { code: 'stretch_knit', label: 'Stretch Knit' },
-  { code: 'technical',    label: 'Technical' },
-]
+const API = import.meta.env.VITE_API_URL || ""
 
-// Mock profiles — variats segons target/construction
-const MOCK_PROFILES = [
-  {
-    id: 'p-alpha-eu',
-    name: 'Alpha EU',
-    targets: ['woman', 'man', 'teen_girl', 'teen_boy', 'unisex', 'maternity'],
-    constructions: ['woven', 'knit', 'stretch_knit'],
-    sizes: ['XS', 'S', 'M', 'L', 'XL'],
-    base: 'M',
-    grading: 'Chest +2cm · Hip +2cm · Length +1cm',
-    standard: 'ISO',
-    customClient: null,
-  },
-  {
-    id: 'p-numeric-eu',
-    name: 'Numeric EU',
-    targets: ['woman', 'man', 'maternity'],
-    constructions: ['woven', 'knit', 'stretch_knit', 'technical'],
-    sizes: ['34', '36', '38', '40', '42', '44'],
-    base: '38',
-    grading: 'Chest +2cm · Waist +2cm · Hip +2cm',
-    standard: 'ISO',
-    customClient: null,
-  },
-  {
-    id: 'p-baby-months',
-    name: 'Baby months',
-    targets: ['baby_girl', 'baby_boy', 'baby_unisex'],
-    constructions: ['woven', 'knit', 'stretch_knit'],
-    sizes: ['0-3m', '3-6m', '6-9m', '9-12m', '12-18m', '18-24m'],
-    base: '6-9m',
-    grading: 'Length +3cm · Chest +1cm',
-    standard: 'ISO',
-    customClient: null,
-  },
-  {
-    id: 'p-kids-eu',
-    name: 'Kids EU (height)',
-    targets: ['toddler_girl', 'toddler_boy', 'girl', 'boy'],
-    constructions: ['woven', 'knit', 'stretch_knit'],
-    sizes: ['92', '98', '104', '110', '116', '122', '128'],
-    base: '110',
-    grading: 'Length +6cm · Chest +2cm',
-    standard: 'ISO',
-    customClient: null,
-  },
-  {
-    id: 'p-custom-zara',
-    name: 'Alpha Custom Zara',
-    targets: ['woman', 'man'],
-    constructions: ['woven', 'knit'],
-    sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL'],
-    base: 'S',
-    grading: 'Chest +1.5cm · Hip +1.5cm · Length +1cm',
-    standard: null,
-    customClient: 'Zara',
-  },
-  {
-    id: 'p-technical-uniform',
-    name: 'Technical Uniform',
-    targets: ['man', 'woman', 'unisex'],
-    constructions: ['technical'],
-    sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-    base: 'L',
-    grading: 'Chest +3cm · Sleeve +1.5cm · Length +1cm',
-    standard: 'ISO',
-    customClient: null,
-  },
-]
-
-async function fetchTargets() {
-  try {
-    const res = await client.get('/api/v1/targets/')
-    const list = res.data.results || res.data
-    if (Array.isArray(list) && list.length) return list
-  } catch (_) {}
-  return MOCK_TARGETS
+// Icones de text per a cada target
+const TARGET_ICONS = {
+  WOMAN: "♀", MAN: "♂", UNISEX_ADULT: "◎",
+  BABY_GIRL: "♀°", BABY_BOY: "♂°", BABY_UNISEX: "◉",
+  TODDLER_GIRL: "♀¹", TODDLER_BOY: "♂¹",
+  GIRL: "♀²", BOY: "♂²",
+  TEEN_GIRL: "♀³", TEEN_BOY: "♂³",
+  MATERNITY: "♀♥",
 }
 
-async function fetchProfiles(target, construction) {
-  try {
-    const res = await client.get('/api/v1/sizing-profiles/', {
-      params: { target, construction },
-    })
-    const list = res.data.results || res.data
-    if (Array.isArray(list) && list.length) return list
-  } catch (_) {}
-  return MOCK_PROFILES.filter(p =>
-    p.targets.includes(target) && p.constructions.includes(construction)
-  )
-}
+const TARGET_ORDER = [
+  "WOMAN","MAN","UNISEX_ADULT",
+  "BABY_GIRL","BABY_BOY","BABY_UNISEX",
+  "TODDLER_GIRL","TODDLER_BOY",
+  "GIRL","BOY","TEEN_GIRL","TEEN_BOY","MATERNITY"
+]
 
 export default function SizeLibrary() {
+  const navigate = useNavigate()
+  const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
+  const [searchParams, setSearchParams] = useSearchParams()
+
   const [targets, setTargets] = useState([])
-  const [target, setTarget] = useState(null)
-  const [construction, setConstruction] = useState(null)
+  const [constructions, setConstructions] = useState([])
   const [profiles, setProfiles] = useState([])
-  const [loadingTargets, setLoadingTargets] = useState(true)
   const [loadingProfiles, setLoadingProfiles] = useState(false)
-  const [detailId, setDetailId] = useState(null)
 
-  useEffect(() => {
-    fetchTargets()
-      .then(setTargets)
-      .finally(() => setLoadingTargets(false))
-  }, [])
+  const [selectedTarget, setSelectedTarget] = useState(searchParams.get('target') || null)
+  const [selectedConstruction, setSelectedConstruction] = useState(searchParams.get('construction') || null)
+  const [detailProfileId, setDetailProfileId] = useState(null)
+  const [msg, setMsg] = useState(null)
 
+  // Carregar targets i construccions
   useEffect(() => {
-    if (!target || !construction) {
-      setProfiles([])
-      return
-    }
+    const headers = { Authorization: `Bearer ${token}` }
+
+    fetch(`${API}/api/v1/targets/`, { headers })
+      .then(r => r.json())
+      .then(d => {
+        const all = Array.isArray(d) ? d : (d.results || [])
+        const sorted = TARGET_ORDER
+          .map(codi => all.find(t => t.codi === codi))
+          .filter(Boolean)
+        setTargets(sorted)
+      })
+      .catch(() => {
+        // Mock si API no disponible
+        setTargets([
+          { id: 1, codi: "WOMAN", nom_en: "Woman", nom_cat: "Dona", display_order: 1 },
+          { id: 2, codi: "MAN", nom_en: "Man", nom_cat: "Home", display_order: 2 },
+          { id: 4, codi: "BABY_GIRL", nom_en: "Baby Girl", nom_cat: "Nadó nena", display_order: 4 },
+          { id: 5, codi: "BABY_BOY", nom_en: "Baby Boy", nom_cat: "Nadó nen", display_order: 5 },
+          { id: 9, codi: "GIRL", nom_en: "Girl", nom_cat: "Nena", display_order: 9 },
+          { id: 10, codi: "BOY", nom_en: "Boy", nom_cat: "Nen", display_order: 10 },
+          { id: 11, codi: "TEEN_GIRL", nom_en: "Teen Girl", nom_cat: "Teen nena", display_order: 11 },
+        ])
+      })
+
+    fetch(`${API}/api/v1/construction-types/`, { headers })
+      .then(r => r.json())
+      .then(d => setConstructions(Array.isArray(d) ? d : (d.results || [])))
+      .catch(() => {
+        setConstructions([
+          { id: 1, codi: "WOVEN", nom_en: "Woven", nom_cat: "Teixit pla" },
+          { id: 2, codi: "KNIT", nom_en: "Knit", nom_cat: "Punt jersey" },
+          { id: 3, codi: "STRETCH_KNIT", nom_en: "Stretch Knit", nom_cat: "Punt elàstic" },
+          { id: 4, codi: "TECHNICAL", nom_en: "Technical", nom_cat: "Tècnic" },
+        ])
+      })
+  }, [token])
+
+  // Carregar profiles quan canvia selecció
+  useEffect(() => {
+    if (!selectedTarget) { setProfiles([]); return }
     setLoadingProfiles(true)
-    setDetailId(null)
-    fetchProfiles(target.code, construction.code)
-      .then(setProfiles)
-      .finally(() => setLoadingProfiles(false))
-  }, [target, construction])
+    const params = new URLSearchParams({ target: selectedTarget })
+    if (selectedConstruction) params.set('construction', selectedConstruction)
 
-  const onSelectTarget = (t) => {
-    setTarget(t)
-    setConstruction(null)
-    setProfiles([])
-    setDetailId(null)
+    fetch(`${API}/api/v1/sizing-profiles/?${params}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(d => {
+        setProfiles(Array.isArray(d) ? d : (d.results || []))
+        setLoadingProfiles(false)
+      })
+      .catch(() => {
+        // Mock data
+        setProfiles([
+          {
+            id: 1,
+            size_system: { id: 1, codi: "ALPHA_EU_W", nom: "Alpha EU — Women", base_unit: "ALPHA", norma_ref: "ISO 8559-2" },
+            target: { id: 1, codi: selectedTarget, nom_en: targets.find(t => t.codi === selectedTarget)?.nom_en || selectedTarget },
+            construction: { id: 1, codi: selectedConstruction || "KNIT", nom_en: "Knit" },
+            fit_type_nom: "Regular",
+            grading_rule_set: { id: 1, nom: "EU Knit Woman Regular", codi_sistema: "EU_KNIT_WOMAN_REGULAR", is_system_default: true, version_number: 1 },
+            is_default: true, is_custom: false, version: 1,
+            size_definitions: [
+              { size_label: "XXS" },{ size_label: "XS" },{ size_label: "S" },
+              { size_label: "M" },{ size_label: "L" },{ size_label: "XL" },{ size_label: "XXL" }
+            ],
+            grading_rules_preview: [
+              { pom_codi: "POM-001", pom_nom_en: "Chest width", logica: "LINEAR", increment: 2.0 },
+              { pom_codi: "POM-003", pom_nom_en: "Waist width", logica: "LINEAR", increment: 1.5 },
+              { pom_codi: "POM-004", pom_nom_en: "Hip width", logica: "LINEAR", increment: 2.0 },
+            ]
+          }
+        ])
+        setLoadingProfiles(false)
+      })
+  }, [selectedTarget, selectedConstruction, token])
+
+  const handleClone = async (profile) => {
+    try {
+      const r = await fetch(`${API}/api/v1/sizing-profiles/${profile.id}/clonar/`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nom_client: `Custom ${profile.size_system?.nom}` }),
+      })
+      const d = await r.json()
+      if (r.ok) {
+        setMsg({ type: 'ok', text: d.missatge })
+        // Recarregar perfils
+        setSelectedConstruction(c => c)
+      } else {
+        setMsg({ type: 'error', text: d.error })
+      }
+    } catch (e) {
+      setMsg({ type: 'error', text: String(e) })
+    }
   }
-
-  const onSelectConstruction = (c) => {
-    setConstruction(c)
-    setDetailId(null)
-  }
-
-  const breadcrumb = useMemo(() => {
-    const parts = ['Size Library']
-    if (target) parts.push(target.en)
-    if (construction) parts.push(construction.label)
-    return parts
-  }, [target, construction])
 
   return (
-    <div>
-      <div style={{marginBottom: '1.5rem'}}>
-        <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>Size Library</h1>
-        <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
-          {breadcrumb.map((p, i) => (
-            <span key={i}>
-              {i > 0 && <span style={{margin: '0 6px', color: 'var(--gray-l2, #d4d4d2)'}}>›</span>}
-              <span style={i === breadcrumb.length - 1 ? {color: 'var(--gold)', fontWeight: 500} : {}}>
-                {p}
-              </span>
-            </span>
-          ))}
-        </p>
+    <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto", fontFamily: "IBM Plex Mono, monospace" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 18, fontWeight: 500, color: "#1d1d1b", margin: "0 0 4px" }}>
+          Size Library
+        </h1>
+        <div style={{ fontSize: 12, color: "#868685" }}>
+          Sistemes de talles, runs i grading disponibles per al teu catàleg.
+        </div>
       </div>
 
-      {/* Step 1 — Target */}
-      <Section
-        step={1}
-        title="Target"
-        subtitle="Selecciona la població objectiu"
-        active={!target}
-      >
-        {loadingTargets ? (
-          <div style={loadingStyle}>Carregant...</div>
-        ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-            gap: '0.8rem',
-          }}>
-            {targets.map(t => (
-              <TargetCard
-                key={t.code}
-                target={t}
-                selected={target?.code === t.code}
-                onClick={() => onSelectTarget(t)}
-              />
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {/* Step 2 — Construction */}
-      {target && (
-        <Section
-          step={2}
-          title="Construction"
-          subtitle="Tipus de teixit"
-          active={!construction}
-        >
-          <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
-            {CONSTRUCTIONS.map(c => (
-              <ConstructionPill
-                key={c.code}
-                label={c.label}
-                selected={construction?.code === c.code}
-                onClick={() => onSelectConstruction(c)}
-              />
-            ))}
-          </div>
-        </Section>
+      {/* Missatge global */}
+      {msg && (
+        <div style={{
+          padding: "8px 12px", marginBottom: 16, borderRadius: 4, fontSize: 11,
+          background: msg.type === 'ok' ? "#f0f9f0" : "#fff0f0",
+          border: `1px solid ${msg.type === 'ok' ? "#c0dd97" : "#f09595"}`,
+          color: msg.type === 'ok' ? "#3b6d11" : "#a32d2d",
+          display: "flex", justifyContent: "space-between",
+        }}>
+          {msg.text}
+          <button onClick={() => setMsg(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}>×</button>
+        </div>
       )}
 
-      {/* Step 3 — Size Sets */}
-      {target && construction && (
-        <Section
-          step={3}
-          title="Size Sets"
-          subtitle={`Sistemes de talles disponibles per ${target.en} · ${construction.label}`}
-          active
-        >
-          {loadingProfiles ? (
-            <div style={loadingStyle}>Carregant...</div>
-          ) : profiles.length === 0 ? (
-            <div style={loadingStyle}>
-              No hi ha sistemes definits per aquesta combinació encara.
+      <div style={{ display: "grid", gridTemplateColumns: detailProfileId ? "1fr 420px" : "1fr", gap: 24, alignItems: "start" }}>
+        <div>
+          {/* NIVELL 1 — Target */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 10 }}>
+              1 · Target — per a qui és la peça?
             </div>
-          ) : (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-              gap: '1.2rem',
-            }}>
-              {profiles.map(p => (
-                <div key={p.id}>
-                  <SizeSetCard
-                    profile={p}
-                    onUse={() => alert(`Usar: ${p.name}`)}
-                    onDetail={() => setDetailId(detailId === p.id ? null : p.id)}
-                    onClone={() => alert(`Clonar: ${p.name}`)}
-                    detailOpen={detailId === p.id}
-                  />
-                  {detailId === p.id && (
-                    <div style={{marginTop: 12}}>
-                      <SizeSetDetail profile={p} />
-                    </div>
-                  )}
-                </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {targets.map(t => (
+                <button
+                  key={t.codi}
+                  onClick={() => {
+                    setSelectedTarget(t.codi === selectedTarget ? null : t.codi)
+                    setSelectedConstruction(null)
+                    setDetailProfileId(null)
+                  }}
+                  style={{
+                    padding: "8px 14px", borderRadius: 6, cursor: "pointer",
+                    background: selectedTarget === t.codi ? "#f5e6d0" : "#fff",
+                    color: selectedTarget === t.codi ? "#c27a2a" : "#1d1d1b",
+                    border: `1px solid ${selectedTarget === t.codi ? "#c27a2a" : "#e0d5c5"}`,
+                    fontFamily: "IBM Plex Mono, monospace", fontSize: 12,
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                    minWidth: 80,
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>{TARGET_ICONS[t.codi] || "◆"}</span>
+                  <span style={{ fontWeight: selectedTarget === t.codi ? 600 : 400 }}>{t.nom_en}</span>
+                  <span style={{ fontSize: 9, color: selectedTarget === t.codi ? "#c27a2a" : "#868685" }}>{t.nom_cat}</span>
+                </button>
               ))}
             </div>
+          </div>
+
+          {/* NIVELL 2 — Construction */}
+          {selectedTarget && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 10 }}>
+                2 · Construcció — tipus de teixit
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  onClick={() => setSelectedConstruction(null)}
+                  style={{
+                    padding: "6px 14px", borderRadius: 4, cursor: "pointer",
+                    background: !selectedConstruction ? "#f5e6d0" : "#fff",
+                    color: !selectedConstruction ? "#c27a2a" : "#868685",
+                    border: `1px solid ${!selectedConstruction ? "#c27a2a" : "#e0d5c5"}`,
+                    fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+                  }}
+                >
+                  Tots
+                </button>
+                {constructions.map(c => (
+                  <button
+                    key={c.codi}
+                    onClick={() => setSelectedConstruction(c.codi === selectedConstruction ? null : c.codi)}
+                    style={{
+                      padding: "6px 14px", borderRadius: 4, cursor: "pointer",
+                      background: selectedConstruction === c.codi ? "#f5e6d0" : "#fff",
+                      color: selectedConstruction === c.codi ? "#c27a2a" : "#1d1d1b",
+                      border: `1px solid ${selectedConstruction === c.codi ? "#c27a2a" : "#e0d5c5"}`,
+                      fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+                    }}
+                  >
+                    {c.nom_en}
+                    <span style={{ fontSize: 10, color: "#868685", marginLeft: 4 }}>{c.nom_cat}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
-        </Section>
-      )}
+
+          {/* NIVELL 3 — Size Sets */}
+          {selectedTarget && (
+            <div>
+              <div style={{
+                fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
+                textTransform: "uppercase", color: "#c27a2a",
+                marginBottom: 10, display: "flex", justifyContent: "space-between",
+              }}>
+                <span>3 · Size Sets disponibles</span>
+                <span style={{ color: "#868685", fontWeight: 400 }}>
+                  {loadingProfiles ? "Carregant..." : `${profiles.length} sistemes`}
+                </span>
+              </div>
+
+              {loadingProfiles ? (
+                <div style={{ color: "#868685", fontSize: 12, padding: "20px 0" }}>
+                  Carregant size sets...
+                </div>
+              ) : profiles.length === 0 ? (
+                <div style={{
+                  padding: "20px", border: "1px dashed #e0d5c5", borderRadius: 8,
+                  textAlign: "center", color: "#868685", fontSize: 12,
+                }}>
+                  Sense size sets per a aquesta combinació.
+                  <br />
+                  Executa el seed data (S1b) per carregar els estàndards ISO.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
+                  {profiles.map(p => (
+                    <SizeSetCard
+                      key={p.id}
+                      profile={p}
+                      onDetail={(profile) => setDetailProfileId(profile.id)}
+                      onClone={handleClone}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!selectedTarget && (
+            <div style={{
+              padding: "40px 24px", border: "1px dashed #e0d5c5", borderRadius: 8,
+              textAlign: "center", color: "#868685", fontSize: 12,
+            }}>
+              Selecciona un target per veure els size sets disponibles
+            </div>
+          )}
+        </div>
+
+        {/* Panel de detall */}
+        {detailProfileId && (
+          <div style={{
+            border: "1px solid #e0d5c5", borderRadius: 8,
+            padding: "16px", background: "#fdf9f5",
+            position: "sticky", top: 24,
+            maxHeight: "calc(100vh - 120px)", overflowY: "auto",
+          }}>
+            <SizeSetDetail
+              profileId={detailProfileId}
+              onClose={() => setDetailProfileId(null)}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
-}
-
-// ─── Building blocks ────────────────────────────────────────────
-
-function Section({ step, title, subtitle, active, children }) {
-  return (
-    <div style={{
-      marginBottom: '1.8rem',
-      opacity: active ? 1 : 0.55,
-      transition: 'opacity 0.2s',
-    }}>
-      <div style={{
-        display: 'flex', alignItems: 'baseline', gap: 10,
-        marginBottom: '0.8rem',
-      }}>
-        <span style={{
-          width: 22, height: 22, borderRadius: '50%',
-          background: 'var(--gold-pale)', color: 'var(--gold)',
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 11, fontWeight: 600, flexShrink: 0,
-        }}>{step}</span>
-        <h2 style={{fontSize: 15, fontWeight: 500, margin: 0}}>{title}</h2>
-        <span style={{fontSize: 11, color: 'var(--gray)', fontWeight: 300}}>
-          {subtitle}
-        </span>
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function TargetCard({ target, selected, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        background: selected ? 'var(--gold-pale)' : 'var(--white)',
-        border: `0.5px solid ${selected ? 'var(--gold)' : '#e4e4e2'}`,
-        borderRadius: 12,
-        padding: '1.1rem 1rem',
-        cursor: 'pointer',
-        textAlign: 'center',
-        fontFamily: 'inherit',
-        transition: 'all 0.15s',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 8,
-      }}
-    >
-      <i
-        className={`ti ${target.icon}`}
-        style={{
-          fontSize: 28,
-          color: selected ? 'var(--gold)' : 'var(--gray)',
-          strokeWidth: 1,
-        }}
-      />
-      <div>
-        <div style={{
-          fontSize: 13, fontWeight: 500,
-          color: selected ? 'var(--gold)' : 'var(--ink, #1d1d1b)',
-        }}>
-          {target.en}
-        </div>
-        <div style={{fontSize: 10, color: 'var(--gray)', fontWeight: 300, marginTop: 2}}>
-          {target.ca}
-        </div>
-      </div>
-    </button>
-  )
-}
-
-function ConstructionPill({ label, selected, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        background: selected ? 'var(--gold)' : 'var(--white)',
-        color: selected ? 'white' : 'var(--ink, #1d1d1b)',
-        border: `0.5px solid ${selected ? 'var(--gold)' : '#e4e4e2'}`,
-        borderRadius: 999,
-        padding: '7px 16px',
-        fontSize: 12,
-        fontWeight: selected ? 500 : 400,
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-        transition: 'all 0.15s',
-      }}
-    >
-      {label}
-    </button>
-  )
-}
-
-const loadingStyle = {
-  padding: '2rem',
-  textAlign: 'center',
-  color: 'var(--gray)',
-  fontSize: 13,
-  background: 'var(--white)',
-  border: '0.5px solid #e4e4e2',
-  borderRadius: 12,
 }

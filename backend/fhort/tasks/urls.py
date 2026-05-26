@@ -89,3 +89,33 @@ except Exception as _e4:
 # Sprint 7A — Design Freeze + Talla Base wizard: paths reubicats a
 # models_app/urls.py (models/...) i pom/urls.py (poms/...) per evitar
 # col·lisions amb els routers detail i amb el prefix duplicat 'v1/'.
+
+# Sprint S2 — Sizing + TenantConfig endpoints
+try:
+    from fhort.pom.s2_views import (
+        targets_list_view,
+        construction_types_list_view,
+        sizing_profiles_view,
+        sizing_profile_detail_view,
+        clone_sizing_profile_view,
+        update_grading_rule_view,
+        tenant_config_view,
+        pom_global_cerca_view,
+        garment_types_per_target_view,
+    )
+    from django.urls import path as _p_s2
+    _s2_paths = [
+        _p_s2('v1/targets/', targets_list_view),
+        _p_s2('v1/construction-types/', construction_types_list_view),
+        _p_s2('v1/sizing-profiles/', sizing_profiles_view),
+        _p_s2('v1/sizing-profiles/<int:pk>/', sizing_profile_detail_view),
+        _p_s2('v1/sizing-profiles/<int:pk>/clonar/', clone_sizing_profile_view),
+        _p_s2('v1/grading-rule-sets/<int:rule_set_id>/regles/<str:pom_codi>/', update_grading_rule_view),
+        _p_s2('v1/tenant-config/', tenant_config_view),
+        _p_s2('v1/pom-global/cerca/', pom_global_cerca_view),
+        _p_s2('v1/garment-types/per-target/', garment_types_per_target_view),
+    ]
+    urlpatterns = _s2_paths + urlpatterns
+except Exception as _e_s2:
+    import logging
+    logging.getLogger(__name__).error(f"Sprint S2 URLs: {_e_s2}")

@@ -1,0 +1,18 @@
+
+INTEGRACIÓ MANUAL — Afegir Size Library a App.jsx i Sidebar.jsx
+
+1. App.jsx — afegir import i ruta:
+   import SizeLibrary from './pages/SizeLibrary'
+   <Route path="/size-library" element={<SizeLibrary />} />
+
+2. Sidebar.jsx — afegir item al grup "Sistema" o nou grup "Talles":
+   {
+     label: t('nav.size_library') || 'Size Library',
+     path: '/size-library',
+     icon: 'ruler-2'
+   }
+
+3. i18n — afegir keys a ca.json, es.json, en.json:
+   "nav.size_library": "Size Library"        (ca)
+   "nav.size_library": "Size Library"        (es)
+   "nav.size_library": "Size Library"        (en)

@@ -1,106 +1,129 @@
-import Badge from './ui/Badge'
 
-export default function SizeSetCard({ profile, onUse, onDetail, onClone, detailOpen }) {
-  const isCustom = !!profile.customClient
+import { useState } from "react"
+import useAuthStore from "../store/auth"
+
+const API = import.meta.env.VITE_API_URL || ""
+
+export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false }) {
+  const [cloning, setCloning] = useState(false)
+
+  const sysNom = profile?.size_system?.nom || "—"
+  const sysUnit = profile?.size_system?.base_unit || ""
+  const sizes = profile?.size_definitions || []
+  const baseSize = sizes.find((_, i) => i === Math.floor(sizes.length / 2))?.size_label
+  const rules = profile?.grading_rules_preview || []
+  const isCustom = profile?.is_custom
+  const isDefault = profile?.is_default
+  const nom = profile?.grading_rule_set?.nom || sysNom
+
+  const handleClone = async () => {
+    if (!onClone) return
+    setCloning(true)
+    await onClone(profile)
+    setCloning(false)
+  }
+
   return (
     <div style={{
-      background: 'var(--white)',
-      border: '0.5px solid #e4e4e2',
-      borderRadius: 12,
-      padding: '1.2rem 1.3rem',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '0.9rem',
-    }}>
-      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8}}>
-        <div style={{display: 'flex', alignItems: 'center', gap: 8, minWidth: 0}}>
-          <i className="ti ti-arrows-maximize" style={{fontSize: 16, color: 'var(--gold)'}} />
-          <span style={{fontSize: 14, fontWeight: 500}}>{profile.name}</span>
+      border: `1px solid ${isCustom ? "#c27a2a" : "#e0d5c5"}`,
+      borderRadius: 8, padding: "16px 18px",
+      background: "#fff", fontFamily: "IBM Plex Mono, monospace",
+      transition: "box-shadow .15s",
+    }}
+      onMouseEnter={e => e.currentTarget.style.boxShadow = "0 2px 8px rgba(194,122,42,.12)"}
+      onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
+    >
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#1d1d1b" }}>{sysNom}</div>
+          {!compact && (
+            <div style={{ fontSize: 11, color: "#868685", marginTop: 2 }}>
+              {profile?.target?.nom_en} · {profile?.construction?.nom_en} · {profile?.fit_type_nom}
+            </div>
+          )}
         </div>
-        {isCustom ? (
-          <Badge variant="gold" icon="ti-user-cog">
-            Personalitzat {profile.customClient}
-          </Badge>
-        ) : (
-          <Badge variant="ok" icon="ti-certificate">
-            Estàndard {profile.standard || 'ISO'}
-          </Badge>
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+          {isCustom ? (
+            <span style={{
+              padding: "2px 8px", borderRadius: 3, fontSize: 10,
+              background: "#f5e6d0", color: "#c27a2a", border: "1px solid #e0c8a0",
+            }}>Personalitzat</span>
+          ) : (
+            <span style={{
+              padding: "2px 8px", borderRadius: 3, fontSize: 10,
+              background: "#f0f9f0", color: "#3b6d11", border: "1px solid #c0dd97",
+            }}>Estàndard ISO</span>
+          )}
+        </div>
+      </div>
+
+      {/* Run de talles */}
+      {sizes.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+          {sizes.map((s, i) => {
+            const isBase = s.size_label === baseSize
+            return (
+              <span key={i} style={{
+                padding: "3px 9px", borderRadius: 4, fontSize: 11,
+                background: isBase ? "#f5e6d0" : "#f5f0ea",
+                color: isBase ? "#c27a2a" : "#1d1d1b",
+                border: `1px solid ${isBase ? "#c27a2a" : "#e0d5c5"}`,
+                fontWeight: isBase ? 600 : 400,
+              }}>
+                {s.size_label}{isBase ? " ★" : ""}
+              </span>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Preview grading */}
+      {!compact && rules.length > 0 && (
+        <div style={{
+          fontSize: 10, color: "#868685", marginBottom: 12,
+          padding: "6px 8px", background: "#fdf9f5", borderRadius: 4,
+          border: "1px solid #f0e8d8", lineHeight: 1.8,
+        }}>
+          {rules.map((r, i) => (
+            <span key={i}>
+              {r.pom_codi} <span style={{ color: "#c27a2a" }}>+{r.increment}cm</span>
+              {i < rules.length - 1 ? " · " : ""}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Botons */}
+      <div style={{ display: "flex", gap: 6 }}>
+        {onUse && (
+          <button onClick={() => onUse(profile)} style={{
+            flex: 1, padding: "6px 10px", borderRadius: 4, fontSize: 11,
+            background: "#f5e6d0", color: "#c27a2a", border: "1px solid #c27a2a",
+            cursor: "pointer", fontFamily: "IBM Plex Mono, monospace",
+          }}>
+            ✓ Usar
+          </button>
+        )}
+        {onDetail && (
+          <button onClick={() => onDetail(profile)} style={{
+            padding: "6px 10px", borderRadius: 4, fontSize: 11,
+            background: "#fff", color: "#868685", border: "1px solid #e0d5c5",
+            cursor: "pointer", fontFamily: "IBM Plex Mono, monospace",
+          }}>
+            Detall
+          </button>
+        )}
+        {onClone && !isCustom && (
+          <button onClick={handleClone} disabled={cloning} style={{
+            padding: "6px 10px", borderRadius: 4, fontSize: 11,
+            background: "#fff", color: "#868685", border: "1px solid #e0d5c5",
+            cursor: "pointer", fontFamily: "IBM Plex Mono, monospace",
+          }}>
+            {cloning ? "..." : "⎘ Clonar"}
+          </button>
         )}
       </div>
-
-      <div style={{display: 'flex', flexWrap: 'wrap', gap: 6}}>
-        {profile.sizes.map(s => {
-          const isBase = s === profile.base
-          return (
-            <span key={s} style={{
-              fontSize: 11,
-              padding: '4px 10px',
-              borderRadius: 6,
-              background: isBase ? 'var(--gold)' : 'var(--gold-pale)',
-              color: isBase ? 'white' : 'var(--gold)',
-              fontWeight: 500,
-              fontVariantNumeric: 'tabular-nums',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-            }}>
-              {s}
-              {isBase && <span style={{fontSize: 10}}>★</span>}
-            </span>
-          )
-        })}
-      </div>
-
-      <div style={{
-        fontSize: 11,
-        color: 'var(--gray)',
-        fontWeight: 300,
-        padding: '8px 10px',
-        background: 'var(--gray-l)',
-        borderRadius: 6,
-      }}>
-        <span style={{
-          fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase',
-          color: 'var(--gray)', marginRight: 6,
-        }}>Grading</span>
-        {profile.grading}
-      </div>
-
-      <div style={{display: 'flex', gap: 6, marginTop: 'auto'}}>
-        <ActionBtn primary icon="ti-check" onClick={onUse}>Usar</ActionBtn>
-        <ActionBtn icon={detailOpen ? 'ti-chevron-up' : 'ti-eye'} onClick={onDetail}>
-          {detailOpen ? 'Tancar' : 'Veure detall'}
-        </ActionBtn>
-        <ActionBtn icon="ti-copy" onClick={onClone}>Clonar</ActionBtn>
-      </div>
     </div>
-  )
-}
-
-function ActionBtn({ icon, children, primary, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        flex: 1,
-        background: primary ? 'var(--gold)' : 'var(--white)',
-        color: primary ? 'white' : 'var(--ink, #1d1d1b)',
-        border: primary ? 'none' : '0.5px solid #e4e4e2',
-        borderRadius: 8,
-        padding: '7px 10px',
-        fontSize: 11.5,
-        fontWeight: primary ? 500 : 400,
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 5,
-        transition: 'all 0.15s',
-      }}
-    >
-      {icon && <i className={`ti ${icon}`} style={{fontSize: 13}} />}
-      {children}
-    </button>
   )
 }

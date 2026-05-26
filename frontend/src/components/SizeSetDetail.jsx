@@ -1,188 +1,234 @@
-import { useMemo, useState } from 'react'
-import Badge from './ui/Badge'
 
-// Mock POMs i deltes — estructura preparada per versioning real
-const MOCK_POMS = [
-  { code: 'CHEST',   name: 'Chest width',  delta: 2 },
-  { code: 'WAIST',   name: 'Waist width',  delta: 2 },
-  { code: 'HIP',     name: 'Hip width',    delta: 2 },
-  { code: 'LENGTH',  name: 'Body length',  delta: 1 },
-  { code: 'SLEEVE',  name: 'Sleeve length', delta: 1 },
-  { code: 'SHOULDER', name: 'Shoulder width', delta: 0.5 },
-]
+import { useState, useEffect } from "react"
+import useAuthStore from "../store/auth"
 
-function buildRow(pom, sizes, base) {
-  const baseIdx = sizes.indexOf(base)
-  const baseValue = 50 // valor base arbitrari per mockup
-  const row = {}
-  sizes.forEach((s, i) => {
-    row[s] = +(baseValue + (i - baseIdx) * pom.delta).toFixed(1)
-  })
-  return row
-}
+const API = import.meta.env.VITE_API_URL || ""
 
-export default function SizeSetDetail({ profile }) {
-  const sizes = profile.sizes
-  const base = profile.base
+export function SizeSetDetail({ profileId, onClose }) {
+  const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
+  const [profile, setProfile] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState({})
+  const [saving, setSaving] = useState(null)
+  const [msg, setMsg] = useState(null)
 
-  const initialRows = useMemo(
-    () => MOCK_POMS.map(p => ({
-      ...p,
-      values: buildRow(p, sizes, base),
-      customDelta: p.delta,
-    })),
-    [profile.id]
-  )
-
-  const [rows, setRows] = useState(initialRows)
-  const [edited, setEdited] = useState(false)
-
-  const onEditDelta = (idx, newDelta) => {
-    setRows(prev => {
-      const next = [...prev]
-      const r = { ...next[idx], customDelta: newDelta }
-      const num = parseFloat(newDelta)
-      if (!isNaN(num)) {
-        r.values = buildRow({ ...r, delta: num }, sizes, base)
-      }
-      next[idx] = r
-      return next
+  useEffect(() => {
+    if (!profileId) return
+    setLoading(true)
+    fetch(`${API}/api/v1/sizing-profiles/${profileId}/`, {
+      headers: { Authorization: `Bearer ${token}` }
     })
-    setEdited(true)
+      .then(r => r.json())
+      .then(d => { setProfile(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [profileId, token])
+
+  const handleEdit = (pomCodi, currentVal) => {
+    setEditing(prev => ({ ...prev, [pomCodi]: currentVal }))
   }
 
+  const handleSave = async (pomCodi) => {
+    if (!profile?.grading_rule_set?.id) return
+    setSaving(pomCodi)
+    const newVal = editing[pomCodi]
+
+    if (profile.is_custom) {
+      // Editar directament
+      try {
+        const r = await fetch(
+          `${API}/api/v1/grading-rule-sets/${profile.grading_rule_set.id}/regles/${pomCodi}/`,
+          {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ increment: parseFloat(newVal) }),
+          }
+        )
+        const d = await r.json()
+        if (r.ok) {
+          setMsg({ type: 'ok', text: `${pomCodi} actualitzat a +${newVal}cm` })
+          setEditing(prev => { const n = {...prev}; delete n[pomCodi]; return n })
+        } else {
+          setMsg({ type: 'error', text: d.error })
+        }
+      } catch (e) {
+        setMsg({ type: 'error', text: String(e) })
+      }
+    } else {
+      setMsg({
+        type: 'warn',
+        text: 'Aquest és un perfil estàndard. Clona\'l primer per poder editar-lo.',
+        pomCodi
+      })
+    }
+    setSaving(null)
+  }
+
+  if (loading) return (
+    <div style={{ padding: 24, fontFamily: "IBM Plex Mono, monospace", color: "#868685" }}>
+      Carregant detall...
+    </div>
+  )
+  if (!profile) return null
+
+  const sizes = profile.size_definitions || []
+  const rules = profile.grading_rules_all || profile.grading_rules_preview || []
+
   return (
-    <div style={{
-      background: 'var(--white)',
-      border: '0.5px solid var(--gold)',
-      borderRadius: 12,
-      overflow: 'hidden',
-    }}>
+    <div style={{ fontFamily: "IBM Plex Mono, monospace" }}>
+      {/* Header */}
       <div style={{
-        padding: '0.9rem 1.3rem',
-        borderBottom: '0.5px solid #e4e4e2',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid #e0d5c5",
       }}>
-        <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-          <i className="ti ti-table" style={{fontSize: 16, color: 'var(--gold)'}} />
-          <span style={{fontSize: 13, fontWeight: 500}}>Detall — {profile.name}</span>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "#1d1d1b" }}>
+            {profile.size_system?.nom}
+          </div>
+          <div style={{ fontSize: 11, color: "#868685", marginTop: 2 }}>
+            {profile.target?.nom_en} · {profile.construction?.nom_en} · {profile.fit_type_nom}
+          </div>
         </div>
-        {edited ? (
-          <Badge variant="gold" icon="ti-user-cog">Personalitzat</Badge>
-        ) : profile.customClient ? (
-          <Badge variant="gold" icon="ti-user-cog">Personalitzat {profile.customClient}</Badge>
-        ) : (
-          <Badge variant="ok" icon="ti-certificate">Estàndard {profile.standard || 'ISO'}</Badge>
-        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {profile.is_custom
+            ? <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 3, background: "#f5e6d0", color: "#c27a2a", border: "1px solid #e0c8a0" }}>Personalitzat v{profile.version}</span>
+            : <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 3, background: "#f0f9f0", color: "#3b6d11", border: "1px solid #c0dd97" }}>Estàndard ISO</span>
+          }
+          {onClose && (
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#868685", fontSize: 18 }}>×</button>
+          )}
+        </div>
       </div>
 
-      <div style={{overflowX: 'auto'}}>
-        <table style={{width: '100%', borderCollapse: 'collapse'}}>
-          <thead>
-            <tr>
-              <th style={hStyle}>POM</th>
-              {sizes.map(s => (
-                <th key={s} style={{
-                  ...hStyle,
-                  textAlign: 'center',
-                  color: s === base ? 'var(--gold)' : 'var(--gray)',
-                }}>
-                  {s}{s === base ? ' ★' : ''}
-                </th>
-              ))}
-              <th style={{...hStyle, textAlign: 'center'}}>Δ/talla</th>
-              <th style={{...hStyle, width: 36}}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.code} style={{borderBottom: i < rows.length - 1 ? '0.5px solid var(--gray-l)' : 'none'}}>
-                <td style={{padding: '0.55rem 1rem'}}>
-                  <div style={{fontSize: 11, fontWeight: 500, color: 'var(--gold)'}}>{r.code}</div>
-                  <div style={{fontSize: 10, color: 'var(--gray)', fontWeight: 300}}>{r.name}</div>
-                </td>
-                {sizes.map(s => (
-                  <td key={s} style={{
-                    padding: '0.55rem 0.5rem',
-                    textAlign: 'center',
-                    fontSize: 11,
-                    fontVariantNumeric: 'tabular-nums',
-                    color: s === base ? 'var(--gold)' : 'var(--ink, #1d1d1b)',
-                    fontWeight: s === base ? 500 : 400,
-                  }}>
-                    {r.values[s]}
-                  </td>
-                ))}
-                <td style={{padding: '0.4rem 0.5rem', textAlign: 'center'}}>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={r.customDelta}
-                    onChange={e => onEditDelta(i, e.target.value)}
-                    style={{
-                      width: 60,
-                      padding: '4px 6px',
-                      fontSize: 11,
-                      textAlign: 'center',
-                      border: '0.5px solid #e4e4e2',
-                      borderRadius: 6,
-                      fontFamily: 'inherit',
-                      fontVariantNumeric: 'tabular-nums',
-                      outline: 'none',
-                      background: parseFloat(r.customDelta) !== r.delta ? 'var(--gold-pale)' : 'var(--white)',
-                      color: parseFloat(r.customDelta) !== r.delta ? 'var(--gold)' : 'inherit',
-                    }}
-                  />
-                </td>
-                <td style={{padding: '0.4rem 0.5rem', textAlign: 'center', color: 'var(--gray)'}}>
-                  <i className="ti ti-pencil" style={{fontSize: 13}} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {edited && (
+      {/* Missatge */}
+      {msg && (
         <div style={{
-          padding: '0.7rem 1.3rem',
-          borderTop: '0.5px solid #e4e4e2',
-          background: 'var(--gold-pale)',
-          display: 'flex', justifyContent: 'flex-end', gap: 8,
+          padding: "6px 10px", marginBottom: 12, borderRadius: 4, fontSize: 11,
+          background: msg.type === 'ok' ? "#f0f9f0" : msg.type === 'warn' ? "#fff8f0" : "#fff0f0",
+          border: `1px solid ${msg.type === 'ok' ? "#c0dd97" : msg.type === 'warn' ? "#e0c8a0" : "#f09595"}`,
+          color: msg.type === 'ok' ? "#3b6d11" : msg.type === 'warn' ? "#c27a2a" : "#a32d2d",
         }}>
-          <button style={btnStyle(false)}>Cancel·lar</button>
-          <button style={btnStyle(true)}>
-            <i className="ti ti-device-floppy" style={{fontSize: 13, marginRight: 5}} />
-            Desar com a versió
-          </button>
+          {msg.text}
+        </div>
+      )}
+
+      {/* Taula de grading */}
+      {rules.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 8 }}>
+            Regles de grading — {profile.grading_rule_set?.nom}
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #e0d5c5" }}>
+                  <th style={{ textAlign: "left", padding: "5px 8px", color: "#868685", fontWeight: 600 }}>POM</th>
+                  <th style={{ textAlign: "left", padding: "5px 8px", color: "#868685", fontWeight: 600 }}>Nom</th>
+                  <th style={{ textAlign: "center", padding: "5px 8px", color: "#868685", fontWeight: 600 }}>Lògica</th>
+                  <th style={{ textAlign: "right", padding: "5px 8px", color: "#c27a2a", fontWeight: 600 }}>Δ/talla (cm)</th>
+                  {profile.is_custom && <th style={{ width: 40 }}></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {rules.map((rule, i) => {
+                  const isEditing = rule.pom_codi in editing
+                  return (
+                    <tr key={i} style={{
+                      borderBottom: "1px solid #f5ede0",
+                      background: i % 2 === 0 ? "#fff" : "#fdf9f5",
+                    }}>
+                      <td style={{ padding: "5px 8px", color: "#c27a2a", fontWeight: 600 }}>
+                        {rule.pom_codi}
+                      </td>
+                      <td style={{ padding: "5px 8px", color: "#1d1d1b" }}>
+                        {rule.pom_nom_en}
+                      </td>
+                      <td style={{ padding: "5px 8px", textAlign: "center", color: "#868685" }}>
+                        {rule.logica}
+                      </td>
+                      <td style={{ padding: "5px 8px", textAlign: "right" }}>
+                        {isEditing ? (
+                          <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                            <input
+                              type="number" step="0.1"
+                              value={editing[rule.pom_codi]}
+                              onChange={e => setEditing(prev => ({ ...prev, [rule.pom_codi]: e.target.value }))}
+                              style={{ width: 60, padding: "2px 4px", border: "1px solid #c27a2a", borderRadius: 3, fontSize: 11, textAlign: "right" }}
+                            />
+                            <button
+                              onClick={() => handleSave(rule.pom_codi)}
+                              disabled={saving === rule.pom_codi}
+                              style={{ padding: "2px 6px", borderRadius: 3, fontSize: 10, background: "#f5e6d0", color: "#c27a2a", border: "1px solid #c27a2a", cursor: "pointer" }}
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => setEditing(prev => { const n={...prev}; delete n[rule.pom_codi]; return n })}
+                              style={{ padding: "2px 6px", borderRadius: 3, fontSize: 10, background: "#fff", color: "#868685", border: "1px solid #e0d5c5", cursor: "pointer" }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ) : (
+                          <span style={{ color: "#1d1d1b", fontWeight: 500 }}>+{rule.increment}</span>
+                        )}
+                      </td>
+                      {profile.is_custom && !isEditing && (
+                        <td style={{ padding: "5px 4px", textAlign: "center" }}>
+                          <button
+                            onClick={() => handleEdit(rule.pom_codi, rule.increment)}
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "#868685", fontSize: 13, padding: "0 4px" }}
+                            title="Editar increment"
+                          >
+                            ✏
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Sizes */}
+      {sizes.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 8 }}>
+            Run de talles — {profile.size_system?.nom}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+            {sizes.map((s, i) => (
+              <div key={i} style={{
+                padding: "5px 10px", borderRadius: 4,
+                background: "#fdf9f5", border: "1px solid #e0d5c5",
+                fontSize: 11, textAlign: "center", minWidth: 48,
+              }}>
+                <div style={{ fontWeight: 600, color: "#1d1d1b" }}>{s.size_label}</div>
+                {s.body_bust_cm && (
+                  <div style={{ fontSize: 9, color: "#868685" }}>{s.body_bust_cm}cm</div>
+                )}
+                {s.body_height_cm && (
+                  <div style={{ fontSize: 9, color: "#868685" }}>{s.body_height_cm}cm</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Nota si es estandard */}
+      {!profile.is_custom && (
+        <div style={{
+          marginTop: 16, padding: "8px 12px", borderRadius: 4,
+          background: "#fdf9f5", border: "1px solid #e0d5c5",
+          fontSize: 11, color: "#868685",
+        }}>
+          ℹ Aquest és un perfil estàndard ISO. Per personalitzar els increments,
+          clona\'l i crea la teva versió pròpia.
         </div>
       )}
     </div>
   )
 }
-
-const hStyle = {
-  padding: '0.6rem 1rem',
-  fontSize: 10,
-  letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-  color: 'var(--gray)',
-  fontWeight: 400,
-  borderBottom: '0.5px solid #e4e4e2',
-  textAlign: 'left',
-  whiteSpace: 'nowrap',
-}
-
-const btnStyle = (primary) => ({
-  background: primary ? 'var(--gold)' : 'var(--white)',
-  color: primary ? 'white' : 'var(--ink, #1d1d1b)',
-  border: primary ? 'none' : '0.5px solid #e4e4e2',
-  borderRadius: 8,
-  padding: '6px 14px',
-  fontSize: 12,
-  fontWeight: primary ? 500 : 400,
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-  display: 'inline-flex',
-  alignItems: 'center',
-})
