@@ -117,6 +117,13 @@
       "digitalitzacio": "Digitalización",
       "des_de_zero": "Desde cero"
     },
+    "sections": {
+      "origen": "Origen",
+      "identificacio": "Identificación",
+      "tipus_prenda": "Tipo de prenda",
+      "sistema_talla": "Sistema de tallas",
+      "grading": "Grading"
+    },
     "actions": {
       "create": "Crear modelo",
       "creating": "Creando...",

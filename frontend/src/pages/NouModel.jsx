@@ -10,6 +10,12 @@ const TEMPORADES = ['SS', 'FW', 'CO', 'SP']
 const FIT_TYPES  = ['Regular', 'Slim', 'Relaxed', 'Oversize', 'Tailored']
 const ESTATS     = ['Nou', 'EnCurs', 'EnRevisio', 'Tancat']
 const PRIORITATS = [1, 3, 4, 5]
+// Els valors han de coincidir amb ORIGEN_PATRO_CHOICES del backend.
+const ORIGENS_PATRO = [
+  { value: 'CAD Client',     labelKey: 'cad_client' },
+  { value: 'Digitalització', labelKey: 'digitalitzacio' },
+  { value: 'Des de zero',    labelKey: 'des_de_zero' },
+]
 
 export default function NouModel() {
   const navigate = useNavigate()
@@ -31,9 +37,11 @@ export default function NouModel() {
     prioritat: 3,
     data_objectiu: '',
     observacions: '',
+    origen_patro: '',
+    versio: '',
     // Tab Mesures
     garment_type: '',
-    garment_group: '',  // UI-only: només filtre del dropdown de garment_type
+    garment_group: '',
     fit_type: 'Regular',
     size_system: '',
     base_size_label: '',
@@ -94,6 +102,9 @@ export default function NouModel() {
     if (form.base_size_label) payload.base_size_label = form.base_size_label
     if (form.size_run_model)  payload.size_run_model = form.size_run_model
     if (form.grading_rule_set)payload.grading_rule_set = form.grading_rule_set
+    if (form.garment_group)   payload.garment_group = form.garment_group
+    if (form.origen_patro)    payload.origen_patro = form.origen_patro
+    if (form.versio)          payload.versio = form.versio
 
     setSubmitting(true)
     try {
@@ -214,6 +225,21 @@ export default function NouModel() {
               <Input type="date" value={form.data_objectiu} onChange={v => setField('data_objectiu', v)} />
             </Field>
 
+            <SectionHeader>{t('model.sections.origen')}</SectionHeader>
+            <Field label={t('model.fields.origen_patro')}>
+              <Select
+                value={form.origen_patro}
+                onChange={v => setField('origen_patro', v)}
+                options={[
+                  { value: '', label: '—' },
+                  ...ORIGENS_PATRO.map(o => ({ value: o.value, label: t(`model.origens.${o.labelKey}`) })),
+                ]}
+              />
+            </Field>
+            <Field label={t('model.fields.versio')}>
+              <Input value={form.versio} onChange={v => setField('versio', v)} placeholder="v1" />
+            </Field>
+
             <Field label={t('model.fields.observacions')} span={2}>
               <Textarea value={form.observacions} onChange={v => setField('observacions', v)} rows={4} />
             </Field>
@@ -323,6 +349,24 @@ function Grid({ children }) {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
       gap: '1.1rem',
+    }}>
+      {children}
+    </div>
+  )
+}
+
+function SectionHeader({ children }) {
+  return (
+    <div style={{
+      gridColumn: '1 / -1',
+      marginTop: '0.6rem',
+      paddingBottom: 4,
+      borderBottom: '0.5px solid #e4e4e2',
+      fontSize: 10,
+      letterSpacing: '0.12em',
+      textTransform: 'uppercase',
+      color: 'var(--gray)',
+      fontWeight: 500,
     }}>
       {children}
     </div>

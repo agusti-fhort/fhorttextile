@@ -117,6 +117,13 @@
       "digitalitzacio": "Digitisation",
       "des_de_zero": "From scratch"
     },
+    "sections": {
+      "origen": "Origin",
+      "identificacio": "Identification",
+      "tipus_prenda": "Garment type",
+      "sistema_talla": "Size system",
+      "grading": "Grading"
+    },
     "actions": {
       "create": "Create model",
       "creating": "Creating...",

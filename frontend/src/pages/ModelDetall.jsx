@@ -174,12 +174,56 @@ function TabModel({ model, token, onSave }) {
   )
 }
 
-function TabMesures({ model }) {
+function TabMesures({ model, token, onSave }) {
+  const [gGroups, setGGroups] = useState([])
+  const [garmentGroup, setGarmentGroup] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!token) return
+    fetch(`${API}/api/v1/garment-groups/?page_size=200`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setGGroups(d.results || (Array.isArray(d) ? d : [])) })
+      .catch(() => {})
+  }, [token])
+
+  useEffect(() => {
+    setGarmentGroup(model?.garment_group ?? '')
+  }, [model?.id, model?.garment_group])
+
+  const dirty = String(garmentGroup ?? '') !== String(model?.garment_group ?? '')
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const r = await fetch(`${API}/api/v1/models/${model.id}/`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ garment_group: garmentGroup === '' ? null : garmentGroup }),
+      })
+      if (r.ok) { const d = await r.json(); onSave && onSave(d) }
+    } catch (e) { console.error(e) }
+    setSaving(false)
+  }
+
   return (
     <div>
       <Section title="Tipus de prenda">
         <FieldRow label="Garment Type">{model?.garment_type_nom || model?.garment_type}</FieldRow>
-        <FieldRow label="Garment Group">{model?.garment_group_nom || model?.garment_group}</FieldRow>
+        <FieldRow label="Garment Group">
+          <select
+            value={garmentGroup ?? ''}
+            onChange={e => setGarmentGroup(e.target.value)}
+            style={inputStyle}
+          >
+            <option value="">—</option>
+            {gGroups.map(g => (
+              <option key={g.id} value={g.id}>{g.nom}</option>
+            ))}
+          </select>
+        </FieldRow>
         <FieldRow label="Fit Type">{model?.fit_type_nom || model?.fit_type}</FieldRow>
       </Section>
       <Section title="Sistema de talla">
@@ -195,6 +239,13 @@ function TabMesures({ model }) {
       <Section title="Grading">
         <FieldRow label="Grading Rule Set">{model?.grading_rule_set_nom || model?.grading_rule_set}</FieldRow>
       </Section>
+      {dirty && (
+        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+          <button onClick={save} disabled={saving} style={btnPrimary}>
+            {saving ? 'Guardant...' : 'Guardar'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -583,7 +634,7 @@ export default function ModelDetall() {
       {/* Tab content */}
       <div style={{ minHeight: 400 }}>
         {tab === 0 && <TabModel model={model} token={token} onSave={refresh} />}
-        {tab === 1 && <TabMesures model={model} />}
+        {tab === 1 && <TabMesures model={model} token={token} onSave={refresh} />}
         {tab === 2 && <TabSF model={model} token={token} />}
         {tab === 3 && <TabFitxers model={model} token={token} />}
         {tab === 4 && <TabServei model={model} token={token} />}
