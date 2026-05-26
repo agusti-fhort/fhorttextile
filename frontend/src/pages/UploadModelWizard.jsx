@@ -3,6 +3,7 @@ import { useState, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import useAuthStore from "../store/auth"
 import { DesignFreezeReport } from "../components/DesignFreezeReport"
+import { XatExtraccio } from "../components/XatExtraccio"
 
 const API = import.meta.env.VITE_API_URL || ""
 
@@ -55,6 +56,8 @@ export default function UploadModelWizard() {
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
   const [step, setStep] = useState(0)
   const [file, setFile] = useState(null)
+  const [fileBase64, setFileBase64] = useState(null)
+  const [fileType, setFileType] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState("")
@@ -92,6 +95,15 @@ export default function UploadModelWizard() {
     setError(null)
     setStep(1)
     setLoadingMsg("Analitzant document amb IA...")
+
+    // Llegir fitxer com a base64 en paral·lel — el xat el reutilitza al pas 2.
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const base64 = String(e.target.result).split(',')[1]
+      setFileBase64(base64)
+      setFileType(file.type)
+    }
+    reader.readAsDataURL(file)
 
     const fd = new FormData()
     fd.append("file", file)
@@ -250,13 +262,32 @@ export default function UploadModelWizard() {
         </div>
       )}
 
-      {/* Step 2 — Design Freeze */}
+      {/* Step 2 — Design Freeze + xat IA */}
       {step === 2 && result && (
-        <DesignFreezeReport
-          result={result}
-          onConfirm={handleConfirm}
-          onReject={() => { setStep(0); setResult(null) }}
-        />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20, height: 500 }}>
+          {/* Columna esquerra: report extracció */}
+          <div style={{ overflowY: 'auto' }}>
+            <DesignFreezeReport
+              result={result}
+              onConfirm={handleConfirm}
+              onReject={() => { setStep(0); setResult(null) }}
+            />
+          </div>
+          {/* Columna dreta: xat IA */}
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <XatExtraccio
+              extraccio={result?.extracted}
+              fileBase64={fileBase64}
+              fileType={fileType}
+              onUpdate={(updates) => {
+                setResult(prev => ({
+                  ...prev,
+                  extracted: { ...prev.extracted, ...updates }
+                }))
+              }}
+            />
+          </div>
+        </div>
       )}
 
       {/* Step 3 — Creant */}
