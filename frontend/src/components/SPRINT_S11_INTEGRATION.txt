@@ -1,0 +1,18 @@
+
+INTEGRACIÓ S11 (manual):
+
+1. Dashboard.jsx — secció Avisos:
+   Substituir crida actual (/api/v1/pom-alerts/) per /api/v1/alerts/summary/?dies=30
+   Mostrar resum: X oberts, Y resolts, top POMs amb problemes
+
+2. Avisos.jsx — actualitzar per usar:
+   GET /api/v1/alerts/summary/ (llista completa)
+   POST /api/v1/alerts/{id}/resoldre/ (botó resoldre)
+   Afegir filtre per estat: Obert / Resolt / Tots
+
+3. ModelDetall.jsx — Tab Control:
+   Afegir badge d'alertes: si hi ha alertes obertes, mostrar comptador vermell
+   Crida: GET /api/v1/models/{id}/alerts/
+
+4. npm run build && systemctl reload nginx
+5. Commit: "feat(sprint-s11): notificacions integrades a Dashboard, Avisos i ModelDetall"

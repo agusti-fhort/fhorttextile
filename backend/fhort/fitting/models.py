@@ -220,7 +220,7 @@ class POMAlert(models.Model):
         ('Corregit', 'Corregit'),
     ]
 
-    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='pom_alerts')
+    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='pom_alerts', null=True, blank=True)
     size_fitting = models.ForeignKey(
         SizeFitting,
         on_delete=models.SET_NULL,
@@ -228,10 +228,10 @@ class POMAlert(models.Model):
         blank=True,
         related_name='pom_alerts',
     )
-    pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='alerts')
-    tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES)
-    valor_detectat = models.DecimalField(max_digits=10, decimal_places=4)
-    valor_esperat = models.DecimalField(max_digits=10, decimal_places=4)
+    pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='alerts', null=True, blank=True)
+    tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES, blank=True, default='desviacio')
+    valor_detectat = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    valor_esperat = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     z_score = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True)
     estat = models.CharField(max_length=20, choices=ESTAT_CHOICES, default='Pendent')
     creat_per = models.CharField(max_length=100, default='sistema')
@@ -244,6 +244,15 @@ class POMAlert(models.Model):
         related_name='pom_alerts_resoltes',
     )
     data_resolucio = models.DateTimeField(null=True, blank=True)
+
+    # Sprint S11 — camps addicionals per a vs-spec + check-tolerances
+    desviacio_cm   = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    tolerancia_cm  = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    missatge       = models.TextField(blank=True)
+    origen         = models.CharField(max_length=20, default='FITTING')
+    nota_resolucio = models.TextField(blank=True)
+    resolt_per_user_id = models.IntegerField(null=True, blank=True,
+                       help_text='ID usuari cross-schema (Sprint S11)')
 
     class Meta:
         verbose_name = 'Alerta POM'

@@ -214,12 +214,32 @@ try:
     from fhort.pom.s10_views import fitting_vs_spec_view, model_fitting_history_view
     from django.urls import path as _p_s10
     _s10_paths = [
-        _p_s10('v1/size-fittings/<int:sf_id>/fittings/<int:fitting_id>/vs-spec/',
+        _p_s10('size-fittings/<int:sf_id>/fittings/<int:fitting_id>/vs-spec/',
                 fitting_vs_spec_view),
-        _p_s10('v1/models/<int:model_id>/fitting-history/',
+        _p_s10('models/<int:model_id>/fitting-history/',
                 model_fitting_history_view),
     ]
     urlpatterns = _s10_paths + urlpatterns
 except Exception as _e_s10:
     import logging
     logging.getLogger(__name__).error(f"Sprint S10 URLs: {_e_s10}")
+
+# Sprint S11 — Notificacions automàtiques
+try:
+    from fhort.pom.s11_views import (
+        pom_alerts_summary_view,
+        resolve_alert_view,
+        model_alerts_view,
+        check_tolerances_view,
+    )
+    from django.urls import path as _p_s11
+    _s11_paths = [
+        _p_s11('v1/alerts/summary/', pom_alerts_summary_view),
+        _p_s11('v1/alerts/<int:alert_id>/resoldre/', resolve_alert_view),
+        _p_s11('v1/models/<int:model_id>/alerts/', model_alerts_view),
+        _p_s11('v1/models/<int:model_id>/check-tolerances/', check_tolerances_view),
+    ]
+    urlpatterns = _s11_paths + urlpatterns
+except Exception as _e_s11:
+    import logging
+    logging.getLogger(__name__).error(f"Sprint S11 URLs: {_e_s11}")
