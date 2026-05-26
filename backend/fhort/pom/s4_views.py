@@ -51,14 +51,16 @@ def update_grading_rule_with_history_view(request, rule_set_id, pom_codi):
 
         if rs.is_system_default:
             return Response({
-                'error': 'No es pot editar un RuleSet estàndard. Clona'l primer.',
+                'error': "No es pot editar un RuleSet estàndard. Clona'l primer.",
                 'action': 'clone_first',
             }, status=400)
 
+        from django.db.models import Q
         rule = GradingRule.objects.filter(
             rule_set=rs,
-            pom__codi_intern=pom_codi
-        ).select_related('pom').first()
+        ).filter(
+            Q(pom__pom_global__codi=pom_codi) | Q(pom__codi_client=pom_codi)
+        ).select_related('pom', 'pom__pom_global').first()
 
         if not rule:
             return Response({'error': f'Regla {pom_codi} no trobada'}, status=404)
@@ -79,11 +81,12 @@ def update_grading_rule_with_history_view(request, rule_set_id, pom_codi):
 
         rule.save(update_fields=['increment', 'logica'])
 
-        # Registrar historial
+        # Registrar historial. rule.pom es POMMaster; GradingRuleHistory.pom es FK a POMGlobal.
+        pom_global = rule.pom.pom_global if rule.pom_id and rule.pom.pom_global_id else None
         user_nom = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
         GradingRuleHistory.objects.create(
             rule_set=rs,
-            pom=rule.pom,
+            pom=pom_global,
             pom_codi=pom_codi,
             valor_anterior=val_anterior,
             valor_nou=rule.increment,
@@ -206,18 +209,33 @@ def grading_rules_with_units_view(request, rule_set_id):
         rs = GradingRuleSet.objects.get(pk=rule_set_id)
         rules = GradingRule.objects.filter(
             rule_set=rs, actiu=True
-        ).select_related('pom', 'pom__categoria').order_by(
-            'pom__categoria__display_order', 'pom__codi_intern'
+        ).select_related('pom', 'pom__categoria', 'pom__pom_global').order_by(
+            'pom__categoria__display_order', 'pom__codi_client'
         )
 
         tenant_unit = get_tenant_unit(request)
 
+        def _pom_codi(p):
+            if p.pom_global_id:
+                return p.pom_global.codi
+            return p.codi_client or ''
+
+        def _pom_nom_en(p):
+            if p.pom_global_id and p.pom_global.nom_en:
+                return p.pom_global.nom_en
+            return p.nom_client
+
+        def _pom_nom_ca(p):
+            if p.pom_global_id and p.pom_global.nom_ca:
+                return p.pom_global.nom_ca
+            return p.nom_client
+
         data = [{
             'pom_id': r.pom_id,
-            'pom_codi': r.pom.codi_intern if r.pom_id else '',
-            'pom_nom_en': r.pom.nom_en if r.pom_id else '',
-            'pom_nom_cat': r.pom.nom_cat if r.pom_id else '',
-            'categoria_nom': r.pom.categoria.nom_en if (r.pom_id and r.pom.categoria_id) else '',
+            'pom_codi': _pom_codi(r.pom) if r.pom_id else '',
+            'pom_nom_en': _pom_nom_en(r.pom) if r.pom_id else '',
+            'pom_nom_cat': _pom_nom_ca(r.pom) if r.pom_id else '',
+            'categoria_nom': r.pom.categoria.nom_ca or r.pom.categoria.nom_en if (r.pom_id and r.pom.categoria_id) else '',
             'logica': r.logica,
             'increment_cm': float(r.increment),
             'increment_display': convert_value(float(r.increment), 'CM', tenant_unit),
@@ -277,7 +295,7 @@ def restore_version_view(request, profile_id):
                     updated += 1
 
         return Response({
-            'missatge': f'Perfil restaurat a l''estàndard. {updated} regles restaurades.',
+            'missatge': f"Perfil restaurat a l'estàndard. {updated} regles restaurades.",
             'regles_restaurades': updated,
         })
 

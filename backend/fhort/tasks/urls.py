@@ -131,15 +131,15 @@ try:
     )
     from django.urls import path as _p_s4
     _s4_paths = [
-        _p_s4('v1/grading-rule-sets/<int:rule_set_id>/regles/<str:pom_codi>/editar/',
+        _p_s4('grading-rule-sets/<int:rule_set_id>/regles/<str:pom_codi>/editar/',
                update_grading_rule_with_history_view),
-        _p_s4('v1/grading-rule-sets/<int:rule_set_id>/historial/',
+        _p_s4('grading-rule-sets/<int:rule_set_id>/historial/',
                grading_rule_history_view),
-        _p_s4('v1/grading-rule-sets/<int:rule_set_id>/regles/',
+        _p_s4('grading-rule-sets/<int:rule_set_id>/regles/',
                grading_rules_with_units_view),
-        _p_s4('v1/sizing-profiles/<int:profile_id>/versions/',
+        _p_s4('sizing-profiles/<int:profile_id>/versions/',
                sizing_profile_versions_view),
-        _p_s4('v1/sizing-profiles/<int:profile_id>/restaurar/',
+        _p_s4('sizing-profiles/<int:profile_id>/restaurar/',
                restore_version_view),
     ]
     urlpatterns = _s4_paths + urlpatterns
