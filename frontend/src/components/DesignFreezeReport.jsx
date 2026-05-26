@@ -138,14 +138,15 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
             {poms.map((p, i) => (
               <div key={i} style={{
                 padding: '3px 8px',
-                background: p.base_value_cm ? '#1a2a1a' : '#1a1a1a',
-                border: `1px solid ${p.base_value_cm ? '#2a4a2a' : 'var(--border)'}`,
-                borderRadius: 3,
+                background: '#f5e6d0',
+                border: '1px solid #e0c8a0',
+                borderRadius: 4,
                 fontSize: 11,
-                color: p.base_value_cm ? '#5a9a5a' : '#555',
+                color: '#1d1d1b',
+                fontFamily: 'IBM Plex Mono, monospace',
               }}>
-                <strong>{p.code}</strong>
-                {p.base_value_cm && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>{p.base_value_cm}</span>}
+                <strong style={{ color: '#1d1d1b', fontWeight: 600 }}>{p.code}</strong>
+                {p.base_value_cm && <span style={{ color: '#c27a2a', marginLeft: 4 }}>{p.base_value_cm}</span>}
               </div>
             ))}
           </div>

@@ -97,8 +97,8 @@ def create_from_extraction_view(request):
 
     try:
         from django_tenants.utils import schema_context
-        from fhort.models_app.models import Model
-        from fhort.pom.models import POMMaster, BaseMeasurement
+        from fhort.models_app.models import Model, BaseMeasurement
+        from fhort.pom.models import POMMaster
 
         tenant_schema = request.tenant.schema_name if hasattr(request, 'tenant') else 'fhort'
 

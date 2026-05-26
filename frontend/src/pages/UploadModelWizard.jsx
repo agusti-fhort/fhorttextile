@@ -22,11 +22,11 @@ function StepIndicator({ current }) {
             }}>
               <div style={{
                 width: 28, height: 28, borderRadius: "50%",
-                background: active ? "#c27a2a" : done ? "#1a2a1a" : "#111",
-                border: `1px solid ${active ? "#c27a2a" : done ? "#2a4a2a" : 'var(--border)'}`,
+                background: active ? "#c27a2a" : done ? "#f5e6d0" : "#f0f0f0",
+                border: `1px solid ${active ? "#c27a2a" : done ? "#e0c8a0" : "#e0d5c5"}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 11, fontFamily: "IBM Plex Mono, monospace",
-                color: active ? "#1d1d1b" : done ? "#4a9a4a" : "#333",
+                color: active ? "#1d1d1b" : done ? "#1d1d1b" : "#868685",
                 fontWeight: active ? 600 : 400,
               }}>
                 {done ? "✓" : i + 1}
@@ -34,13 +34,13 @@ function StepIndicator({ current }) {
               <div style={{
                 fontSize: 10, whiteSpace: "nowrap",
                 fontFamily: "IBM Plex Mono, monospace",
-                color: active ? "#c27a2a" : done ? "#4a9a4a" : "#333",
+                color: active ? "#c27a2a" : done ? "#1d1d1b" : "#868685",
               }}>
                 {s}
               </div>
             </div>
             {i < STEPS.length - 1 && (
-              <div style={{ width: 40, height: 1, background: i < current ? "#2a4a2a" : "#1a1a1a", margin: "0 4px", marginBottom: 18 }} />
+              <div style={{ width: 40, height: 1, background: i < current ? "#c27a2a" : "#e0d5c5", margin: "0 4px", marginBottom: 18 }} />
             )}
           </div>
         )

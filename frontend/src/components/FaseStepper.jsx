@@ -4,15 +4,18 @@ const FASES = [
   'Mostres', 'Preproducció', 'Producció', 'Tancat'
 ]
 
+// Paleta tema clar: fons gold pàl·lid + text negre per a fases "done";
+// fons gold pur + text negre per a "active"; gris baixa opacitat per "future".
+// Regla de contrast: text sempre #1d1d1b (sobre fons clar) o #ffffff (sobre fons fosc).
 const FASE_COLORS = {
-  'Nou':          { bg: '#1a1a1a', text: '#555', border: '#2a2a2a' },
-  'Disseny':      { bg: '#1a2a1a', text: '#4a8a4a', border: '#2a4a2a' },
-  'Tècnic':       { bg: '#1a1a2a', text: '#4a4a8a', border: '#2a2a4a' },
-  'Prototip':     { bg: '#2a1a1a', text: '#8a4a2a', border: '#4a2a1a' },
-  'Mostres':      { bg: '#2a2a1a', text: '#8a7a2a', border: '#4a4a1a' },
-  'Preproducció': { bg: '#1a2a2a', text: '#2a7a7a', border: '#1a4a4a' },
-  'Producció':    { bg: '#2a1a2a', text: '#7a2a7a', border: '#4a1a4a' },
-  'Tancat':       { bg: '#1a1a1a', text: '#5a5a5a', border: '#3a3a3a' },
+  'Nou':          { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Disseny':      { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Tècnic':       { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Prototip':     { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Mostres':      { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Preproducció': { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Producció':    { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
+  'Tancat':       { bg: '#1d1d1b', text: '#ffffff', border: '#1d1d1b' },
 }
 
 export function FaseStepper({ faseActual, onFaseClick }) {
@@ -48,13 +51,13 @@ export function FaseStepper({ faseActual, onFaseClick }) {
                   ? '#c27a2a'
                   : done
                   ? colors.bg
-                  : '#111',
+                  : '#f0f0f0',
                 color: active
                   ? '#1d1d1b'
                   : done
                   ? colors.text
-                  : '#333',
-                border: `1px solid ${active ? '#c27a2a' : done ? colors.border : '#222'}`,
+                  : '#868685',
+                border: `1px solid ${active ? '#c27a2a' : done ? colors.border : '#e0d5c5'}`,
                 whiteSpace: 'nowrap',
                 cursor: onFaseClick ? 'pointer' : 'default',
                 transition: 'all 0.15s',
@@ -69,7 +72,7 @@ export function FaseStepper({ faseActual, onFaseClick }) {
               <div style={{
                 width: 12,
                 height: 1,
-                background: i < idx ? '#333' : '#1a1a1a',
+                background: i < idx ? '#c27a2a' : '#e0d5c5',
                 flexShrink: 0,
               }} />
             )}
