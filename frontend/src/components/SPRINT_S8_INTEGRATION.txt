@@ -1,0 +1,18 @@
+
+INTEGRACIÓ MANUAL — Sprint S8
+
+1. SizeSetDetail.jsx — afegir al header:
+   import { ExportSizeSetCSV, ExportGradingCSV } from "./ExportButton"
+   <ExportSizeSetCSV profileId={profile.id} />
+   <ExportGradingCSV ruleSetId={profile.grading_rule_set?.id} />
+
+2. FittingDetall.jsx — afegir al header:
+   import { ExportFittingCSV } from "../components/ExportButton"
+   <ExportFittingCSV fittingId={fitting.id} />
+
+3. ModelDetall.jsx — afegir al header del tab Model:
+   import { ExportModelPDF } from "../components/ExportButton"
+   <ExportModelPDF modelId={model.id} nomModel={model.codi_intern} />
+
+4. npm run build && systemctl reload nginx
+5. Commit: "feat(sprint-s8): ExportButton integrat a Size Library, Fitting i ModelDetall"
