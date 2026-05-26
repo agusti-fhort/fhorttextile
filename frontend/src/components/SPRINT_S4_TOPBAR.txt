@@ -1,0 +1,9 @@
+
+PATCH Topbar.jsx — afegir UnitToggle al costat del LanguageSwitcher:
+
+1. Afegir import:
+   import { UnitToggle } from "../UnitToggle"
+
+2. Al render del Topbar, al costat del LanguageSwitcher:
+   <UnitToggle />
+   <LanguageSwitcher />

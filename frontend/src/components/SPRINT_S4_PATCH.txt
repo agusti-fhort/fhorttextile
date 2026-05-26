@@ -1,0 +1,22 @@
+
+PATCH SizeSetDetail.jsx — integrar versioning complet:
+
+1. Afegir imports:
+   import { VersionBadge } from "./VersionBadge"
+   import { GradingHistoryPanel } from "./GradingHistoryPanel"
+   import { useUnit } from "./UnitToggle"
+
+2. Substituir la crida d'edició per:
+   PATCH /api/v1/grading-rule-sets/{id}/regles/{pom}/editar/
+   (en lloc de l'anterior /api/v1/grading-rule-sets/{id}/regles/{pom}/)
+
+3. Mostrar GradingHistoryPanel quan l'usuari clica "Historial"
+   (botó nou al header del detall)
+
+4. Usar useUnit() per mostrar valors en CM o INCH automàticament
+
+5. Afegir botó "Restaurar a estàndard" que crida:
+   POST /api/v1/sizing-profiles/{id}/restaurar/
+   Amb confirmació prèvia
+
+Claude Code: aplica aquest patch manualment
