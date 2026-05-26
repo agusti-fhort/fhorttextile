@@ -83,3 +83,5 @@ try:
     urlpatterns = _sprint4_paths + urlpatterns
 except Exception as _e4:
     pass
+
+# Sprint 6 — extracció IA: viu a fhort.models_app.urls (evita col·lisió amb ModelViewSet detail)

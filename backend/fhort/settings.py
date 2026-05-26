@@ -122,6 +122,10 @@ DATABASES = {
 DATABASE_ROUTERS = ['django_tenants.routers.TenantSyncRouter']
 
 
+# Anthropic Claude API — usat per extraction_service.py (sprint 6)
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},

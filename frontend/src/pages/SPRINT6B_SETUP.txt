@@ -1,0 +1,14 @@
+
+INSTRUCCIONS MANUALS per completar Sprint 6B:
+
+1. Afegir la ruta al router (src/App.jsx o equivalent):
+   import UploadModelWizard from './pages/UploadModelWizard'
+   <Route path="/models/nou-des-de-fitxer" element={<UploadModelWizard />} />
+
+2. Afegir botó a la pàgina de llistat de models:
+   <button onClick={() => navigate('/models/nou-des-de-fitxer')}>
+     ⬆ Nou model des de fitxer
+   </button>
+
+3. Assegurar que ANTHROPIC_API_KEY és al settings.py del backend:
+   ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')
