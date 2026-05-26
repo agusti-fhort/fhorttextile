@@ -129,7 +129,7 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
 
         # Generar POMAlerts (si el model existeix)
         try:
-            from fhort.pom.models import POMAlert
+            from fhort.fitting.models import POMAlert
             for r in resultats:
                 if r['passa'] is False and model:
                     POMAlert.objects.update_or_create(

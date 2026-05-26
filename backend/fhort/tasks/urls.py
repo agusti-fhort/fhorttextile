@@ -234,10 +234,10 @@ try:
     )
     from django.urls import path as _p_s11
     _s11_paths = [
-        _p_s11('v1/alerts/summary/', pom_alerts_summary_view),
-        _p_s11('v1/alerts/<int:alert_id>/resoldre/', resolve_alert_view),
-        _p_s11('v1/models/<int:model_id>/alerts/', model_alerts_view),
-        _p_s11('v1/models/<int:model_id>/check-tolerances/', check_tolerances_view),
+        _p_s11('alerts/summary/', pom_alerts_summary_view),
+        _p_s11('alerts/<int:alert_id>/resoldre/', resolve_alert_view),
+        _p_s11('models/<int:model_id>/alerts/', model_alerts_view),
+        _p_s11('models/<int:model_id>/check-tolerances/', check_tolerances_view),
     ]
     urlpatterns = _s11_paths + urlpatterns
 except Exception as _e_s11:
