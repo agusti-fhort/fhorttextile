@@ -166,3 +166,27 @@ try:
 except Exception as _e_s6:
     import logging
     logging.getLogger(__name__).error(f"Sprint S6 URLs: {_e_s6}")
+
+# Sprint S8 — Exportació PDF/CSV
+try:
+    from fhort.pom.s8_views import (
+        export_grading_csv_view,
+        export_size_set_csv_view,
+        export_fitting_csv_view,
+        export_model_spec_pdf_view,
+    )
+    from django.urls import path as _p_s8
+    _s8_paths = [
+        _p_s8('v1/grading-rule-sets/<int:rule_set_id>/export/csv/',
+               export_grading_csv_view),
+        _p_s8('v1/sizing-profiles/<int:profile_id>/export/csv/',
+               export_size_set_csv_view),
+        _p_s8('v1/fittings/<int:fitting_id>/export/csv/',
+               export_fitting_csv_view),
+        _p_s8('v1/models/<int:model_id>/export/pdf/',
+               export_model_spec_pdf_view),
+    ]
+    urlpatterns = _s8_paths + urlpatterns
+except Exception as _e_s8:
+    import logging
+    logging.getLogger(__name__).error(f"Sprint S8 URLs: {_e_s8}")
