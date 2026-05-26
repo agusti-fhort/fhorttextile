@@ -1,6 +1,7 @@
 
 import { useState, useRef } from "react"
 import { useNavigate } from "react-router-dom"
+import useAuthStore from "../store/auth"
 import { DesignFreezeReport } from "../components/DesignFreezeReport"
 
 const API = import.meta.env.VITE_API_URL || ""
@@ -49,7 +50,9 @@ function StepIndicator({ current }) {
 
 export default function UploadModelWizard() {
   const navigate = useNavigate()
-  const token = localStorage.getItem("token")
+  // Token via Zustand auth store (clau real: 'access_token' al localStorage).
+  // Fallback al localStorage directe per si el store no ha inicialitzat encara.
+  const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
   const [step, setStep] = useState(0)
   const [file, setFile] = useState(null)
   const [dragging, setDragging] = useState(false)
@@ -80,6 +83,11 @@ export default function UploadModelWizard() {
 
   const handleAnalyze = async () => {
     if (!file) return
+    if (!token) {
+      setError("Sessió no autenticada — torna a iniciar sessió.")
+      navigate("/login")
+      return
+    }
     setLoading(true)
     setError(null)
     setStep(1)
@@ -107,6 +115,11 @@ export default function UploadModelWizard() {
   }
 
   const handleConfirm = async (extracted) => {
+    if (!token) {
+      setError("Sessió no autenticada — torna a iniciar sessió.")
+      navigate("/login")
+      return
+    }
     setLoading(true)
     setStep(3)
     setLoadingMsg("Creant model...")
