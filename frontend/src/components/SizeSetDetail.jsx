@@ -4,6 +4,7 @@ import useAuthStore from "../store/auth"
 import { VersionBadge } from "./VersionBadge"
 import { GradingHistoryPanel } from "./GradingHistoryPanel"
 import { useUnit } from "./UnitToggle"
+import { ExportSizeSetCSV, ExportGradingCSV } from "./ExportButton"
 
 const API = import.meta.env.VITE_API_URL || ""
 
@@ -128,7 +129,11 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
             {profile.target?.nom_en} · {profile.construction?.nom_en} · {profile.fit_type_nom}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <ExportSizeSetCSV profileId={profile.id} />
+          {profile.grading_rule_set?.id && (
+            <ExportGradingCSV ruleSetId={profile.grading_rule_set.id} />
+          )}
           <VersionBadge
             isCustom={profile.is_custom}
             version={profile.version}

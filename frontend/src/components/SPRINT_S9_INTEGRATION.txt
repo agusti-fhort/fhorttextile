@@ -1,0 +1,7 @@
+
+INTEGRACIÓ S9:
+1. App.jsx: import OnboardingWizard + <Route path="/onboarding" element={<OnboardingWizard />} />
+2. Dashboard.jsx: si onboarding_status.percentatge < 100, mostrar banner
+   "Configuració incompleta X% → Completar setup"
+3. Sidebar: item { label: 'Configuració inicial', path: '/onboarding', icon: 'settings' }
+   (visible només si percentatge < 100)

@@ -9,6 +9,7 @@ import { KanbanTasquesModel } from "../components/KanbanTasquesModel"
 import { TallaBaseWizard } from "../components/TallaBaseWizard"
 import { DesignFreezePanel } from "../components/DesignFreezePanel"
 import { SizingProfileWizard } from "../components/SizingProfileWizard"
+import { ExportModelPDF } from "../components/ExportButton"
 
 const API = import.meta.env.VITE_API_URL || ""
 const TABS = ["Model", "Mesures", "Size & Fitting", "Fitxers", "Servei", "Control"]
@@ -637,6 +638,7 @@ export default function ModelDetall() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <EstatBadge estat={model.estat} />
             <EstatBadge estat={model.prioritat} size="xs" />
+            <ExportModelPDF modelId={model.id} nomModel={model.codi_intern || model.codi} />
           </div>
         </div>
         <div style={{ marginTop: 12 }}>

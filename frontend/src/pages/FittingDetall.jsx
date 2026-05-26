@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { fittings, fittingLines, sizeFittings } from '../api/endpoints'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
+import { ExportFittingCSV } from '../components/ExportButton'
 
 const estatVariant = {
   ok:    'ok',
@@ -70,7 +71,7 @@ export default function FittingDetall() {
               Sessió fitting #{fitting?.numero ?? fitting?.id ?? id}
             </h1>
           </div>
-          <div style={{display: 'flex', gap: '2rem', fontSize: 12}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '2rem', fontSize: 12, flexWrap: 'wrap'}}>
             <div>
               <div style={{color: 'var(--gray)', fontWeight: 300, fontSize: 11, marginBottom: 4}}>Data fitting</div>
               <div>{fitting?.data_fitting || fitting?.data || '—'}</div>
@@ -79,6 +80,7 @@ export default function FittingDetall() {
               <div style={{color: 'var(--gray)', fontWeight: 300, fontSize: 11, marginBottom: 4}}>Responsable</div>
               <div>{fitting?.responsable_nom || fitting?.responsable || '—'}</div>
             </div>
+            {fitting?.id && <ExportFittingCSV fittingId={fitting.id} />}
           </div>
         </div>
       </Card>
