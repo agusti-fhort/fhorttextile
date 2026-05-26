@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 
+import useAuthStore from "../store/auth"
 const API = import.meta.env.VITE_API_URL || ""
 
 const SECCIONS = [
@@ -276,7 +277,10 @@ function GradingRules({ token }) {
 export default function Configuracio() {
   const location = useLocation()
   const navigate = useNavigate()
-  const token = localStorage.getItem("token")
+  const token = useAuthStore.getState().token || localStorage.getItem('access_token')
+
+  // Guard auth: redirigeix si no hi ha token (cap fetch s'executarà sense auth)
+  useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
   const current = location.pathname
 
   // Redirigir sub-rutes desconegudes a general

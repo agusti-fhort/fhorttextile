@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import useAuthStore from "../store/auth"
 import { EstatBadge } from "../components/EstatBadge"
 import { FaseStepper } from "../components/FaseStepper"
 
@@ -10,7 +11,10 @@ const FASES = ["Nou", "Disseny", "Tècnic", "Prototip", "Mostres", "Preproducci�
 
 export default function Models() {
   const navigate = useNavigate()
-  const token = localStorage.getItem("token")
+  const token = useAuthStore.getState().token || localStorage.getItem('access_token')
+
+  // Guard auth: redirigeix si no hi ha token (cap fetch s'executarà sense auth)
+  useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
   const [models, setModels] = useState([])
   const [loading, setLoading] = useState(true)
   const [cerca, setCerca] = useState("")

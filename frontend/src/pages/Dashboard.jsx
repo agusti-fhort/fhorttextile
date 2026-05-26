@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import useAuthStore from "../store/auth"
 import { EstatBadge } from "../components/EstatBadge"
 import { FaseStepper } from "../components/FaseStepper"
 
@@ -27,7 +28,10 @@ function KPICard({ label, value, sub, color = "#c27a2a", onClick }) {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const token = localStorage.getItem("token")
+  const token = useAuthStore.getState().token || localStorage.getItem('access_token')
+
+  // Guard auth: redirigeix si no hi ha token (cap fetch s'executarà sense auth)
+  useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
   const [stats, setStats] = useState({})
   const [recents, setRecents] = useState([])
   const [avisos, setAvisos] = useState([])

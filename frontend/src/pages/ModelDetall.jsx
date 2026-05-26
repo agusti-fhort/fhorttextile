@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
+import useAuthStore from "../store/auth"
 import { FaseStepper } from "../components/FaseStepper"
 import { EstatBadge } from "../components/EstatBadge"
 import { TaulaMesures } from "../components/TaulaMesures"
@@ -537,8 +538,11 @@ function TabControl({ model, token, onUpdate }) {
 export default function ModelDetall() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const token = localStorage.getItem('token')
+  const token = useAuthStore.getState().token || localStorage.getItem('access_token')
   const [tab, setTab] = useState(0)
+
+  // Guard auth: redirigeix si no hi ha token (cap fetch s'executarà sense auth)
+  useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
 
   const { model, loading, error, refresh } = useModel(id, token)
 

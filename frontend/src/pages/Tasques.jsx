@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
+import useAuthStore from "../store/auth"
 import { EstatBadge } from "../components/EstatBadge"
 
 const API = import.meta.env.VITE_API_URL || ""
@@ -264,7 +265,10 @@ function PaquetsServei({ token }) {
 // ── Component principal ───────────────────────────────────────────────────────
 export default function Tasques() {
   const location = useLocation()
-  const token = localStorage.getItem("token")
+  const token = useAuthStore.getState().token || localStorage.getItem('access_token')
+
+  // Guard auth: redirigeix si no hi ha token (cap fetch s'executarà sense auth)
+  useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
   const current = location.pathname
 
   return (
