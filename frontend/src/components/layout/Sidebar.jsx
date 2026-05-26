@@ -50,9 +50,10 @@ const navGroups = [
       { to: '/models/nou-des-de-fitxer', labelKey: 'nav.models_from_file' },
     ]},
     { labelKey: 'nav.poms', icon: 'ti-ruler-measure', children: [
-      { to: '/poms',         labelKey: 'nav.poms_list' },
-      { to: '/poms/grading', labelKey: 'nav.grading' },
-      { to: '/poms/sizes',   labelKey: 'nav.sizes' },
+      { to: '/poms',          labelKey: 'nav.poms_list' },
+      { to: '/poms/grading',  labelKey: 'nav.grading' },
+      { to: '/poms/sizes',    labelKey: 'nav.sizes' },
+      { to: '/size-library',  labelKey: 'nav.size_library' },
     ]},
     { labelKey: 'nav.tasques', icon: 'ti-checklist', children: [
       { to: '/tasques',         labelKey: 'nav.tasques_list' },

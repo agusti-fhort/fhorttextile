@@ -12,6 +12,7 @@ import SizeFittingDetall from './pages/SizeFittingDetall'
 import FittingDetall from './pages/FittingDetall'
 import GradingRuleSets from './pages/GradingRuleSets'
 import SizeSystems from './pages/SizeSystems'
+import SizeLibrary from './pages/SizeLibrary'
 import NouModel from './pages/NouModel'
 import NouSizeFitting from './pages/NouSizeFitting'
 import UploadModelWizard from './pages/UploadModelWizard'
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="poms" element={<POMs />} />
           <Route path="poms/grading" element={<GradingRuleSets />} />
           <Route path="poms/sizes" element={<SizeSystems />} />
+          <Route path="size-library" element={<SizeLibrary />} />
           <Route path="configuracio/garment-types" element={<Configuracio />} />
           <Route path="configuracio/size-systems" element={<Configuracio />} />
           <Route path="configuracio/grading" element={<Configuracio />} />
