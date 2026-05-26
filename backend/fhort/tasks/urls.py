@@ -85,3 +85,7 @@ except Exception as _e4:
     pass
 
 # Sprint 6 — extracció IA: viu a fhort.models_app.urls (evita col·lisió amb ModelViewSet detail)
+
+# Sprint 7A — Design Freeze + Talla Base wizard: paths reubicats a
+# models_app/urls.py (models/...) i pom/urls.py (poms/...) per evitar
+# col·lisions amb els routers detail i amb el prefix duplicat 'v1/'.

@@ -18,4 +18,22 @@ try:
 except Exception:
     _sprint6_paths = []
 
-urlpatterns = _sprint6_paths + router.urls
+# Sprint 7A — Design Freeze + Talla Base. Paths amb 3+ segments
+# (no col·lisionen amb ModelViewSet detail), però prepended per coherència.
+try:
+    from fhort.pom.wizard_views import (
+        aprovar_design_freeze_view,
+        guardar_talla_base_view,
+        confirmar_talla_base_view,
+        base_measurements_view,
+    )
+    _sprint7_model_paths = [
+        path('models/<int:model_id>/aprovar-design-freeze/', aprovar_design_freeze_view),
+        path('models/<int:model_id>/guardar-talla-base/',    guardar_talla_base_view),
+        path('models/<int:model_id>/confirmar-talla-base/',  confirmar_talla_base_view),
+        path('models/<int:model_id>/base-measurements/',     base_measurements_view),
+    ]
+except Exception:
+    _sprint7_model_paths = []
+
+urlpatterns = _sprint6_paths + _sprint7_model_paths + router.urls

@@ -182,6 +182,16 @@ class Model(models.Model):
     # Última activitat (s'actualitza a cada save via signal post_save)
     darrera_activitat = models.DateTimeField(null=True, blank=True)
 
+    
+    # --- Sprint 7A: Design Freeze ---
+    design_freeze_at = models.DateTimeField(null=True, blank=True)
+    design_freeze_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='design_freezes',
+    )
+    # --- Fi Sprint 7A ---
     class Meta:
         verbose_name = 'Model'
         verbose_name_plural = 'Models'
