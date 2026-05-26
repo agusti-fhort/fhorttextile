@@ -1,0 +1,19 @@
+
+INTEGRACIÓ MANUAL — Sprint S7
+
+1. App.jsx — afegir ruta:
+   import GarmentPOMMapEditor from './pages/GarmentPOMMapEditor'
+   <Route path="/garment-pom-map" element={<GarmentPOMMapEditor />} />
+   <Route path="/garment-pom-map/:id" element={<GarmentPOMMapEditor />} />
+
+2. Sidebar.jsx — afegir item a "Sistema" o "Configuració":
+   { label: 'Garment POM Map', path: '/garment-pom-map', icon: 'list' }
+
+3. i18n — afegir:
+   "nav.garment_pom_map": "Garment POM Map"
+
+4. TallaBaseWizard.jsx — actualitzar per usar /poms/suggerits-v2/
+   en lloc de /poms/suggerits/ (millor cobertura de dades)
+
+5. npm run build && systemctl reload nginx
+6. Commit: "feat(sprint-s7): GarmentPOMMapEditor + suggerits-v2 integrats"
