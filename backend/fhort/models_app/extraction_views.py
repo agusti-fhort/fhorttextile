@@ -98,11 +98,29 @@ def create_from_extraction_view(request):
     try:
         from django_tenants.utils import schema_context
         from fhort.models_app.models import Model, BaseMeasurement
-        from fhort.pom.models import POMMaster
+        from fhort.pom.models import POMMaster, GarmentType
 
         tenant_schema = request.tenant.schema_name if hasattr(request, 'tenant') else 'fhort'
 
         with schema_context(tenant_schema):
+            # garment_type és NOT NULL al Model. Provem a fer match per nom
+            # aproximat amb el que ha extret la IA; si no, agafem el primer
+            # GarmentType disponible com a fallback.
+            gt_hint = overrides.get('garment_type') or val('garment_type') or ''
+            gt = None
+            if gt_hint:
+                gt = (
+                    GarmentType.objects.filter(nom_client__icontains=gt_hint).first()
+                    or GarmentType.objects.filter(codi_client__icontains=gt_hint).first()
+                )
+            if gt is None:
+                gt = GarmentType.objects.first()
+            if gt is None:
+                return Response(
+                    {'error': 'No hi ha cap GarmentType configurat al tenant; cal sembrar-ne almenys un.'},
+                    status=422,
+                )
+
             # Crear el model
             model = Model.objects.create(
                 nom_prenda=style_name,
@@ -114,6 +132,7 @@ def create_from_extraction_view(request):
                 codi_tenant=overrides.get('codi_tenant', 'GEN'),
                 sequencial=overrides.get('sequencial', 1),
                 responsable_id=request.user.id,
+                garment_type=gt,
             )
 
             # Crear BaseMeasurements
