@@ -19,6 +19,10 @@ export default function FittingDetall() {
   const [sf, setSf] = useState(null)
   const [lines, setLines] = useState([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('lines')
+  const [vsSpec, setVsSpec] = useState(null)
+  const [vsSpecLoading, setVsSpecLoading] = useState(false)
+  const [vsSpecError, setVsSpecError] = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -33,6 +37,16 @@ export default function FittingDetall() {
       setSf(sfRes.data)
     }).finally(() => setLoading(false))
   }, [sfId, id])
+
+  useEffect(() => {
+    if (activeTab !== 'vsspec' || vsSpec || vsSpecLoading) return
+    setVsSpecLoading(true)
+    setVsSpecError(null)
+    client.get(`/api/v1/size-fittings/${sfId}/fittings/${id}/vs-spec/`)
+      .then(res => setVsSpec(res.data))
+      .catch(e => setVsSpecError(e.response?.data?.detail || 'No s\'ha pogut carregar la comparativa'))
+      .finally(() => setVsSpecLoading(false))
+  }, [activeTab, sfId, id, vsSpec, vsSpecLoading])
 
   if (loading) return (
     <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
@@ -86,6 +100,75 @@ export default function FittingDetall() {
         </div>
       </Card>
 
+      {/* Tabs */}
+      <div style={{
+        display: 'flex', gap: 4, marginBottom: 12,
+        borderBottom: '1px solid #e0d5c5',
+      }}>
+        <TabHead label={`Línies (${lines.length})`} active={activeTab === 'lines'}
+          onClick={() => setActiveTab('lines')} />
+        <TabHead label="vs Spec" active={activeTab === 'vsspec'}
+          onClick={() => setActiveTab('vsspec')} />
+      </div>
+
+      {activeTab === 'vsspec' && (
+        <Card title="Mesurat vs Spec" icon="ti-target" padding={0}>
+          {vsSpecLoading ? (
+            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
+              Carregant comparativa...
+            </div>
+          ) : vsSpecError ? (
+            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--err)', fontSize: 12}}>
+              {vsSpecError}
+            </div>
+          ) : !vsSpec || !(vsSpec.results || vsSpec.lines || vsSpec.length) ? (
+            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
+              Sense dades de comparativa.
+            </div>
+          ) : (
+            <table style={{width: '100%', borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums'}}>
+              <thead>
+                <tr>
+                  {['POM', 'Spec', 'Mesurat', 'Δ', 'Tol.', ''].map(h => (
+                    <th key={h} style={hStyle}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(vsSpec.results || vsSpec.lines || vsSpec).map((r, i, arr) => {
+                  const pass = r.pass ?? r.ok ?? (r.delta != null && r.tolerancia != null
+                    ? Math.abs(r.delta) <= r.tolerancia : null)
+                  return (
+                    <tr key={r.id || i} style={{borderBottom: i < arr.length - 1 ? '0.5px solid var(--gray-l)' : 'none'}}>
+                      <td style={{padding: '0.6rem 1rem', fontSize: 11, color: 'var(--gold)', fontWeight: 500}}>
+                        {r.pom_codi || r.pom}
+                      </td>
+                      <td style={{padding: '0.6rem 1rem', fontSize: 12}}>{r.spec ?? r.valor_spec ?? '—'}</td>
+                      <td style={{padding: '0.6rem 1rem', fontSize: 12, fontWeight: 500}}>{r.mesurat ?? r.valor_mesurat ?? '—'}</td>
+                      <td style={{
+                        padding: '0.6rem 1rem', fontSize: 12, fontWeight: 500,
+                        color: r.delta == null ? 'var(--gray)' : r.delta > 0 ? 'var(--ok)' : r.delta < 0 ? 'var(--err)' : 'var(--charcoal)',
+                      }}>
+                        {r.delta == null ? '—' : (r.delta > 0 ? '+' : '') + r.delta}
+                      </td>
+                      <td style={{padding: '0.6rem 1rem', fontSize: 11, color: 'var(--gray)'}}>
+                        ±{r.tolerancia ?? r.tol ?? '—'}
+                      </td>
+                      <td style={{padding: '0.6rem 1rem'}}>
+                        {pass === true && <Badge variant="ok" icon="ti-check">Pass</Badge>}
+                        {pass === false && <Badge variant="err" icon="ti-x">Fail</Badge>}
+                        {pass === null && <Badge variant="gray">—</Badge>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      )}
+
+      {activeTab === 'lines' && (
       <Card title={`Línies de fitting (${lines.length})`} icon="ti-list-details" padding={0}>
         {lines.length === 0 ? (
           <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
@@ -138,7 +221,30 @@ export default function FittingDetall() {
           </table>
         )}
       </Card>
+      )}
     </div>
+  )
+}
+
+function TabHead({ label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '8px 16px',
+        background: 'none',
+        border: 'none',
+        borderBottom: active ? '2px solid var(--gold)' : '2px solid transparent',
+        color: active ? 'var(--gold)' : 'var(--gray)',
+        cursor: 'pointer',
+        fontSize: 12,
+        fontWeight: active ? 500 : 400,
+        fontFamily: 'var(--font)',
+        marginBottom: -1,
+      }}
+    >
+      {label}
+    </button>
   )
 }
 

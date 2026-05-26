@@ -200,11 +200,26 @@ try:
     )
     from django.urls import path as _p_s9
     _s9_paths = [
-        _p_s9('v1/onboarding/status/', onboarding_status_view),
-        _p_s9('v1/onboarding/setup-from-excel/', setup_tenant_from_excel_view),
-        _p_s9('v1/onboarding/config/', setup_client_config_view),
+        _p_s9('onboarding/status/', onboarding_status_view),
+        _p_s9('onboarding/setup-from-excel/', setup_tenant_from_excel_view),
+        _p_s9('onboarding/config/', setup_client_config_view),
     ]
     urlpatterns = _s9_paths + urlpatterns
 except Exception as _e_s9:
     import logging
     logging.getLogger(__name__).error(f"Sprint S9 URLs: {_e_s9}")
+
+# Sprint S10 — Fitting integrat
+try:
+    from fhort.pom.s10_views import fitting_vs_spec_view, model_fitting_history_view
+    from django.urls import path as _p_s10
+    _s10_paths = [
+        _p_s10('v1/size-fittings/<int:sf_id>/fittings/<int:fitting_id>/vs-spec/',
+                fitting_vs_spec_view),
+        _p_s10('v1/models/<int:model_id>/fitting-history/',
+                model_fitting_history_view),
+    ]
+    urlpatterns = _s10_paths + urlpatterns
+except Exception as _e_s10:
+    import logging
+    logging.getLogger(__name__).error(f"Sprint S10 URLs: {_e_s10}")
