@@ -56,7 +56,22 @@ increment = float(rule.increment) if rule.increment else 0  # era rule.increment
 **Opció B**: afegir camps alias al model (`is_active = property(lambda s: s.actiu)`).
 Menys invasiu però duplica conceptes.
 
-## 2. POMMaster — fields que no existeixen al tenant
+## 2. POMMaster — fields que no existeixen al tenant — ✅ RESOLT
+
+**Resolt amb Opció A**: 5 `@property` al POMMaster que delegen a `pom_global`
+i `categoria` (read-only). 2 ORM `order_by` ajustades a `pom__categoria__display_order`
+(camí real al schema). `select_related` ampliat a `'pom__pom_global', 'pom__categoria'`
+per evitar N+1 a les 3 queries crítiques.
+
+Verificació amb dades reals al schema fhort (POMMaster id=1):
+- `pom_code='AB'`, `name_cat='Across Back (FHORT std)'`, `name_en='...'`,
+  `display_order=1`, `is_key_measure=False`
+
+`is_key_measure` retorna sempre `False` (no hi ha info al schema). Si el
+frontend ho necessita per a UX, caldrà afegir BooleanField explícit al
+POMMaster (migració).
+
+Detalls del context original (mantenir per referència):
 
 POMMaster real té: `actiu, categoria (FK), codi_client, id, nom_client, notes, pom_global (FK)`.
 
@@ -179,7 +194,7 @@ Sense migració però amb 9 punts de canvi.
 1. ~~**#5 ModelTasca.fase/gate**~~ — ✅ RESOLT
 2. ~~**#3 SizeFitting.estat_mesures**~~ — ✅ RESOLT
 3. ~~**#1 GradingRule fields**~~ — ✅ RESOLT
-4. **#2 POMMaster fields** — opció A (properties) és la més ràpida; opció C la més neta.
+4. ~~**#2 POMMaster fields**~~ — ✅ RESOLT
 5. **#4 Signal sincronitzar_size_fitting** — auto-creació SF ara ja crearà el camp `estat` correctament; cal verificar que la resta del bloc (camps copiats com `garment_group_id` etc.) funciona o cal netejar.
 
 Tots aquests punts es poden tractar en un sol PR `chore: align grading/tasks services with schema`. Cap requereix nous models ni migracions a banda del que ja està commited (excepte opció A del #5 si es trien camps denormalitzats).

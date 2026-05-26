@@ -83,7 +83,9 @@ def taula_mesures_view(request, sf_id):
         if grading_version:
             specs = GradedSpec.objects.filter(
                 grading_version=grading_version, is_active=True
-            ).select_related('pom').order_by('pom__display_order', 'size_label')
+            ).select_related(
+                'pom', 'pom__pom_global', 'pom__categoria'
+            ).order_by('pom__categoria__display_order', 'size_label')
 
             for spec in specs:
                 pom_id = spec.pom_id
@@ -111,7 +113,7 @@ def taula_mesures_view(request, sf_id):
                 from fhort.models_app.models import BaseMeasurement
                 base_ms = BaseMeasurement.objects.filter(
                     model=model, is_active=True
-                ).select_related('pom')
+                ).select_related('pom', 'pom__pom_global', 'pom__categoria')
                 for bm in base_ms:
                     pom_id = bm.pom_id
                     if pom_id not in poms_seen:

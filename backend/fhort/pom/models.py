@@ -146,6 +146,35 @@ class POMMaster(models.Model):
     def __str__(self):
         return f'{self.codi_client} · {self.nom_client}'
 
+    # ── Properties d'alias per al codi sprint3/4 ────────────────────────────
+    # Resolen TECH_DEBT.md #2. Read-only — no funcionen en ORM (.filter/order_by).
+    # Per ORM, usar les FKs naturals: pom__categoria__display_order, pom__pom_global__nom_ca.
+    @property
+    def pom_code(self):
+        return self.codi_client or (self.pom_global.codi if self.pom_global_id else '')
+
+    @property
+    def name_cat(self):
+        if self.pom_global_id and self.pom_global.nom_ca:
+            return self.pom_global.nom_ca
+        return self.nom_client
+
+    @property
+    def name_en(self):
+        if self.pom_global_id and self.pom_global.nom_en:
+            return self.pom_global.nom_en
+        return self.nom_client
+
+    @property
+    def display_order(self):
+        return self.categoria.display_order if self.categoria_id else 999
+
+    @property
+    def is_key_measure(self):
+        # No tenim camp equivalent al schema actual. Si calgués distingir
+        # "key measures", afegir un BooleanField explícit al model (migració).
+        return False
+
 
 class POMEstadisticaTenant(models.Model):
     pom = models.ForeignKey(POMMaster, on_delete=models.CASCADE, related_name='estadistiques')

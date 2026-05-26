@@ -193,7 +193,9 @@ def _get_graded_specs(sf):
         return list(
             GradedSpec.objects.filter(
                 grading_version=grading_version, is_active=True
-            ).select_related('pom').order_by('pom__display_order', 'size_label')
+            ).select_related(
+                'pom', 'pom__pom_global', 'pom__categoria'
+            ).order_by('pom__categoria__display_order', 'size_label')
         )
     except Exception as e:
         logger.error(f"Error carregant GradedSpecs: {e}")
