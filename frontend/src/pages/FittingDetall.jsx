@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { fittings, fittingLines, sizeFittings } from '../api/endpoints'
+import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import { ExportFittingCSV } from '../components/ExportButton'

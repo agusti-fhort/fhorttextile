@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
 import { pomAlerts } from '../../api/endpoints'
+import client from '../../api/client'
 
 // Paleta del sidebar (locked spec):
 const C = {
@@ -188,15 +189,36 @@ export default function Sidebar() {
   const [alertsPending, setAlertsPending] = useState(0)
   const [expanded, setExpanded] = useState({['nav.models']: true})
   const [logoutHover, setLogoutHover] = useState(false)
+  const [onboardingPct, setOnboardingPct] = useState(100)
 
   useEffect(() => {
     pomAlerts.list({ estat: 'Pendent', page_size: 1 })
       .then(res => setAlertsPending(res.data.count || 0))
       .catch(() => {})
+    client.get('/api/v1/onboarding-status/')
+      .then(res => {
+        const pct = res.data?.percentatge
+        if (typeof pct === 'number') setOnboardingPct(pct)
+      })
+      .catch(() => {})
   }, [])
 
   const badges = { alerts: alertsPending }
   const toggle = (key) => setExpanded(s => ({...s, [key]: !s[key]}))
+
+  // Injecta "Configuració inicial" dins Configuració si onboarding < 100%
+  const items = navGroups[0].items.map(item => {
+    if (item.labelKey === 'nav.configuracio' && onboardingPct < 100) {
+      return {
+        ...item,
+        children: [
+          { to: '/onboarding', labelKey: 'nav.onboarding' },
+          ...item.children,
+        ],
+      }
+    }
+    return item
+  })
 
   return (
     <aside style={{
@@ -223,7 +245,7 @@ export default function Sidebar() {
         <Logo />
       </div>
       <div style={{flex: 1, padding: '0.8rem 0'}}>
-        {navGroups[0].items.map(item => (
+        {items.map(item => (
           <NavItem
             key={item.to || item.labelKey}
             item={item}

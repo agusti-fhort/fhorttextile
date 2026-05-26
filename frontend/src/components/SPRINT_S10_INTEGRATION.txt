@@ -1,0 +1,17 @@
+
+INTEGRACIÓ S10 (manual) — FittingDetall.jsx:
+
+1. Afegir pestanya "vs Spec" al FittingDetall:
+   Crida: GET /api/v1/size-fittings/{sf_id}/fittings/{id}/vs-spec/
+   Mostrar taula: POM | Spec | Mesurat | Δ | Tol | ✓/✗
+
+2. Usar FittingLinesUnits.jsx (Sprint S6) per renderitzar
+   — ja té la lògica de pass/fail visual
+
+3. ModelDetall — Tab Control:
+   Afegir secció "Historial de fittings":
+   Crida: GET /api/v1/models/{id}/fitting-history/
+   Mostrar llistat de fittings amb data i resum pass/fail
+
+4. npm run build && systemctl reload nginx
+5. Commit: "feat(sprint-s10): fitting vs spec integrat a FittingDetall + historial"

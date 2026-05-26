@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [avisos, setAvisos] = useState([])
   const [me, setMe] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [onboarding, setOnboarding] = useState(null)
 
   useEffect(() => {
     const headers = { Authorization: `Bearer ${token}` }
@@ -45,7 +46,8 @@ export default function Dashboard() {
       fetch(`${API}/api/v1/models/?estat=En+curs&ordering=-darrera_activitat&limit=5`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/pom-alerts/?estat=Obert&limit=100`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/me/`, { headers }).then(r => r.json()),
-    ]).then(([allRes, recentsRes, avisosRes, meRes]) => {
+      fetch(`${API}/api/v1/onboarding-status/`, { headers }).then(r => r.ok ? r.json() : null),
+    ]).then(([allRes, recentsRes, avisosRes, meRes, onbRes]) => {
       // Stats
       if (allRes.status === "fulfilled") {
         const all = allRes.value
@@ -67,6 +69,8 @@ export default function Dashboard() {
       }
       // Me
       if (meRes.status === "fulfilled") setMe(meRes.value)
+      // Onboarding
+      if (onbRes.status === "fulfilled" && onbRes.value) setOnboarding(onbRes.value)
 
       setLoading(false)
     })
@@ -77,6 +81,46 @@ export default function Dashboard() {
 
   return (
     <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
+      {/* Onboarding banner */}
+      {onboarding && typeof onboarding.percentatge === 'number' && onboarding.percentatge < 100 && (
+        <div
+          onClick={() => navigate('/onboarding')}
+          style={{
+            marginBottom: 20, padding: '12px 16px',
+            borderRadius: 8, background: '#fdf6ee',
+            border: '1px solid #e0c8a0',
+            display: 'flex', alignItems: 'center', gap: 14,
+            cursor: 'pointer',
+            fontFamily: 'IBM Plex Mono, monospace',
+          }}
+        >
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: '#f5e6d0', color: '#c27a2a',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontWeight: 600,
+          }}>
+            {onboarding.percentatge}%
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#1d1d1b' }}>
+              Configuració incompleta
+            </div>
+            <div style={{ fontSize: 11, color: '#868685', marginTop: 2 }}>
+              {onboarding.passos_pendents
+                ? `Falten ${onboarding.passos_pendents} passos per completar el setup`
+                : 'Completa el setup inicial per desbloquejar totes les funcionalitats'}
+            </div>
+          </div>
+          <span style={{
+            padding: '6px 12px', borderRadius: 6, fontSize: 11,
+            background: '#c27a2a', color: '#fff', fontWeight: 500,
+          }}>
+            Completar setup →
+          </span>
+        </div>
+      )}
+
       {/* Salutació */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 500, color: "#1d1d1b", margin: "0 0 4px" }}>

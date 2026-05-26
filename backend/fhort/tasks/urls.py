@@ -177,16 +177,34 @@ try:
     )
     from django.urls import path as _p_s8
     _s8_paths = [
-        _p_s8('v1/grading-rule-sets/<int:rule_set_id>/export/csv/',
+        _p_s8('grading-rule-sets/<int:rule_set_id>/export/csv/',
                export_grading_csv_view),
-        _p_s8('v1/sizing-profiles/<int:profile_id>/export/csv/',
+        _p_s8('sizing-profiles/<int:profile_id>/export/csv/',
                export_size_set_csv_view),
-        _p_s8('v1/fittings/<int:fitting_id>/export/csv/',
+        _p_s8('fittings/<int:fitting_id>/export/csv/',
                export_fitting_csv_view),
-        _p_s8('v1/models/<int:model_id>/export/pdf/',
+        _p_s8('models/<int:model_id>/export/pdf/',
                export_model_spec_pdf_view),
     ]
     urlpatterns = _s8_paths + urlpatterns
 except Exception as _e_s8:
     import logging
     logging.getLogger(__name__).error(f"Sprint S8 URLs: {_e_s8}")
+
+# Sprint S9 — Onboarding
+try:
+    from fhort.pom.s9_views import (
+        onboarding_status_view,
+        setup_tenant_from_excel_view,
+        setup_client_config_view,
+    )
+    from django.urls import path as _p_s9
+    _s9_paths = [
+        _p_s9('v1/onboarding/status/', onboarding_status_view),
+        _p_s9('v1/onboarding/setup-from-excel/', setup_tenant_from_excel_view),
+        _p_s9('v1/onboarding/config/', setup_client_config_view),
+    ]
+    urlpatterns = _s9_paths + urlpatterns
+except Exception as _e_s9:
+    import logging
+    logging.getLogger(__name__).error(f"Sprint S9 URLs: {_e_s9}")
