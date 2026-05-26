@@ -38,8 +38,8 @@ class SizeSystemLightSerializer(serializers.Serializer):
 
 class SizeDefinitionSerializer(serializers.Serializer):
     id = serializers.IntegerField()
-    size_label = serializers.CharField()
-    display_order = serializers.IntegerField()
+    size_label = serializers.CharField(source='etiqueta')
+    display_order = serializers.IntegerField(source='ordre')
     body_height_cm = serializers.FloatField(allow_null=True)
     body_bust_cm = serializers.FloatField(allow_null=True)
     age_months_min = serializers.IntegerField(allow_null=True)
@@ -65,10 +65,18 @@ class GradingRuleLightSerializer(serializers.Serializer):
     increment = serializers.FloatField()
 
     def get_pom_codi(self, obj):
-        return getattr(obj.pom, 'codi_intern', '') if obj.pom_id else ''
+        if not obj.pom_id:
+            return ''
+        if getattr(obj.pom, 'pom_global_id', None):
+            return obj.pom.pom_global.codi
+        return getattr(obj.pom, 'codi_client', '') or ''
 
     def get_pom_nom_en(self, obj):
-        return getattr(obj.pom, 'nom_en', '') if obj.pom_id else ''
+        if not obj.pom_id:
+            return ''
+        if getattr(obj.pom, 'pom_global_id', None):
+            return obj.pom.pom_global.nom_en
+        return getattr(obj.pom, 'nom_client', '') or ''
 
 
 class SizingProfileSerializer(serializers.Serializer):
@@ -98,7 +106,7 @@ class SizingProfileSerializer(serializers.Serializer):
             from fhort.pom.models import SizeDefinition
             defs = SizeDefinition.objects.filter(
                 size_system=obj.size_system
-            ).order_by('display_order')
+            ).order_by('ordre')
             return SizeDefinitionSerializer(defs, many=True).data
         except Exception:
             return []
@@ -111,8 +119,7 @@ class SizingProfileSerializer(serializers.Serializer):
             rules = GradingRule.objects.filter(
                 rule_set=obj.grading_rule_set,
                 actiu=True,
-                pom__is_key_measure=True,
-            ).select_related('pom')[:5]
+            ).select_related('pom', 'pom__pom_global')[:5]
             return GradingRuleLightSerializer(rules, many=True).data
         except Exception:
             return []
@@ -128,12 +135,10 @@ class TenantConfigSerializer(serializers.Serializer):
 
 class POMGlobalLightSerializer(serializers.Serializer):
     id = serializers.IntegerField()
-    codi_intern = serializers.CharField()
+    codi = serializers.CharField()
     nom_en = serializers.CharField()
-    nom_cat = serializers.CharField()
-    categoria_nom = serializers.SerializerMethodField()
-    is_key_measure = serializers.BooleanField()
-    htm_metode_en = serializers.CharField()
-
-    def get_categoria_nom(self, obj):
-        return obj.categoria.nom_en if obj.categoria_id else ''
+    nom_ca = serializers.CharField()
+    nom_es = serializers.CharField()
+    categoria = serializers.CharField()
+    descripcio_en = serializers.CharField()
+    actiu = serializers.BooleanField()

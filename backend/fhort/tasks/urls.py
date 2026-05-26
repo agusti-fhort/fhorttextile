@@ -105,15 +105,15 @@ try:
     )
     from django.urls import path as _p_s2
     _s2_paths = [
-        _p_s2('v1/targets/', targets_list_view),
-        _p_s2('v1/construction-types/', construction_types_list_view),
-        _p_s2('v1/sizing-profiles/', sizing_profiles_view),
-        _p_s2('v1/sizing-profiles/<int:pk>/', sizing_profile_detail_view),
-        _p_s2('v1/sizing-profiles/<int:pk>/clonar/', clone_sizing_profile_view),
-        _p_s2('v1/grading-rule-sets/<int:rule_set_id>/regles/<str:pom_codi>/', update_grading_rule_view),
-        _p_s2('v1/tenant-config/', tenant_config_view),
-        _p_s2('v1/pom-global/cerca/', pom_global_cerca_view),
-        _p_s2('v1/garment-types/per-target/', garment_types_per_target_view),
+        _p_s2('targets/', targets_list_view),
+        _p_s2('construction-types/', construction_types_list_view),
+        _p_s2('sizing-profiles/', sizing_profiles_view),
+        _p_s2('sizing-profiles/<int:pk>/', sizing_profile_detail_view),
+        _p_s2('sizing-profiles/<int:pk>/clonar/', clone_sizing_profile_view),
+        _p_s2('grading-rule-sets/<int:rule_set_id>/regles/<str:pom_codi>/', update_grading_rule_view),
+        _p_s2('tenant-config/', tenant_config_view),
+        _p_s2('pom-global/cerca/', pom_global_cerca_view),
+        _p_s2('garment-types-by-target/', garment_types_per_target_view),
     ]
     urlpatterns = _s2_paths + urlpatterns
 except Exception as _e_s2:

@@ -99,7 +99,7 @@ def sizing_profile_detail_view(request, pk):
         all_rules = GradingRule.objects.filter(
             rule_set=profile.grading_rule_set,
             actiu=True
-        ).select_related('pom').order_by('pom__categoria__display_order', 'pom__codi_intern')
+        ).select_related('pom', 'pom__pom_global').order_by('pom__codi_client')
         data['grading_rules_all'] = GradingRuleLightSerializer(all_rules, many=True).data
 
         return Response(data)
@@ -192,17 +192,19 @@ def update_grading_rule_view(request, rule_set_id, pom_codi):
     """
     try:
         from fhort.pom.models import GradingRule, GradingRuleSet
+        from django.db.models import Q
 
         rs = GradingRuleSet.objects.get(pk=rule_set_id)
         if rs.is_system_default:
             return Response({
-                'error': 'No es pot editar un RuleSet estandard. Clona'l primer.'
+                'error': "No es pot editar un RuleSet estandard. Clona'l primer."
             }, status=400)
 
         rule = GradingRule.objects.filter(
             rule_set=rs,
-            pom__codi_intern=pom_codi
-        ).first()
+        ).filter(
+            Q(pom__pom_global__codi=pom_codi) | Q(pom__codi_client=pom_codi)
+        ).select_related('pom', 'pom__pom_global').first()
 
         if not rule:
             return Response({'error': f'Regla {pom_codi} no trobada'}, status=404)
@@ -271,18 +273,18 @@ def pom_global_cerca_view(request):
         from fhort.pom.s2_serializers import POMGlobalLightSerializer
         from django.db.models import Q
 
-        qs = POMGlobal.objects.filter(actiu=True).select_related('categoria')
+        qs = POMGlobal.objects.filter(actiu=True)
 
         if q:
             qs = qs.filter(
-                Q(codi_intern__icontains=q) |
+                Q(codi__icontains=q) |
                 Q(nom_en__icontains=q) |
-                Q(nom_cat__icontains=q)
+                Q(nom_ca__icontains=q)
             )
         if categoria:
-            qs = qs.filter(categoria__nom_en__icontains=categoria)
+            qs = qs.filter(categoria__icontains=categoria)
 
-        qs = qs.order_by('categoria__display_order', 'codi_intern')[:30]
+        qs = qs.order_by('categoria', 'codi')[:30]
 
         return Response({
             'count': qs.count(),
@@ -302,21 +304,23 @@ def garment_types_per_target_view(request):
     target_codi = request.query_params.get('target', '')
     try:
         from fhort.pom.models import GarmentType
-        qs = GarmentType.objects.select_related('garment_group' if hasattr(GarmentType, 'garment_group') else None)
+        qs = GarmentType.objects.select_related('garment_type_global')
 
         if target_codi:
             qs = qs.filter(targets_recomanats__codi=target_codi)
 
         results = []
-        for gt in qs.order_by('nom_ca')[:100]:
+        for gt in qs.order_by('nom_client')[:100]:
             results.append({
                 'id': gt.id,
-                'nom_ca': gt.nom_ca if hasattr(gt, 'nom_ca') else str(gt),
-                'nom_en': gt.nom_en if hasattr(gt, 'nom_en') else str(gt),
-                'garment_group_nom': str(gt.garment_group) if hasattr(gt, 'garment_group') else '',
-                'construccio_habitual': gt.construccio_habitual if hasattr(gt, 'construccio_habitual') else '',
+                'codi_client': gt.codi_client,
+                'nom_client': gt.nom_client,
+                'grup': gt.grup,
+                'construccio_habitual': gt.construccio_habitual or '',
             })
 
         return Response({'count': len(results), 'results': results})
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("garment_types_per_target_view error")
         return Response({'error': str(e)}, status=500)
