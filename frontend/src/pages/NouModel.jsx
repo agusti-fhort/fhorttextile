@@ -1,46 +1,58 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { models, garmentTypes } from '../api/endpoints'
+import { useTranslation } from 'react-i18next'
+import { models, garmentTypes, garmentGroups, sizeSystems, gradingRuleSets } from '../api/endpoints'
 
-const TEMPORADES = [
-  { value: 'SS', label: 'SS · Spring/Summer' },
-  { value: 'FW', label: 'FW · Fall/Winter' },
-  { value: 'CO', label: 'CO · Cruise' },
-  { value: 'SP', label: 'SP · Special' },
-]
+const TAB_KEYS = ['model', 'mesures', 'fitting', 'fitxers', 'servei', 'control']
+const TABS_DISABLED_ON_CREATE = new Set(['fitting', 'fitxers', 'servei', 'control'])
 
-const FITS = ['Regular', 'Slim', 'Relaxed', 'Oversized']
-
-const PRIORITATS = [
-  { value: 1, label: '1 · Baixa' },
-  { value: 3, label: '3 · Normal' },
-  { value: 4, label: '4 · Alta' },
-  { value: 5, label: '5 · Urgent' },
-]
+const TEMPORADES = ['SS', 'FW', 'CO', 'SP']
+const FIT_TYPES  = ['Regular', 'Slim', 'Relaxed', 'Oversize', 'Tailored']
+const ESTATS     = ['Nou', 'EnCurs', 'EnRevisio', 'Tancat']
+const PRIORITATS = [1, 3, 4, 5]
 
 export default function NouModel() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const anyActual = new Date().getFullYear()
 
+  const [activeTab, setActiveTab] = useState('model')
   const [form, setForm] = useState({
-    nom_prenda: '',
+    // Tab Model — camps reals del backend
     codi_client: '',
+    codi_tenant: '',
+    nom_prenda: '',
+    descripcio: '',
     temporada: 'SS',
     any: anyActual,
-    garment_type: '',
-    fit_type: 'Regular',
     color_referencia: '',
+    familia: '',
+    estat: 'Nou',
     prioritat: 3,
     data_objectiu: '',
     observacions: '',
+    // Tab Mesures
+    garment_type: '',
+    garment_group: '',  // UI-only: només filtre del dropdown de garment_type
+    fit_type: 'Regular',
+    size_system: '',
+    base_size_label: '',
+    size_run_model: '',
+    grading_rule_set: '',
   })
+
   const [gTypes, setGTypes] = useState([])
+  const [gGroups, setGGroups] = useState([])
+  const [ssList, setSsList] = useState([])
+  const [grsList, setGrsList] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    garmentTypes.list({ page_size: 200 })
-      .then(res => setGTypes(res.data.results || []))
+    garmentTypes.list({ page_size: 200 }).then(r => setGTypes(r.data.results || [])).catch(() => {})
+    garmentGroups.list({ page_size: 200 }).then(r => setGGroups(r.data.results || [])).catch(() => {})
+    sizeSystems.list({ page_size: 200 }).then(r => setSsList(r.data.results || [])).catch(() => {})
+    gradingRuleSets.list({ page_size: 200 }).then(r => setGrsList(r.data.results || [])).catch(() => {})
   }, [])
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -49,117 +61,212 @@ export default function NouModel() {
     e.preventDefault()
     setError('')
     if (!form.nom_prenda) {
-      setError('El nom de la prenda és obligatori.')
+      setError(t('errors.required') + ': ' + t('model.fields.nom_prenda'))
       return
     }
+    if (!form.garment_type) {
+      setError(t('errors.required') + ': ' + t('model.fields.garment_type'))
+      setActiveTab('mesures')
+      return
+    }
+
+    // Només camps suportats pel backend. codi_tenant és REQUIRED; si no s'ha posat,
+    // derivem-lo dels 3 primers chars de codi_client (uppercase).
+    const codiTenantAuto = (form.codi_tenant || form.codi_client.slice(0, 3).toUpperCase() || 'TNT').slice(0, 3)
+    const payload = {
+      nom_prenda: form.nom_prenda,
+      codi_client: form.codi_client,
+      codi_tenant: codiTenantAuto,
+      descripcio: form.descripcio || null,
+      temporada: form.temporada,
+      any: Number(form.any),
+      color_referencia: form.color_referencia || null,
+      familia: form.familia || null,
+      estat: form.estat,
+      prioritat: Number(form.prioritat),
+      observacions: form.observacions || null,
+      garment_type: form.garment_type,
+      fit_type: form.fit_type,
+      sequencial: 1,  // signal pre_save recalcula automàticament
+    }
+    if (form.data_objectiu)   payload.data_objectiu = form.data_objectiu
+    if (form.size_system)     payload.size_system = form.size_system
+    if (form.base_size_label) payload.base_size_label = form.base_size_label
+    if (form.size_run_model)  payload.size_run_model = form.size_run_model
+    if (form.grading_rule_set)payload.grading_rule_set = form.grading_rule_set
+
     setSubmitting(true)
     try {
-      const payload = { ...form }
-      if (!payload.garment_type) delete payload.garment_type
-      if (!payload.data_objectiu) delete payload.data_objectiu
       const res = await models.create(payload)
       navigate(`/models/${res.data.id}`)
     } catch (err) {
-      const msg = err.response?.data ? JSON.stringify(err.response.data) : 'Error desconegut'
-      setError(`No s'ha pogut crear el model: ${msg}`)
+      const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message
+      setError(`${t('errors.create_failed')}: ${detail}`)
       setSubmitting(false)
     }
   }
 
   return (
     <div>
-      <button onClick={() => navigate('/models')} style={{
-        background: 'none', border: 'none', cursor: 'pointer',
-        color: 'var(--gray)', fontSize: 12, fontFamily: 'var(--font)',
-        marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: 6,
-      }}>
+      <button onClick={() => navigate('/models')} style={btnGhost}>
         <i className="ti ti-arrow-left" style={{fontSize: 14}} />
-        Tornar a Models
+        {t('app.back')}
       </button>
 
-      <div style={{marginBottom: '1.5rem'}}>
-        <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>Nou model</h1>
-        <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
-          Crea un model nou per al tenant
-        </p>
+      <div style={{marginBottom: '1.2rem'}}>
+        <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>{t('model.new')}</h1>
+      </div>
+
+      {/* Tabs */}
+      <div style={{
+        display: 'flex',
+        gap: 4,
+        borderBottom: '0.5px solid #e4e4e2',
+        marginBottom: '1rem',
+      }}>
+        {TAB_KEYS.map(k => {
+          const disabled = TABS_DISABLED_ON_CREATE.has(k)
+          const isActive = activeTab === k
+          return (
+            <button
+              key={k}
+              type="button"
+              onClick={() => !disabled && setActiveTab(k)}
+              disabled={disabled}
+              title={disabled ? t('model.tab_unavailable') : ''}
+              style={{
+                background: 'none',
+                border: 'none',
+                borderBottom: isActive ? '2px solid var(--gold)' : '2px solid transparent',
+                padding: '8px 14px',
+                fontSize: 12,
+                fontFamily: 'var(--font)',
+                fontWeight: isActive ? 500 : 400,
+                color: disabled ? '#bbb' : isActive ? 'var(--charcoal)' : 'var(--gray)',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {t(`model.tabs.${k}`)}
+            </button>
+          )
+        })}
       </div>
 
       <form onSubmit={handleSubmit} style={{
         background: 'var(--white)',
         border: '0.5px solid #e4e4e2',
         borderRadius: 12,
-        padding: '1.5rem 1.8rem',
-        maxWidth: 880,
+        padding: '1.4rem 1.6rem',
+        maxWidth: 980,
       }}>
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr',
-          gap: '1.2rem',
-        }}>
-          <Field label="Nom de la prenda *">
-            <Input value={form.nom_prenda} onChange={v => setField('nom_prenda', v)} required />
-          </Field>
-          <Field label="Referència client">
-            <Input value={form.codi_client} onChange={v => setField('codi_client', v)} />
-          </Field>
-
-          <Field label="Temporada">
-            <Select value={form.temporada} onChange={v => setField('temporada', v)} options={TEMPORADES} />
-          </Field>
-          <Field label="Any">
-            <Input type="number" value={form.any} onChange={v => setField('any', Number(v))} />
-          </Field>
-
-          <Field label="Garment Type">
-            <Select
-              value={form.garment_type}
-              onChange={v => setField('garment_type', v)}
-              options={[{value: '', label: '—'}, ...gTypes.map(g => ({value: g.id, label: g.nom}))]}
-            />
-          </Field>
-          <Field label="Fit Type">
-            <Select
-              value={form.fit_type}
-              onChange={v => setField('fit_type', v)}
-              options={FITS.map(f => ({value: f, label: f}))}
-            />
-          </Field>
-
-          <Field label="Color de referència">
-            <Input value={form.color_referencia} onChange={v => setField('color_referencia', v)} />
-          </Field>
-          <Field label="Prioritat">
-            <Select
-              value={form.prioritat}
-              onChange={v => setField('prioritat', Number(v))}
-              options={PRIORITATS}
-            />
-          </Field>
-
-          <Field label="Data objectiu">
-            <Input type="date" value={form.data_objectiu} onChange={v => setField('data_objectiu', v)} />
-          </Field>
-          <div />
-
-          <div style={{gridColumn: '1 / -1'}}>
-            <Field label="Observacions">
-              <textarea
-                value={form.observacions}
-                onChange={e => setField('observacions', e.target.value)}
-                rows={4}
-                style={{
-                  width: '100%', resize: 'vertical',
-                  background: 'var(--white)',
-                  border: '0.5px solid #e4e4e2',
-                  borderRadius: 8,
-                  padding: '8px 12px',
-                  fontSize: 12,
-                  fontFamily: 'var(--font)',
-                  outline: 'none',
-                }}
-              />
+        {activeTab === 'model' && (
+          <Grid>
+            <Field label={t('model.fields.codi_intern')}>
+              <Input value="" disabled placeholder="(auto-generat)" />
             </Field>
+            <Field label={t('model.fields.codi_client') + ' *'}>
+              <Input value={form.codi_client} onChange={v => setField('codi_client', v)} required />
+            </Field>
+
+            <Field label={t('model.fields.codi_tenant')} hint={t('model.fields.codi_tenant_help')}>
+              <Input value={form.codi_tenant} onChange={v => setField('codi_tenant', v.toUpperCase().slice(0, 3))} maxLength={3} placeholder="(auto: 3 prim. de codi_client)" />
+            </Field>
+            <Field label={t('model.fields.familia')}>
+              <Input value={form.familia} onChange={v => setField('familia', v)} />
+            </Field>
+
+            <Field label={t('model.fields.nom_prenda') + ' *'} span={2}>
+              <Input value={form.nom_prenda} onChange={v => setField('nom_prenda', v)} required />
+            </Field>
+
+            <Field label={t('model.fields.descripcio')} span={2}>
+              <Textarea value={form.descripcio} onChange={v => setField('descripcio', v)} rows={3} />
+            </Field>
+
+            <Field label={t('model.fields.temporada')}>
+              <Select value={form.temporada} onChange={v => setField('temporada', v)}
+                options={TEMPORADES.map(s => ({ value: s, label: t(`model.temporades.${s}`) }))} />
+            </Field>
+            <Field label={t('model.fields.any')}>
+              <Input type="number" value={form.any} onChange={v => setField('any', Number(v))} />
+            </Field>
+
+            <Field label={t('model.fields.color_referencia')}>
+              <Input value={form.color_referencia} onChange={v => setField('color_referencia', v)} />
+            </Field>
+            <Field label={t('model.fields.estat')}>
+              <Select value={form.estat} onChange={v => setField('estat', v)}
+                options={ESTATS.map(e => ({ value: e, label: t(`model.estats.${e}`) }))} />
+            </Field>
+
+            <Field label={t('model.fields.prioritat')}>
+              <Select value={form.prioritat} onChange={v => setField('prioritat', Number(v))}
+                options={PRIORITATS.map(p => ({ value: p, label: `${p} · ${t(`model.prioritats.${p}`)}` }))} />
+            </Field>
+            <Field label={t('model.fields.responsable')}>
+              <Input value="" disabled placeholder={t('model.unsupported_field')} />
+            </Field>
+
+            <Field label={t('model.fields.data_entrada')}>
+              <Input value="" disabled placeholder="(auto)" />
+            </Field>
+            <Field label={t('model.fields.data_objectiu')}>
+              <Input type="date" value={form.data_objectiu} onChange={v => setField('data_objectiu', v)} />
+            </Field>
+
+            <Field label={t('model.fields.observacions')} span={2}>
+              <Textarea value={form.observacions} onChange={v => setField('observacions', v)} rows={4} />
+            </Field>
+          </Grid>
+        )}
+
+        {activeTab === 'mesures' && (
+          <Grid>
+            <Field label={t('model.fields.garment_type') + ' *'}>
+              <Select value={form.garment_type} onChange={v => setField('garment_type', v)}
+                options={[{ value: '', label: '—' }, ...gTypes.map(g => ({ value: g.id, label: g.nom_client || g.codi_client }))]} />
+            </Field>
+            <Field label={t('model.fields.garment_group')}>
+              <Select value={form.garment_group} onChange={v => setField('garment_group', v)}
+                options={[{ value: '', label: '—' }, ...gGroups.map(g => ({ value: g.id, label: g.nom }))]} />
+            </Field>
+
+            <Field label={t('model.fields.fit_type')}>
+              <Select value={form.fit_type} onChange={v => setField('fit_type', v)}
+                options={FIT_TYPES.map(f => ({ value: f, label: f }))} />
+            </Field>
+            <Field label={t('model.fields.size_system')}>
+              <Select value={form.size_system} onChange={v => setField('size_system', v)}
+                options={[{ value: '', label: '—' }, ...ssList.map(s => ({ value: s.id, label: `${s.codi} · ${s.nom}` }))]} />
+            </Field>
+
+            <Field label={t('model.fields.base_size_label')}>
+              <Input value={form.base_size_label} onChange={v => setField('base_size_label', v)} placeholder="M" />
+            </Field>
+            <Field label={t('model.fields.grading_rule_set')}>
+              <Select value={form.grading_rule_set} onChange={v => setField('grading_rule_set', v)}
+                options={[{ value: '', label: '—' }, ...grsList.map(g => ({ value: g.id, label: g.nom }))]} />
+            </Field>
+
+            <Field label={t('model.fields.size_run_model')} span={2} hint={t('model.fields.size_run_help')}>
+              <Input value={form.size_run_model} onChange={v => setField('size_run_model', v)} placeholder="XS·S·M·L·XL" />
+            </Field>
+          </Grid>
+        )}
+
+        {TABS_DISABLED_ON_CREATE.has(activeTab) && (
+          <div style={{
+            padding: '2rem',
+            textAlign: 'center',
+            color: 'var(--gray)',
+            fontSize: 12,
+            background: 'var(--gray-l)',
+            borderRadius: 8,
+          }}>
+            <i className="ti ti-lock" style={{fontSize: 22, display: 'block', marginBottom: 10}} />
+            {t('model.tab_unavailable')}
           </div>
-        </div>
+        )}
 
         {error && (
           <div style={{
@@ -175,24 +282,16 @@ export default function NouModel() {
           marginTop: '1.5rem', display: 'flex',
           justifyContent: 'flex-end', gap: '0.6rem',
         }}>
-          <button type="button" onClick={() => navigate('/models')} style={{
-            background: 'var(--white)', color: 'var(--gray)',
-            border: '0.5px solid #e4e4e2', borderRadius: 8,
-            padding: '8px 16px', fontSize: 12,
-            cursor: 'pointer', fontFamily: 'var(--font)',
-          }}>
-            Cancel·lar
+          <button type="button" onClick={() => navigate('/models')} style={btnSecondary}>
+            {t('app.cancel')}
           </button>
           <button type="submit" disabled={submitting} style={{
+            ...btnPrimary,
             background: submitting ? 'rgba(194,122,42,0.5)' : 'var(--gold)',
-            color: 'white', border: 'none', borderRadius: 8,
-            padding: '8px 20px', fontSize: 12, fontWeight: 500,
             cursor: submitting ? 'not-allowed' : 'pointer',
-            fontFamily: 'var(--font)',
-            display: 'flex', alignItems: 'center', gap: 6,
           }}>
             <i className="ti ti-check" style={{fontSize: 14}} />
-            {submitting ? 'Creant...' : 'Crear model'}
+            {submitting ? t('model.actions.creating') : t('model.actions.create')}
           </button>
         </div>
       </form>
@@ -200,30 +299,92 @@ export default function NouModel() {
   )
 }
 
-function Field({ label, children }) {
+const btnGhost = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  color: 'var(--gray)', fontSize: 12, fontFamily: 'var(--font)',
+  marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: 6,
+}
+const btnSecondary = {
+  background: 'var(--white)', color: 'var(--gray)',
+  border: '0.5px solid #e4e4e2', borderRadius: 8,
+  padding: '8px 16px', fontSize: 12,
+  cursor: 'pointer', fontFamily: 'var(--font)',
+}
+const btnPrimary = {
+  color: 'white', border: 'none', borderRadius: 8,
+  padding: '8px 20px', fontSize: 12, fontWeight: 500,
+  fontFamily: 'var(--font)',
+  display: 'flex', alignItems: 'center', gap: 6,
+}
+
+function Grid({ children }) {
   return (
-    <label style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '1.1rem',
+    }}>
+      {children}
+    </div>
+  )
+}
+
+function Field({ label, children, hint, span = 1 }) {
+  return (
+    <label style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6,
+      gridColumn: span === 2 ? '1 / -1' : 'auto',
+    }}>
       <span style={{fontSize: 11, color: 'var(--gray)', fontWeight: 400}}>{label}</span>
       {children}
+      {hint && (
+        <span style={{fontSize: 10, color: 'var(--gray)', fontWeight: 300}}>{hint}</span>
+      )}
     </label>
   )
 }
 
-function Input({ value, onChange, type = 'text', required }) {
+const inputStyle = {
+  background: 'var(--white)',
+  border: '0.5px solid #e4e4e2',
+  borderRadius: 8,
+  padding: '8px 12px',
+  fontSize: 12,
+  fontFamily: 'var(--font)',
+  outline: 'none',
+}
+
+function Input({ value, onChange, type = 'text', required, disabled, placeholder }) {
   return (
     <input
       type={type}
-      value={value}
+      value={value ?? ''}
       required={required}
-      onChange={e => onChange(e.target.value)}
+      disabled={disabled}
+      placeholder={placeholder}
+      onChange={e => onChange && onChange(e.target.value)}
       style={{
-        background: 'var(--white)',
-        border: '0.5px solid #e4e4e2',
-        borderRadius: 8,
-        padding: '8px 12px',
-        fontSize: 12,
-        fontFamily: 'var(--font)',
-        outline: 'none',
+        ...inputStyle,
+        background: disabled ? '#f6f6f4' : 'var(--white)',
+        color: disabled ? '#aaa' : 'inherit',
+        cursor: disabled ? 'not-allowed' : 'text',
+      }}
+    />
+  )
+}
+
+function Textarea({ value, onChange, rows = 3 }) {
+  return (
+    <textarea
+      value={value ?? ''}
+      onChange={e => onChange(e.target.value)}
+      rows={rows}
+      style={{
+        ...inputStyle,
+        width: '100%',
+        resize: 'vertical',
       }}
     />
   )
@@ -232,16 +393,10 @@ function Input({ value, onChange, type = 'text', required }) {
 function Select({ value, onChange, options }) {
   return (
     <select
-      value={value}
+      value={value ?? ''}
       onChange={e => onChange(e.target.value)}
       style={{
-        background: 'var(--white)',
-        border: '0.5px solid #e4e4e2',
-        borderRadius: 8,
-        padding: '8px 12px',
-        fontSize: 12,
-        fontFamily: 'var(--font)',
-        outline: 'none',
+        ...inputStyle,
         appearance: 'none',
         backgroundImage: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'10\' viewBox=\'0 0 10 10\'><path d=\'M2 4 L5 7 L8 4\' stroke=\'%23868685\' stroke-width=\'1.2\' fill=\'none\'/></svg>")',
         backgroundRepeat: 'no-repeat',
@@ -250,7 +405,7 @@ function Select({ value, onChange, options }) {
       }}
     >
       {options.map(o => (
-        <option key={o.value} value={o.value}>{o.label}</option>
+        <option key={String(o.value)} value={o.value}>{o.label}</option>
       ))}
     </select>
   )

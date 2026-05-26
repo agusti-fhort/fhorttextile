@@ -68,6 +68,12 @@ class Model(models.Model):
         ('Tailored', 'Tailored'),
     ]
 
+    ORIGEN_PATRO_CHOICES = [
+        ('CAD Client', 'CAD Client'),
+        ('Digitalització', 'Digitalització'),
+        ('Des de zero', 'Des de zero'),
+    ]
+
     codi_intern = models.CharField(max_length=40, unique=True)
     codi_client = models.CharField(max_length=80)
 
@@ -83,6 +89,13 @@ class Model(models.Model):
     garment_type = models.ForeignKey(
         'pom.GarmentType',
         on_delete=models.PROTECT,
+        related_name='models',
+    )
+    garment_group = models.ForeignKey(
+        'pom.GarmentGroup',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='models',
     )
     fit_type = models.CharField(max_length=20, choices=FIT_CHOICES, default='Regular')
@@ -139,6 +152,14 @@ class Model(models.Model):
     )
 
     observacions = models.TextField(null=True, blank=True)
+
+    origen_patro = models.CharField(
+        max_length=50,
+        choices=ORIGEN_PATRO_CHOICES,
+        null=True,
+        blank=True,
+    )
+    versio = models.CharField(max_length=20, null=True, blank=True)
 
     # --- Sprint 1A: camps nous (fase_actual ja existeix amb FASE_CHOICES) ---
     familia = models.CharField(max_length=100, null=True, blank=True)

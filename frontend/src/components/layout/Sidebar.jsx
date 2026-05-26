@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
 import { pomAlerts } from '../../api/endpoints'
 
@@ -23,32 +24,124 @@ const Logo = () => (
   </svg>
 )
 
-const navItems = [
-  { section: 'Principal', items: [
-    { to: '/',        label: 'Dashboard',     icon: 'ti-layout-dashboard' },
-    { to: '/models',  label: 'Models',        icon: 'ti-shirt' },
-    { to: '/fitting', label: 'Size & Fitting', icon: 'ti-ruler-2' },
-    { to: '/avisos',  label: 'Avisos',        icon: 'ti-alert-triangle', badgeKey: 'alerts' },
-  ]},
-  { section: 'Tècnic', items: [
-    { to: '/tasques',         label: 'Tasques',    icon: 'ti-checklist' },
-    { to: '/tasques/kanban',  label: 'Kanban',     icon: 'ti-layout-kanban' },
-    { to: '/temps',           label: 'Temps',      icon: 'ti-clock' },
-    { to: '/fitxers',         label: 'Fitxers',    icon: 'ti-file-upload' },
-  ]},
-  { section: 'Sistema', items: [
-    { to: '/poms',           label: 'POMs',          icon: 'ti-ruler-2' },
-    { to: '/poms/grading',   label: 'Grading',       icon: 'ti-arrows-maximize' },
-    { to: '/poms/sizes',     label: 'Size Systems',  icon: 'ti-resize' },
-    { to: '/ia',             label: 'IA',            icon: 'ti-sparkles' },
-    { to: '/configuracio',   label: 'Configuració',  icon: 'ti-settings' },
-    { to: '/perfil',         label: 'El meu perfil', icon: 'ti-user' },
+// Estructura: 1 sola secció principal amb 5 ítems top-level + submenús expandibles.
+// Dashboard i Avisos queden visibles sempre al top com a accessos directes.
+const navGroups = [
+  { items: [
+    { to: '/', labelKey: 'nav.dashboard', icon: 'ti-layout-dashboard' },
+    { to: '/avisos', labelKey: 'nav.avisos', icon: 'ti-alert-triangle', badgeKey: 'alerts' },
+    { labelKey: 'nav.models', icon: 'ti-shirt', children: [
+      { to: '/models',                   labelKey: 'nav.models_list' },
+      { to: '/models/nou',               labelKey: 'nav.models_new' },
+      { to: '/models/nou-des-de-fitxer', labelKey: 'nav.models_from_file' },
+    ]},
+    { labelKey: 'nav.poms', icon: 'ti-ruler-measure', children: [
+      { to: '/poms',         labelKey: 'nav.poms_list' },
+      { to: '/poms/grading', labelKey: 'nav.grading' },
+      { to: '/poms/sizes',   labelKey: 'nav.sizes' },
+    ]},
+    { labelKey: 'nav.tasques', icon: 'ti-checklist', children: [
+      { to: '/tasques',         labelKey: 'nav.tasques_list' },
+      { to: '/tasques/catalog', labelKey: 'nav.tasques_catalog' },
+      { to: '/tasques/paquets', labelKey: 'nav.tasques_paquets' },
+      { to: '/tasques/kanban',  labelKey: 'nav.kanban' },
+      { to: '/temps',           labelKey: 'nav.temps' },
+    ]},
+    { labelKey: 'nav.fittings', icon: 'ti-ruler-2', children: [
+      { to: '/fitting',  labelKey: 'nav.fitting_list' },
+      { to: '/fittings', labelKey: 'nav.fittings_sessions' },
+    ]},
+    { labelKey: 'nav.configuracio', icon: 'ti-settings', children: [
+      { to: '/configuracio/garment-types', labelKey: 'nav.garment_types' },
+      { to: '/configuracio',               labelKey: 'nav.configuracio_general' },
+      { to: '/perfil',                     labelKey: 'nav.perfil' },
+    ]},
   ]},
 ]
 
+function NavItem({ item, badges, t, expanded, onToggle }) {
+  const hasChildren = !!item.children
+  const badge = item.badgeKey ? badges[item.badgeKey] : null
+
+  if (hasChildren) {
+    return (
+      <div>
+        <button
+          onClick={onToggle}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+            padding: '0.55rem 1rem', margin: '1px 0.5rem',
+            border: 'none', background: 'none', cursor: 'pointer',
+            borderRadius: 8, color: 'var(--text-main)',
+            fontSize: 12, fontFamily: 'inherit', textAlign: 'left',
+          }}
+        >
+          <i className={`ti ${item.icon}`} style={{fontSize: 17, color: 'var(--gold)'}} />
+          <span style={{flex: 1, fontWeight: 500}}>{t(item.labelKey)}</span>
+          <i className={`ti ${expanded ? 'ti-chevron-down' : 'ti-chevron-right'}`} style={{fontSize: 13, color: 'var(--text-muted)'}} />
+        </button>
+        {expanded && (
+          <div style={{marginLeft: '1.7rem'}}>
+            {item.children.map(child => (
+              <NavLink
+                key={child.to}
+                to={child.to}
+                style={({ isActive }) => ({
+                  display: 'block',
+                  padding: '0.45rem 1rem',
+                  margin: '1px 0.5rem',
+                  borderRadius: 6,
+                  color: isActive ? 'var(--gold)' : 'var(--text-muted)',
+                  background: isActive ? 'rgba(194,122,42,0.12)' : 'none',
+                  textDecoration: 'none',
+                  fontSize: 11.5,
+                  fontWeight: isActive ? 500 : 400,
+                  transition: 'all 0.15s',
+                })}
+              >
+                {t(child.labelKey)}
+              </NavLink>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <NavLink
+      to={item.to}
+      end={item.to === '/'}
+      style={({ isActive }) => ({
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '0.6rem 1rem', margin: '1px 0.5rem',
+        borderRadius: 8,
+        color: isActive ? 'var(--gold)' : 'var(--text-main)',
+        background: isActive ? 'rgba(194,122,42,0.12)' : 'none',
+        textDecoration: 'none',
+        fontSize: 12, fontWeight: isActive ? 500 : 400,
+        transition: 'all 0.15s',
+      })}
+    >
+      <i className={`ti ${item.icon}`} style={{fontSize: 17, color: 'var(--gold)'}} />
+      <span style={{flex: 1}}>{t(item.labelKey)}</span>
+      {badge > 0 && (
+        <span style={{
+          fontSize: 10, fontWeight: 600,
+          padding: '1px 7px', borderRadius: 10,
+          background: 'var(--err)', color: 'var(--white)',
+          fontVariantNumeric: 'tabular-nums',
+        }}>{badge}</span>
+      )}
+    </NavLink>
+  )
+}
+
 export default function Sidebar() {
+  const { t } = useTranslation()
   const logout = useAuthStore(s => s.logout)
   const [alertsPending, setAlertsPending] = useState(0)
+  const [expanded, setExpanded] = useState({models: true})
 
   useEffect(() => {
     pomAlerts.list({ estat: 'Pendent', page_size: 1 })
@@ -57,18 +150,19 @@ export default function Sidebar() {
   }, [])
 
   const badges = { alerts: alertsPending }
+  const toggle = (key) => setExpanded(s => ({...s, [key]: !s[key]}))
 
   return (
     <aside style={{
       width: 240,
-      background: 'var(--charcoal)',
+      background: 'var(--bg-sidebar)',
       height: '100vh',
       display: 'flex',
       flexDirection: 'column',
       position: 'fixed',
       left: 0,
       top: 0,
-      borderRight: '0.5px solid rgba(255,255,255,0.06)',
+      borderRight: '0.5px solid var(--border)',
       overflowY: 'auto',
     }}>
       <div style={{
@@ -76,85 +170,41 @@ export default function Sidebar() {
         display: 'flex',
         alignItems: 'center',
         padding: '0 1.2rem',
-        borderBottom: '0.5px solid rgba(255,255,255,0.06)',
+        borderBottom: '0.5px solid var(--border)',
         flexShrink: 0,
+        background: 'var(--text-main)',
       }}>
         <Logo />
       </div>
-      <div style={{flex: 1, padding: '0.5rem 0'}}>
-        {navItems.map(group => (
-          <div key={group.section}>
-            <div style={{
-              fontSize: 10,
-              letterSpacing: '0.12em',
-              color: 'rgba(255,255,255,0.25)',
-              textTransform: 'uppercase',
-              padding: '0.8rem 1rem 0.3rem',
-            }}>
-              {group.section}
-            </div>
-            {group.items.map(item => {
-              const badge = item.badgeKey ? badges[item.badgeKey] : null
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/'}
-                  style={({ isActive }) => ({
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '0.6rem 1rem',
-                    margin: '1px 0.5rem',
-                    borderRadius: 8,
-                    color: isActive ? 'var(--gold-l)' : 'rgba(255,255,255,0.45)',
-                    background: isActive ? 'rgba(194,122,42,0.15)' : 'none',
-                    textDecoration: 'none',
-                    fontSize: 12,
-                    transition: 'all 0.15s',
-                  })}
-                >
-                  <i className={`ti ${item.icon}`} style={{fontSize: 17}} />
-                  <span style={{flex: 1}}>{item.label}</span>
-                  {badge > 0 && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 500,
-                      padding: '1px 7px', borderRadius: 10,
-                      background: 'var(--err)', color: 'white',
-                      fontVariantNumeric: 'tabular-nums',
-                    }}>
-                      {badge}
-                    </span>
-                  )}
-                </NavLink>
-              )
-            })}
-          </div>
+      <div style={{flex: 1, padding: '0.8rem 0'}}>
+        {navGroups[0].items.map((item, i) => (
+          <NavItem
+            key={item.to || item.labelKey}
+            item={item}
+            badges={badges}
+            t={t}
+            expanded={!!expanded[item.labelKey]}
+            onToggle={() => toggle(item.labelKey)}
+          />
         ))}
       </div>
       <div style={{
-        borderTop: '0.5px solid rgba(255,255,255,0.06)',
+        borderTop: '0.5px solid var(--border)',
         padding: '0.8rem',
       }}>
         <button
           onClick={logout}
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '0.6rem 1rem',
-            borderRadius: 8,
-            color: 'rgba(255,255,255,0.35)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 12,
-            width: '100%',
-            fontFamily: 'var(--font)',
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '0.6rem 1rem', borderRadius: 8,
+            color: 'var(--text-muted)',
+            background: 'none', border: 'none',
+            cursor: 'pointer', fontSize: 12,
+            width: '100%', fontFamily: 'inherit',
           }}
         >
           <i className="ti ti-logout" style={{fontSize: 17}} />
-          Tancar sessió
+          {t('nav.logout')}
         </button>
       </div>
     </aside>

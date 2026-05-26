@@ -1,0 +1,134 @@
+{
+  "app": {
+    "title": "Fhort Textile Tech",
+    "loading": "Loading...",
+    "empty": "No data",
+    "save": "Save",
+    "cancel": "Cancel",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "back": "Back",
+    "search": "Search...",
+    "yes": "Yes",
+    "no": "No",
+    "confirm": "Confirm",
+    "close": "Close",
+    "next": "Next",
+    "previous": "Previous"
+  },
+  "lang": {
+    "ca": "Catalan",
+    "es": "Spanish",
+    "en": "English"
+  },
+  "nav": {
+    "section_principal": "Main",
+    "section_operatiu": "Operations",
+    "section_sistema": "System",
+    "dashboard": "Dashboard",
+    "models": "Models",
+    "models_new": "New model",
+    "models_from_file": "New from file",
+    "fitting": "Size & Fitting",
+    "fittings": "Fitting sessions",
+    "tasques": "Tasks",
+    "tasques_catalog": "Task catalog",
+    "tasques_paquets": "Service packages",
+    "kanban": "Kanban",
+    "temps": "Time tracking",
+    "fitxers": "Files",
+    "poms": "POMs",
+    "grading": "Grading",
+    "sizes": "Size Systems",
+    "garment_types": "Garment Types",
+    "ia": "AI",
+    "avisos": "Alerts",
+    "configuracio": "Configuration",
+    "perfil": "My profile",
+    "logout": "Sign out",
+    "models_list": "List",
+    "poms_list": "List",
+    "tasques_list": "List",
+    "fitting_list": "List",
+    "fittings_sessions": "Fitting sessions",
+    "configuracio_general": "General"
+  },
+  "model": {
+    "title": "Models",
+    "new": "New model",
+    "tabs": {
+      "model": "Model",
+      "mesures": "Measurements",
+      "fitting": "Size & Fitting",
+      "fitxers": "Files",
+      "servei": "Service",
+      "control": "Control"
+    },
+    "fields": {
+      "codi_intern": "Internal code",
+      "codi_client": "Client reference",
+      "nom_prenda": "Garment name",
+      "descripcio": "Description",
+      "temporada": "Season",
+      "any": "Year",
+      "color_referencia": "Colorway / Reference color",
+      "estat": "Status",
+      "prioritat": "Priority",
+      "responsable": "Owner",
+      "data_entrada": "Entry date",
+      "data_objectiu": "Target date",
+      "observacions": "Notes",
+      "origen_patro": "Pattern origin",
+      "versio": "Version",
+      "garment_type": "Garment Type",
+      "garment_group": "Garment Group",
+      "fit_type": "Fit Type",
+      "size_system": "Size System",
+      "base_size_label": "Base size",
+      "size_run_model": "Model size run",
+      "size_run_help": "Sizes separated by · or ; (e.g. XS·S·M·L·XL)",
+      "grading_rule_set": "Grading Rule Set",
+      "fase_actual": "Current phase",
+      "familia": "Family",
+      "codi_tenant": "Tenant code",
+      "codi_tenant_help": "3 chars · auto-derived from customer code if empty"
+    },
+    "estats": {
+      "Nou": "New",
+      "EnCurs": "In progress",
+      "EnRevisio": "In review",
+      "Tancat": "Closed"
+    },
+    "prioritats": {
+      "1": "Low",
+      "3": "Normal",
+      "4": "High",
+      "5": "Urgent"
+    },
+    "temporades": {
+      "SS": "SS · Spring/Summer",
+      "FW": "FW · Fall/Winter",
+      "CO": "CO · Cruise",
+      "SP": "SP · Special"
+    },
+    "origens": {
+      "cad_client": "Client CAD",
+      "digitalitzacio": "Digitisation",
+      "des_de_zero": "From scratch"
+    },
+    "actions": {
+      "create": "Create model",
+      "creating": "Creating...",
+      "save": "Save changes"
+    },
+    "tab_unavailable": "This tab becomes available after the model is created.",
+    "unsupported_field": "Field not available on the current backend"
+  },
+  "errors": {
+    "required": "This field is required",
+    "create_failed": "Could not create the model",
+    "load_failed": "Error loading data",
+    "generic": "An error occurred"
+  }
+}

@@ -52,15 +52,16 @@ export default function App() {
           <Route path="fitting" element={<SizeFittingLlista />} />
           <Route path="fitting/:id" element={<SizeFittingDetall />} />
           <Route path="fitting/:sfId/fitting/:id" element={<FittingDetall />} />
-          <Route path="fittings" element={<Dashboard />} />
+          <Route path="fittings" element={<SizeFittingLlista />} />
           <Route path="tasques" element={<Tasques />} />
+          <Route path="tasques/catalog" element={<Tasques />} />
+          <Route path="tasques/paquets" element={<Tasques />} />
           <Route path="tasques/kanban" element={<KanbanTasques />} />
           <Route path="temps" element={<Temps />} />
-          <Route path="fitxers" element={<Dashboard />} />
           <Route path="poms" element={<POMs />} />
           <Route path="poms/grading" element={<GradingRuleSets />} />
           <Route path="poms/sizes" element={<SizeSystems />} />
-          <Route path="ia" element={<Dashboard />} />
+          <Route path="configuracio/garment-types" element={<Configuracio />} />
           <Route path="avisos" element={<Avisos />} />
           <Route path="configuracio" element={<Configuracio />} />
           <Route path="perfil" element={<PerfilUsuari />} />

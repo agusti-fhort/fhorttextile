@@ -57,12 +57,15 @@ class LiniaContracteSerializer(serializers.ModelSerializer):
 class ModelDetailSerializer(serializers.ModelSerializer):
     fitxers = ModelFitxerSerializer(many=True, read_only=True)
     garment_type_nom = serializers.CharField(source='garment_type.nom_client', read_only=True)
+    garment_group_nom = serializers.CharField(source='garment_group.nom', read_only=True)
     responsable_nom = serializers.CharField(source='responsable.nom_complet', read_only=True)
     size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
     talla_base_etiqueta = serializers.CharField(source='talla_base.etiqueta', read_only=True)
 
     class Meta:
         model = Model
+        # 'fields = __all__' ja inclou els camps nous origen_patro, versio,
+        # garment_group. Les variants *_nom només són exposades en lectura.
         fields = '__all__'
         read_only_fields = ('codi_intern', 'data_entrada')
 

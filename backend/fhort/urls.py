@@ -25,6 +25,7 @@ urlpatterns = [
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
     # API v1 — apps core del PLM
+    path('api/v1/', include('fhort.accounts.urls')),
     path('api/v1/', include('fhort.models_app.urls')),
     path('api/v1/', include('fhort.pom.urls')),
     path('api/v1/', include('fhort.fitting.urls')),

@@ -7,7 +7,7 @@ const API = import.meta.env.VITE_API_URL || ""
 const ESTAT_ORDER = ["Pendent", "En curs", "Bloquejada", "Feta"]
 
 const STAT_STYLES = {
-  "Pendent":   { header: '#1a1a2a', border: '#2a2a4a', accent: '#4a4a8a' },
+  "Pendent":   { header: '#1a1a2a', border: 'var(--border)', accent: '#4a4a8a' },
   "En curs":   { header: '#1a2a3a', border: '#2a4a6a', accent: '#4a7aaa' },
   "Bloquejada":{ header: '#2a1a1a', border: '#4a2020', accent: '#8a3a3a' },
   "Feta":      { header: '#1a2a1a', border: '#2a4a2a', accent: '#4a8a4a' },
@@ -71,7 +71,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
     setUpdating(null)
   }
 
-  if (loading) return <div style={{ color: '#444', fontSize: 12, padding: 16 }}>Carregant tasques...</div>
+  if (loading) return <div style={{ color: 'var(--text-main)', fontSize: 12, padding: 16 }}>Carregant tasques...</div>
 
   const byEstat = ESTAT_ORDER.reduce((acc, e) => {
     acc[e] = tasques.filter(t => t.estat === e)
@@ -84,12 +84,12 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
       'Disseny': '#2a4a2a', 'Tècnic': '#2a2a4a', 'Prototip': '#4a2a1a',
       'Mostres': '#4a4a1a', 'Preproducció': '#1a4a4a', 'Producció': '#3a1a4a',
     }
-    return map[fase] || '#2a2a2a'
+    return map[fase] || 'var(--border)'
   }
 
   if (tasques.length === 0) {
     return (
-      <div style={{ color: '#444', fontSize: 12, padding: '16px 0' }}>
+      <div style={{ color: 'var(--text-main)', fontSize: 12, padding: '16px 0' }}>
         <p>No hi ha tasques generades.</p>
         {onGenerarTasques && (
           <button onClick={onGenerarTasques} style={btnStyle}>
@@ -109,8 +109,8 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
           return (
             <div key={estat} style={{
               flex: '0 0 200px',
-              background: '#0e0e0e',
-              border: `1px solid ${st.border}`,
+              background: 'var(--bg-card)',
+              border: `1px solid var(--border)`,
               borderRadius: 6,
               overflow: 'hidden',
             }}>
@@ -143,7 +143,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
               <div style={{ padding: '6px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {col.map(t => (
                   <div key={t.id} style={{
-                    background: '#141414',
+                    background: 'var(--bg-card)',
                     border: `1px solid ${t.gate ? '#3a3a1a' : '#1a1a1a'}`,
                     borderRadius: 4,
                     padding: '6px 8px',
@@ -154,7 +154,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
                       <span style={{
                         fontSize: 9,
                         fontFamily: 'IBM Plex Mono, monospace',
-                        color: '#555',
+                        color: 'var(--text-muted)',
                         background: getFaseColor(t.fase),
                         padding: '1px 5px',
                         borderRadius: 2,
@@ -164,7 +164,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
                       {t.gate && (
                         <span style={{
                           marginLeft: 4, fontSize: 9,
-                          color: '#8a7a2a', background: '#2a2a0a',
+                          color: 'var(--gold)', background: 'var(--gold-pale)',
                           padding: '1px 5px', borderRadius: 2,
                           fontFamily: 'IBM Plex Mono, monospace',
                         }}>
@@ -176,7 +176,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
                     {/* Nom tasca */}
                     <div style={{
                       fontSize: 11,
-                      color: '#aaa',
+                      color: 'var(--text-muted)',
                       fontFamily: 'IBM Plex Mono, monospace',
                       marginBottom: 4,
                       lineHeight: 1.3,
@@ -186,7 +186,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
 
                     {/* Slots */}
                     {t.slots_base > 0 && (
-                      <div style={{ fontSize: 10, color: '#444', marginBottom: 6 }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-main)', marginBottom: 6 }}>
                         {t.slots_reals > 0
                           ? `${t.slots_reals}/${t.slots_base} slots`
                           : `${t.slots_base} slots prev.`
@@ -223,7 +223,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
                       {t.estat === 'Feta' && (
                         <button
                           onClick={() => updateEstat(t.id, 'En curs')}
-                          style={{ ...smallBtn, color: '#555', borderColor: '#2a2a2a' }}
+                          style={{ ...smallBtn, color: 'var(--text-muted)', borderColor: 'var(--border)' }}
                         >
                           ↩ Reobrir
                         </button>
@@ -232,7 +232,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
                   </div>
                 ))}
                 {col.length === 0 && (
-                  <div style={{ color: '#2a2a2a', fontSize: 11, padding: '8px 4px', textAlign: 'center' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 11, padding: '8px 4px', textAlign: 'center' }}>
                     —
                   </div>
                 )}
@@ -247,9 +247,9 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
 
 const btnStyle = {
   padding: '6px 14px',
-  background: '#1a1a2a',
+  background: 'var(--bg-muted)',
   color: '#4a7aaa',
-  border: '1px solid #2a2a4a',
+  border: '1px solid var(--border)',
   borderRadius: 4,
   fontSize: 11,
   fontFamily: 'IBM Plex Mono, monospace',
@@ -259,10 +259,10 @@ const btnStyle = {
 const smallBtn = {
   padding: '2px 8px',
   background: 'transparent',
-  border: '1px solid #2a2a2a',
+  border: '1px solid var(--border)',
   borderRadius: 3,
   fontSize: 10,
   fontFamily: 'IBM Plex Mono, monospace',
   cursor: 'pointer',
-  color: '#555',
+  color: 'var(--text-muted)',
 }

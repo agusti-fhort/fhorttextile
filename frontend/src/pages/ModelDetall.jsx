@@ -33,12 +33,12 @@ function useModel(id, token) {
 
 function FieldRow({ label, children, mono }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8, padding: '5px 0', borderBottom: '1px solid #181818' }}>
-      <span style={{ color: '#444', fontSize: 11, fontFamily: 'IBM Plex Mono, monospace', paddingTop: 2 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
+      <span style={{ color: 'var(--text-main)', fontSize: 11, fontFamily: 'IBM Plex Mono, monospace', paddingTop: 2 }}>
         {label}
       </span>
-      <span style={{ color: '#bbb', fontSize: 12, fontFamily: mono ? 'IBM Plex Mono, monospace' : 'inherit' }}>
-        {children ?? <span style={{ color: '#2a2a2a' }}>—</span>}
+      <span style={{ color: 'var(--text-muted)', fontSize: 12, fontFamily: mono ? 'IBM Plex Mono, monospace' : 'inherit' }}>
+        {children ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
       </span>
     </div>
   )
@@ -54,7 +54,7 @@ function Section({ title, children, collapsible }) {
           style={{
             fontSize: 10,
             fontFamily: 'IBM Plex Mono, monospace',
-            color: '#555',
+            color: 'var(--text-muted)',
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
             marginBottom: 8,
@@ -76,10 +76,10 @@ function TabBtn({ label, active, onClick }) {
       onClick={onClick}
       style={{
         padding: '6px 14px',
-        background: active ? '#1a1a2a' : 'transparent',
-        color: active ? '#8a8acc' : '#444',
+        background: active ? 'var(--gold-pale)' : 'transparent',
+        color: active ? 'var(--gold)' : 'var(--text-muted)',
         border: 'none',
-        borderBottom: active ? '2px solid #5a5a9a' : '2px solid transparent',
+        borderBottom: active ? '2px solid var(--gold)' : '2px solid transparent',
         fontSize: 11,
         fontFamily: 'IBM Plex Mono, monospace',
         cursor: 'pointer',
@@ -244,8 +244,8 @@ function TabSF({ model, token }) {
     setAction(null)
   }
 
-  if (loading) return <div style={{ color: '#444', fontSize: 12 }}>Carregant SF...</div>
-  if (!sf) return <div style={{ color: '#444', fontSize: 12 }}>No hi ha Size & Fitting per a aquest model.</div>
+  if (loading) return <div style={{ color: 'var(--text-main)', fontSize: 12 }}>Carregant SF...</div>
+  if (!sf) return <div style={{ color: 'var(--text-main)', fontSize: 12 }}>No hi ha Size & Fitting per a aquest model.</div>
 
   return (
     <div>
@@ -342,9 +342,9 @@ function TabFitxers({ model, token }) {
       {CATS.map(cat => (
         <Section key={cat} title={cat} collapsible>
           {bycat[cat].length === 0
-            ? <div style={{ color: '#333', fontSize: 11, padding: '4px 0' }}>Sense fitxers</div>
+            ? <div style={{ color: 'var(--text-main)', fontSize: 11, padding: '4px 0' }}>Sense fitxers</div>
             : bycat[cat].map(f => (
-              <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #181818' }}>
+              <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
                 <a
                   href={f.url || f.fitxer}
                   target="_blank"
@@ -353,7 +353,7 @@ function TabFitxers({ model, token }) {
                 >
                   {f.nom_fitxer}
                 </a>
-                <span style={{ color: '#333', fontSize: 10 }}>
+                <span style={{ color: 'var(--text-main)', fontSize: 10 }}>
                   {f.versio ? `v${f.versio}` : ''}
                 </span>
               </div>
@@ -361,8 +361,8 @@ function TabFitxers({ model, token }) {
           }
           <label style={{ display: 'inline-block', marginTop: 8, cursor: 'pointer' }}>
             <span style={{
-              fontSize: 10, color: '#444', fontFamily: 'IBM Plex Mono, monospace',
-              padding: '3px 8px', border: '1px solid #2a2a2a', borderRadius: 3,
+              fontSize: 10, color: 'var(--text-main)', fontFamily: 'IBM Plex Mono, monospace',
+              padding: '3px 8px', border: '1px solid var(--border)', borderRadius: 3,
             }}>
               {uploading ? 'Pujant...' : `+ Afegir a ${cat}`}
             </span>
@@ -403,23 +403,23 @@ function TabServei({ model, token }) {
     <div>
       <Section title="Serveis assignats">
         {serveis.length === 0
-          ? <div style={{ color: '#333', fontSize: 11 }}>Sense serveis assignats.</div>
+          ? <div style={{ color: 'var(--text-main)', fontSize: 11 }}>Sense serveis assignats.</div>
           : serveis.map(s => (
             <div key={s.id} style={{
               display: 'grid',
               gridTemplateColumns: '1fr 80px 100px',
               gap: 8,
               padding: '6px 0',
-              borderBottom: '1px solid #181818',
+              borderBottom: '1px solid var(--border)',
               alignItems: 'center',
             }}>
               <div>
-                <div style={{ fontSize: 12, color: '#aaa', fontFamily: 'IBM Plex Mono, monospace' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace' }}>
                   {s.nom_servei}
                 </div>
-                <div style={{ fontSize: 10, color: '#444' }}>{s.grup}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-main)' }}>{s.grup}</div>
               </div>
-              <div style={{ fontSize: 11, color: '#666', textAlign: 'right' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
                 {s.slots_base ? `${s.slots_base} slots` : ''}
               </div>
               <div>
@@ -479,7 +479,7 @@ function TabControl({ model, token, onUpdate }) {
 
       {model?.observacions && (
         <Section title="Observacions">
-          <div style={{ color: '#666', fontSize: 12, lineHeight: 1.6 }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6 }}>
             {model.observacions}
           </div>
         </Section>
@@ -528,7 +528,7 @@ export default function ModelDetall() {
 
   if (loading) return (
     <div style={pageStyle}>
-      <div style={{ color: '#444', fontSize: 12, fontFamily: 'IBM Plex Mono, monospace' }}>
+      <div style={{ color: 'var(--text-main)', fontSize: 12, fontFamily: 'IBM Plex Mono, monospace' }}>
         Carregant model {id}...
       </div>
     </div>
@@ -549,7 +549,7 @@ export default function ModelDetall() {
       <div style={{ marginBottom: 16 }}>
         <button
           onClick={() => navigate(-1)}
-          style={{ color: '#444', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, marginBottom: 8, fontFamily: 'IBM Plex Mono, monospace' }}
+          style={{ color: 'var(--text-main)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, marginBottom: 8, fontFamily: 'IBM Plex Mono, monospace' }}
         >
           ← Models
         </button>
@@ -558,9 +558,9 @@ export default function ModelDetall() {
             <h1 style={{ fontSize: 18, fontFamily: 'IBM Plex Mono, monospace', color: '#c27a2a', margin: 0 }}>
               {model.codi}
             </h1>
-            <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
               {model.nom_prenda}
-              {model.client_nom && <span style={{ color: '#555' }}> · {model.client_nom}</span>}
+              {model.client_nom && <span style={{ color: 'var(--text-muted)' }}> · {model.client_nom}</span>}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -599,14 +599,14 @@ const pageStyle = {
   padding: '20px 24px',
   maxWidth: 960,
   margin: '0 auto',
-  color: '#bbb',
+  color: 'var(--text-muted)',
 }
 
 const inputStyle = {
-  background: '#111',
+  background: 'var(--bg-card)',
   border: '1px solid #222',
   borderRadius: 3,
-  color: '#bbb',
+  color: 'var(--text-muted)',
   fontSize: 12,
   fontFamily: 'IBM Plex Mono, monospace',
   padding: '4px 8px',
@@ -615,7 +615,7 @@ const inputStyle = {
 
 const btnPrimary = {
   padding: '7px 16px',
-  background: '#1a1a2a',
+  background: 'var(--bg-muted)',
   color: '#7a7acc',
   border: '1px solid #3a3a6a',
   borderRadius: 4,
@@ -627,8 +627,8 @@ const btnPrimary = {
 const btnSecondary = {
   padding: '6px 12px',
   background: 'transparent',
-  color: '#555',
-  border: '1px solid #2a2a2a',
+  color: 'var(--text-muted)',
+  border: '1px solid var(--border)',
   borderRadius: 3,
   fontSize: 11,
   fontFamily: 'IBM Plex Mono, monospace',

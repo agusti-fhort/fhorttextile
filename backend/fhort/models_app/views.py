@@ -29,7 +29,8 @@ class ModelViewSet(viewsets.ModelViewSet):
             return Model.objects.none()
         return (
             Model.objects
-            .select_related('garment_type', 'responsable', 'responsable__user',
+            .select_related('garment_type', 'garment_group',
+                            'responsable', 'responsable__user',
                             'size_system', 'talla_base', 'grading_rule_set')
             .all()
         )

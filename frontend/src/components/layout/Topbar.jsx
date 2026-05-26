@@ -1,28 +1,36 @@
 import { useLocation, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import LanguageSwitcher from './LanguageSwitcher'
 
-const breadcrumbs = {
-  '/':              'Dashboard',
-  '/models':        'Models',
-  '/models/nou':    'Nou model',
-  '/fitting':       'Size & Fitting',
-  '/fittings':      'Fittings',
-  '/tasques':       'Tasques',
-  '/tasques/kanban':'Kanban',
-  '/temps':         'Temps',
-  '/fitxers':       'Fitxers',
-  '/poms':          'POMs',
-  '/poms/grading':  'Grading',
-  '/poms/sizes':    'Size Systems',
-  '/avisos':        'Avisos',
-  '/ia':            'IA',
-  '/configuracio':  'Configuració',
-  '/perfil':        'El meu perfil',
+const PATH_TO_KEY = {
+  '/':                          'nav.dashboard',
+  '/models':                    'nav.models',
+  '/models/nou':                'nav.models_new',
+  '/models/nou-des-de-fitxer':  'nav.models_from_file',
+  '/fitting':                   'nav.fitting',
+  '/fittings':                  'nav.fittings',
+  '/tasques':                   'nav.tasques',
+  '/tasques/catalog':           'nav.tasques_catalog',
+  '/tasques/paquets':           'nav.tasques_paquets',
+  '/tasques/kanban':            'nav.kanban',
+  '/temps':                     'nav.temps',
+  '/fitxers':                   'nav.fitxers',
+  '/poms':                      'nav.poms',
+  '/poms/grading':              'nav.grading',
+  '/poms/sizes':                'nav.sizes',
+  '/configuracio/garment-types':'nav.garment_types',
+  '/avisos':                    'nav.avisos',
+  '/ia':                        'nav.ia',
+  '/configuracio':              'nav.configuracio',
+  '/perfil':                    'nav.perfil',
 }
 
 export default function Topbar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const title = breadcrumbs[pathname] || 'Fhort Textile Tech'
+  const { t } = useTranslation()
+  const key = PATH_TO_KEY[pathname]
+  const title = key ? t(key) : t('app.title')
 
   return (
     <header style={{
@@ -39,11 +47,12 @@ export default function Topbar() {
     }}>
       <div style={{display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray)'}}>
         <i className="ti ti-layout-dashboard" style={{fontSize: 14}} />
-        <span>Fhort Textile Tech</span>
+        <span>{t('app.title')}</span>
         <i className="ti ti-chevron-right" style={{fontSize: 14}} />
         <strong style={{color: 'var(--charcoal)', fontWeight: 500}}>{title}</strong>
       </div>
       <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.8rem'}}>
+        <LanguageSwitcher />
         <button
           onClick={() => navigate('/avisos')}
           style={{
@@ -91,7 +100,7 @@ export default function Topbar() {
           }}
         >
           <i className="ti ti-plus" style={{fontSize: 15}} />
-          Nou model
+          {t('model.new')}
         </button>
       </div>
     </header>

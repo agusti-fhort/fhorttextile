@@ -21,7 +21,7 @@ function StepIndicator({ current }) {
               <div style={{
                 width: 28, height: 28, borderRadius: "50%",
                 background: active ? "#c27a2a" : done ? "#1a2a1a" : "#111",
-                border: `1px solid ${active ? "#c27a2a" : done ? "#2a4a2a" : "#2a2a2a"}`,
+                border: `1px solid ${active ? "#c27a2a" : done ? "#2a4a2a" : 'var(--border)'}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 11, fontFamily: "IBM Plex Mono, monospace",
                 color: active ? "#1d1d1b" : done ? "#4a9a4a" : "#333",
@@ -133,7 +133,7 @@ export default function UploadModelWizard() {
   return (
     <div style={{ padding: "24px", maxWidth: 640, margin: "0 auto" }}>
       <button onClick={() => navigate(-1)} style={{
-        background: "none", border: "none", color: "#444", cursor: "pointer",
+        background: "none", border: "none", color: 'var(--text-main)', cursor: "pointer",
         fontSize: 11, fontFamily: "IBM Plex Mono, monospace", marginBottom: 20,
       }}>
         ← Tornar
@@ -142,7 +142,7 @@ export default function UploadModelWizard() {
       <h1 style={{ fontSize: 18, fontFamily: "IBM Plex Mono, monospace", color: "#c27a2a", marginBottom: 6 }}>
         Nou model des de fitxer
       </h1>
-      <p style={{ fontSize: 12, color: "#555", marginBottom: 24, fontFamily: "IBM Plex Mono, monospace" }}>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 24, fontFamily: "IBM Plex Mono, monospace" }}>
         Puja una fitxa tècnica i la IA extraurà les dades automàticament.
       </p>
 
@@ -152,7 +152,7 @@ export default function UploadModelWizard() {
       {error && (
         <div style={{
           padding: "8px 12px", marginBottom: 16, borderRadius: 4,
-          background: "#2a1a1a", border: "1px solid #4a2020",
+          background: 'var(--bg-muted)', border: "1px solid #4a2020",
           color: "#cc6666", fontSize: 11, fontFamily: "IBM Plex Mono, monospace",
         }}>
           ✗ {error}
@@ -168,7 +168,7 @@ export default function UploadModelWizard() {
             onDrop={handleDrop}
             onClick={() => fileInput.current.click()}
             style={{
-              border: `1.5px dashed ${dragging ? "#c27a2a" : file ? "#2a4a2a" : "#2a2a2a"}`,
+              border: `1.5px dashed ${dragging ? "#c27a2a" : file ? "#2a4a2a" : 'var(--border)'}`,
               borderRadius: 8, padding: "40px 24px", textAlign: "center",
               cursor: "pointer", transition: "all .15s",
               background: dragging ? "rgba(194,122,42,0.05)" : "transparent",
@@ -182,25 +182,25 @@ export default function UploadModelWizard() {
             {file ? (
               <div>
                 <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
-                <div style={{ fontSize: 13, color: "#aaa", fontFamily: "IBM Plex Mono, monospace" }}>{file.name}</div>
-                <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: "IBM Plex Mono, monospace" }}>{file.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                   {(file.size / 1024).toFixed(0)} KB — clica per canviar
                 </div>
               </div>
             ) : (
               <div>
                 <div style={{ fontSize: 28, marginBottom: 8 }}>⬆</div>
-                <div style={{ fontSize: 12, color: "#888", fontFamily: "IBM Plex Mono, monospace" }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: "IBM Plex Mono, monospace" }}>
                   Arrossega o clica per seleccionar
                 </div>
-                <div style={{ fontSize: 11, color: "#444", marginTop: 6 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-main)', marginTop: 6 }}>
                   PDF · PNG · JPG · WEBP · màx. 20MB
                 </div>
               </div>
             )}
           </div>
 
-          <div style={{ fontSize: 11, color: "#444", marginBottom: 20, fontFamily: "IBM Plex Mono, monospace", lineHeight: 1.6 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-main)', marginBottom: 20, fontFamily: "IBM Plex Mono, monospace", lineHeight: 1.6 }}>
             Accepta: fitxes tècniques PLM, mesuraments, fit comments, sketches escanejats.
             Si el document no conté mesures de talla base, el grading es generarà automàticament
             des de les Grading Rules configurades al sistema.
@@ -211,7 +211,7 @@ export default function UploadModelWizard() {
             disabled={!file || loading}
             style={{
               width: "100%", padding: "10px",
-              background: file ? "#1a1a2a" : "#111",
+              background: file ? 'var(--bg-muted)' : 'var(--bg-card)',
               color: file ? "#7a7acc" : "#333",
               border: `1px solid ${file ? "#3a3a6a" : "#222"}`,
               borderRadius: 4, fontSize: 12,
@@ -228,10 +228,10 @@ export default function UploadModelWizard() {
       {step === 1 && loading && (
         <div style={{ textAlign: "center", padding: "40px 0" }}>
           <div style={{ fontSize: 32, marginBottom: 16 }}>⏳</div>
-          <div style={{ fontSize: 12, color: "#888", fontFamily: "IBM Plex Mono, monospace" }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: "IBM Plex Mono, monospace" }}>
             {loadingMsg}
           </div>
-          <div style={{ fontSize: 11, color: "#444", marginTop: 8 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-main)', marginTop: 8 }}>
             Pot trigar 15-45 segons depenent del document
           </div>
         </div>
@@ -250,7 +250,7 @@ export default function UploadModelWizard() {
       {step === 3 && loading && (
         <div style={{ textAlign: "center", padding: "40px 0" }}>
           <div style={{ fontSize: 32, marginBottom: 16 }}>⚙</div>
-          <div style={{ fontSize: 12, color: "#888", fontFamily: "IBM Plex Mono, monospace" }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: "IBM Plex Mono, monospace" }}>
             {loadingMsg}
           </div>
         </div>

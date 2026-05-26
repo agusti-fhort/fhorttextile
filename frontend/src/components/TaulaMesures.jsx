@@ -80,14 +80,14 @@ export function TaulaMesures({ sfId, token, onUpdate }) {
         <tbody>
           {poms.map((pom, rowIdx) => (
             <tr key={pom.id} style={{ background: rowIdx % 2 === 0 ? '#111' : '#0e0e0e' }}>
-              <td style={{ ...styles.td, color: '#333', textAlign: 'right' }}>
+              <td style={{ ...styles.td, color: 'var(--text-main)', textAlign: 'right' }}>
                 {pom.display_order || rowIdx + 1}
               </td>
               <td style={{ ...styles.td, color: pom.is_key_measure ? '#c27a2a' : '#888' }}>
                 {pom.is_key_measure && <span title="Key measure" style={{ marginRight: 4 }}>★</span>}
                 {pom.nom_cat || pom.nom_en}
               </td>
-              <td style={{ ...styles.td, color: '#555' }}>{pom.codi}</td>
+              <td style={{ ...styles.td, color: 'var(--text-muted)' }}>{pom.codi}</td>
               {size_run.map(talla => {
                 const cellKey = `${pom.id}_${talla}`
                 const cellData = cells[pom.id]?.[talla]
@@ -121,7 +121,7 @@ export function TaulaMesures({ sfId, token, onUpdate }) {
                           if (e.key === 'Escape') setEditingCell(null)
                         }}
                         style={{
-                          width: 52, background: '#1a2a1a', color: '#5aaa5a',
+                          width: 52, background: 'var(--bg-muted)', color: '#5aaa5a',
                           border: '1px solid #2a4a2a', borderRadius: 2,
                           fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
                           textAlign: 'right', padding: '1px 3px',
@@ -137,7 +137,7 @@ export function TaulaMesures({ sfId, token, onUpdate }) {
           ))}
         </tbody>
       </table>
-      <div style={{ padding: '8px 0', color: '#444', fontSize: 10 }}>
+      <div style={{ padding: '8px 0', color: 'var(--text-main)', fontSize: 10 }}>
         ● talla base &nbsp;·&nbsp; ★ key measure &nbsp;·&nbsp; clic per editar
       </div>
     </div>
@@ -145,16 +145,16 @@ export function TaulaMesures({ sfId, token, onUpdate }) {
 }
 
 const styles = {
-  msg: { color: '#555', fontFamily: 'IBM Plex Mono, monospace', fontSize: 12, padding: '16px 0' },
+  msg: { color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace', fontSize: 12, padding: '16px 0' },
   table: { borderCollapse: 'collapse', width: '100%', minWidth: 500 },
   th: {
     padding: '6px 8px', textAlign: 'left', fontSize: 11,
     fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
-    color: '#666', borderBottom: '1px solid #2a2a2a',
-    background: '#111', whiteSpace: 'nowrap',
+    color: 'var(--text-muted)', borderBottom: '1px solid var(--border)',
+    background: 'var(--bg-card)', whiteSpace: 'nowrap',
   },
   td: {
-    padding: '3px 8px', fontSize: 11, color: '#666',
+    padding: '3px 8px', fontSize: 11, color: 'var(--text-muted)',
     borderBottom: '1px solid #1a1a1a',
     fontFamily: 'IBM Plex Mono, monospace',
   },

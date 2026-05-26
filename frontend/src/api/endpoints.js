@@ -8,6 +8,8 @@ export const models = {
   list: (params) => client.get('/api/v1/models/', { params }),
   get: (id) => client.get(`/api/v1/models/${id}/`),
   create: (data) => client.post('/api/v1/models/', data),
+  update: (id, data) => client.patch(`/api/v1/models/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/models/${id}/`),
 }
 
 export const poms = {
@@ -38,9 +40,28 @@ export const gradingRules = {
   list: (params) => client.get('/api/v1/grading-rules/', { params }),
 }
 
-export const tasks = {
+export const modelTasques = {
   list: (params) => client.get('/api/v1/model-tasques/', { params }),
   listByModel: (modelId) => client.get('/api/v1/model-tasques/', { params: { model: modelId } }),
+}
+// Alias retrocompatible
+export const tasks = modelTasques
+
+export const tasquesCatalog = {
+  list: (params) => client.get('/api/v1/tasques/', { params }),
+}
+
+export const paquetsServei = {
+  list: (params) => client.get('/api/v1/paquets-servei/', { params }),
+}
+
+export const modelServeis = {
+  list: (params) => client.get('/api/v1/model-serveis/', { params }),
+  create: (data) => client.post('/api/v1/model-serveis/', data),
+}
+
+export const sessionsFitting = {
+  list: (params) => client.get('/api/v1/sessions-fitting/', { params }),
 }
 
 export const sizeFittings = {
@@ -79,6 +100,9 @@ export const timers = {
   tancar: (id) => client.post(`/api/v1/timers/${id}/tancar/`),
 }
 
+// NOTA: el backend Django encara no exposa /api/v1/me/.
+// Els callers (Configuracio, KanbanTasques, PerfilUsuari) envolten la crida
+// amb .catch(()=>{}) per fallar amb gràcia mentre l'endpoint no existeix.
 export const me = {
   get: () => client.get('/api/v1/me/'),
 }
