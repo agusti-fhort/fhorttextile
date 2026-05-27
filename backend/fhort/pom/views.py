@@ -40,7 +40,7 @@ class POMMasterViewSet(viewsets.ModelViewSet):
     ordering = ['codi_client']
 
 
-class SizeSystemViewSet(viewsets.ReadOnlyModelViewSet):
+class SizeSystemViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = SizeSystemSerializer
     queryset = SizeSystem.objects.prefetch_related('talles').all()
@@ -48,6 +48,15 @@ class SizeSystemViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['actiu']
     search_fields = ['codi', 'nom']
     ordering = ['codi']
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.talles.exists():
+            return Response(
+                {'error': 'Elimina primer les talles associades'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 class SizeDefinitionViewSet(viewsets.ModelViewSet):

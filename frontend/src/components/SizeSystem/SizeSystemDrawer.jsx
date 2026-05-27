@@ -13,6 +13,8 @@ export default function SizeSystemDrawer({ sizeSystem, onClose }) {
 
   useEffect(() => {
     if (!sizeSystem) return
+    console.log('SizeSystem prop:', sizeSystem)
+    console.log('Fetching definitions for id:', sizeSystem?.id)
     setLoading(true)
     fetch(`/api/v1/size-definitions/?size_system=${sizeSystem.id}&page_size=50`, {
       headers: authHeaders(),
@@ -53,6 +55,26 @@ export default function SizeSystemDrawer({ sizeSystem, onClose }) {
     })
     if (res.ok) {
       setDefinitions(prev => prev.filter(d => d.id !== defId))
+    }
+  }
+
+  const handleDeleteSystem = async () => {
+    const nom = sizeSystem.nom || sizeSystem.codi
+    if (!confirm(`Esborrar el sistema de talles ${nom}? Aquesta acció és irreversible.`)) return
+    const res = await fetch(`/api/v1/size-systems/${sizeSystem.id}/`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    })
+    if (res.ok) {
+      onClose()
+      window.location.reload()
+    } else {
+      let msg = 'No s\'ha pogut esborrar el sistema'
+      try {
+        const d = await res.json()
+        msg = d.detail || d.error || msg
+      } catch {}
+      alert(msg)
     }
   }
 
@@ -256,14 +278,24 @@ export default function SizeSystemDrawer({ sizeSystem, onClose }) {
             }}>
             + Afegir talla
           </button>
-          <button onClick={onClose}
-            style={{
-              padding: '0.4rem 0.85rem', border: '1px solid #ddd',
-              borderRadius: 6, background: '#fff', color: '#666',
-              cursor: 'pointer', fontSize: '0.82rem',
-            }}>
-            Tancar
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={handleDeleteSystem}
+              style={{
+                padding: '0.4rem 0.85rem', border: '1px solid #C0392B',
+                borderRadius: 6, background: '#fff', color: '#C0392B',
+                cursor: 'pointer', fontSize: '0.82rem',
+              }}>
+              Esborrar sistema
+            </button>
+            <button onClick={onClose}
+              style={{
+                padding: '0.4rem 0.85rem', border: '1px solid #ddd',
+                borderRadius: 6, background: '#fff', color: '#666',
+                cursor: 'pointer', fontSize: '0.82rem',
+              }}>
+              Tancar
+            </button>
+          </div>
         </div>
       </div>
     </>
