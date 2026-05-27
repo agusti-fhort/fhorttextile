@@ -317,12 +317,31 @@ class ModelServei(models.Model):
 
 class BaseMeasurement(models.Model):
     """Mesures de la talla base introduïdes per al Model abans de generar talles."""
+
+    ORIGEN_CHOICES = [
+        ('STANDARD',   'Estàndard (carregat del RuleSet)'),
+        ('IMPORTED',   'Importat de fitxa externa'),
+        ('MANUAL',     'Introduït manualment'),
+        ('FITTED',     'Modificat en fitting'),
+        ('CALCULATED', 'Calculat des de talla base + delta'),
+    ]
+
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='base_measurements')
     pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='base_measurements')
     base_value_cm = models.FloatField()
     is_active = models.BooleanField(default=True)
     notes = models.TextField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Sprint S14-A
+    nom_fitxa = models.CharField(
+        max_length=20, blank=True, default='',
+        help_text='Nomenclatura de la fletxa al croquis (ex: A, 1, CH). '
+                  'Per defecte: abbreviation del POMGlobal.'
+    )
+    origen = models.CharField(
+        max_length=20, choices=ORIGEN_CHOICES, default='STANDARD',
+    )
 
     class Meta:
         verbose_name = 'Mesura base'
