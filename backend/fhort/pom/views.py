@@ -1,7 +1,8 @@
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from .models import (
     GarmentGroup,
@@ -55,7 +56,7 @@ class SizeDefinitionViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['size_system', 'ordre']
 
 
-class GarmentTypeViewSet(viewsets.ReadOnlyModelViewSet):
+class GarmentTypeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = GarmentTypeSerializer
     queryset = GarmentType.objects.select_related('garment_type_global').all()
@@ -63,6 +64,15 @@ class GarmentTypeViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['actiu', 'grup']
     search_fields = ['codi_client', 'nom_client']
     ordering = ['codi_client']
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.is_system:
+            return Response(
+                {'error': 'No es pot esborrar un tipus de sistema.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 class GarmentGroupViewSet(viewsets.ReadOnlyModelViewSet):

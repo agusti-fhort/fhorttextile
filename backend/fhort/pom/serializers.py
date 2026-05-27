@@ -56,6 +56,7 @@ class GarmentTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = GarmentType
         fields = '__all__'
+        read_only_fields = ['is_system']
 
 
 class GradingRuleSerializer(serializers.ModelSerializer):

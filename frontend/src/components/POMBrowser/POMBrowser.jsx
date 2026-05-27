@@ -1,8 +1,28 @@
 import { useState, useEffect } from 'react'
 import useAuthStore from '../../store/auth'
-import { garmentTypes as garmentTypesApi } from '../../api/endpoints'
+import GarmentTypeSelector from '../GarmentTypeSelector/GarmentTypeSelector'
 
 const API = import.meta.env.VITE_API_URL || ''
+
+function gtNom(t, lang = 'ca') {
+  if (!t) return ''
+  if (lang === 'ca') return t.nom_ca || t.nom_cat || t.nom_en || t.nom_client || t.global_nom || ''
+  if (lang === 'es') return t.nom_es || t.nom_en || t.nom_client || t.global_nom || ''
+  return t.nom_en || t.nom_client || t.global_nom || ''
+}
+
+function grupLabel(grup, lang = 'ca') {
+  const MAP = {
+    TOPS: { ca: 'Parts superiors', en: 'Tops', es: 'Partes superiores' },
+    BOTTOMS: { ca: 'Parts inferiors', en: 'Bottoms', es: 'Partes inferiores' },
+    DRESSES: { ca: 'Vestits', en: 'Dresses', es: 'Vestidos' },
+    OUTERWEAR: { ca: 'Abrics', en: 'Outerwear', es: 'Abrigos' },
+    UNDERWEAR: { ca: 'Interior', en: 'Underwear', es: 'Interior' },
+    SWIMWEAR: { ca: 'Bany', en: 'Swimwear', es: 'Baño' },
+    ACCESSORIES: { ca: 'Complements', en: 'Accessories', es: 'Complementos' },
+  }
+  return MAP[grup]?.[lang] || grup
+}
 
 // TODO(backend): endpoint dedicat `GET /api/v1/poms/?garment_type=<id>` que retorni
 // POMs filtrats per GarmentType amb tots els camps rics de POMGlobal
@@ -104,34 +124,46 @@ export default function POMBrowser({
   garmentTypeCode = '',
   activePoms = [],
   onTogglePom = () => {},
+  lang = 'ca',
 }) {
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
 
-  const [garmentTypes, setGarmentTypes] = useState([])
-  const [selectedGT, setSelectedGT] = useState(garmentTypeCode || '')
+  // L'objecte GarmentType complet seleccionat (null = step 'select-type').
+  const [selectedGT, setSelectedGT] = useState(null)
   const [poms, setPoms] = useState([])
   const [search, setSearch] = useState('')
   const [selectedPom, setSelectedPom] = useState(null)
   const [loading, setLoading] = useState(false)
   const [usingMock, setUsingMock] = useState(false)
 
+  // Resol l'objecte GarmentType quan només arriba l'ID per prop (cas wizard assign).
   useEffect(() => {
-    setSelectedGT(garmentTypeCode || '')
+    if (!garmentTypeCode) { setSelectedGT(null); return }
+    // Si ja és l'objecte seleccionat, no recarreguem.
+    if (selectedGT && String(selectedGT.id) === String(garmentTypeCode)) return
+
+    fetch(`${API}/api/v1/garment-types/${garmentTypeCode}/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => setSelectedGT(data))
+      .catch(() => {
+        // Fallback: objecte sintètic amb només l'ID
+        setSelectedGT({ id: garmentTypeCode, nom_en: '', nom_ca: '', grup: '' })
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [garmentTypeCode])
 
+  // Carrega POMs quan canvia el GarmentType seleccionat.
   useEffect(() => {
-    garmentTypesApi.list({ page_size: 200 })
-      .then(r => setGarmentTypes(r.data.results || r.data || []))
-      .catch(() => setGarmentTypes([]))
-  }, [])
-
-  useEffect(() => {
-    if (!selectedGT) { setPoms([]); return }
+    setSelectedPom(null)
+    if (!selectedGT?.id) { setPoms([]); return }
     setLoading(true)
-    // TODO(backend): afegir filtre `?garment_type=<id>` a POMMasterViewSet.
-    const params = new URLSearchParams({ garment_type: selectedGT, page_size: 500 })
+    // TODO(backend): afegir filtre `?garment_type=<id>` a POMMasterViewSet
+    // i exposar camps rics de POMGlobal al serializer.
+    const params = new URLSearchParams({ garment_type: selectedGT.id, page_size: 500 })
     fetch(`${API}/api/v1/poms/?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
@@ -163,32 +195,65 @@ export default function POMBrowser({
     )
   })
 
-  const gtLabel = (gt) => gt.nom_client || gt.nom_cat || gt.nom_en || gt.codi_client || gt.codi
-  const gtValue = (gt) => gt.id ?? gt.codi ?? gt.codi_client
+  // ── Step 'select-type' ────────────────────────────────────────────────────
+  if (!selectedGT) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <GarmentTypeSelector
+          lang={lang}
+          onSelect={(gt) => setSelectedGT(gt)}
+        />
+      </div>
+    )
+  }
 
+  // ── Step 'view-poms' ──────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: 'IBM Plex Mono, monospace' }}>
+      {/* Breadcrumb + Search */}
       <div style={{
-        display: 'flex', gap: 10, padding: '12px 16px',
+        display: 'flex', gap: 12, padding: '12px 16px',
         borderBottom: '0.5px solid #e4e4e2', background: '#fff',
         alignItems: 'center', flexWrap: 'wrap',
       }}>
-        <select
-          value={selectedGT}
-          onChange={e => { setSelectedGT(e.target.value); setSelectedPom(null) }}
-          style={selectStyle}
-        >
-          <option value="">— Tipus de prenda —</option>
-          {garmentTypes.map(gt => (
-            <option key={gtValue(gt)} value={gtValue(gt)}>{gtLabel(gt)}</option>
-          ))}
-        </select>
+        {mode === 'explore' && (
+          <button
+            onClick={() => setSelectedGT(null)}
+            title="Canviar tipus de prenda"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
+              background: '#fff', color: '#868685',
+              border: '0.5px solid #e0d5c5',
+              fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#c27a2a'; e.currentTarget.style.color = '#c27a2a' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#e0d5c5'; e.currentTarget.style.color = '#868685' }}
+          >
+            ← Canviar tipus
+          </button>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          {selectedGT.grup && (
+            <>
+              <span style={{ fontSize: 10, color: '#868685', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                {grupLabel(selectedGT.grup, lang)}
+              </span>
+              <span style={{ fontSize: 12, color: '#868685' }}>›</span>
+            </>
+          )}
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#1d1d1b' }}>
+            {gtNom(selectedGT, lang) || selectedGT.codi_client || '—'}
+          </span>
+        </div>
+
         <input
           type="text"
           placeholder="Cerca POM (codi, nom, abreviatura)..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ ...selectStyle, width: 280, flex: '0 1 auto' }}
+          style={{ ...selectStyle, width: 280, flex: '0 1 auto', marginLeft: 'auto' }}
         />
         {usingMock && (
           <span style={{
@@ -198,7 +263,6 @@ export default function POMBrowser({
             mock data · backend pendent
           </span>
         )}
-        <div style={{ flex: 1 }} />
         {mode === 'assign' && (
           <span style={{ fontSize: 11, color: '#868685' }}>
             {activePoms.length} POMs assignats
@@ -206,18 +270,10 @@ export default function POMBrowser({
         )}
       </div>
 
-      <div style={{
-        display: 'flex', flex: 1, overflow: 'hidden',
-        borderTop: selectedPom && mode === 'explore' ? 'none' : 'none',
-      }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
           {loading && <p style={hintStyle}>Carregant POMs...</p>}
-          {!loading && !selectedGT && (
-            <p style={{ ...hintStyle, textAlign: 'center', marginTop: 40 }}>
-              Selecciona un tipus de prenda per veure els seus POMs
-            </p>
-          )}
-          {!loading && selectedGT && filtered.length === 0 && (
+          {!loading && filtered.length === 0 && (
             <p style={{ ...hintStyle, textAlign: 'center', marginTop: 40 }}>
               Cap POM trobat
             </p>
