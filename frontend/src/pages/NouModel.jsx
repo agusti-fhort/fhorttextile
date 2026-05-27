@@ -433,7 +433,11 @@ export default function NouModel() {
 
             <Field label="Punts de mesura (POMs)" span={2} hint={form.garment_type ? `${(form.selected_pom_codes || []).length} POMs assignats` : 'Selecciona primer un tipus de prenda'}>
               {isImport && (importState.extracted?.poms?.length > 0) && (
-                <PomsImportPreview poms={importState.extracted.poms} />
+                <PomsImportPreview
+                  poms={importState.extracted.poms}
+                  gradingTable={importState.extracted.grading_table}
+                  baseSizeLabel={importState.prefill?.base_size_label}
+                />
               )}
 
               {isImport && !showManualPomBrowser && (
@@ -659,7 +663,28 @@ function Select({ value, onChange, options }) {
   )
 }
 
-function PomsImportPreview({ poms }) {
+function PomsImportPreview({ poms, gradingTable, baseSizeLabel }) {
+  const hasGrading = Array.isArray(gradingTable) && gradingTable.length > 0
+
+  // Map code → values_by_size per fer el join amb poms[]
+  const gradingByCode = hasGrading
+    ? gradingTable.reduce((acc, g) => {
+        if (g?.code) acc[g.code] = g.values_by_size || {}
+        return acc
+      }, {})
+    : {}
+
+  // Ordre de talles: claus del primer element (preserva l'ordre d'inserció).
+  const sizeLabels = hasGrading
+    ? Object.keys(gradingTable[0]?.values_by_size || {})
+    : []
+
+  const thBase = {
+    padding: '0.4rem 0.6rem',
+    fontWeight: 600, color: '#666', fontSize: 11,
+    borderBottom: '1px solid #e5e7eb',
+  }
+
   return (
     <div style={{
       marginBottom: 12, padding: '0.75rem',
@@ -670,53 +695,96 @@ function PomsImportPreview({ poms }) {
         textTransform: 'uppercase', letterSpacing: '0.06em',
       }}>
         POMs detectats al document ({poms.length})
+        {hasGrading && (
+          <span style={{ marginLeft: 8, color: 'var(--gold)', textTransform: 'none', letterSpacing: 0 }}>
+            · grading de {sizeLabels.length} talles
+          </span>
+        )}
       </div>
-      <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ background: '#f8f9fa' }}>
-            {['Codi fitxa', 'Descripció', 'Valor base (cm)', 'Confiança IA'].map(h => (
-              <th key={h} style={{
-                padding: '0.4rem 0.6rem', textAlign: 'left',
-                fontWeight: 600, color: '#666', fontSize: 11,
-                borderBottom: '1px solid #e5e7eb',
-              }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {poms.map((p, i) => {
-            const conf = String(p.confidence || 'low').toLowerCase()
-            const badge = CONFIDENCE_BADGES[conf] || CONFIDENCE_BADGES.low
-            return (
-              <tr key={i} style={{
-                background: i % 2 === 0 ? 'var(--white)' : '#fafafa',
-                borderBottom: '1px solid #f0f0f0',
-              }}>
-                <td style={{
-                  padding: '0.4rem 0.6rem', fontFamily: 'IBM Plex Mono, monospace',
-                  fontSize: 11, color: '#c27a2a', fontWeight: 600,
-                }}>{p.code || '—'}</td>
-                <td style={{
-                  padding: '0.4rem 0.6rem', fontSize: 11, color: '#333',
-                }}>{p.description || <span style={{ color: '#aaa' }}>—</span>}</td>
-                <td style={{
-                  padding: '0.4rem 0.6rem', fontFamily: 'IBM Plex Mono, monospace',
-                  textAlign: 'right',
-                }}>{p.base_value_cm != null ? p.base_value_cm : '—'}</td>
-                <td style={{ padding: '0.4rem 0.6rem' }}>
-                  <span style={{
-                    fontSize: 10, padding: '0.15rem 0.4rem', borderRadius: 3,
-                    background: badge.bg, color: badge.color,
-                    fontWeight: 600, letterSpacing: '0.04em',
-                  }}>{badge.label}</span>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#f8f9fa' }}>
+              <th style={{ ...thBase, textAlign: 'left' }}>Codi fitxa</th>
+              <th style={{ ...thBase, textAlign: 'left' }}>Descripció</th>
+              <th style={{ ...thBase, textAlign: 'left' }}>Confiança{hasGrading ? '' : ' IA'}</th>
+              {!hasGrading && (
+                <th style={{ ...thBase, textAlign: 'right' }}>Valor base (cm)</th>
+              )}
+              {hasGrading && sizeLabels.map(s => {
+                const isBase = s === baseSizeLabel
+                return (
+                  <th key={s} style={{
+                    ...thBase,
+                    textAlign: 'center',
+                    background: '#fdf6ee',
+                    fontFamily: 'IBM Plex Mono, monospace',
+                    minWidth: 52,
+                  }}>
+                    {s}
+                    {isBase && <span style={{ color: '#c27a2a', marginLeft: 3 }}>•</span>}
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {poms.map((p, i) => {
+              const conf = String(p.confidence || 'low').toLowerCase()
+              const badge = CONFIDENCE_BADGES[conf] || CONFIDENCE_BADGES.low
+              const values = hasGrading ? gradingByCode[p.code] : null
+              return (
+                <tr key={i} style={{
+                  background: i % 2 === 0 ? 'var(--white)' : '#fafafa',
+                  borderBottom: '1px solid #f0f0f0',
+                }}>
+                  <td style={{
+                    padding: '0.4rem 0.6rem', fontFamily: 'IBM Plex Mono, monospace',
+                    fontSize: 11, color: '#c27a2a', fontWeight: 600,
+                  }}>{p.code || '—'}</td>
+                  <td style={{
+                    padding: '0.4rem 0.6rem', fontSize: 11, color: '#333',
+                  }}>{p.description || <span style={{ color: '#aaa' }}>—</span>}</td>
+                  <td style={{ padding: '0.4rem 0.6rem' }}>
+                    <span style={{
+                      fontSize: 10, padding: '0.15rem 0.4rem', borderRadius: 3,
+                      background: badge.bg, color: badge.color,
+                      fontWeight: 600, letterSpacing: '0.04em',
+                    }}>{badge.label}</span>
+                  </td>
+                  {!hasGrading && (
+                    <td style={{
+                      padding: '0.4rem 0.6rem', fontFamily: 'IBM Plex Mono, monospace',
+                      textAlign: 'right',
+                    }}>{p.base_value_cm != null ? p.base_value_cm : '—'}</td>
+                  )}
+                  {hasGrading && sizeLabels.map(s => {
+                    const v = values?.[s]
+                    const isBase = s === baseSizeLabel
+                    return (
+                      <td key={s} style={{
+                        padding: '0.4rem 0.6rem',
+                        fontFamily: 'IBM Plex Mono, monospace',
+                        textAlign: 'right', fontSize: 11,
+                        background: isBase ? '#fefaf5' : 'transparent',
+                        fontWeight: isBase ? 600 : 400,
+                      }}>
+                        {v != null
+                          ? v
+                          : <span style={{ color: '#aaa' }}>—</span>}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
       <p style={{ margin: '0.6rem 0 0', fontSize: 11, color: '#888' }}>
-        L'assignació de POMs es resoldrà automàticament en crear el model.
+        {hasGrading
+          ? 'Grading importat del document. Es guardarà al crear el model.'
+          : "L'assignació de POMs es resoldrà automàticament en crear el model."}
       </p>
     </div>
   )
