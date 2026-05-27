@@ -17,7 +17,7 @@ import GarmentPOMMapEditor from './pages/GarmentPOMMapEditor'
 import OnboardingWizard from './pages/OnboardingWizard'
 import NouModel from './pages/NouModel'
 import NouSizeFitting from './pages/NouSizeFitting'
-import UploadModelWizard from './pages/UploadModelWizard'
+import ImportWizard from './pages/ImportWizard'
 import KanbanTasques from './pages/KanbanTasques'
 import Temps from './pages/Temps'
 import Avisos from './pages/Avisos'
@@ -49,7 +49,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="models" element={<Models />} />
           <Route path="models/nou" element={<NouModel />} />
-          <Route path="models/nou-des-de-fitxer" element={<UploadModelWizard />} />
+          <Route path="models/nou-des-de-fitxer" element={<ImportWizard />} />
           <Route path="models/:id" element={<ModelDetall />} />
           <Route path="models/:id/nou-sf" element={<NouSizeFitting />} />
           <Route path="fitting" element={<SizeFittingLlista />} />
