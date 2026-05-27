@@ -98,6 +98,7 @@ export default function SizeSystems() {
         <SizeSystemDrawer
           sizeSystem={selectedSS}
           onClose={() => setSelectedSS(null)}
+          onDeleted={(id) => setSystems(prev => prev.filter(ss => ss.id !== id))}
         />
       )}
     </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export default function SizeSystemDrawer({ sizeSystem, onClose }) {
+export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
   const [definitions, setDefinitions] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
@@ -66,8 +66,9 @@ export default function SizeSystemDrawer({ sizeSystem, onClose }) {
       headers: authHeaders(),
     })
     if (res.ok) {
+      const deletedId = sizeSystem.id
       onClose()
-      window.location.reload()
+      if (onDeleted) onDeleted(deletedId)
     } else {
       let msg = 'No s\'ha pogut esborrar el sistema'
       try {
