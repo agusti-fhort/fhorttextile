@@ -15,6 +15,49 @@ el marcador igualment: cap cost extra i s'activarà automàticament si el prompt
 creix.
 """
 
+
+def build_extraction_prompt(wizard_context=None) -> str:
+    """
+    Retorna un bloc de context per prependre al prompt d'extracció.
+
+    Si el wizard ha pre-configurat target/garment_type/size_system/size_run/
+    base_size/etc abans de pujar el fitxer, ho injectem com a context perquè
+    la IA enfoqui POMs rellevants, mapegi correctament la graduació i marqui
+    discrepàncies entre les talles del document i les configurades.
+
+    Si `wizard_context` és buit o None, retorna cadena buida — el prompt base
+    funciona igual que abans.
+    """
+    ctx = wizard_context or {}
+    if not any(ctx.get(k) for k in (
+        'target_codi', 'garment_type_codi', 'garment_type_nom',
+        'size_system_codi', 'size_run', 'base_size',
+        'construction_codi', 'fit_type_codi',
+    )):
+        return ""
+
+    return (
+        "## PRE-CONFIGURED CONTEXT (provided by the user before uploading)\n"
+        "The user has already configured:\n"
+        f"- Garment type: {ctx.get('garment_type_nom', '')} ({ctx.get('garment_type_codi', '')})\n"
+        f"- Target: {ctx.get('target_codi', '')}\n"
+        f"- Size system: {ctx.get('size_system_codi', '')}\n"
+        f"- Size run: {ctx.get('size_run', '')}\n"
+        f"- Base size: {ctx.get('base_size', '')}\n"
+        f"- Construction: {ctx.get('construction_codi', '')}\n"
+        f"- Fit type: {ctx.get('fit_type_codi', '')}\n"
+        "\n"
+        "Use this context to:\n"
+        f"1. Focus POM extraction on measurements relevant for {ctx.get('garment_type_nom') or 'this garment type'}\n"
+        f"2. Map the grading table to the sizes: {ctx.get('size_run', '')}\n"
+        f"3. Identify the base size values for size: {ctx.get('base_size', '')}\n"
+        "4. Flag any discrepancy between document sizes and configured sizes in `size_discrepancy`:\n"
+        "   {\"document_sizes\": [...], \"configured_sizes\": [...], "
+        "\"missing_in_config\": [...], \"missing_in_document\": [...]}\n"
+        "\n"
+    )
+
+
 TECH_SHEET_EXTRACTION_PROMPT = """
 You are a specialist in fashion garment measurement sheets (tech packs, fichas técnicas, fulls de mesures).
 Your ONLY task is to extract structured data from the garment measurement document provided.

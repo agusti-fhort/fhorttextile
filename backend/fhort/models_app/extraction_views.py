@@ -103,9 +103,21 @@ def extract_from_file_view(request):
     except Exception as e:
         return Response({'error': f'Error llegint el fitxer: {e}'}, status=400)
 
+    wizard_context = {
+        'target_codi':        request.data.get('target_codi', ''),
+        'garment_type_codi':  request.data.get('garment_type_codi', ''),
+        'garment_type_nom':   request.data.get('garment_type_nom', ''),
+        'size_system_codi':   request.data.get('size_system_codi', ''),
+        'size_system_id':     request.data.get('size_system_id', ''),
+        'size_run':           request.data.get('size_run', ''),
+        'base_size':          request.data.get('base_size', ''),
+        'construction_codi':  request.data.get('construction_codi', ''),
+        'fit_type_codi':      request.data.get('fit_type_codi', ''),
+    }
+
     try:
         from fhort.models_app.extraction_service import extract_from_file, check_design_freeze
-        extracted = extract_from_file(file_bytes, file_obj.name)
+        extracted = extract_from_file(file_bytes, file_obj.name, wizard_context)
         design_freeze = check_design_freeze(extracted)
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -119,6 +131,7 @@ def extract_from_file_view(request):
         'file_size_kb': round(file_obj.size / 1024, 1),
         'extracted': extracted,
         'design_freeze': design_freeze,
+        'wizard_context': wizard_context,
     })
 
 
@@ -134,6 +147,7 @@ def create_from_extraction_view(request):
     """
     extracted = request.data.get('extracted')
     overrides = request.data.get('overrides', {})
+    wizard_context = request.data.get('wizard_context', {}) or {}
 
     if not extracted:
         return Response({'error': 'Cal proporcionar el camp "extracted"'}, status=400)
@@ -152,14 +166,18 @@ def create_from_extraction_view(request):
             return v.get('value') or fallback
         return v or fallback
 
-    # Aplicar overrides de l'usuari
+    # Aplicar overrides de l'usuari, amb fallback al wizard_context
     style_name = overrides.get('style_name') or val('style_name') or val('style_code')
     temporada = overrides.get('temporada') or val('season', 'SS')
     any_ = overrides.get('any') or val('year')
-    base_size = overrides.get('base_size') or val('base_size')
+    base_size = overrides.get('base_size') or val('base_size') or wizard_context.get('base_size')
 
-    # Fix A — size_run normalitzat
-    size_run_raw = overrides.get('size_run') or val('size_run')
+    # Fix A — size_run normalitzat (wizard com a darrera xarxa)
+    size_run_raw = (
+        overrides.get('size_run')
+        or val('size_run')
+        or wizard_context.get('size_run')
+    )
     size_run = normalize_size_run(size_run_raw)
 
     # Fix D — any correcte (2 dígits → 4, fallback a l'any actual)
@@ -175,7 +193,16 @@ def create_from_extraction_view(request):
     if not codi_client:
         codi_client = 'IMP'
 
-    codi_tenant = (overrides.get('codi_tenant') or codi_client[:3]).upper()[:3]
+    # codi_tenant: prioritat override > tenant logat > primers chars del codi_client
+    tenant_schema_for_codi = (
+        request.tenant.schema_name if hasattr(request, 'tenant') and request.tenant else ''
+    )
+    codi_tenant = (
+        overrides.get('codi_tenant')
+        or tenant_schema_for_codi
+        or codi_client
+    )
+    codi_tenant = (codi_tenant or 'IMP').upper()[:3]
 
     try:
         from django_tenants.utils import schema_context
@@ -185,16 +212,29 @@ def create_from_extraction_view(request):
         tenant_schema = request.tenant.schema_name if hasattr(request, 'tenant') else 'fhort'
 
         with schema_context(tenant_schema):
-            # garment_type és NOT NULL al Model. Provem a fer match per nom
-            # aproximat amb el que ha extret la IA; si no, agafem el primer
-            # GarmentType disponible com a fallback.
-            gt_hint = overrides.get('garment_type') or val('garment_type') or ''
+            # garment_type és NOT NULL al Model. Prioritats:
+            # 1) wizard_context.garment_type_codi → match exacte per codi_client
+            # 2) overrides.garment_type → match per nom/codi (heurístic)
+            # 3) val('garment_type_code') / val('garment_type') → match heurístic
+            # 4) primer GarmentType disponible com a fallback
             gt = None
-            if gt_hint:
-                gt = (
-                    GarmentType.objects.filter(nom_client__icontains=gt_hint).first()
-                    or GarmentType.objects.filter(codi_client__icontains=gt_hint).first()
+            wiz_gt_codi = (wizard_context.get('garment_type_codi') or '').strip()
+            if wiz_gt_codi:
+                gt = GarmentType.objects.filter(codi_client__iexact=wiz_gt_codi).first()
+
+            if gt is None:
+                gt_hint = (
+                    overrides.get('garment_type')
+                    or val('garment_type_code')
+                    or val('garment_type')
+                    or ''
                 )
+                if gt_hint:
+                    gt = (
+                        GarmentType.objects.filter(codi_client__iexact=gt_hint).first()
+                        or GarmentType.objects.filter(nom_client__icontains=gt_hint).first()
+                        or GarmentType.objects.filter(codi_client__icontains=gt_hint).first()
+                    )
             if gt is None:
                 gt = GarmentType.objects.first()
             if gt is None:
@@ -218,18 +258,26 @@ def create_from_extraction_view(request):
             )
 
             # === SIZE SYSTEM ===
-            # Prioritat: override explícit > heurística (alpha + garment group).
+            # Prioritat:
+            #   1) override explícit (size_system = id)
+            #   2) wizard_context.size_system_id (id) o size_system_codi (codi)
+            #   3) heurística (alpha + garment group).
             from fhort.pom.models import SizeSystem
             size_system_assigned = None
-            size_system_id = overrides.get('size_system')
+            size_system_id = overrides.get('size_system') or wizard_context.get('size_system_id')
+            wiz_ss_codi = (wizard_context.get('size_system_codi') or '').strip()
+            ss = None
             if size_system_id:
                 try:
                     ss = SizeSystem.objects.get(id=size_system_id)
-                    model.size_system = ss
-                    model.save(update_fields=['size_system'])
-                    size_system_assigned = ss.codi
                 except Exception:
-                    pass
+                    ss = None
+            if ss is None and wiz_ss_codi:
+                ss = SizeSystem.objects.filter(codi__iexact=wiz_ss_codi).first()
+            if ss is not None:
+                model.size_system = ss
+                model.save(update_fields=['size_system'])
+                size_system_assigned = ss.codi
             else:
                 sizes_list = [s for s in (size_run or '').split('·') if s]
                 has_alpha = any(
@@ -568,6 +616,10 @@ def create_from_extraction_view(request):
                             'reason': f'Error creant SizeFitting/GradingVersion: {e}',
                         })
 
+            poms_pendents = [
+                m['code'] for m in match_log
+                if m.get('match_type') == 'auto_created'
+            ]
             return Response({
                 'model_id': model.id,
                 'model_codi': model.codi_intern,
@@ -578,10 +630,16 @@ def create_from_extraction_view(request):
                 'graded_skipped': graded_skipped,
                 'size_run': model.size_run_model,
                 'size_system': size_system_assigned,
+                'size_discrepancy': extracted.get('size_discrepancy'),
+                'poms_pendents': poms_pendents,
                 'message': (
                     f'Model creat. {poms_created} POMs importats, '
                     f'{graded_created} valors de grading, '
                     f'{len(poms_skipped)} POMs pendents de revisió.'
+                    + (
+                        f' {len(poms_pendents)} POMs nous pendents de revisió.'
+                        if poms_pendents else ''
+                    )
                 ),
             }, status=201)
 

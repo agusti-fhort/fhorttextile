@@ -126,13 +126,20 @@ def _file_to_content_block(file_bytes: bytes, filename: str) -> dict:
             raise ValueError(f"Format de fitxer no suportat: {ext}")
 
 
-def extract_from_file(file_bytes: bytes, filename: str) -> dict:
+def extract_from_file(file_bytes: bytes, filename: str, wizard_context: dict | None = None) -> dict:
     """
     Envia el fitxer a la Claude API i retorna el JSON d\'extracció.
+
+    wizard_context: dict opcional amb target, garment_type, size_system,
+    size_run, base_size, construction, fit_type — provinents del wizard
+    abans de la pujada de fitxer.
     """
+    from fhort.models_app.extraction_prompt import build_extraction_prompt
+
     api_key = _get_api_key()
 
     content_block = _file_to_content_block(file_bytes, filename)
+    prompt_text = build_extraction_prompt(wizard_context) + EXTRACTION_PROMPT
 
     payload = {
         "model": MODEL,
@@ -142,7 +149,7 @@ def extract_from_file(file_bytes: bytes, filename: str) -> dict:
                 "role": "user",
                 "content": [
                     content_block,
-                    {"type": "text", "text": EXTRACTION_PROMPT}
+                    {"type": "text", "text": prompt_text}
                 ]
             }
         ]
