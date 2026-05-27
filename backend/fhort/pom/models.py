@@ -7,17 +7,56 @@ from django.db import models
 
 class POMGlobal(models.Model):
     UNITAT_CHOICES = [('cm', 'cm'), ('inch', 'inch')]
+    SCOPE_CHOICES = [
+        ('HALF', 'Half'), ('FULL', 'Full'), ('CALCULATED', 'Calculated'),
+    ]
+    ORIENTATION_CHOICES = [
+        ('HORIZONTAL', 'Horizontal'), ('VERTICAL', 'Vertical'),
+        ('CIRCUMFERENCE', 'Circumference'), ('CURVED', 'Curved'),
+        ('DIAGONAL', 'Diagonal'),
+    ]
+    STATE_CHOICES = [
+        ('FLAT', 'Flat'), ('RELAXED', 'Relaxed'),
+        ('STRETCHED', 'Stretched'), ('ON_BODY', 'On body'),
+    ]
+    LINE_CHOICES = [
+        ('STRAIGHT', 'Straight'), ('CURVED', 'Curved'),
+        ('ALONG CURVE', 'Along curve'), ('ANGLED', 'Angled'),
+    ]
+    BODY_SECTION_CHOICES = [
+        ('FRONT', 'Front'), ('BACK', 'Back'), ('SIDE', 'Side'),
+        ('SLEEVE', 'Sleeve'), ('BOTH', 'Both'), ('HEAD', 'Head'),
+    ]
 
     codi = models.CharField(max_length=80, unique=True)
     nom_en = models.CharField(max_length=200)
     nom_ca = models.CharField(max_length=200)
-    nom_es = models.CharField(max_length=200)
+    nom_es = models.CharField(max_length=200, blank=True)
     categoria = models.CharField(max_length=40)
     descripcio_en = models.TextField(blank=True)
+    descripcio_ca = models.TextField(blank=True)
     unitat = models.CharField(max_length=4, choices=UNITAT_CHOICES, default='cm')
     actiu = models.BooleanField(default=True)
 
-
+    # Sprint S12-A — catàleg ampliat (How To Measure detallat)
+    abbreviation    = models.CharField(max_length=40, blank=True)
+    start_point     = models.CharField(max_length=120, blank=True)
+    end_point       = models.CharField(max_length=120, blank=True)
+    reference_point = models.CharField(max_length=200, blank=True)
+    scope           = models.CharField(max_length=20, choices=SCOPE_CHOICES, blank=True)
+    orientation     = models.CharField(max_length=20, choices=ORIENTATION_CHOICES, blank=True)
+    state           = models.CharField(max_length=20, choices=STATE_CHOICES, blank=True)
+    line            = models.CharField(max_length=20, choices=LINE_CHOICES, blank=True)
+    body_section    = models.CharField(max_length=20, choices=BODY_SECTION_CHOICES, blank=True)
+    is_key          = models.BooleanField(default=False)
+    tol_prod_cm     = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    tol_samp_cm     = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    applies_woven   = models.BooleanField(default=True)
+    applies_knit    = models.BooleanField(default=True)
+    applies_swim    = models.BooleanField(default=False)
+    notes           = models.TextField(blank=True)
+    iso_ref         = models.CharField(max_length=60, blank=True)
+    # Fi Sprint S12-A
 
     # Sprint S1 — ISO 8559-1 linkage
     body_measure_iso = models.ForeignKey(
