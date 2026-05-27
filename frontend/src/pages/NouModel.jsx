@@ -1,49 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { models, garmentTypes, garmentGroups } from '../api/endpoints'
 import { SizingProfileWizard } from '../components/SizingProfileWizard'
 import POMBrowser from '../components/POMBrowser/POMBrowser'
-
-// Pre-emplenat opcional des d'importació IA (UploadModelWizard navega aquí amb
-// state.importData = result.extracted). Tots els getters són defensius perquè
-// els camps de la IA poden ser strings, objectes {value, confidence} o absents.
-function buildInitialForm(importData, anyActual) {
-  const v = (field) => {
-    const x = importData?.[field]
-    if (x && typeof x === 'object' && 'value' in x) return x.value
-    return x
-  }
-  const sizeRunRaw = v('size_run')
-  let sizeRunModel = ''
-  if (sizeRunRaw) {
-    if (Array.isArray(sizeRunRaw)) {
-      sizeRunModel = sizeRunRaw.map(s => String(s).trim()).filter(Boolean).join('·')
-    } else {
-      sizeRunModel = String(sizeRunRaw)
-        .replace(/[\[\]'"]/g, '')
-        .split(/[\s,·]+/)
-        .filter(Boolean)
-        .join('·')
-    }
-  }
-  const seasonRaw = v('season')
-  const temporada = seasonRaw
-    ? String(seasonRaw).slice(0, 2).toUpperCase()
-    : 'SS'
-  const styleRef = v('style_reference') || ''
-  return {
-    nom_prenda:      v('style_name') || '',
-    codi_client:     String(styleRef).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6),
-    temporada,
-    any:             v('year') || anyActual,
-    garment_type:    importData?.garment_type_code || '',
-    fit_type:        importData?.fit_type || 'Regular',
-    base_size_label: v('base_size') || '',
-    size_run_model:  sizeRunModel,
-    descripcio:      styleRef ? `Importat de fitxa tècnica · ref. ${styleRef}` : '',
-  }
-}
 
 const TAB_KEYS = ['model', 'mesures', 'fitting', 'fitxers', 'servei', 'control']
 const TABS_DISABLED_ON_CREATE = new Set(['fitting', 'fitxers', 'servei', 'control'])
@@ -61,27 +21,18 @@ const ORIGENS_PATRO = [
 
 export default function NouModel() {
   const navigate = useNavigate()
-  const location = useLocation()
   const { t } = useTranslation()
   const anyActual = new Date().getFullYear()
 
-  // Dades pre-emplenades des d'importació IA (UploadModelWizard → navigate
-  // amb state.importData = extracted).
-  const importData = location.state?.importData || null
-  const matchedPomCodes = location.state?.matchedPomCodes || []
-  const isImport = !!importData
-
-  const importPrefill = isImport ? buildInitialForm(importData, anyActual) : {}
-
-  const [activeTab, setActiveTab] = useState(isImport ? 'mesures' : 'model')
+  const [activeTab, setActiveTab] = useState('model')
   const [form, setForm] = useState({
     // Tab Model — camps reals del backend
-    codi_client: importPrefill.codi_client || '',
+    codi_client: '',
     codi_tenant: '',
-    nom_prenda: importPrefill.nom_prenda || '',
-    descripcio: importPrefill.descripcio || '',
-    temporada: importPrefill.temporada || 'SS',
-    any: importPrefill.any || anyActual,
+    nom_prenda: '',
+    descripcio: '',
+    temporada: 'SS',
+    any: anyActual,
     color_referencia: '',
     familia: '',
     estat: 'Nou',
@@ -91,16 +42,16 @@ export default function NouModel() {
     origen_patro: '',
     versio: '',
     // Tab Mesures
-    garment_type: importPrefill.garment_type || '',
+    garment_type: '',
     garment_group: '',
-    fit_type: importPrefill.fit_type || 'Regular',
+    fit_type: 'Regular',
     size_system: '',
-    base_size_label: importPrefill.base_size_label || '',
-    size_run_model: importPrefill.size_run_model || '',
+    base_size_label: '',
+    size_run_model: '',
     grading_rule_set: '',
-    // Pre-selecció de POMs des de la IA (només els matchats amb confiança >low).
-    // Si no en venen del backend, queda buit i l'usuari els tria via POMBrowser.
-    selected_pom_codes: matchedPomCodes,
+    // TODO(backend): persistir els POMs assignats al Model
+    // (cal endpoint/camp al backend; per ara només UI a la wizard).
+    selected_pom_codes: [],
   })
 
   const [gTypes, setGTypes] = useState([])
@@ -114,28 +65,6 @@ export default function NouModel() {
     garmentTypes.list({ page_size: 200 }).then(r => setGTypes(r.data.results || [])).catch(() => {})
     garmentGroups.list({ page_size: 200 }).then(r => setGGroups(r.data.results || [])).catch(() => {})
   }, [])
-
-  // Si el garment_type pre-emplenat ve d'importació IA, és un CODI (ex: 'DRESS'),
-  // però el Select treballa amb id numèric. Quan gTypes arriba, mapem.
-  useEffect(() => {
-    if (!isImport || !gTypes.length) return
-    setForm(f => {
-      const v = f.garment_type
-      if (!v || /^\d+$/.test(String(v))) return f
-      const gt = gTypes.find(g =>
-        String(g.codi_client).toUpperCase() === String(v).toUpperCase()
-        || String(g.nom_client || '').toUpperCase() === String(v).toUpperCase()
-      )
-      if (!gt) return f
-      const grupCodi = gt.grup || ''
-      const group = grupCodi ? gGroups.find(g => g.codi === grupCodi) : null
-      return {
-        ...f,
-        garment_type: gt.id,
-        garment_group: group ? group.id : f.garment_group,
-      }
-    })
-  }, [isImport, gTypes, gGroups])
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -220,18 +149,6 @@ export default function NouModel() {
       <div style={{marginBottom: '1.2rem'}}>
         <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>{t('model.new')}</h1>
       </div>
-
-      {isImport && (
-        <div style={{
-          background: '#EBF8EC', border: '1px solid #A9DFBF',
-          borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem',
-          fontSize: 12, color: '#1E8449', maxWidth: 980,
-        }}>
-          <strong>Dades importades de fitxa tècnica.</strong>{' '}
-          Revisa i completa els camps abans de guardar. Els camps
-          pre-emplenats provenen de l'anàlisi IA.
-        </div>
-      )}
 
       {/* Tabs */}
       <div style={{
@@ -394,10 +311,6 @@ export default function NouModel() {
                       }))
                     }}
                     onCancel={() => setShowWizard(false)}
-                    initialValues={isImport ? {
-                      size_run: form.size_run_model,
-                      base_size: form.base_size_label,
-                    } : {}}
                   />
                 </div>
               )}
