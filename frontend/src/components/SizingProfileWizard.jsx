@@ -60,7 +60,20 @@ function StepBar({ step }) {
 
 export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }) {
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
-  const [step, setStep] = useState(0)
+
+  // Pre-selecció des d'importació IA: si arriben target+construction, saltem
+  // directament al pas 2 (Size Set); sinó comencem al 0 (Target).
+  const [step, setStep] = useState(
+    initialValues.target && initialValues.construction ? 2 : 0
+  )
+
+  // size_run d'entrada normalitzat a array (accepta string amb · o array).
+  const initialSizeRun = (() => {
+    const raw = initialValues.size_run
+    if (!raw) return []
+    if (Array.isArray(raw)) return raw.map(s => String(s).trim()).filter(Boolean)
+    return String(raw).split('·').map(s => s.trim()).filter(Boolean)
+  })()
 
   // Dades carregades
   const [targets, setTargets] = useState([])
@@ -72,8 +85,8 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
   const [selTarget, setSelTarget] = useState(initialValues.target || null)
   const [selConstruction, setSelConstruction] = useState(initialValues.construction || null)
   const [selProfile, setSelProfile] = useState(null)
-  const [selSizes, setSelSizes] = useState([])
-  const [selBase, setSelBase] = useState(null)
+  const [selSizes, setSelSizes] = useState(initialSizeRun)
+  const [selBase, setSelBase] = useState(initialValues.base_size || null)
 
   const headers = { Authorization: `Bearer ${token}` }
 
@@ -141,14 +154,23 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
       })
   }, [selTarget, selConstruction])
 
-  // Quan selecciona un profile, preseleccionar totes les talles
+  // Quan selecciona un profile, preseleccionar talles. Si venim d'importació
+  // (initialValues), prioritzem el size_run i base_size pre-emplenats —
+  // intersectant amb les talles realment definides al profile.
   useEffect(() => {
     if (selProfile) {
       const defs = selProfile.size_definitions || []
-      setSelSizes(defs.map(s => s.size_label))
-      // Talla base = la central
-      const mid = defs[Math.floor(defs.length / 2)]
-      setSelBase(mid?.size_label || null)
+      const defLabels = defs.map(s => s.size_label)
+      const preselected = initialSizeRun.length > 0
+        ? initialSizeRun.filter(s => defLabels.includes(s))
+        : defLabels
+      setSelSizes(preselected.length > 0 ? preselected : defLabels)
+      if (initialValues.base_size && preselected.includes(initialValues.base_size)) {
+        setSelBase(initialValues.base_size)
+      } else {
+        const mid = defs[Math.floor(defs.length / 2)]
+        setSelBase(mid?.size_label || null)
+      }
     }
   }, [selProfile])
 

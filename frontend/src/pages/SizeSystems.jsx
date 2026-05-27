@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { sizeSystems, sizeDefinitions } from '../api/endpoints'
+import SizeSystemDrawer from '../components/SizeSystem/SizeSystemDrawer'
 
 export default function SizeSystems() {
   const [systems, setSystems] = useState([])
   const [definitions, setDefinitions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [selectedSS, setSelectedSS] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -47,12 +49,19 @@ export default function SizeSystems() {
           {systems.map(s => {
             const talles = (s.talles || s.size_definitions || tallesPerSystem(s.id))
             return (
-              <div key={s.id} style={{
-                background: 'var(--white)',
-                border: '0.5px solid #e4e4e2',
-                borderRadius: 12,
-                padding: '1.2rem 1.4rem',
-              }}>
+              <div key={s.id}
+                onClick={() => setSelectedSS(s)}
+                style={{
+                  background: 'var(--white)',
+                  border: '0.5px solid #e4e4e2',
+                  borderRadius: 12,
+                  padding: '1.2rem 1.4rem',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = '#c27a2a'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = '#e4e4e2'}
+              >
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   marginBottom: 4,
@@ -83,6 +92,13 @@ export default function SizeSystems() {
             )
           })}
         </div>
+      )}
+
+      {selectedSS && (
+        <SizeSystemDrawer
+          sizeSystem={selectedSS}
+          onClose={() => setSelectedSS(null)}
+        />
       )}
     </div>
   )

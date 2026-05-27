@@ -4,11 +4,10 @@ import { useNavigate } from "react-router-dom"
 import useAuthStore from "../store/auth"
 import { DesignFreezeReport } from "../components/DesignFreezeReport"
 import { XatExtraccio } from "../components/XatExtraccio"
-import ImportConfirmStep from "../components/ImportFromSheet/ImportConfirmStep"
 
 const API = import.meta.env.VITE_API_URL || ""
 
-const STEPS = ["Puja fitxer", "Anàlisi IA", "Design Freeze", "Confirmar"]
+const STEPS = ["Puja fitxer", "Anàlisi IA", "Design Freeze"]
 
 function StepIndicator({ current }) {
   return (
@@ -127,50 +126,27 @@ export default function UploadModelWizard() {
     setLoadingMsg("")
   }
 
-  // Pas 2 → 3: la confirmació del DesignFreeze ja no crea el model, només
-  // obre el formulari editable d'ImportConfirmStep al pas 3.
+  // Confirmar Design Freeze: navega a NouModel pre-emplenat amb les dades de
+  // l'extracció IA. La creació real del Model passa allà (POST /models/), no
+  // a /create-from-extraction/.
   const handleConfirm = () => {
     setError(null)
-    setStep(3)
-  }
-
-  const handleCreateModel = async (overrides) => {
-    if (!token) {
-      setError("Sessió no autenticada — torna a iniciar sessió.")
-      navigate("/login")
-      return
-    }
-    setLoading(true)
-    setLoadingMsg("Creant model...")
-    try {
-      const r = await fetch(`${API}/api/v1/models/create-from-extraction/`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          extracted: result?.extracted,
-          overrides,
-        }),
-      })
-      const data = await r.json()
-      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`)
-      navigate(`/models/${data.model_id}`)
-    } catch (e) {
-      setError(e.message)
-    }
-    setLoading(false)
-    setLoadingMsg("")
+    navigate('/models/nou', {
+      state: {
+        importData: result?.extracted,
+        matchedPomCodes: (result?.extracted?.poms || [])
+          .filter(p => p && p.confidence !== 'low')
+          .map(p => p.matched_pom_code)
+          .filter(Boolean),
+      },
+    })
   }
 
   // Step 2 (Design Freeze) ocupa amplada completa per al split report+xat;
-  // Step 3 (ImportConfirmStep) necessita amplada mitjana per als grids 2-col.
+  // la resta queden estrets per llegibilitat.
   const wrapperStyle = step === 2
     ? { padding: "24px", maxWidth: 1200, margin: "0 auto" }
-    : step === 3
-      ? { padding: "24px", maxWidth: 880, margin: "0 auto" }
-      : { padding: "24px", maxWidth: 640, margin: "0 auto" }
+    : { padding: "24px", maxWidth: 640, margin: "0 auto" }
 
   return (
     <div style={wrapperStyle}>
@@ -253,12 +229,12 @@ export default function UploadModelWizard() {
             disabled={!file || loading}
             style={{
               width: "100%", padding: "10px",
-              background: file ? 'var(--bg-muted)' : 'var(--bg-card)',
-              color: file ? "#7a7acc" : "#333",
-              border: `1px solid ${file ? "#3a3a6a" : "#222"}`,
+              background: file ? '#c27a2a' : '#e5e7eb',
+              color: file ? '#fff' : '#aaa',
+              border: 'none',
               borderRadius: 4, fontSize: 12,
               fontFamily: "IBM Plex Mono, monospace",
-              cursor: file ? "pointer" : "not-allowed",
+              cursor: file ? 'pointer' : 'default',
             }}
           >
             ⚡ Analitzar amb IA
@@ -313,15 +289,6 @@ export default function UploadModelWizard() {
         </div>
       )}
 
-      {/* Step 3 — Confirmar (formulari editable + creació de model) */}
-      {step === 3 && result && (
-        <ImportConfirmStep
-          extracted={result?.extracted}
-          onConfirm={handleCreateModel}
-          onBack={() => setStep(2)}
-          loading={loading}
-        />
-      )}
     </div>
   )
 }

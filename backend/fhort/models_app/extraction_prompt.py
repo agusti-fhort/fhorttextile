@@ -47,6 +47,13 @@ JACKET, COAT, TRENCH_COAT, PARKA, GILET, LEATHER_GARMENT, BRA, BRIEFS_WOMAN,
 BOXERS, PYJAMA_SET, SWIMSUIT, BIKINI_TOP, BIKINI_BOTTOM, SWIM_SHORTS, BABY_SWIMWEAR,
 HAT_CAP, SCARF, BELT
 
+IMPORTANT GARMENT TYPE DISAMBIGUATION:
+- A garment with WAIST, HIP, COLLAR/NECKLINE, BODY LENGTH from HPS,
+  and BOTTOM WIDTH measurements is a DRESS, not a BODYSUIT
+- BODYSUIT has crotch/rise measurements
+- Use DRESS for: maxi dress, midi dress, mini dress, shirt dress, wrap dress
+- Use BODYSUIT only when there are explicit crotch or rise measurements
+
 3. SIZES AND BASE SIZE — extract all size labels and identify base_size
 
 4. MEASUREMENT TABLE — for each row:

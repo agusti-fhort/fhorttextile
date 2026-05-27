@@ -194,6 +194,18 @@ class POMMaster(models.Model):
     nom_client = models.CharField(max_length=200)
     notes = models.TextField(blank=True)
     actiu = models.BooleanField(default=True)
+    pendent_revisio = models.BooleanField(
+        default=False,
+        verbose_name='Pendent de revisió',
+        help_text="POM creat automàticament des d'importació. Requereix revisió de la patronista.",
+    )
+    origen_import = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        verbose_name='Origen importació',
+        help_text="Referència del model/fitxa des d'on s'ha creat aquest POM",
+    )
 
     class Meta:
         verbose_name = 'POM (tenant)'

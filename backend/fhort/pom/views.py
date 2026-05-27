@@ -50,7 +50,7 @@ class SizeSystemViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['codi']
 
 
-class SizeDefinitionViewSet(viewsets.ReadOnlyModelViewSet):
+class SizeDefinitionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = SizeDefinitionSerializer
     queryset = SizeDefinition.objects.select_related('size_system').all()
