@@ -40,39 +40,20 @@ const FITS = [
   { codi: 'CUSTOM',    nom_en: 'Custom',    nom_ca: 'Personalitzat' },
 ]
 
+const GARMENT_GROUPS = [
+  { codi: 'TOPS',        nom_en: 'Tops',        nom_ca: 'Parts superiors' },
+  { codi: 'BOTTOMS',     nom_en: 'Bottoms',     nom_ca: 'Parts inferiors' },
+  { codi: 'DRESSES',     nom_en: 'Dresses',     nom_ca: 'Vestits' },
+  { codi: 'OUTERWEAR',   nom_en: 'Outerwear',   nom_ca: 'Abrics' },
+  { codi: 'UNDERWEAR',   nom_en: 'Underwear',   nom_ca: 'Interior' },
+  { codi: 'SWIMWEAR',    nom_en: 'Swimwear',    nom_ca: 'Bany' },
+  { codi: 'ACCESSORIES', nom_en: 'Accessories', nom_ca: 'Complements' },
+]
+
 const LOGICA_COLORS = {
   LINEAR:  { bg: '#eef4fc', color: '#2a5a8a', label: 'LINEAR' },
   FIXED:   { bg: '#f5f0ea', color: '#868685', label: 'FIXED' },
   STEPPED: { bg: '#fdf6ee', color: '#c27a2a', label: 'STEPPED' },
-}
-
-// TODO(backend): GradingRuleSetSerializer retorna target/construction/fit_type
-// com a IDs (ForeignKey) i no com a codis. Sense endpoints /api/v1/targets/,
-// /api/v1/construction-types/ ni /api/v1/fit-types/, inferim el mapping
-// id→codi a partir del camp `codi_sistema` o `nom` del propi RuleSet
-// (patró 'EU_WOVEN_WOMAN_REGULAR' conté els codis textuals).
-function inferCodeMappings(ruleSets) {
-  const targetById = {}, constructionById = {}, fitById = {}
-  const targetCodes = TARGETS.map(t => t.codi).sort((a, b) => b.length - a.length)
-  const constructionCodes = CONSTRUCTIONS.map(c => c.codi).sort((a, b) => b.length - a.length)
-  const fitCodes = FITS.map(f => f.codi).sort((a, b) => b.length - a.length)
-
-  for (const rs of ruleSets) {
-    const ref = ((rs.codi_sistema || '') + ' ' + (rs.nom || '')).toUpperCase()
-    if (rs.target != null && targetById[rs.target] === undefined) {
-      const found = targetCodes.find(c => ref.includes(c) || ref.includes(c.replace(/_/g, ' ')))
-      if (found) targetById[rs.target] = found
-    }
-    if (rs.construction != null && constructionById[rs.construction] === undefined) {
-      const found = constructionCodes.find(c => ref.includes(c) || ref.includes(c.replace(/_/g, ' ')))
-      if (found) constructionById[rs.construction] = found
-    }
-    if (rs.fit_type != null && fitById[rs.fit_type] === undefined) {
-      const found = fitCodes.find(c => ref.includes(c) || ref.includes(c.replace(/_/g, ' ')))
-      if (found) fitById[rs.fit_type] = found
-    }
-  }
-  return { targetById, constructionById, fitById }
 }
 
 export default function GradingRuleSets() {
@@ -83,9 +64,14 @@ export default function GradingRuleSets() {
   const [selectedTarget, setSelectedTarget] = useState(null)
   const [selectedConstruction, setSelectedConstruction] = useState(null)
   const [selectedFit, setSelectedFit] = useState(null)
+  const [selectedGarmentGroup, setSelectedGarmentGroup] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [msg, setMsg] = useState(null)
+  // Mapping id → codi de GarmentGroup, per poder filtrar per codi a partir
+  // del FK id que retorna el RuleSet (`rs.garment_group`). El serializer no
+  // exposa `garment_group_codi`, només el nom traduït (no usable com a clau).
+  const [garmentGroupCodiById, setGarmentGroupCodiById] = useState({})
   const lang = 'ca'
 
   const authHeaders = () => token ? { Authorization: `Bearer ${token}` } : {}
@@ -101,25 +87,44 @@ export default function GradingRuleSets() {
 
   useEffect(() => { loadRuleSets() }, [token])
 
-  // Mapping id → codi inferit
-  const { targetById, constructionById, fitById } = useMemo(
-    () => inferCodeMappings(allRuleSets),
-    [allRuleSets]
-  )
+  // Carrega el catàleg de GarmentGroup per resoldre id→codi (un sol cop).
+  useEffect(() => {
+    fetch(`${API}/api/v1/garment-groups/?page_size=200`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => {
+        const list = d.results || (Array.isArray(d) ? d : [])
+        const map = {}
+        for (const g of list) map[g.id] = g.codi
+        setGarmentGroupCodiById(map)
+      })
+      .catch(() => setGarmentGroupCodiById({}))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
 
-  // RuleSets enriquits amb codis textuals
-  const enrichedRuleSets = useMemo(() => allRuleSets.map(rs => ({
-    ...rs,
-    target_codi: rs.target != null ? targetById[rs.target] : null,
-    construction_codi: rs.construction != null ? constructionById[rs.construction] : null,
-    fit_type_codi: rs.fit_type != null ? fitById[rs.fit_type] : null,
-  })), [allRuleSets, targetById, constructionById, fitById])
+  // El GradingRuleSetSerializer (S16-A) exposa `targets_codis` (array) +
+  // construction_codi + fit_type_codi. Usem-los directament; un RuleSet pot
+  // aplicar a múltiples targets (ex. BABY → 3) gràcies al canvi a M2M.
+  const enrichedRuleSets = allRuleSets
 
-  // Targets que apareixen als RuleSets (inclou els sense target)
+  // Helpers per matching M2M targets (un RuleSet apareix sota cada target del array).
+  const matchesTarget = (rs, target) =>
+    !rs.targets_codis?.length || rs.targets_codis.includes(target)
+
+  // Helper per matching garment_group via id→codi map (FK del RuleSet).
+  // RuleSets sense garment_group assignat es consideren compatibles amb qualsevol
+  // grup (passa la condició) — políticament correcte mentre el catàleg actual no
+  // tingui RuleSets específics de grup.
+  const matchesGarmentGroup = (rs, groupCodi) => {
+    if (!rs.garment_group) return true
+    const rsGroupCodi = garmentGroupCodiById[rs.garment_group]
+    return rsGroupCodi === groupCodi
+  }
+
+  // Targets que apareixen als RuleSets (extret dels arrays targets_codis).
   const availableTargetCodes = useMemo(() => {
     const set = new Set()
     for (const rs of enrichedRuleSets) {
-      if (rs.target_codi) set.add(rs.target_codi)
+      for (const t of (rs.targets_codis || [])) set.add(t)
     }
     return set
   }, [enrichedRuleSets])
@@ -129,7 +134,7 @@ export default function GradingRuleSets() {
     if (!selectedTarget) return []
     const set = new Set(
       enrichedRuleSets
-        .filter(rs => !rs.target_codi || rs.target_codi === selectedTarget)
+        .filter(rs => matchesTarget(rs, selectedTarget))
         .map(rs => rs.construction_codi)
         .filter(Boolean)
     )
@@ -142,7 +147,7 @@ export default function GradingRuleSets() {
     const set = new Set(
       enrichedRuleSets
         .filter(rs =>
-          (!rs.target_codi || rs.target_codi === selectedTarget) &&
+          matchesTarget(rs, selectedTarget) &&
           (!rs.construction_codi || rs.construction_codi === selectedConstruction)
         )
         .map(rs => rs.fit_type_codi)
@@ -151,16 +156,18 @@ export default function GradingRuleSets() {
     return FITS.filter(f => set.has(f.codi))
   }, [enrichedRuleSets, selectedTarget, selectedConstruction])
 
-  // RuleSets que coincideixen amb la selecció
+  // RuleSets que coincideixen amb la selecció completa (4 filtres).
+  // matchingRuleSets està buit fins que selectedGarmentGroup té valor.
   const matchingRuleSets = useMemo(() => {
-    if (!selectedTarget) return []
+    if (!selectedTarget || !selectedConstruction || !selectedFit || !selectedGarmentGroup) return []
     return enrichedRuleSets.filter(rs => {
-      const tMatch = !rs.target_codi || rs.target_codi === selectedTarget
-      const cMatch = !selectedConstruction || !rs.construction_codi || rs.construction_codi === selectedConstruction
-      const fMatch = !selectedFit || !rs.fit_type_codi || rs.fit_type_codi === selectedFit
-      return tMatch && cMatch && fMatch
+      const tMatch = matchesTarget(rs, selectedTarget)
+      const cMatch = !rs.construction_codi || rs.construction_codi === selectedConstruction
+      const fMatch = !rs.fit_type_codi || rs.fit_type_codi === selectedFit
+      const gMatch = matchesGarmentGroup(rs, selectedGarmentGroup)
+      return tMatch && cMatch && fMatch && gMatch
     })
-  }, [enrichedRuleSets, selectedTarget, selectedConstruction, selectedFit])
+  }, [enrichedRuleSets, selectedTarget, selectedConstruction, selectedFit, selectedGarmentGroup, garmentGroupCodiById])
 
   const nom = (obj) => lang === 'ca' ? obj.nom_ca : obj.nom_en
 
@@ -256,51 +263,92 @@ export default function GradingRuleSets() {
                 setSelectedTarget(t.codi)
                 setSelectedConstruction(null)
                 setSelectedFit(null)
+                setSelectedGarmentGroup(null)
               }}
             />
           ))}
         </div>
       </StepSection>
 
-      {/* Pas 2: Construction */}
-      {selectedTarget && availableConstructions.length > 0 && (
-        <StepSection number={2} title="TIPUS DE CONSTRUCCIÓ">
+      {/* Pas 2: Construction + Fit al mateix nivell */}
+      {selectedTarget && (availableConstructions.length > 0 || availableFits.length > 0) && (
+        <StepSection number={2} title="CONSTRUCCIÓ I FIT">
+          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ fontSize: 10, color: '#868685', marginBottom: 6,
+                textTransform: 'uppercase', letterSpacing: '.06em',
+                fontFamily: 'IBM Plex Mono, monospace' }}>
+                Tipus de construcció
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {availableConstructions.map(c => (
+                  <SelectionButton
+                    key={c.codi}
+                    label={c.nom_en}
+                    sublabel={lang !== 'en' ? c.nom_ca : null}
+                    selected={selectedConstruction === c.codi}
+                    onClick={() => {
+                      setSelectedConstruction(c.codi)
+                      setSelectedFit(null)
+                      setSelectedGarmentGroup(null)
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+            {selectedConstruction && availableFits.length > 0 && (
+              <div>
+                <p style={{ fontSize: 10, color: '#868685', marginBottom: 6,
+                  textTransform: 'uppercase', letterSpacing: '.06em',
+                  fontFamily: 'IBM Plex Mono, monospace' }}>
+                  Fit type
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {availableFits.map(f => (
+                    <SelectionButton
+                      key={f.codi}
+                      label={f.nom_en}
+                      sublabel={lang !== 'en' ? f.nom_ca : null}
+                      selected={selectedFit === f.codi}
+                      onClick={() => {
+                        setSelectedFit(f.codi)
+                        setSelectedGarmentGroup(null)
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </StepSection>
+      )}
+
+      {/* Pas 3: Garment Group */}
+      {selectedFit && (
+        <StepSection number={3} title="GRUP DE PEÇA">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {availableConstructions.map(c => (
+            {GARMENT_GROUPS.map(g => (
               <SelectionButton
-                key={c.codi}
-                item={c}
-                selected={selectedConstruction === c.codi}
-                onClick={() => { setSelectedConstruction(c.codi); setSelectedFit(null) }}
+                key={g.codi}
+                label={g.nom_en}
+                sublabel={lang !== 'en' ? g.nom_ca : null}
+                selected={selectedGarmentGroup === g.codi}
+                onClick={() => setSelectedGarmentGroup(g.codi)}
               />
             ))}
           </div>
         </StepSection>
       )}
 
-      {/* Pas 3: Fit */}
-      {selectedConstruction && availableFits.length > 0 && (
-        <StepSection number={3} title="FIT TYPE">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {availableFits.map(f => (
-              <SelectionButton
-                key={f.codi}
-                item={f}
-                selected={selectedFit === f.codi}
-                onClick={() => setSelectedFit(f.codi)}
-              />
-            ))}
-          </div>
-        </StepSection>
-      )}
-
-      {/* Fitxes RuleSet */}
-      {matchingRuleSets.length > 0 && (
+      {/* Fitxes RuleSet — només amb els 4 filtres seleccionats */}
+      {selectedGarmentGroup && matchingRuleSets.length > 0 && (
         <div style={{ marginTop: 24 }}>
           {matchingRuleSets.map(rs => (
             <RuleSetCard
               key={rs.id}
               rs={rs}
+              lang={lang}
+              authHeaders={authHeaders}
               onClone={() => {
                 setEditTarget({
                   ...rs, id: null,
@@ -317,8 +365,8 @@ export default function GradingRuleSets() {
         </div>
       )}
 
-      {/* Missatge si no hi ha match */}
-      {selectedFit && matchingRuleSets.length === 0 && (
+      {/* Missatge si no hi ha match (amb els 4 filtres aplicats) */}
+      {selectedGarmentGroup && matchingRuleSets.length === 0 && (
         <div style={{
           marginTop: 24, padding: '2rem', border: '1px dashed #e0d5c5',
           borderRadius: 8, textAlign: 'center', color: 'var(--gray, #868685)', fontSize: 12,
@@ -328,7 +376,7 @@ export default function GradingRuleSets() {
             onClick={() => { setEditTarget(null); setShowModal(true) }}
             style={{ ...btnPrimary, display: 'block', margin: '0.75rem auto 0' }}
           >
-            + Crear RuleSet per a {selectedTarget} · {selectedConstruction} · {selectedFit}
+            + Crear RuleSet per a {selectedTarget} · {selectedConstruction} · {selectedFit} · {selectedGarmentGroup}
           </button>
         </div>
       )}
@@ -398,15 +446,16 @@ function TargetCard({ target, selected, available, onClick }) {
 }
 
 // ── SelectionButton ─────────────────────────────────────────────────────────
-// Mateix patró que Size Library: nom_en principal, nom_ca petit gris al costat.
-function SelectionButton({ item, selected, onClick }) {
+// API S16-B: label + sublabel (en lloc d'`item={...}`). Sublabel es renderitza
+// en una segona línia, més petita i grisa.
+function SelectionButton({ label, sublabel, selected, onClick }) {
   return (
     <button
       onClick={onClick}
       style={{
         border: `1px solid ${selected ? '#c27a2a' : '#e0d5c5'}`,
         borderRadius: 6,
-        padding: '6px 14px',
+        padding: sublabel ? '5px 12px' : '6px 14px',
         background: selected ? '#fdf6ee' : '#fff',
         color: selected ? '#c27a2a' : '#1d1d1b',
         fontWeight: selected ? 600 : 400,
@@ -414,12 +463,20 @@ function SelectionButton({ item, selected, onClick }) {
         cursor: 'pointer',
         fontFamily: 'IBM Plex Mono, monospace',
         transition: 'all .15s',
+        textAlign: 'left',
+        lineHeight: 1.25,
       }}
     >
-      {item.nom_en}
-      {item.nom_ca && (
-        <span style={{ fontSize: 10, color: '#868685', marginLeft: 6, fontWeight: 400 }}>
-          {item.nom_ca}
+      {label}
+      {sublabel && (
+        <span style={{
+          display: 'block',
+          fontSize: 9,
+          color: selected ? '#a06622' : '#868685',
+          fontWeight: 400,
+          marginTop: 1,
+        }}>
+          {sublabel}
         </span>
       )}
     </button>
@@ -427,11 +484,77 @@ function SelectionButton({ item, selected, onClick }) {
 }
 
 // ── RuleSetCard ─────────────────────────────────────────────────────────────
-function RuleSetCard({ rs, onClone, onEdit, onDelete }) {
-  const [expanded, setExpanded] = useState(true)
-  const regles = rs.regles || []
-  const reglesCount = rs.regles_count ?? regles.length
-  const aboveXlCount = regles.filter(r => r.valors_step?.above_xl != null).length
+function RuleSetCard({ rs, lang = 'ca', authHeaders, onClone, onEdit, onDelete }) {
+  // S16-B: plegat per defecte (l'usuari ja arriba aquí amb 4 filtres aplicats
+  // i la fitxa és un punt focal, no la llista navegacional anterior).
+  const [expanded, setExpanded] = useState(false)
+  // Còpia local mutable de regles per inline edit / deactivate sense esperar
+  // refetch complet. Es sincronitza si l'API retorna noves regles (rs.regles).
+  const [localRules, setLocalRules] = useState(rs.regles || [])
+  useEffect(() => { setLocalRules(rs.regles || []) }, [rs.regles])
+
+  const editable = !rs.is_system_default
+  const reglesCount = localRules.length
+  const aboveXlCount = localRules.filter(r => r.valors_step?.above_xl != null).length
+
+  const updateLocalRule = (id, patch) => {
+    setLocalRules(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+  }
+
+  const handleSaveRule = async (ruleId, field, value) => {
+    const current = localRules.find(r => r.id === ruleId)
+    const body = field === 'increment'
+      ? { increment: value }
+      : { valors_step: { ...(current?.valors_step || {}), above_xl: value } }
+    try {
+      const res = await fetch(`${API}/api/v1/grading-rules/${ruleId}/`, {
+        method: 'PATCH',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        updateLocalRule(ruleId, updated)
+      } else {
+        // En cas d'error (p.ex. 403 RuleSet sistema), revertim visualment
+        // recarregant la regla des de l'estat actual de rs.regles.
+        const original = (rs.regles || []).find(r => r.id === ruleId)
+        if (original) updateLocalRule(ruleId, original)
+      }
+    } catch {
+      // network error: cap canvi local
+    }
+  }
+
+  const handleDeactivateRule = async (ruleId) => {
+    if (!confirm('Marcar aquesta regla com a inactiva?')) return
+    try {
+      const res = await fetch(`${API}/api/v1/grading-rules/${ruleId}/`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      })
+      if (res.ok) {
+        // El backend marca actiu=false (no esborra). La traiem de la llista local.
+        setLocalRules(prev => prev.filter(r => r.id !== ruleId))
+      }
+    } catch {
+      // network error: cap canvi
+    }
+  }
+
+  // Capçaleres de la taula (Traducció només si lang ≠ en).
+  const showTrad = lang !== 'en'
+  const headers = [
+    { label: 'Codi',       align: 'left'  },
+    { label: 'Nom POM',    align: 'left'  },
+    ...(showTrad ? [{ label: 'Traducció', align: 'left' }] : []),
+    { label: 'Lògica',     align: 'left'  },
+    { label: 'Δ/talla',    align: 'right' },
+    { label: 'Δ>XL',       align: 'right' },
+    { label: 'Talla base', align: 'right' },
+    { label: 'Valor base', align: 'right' },
+    ...(editable ? [{ label: '', align: 'center' }] : []),
+  ]
 
   return (
     <div style={{
@@ -467,7 +590,18 @@ function RuleSetCard({ rs, onClone, onEdit, onDelete }) {
               fontSize: 11, color: '#868685', marginTop: 2,
               display: 'flex', gap: 10, flexWrap: 'wrap',
             }}>
-              {rs.target_codi && <span>Target: <strong>{rs.target_codi}</strong></span>}
+              {/* S16-B: targets array (M2M) — un RuleSet pot aplicar a múltiples targets */}
+              {rs.targets_codis?.length > 0 && (
+                <span>
+                  {rs.targets_codis.length > 1 ? 'Targets: ' : 'Target: '}
+                  {rs.targets_codis.map((t, i) => (
+                    <span key={t}>
+                      {i > 0 && <span style={{ color: '#bbb' }}> · </span>}
+                      <strong>{t}</strong>
+                    </span>
+                  ))}
+                </span>
+              )}
               {rs.construction_codi && <span>Construction: <strong>{rs.construction_codi}</strong></span>}
               {rs.fit_type_codi && <span>Fit: <strong>{rs.fit_type_codi}</strong></span>}
               {rs.size_system_nom && <span>Size System: <strong>{rs.size_system_nom}</strong></span>}
@@ -495,25 +629,25 @@ function RuleSetCard({ rs, onClone, onEdit, onDelete }) {
       </div>
 
       {/* Taula */}
-      {expanded && regles.length > 0 && (
+      {expanded && localRules.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#fafaf8' }}>
-                {['Codi', 'Nom POM', 'Lògica', 'Δ/talla', 'Δ>XL', 'Talla base', 'Valor base'].map((h, i) => (
-                  <th key={h} style={{
+                {headers.map((h, i) => (
+                  <th key={i} style={{
                     padding: '8px 12px',
-                    textAlign: i >= 3 ? 'right' : 'left',
+                    textAlign: h.align,
                     fontWeight: 600, color: '#868685', fontSize: 10,
                     textTransform: 'uppercase', letterSpacing: '0.06em',
                     borderBottom: '0.5px solid #e0d5c5',
                     fontFamily: 'IBM Plex Mono, monospace',
-                  }}>{h}</th>
+                  }}>{h.label}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {regles.map((r, i) => {
+              {localRules.map((r, i) => {
                 const logica = LOGICA_COLORS[r.logica] || LOGICA_COLORS.FIXED
                 const aboveXl = r.valors_step?.above_xl
                 const isKey = r.increment > 0 && r.logica === 'LINEAR'
@@ -529,7 +663,7 @@ function RuleSetCard({ rs, onClone, onEdit, onDelete }) {
                       padding: '7px 12px', color: '#1d1d1b',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
-                      {r.pom_nom}
+                      {r.pom_nom_en || r.pom_nom}
                       {isKey && (
                         <span style={{
                           marginLeft: 6, fontSize: 9, padding: '2px 5px', borderRadius: 3,
@@ -538,6 +672,12 @@ function RuleSetCard({ rs, onClone, onEdit, onDelete }) {
                         }}>KEY</span>
                       )}
                     </td>
+                    {showTrad && (
+                      <td style={{
+                        padding: '7px 12px', color: '#868685', fontStyle: 'italic',
+                        borderBottom: '0.5px solid #f0eee9',
+                      }}>{r.pom_nom_ca || '—'}</td>
+                    )}
                     <td style={{ padding: '7px 12px', borderBottom: '0.5px solid #f0eee9' }}>
                       <span style={{
                         fontSize: 10, padding: '2px 6px', borderRadius: 3,
@@ -548,11 +688,16 @@ function RuleSetCard({ rs, onClone, onEdit, onDelete }) {
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
                       fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
-                      color: r.increment > 0 ? '#2a5a8a' : '#868685',
+                      color: Number(r.increment) > 0 ? '#2a5a8a' : '#868685',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
-                      {r.increment > 0 ? `+${r.increment}` : r.increment === 0 ? '—' : r.increment}
-                      {r.increment !== 0 ? ' cm' : ''}
+                      <EditableIncrement
+                        value={Number(r.increment) || 0}
+                        ruleId={r.id}
+                        field="increment"
+                        readOnly={!editable}
+                        onSave={handleSaveRule}
+                      />
                     </td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
@@ -560,7 +705,13 @@ function RuleSetCard({ rs, onClone, onEdit, onDelete }) {
                       color: aboveXl ? '#c27a2a' : '#c0c0c0',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
-                      {aboveXl != null ? `+${aboveXl} cm` : '—'}
+                      <EditableIncrement
+                        value={aboveXl != null ? Number(aboveXl) : 0}
+                        ruleId={r.id}
+                        field="above_xl"
+                        readOnly={!editable}
+                        onSave={handleSaveRule}
+                      />
                     </td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
@@ -573,7 +724,19 @@ function RuleSetCard({ rs, onClone, onEdit, onDelete }) {
                       fontFamily: 'IBM Plex Mono, monospace',
                       color: '#868685',
                       borderBottom: '0.5px solid #f0eee9',
-                    }}>{r.valor_base > 0 ? `${r.valor_base} cm` : '—'}</td>
+                    }}>{Number(r.valor_base) > 0 ? `${r.valor_base} cm` : '—'}</td>
+                    {editable && (
+                      <td style={{
+                        padding: '7px 12px', textAlign: 'center',
+                        borderBottom: '0.5px solid #f0eee9',
+                      }}>
+                        <ActionBtn
+                          onClick={() => handleDeactivateRule(r.id)}
+                          label="Inactivar"
+                          danger
+                        />
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -582,12 +745,70 @@ function RuleSetCard({ rs, onClone, onEdit, onDelete }) {
         </div>
       )}
 
-      {expanded && regles.length === 0 && (
+      {expanded && localRules.length === 0 && (
         <div style={{ padding: '1.5rem', textAlign: 'center', color: '#bbb', fontSize: 12 }}>
           Cap regla definida per a aquest RuleSet.
         </div>
       )}
     </div>
+  )
+}
+
+// ── EditableIncrement ───────────────────────────────────────────────────────
+// Mostra un valor numèric. Si readOnly, es renderitza com a text estàtic.
+// Si editable, click → input numèric inline. Enter desa, Escape cancel·la.
+function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  useEffect(() => { setDraft(value) }, [value])
+
+  const display = value > 0 ? `+${value}` : value === 0 ? '—' : `${value}`
+  const suffix = value === 0 ? '' : ' cm'
+
+  if (readOnly) {
+    return <span>{display}{suffix}</span>
+  }
+
+  if (editing) {
+    const commit = () => {
+      const parsed = parseFloat(draft)
+      if (!isNaN(parsed)) onSave(ruleId, field, parsed)
+      setEditing(false)
+    }
+    return (
+      <input
+        autoFocus
+        type="number"
+        step="0.25"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') commit()
+          if (e.key === 'Escape') { setDraft(value); setEditing(false) }
+        }}
+        style={{
+          width: 64, textAlign: 'right',
+          border: '1px solid #c27a2a', borderRadius: 4,
+          padding: '1px 4px', fontSize: 11,
+          fontFamily: 'IBM Plex Mono, monospace',
+        }}
+      />
+    )
+  }
+
+  return (
+    <span
+      onClick={() => setEditing(true)}
+      title="Click per editar"
+      style={{
+        cursor: 'pointer',
+        borderBottom: '1px dashed #c0c0c0',
+        paddingBottom: 1,
+      }}
+    >
+      {display}{suffix}
+    </span>
   )
 }
 
