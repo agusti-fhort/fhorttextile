@@ -11,10 +11,15 @@ router.register('base-measurements', BaseMeasurementViewSet, basename='base-meas
 # Sprint 6 — extracció IA. Paths abans del router perquè 'models/extract-from-file/'
 # no quedi capturat per 'models/<pk>/' del ModelViewSet detail.
 try:
-    from .extraction_views import extract_from_file_view, create_from_extraction_view
+    from .extraction_views import (
+        extract_from_file_view,
+        create_from_extraction_view,
+        delete_model_view,
+    )
     _sprint6_paths = [
         path('models/extract-from-file/', extract_from_file_view),
         path('models/create-from-extraction/', create_from_extraction_view),
+        path('models/<int:model_id>/delete/', delete_model_view, name='delete-model'),
     ]
 except Exception:
     _sprint6_paths = []
