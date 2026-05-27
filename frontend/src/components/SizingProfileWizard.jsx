@@ -4,14 +4,6 @@ import useAuthStore from "../store/auth"
 
 const API = import.meta.env.VITE_API_URL || ""
 
-const TARGET_ICONS = {
-  WOMAN:"♀", MAN:"♂", UNISEX_ADULT:"◎",
-  BABY_GIRL:"♀°", BABY_BOY:"♂°", BABY_UNISEX:"◉",
-  TODDLER_GIRL:"♀¹", TODDLER_BOY:"♂¹",
-  GIRL:"♀²", BOY:"♂²",
-  TEEN_GIRL:"♀³", TEEN_BOY:"♂³", MATERNITY:"♀♥",
-}
-
 const TARGET_ORDER = [
   "WOMAN","MAN","UNISEX_ADULT",
   "BABY_GIRL","BABY_BOY","BABY_UNISEX",
@@ -200,7 +192,6 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
                 display:"flex", flexDirection:"column", alignItems:"center", gap:3,
                 minWidth:78,
               }}>
-                <span style={{ fontSize:16 }}>{TARGET_ICONS[t.codi]||"◆"}</span>
                 <span style={{ fontWeight: selTarget===t.codi ? 600 : 400 }}>{t.nom_en}</span>
                 <span style={{ fontSize:9, color: selTarget===t.codi ? "#c27a2a" : "#868685" }}>
                   {t.nom_cat}

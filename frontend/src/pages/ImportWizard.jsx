@@ -5,7 +5,6 @@ import GarmentTypeSelector from "../components/GarmentTypeSelector/GarmentTypeSe
 import { SizingProfileWizard } from "../components/SizingProfileWizard"
 import { DesignFreezeReport } from "../components/DesignFreezeReport"
 import { XatExtraccio } from "../components/XatExtraccio"
-import ImportConfirmStep from "../components/ImportFromSheet/ImportConfirmStep"
 
 const API = import.meta.env.VITE_API_URL || ""
 
@@ -13,8 +12,7 @@ const STEPS = [
   { id: 1, label: "Target" },
   { id: 2, label: "Tipus peça" },
   { id: 3, label: "Talles" },
-  { id: 4, label: "Analitza" },
-  { id: 5, label: "Confirma" },
+  { id: 4, label: "Anàlisi IA" },
 ]
 
 // Idèntic a TARGETS de GradingRuleSets.jsx
@@ -33,14 +31,6 @@ const TARGETS = [
   { codi: 'TEEN_BOY',      nom_en: 'Teen Boy',      nom_ca: 'Adolescent nen' },
   { codi: 'MATERNITY',     nom_en: 'Maternity',     nom_ca: 'Maternitat' },
 ]
-
-const TARGET_ICONS = {
-  WOMAN: "♀", MAN: "♂", UNISEX_ADULT: "◎",
-  BABY_GIRL: "♀°", BABY_BOY: "♂°", BABY_UNISEX: "◉",
-  TODDLER_GIRL: "♀¹", TODDLER_BOY: "♂¹",
-  GIRL: "♀²", BOY: "♂²",
-  TEEN_GIRL: "♀³", TEEN_BOY: "♂³", MATERNITY: "♀♥",
-}
 
 function StepIndicator({ current }) {
   return (
@@ -191,54 +181,41 @@ export default function ImportWizard() {
     setLoadingMsg("")
   }
 
-  const handleCreateModel = async (overrides) => {
-    if (!token) {
-      setError("Sessió no autenticada — torna a iniciar sessió.")
-      navigate("/login")
-      return
-    }
-    setLoading(true)
-    setLoadingMsg("Creant model...")
-    try {
-      const r = await fetch(`${API}/api/v1/models/create-from-extraction/`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+  // Pas 4 → NouModel amb pre-fill via location.state.
+  // NouModel ha de llegir state.prefill (i opcionalment state.extracted/wizard_context)
+  // per omplir el formulari de creació.
+  const handleProceedToNouModel = () => {
+    const ext = result?.extracted || {}
+    const yearVal = ext.year?.value ?? ext.year
+    navigate('/models/nou', {
+      state: {
+        fromImport: true,
+        extracted: ext,
+        wizard_context: wizardContext,
+        prefill: {
+          nom_prenda:       ext.style_name?.value || ext.style_name || '',
+          codi_client:      ext.style_reference?.value || ext.style_reference || '',
+          temporada:        String(ext.season?.value || ext.season || 'SS').slice(0, 2).toUpperCase(),
+          any:              Number(yearVal) || new Date().getFullYear(),
+          garment_type:     selectedGarmentType?.id || '',
+          fit_type:         ext.fit_type || 'Regular',
+          size_system:      sizingResult?.size_system_id || '',
+          base_size_label:  sizingResult?.base_size_label || '',
+          size_run_model:   sizingResult?.size_run_model || '',
+          grading_rule_set: sizingResult?.grading_rule_set_id || '',
         },
-        body: JSON.stringify({
-          extracted: result?.extracted,
-          overrides,
-          wizard_context: wizardContext,
-        }),
-      })
-      const data = await r.json()
-      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`)
-      navigate(`/models/${data.model_id}`, {
-        state: {
-          justImported: true,
-          poms_pendents: data.poms_pendents || [],
-          size_discrepancy: data.size_discrepancy,
-          message: data.message,
-        },
-      })
-    } catch (e) {
-      setError(e.message)
-    }
-    setLoading(false)
-    setLoadingMsg("")
+      },
+    })
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   // Pas 4 review (result present) ocupa amplada gran per al split report+xat;
-  // Pas 5 (ImportConfirmStep) amplada mitjana per als grids 2-col.
+  // la resta usen amplada mitjana.
   const wrapperStyle =
     (step === 4 && result)
       ? { padding: "24px", maxWidth: 1200, margin: "0 auto" }
-      : step === 5
-        ? { padding: "24px", maxWidth: 880, margin: "0 auto" }
-        : { padding: "24px", maxWidth: 760, margin: "0 auto" }
+      : { padding: "24px", maxWidth: 760, margin: "0 auto" }
 
   return (
     <div style={wrapperStyle}>
@@ -253,7 +230,7 @@ export default function ImportWizard() {
         Nou model des de fitxer
       </h1>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 24, fontFamily: "IBM Plex Mono, monospace" }}>
-        Cinc passos: target, tipus de peça, sistema de talles, anàlisi IA i confirmació.
+        Quatre passos: target, tipus de peça, sistema de talles i anàlisi IA. La confirmació final es fa al formulari de Nou model.
       </p>
 
       <StepIndicator current={step} />
@@ -289,7 +266,6 @@ export default function ImportWizard() {
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                     minWidth: 90,
                   }}>
-                  <span style={{ fontSize: 16 }}>{TARGET_ICONS[t.codi] || "◆"}</span>
                   <span style={{ fontWeight: sel ? 600 : 400 }}>{t.nom_en}</span>
                   <span style={{ fontSize: 9, color: sel ? "#c27a2a" : "#868685" }}>
                     {t.nom_ca}
@@ -420,7 +396,7 @@ export default function ImportWizard() {
           <div style={{ overflowY: 'auto', minWidth: 0 }}>
             <DesignFreezeReport
               result={result}
-              onConfirm={() => { setError(null); setStep(5) }}
+              onConfirm={handleProceedToNouModel}
               onReject={() => { setResult(null); setFile(null); setFileBase64(null) }}
             />
           </div>
@@ -440,15 +416,6 @@ export default function ImportWizard() {
         </div>
       )}
 
-      {/* PAS 5 — Confirma (ImportConfirmStep) ─────────────────────────── */}
-      {step === 5 && result && (
-        <ImportConfirmStep
-          extracted={result?.extracted}
-          onConfirm={handleCreateModel}
-          onBack={() => setStep(4)}
-          loading={loading}
-        />
-      )}
     </div>
   )
 }
