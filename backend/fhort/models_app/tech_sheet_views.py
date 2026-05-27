@@ -22,8 +22,10 @@ Notes d'integració amb l'SDK Anthropic (per skill `claude-api`):
 """
 
 import base64
+import datetime
 import json
 import logging
+import re
 
 import anthropic
 from django.conf import settings
@@ -249,16 +251,37 @@ class TechSheetCreateModelView(APIView):
 
         header = extracted.get('header') or {}
 
+        # Fix 1 (S17): la IA pot retornar `sizes` com a string (ex: "['XXS','XS','S']")
+        # o com a array net. Normalitzem a llista d'strings nets abans de join.
+        raw_sizes = extracted.get('sizes') or []
+        if isinstance(raw_sizes, str):
+            raw_sizes = re.findall(r'[A-Za-z0-9]+', raw_sizes)
+        size_run = '·'.join(
+            str(s).strip() for s in raw_sizes if str(s).strip()
+        )
+
+        # Camps NOT NULL del Model que el view ha d'omplir explícitament:
+        # - any: extret del header (`year`) o, defectivament, l'any actual.
+        # - sequencial=1: el signal pre_save del Model recalcula el correlatiu
+        #   real per tenant+any+temporada; cal un valor inicial vàlid per
+        #   satisfer el constraint NOT NULL abans del signal.
+        try:
+            year_value = int(header.get('year') or datetime.date.today().year)
+        except (TypeError, ValueError):
+            year_value = datetime.date.today().year
+
         model = Model.objects.create(
             nom_prenda=header.get('style_name') or 'Model importat',
             codi_client=header.get('style_reference') or '',
             codi_tenant=(header.get('style_reference') or 'IMP')[:3].upper(),
             temporada=header.get('season') or 'SS',
+            any=year_value,
+            sequencial=1,
             garment_type=garment_type,
             estat='Nou',
             fase_actual='Proto',
             base_size_label=extracted.get('base_size') or '',
-            size_run_model='·'.join(extracted.get('sizes') or []),
+            size_run_model=size_run,
             observacions=(
                 f"Importat de fitxa: {header.get('style_reference', '')} | "
                 f"Proveïdor: {header.get('supplier', '')} | "
@@ -286,14 +309,20 @@ class TechSheetCreateModelView(APIView):
                 })
                 continue
 
-            try:
-                pom_master = POMMaster.objects.select_related('pom_global').get(
-                    pom_global__codi=pom_code
-                )
-            except POMMaster.DoesNotExist:
+            # Fix 2 (S17): pom_global no és unique a POMMaster (un tenant pot
+            # tenir variants personalitzades del mateix POMGlobal). Usem
+            # .filter().first() per evitar MultipleObjectsReturned i loguem
+            # qualsevol miss al `skipped`.
+            pom_master = (
+                POMMaster.objects
+                .select_related('pom_global')
+                .filter(pom_global__codi=pom_code)
+                .first()
+            )
+            if pom_master is None:
                 skipped.append({
                     'client_code': client_code,
-                    'reason': f'POM {pom_code} no trobat al catàleg',
+                    'reason': f'POM {pom_code} no trobat al catàleg del tenant',
                 })
                 continue
 

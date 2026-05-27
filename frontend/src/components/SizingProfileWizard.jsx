@@ -246,13 +246,25 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
       )}
 
       {/* STEP 2 — Size Set */}
-      {step === 2 && (
+      {step === 2 && (() => {
+        // Fix S17: dedup per size_system id. Múltiples profiles (per garment_type
+        // diferent) poden compartir el mateix size_system; per a la UI de selecció
+        // de Size Set en mostrem només un per system, prioritzant els `is_default`.
+        const uniqueProfiles = Object.values(
+          (profiles || []).reduce((acc, p) => {
+            const key = p.size_system?.id ?? p.size_system
+            if (key == null) return acc
+            if (!acc[key] || p.is_default) acc[key] = p
+            return acc
+          }, {})
+        )
+        return (
         <div>
           <div style={{ fontSize:11, color:"#868685", marginBottom:12 }}>
-            {loading ? "Carregant size sets..." : `${profiles.length} sistemes disponibles. Selecciona i ajusta el run de talles.`}
+            {loading ? "Carregant size sets..." : `${uniqueProfiles.length} sistemes disponibles. Selecciona i ajusta el run de talles.`}
           </div>
 
-          {profiles.map(p => {
+          {uniqueProfiles.map(p => {
             const isSelected = selProfile?.id === p.id
             return (
               <div key={p.id} style={{
@@ -351,7 +363,8 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
             )
           })}
         </div>
-      )}
+        )
+      })()}
 
       {/* STEP 3 — Resum */}
       {step === 3 && selProfile && (
