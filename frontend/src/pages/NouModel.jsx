@@ -94,6 +94,9 @@ export default function NouModel() {
   const [error, setError] = useState('')
   const [showWizard, setShowWizard] = useState(false)
   const [sizingResult, setSizingResult] = useState(initialSizingResult)
+  // Si ve d'importació, el POMBrowser queda amagat per defecte (el backend
+  // resol l'assignació). L'usuari pot revelar-lo amb el botó "+ Afegir POM".
+  const [showManualPomBrowser, setShowManualPomBrowser] = useState(false)
 
   useEffect(() => {
     garmentTypes.list({ page_size: 200 }).then(r => setGTypes(r.data.results || [])).catch(() => {})
@@ -432,36 +435,50 @@ export default function NouModel() {
               {isImport && (importState.extracted?.poms?.length > 0) && (
                 <PomsImportPreview poms={importState.extracted.poms} />
               )}
-              {form.garment_type ? (
-                <div style={{
-                  height: '60vh',
-                  border: '0.5px solid #e4e4e2', borderRadius: 8,
-                  overflow: 'hidden', background: 'var(--white)',
-                }}>
-                  <POMBrowser
-                    mode="assign"
-                    garmentTypeCode={form.garment_type}
-                    activePoms={form.selected_pom_codes || []}
-                    onTogglePom={(pomCode) => {
-                      setForm(f => {
-                        const current = f.selected_pom_codes || []
-                        const updated = current.includes(pomCode)
-                          ? current.filter(c => c !== pomCode)
-                          : [...current, pomCode]
-                        return { ...f, selected_pom_codes: updated }
-                      })
-                    }}
-                  />
-                </div>
-              ) : (
-                <div style={{
-                  padding: '1rem 1.2rem',
-                  border: '0.5px dashed #e4e4e2', borderRadius: 8,
-                  fontSize: 12, color: 'var(--gray)',
-                  background: 'var(--white)',
-                }}>
-                  Selecciona un tipus de prenda per assignar POMs al model.
-                </div>
+
+              {isImport && !showManualPomBrowser && (
+                <button
+                  type="button"
+                  onClick={() => setShowManualPomBrowser(true)}
+                  style={btnSecondary}
+                >
+                  <i className="ti ti-plus" style={{ fontSize: 14 }} />
+                  Afegir POM
+                </button>
+              )}
+
+              {(!isImport || showManualPomBrowser) && (
+                form.garment_type ? (
+                  <div style={{
+                    height: '60vh',
+                    border: '0.5px solid #e4e4e2', borderRadius: 8,
+                    overflow: 'hidden', background: 'var(--white)',
+                  }}>
+                    <POMBrowser
+                      mode="assign"
+                      garmentTypeCode={form.garment_type}
+                      activePoms={form.selected_pom_codes || []}
+                      onTogglePom={(pomCode) => {
+                        setForm(f => {
+                          const current = f.selected_pom_codes || []
+                          const updated = current.includes(pomCode)
+                            ? current.filter(c => c !== pomCode)
+                            : [...current, pomCode]
+                          return { ...f, selected_pom_codes: updated }
+                        })
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{
+                    padding: '1rem 1.2rem',
+                    border: '0.5px dashed #e4e4e2', borderRadius: 8,
+                    fontSize: 12, color: 'var(--gray)',
+                    background: 'var(--white)',
+                  }}>
+                    Selecciona un tipus de prenda per assignar POMs al model.
+                  </div>
+                )
               )}
             </Field>
           </Grid>

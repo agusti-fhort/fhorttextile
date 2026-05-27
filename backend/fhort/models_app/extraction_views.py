@@ -562,6 +562,17 @@ def create_from_extraction_view(request):
                             if bm.nom_fitxa
                         }
 
+                        # B1 — Si el wizard ha definit size_run, limitem el grading
+                        # a aquestes talles (filtra columnes extra del document).
+                        # Si size_run està buit, mantenim el comportament actual:
+                        # importem totes les talles que apareixen al document.
+                        wiz_size_run_str = wizard_context.get('size_run', '') or ''
+                        wiz_size_labels = {
+                            s.strip().upper()
+                            for s in wiz_size_run_str.split('·')
+                            if s.strip()
+                        }
+
                         for row in grading_table:
                             code = row.get('code', '') or ''
                             values_by_size = row.get('values_by_size', {}) or {}
@@ -584,6 +595,11 @@ def create_from_extraction_view(request):
 
                             for size_label, value in values_by_size.items():
                                 if value is None:
+                                    continue
+                                if (
+                                    wiz_size_labels
+                                    and str(size_label).strip().upper() not in wiz_size_labels
+                                ):
                                     continue
                                 try:
                                     v = float(value)

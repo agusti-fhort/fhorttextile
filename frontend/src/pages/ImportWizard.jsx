@@ -353,7 +353,14 @@ export default function ImportWizard() {
 
           {loading && (
             <div style={{ textAlign: "center", padding: "16px 0" }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
+              <style>{`@keyframes iw-spin { to { transform: rotate(360deg); } }`}</style>
+              <div style={{
+                width: 36, height: 36, borderRadius: '50%',
+                border: '3px solid rgba(200,150,62,0.18)',
+                borderTopColor: 'var(--gold)',
+                animation: 'iw-spin 0.8s linear infinite',
+                margin: '0 auto 12px',
+              }} />
               <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: "IBM Plex Mono, monospace" }}>
                 {loadingMsg}
               </div>
@@ -370,12 +377,14 @@ export default function ImportWizard() {
               disabled={!file || loading}
               style={{
                 padding: "10px 18px",
-                background: file && !loading ? 'var(--bg-muted)' : 'var(--bg-card)',
-                color: file && !loading ? "#7a7acc" : "#333",
-                border: `1px solid ${file && !loading ? "#3a3a6a" : "#222"}`,
+                background: 'var(--gold)',
+                color: '#FFFFFF',
+                border: 'none',
                 borderRadius: 4, fontSize: 12,
                 fontFamily: "IBM Plex Mono, monospace",
+                fontWeight: 600,
                 cursor: file && !loading ? "pointer" : "not-allowed",
+                opacity: file && !loading ? 1 : 0.5,
               }}
             >
               ⚡ Analitzar amb IA

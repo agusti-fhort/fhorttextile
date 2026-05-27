@@ -52,7 +52,10 @@ function StepBar({ step }) {
 
 export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }) {
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
-  const [step, setStep] = useState(0)
+  // Si initialValues.target ja ve seleccionat (p.ex. des d'ImportWizard o
+  // d'una importació via NouModel), saltem el sub-pas Target i comencem a
+  // Construcció. La card Target queda pre-marcada via selTarget.
+  const [step, setStep] = useState(initialValues.target ? 1 : 0)
 
   // Dades carregades
   const [targets, setTargets] = useState([])
