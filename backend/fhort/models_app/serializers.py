@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Contracte, LiniaContracte, Model, ModelFitxer, ModelServei
+from .models import BaseMeasurement, Contracte, LiniaContracte, Model, ModelFitxer, ModelServei
 
 
 class ModelFitxerSerializer(serializers.ModelSerializer):
@@ -69,6 +69,33 @@ class ModelDetailSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('codi_intern', 'data_entrada')
 
+
+
+# Sprint S14B — BaseMeasurement CRUD
+class BaseMeasurementSerializer(serializers.ModelSerializer):
+    # Exposem camps del POM via `pom.pom_global` per a la UI.
+    pom_code = serializers.CharField(source='pom.pom_global.codi', read_only=True)
+    pom_name_en = serializers.CharField(source='pom.pom_global.nom_en', read_only=True)
+    pom_name_cat = serializers.CharField(source='pom.pom_global.nom_ca', read_only=True)
+    pom_abbreviation = serializers.CharField(source='pom.pom_global.abbreviation', read_only=True)
+    pom_is_key = serializers.BooleanField(source='pom.pom_global.is_key', read_only=True)
+    pom_category = serializers.CharField(source='pom.pom_global.categoria', read_only=True)
+    # Camps legacy del POMMaster (fallback quan no hi ha pom_global associat).
+    pom_codi_client = serializers.CharField(source='pom.codi_client', read_only=True)
+    pom_nom_client = serializers.CharField(source='pom.nom_client', read_only=True)
+
+    class Meta:
+        model = BaseMeasurement
+        fields = (
+            'id', 'model', 'pom',
+            'pom_code', 'pom_name_en', 'pom_name_cat',
+            'pom_abbreviation', 'pom_is_key', 'pom_category',
+            'pom_codi_client', 'pom_nom_client',
+            'base_value_cm', 'is_active', 'notes',
+            'nom_fitxa', 'origen',
+            'updated_at',
+        )
+        read_only_fields = ('updated_at',)
 
 
 # Sprint 1C — ModelServei

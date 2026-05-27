@@ -105,7 +105,9 @@ function normalizePOMs(raw) {
   return raw.map(entry => {
     // Cas (a): GarmentPOMMap → desempaquetar pom
     const isKeyFromMap = typeof entry.is_key === 'boolean' ? entry.is_key : undefined
-    const pomSource = entry.pom || entry
+    // entry.pom pot ser l'objecte POMMaster (expandit) o un ID enter (FK no expandit).
+    // Només l'usem com a font si és realment l'objecte; en cas contrari, fem servir l'entrada plana.
+    const pomSource = (entry.pom && typeof entry.pom === 'object') ? entry.pom : entry
     const pg = pomSource.pom_global || pomSource
 
     return {
@@ -180,11 +182,16 @@ export default function POMBrowser({
     setSelectedPom(null)
     if (!selectedGT?.id) { setPoms([]); return }
     setLoading(true)
-    const gtParam = selectedGT.codi_client || selectedGT.id
-    const params = new URLSearchParams({
-      garment_type: gtParam,
-      page_size: '500',
-    })
+    // Backend GarmentPOMMapViewSet accepta:
+    //   ?garment_type=<id>                  (FK exact)
+    //   ?garment_type__codi_client=<codi>   (lookup per codi_client del GarmentType)
+    // Si tenim el codi_client el preferim (més estable que un ID intern).
+    const params = new URLSearchParams({ page_size: '500' })
+    if (selectedGT.codi_client) {
+      params.set('garment_type__codi_client', selectedGT.codi_client)
+    } else {
+      params.set('garment_type', selectedGT.id)
+    }
     fetch(`${API}/api/v1/garment-pom-maps/?${params}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })

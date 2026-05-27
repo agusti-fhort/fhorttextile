@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     GarmentGroupViewSet,
+    GarmentPOMMapViewSet,
     GarmentTypeViewSet,
     GradingRuleSetViewSet,
     GradingRuleViewSet,
@@ -21,6 +22,7 @@ router.register('garment-groups', GarmentGroupViewSet, basename='garment-group')
 router.register('garment-types', GarmentTypeViewSet, basename='garment-type')
 router.register('grading-rule-sets', GradingRuleSetViewSet, basename='grading-rule-set')
 router.register('grading-rules', GradingRuleViewSet, basename='grading-rule')
+router.register('garment-pom-maps', GarmentPOMMapViewSet, basename='garment-pom-map')
 
 # Sprint 7A — wizard de POMs. Els paths 'poms/suggerits/', 'poms/cerca/' i
 # 'poms/crear-tenant/' col·lisionarien amb POMMasterViewSet detail (poms/<pk>/);

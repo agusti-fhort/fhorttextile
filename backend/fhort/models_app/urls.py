@@ -1,11 +1,12 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .views import ModelFitxerViewSet, ModelViewSet
+from .views import BaseMeasurementViewSet, ModelFitxerViewSet, ModelViewSet
 
 router = DefaultRouter()
 router.register('models', ModelViewSet, basename='model')
 router.register('model-fitxers', ModelFitxerViewSet, basename='model-fitxer')
+router.register('base-measurements', BaseMeasurementViewSet, basename='base-measurement')
 
 # Sprint 6 — extracció IA. Paths abans del router perquè 'models/extract-from-file/'
 # no quedi capturat per 'models/<pk>/' del ModelViewSet detail.
@@ -47,4 +48,20 @@ try:
 except Exception:
     _sprint8_paths = []
 
-urlpatterns = _sprint6_paths + _sprint7_model_paths + _sprint8_paths + router.urls
+# Sprint S17 — Importació de fitxes tècniques via API Anthropic.
+try:
+    from .tech_sheet_views import TechSheetExtractView, TechSheetCreateModelView
+    _sprint17_paths = [
+        path('models/extract-sheet/',     TechSheetExtractView.as_view(),     name='extract-sheet'),
+        path('models/create-from-sheet/', TechSheetCreateModelView.as_view(), name='create-from-sheet'),
+    ]
+except Exception:
+    _sprint17_paths = []
+
+urlpatterns = (
+    _sprint6_paths
+    + _sprint7_model_paths
+    + _sprint8_paths
+    + _sprint17_paths
+    + router.urls
+)

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom"
 import useAuthStore from "../store/auth"
 import { EstatBadge } from "../components/EstatBadge"
 import { FaseStepper } from "../components/FaseStepper"
+import ImportFromSheetWizard from "../components/ImportFromSheet/ImportFromSheetWizard"
 
 const API = import.meta.env.VITE_API_URL || ""
 
@@ -21,6 +22,7 @@ export default function Models() {
   const [filtreFase, setFiltreFase] = useState("")
   const [filtreEstat, setFiltreEstat] = useState("")
   const [total, setTotal] = useState(0)
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -57,6 +59,13 @@ export default function Models() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setShowImport(true)} style={{
+            padding: "7px 14px", borderRadius: 4, fontSize: 11, cursor: "pointer",
+            background: "#fff", color: "#c27a2a", border: "1px solid #c27a2a",
+            fontFamily: "IBM Plex Mono, monospace",
+          }}>
+            Importar fitxa tècnica
+          </button>
           <button onClick={() => navigate("/models/nou-des-de-fitxer")} style={{
             padding: "7px 14px", borderRadius: 4, fontSize: 11, cursor: "pointer",
             background: "#fff", color: "#868685", border: "1px solid #e0d5c5",
@@ -168,6 +177,13 @@ export default function Models() {
             </div>
           )}
         </div>
+      )}
+
+      {showImport && (
+        <ImportFromSheetWizard
+          onModelCreated={(modelId) => navigate(`/models/${modelId}`)}
+          onClose={() => setShowImport(false)}
+        />
       )}
     </div>
   )

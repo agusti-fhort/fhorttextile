@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
 import { pomAlerts } from '../../api/endpoints'
@@ -76,7 +76,7 @@ const navGroups = [
   ]},
 ]
 
-function NavParent({ item, t, expanded, onToggle }) {
+function NavParent({ item, t, expanded, onToggle, activeRoute }) {
   const [hover, setHover] = useState(false)
   return (
     <div>
@@ -105,7 +105,12 @@ function NavParent({ item, t, expanded, onToggle }) {
       {expanded && (
         <div style={{marginLeft: '1.7rem'}}>
           {item.children.map(child => (
-            <NavChild key={child.to} child={child} t={t} />
+            <NavChild
+              key={child.to}
+              child={child}
+              t={t}
+              isActive={activeRoute === child.to}
+            />
           ))}
         </div>
       )}
@@ -113,14 +118,14 @@ function NavParent({ item, t, expanded, onToggle }) {
   )
 }
 
-function NavChild({ child, t }) {
+function NavChild({ child, t, isActive }) {
   const [hover, setHover] = useState(false)
   return (
     <NavLink
       to={child.to}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={({ isActive }) => ({
+      style={{
         display: 'block',
         padding: '0.45rem 1rem',
         margin: '1px 0.5rem',
@@ -131,23 +136,22 @@ function NavChild({ child, t }) {
         fontSize: 11.5,
         fontWeight: isActive ? 500 : 400,
         transition: 'all 0.15s',
-      })}
+      }}
     >
       {t(child.labelKey)}
     </NavLink>
   )
 }
 
-function NavLeaf({ item, badges, t }) {
+function NavLeaf({ item, badges, t, isActive }) {
   const [hover, setHover] = useState(false)
   const badge = item.badgeKey ? badges[item.badgeKey] : null
   return (
     <NavLink
       to={item.to}
-      end={item.to === '/'}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={({ isActive }) => ({
+      style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '0.6rem 1rem', margin: '1px 0.5rem',
         borderRadius: 8,
@@ -156,35 +160,38 @@ function NavLeaf({ item, badges, t }) {
         textDecoration: 'none',
         fontSize: 12, fontWeight: isActive ? 500 : 400,
         transition: 'all 0.15s',
-      })}
+      }}
     >
-      {({ isActive }) => (
-        <>
-          <i className={`ti ${item.icon}`} style={{fontSize: 17, color: isActive ? C.activeFg : C.icon}} />
-          <span style={{flex: 1}}>{t(item.labelKey)}</span>
-          {badge > 0 && (
-            <span style={{
-              fontSize: 10, fontWeight: 600,
-              padding: '1px 7px', borderRadius: 10,
-              background: 'var(--err)', color: '#ffffff',
-              fontVariantNumeric: 'tabular-nums',
-            }}>{badge}</span>
-          )}
-        </>
+      <i className={`ti ${item.icon}`} style={{fontSize: 17, color: isActive ? C.activeFg : C.icon}} />
+      <span style={{flex: 1}}>{t(item.labelKey)}</span>
+      {badge > 0 && (
+        <span style={{
+          fontSize: 10, fontWeight: 600,
+          padding: '1px 7px', borderRadius: 10,
+          background: 'var(--err)', color: '#ffffff',
+          fontVariantNumeric: 'tabular-nums',
+        }}>{badge}</span>
       )}
     </NavLink>
   )
 }
 
-function NavItem({ item, badges, t, expanded, onToggle }) {
+function NavItem({ item, badges, t, expanded, onToggle, activeRoute }) {
   if (item.children) {
-    return <NavParent item={item} t={t} expanded={expanded} onToggle={onToggle} />
+    return (
+      <NavParent
+        item={item} t={t}
+        expanded={expanded} onToggle={onToggle}
+        activeRoute={activeRoute}
+      />
+    )
   }
-  return <NavLeaf item={item} badges={badges} t={t} />
+  return <NavLeaf item={item} badges={badges} t={t} isActive={activeRoute === item.to} />
 }
 
 export default function Sidebar() {
   const { t } = useTranslation()
+  const location = useLocation()
   const logout = useAuthStore(s => s.logout)
   const [alertsPending, setAlertsPending] = useState(0)
   const [expanded, setExpanded] = useState({['nav.models']: true})
@@ -207,7 +214,7 @@ export default function Sidebar() {
   const toggle = (key) => setExpanded(s => ({...s, [key]: !s[key]}))
 
   // Injecta "Configuració inicial" dins Configuració si onboarding < 100%
-  const items = navGroups[0].items.map(item => {
+  const items = useMemo(() => navGroups[0].items.map(item => {
     if (item.labelKey === 'nav.configuracio' && onboardingPct < 100) {
       return {
         ...item,
@@ -218,7 +225,45 @@ export default function Sidebar() {
       }
     }
     return item
-  })
+  }), [onboardingPct])
+
+  // Conjunt de totes les rutes del sidebar (leaves + children)
+  const allRoutes = useMemo(() => {
+    const routes = []
+    items.forEach(item => {
+      if (item.to) routes.push(item.to)
+      if (item.children) item.children.forEach(c => routes.push(c.to))
+    })
+    return routes
+  }, [items])
+
+  // Match exacte o, si no, el prefix més específic (longest match wins).
+  // '/' només compta com a match exacte per evitar que matchi totes les rutes.
+  const activeRoute = useMemo(() => {
+    const path = location.pathname
+    const matches = allRoutes.filter(r => {
+      if (r === '/') return path === '/'
+      return path === r || path.startsWith(r + '/')
+    })
+    matches.sort((a, b) => b.length - a.length)
+    return matches[0] || null
+  }, [allRoutes, location.pathname])
+
+  // Autoexpansió: si la ruta actual és (o és subruta de) qualsevol child d'un
+  // grup, expandim el grup. startsWith() s'usa NOMÉS aquí, no per al highlight
+  // dels ítems fill (que segueix la lògica de match més específic).
+  useEffect(() => {
+    const path = location.pathname
+    items.forEach(item => {
+      if (!item.children) return
+      const hasMatch = item.children.some(c =>
+        path === c.to || path.startsWith(c.to + '/')
+      )
+      if (hasMatch) {
+        setExpanded(s => s[item.labelKey] ? s : { ...s, [item.labelKey]: true })
+      }
+    })
+  }, [location.pathname, items])
 
   return (
     <aside style={{
@@ -253,6 +298,7 @@ export default function Sidebar() {
             t={t}
             expanded={!!expanded[item.labelKey]}
             onToggle={() => toggle(item.labelKey)}
+            activeRoute={activeRoute}
           />
         ))}
       </div>

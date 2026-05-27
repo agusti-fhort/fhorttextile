@@ -4,8 +4,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Model, ModelFitxer
+from .models import BaseMeasurement, Model, ModelFitxer
 from .serializers import (
+    BaseMeasurementSerializer,
     ModelDetailSerializer,
     ModelFitxerSerializer,
     ModelListSerializer,
@@ -49,6 +50,27 @@ class ModelFitxerViewSet(viewsets.ModelViewSet):
     filterset_fields = ['model', 'categoria', 'enviat_ia']
     ordering_fields = ['data_pujada']
     ordering = ['-data_pujada']
+
+
+# Sprint S14B — BaseMeasurement CRUD
+class BaseMeasurementViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = BaseMeasurementSerializer
+    queryset = (
+        BaseMeasurement.objects
+        .select_related('pom', 'pom__pom_global')
+        .all()
+    )
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['model', 'pom', 'is_active', 'origen']
+    ordering_fields = ['updated_at', 'id']
+    ordering = ['model', 'id']
+
+    def get_queryset(self):
+        # Al schema 'public' no hi ha dades de tenant — retorna queryset buit.
+        if getattr(connection, 'schema_name', None) == 'public':
+            return BaseMeasurement.objects.none()
+        return super().get_queryset()
 
 
 
