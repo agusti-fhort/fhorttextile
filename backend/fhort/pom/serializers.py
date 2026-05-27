@@ -66,6 +66,11 @@ class GradingRuleSerializer(serializers.ModelSerializer):
     pom_nom_en = serializers.SerializerMethodField()
     pom_nom_ca = serializers.SerializerMethodField()
     pom_abbreviation = serializers.SerializerMethodField()
+    # S16-B fix: codi global (POM-001) per a la columna CODI de la taula,
+    # i categoria global (Upper body, Sleeve, ...) per filtrar regles per
+    # grup de peça al frontend.
+    pom_code_global = serializers.SerializerMethodField()
+    pom_categoria = serializers.SerializerMethodField()
     talla_base_etiqueta = serializers.CharField(source='talla_base.etiqueta', read_only=True)
 
     def get_pom_nom_en(self, obj):
@@ -83,11 +88,22 @@ class GradingRuleSerializer(serializers.ModelSerializer):
             return obj.pom.pom_global.abbreviation
         return obj.pom.codi_client if obj.pom else None
 
+    def get_pom_code_global(self, obj):
+        if obj.pom and obj.pom.pom_global:
+            return obj.pom.pom_global.codi
+        return None
+
+    def get_pom_categoria(self, obj):
+        if obj.pom and obj.pom.pom_global:
+            return obj.pom.pom_global.categoria
+        return None
+
     class Meta:
         model = GradingRule
         fields = (
             'id', 'rule_set', 'pom', 'pom_codi', 'pom_nom',
             'pom_nom_en', 'pom_nom_ca', 'pom_abbreviation',
+            'pom_code_global', 'pom_categoria',
             'talla_base', 'talla_base_etiqueta',
             'logica', 'valor_base', 'increment', 'valors_step', 'actiu',
         )

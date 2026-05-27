@@ -50,6 +50,19 @@ const GARMENT_GROUPS = [
   { codi: 'ACCESSORIES', nom_en: 'Accessories', nom_ca: 'Complements' },
 ]
 
+// S16-B fix: mapping grup → categories POM rellevants. La taula de regles
+// filtra els POMs pel grup seleccionat, mostrant només els que pertanyen a
+// alguna d'aquestes categories (POMGlobal.categoria és un CharField string).
+const GROUP_POM_CATEGORIES = {
+  TOPS:        ['Upper body', 'Sleeve', 'Collar / Neckline', 'Hem / Finish', 'Knitwear-specific', 'Closure / Detail'],
+  BOTTOMS:     ['Lower body', 'Waistband', 'Rise', 'Hem / Finish', 'Closure / Detail'],
+  DRESSES:     ['Upper body', 'Sleeve', 'Collar / Neckline', 'Skirt / Dress', 'Hem / Finish', 'Closure / Detail'],
+  OUTERWEAR:   ['Upper body', 'Sleeve', 'Collar / Neckline', 'Jacket / Coat', 'Hem / Finish', 'Closure / Detail'],
+  UNDERWEAR:   ['Upper body', 'Swimwear-specific', 'Rise', 'Hem / Finish'],
+  SWIMWEAR:    ['Upper body', 'Swimwear-specific', 'Rise', 'Closure / Detail'],
+  ACCESSORIES: ['Placement', 'Closure / Detail'],
+}
+
 const LOGICA_COLORS = {
   LINEAR:  { bg: '#eef4fc', color: '#2a5a8a', label: 'LINEAR' },
   FIXED:   { bg: '#f5f0ea', color: '#868685', label: 'FIXED' },
@@ -349,6 +362,7 @@ export default function GradingRuleSets() {
               rs={rs}
               lang={lang}
               authHeaders={authHeaders}
+              garmentGroup={selectedGarmentGroup}
               onClone={() => {
                 setEditTarget({
                   ...rs, id: null,
@@ -484,7 +498,7 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
 }
 
 // ── RuleSetCard ─────────────────────────────────────────────────────────────
-function RuleSetCard({ rs, lang = 'ca', authHeaders, onClone, onEdit, onDelete }) {
+function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEdit, onDelete }) {
   // S16-B: plegat per defecte (l'usuari ja arriba aquí amb 4 filtres aplicats
   // i la fitxa és un punt focal, no la llista navegacional anterior).
   const [expanded, setExpanded] = useState(false)
@@ -493,9 +507,17 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, onClone, onEdit, onDelete }
   const [localRules, setLocalRules] = useState(rs.regles || [])
   useEffect(() => { setLocalRules(rs.regles || []) }, [rs.regles])
 
+  // S16-B fix: filtra regles per categories POM rellevants al grup seleccionat.
+  // Si no hi ha grup o no hi ha mapping, mostra totes.
+  const relevantCategories = garmentGroup ? GROUP_POM_CATEGORIES[garmentGroup] : null
+  const visibleRules = relevantCategories
+    ? localRules.filter(r => !r.pom_categoria || relevantCategories.includes(r.pom_categoria))
+    : localRules
+
   const editable = !rs.is_system_default
-  const reglesCount = localRules.length
-  const aboveXlCount = localRules.filter(r => r.valors_step?.above_xl != null).length
+  const reglesCount = visibleRules.length
+  const totalRulesCount = localRules.length
+  const aboveXlCount = visibleRules.filter(r => r.valors_step?.above_xl != null).length
 
   const updateLocalRule = (id, patch) => {
     setLocalRules(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
@@ -611,7 +633,11 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, onClone, onEdit, onDelete }
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <Pill bg="#eef4fc" color="#2a5a8a">{reglesCount} regles</Pill>
+          <Pill bg="#eef4fc" color="#2a5a8a">
+            {relevantCategories && reglesCount !== totalRulesCount
+              ? `${reglesCount}/${totalRulesCount} regles`
+              : `${reglesCount} regles`}
+          </Pill>
           {aboveXlCount > 0 && <Pill bg="#fdf6ee" color="#c27a2a">{aboveXlCount} Δ&gt;XL</Pill>}
           <Pill
             bg={rs.is_system_default ? '#f5f0ea' : '#f0f9f0'}
@@ -629,7 +655,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, onClone, onEdit, onDelete }
       </div>
 
       {/* Taula */}
-      {expanded && localRules.length > 0 && (
+      {expanded && visibleRules.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
             <thead>
@@ -647,18 +673,31 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, onClone, onEdit, onDelete }
               </tr>
             </thead>
             <tbody>
-              {localRules.map((r, i) => {
+              {visibleRules.map((r, i) => {
                 const logica = LOGICA_COLORS[r.logica] || LOGICA_COLORS.FIXED
                 const aboveXl = r.valors_step?.above_xl
                 const isKey = r.increment > 0 && r.logica === 'LINEAR'
                 return (
                   <tr key={r.id} style={{ background: i % 2 === 0 ? '#fff' : '#fafaf8' }}>
+                    {/* CODI: codi global (POM-001) gris petit a sobre,
+                        abreviatura (CH) daurada més gran a sota. */}
                     <td style={{
                       padding: '7px 12px',
                       fontFamily: 'IBM Plex Mono, monospace',
-                      fontSize: 11, color: '#c27a2a',
                       borderBottom: '0.5px solid #f0eee9',
-                    }}>{r.pom_abbreviation || r.pom_codi}</td>
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {r.pom_code_global && (
+                        <div style={{
+                          fontSize: 9, color: '#868685',
+                          lineHeight: 1.1, letterSpacing: '.02em',
+                        }}>{r.pom_code_global}</div>
+                      )}
+                      <div style={{
+                        fontSize: 12, color: '#c27a2a', fontWeight: 600,
+                        lineHeight: 1.15,
+                      }}>{r.pom_abbreviation || r.pom_codi}</div>
+                    </td>
                     <td style={{
                       padding: '7px 12px', color: '#1d1d1b',
                       borderBottom: '0.5px solid #f0eee9',
@@ -745,9 +784,11 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, onClone, onEdit, onDelete }
         </div>
       )}
 
-      {expanded && localRules.length === 0 && (
+      {expanded && visibleRules.length === 0 && (
         <div style={{ padding: '1.5rem', textAlign: 'center', color: '#bbb', fontSize: 12 }}>
-          Cap regla definida per a aquest RuleSet.
+          {localRules.length === 0
+            ? 'Cap regla definida per a aquest RuleSet.'
+            : `Cap regla rellevant per a ${garmentGroup} (${localRules.length} amagades).`}
         </div>
       )}
     </div>
