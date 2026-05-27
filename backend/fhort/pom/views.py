@@ -109,6 +109,15 @@ class GradingRuleSetViewSet(viewsets.ModelViewSet):
     search_fields = ['nom']
     ordering = ['nom']
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.is_system_default:
+            return Response(
+                {'error': 'No es pot esborrar un RuleSet de sistema.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().destroy(request, *args, **kwargs)
+
 
 class GradingRuleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]

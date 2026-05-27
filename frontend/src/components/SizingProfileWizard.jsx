@@ -261,15 +261,25 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
                 background: isSelected ? "#fdf6ee" : "#fff", cursor:"pointer",
               }} onClick={() => setSelProfile(p)}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:isSelected?10:0 }}>
-                  <div>
-                    <span style={{ fontSize:13, fontWeight:600, color: isSelected?"#c27a2a":"#1d1d1b" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color: isSelected?"#c27a2a":"#1d1d1b" }}>
                       {p.size_system?.nom}
-                    </span>
-                    <span style={{ fontSize:10, color:"#868685", marginLeft:8 }}>
-                      {p.fit_type_nom}
-                    </span>
+                    </div>
+                    {/* Fix 2 (S15) — subtítol per distingir profiles que comparteixen
+                        size_system: combinació target · construction · fit_type. */}
+                    <div style={{
+                      fontSize:10, color: isSelected?"#a06622":"#868685",
+                      marginTop:3, fontFamily:"IBM Plex Mono, monospace",
+                      letterSpacing:".02em",
+                    }}>
+                      {[
+                        p.target?.nom_en || p.target?.codi,
+                        p.construction?.nom_en || p.construction?.codi,
+                        p.fit_type_nom,
+                      ].filter(Boolean).join(" · ")}
+                    </div>
                   </div>
-                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink: 0 }}>
                     {p.is_custom
                       ? <span style={{ fontSize:9, padding:"1px 6px", borderRadius:3, background:"#f5e6d0", color:"#c27a2a", border:"1px solid #e0c8a0" }}>Custom</span>
                       : <span style={{ fontSize:9, padding:"1px 6px", borderRadius:3, background:"#f0f9f0", color:"#3b6d11", border:"1px solid #c0dd97" }}>ISO</span>

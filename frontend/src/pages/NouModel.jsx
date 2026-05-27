@@ -68,6 +68,25 @@ export default function NouModel() {
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  // Fix 1 (S15) — quan canvia garment_type, omple garment_group automàticament
+  // a partir del camp `grup` del GarmentType seleccionat.
+  // La dada ja està a gTypes (carregat al mount), evitant una crida extra a
+  // /api/v1/garment-types/<id>/. gGroups es mapeja per codi → id.
+  const handleGarmentTypeChange = (gtId) => {
+    setForm(f => {
+      const gt = gTypes.find(g => String(g.id) === String(gtId))
+      const grupCodi = gt?.grup || ''
+      const group = grupCodi
+        ? gGroups.find(g => g.codi === grupCodi)
+        : null
+      return {
+        ...f,
+        garment_type: gtId,
+        garment_group: group ? group.id : f.garment_group,
+      }
+    })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
@@ -252,7 +271,7 @@ export default function NouModel() {
         {activeTab === 'mesures' && (
           <Grid>
             <Field label={t('model.fields.garment_type') + ' *'}>
-              <Select value={form.garment_type} onChange={v => setField('garment_type', v)}
+              <Select value={form.garment_type} onChange={v => handleGarmentTypeChange(v)}
                 options={[{ value: '', label: '—' }, ...gTypes.map(g => ({ value: g.id, label: g.nom_client || g.codi_client }))]} />
             </Field>
             <Field label={t('model.fields.garment_group')}>
