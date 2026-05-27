@@ -116,7 +116,10 @@ export default function ImportWizard() {
     grading_rule_set_id: sizingResult?.grading_rule_set_id,
     grading_rule_set_nom:sizingResult?.grading_rule_set_nom,
     base_size_label:     sizingResult?.base_size_label,
-    size_run_model:      sizingResult?.size_run_model,
+    // size_run: el backend (create-from-extraction) llegeix aquesta clau.
+    // size_run_model: NouModel.jsx la consumeix amb el sufix _model.
+    size_run:            sizingResult?.size_run_model || '',
+    size_run_model:      sizingResult?.size_run_model || '',
     construction_codi:   sizingResult?.construction_codi,
   }
 
@@ -370,26 +373,6 @@ export default function ImportWizard() {
             </div>
           )}
 
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
-            <button onClick={() => setStep(3)} style={navBtnStyle}>← Enrere</button>
-            <button
-              onClick={handleAnalyze}
-              disabled={!file || loading}
-              style={{
-                padding: "10px 18px",
-                background: 'var(--gold)',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: 4, fontSize: 12,
-                fontFamily: "IBM Plex Mono, monospace",
-                fontWeight: 600,
-                cursor: file && !loading ? "pointer" : "not-allowed",
-                opacity: file && !loading ? 1 : 0.5,
-              }}
-            >
-              ⚡ Analitzar amb IA
-            </button>
-          </div>
         </div>
       )}
 
@@ -424,6 +407,55 @@ export default function ImportWizard() {
           </div>
         </div>
       )}
+
+      {/* PAS 4 footer unificat — sempre visible, "Continuar" disabled
+          fins que result existeix i loading sigui false ───────────────── */}
+      {step === 4 && (() => {
+        const continuarDisabled = !result || loading
+        return (
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+            <button onClick={() => setStep(3)} style={navBtnStyle}>← Enrere</button>
+            <div style={{ display: "flex", gap: 8 }}>
+              {!result && (
+                <button
+                  onClick={handleAnalyze}
+                  disabled={!file || loading}
+                  style={{
+                    padding: "10px 18px",
+                    background: 'var(--gold)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: 4, fontSize: 12,
+                    fontFamily: "IBM Plex Mono, monospace",
+                    fontWeight: 600,
+                    cursor: file && !loading ? "pointer" : "not-allowed",
+                    opacity: file && !loading ? 1 : 0.5,
+                  }}
+                >
+                  ⚡ Analitzar amb IA
+                </button>
+              )}
+              <button
+                onClick={handleProceedToNouModel}
+                disabled={continuarDisabled}
+                style={{
+                  padding: "10px 18px",
+                  background: 'var(--gold)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: 4, fontSize: 12,
+                  fontFamily: "IBM Plex Mono, monospace",
+                  fontWeight: 600,
+                  cursor: continuarDisabled ? "not-allowed" : "pointer",
+                  opacity: continuarDisabled ? 0.5 : 1,
+                }}
+              >
+                Continuar → Crear model
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
     </div>
   )
