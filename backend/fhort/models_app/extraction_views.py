@@ -185,12 +185,40 @@ def create_from_extraction_view(request):
                 garment_type=gt,
             )
 
-            # Fix B — Match POMMaster amb prioritats: codi exacte, descripció,
-            # nom_en del POMGlobal, abbreviation.
+            # Fix B — Match POMMaster amb prioritats: codi exacte, root-code
+            # (codis posicionals tipus D1/G2s/Y5 → arrel D/G/Y), descripció,
+            # sinònims explícits, nom_en del POMGlobal, abbreviation.
+            SYNONYMS = {
+                'waist position': 'waist position',
+                'hip position': 'hip position',
+                'front body length': 'body length',
+                'straight back body length': 'body length cb',
+                'side length': 'side seam',
+                'front armhole curve': 'armhole curve',
+                'neckline width': 'neck width',
+                'collar height': 'collar height',
+                'collar width': 'collar width',
+                'bottom width': 'skirt sweep',
+                'body zip length': 'zip length',
+                'lining length at center front': 'lining length',
+                'lining length at center back': 'lining length',
+                'lining bottom width along hem': 'lining hem width',
+            }
+
             def find_pom_master(code, description):
                 pm = POMMaster.objects.filter(codi_client__iexact=code).first()
                 if pm:
                     return pm, 'exact_code'
+
+                # Estratègia 0 — codis posicionals lletra+dígit (D1, G2s, Y5, F1...).
+                # Extreu lletra(es) arrel inicial i busca codi_client exacte.
+                if code:
+                    m = _re.match(r'^([A-Za-z]+)\d', code)
+                    if m:
+                        root = m.group(1)
+                        pm = POMMaster.objects.filter(codi_client__iexact=root).first()
+                        if pm:
+                            return pm, 'root_code_match'
 
                 if not description:
                     return None, 'no_match'
@@ -202,6 +230,21 @@ def create_from_extraction_view(request):
                     nom = (pm.nom_client or '').lower()
                     if desc_base and (desc_base in nom or nom in desc_base):
                         return pm, 'description_match'
+
+                # Sinònim explícit: tradueix la descripció IA a la nostra nomenclatura
+                # i torna a provar contra nom_client i nom_en.
+                syn = SYNONYMS.get(desc_base)
+                if syn:
+                    for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
+                        nom = (pm.nom_client or '').lower()
+                        if syn in nom or nom in syn:
+                            return pm, 'synonym_match'
+                    for pm in POMMaster.objects.select_related('pom_global').filter(
+                        pom_global__isnull=False, actiu=True
+                    ):
+                        nom_en = (pm.pom_global.nom_en or '').lower()
+                        if syn in nom_en or nom_en in syn:
+                            return pm, 'synonym_global_match'
 
                 for pm in POMMaster.objects.select_related('pom_global').filter(
                     pom_global__isnull=False, actiu=True

@@ -310,6 +310,11 @@ def base_measurements_view(request, model_id):
             'categoria_nom': bm.pom.categoria.nom_ca if bm.pom.categoria_id else '',
             'base_value_cm': bm.base_value_cm,
             'notes': bm.notes or '',
+            'nom_fitxa': bm.nom_fitxa or '',
+            'origen': bm.origen or '',
+            'pom_abbreviation': bm.pom.pom_global.abbreviation if bm.pom.pom_global_id else '',
+            'pom_code_global': bm.pom.pom_global.codi if bm.pom.pom_global_id else '',
+            'pom_is_key': bool(bm.pom.pom_global.is_key) if bm.pom.pom_global_id else False,
         } for bm in bms]
 
         return Response({'count': len(data), 'results': data})

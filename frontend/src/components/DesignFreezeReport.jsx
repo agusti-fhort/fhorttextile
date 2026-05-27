@@ -185,7 +185,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
             color: '#4a9a4a', border: '1px solid #2a4a2a', borderRadius: 4,
             fontSize: 11, cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace',
           }}>
-            ✓ Crear model
+            Continuar →
           </button>
         )}
       </div>
