@@ -7,16 +7,6 @@ import { SizeSetDetail } from "../components/SizeSetDetail"
 
 const API = import.meta.env.VITE_API_URL || ""
 
-// Icones de text per a cada target
-const TARGET_ICONS = {
-  WOMAN: "♀", MAN: "♂", UNISEX_ADULT: "◎",
-  BABY_GIRL: "♀°", BABY_BOY: "♂°", BABY_UNISEX: "◉",
-  TODDLER_GIRL: "♀¹", TODDLER_BOY: "♂¹",
-  GIRL: "♀²", BOY: "♂²",
-  TEEN_GIRL: "♀³", TEEN_BOY: "♂³",
-  MATERNITY: "♀♥",
-}
-
 const TARGET_ORDER = [
   "WOMAN","MAN","UNISEX_ADULT",
   "BABY_GIRL","BABY_BOY","BABY_UNISEX",
@@ -182,16 +172,15 @@ export default function SizeLibrary() {
                     setDetailProfileId(null)
                   }}
                   style={{
-                    padding: "8px 14px", borderRadius: 6, cursor: "pointer",
+                    padding: "10px 14px", borderRadius: 6, cursor: "pointer",
                     background: selectedTarget === t.codi ? "#f5e6d0" : "#fff",
                     color: selectedTarget === t.codi ? "#c27a2a" : "#1d1d1b",
                     border: `1px solid ${selectedTarget === t.codi ? "#c27a2a" : "#e0d5c5"}`,
                     fontFamily: "IBM Plex Mono, monospace", fontSize: 12,
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                    minWidth: 80,
+                    minWidth: 90,
                   }}
                 >
-                  <span style={{ fontSize: 16 }}>{TARGET_ICONS[t.codi] || "◆"}</span>
                   <span style={{ fontWeight: selectedTarget === t.codi ? 600 : 400 }}>{t.nom_en}</span>
                   <span style={{ fontSize: 9, color: selectedTarget === t.codi ? "#c27a2a" : "#868685" }}>{t.nom_cat}</span>
                 </button>

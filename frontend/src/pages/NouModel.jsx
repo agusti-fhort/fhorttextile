@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { models, garmentTypes, garmentGroups } from '../api/endpoints'
 import { SizingProfileWizard } from '../components/SizingProfileWizard'
+import POMBrowser from '../components/POMBrowser/POMBrowser'
 
 const TAB_KEYS = ['model', 'mesures', 'fitting', 'fitxers', 'servei', 'control']
 const TABS_DISABLED_ON_CREATE = new Set(['fitting', 'fitxers', 'servei', 'control'])
@@ -48,6 +49,9 @@ export default function NouModel() {
     base_size_label: '',
     size_run_model: '',
     grading_rule_set: '',
+    // TODO(backend): persistir els POMs assignats al Model
+    // (cal endpoint/camp al backend; per ara només UI a la wizard).
+    selected_pom_codes: [],
   })
 
   const [gTypes, setGTypes] = useState([])
@@ -312,6 +316,40 @@ export default function NouModel() {
                     <i className="ti ti-edit" style={{fontSize: 14}} />
                     Canviar
                   </button>
+                </div>
+              )}
+            </Field>
+
+            <Field label="Punts de mesura (POMs)" span={2} hint={form.garment_type ? `${(form.selected_pom_codes || []).length} POMs assignats` : 'Selecciona primer un tipus de prenda'}>
+              {form.garment_type ? (
+                <div style={{
+                  height: '60vh',
+                  border: '0.5px solid #e4e4e2', borderRadius: 8,
+                  overflow: 'hidden', background: 'var(--white)',
+                }}>
+                  <POMBrowser
+                    mode="assign"
+                    garmentTypeCode={form.garment_type}
+                    activePoms={form.selected_pom_codes || []}
+                    onTogglePom={(pomCode) => {
+                      setForm(f => {
+                        const current = f.selected_pom_codes || []
+                        const updated = current.includes(pomCode)
+                          ? current.filter(c => c !== pomCode)
+                          : [...current, pomCode]
+                        return { ...f, selected_pom_codes: updated }
+                      })
+                    }}
+                  />
+                </div>
+              ) : (
+                <div style={{
+                  padding: '1rem 1.2rem',
+                  border: '0.5px dashed #e4e4e2', borderRadius: 8,
+                  fontSize: 12, color: 'var(--gray)',
+                  background: 'var(--white)',
+                }}>
+                  Selecciona un tipus de prenda per assignar POMs al model.
                 </div>
               )}
             </Field>

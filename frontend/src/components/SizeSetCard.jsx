@@ -102,7 +102,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
             background: "#f5e6d0", color: "#c27a2a", border: "1px solid #c27a2a",
             cursor: "pointer", fontFamily: "IBM Plex Mono, monospace",
           }}>
-            ✓ Usar
+            Usar
           </button>
         )}
         {onDetail && (
@@ -120,7 +120,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
             background: "#fff", color: "#868685", border: "1px solid #e0d5c5",
             cursor: "pointer", fontFamily: "IBM Plex Mono, monospace",
           }}>
-            {cloning ? "..." : "⎘ Clonar"}
+            {cloning ? "..." : "Clonar"}
           </button>
         )}
       </div>
