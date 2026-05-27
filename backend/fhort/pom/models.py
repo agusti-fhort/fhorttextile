@@ -83,10 +83,15 @@ class GarmentTypeGlobal(models.Model):
     nom_es = models.CharField(max_length=200)
     grup = models.CharField(max_length=40)
     actiu = models.BooleanField(default=True)
+    # Sprint S13-A
+    is_system = models.BooleanField(default=True,
+        help_text="True = catàleg canònic, no esborrable")
+    display_order = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name = 'Tipus garment global'
         verbose_name_plural = 'Tipus garment globals'
+        ordering = ['grup', 'display_order', 'codi']
 
     def __str__(self):
         return f'{self.codi} · {self.nom_en}'
@@ -346,7 +351,12 @@ class GarmentType(models.Model):
     grup = models.CharField(max_length=40)
     actiu = models.BooleanField(default=True)
 
-
+    # Sprint S13-A — multiidioma + system flag
+    nom_en = models.CharField(max_length=200, blank=True, default='')
+    nom_ca = models.CharField(max_length=200, blank=True, default='')
+    nom_es = models.CharField(max_length=200, blank=True, default='')
+    is_system = models.BooleanField(default=False,
+        help_text="True = ve del catàleg global canònic, no esborrable")
 
     # Sprint S1 — target i construccio
     targets_recomanats = models.ManyToManyField(
