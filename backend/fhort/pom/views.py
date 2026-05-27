@@ -1,11 +1,13 @@
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
     GarmentGroup,
+    GarmentPOMMap,
     GarmentType,
     GradingRule,
     GradingRuleSet,
@@ -16,6 +18,7 @@ from .models import (
 )
 from .serializers import (
     GarmentGroupSerializer,
+    GarmentPOMMapSerializer,
     GarmentTypeSerializer,
     GradingRuleSerializer,
     GradingRuleSetSerializer,
@@ -122,6 +125,52 @@ class GradingRuleSetViewSet(viewsets.ModelViewSet):
 class GradingRuleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = GradingRuleSerializer
-    queryset = GradingRule.objects.select_related('rule_set', 'pom', 'talla_base').all()
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['rule_set', 'pom', 'logica', 'actiu']
+    queryset = GradingRule.objects.select_related(
+        'pom__pom_global', 'talla_base', 'rule_set'
+    ).all()
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['rule_set', 'actiu', 'logica']
+    search_fields = ['pom__codi_client', 'pom__nom_client']
+    ordering = ['rule_set', 'pom__codi_client']
+
+    def destroy(self, request, *args, **kwargs):
+        """No esborrem físicament — marquem inactiu."""
+        instance = self.get_object()
+        instance.actiu = False
+        instance.save(update_fields=['actiu'])
+        return Response(
+            {'status': 'inactiu', 'id': instance.id},
+            status=status.HTTP_200_OK
+        )
+
+    def perform_update(self, serializer):
+        # Protegir regles de RuleSets de sistema: cal clonar abans de modificar.
+        instance = serializer.instance
+        if instance.rule_set.is_system_default:
+            raise PermissionDenied(
+                'Les regles de RuleSets de sistema no es poden modificar. '
+                'Clona el RuleSet primer.'
+            )
+        serializer.save()
+
+
+class GarmentPOMMapViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = GarmentPOMMapSerializer
+    queryset = (
+        GarmentPOMMap.objects
+        .select_related('garment_type', 'pom', 'pom__pom_global')
+        .all()
+    )
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    # Suporta filtre per FK id (`?garment_type=<id>`) i per codi_client
+    # (`?garment_type_codi_client=<codi>` o `?garment_type__codi_client=<codi>`).
+    filterset_fields = {
+        'garment_type': ['exact'],
+        'garment_type__codi_client': ['exact'],
+        'pom': ['exact'],
+        'is_key': ['exact'],
+        'obligatori': ['exact'],
+    }
+    ordering_fields = ['ordre', 'id']
+    ordering = ['garment_type', 'ordre']

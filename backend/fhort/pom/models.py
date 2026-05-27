@@ -410,10 +410,20 @@ class GradingRuleSet(models.Model):
 
 
     # Sprint S1 — target, construccio, versioning
+    # Sprint S16-A — `target` FK conservada temporalment (related_name renomenat
+    # a *_legacy). El nou `targets` M2M és la font autoritativa; la FK s'eliminarà
+    # en un sprint posterior un cop el codi consumidor estigui actualitzat.
     target = models.ForeignKey(
         'Target', null=True, blank=True,
         on_delete=models.SET_NULL,
+        related_name='grading_rule_sets_legacy',
+    )
+    targets = models.ManyToManyField(
+        'Target',
+        blank=True,
         related_name='grading_rule_sets',
+        verbose_name='Targets aplicables',
+        help_text='Un RuleSet pot aplicar a múltiples targets (ex: BABY_GIRL+BABY_BOY+BABY_UNISEX).',
     )
     construction = models.ForeignKey(
         'ConstructionType', null=True, blank=True,
@@ -464,8 +474,9 @@ class GradingRule(models.Model):
     pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='regles_grading')
     talla_base = models.ForeignKey(SizeDefinition, on_delete=models.PROTECT, related_name='regles_base')
     logica = models.CharField(max_length=20, choices=LOGICA_CHOICES)
-    valor_base = models.DecimalField(max_digits=10, decimal_places=4)
-    increment = models.DecimalField(max_digits=10, decimal_places=4, default=0)
+    # Sprint S16-A — decimals 4 → 2 (precisió real per mesures de roba en cm)
+    valor_base = models.DecimalField(max_digits=7, decimal_places=2, default=0)
+    increment = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     valors_step = models.JSONField(null=True, blank=True)
     actiu = models.BooleanField(default=True)
 
