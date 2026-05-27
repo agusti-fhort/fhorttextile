@@ -10,6 +10,7 @@ import { TallaBaseWizard } from "../components/TallaBaseWizard"
 import { DesignFreezePanel } from "../components/DesignFreezePanel"
 import { SizingProfileWizard } from "../components/SizingProfileWizard"
 import { ExportModelPDF } from "../components/ExportButton"
+import MeasurementTable from "../components/MeasurementTable/MeasurementTable"
 
 const API = import.meta.env.VITE_API_URL || ""
 const TABS = ["Model", "Mesures", "Size & Fitting", "Fitxers", "Servei", "Control"]
@@ -301,6 +302,15 @@ function TabMesures({ model, token, onSave }) {
           </button>
         </div>
       )}
+
+      <Section title="Taula de mesures">
+        <MeasurementTable
+          modelId={model?.id}
+          sizeRun={(model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean)}
+          baseSize={model?.base_size_label || ''}
+          readOnly={model?.estat === 'Tancat' || model?.estat === 'Closed'}
+        />
+      </Section>
     </div>
   )
 }

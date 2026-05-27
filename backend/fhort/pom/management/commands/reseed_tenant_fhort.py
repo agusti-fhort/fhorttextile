@@ -20,6 +20,7 @@ from django_tenants.utils import schema_context
 
 
 EXCEL_PATH = '/root/fhort-sessions/FHORT_Master_Data_Reference_v2.xlsx'
+GRADING_EXCEL_PATH = '/root/fhort-sessions/FHORT_GradingRules_Dataset_v1.xlsx'
 
 
 def _find_header(rows, key='id', second=None):
@@ -63,15 +64,21 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--tenant', default='fhort')
-        parser.add_argument('--excel', default=EXCEL_PATH)
+        parser.add_argument('--excel', default=EXCEL_PATH,
+                            help='Excel mestre (POMs, GarmentPOMMap, SizingProfiles)')
+        parser.add_argument('--grading-excel', default=GRADING_EXCEL_PATH,
+                            help='Excel ampliat de GradingRuleSets + GradingRules (S14-A)')
 
     def handle(self, *args, **opts):
         tenant = opts['tenant']
         excel_path = opts['excel']
+        grading_excel_path = opts['grading_excel']
 
-        # ── Carregar Excel ──────────────────────────────────────────────
-        self.stdout.write(self.style.WARNING(f'Carregant Excel: {excel_path}'))
+        # ── Carregar Excels ─────────────────────────────────────────────
+        self.stdout.write(self.style.WARNING(f'Carregant Excel mestre: {excel_path}'))
         wb = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
+        self.stdout.write(self.style.WARNING(f'Carregant Excel grading: {grading_excel_path}'))
+        wb_grad = openpyxl.load_workbook(grading_excel_path, read_only=True, data_only=True)
 
         # ── Garment_POM_Map ─────────────────────────────────────────────
         ws = wb['Garment_POM_Map']
@@ -92,41 +99,58 @@ class Command(BaseCommand):
                 'obligatori': _str(r[6]).upper() == 'TRUE',
             })
 
-        # ── Grading_RuleSets ────────────────────────────────────────────
-        ws = wb['Grading_RuleSets']
+        # ── GradingRuleSets (NOU dataset v1, 18 RuleSets) ───────────────
+        # Capçalera a fila idx 1: codi_sistema, nom_en, nom_ca, target,
+        # construction, fit_type, base_size, grade_increment_ref,
+        # is_system_default, norma_ref, notes
+        # Camps norma_ref/notes ignorats: el model GradingRuleSet no els té.
+        ws = wb_grad['GradingRuleSets']
         rows = list(ws.iter_rows(values_only=True))
-        h = _find_header(rows, 'id')
+        h = _find_header(rows, 'codi_sistema')
+        assert h is not None, 'No s\'ha trobat capçalera de GradingRuleSets'
         rs_data = []
         for r in rows[h+1:]:
-            if not r or not r[0] or not _str(r[0]).isdigit():
+            if not r or not r[0]:
+                continue
+            codi = _str(r[0])
+            # Línies de secció/títol començarien per text descriptiu; les
+            # files de dades són identificades pel codi_sistema (no buit)
+            # i un nom_en a la cel·la r[1].
+            if not _str(r[1]):
                 continue
             rs_data.append({
-                'codi_sistema': _str(r[1]),
-                'nom_en': _str(r[2]),
-                'nom_ca': _str(r[3]),
-                'target': _str(r[4]),
-                'construction': _str(r[5]),
-                'fit_type': _str(r[6]),
-                'base_size': _str(r[7]),
-                'is_system_default': _parse_bool(r[9]),
+                'codi_sistema': codi,
+                'nom_en': _str(r[1]),
+                'nom_ca': _str(r[2]),
+                'target': _str(r[3]),
+                'construction': _str(r[4]),
+                'fit_type': _str(r[5]),
+                'base_size': _str(r[6]),
+                'is_system_default': _parse_bool(r[8]),
             })
 
-        # ── Grading_Rules ───────────────────────────────────────────────
-        ws = wb['Grading_Rules']
+        # ── GradingRules (NOU dataset v1, ~618 regles + files de secció) ─
+        # Capçalera a fila idx 1: ruleset_codi, pom_code, logica,
+        # increment_cm, increment_above_xl_cm, actiu, notes_en, norma_ref
+        # Files de secció: r[1] (pom_code) és None i r[0] conté "—".
+        # Camp notes_en/norma_ref ignorats: el model GradingRule no els té.
+        ws = wb_grad['GradingRules']
         rows = list(ws.iter_rows(values_only=True))
-        h = _find_header(rows, 'id')
+        h = _find_header(rows, 'ruleset_codi')
+        assert h is not None, 'No s\'ha trobat capçalera de GradingRules'
         rules_data = []
         for r in rows[h+1:]:
-            if not r or not r[0] or not _str(r[0]).isdigit():
+            if not r or not r[0] or not r[1]:
+                # Saltar files de secció (pom_code None) i files buides.
                 continue
             rules_data.append({
-                'ruleset_codi': _str(r[1]),
-                'pom_code': _str(r[2]),
-                'logica': _str(r[4]) or 'LINEAR',
-                'increment': _to_float(r[5]),
-                'increment_above_xl': _to_float(r[6]) if r[6] not in (None, '', '—') else None,
-                'actiu': _parse_bool(r[7], default=True),
-                'notes': _str(r[8]),
+                'ruleset_codi': _str(r[0]),
+                'pom_code': _str(r[1]),
+                'logica': _str(r[2]) or 'LINEAR',
+                'increment': _to_float(r[3]),
+                'increment_above_xl': _to_float(r[4]) if r[4] not in (None, '', '—') else None,
+                'actiu': _parse_bool(r[5], default=True),
+                'notes': '',
             })
 
         # ── Sizing_Profiles ─────────────────────────────────────────────
@@ -175,10 +199,33 @@ class Command(BaseCommand):
 
             with transaction.atomic():
                 # =============================================
+                # PAS 0 · Neteja en ordre invers de dependencia
+                # (idempotència: l'ordre Pas A→D borraria POMMaster
+                # primer, però GradingRule/GarmentPOMMap el PROTECT-en
+                # després d'una primera execució)
+                # =============================================
+                self.stdout.write(self.style.WARNING('Pas 0 · Neteja prèvia'))
+                from fhort.pom.models import (
+                    GradingException as _GradingException,
+                    ClientMesuraPerfil as _CMP,
+                )
+                for label, model in [
+                    ('GradingException', _GradingException),
+                    ('GradingRule', GradingRule),
+                    ('SizingProfile', SizingProfile),
+                    ('GradingRuleSet', GradingRuleSet),
+                    ('ClientMesuraPerfil', _CMP),
+                    ('GarmentPOMMap', GarmentPOMMap),
+                    ('POMMaster', POMMaster),
+                ]:
+                    n, _ = model.objects.all().delete()
+                    if n:
+                        self.stdout.write(f'  {label}: {n} esborrats')
+
+                # =============================================
                 # PAS A · POMMaster (1 per POMGlobal)
                 # =============================================
                 self.stdout.write(self.style.WARNING('\nPas A · POMMaster'))
-                POMMaster.objects.all().delete()
                 # POMCategory: agafem només les "noves" (codi == nom de categoria
                 # que coincideix amb POMGlobal.categoria string). Si hi ha
                 # duplicat (CAT-UB + Upper body), preferim la que té display_order > 0
