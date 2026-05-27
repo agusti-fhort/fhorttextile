@@ -768,6 +768,28 @@ export default function ModelDetall() {
             <EstatBadge estat={model.estat} />
             <EstatBadge estat={model.prioritat} size="xs" />
             <ExportModelPDF modelId={model.id} nomModel={model.codi_intern || model.codi} />
+            <button
+              onClick={async () => {
+                if (!confirm(`Esborrar "${model.nom_prenda}"? Aquesta acció no es pot desfer.`)) return
+                const res = await fetch(`${API}/api/v1/models/${model.id}/delete/`, {
+                  method: 'DELETE',
+                  headers: { Authorization: `Bearer ${token}` },
+                })
+                if (res.ok) {
+                  navigate('/models')
+                } else {
+                  alert(`No s'ha pogut esborrar (HTTP ${res.status})`)
+                }
+              }}
+              style={{
+                padding: '4px 10px', border: '1px solid #FADBD8',
+                borderRadius: 6, background: '#fff', color: '#C0392B',
+                cursor: 'pointer', fontSize: 11,
+                fontFamily: 'IBM Plex Mono, monospace',
+              }}
+            >
+              Esborrar model
+            </button>
           </div>
         </div>
         <div style={{ marginTop: 12 }}>

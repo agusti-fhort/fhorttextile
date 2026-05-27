@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom"
 import useAuthStore from "../store/auth"
 import { DesignFreezeReport } from "../components/DesignFreezeReport"
 import { XatExtraccio } from "../components/XatExtraccio"
+import ImportConfirmStep from "../components/ImportFromSheet/ImportConfirmStep"
 
 const API = import.meta.env.VITE_API_URL || ""
 
@@ -126,14 +127,20 @@ export default function UploadModelWizard() {
     setLoadingMsg("")
   }
 
-  const handleConfirm = async (extracted) => {
+  // Pas 2 → 3: la confirmació del DesignFreeze ja no crea el model, només
+  // obre el formulari editable d'ImportConfirmStep al pas 3.
+  const handleConfirm = () => {
+    setError(null)
+    setStep(3)
+  }
+
+  const handleCreateModel = async (overrides) => {
     if (!token) {
       setError("Sessió no autenticada — torna a iniciar sessió.")
       navigate("/login")
       return
     }
     setLoading(true)
-    setStep(3)
     setLoadingMsg("Creant model...")
     try {
       const r = await fetch(`${API}/api/v1/models/create-from-extraction/`, {
@@ -142,24 +149,28 @@ export default function UploadModelWizard() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ extracted }),
+        body: JSON.stringify({
+          extracted: result?.extracted,
+          overrides,
+        }),
       })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`)
       navigate(`/models/${data.model_id}`)
     } catch (e) {
       setError(e.message)
-      setStep(2)
     }
     setLoading(false)
     setLoadingMsg("")
   }
 
   // Step 2 (Design Freeze) ocupa amplada completa per al split report+xat;
-  // la resta de steps queden estrets per llegibilitat.
+  // Step 3 (ImportConfirmStep) necessita amplada mitjana per als grids 2-col.
   const wrapperStyle = step === 2
     ? { padding: "24px", maxWidth: 1200, margin: "0 auto" }
-    : { padding: "24px", maxWidth: 640, margin: "0 auto" }
+    : step === 3
+      ? { padding: "24px", maxWidth: 880, margin: "0 auto" }
+      : { padding: "24px", maxWidth: 640, margin: "0 auto" }
 
   return (
     <div style={wrapperStyle}>
@@ -302,14 +313,14 @@ export default function UploadModelWizard() {
         </div>
       )}
 
-      {/* Step 3 — Creant */}
-      {step === 3 && loading && (
-        <div style={{ textAlign: "center", padding: "40px 0" }}>
-          <div style={{ fontSize: 32, marginBottom: 16 }}>⚙</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: "IBM Plex Mono, monospace" }}>
-            {loadingMsg}
-          </div>
-        </div>
+      {/* Step 3 — Confirmar (formulari editable + creació de model) */}
+      {step === 3 && result && (
+        <ImportConfirmStep
+          extracted={result?.extracted}
+          onConfirm={handleCreateModel}
+          onBack={() => setStep(2)}
+          loading={loading}
+        />
       )}
     </div>
   )

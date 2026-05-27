@@ -46,6 +46,20 @@ export default function Models() {
       .catch(() => setLoading(false))
   }, [token, cerca, filtreFase, filtreEstat])
 
+  const handleDeleteModel = async (modelId, nomPrenda) => {
+    if (!confirm(`Esborrar "${nomPrenda}"? Aquesta acció no es pot desfer.`)) return
+    const res = await fetch(`${API}/api/v1/models/${modelId}/delete/`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) {
+      setModels(prev => prev.filter(m => m.id !== modelId))
+      setTotal(t => Math.max(0, t - 1))
+    } else {
+      alert(`No s'ha pogut esborrar (HTTP ${res.status})`)
+    }
+  }
+
   return (
     <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
       {/* Header */}
@@ -154,6 +168,18 @@ export default function Models() {
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
                   <EstatBadge estat={m.prioritat} size="xs" />
                   <EstatBadge estat={m.estat} size="xs" />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteModel(m.id, m.nom_prenda) }}
+                    title="Esborrar model"
+                    style={{
+                      fontSize: 10, color: "#C0392B", background: "none",
+                      border: "1px solid #FADBD8", borderRadius: 4,
+                      padding: "2px 8px", cursor: "pointer",
+                      fontFamily: "IBM Plex Mono, monospace",
+                    }}
+                  >
+                    Esborrar
+                  </button>
                 </div>
               </div>
               {m.fase_actual && (
