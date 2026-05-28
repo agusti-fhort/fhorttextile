@@ -22,6 +22,7 @@ export default function ModelMesures() {
 
   // Manual
   const [pomsSuggerits, setPomsSuggerits] = useState([])
+  const [selectedPomIds, setSelectedPomIds] = useState([])
 
   // Import
   const [importFile, setImportFile] = useState(null)
@@ -31,6 +32,7 @@ export default function ModelMesures() {
   // Taula final
   const [taulaRows, setTaulaRows] = useState([])
   const [saving, setSaving] = useState(false)
+  const [generatingGrading, setGeneratingGrading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -40,9 +42,38 @@ export default function ModelMesures() {
       fetch(`${API}/api/v1/models/${id}/poms-suggerits/`, { headers: authHeaders }).then(r => r.json()),
     ]).then(([modelData, pomsData]) => {
       setModel(modelData)
-      setPomsSuggerits(pomsData.poms || [])
+      const poms = pomsData.poms || []
+      setPomsSuggerits(poms)
+      setSelectedPomIds(prev => prev.length > 0 ? prev : poms.filter(p => p.is_key).map(p => p.pom_id))
     }).catch(() => setError('Error carregant les dades'))
   }, [id])
+
+  const togglePom = (pom) => {
+    setSelectedPomIds(prev =>
+      prev.includes(pom.pom_id)
+        ? prev.filter(id => id !== pom.pom_id)
+        : [...prev, pom.pom_id]
+    )
+  }
+
+  const handleGenerarGrading = async () => {
+    setGeneratingGrading(true); setError('')
+    try {
+      const r = await fetch(`${API}/api/v1/models/${id}/generar-grading/`, {
+        method: 'POST', headers: authHeaders,
+      })
+      const d = await r.json()
+      if (r.ok) {
+        setTaulaRows(d.rows || [])
+      } else {
+        setError(d.error || 'Error generant grading')
+      }
+    } catch {
+      setError('Error de connexió')
+    } finally {
+      setGeneratingGrading(false)
+    }
+  }
 
   useEffect(() => {
     if (!id) return
@@ -176,9 +207,39 @@ export default function ModelMesures() {
         <div style={{ maxWidth: 1000, margin: '0 auto', padding: '2rem 1rem' }}>
           <ModelSummaryBar model={model} />
 
+          {taulaRows.length === 0 && pomsSuggerits.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)', marginBottom: 8 }}>
+                POMs suggerits per a aquest tipus de peça — clica per afegir a la taula:
+              </div>
+              {pomsSuggerits.filter(p => p.is_key).length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--gold)', marginRight: 6,
+                                 fontWeight: 500 }}>KEY</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    {pomsSuggerits.filter(p => p.is_key).map(p => (
+                      <POMChipSuggerit key={p.pom_id} pom={p}
+                        selected={selectedPomIds.includes(p.pom_id)}
+                        onToggle={() => togglePom(p)} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {pomsSuggerits.filter(p => !p.is_key).length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {pomsSuggerits.filter(p => !p.is_key).map(p => (
+                    <POMChipSuggerit key={p.pom_id} pom={p}
+                      selected={selectedPomIds.includes(p.pom_id)}
+                      onToggle={() => togglePom(p)} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <TaulaEditable
             rows={taulaRows.length > 0 ? taulaRows : pomsSuggerits
-              .filter(p => p.is_key)
+              .filter(p => selectedPomIds.includes(p.pom_id))
               .map((p, i) => ({
                 id: `tmp-${p.pom_id}`,
                 pom_id: p.pom_id, pom_code: p.pom_code,
@@ -192,12 +253,34 @@ export default function ModelMesures() {
             onSaved={(newRows) => setTaulaRows(newRows)}
           />
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 24 }}>
             <button type="button" onClick={() => setMode('selector')}
               style={{ padding: '8px 16px', border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
                        borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
               ← Enrere
             </button>
+            {taulaRows.length > 0 && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                {model?.grading_rule_set && (
+                  <button type="button" onClick={handleGenerarGrading} disabled={generatingGrading}
+                    style={{
+                      padding: '8px 16px', border: '0.5px solid var(--gold)',
+                      borderRadius: 6, background: 'transparent',
+                      color: 'var(--gold)', fontSize: 13, cursor: 'pointer',
+                    }}>
+                    {generatingGrading ? '⏳ Generant...' : '⚡ Generar grading automàtic'}
+                  </button>
+                )}
+                <button type="button" onClick={() => navigate(`/models/${id}/fitxers`)}
+                  style={{
+                    padding: '8px 20px', background: 'var(--gold)', color: '#fff',
+                    border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500,
+                    cursor: 'pointer',
+                  }}>
+                  Continuar → Fitxers
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -296,20 +379,51 @@ export default function ModelMesures() {
             onSaved={(newRows) => setTaulaRows(newRows)}
           />
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-            <button type="button" onClick={() => navigate(`/models/${id}`)}
+          <div style={{ display: 'flex', justifyContent: 'space-between',
+                        alignItems: 'center', marginTop: 16 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {model?.grading_rule_set && (
+                <button type="button" onClick={handleGenerarGrading} disabled={generatingGrading}
+                  style={{
+                    padding: '8px 16px', border: '0.5px solid var(--gold)',
+                    borderRadius: 6, background: 'transparent',
+                    color: 'var(--gold)', fontSize: 13, cursor: 'pointer',
+                    fontFamily: 'IBM Plex Mono, monospace',
+                  }}>
+                  {generatingGrading ? '⏳ Generant...' : '⚡ Generar grading automàtic'}
+                </button>
+              )}
+            </div>
+            <button type="button" onClick={() => navigate(`/models/${id}/fitxers`)}
               style={{
                 padding: '8px 20px', borderRadius: 6, border: 'none',
                 fontSize: 14, fontWeight: 500,
                 background: 'var(--gold)', color: '#fff', cursor: 'pointer',
                 fontFamily: 'IBM Plex Mono, monospace',
               }}>
-              Continuar a la fitxa →
+              Continuar → Fitxers i imatges
             </button>
           </div>
         </div>
       )}
     </>
+  )
+}
+
+function POMChipSuggerit({ pom, selected, onToggle }) {
+  return (
+    <button type="button" onClick={onToggle}
+      style={{
+        padding: '3px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+        border: selected
+          ? '1.5px solid var(--gold)' : '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+        background: selected ? '#fdf6ee' : 'transparent',
+        color: selected ? '#7a4a10' : 'var(--color-text-secondary, #868685)',
+        fontFamily: 'IBM Plex Mono, monospace',
+      }}>
+      <span style={{ fontFamily: 'monospace', marginRight: 4 }}>{pom.pom_code}</span>
+      {pom.nom_ca || pom.nom_en}
+    </button>
   )
 }
 

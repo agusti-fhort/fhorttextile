@@ -7,6 +7,7 @@ from .views import (
     ModelViewSet,
     analisi_ia_view,
     create_model_wizard,
+    generar_grading_view,
     next_model_ref,
     poms_suggerits_view,
     reorder_measurements_view,
@@ -89,6 +90,7 @@ urlpatterns = (
         path('models/<int:model_id>/upload-fitxer/', upload_fitxer_view),
         path('models/<int:model_id>/analisi-ia/', analisi_ia_view),
         path('models/<int:model_id>/xat-mesures/', xat_mesures_view),
+        path('models/<int:model_id>/generar-grading/', generar_grading_view),
     ]
     + _sprint6_paths
     + _sprint7_model_paths

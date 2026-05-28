@@ -21,7 +21,6 @@ export default function Models() {
   const [loading, setLoading] = useState(true)
   const [cerca, setCerca] = useState("")
   const [filtreFase, setFiltreFase] = useState("")
-  const [filtreEstat, setFiltreEstat] = useState("")
   const [filtreAny, setFiltreAny] = useState("")
   const [filtreTemporada, setFiltreTemporada] = useState("")
   const [total, setTotal] = useState(0)
@@ -31,7 +30,6 @@ export default function Models() {
     const params = new URLSearchParams()
     if (cerca) params.set("search", cerca)
     if (filtreFase) params.set("fase_actual", filtreFase)
-    if (filtreEstat) params.set("estat", filtreEstat)
     params.set("ordering", "-data_entrada")
     params.set("limit", "50")
 
@@ -46,7 +44,7 @@ export default function Models() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [token, cerca, filtreFase, filtreEstat])
+  }, [token, cerca, filtreFase])
 
   // Filtrat client-side (Any / Temporada — el backend no els suporta com a query params).
   const modelsFiltered = useMemo(() => {
@@ -83,15 +81,6 @@ export default function Models() {
             {total} models
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => navigate("/models/nou")} style={{
-            padding: "7px 16px", borderRadius: 4, fontSize: 11, cursor: "pointer",
-            background: "#f5e6d0", color: "#c27a2a", border: "1px solid #c27a2a",
-            fontFamily: "IBM Plex Mono, monospace", fontWeight: 600,
-          }}>
-            + Nou model
-          </button>
-        </div>
       </div>
 
       {/* Filtres */}
@@ -112,13 +101,6 @@ export default function Models() {
         }}>
           <option value="">Totes les fases</option>
           {FASES.map(f => <option key={f} value={f}>{f}</option>)}
-        </select>
-        <select value={filtreEstat} onChange={e => setFiltreEstat(e.target.value)} style={{
-          padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
-          fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
-        }}>
-          <option value="">Tots els estats</option>
-          {["Nou", "EnCurs", "Bloquejat", "Tancat"].map(e => <option key={e} value={e}>{e === "EnCurs" ? "En curs" : e}</option>)}
         </select>
         <select value={filtreAny} onChange={e => setFiltreAny(e.target.value)} style={{
           padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,

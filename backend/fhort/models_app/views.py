@@ -709,3 +709,89 @@ def xat_mesures_view(request, model_id):
         return Response({'error': f'Error parsing IA: {e}'}, status=500)
     except Exception as e:
         return Response({'error': f'Error: {e}'}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generar_grading_view(request, model_id):
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    if not model.grading_rule_set_id:
+        return Response({'error': 'El model no té GradingRuleSet configurat'}, status=400)
+    if not model.size_run_model or not model.base_size_label:
+        return Response({'error': 'Cal configurar talles i talla base'}, status=400)
+
+    from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
+    from fhort.pom.services import generar_graded_specs
+
+    base_measurements_qs = BaseMeasurement.objects.filter(model=model, is_active=True)
+    if not base_measurements_qs.exists():
+        return Response({'error': 'No hi ha mesures base'}, status=400)
+
+    # Obtenir o crear SizeFitting amb els camps obligatoris reals
+    sf = SizeFitting.objects.filter(model=model).first()
+    if not sf:
+        next_num = 1
+        codi = f"{model.codi_intern}-SF-{next_num}"
+        while SizeFitting.objects.filter(codi=codi).exists():
+            next_num += 1
+            codi = f"{model.codi_intern}-SF-{next_num}"
+        profile = getattr(request.user, 'profile', None)
+        try:
+            sf = SizeFitting.objects.create(
+                model=model,
+                numero=next_num,
+                codi=codi,
+                tipus='SizeSet',
+                creat_per=profile,
+            )
+        except Exception as e:
+            return Response({'error': f'Error creant SizeFitting: {e}'}, status=500)
+
+    # Cridar el motor existent
+    try:
+        graded_count = generar_graded_specs(sf.id)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=400)
+    except Exception as e:
+        return Response({'error': f'Error generant grading: {e}'}, status=500)
+
+    # Construir resposta tipus taula-mesures
+    size_run = [s.strip() for s in model.size_run_model.split('·') if s.strip()]
+    gv = GradingVersion.objects.filter(size_fitting=sf).order_by('-data').first()
+
+    rows = []
+    for bm in (
+        BaseMeasurement.objects.filter(model=model, is_active=True)
+        .select_related('pom', 'pom__pom_global').order_by('ordre')
+    ):
+        pom = bm.pom
+        pg = getattr(pom, 'pom_global', None)
+        graded = {}
+        if gv:
+            for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom):
+                graded[spec.size_label] = (
+                    float(spec.graded_value_cm) if spec.graded_value_cm is not None else None
+                )
+        rows.append({
+            'id': bm.id,
+            'pom_id': pom.id,
+            'pom_code': pom.codi_client,
+            'nom_fitxa': bm.nom_fitxa or '',
+            'nom_ca': pg.nom_ca if pg else pom.nom_client,
+            'nom_en': pg.nom_en if pg else pom.nom_client,
+            'base_value_cm': float(bm.base_value_cm) if bm.base_value_cm is not None else None,
+            'graded': graded,
+            'ordre': bm.ordre,
+        })
+
+    return Response({
+        'model_id': model_id,
+        'graded_count': graded_count,
+        'size_run': size_run,
+        'base_size': model.base_size_label,
+        'rows': rows,
+    })

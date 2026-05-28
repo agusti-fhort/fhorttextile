@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import TaulaEditable from '../components/TaulaEditable/TaulaEditable'
-import XatMesures from '../components/XatMesures/XatMesures'
 
 const API = import.meta.env.VITE_API_URL || ''
 const TABS = ['Resum', 'Mesures', 'Fitting', 'Fitxers', 'Anàlisi IA', 'Producció']
@@ -15,14 +14,14 @@ const btnSecondary = {
   fontFamily: 'IBM Plex Mono, monospace',
 }
 
-export default function ModelFitxa() {
+export default function ModelFitxa({ defaultTab = 'Mesures' }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   const [model, setModel] = useState(null)
-  const [activeTab, setActiveTab] = useState('Mesures')
+  const [activeTab, setActiveTab] = useState(defaultTab)
   const [taulaRows, setTaulaRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -108,24 +107,14 @@ export default function ModelFitxa() {
           />
         )}
         {activeTab === 'Mesures' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20 }}>
-            <TaulaEditable
-              rows={taulaRows}
-              sizeRun={(model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean)}
-              baseSize={model?.base_size_label}
-              modelId={parseInt(id)}
-              isImport={false}
-              onSaved={setTaulaRows}
-            />
-            <XatMesures
-              modelId={parseInt(id)}
-              onMesuresUpdated={() => {
-                fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
-                  .then(r => r.json())
-                  .then(d => setTaulaRows(d.rows || []))
-              }}
-            />
-          </div>
+          <TaulaEditable
+            rows={taulaRows}
+            sizeRun={(model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean)}
+            baseSize={model?.base_size_label}
+            modelId={parseInt(id)}
+            isImport={false}
+            onSaved={setTaulaRows}
+          />
         )}
         {activeTab === 'Fitting' && <TabFitting modelId={id} />}
         {activeTab === 'Fitxers' && <TabFitxers modelId={parseInt(id)} />}
