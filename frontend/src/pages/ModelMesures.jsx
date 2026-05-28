@@ -98,15 +98,13 @@ export default function ModelMesures() {
     try {
       const formData = new FormData()
       formData.append('file', importFile)
-      formData.append('wizard_context', JSON.stringify({
-        target_codi: model?.target,
-        garment_type_codi: model?.garment_type_nom || model?.garment_type,
-        garment_type_nom: model?.garment_type_nom || '',
-        construction_codi: model?.construction,
-        size_system_codi: model?.size_system_nom || String(model?.size_system || ''),
-        size_run: model?.size_run_model,
-        base_size: model?.base_size_label,
-      }))
+      formData.append('target_codi',       model?.target || '')
+      formData.append('garment_type_codi', model?.garment_type_nom || String(model?.garment_type || ''))
+      formData.append('garment_type_nom',  model?.garment_type_nom || '')
+      formData.append('construction_codi', model?.construction || '')
+      formData.append('size_system_codi',  model?.size_system_nom || String(model?.size_system || ''))
+      formData.append('size_run',          model?.size_run_model || '')
+      formData.append('base_size',         model?.base_size_label || '')
       const r = await fetch(`${API}/api/v1/models/extract-from-file/`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },

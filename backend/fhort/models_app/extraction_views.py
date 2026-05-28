@@ -243,19 +243,34 @@ def create_from_extraction_view(request):
                     status=422,
                 )
 
-            # Crear el model
-            model = Model.objects.create(
-                nom_prenda=style_name,
-                temporada=temporada[:2].upper() if temporada else 'SS',
-                any=any_value,
-                base_size_label=base_size,
-                size_run_model=size_run,
-                codi_client=codi_client,
-                codi_tenant=codi_tenant,
-                sequencial=overrides.get('sequencial', 1),
-                responsable_id=request.user.id,
-                garment_type=gt,
-            )
+            # Crear el model — o usar l'existent si overrides.model_id
+            model_id_override = overrides.get('model_id')
+            if model_id_override:
+                try:
+                    model = Model.objects.get(id=int(model_id_override))
+                    if base_size:
+                        model.base_size_label = base_size
+                    if size_run:
+                        model.size_run_model = size_run
+                    model.save()
+                except Model.DoesNotExist:
+                    return Response(
+                        {'error': f'Model {model_id_override} no trobat'},
+                        status=404,
+                    )
+            else:
+                model = Model.objects.create(
+                    nom_prenda=style_name,
+                    temporada=temporada[:2].upper() if temporada else 'SS',
+                    any=any_value,
+                    base_size_label=base_size,
+                    size_run_model=size_run,
+                    codi_client=codi_client,
+                    codi_tenant=codi_tenant,
+                    sequencial=overrides.get('sequencial', 1),
+                    responsable_id=request.user.id,
+                    garment_type=gt,
+                )
 
             # === SIZE SYSTEM ===
             # Prioritat:
