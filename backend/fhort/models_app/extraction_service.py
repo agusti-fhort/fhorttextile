@@ -78,7 +78,7 @@ Afegeix a anomalies_detected (no bloquejant):
 
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-5"
 
 
 def _get_api_key() -> str:

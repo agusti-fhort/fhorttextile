@@ -16,7 +16,7 @@ export default function ModelMesures() {
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   const [model, setModel] = useState(null)
-  const [mode, setMode] = useState('selector') // 'selector' | 'manual' | 'import'
+  const [mode, setMode] = useState('selector') // 'selector' | 'manual' | 'import' | 'resultat'
 
   // Manual
   const [pomsSuggerits, setPomsSuggerits] = useState([])
@@ -84,7 +84,7 @@ export default function ModelMesures() {
 
       const taula = await fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders }).then(r => r.json())
       setTaulaRows(taula.rows || [])
-      setSaved(true)
+      setMode('resultat')
     } catch {
       setError('Error de connexió')
     } finally {
@@ -316,7 +316,159 @@ export default function ModelMesures() {
           </div>
         </div>
       )}
+
+      {mode === 'resultat' && (
+        <div style={{ width: '100%', padding: '1rem' }}>
+          <ModelSummaryBar model={model} />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between',
+                        alignItems: 'center', marginBottom: 12 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>
+              Taula de mesures i grading
+            </h2>
+            <button type="button" onClick={() => setMode('manual')}
+              style={{ padding: '6px 14px', border: '0.5px solid var(--color-border-tertiary)',
+                       borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
+              ✏ Editar mesures
+            </button>
+          </div>
+
+          <TaulaResultat rows={taulaRows}
+                         sizeRun={model?.size_run_model?.split('·') || []}
+                         baseSize={model?.base_size_label} />
+        </div>
+      )}
     </>
+  )
+}
+
+const thResult = { padding: '8px 12px', textAlign: 'left', fontSize: 12, fontWeight: 500 }
+const tdResult = { padding: '6px 12px', verticalAlign: 'middle', fontSize: 13 }
+
+function TaulaResultat({ rows, sizeRun, baseSize }) {
+  if (!rows || rows.length === 0) {
+    return <p style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>
+      Cap mesura guardada.
+    </p>
+  }
+
+  return (
+    <div style={{ overflowX: 'auto', width: '100%' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr style={{ background: 'var(--color-background-secondary)',
+                       borderBottom: '1px solid var(--color-border-tertiary)' }}>
+            <th style={thResult}>Codi POM</th>
+            <th style={thResult}>Nomenclatura</th>
+            <th style={thResult}>Descripció</th>
+            {sizeRun.map(s => (
+              <th key={s} style={{
+                ...thResult, textAlign: 'right', fontFamily: 'monospace',
+                background: s.trim() === baseSize ? '#fdf6ee' : undefined,
+                color: s.trim() === baseSize ? '#7a4a10' : undefined,
+              }}>
+                {s.trim()} {s.trim() === baseSize ? '★' : ''}
+              </th>
+            ))}
+            <th style={{ ...thResult, textAlign: 'right', color: 'var(--color-text-secondary)' }}>
+              Δ S→L
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(row => {
+            const sizes = sizeRun.map(s => s.trim())
+            const firstVal = row.graded?.[sizes[0]]
+            const lastVal = row.graded?.[sizes[sizes.length - 1]]
+            const delta = (firstVal != null && lastVal != null)
+              ? (lastVal - firstVal).toFixed(1)
+              : '—'
+
+            return (
+              <tr key={row.pom_id}
+                style={{ borderBottom: '0.5px solid var(--color-border-tertiary)' }}>
+                <td style={{ ...tdResult, fontFamily: 'monospace',
+                             fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                  {row.pom_code}
+                </td>
+                <td style={{ ...tdResult, fontFamily: 'monospace', color: 'var(--gold)' }}>
+                  <NomFitxaEdit pomId={row.pom_id} value={row.nom_fitxa} />
+                </td>
+                <td style={tdResult}>{row.nom_ca || row.nom_en}</td>
+                {sizeRun.map(s => {
+                  const sl = s.trim()
+                  const val = sl === baseSize
+                    ? row.base_value_cm
+                    : row.graded?.[sl]
+                  return (
+                    <td key={sl} style={{
+                      ...tdResult, textAlign: 'right', fontFamily: 'monospace',
+                      background: sl === baseSize ? '#fefaf5' : undefined,
+                      fontWeight: sl === baseSize ? 500 : 400,
+                    }}>
+                      {val != null ? Number(val).toFixed(1) : '—'}
+                    </td>
+                  )
+                })}
+                <td style={{ ...tdResult, textAlign: 'right', fontFamily: 'monospace',
+                             color: 'var(--color-text-secondary)' }}>
+                  {delta}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function NomFitxaEdit({ pomId, value }) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState(value || '')
+  const token = localStorage.getItem('access_token')
+
+  const handleSave = async () => {
+    await fetch(`${API}/api/v1/base-measurements/?pom=${pomId}&page_size=1`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(r => r.json()).then(async d => {
+      const bm = d.results?.[0] || d[0]
+      if (bm) {
+        await fetch(`${API}/api/v1/base-measurements/${bm.id}/`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ nom_fitxa: val }),
+        })
+      }
+    })
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false) }}
+        style={{
+          width: 60, padding: '2px 6px', border: '1px solid var(--gold)',
+          borderRadius: 4, fontSize: 12, fontFamily: 'monospace', background: '#fdf6ee',
+        }}
+      />
+    )
+  }
+
+  return (
+    <span onClick={() => setEditing(true)}
+      style={{ cursor: 'pointer', padding: '2px 4px', borderRadius: 4,
+               minWidth: 40, display: 'inline-block',
+               color: val ? 'var(--gold)' : 'var(--color-text-secondary)',
+               borderBottom: '1px dashed var(--color-border-tertiary)' }}
+      title="Clic per editar nomenclatura">
+      {val || '—'}
+    </span>
   )
 }
 

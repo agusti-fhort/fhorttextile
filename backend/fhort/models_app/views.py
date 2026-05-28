@@ -343,5 +343,52 @@ def set_measurements_view(request, model_id):
         except POMMaster.DoesNotExist:
             errors.append(f'POMMaster {pom_id} no trobat')
 
+    try:
+        from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
+        from fhort.pom.models import GradingRule, GradingRuleSet
+
+        sf, _ = SizeFitting.objects.get_or_create(
+            model=model,
+            defaults={'size_system': model.size_system}
+        )
+
+        gv = GradingVersion.objects.create(size_fitting=sf)
+
+        size_run = []
+        if model.size_run_model:
+            size_run = [s.strip() for s in model.size_run_model.split('·') if s.strip()]
+
+        base_size = model.base_size_label
+
+        all_bm = BaseMeasurement.objects.filter(model=model, is_active=True)
+        grading_rule_set = model.grading_rule_set
+
+        for bm in all_bm:
+            base_val = float(bm.base_value_cm) if bm.base_value_cm else 0
+
+            for size_label in size_run:
+                if size_label == base_size:
+                    graded_val = base_val
+                else:
+                    delta = 0
+                    if grading_rule_set:
+                        rule = GradingRule.objects.filter(
+                            rule_set=grading_rule_set,
+                            pom=bm.pom,
+                            size_label=size_label,
+                        ).first()
+                        if rule:
+                            delta = float(rule.increment_cm or 0)
+                    graded_val = base_val + delta
+
+                GradedSpec.objects.update_or_create(
+                    grading_version=gv,
+                    pom=bm.pom,
+                    size_label=size_label,
+                    defaults={'graded_value_cm': graded_val}
+                )
+    except Exception:
+        pass
+
     return Response({'created': created, 'updated': updated, 'errors': errors},
                     status=201 if not errors else 207)
