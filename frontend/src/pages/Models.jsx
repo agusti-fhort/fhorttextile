@@ -121,7 +121,7 @@ export default function Models() {
           fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
         }}>
           <option value="">Tots els estats</option>
-          {["Nou", "En curs", "Bloquejat", "Tancat"].map(e => <option key={e} value={e}>{e}</option>)}
+          {["Nou", "EnCurs", "Bloquejat", "Tancat"].map(e => <option key={e} value={e}>{e === "EnCurs" ? "En curs" : e}</option>)}
         </select>
         {(cerca || filtreFase || filtreEstat) && (
           <button onClick={() => { setCerca(""); setFiltreFase(""); setFiltreEstat("") }} style={{

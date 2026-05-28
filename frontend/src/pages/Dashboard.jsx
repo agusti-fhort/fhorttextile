@@ -44,7 +44,7 @@ export default function Dashboard() {
     const headers = { Authorization: `Bearer ${token}` }
     Promise.allSettled([
       fetch(`${API}/api/v1/models/?limit=100`, { headers }).then(r => r.json()),
-      fetch(`${API}/api/v1/models/?estat=En+curs&ordering=-darrera_activitat&limit=5`, { headers }).then(r => r.json()),
+      fetch(`${API}/api/v1/models/?estat=EnCurs&ordering=-darrera_activitat&limit=5`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/alerts/summary/?dies=30`, { headers })
         .then(r => r.ok ? r.json() : Promise.reject(r))
         .catch(() => fetch(`${API}/api/v1/pom-alerts/?estat=Obert&limit=100`, { headers }).then(r => r.json())),
@@ -56,7 +56,7 @@ export default function Dashboard() {
         const all = allRes.value
         const items = Array.isArray(all) ? all : (all.results || [])
         const total = all.count || items.length
-        const enCurs = items.filter(m => m.estat === "En curs").length
+        const enCurs = items.filter(m => m.estat === "EnCurs").length
         const tallesGen = items.filter(m => m.fase_actual === "Prototip" || m.fase_actual === "Mostres").length
         setStats({ total, enCurs, tallesGen })
       }
@@ -152,7 +152,7 @@ export default function Dashboard() {
           value={loading ? "…" : stats.enCurs}
           sub="models actius"
           color="#3b7a9a"
-          onClick={() => navigate("/models?estat=En+curs")}
+          onClick={() => navigate("/models?estat=EnCurs")}
         />
         <KPICard
           label="Avisos oberts"

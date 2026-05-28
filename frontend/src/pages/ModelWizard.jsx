@@ -64,16 +64,25 @@ const inputStyle = {
   borderRadius: 4,
   border: BORDER_INACTIVE,
   fontFamily: 'IBM Plex Mono, monospace',
-  fontSize: 12,
+  fontSize: 14,
   background: '#fff',
   color: 'var(--text-main)',
 }
 
 const labelStyle = {
   display: 'block',
-  fontSize: 10,
-  color: 'var(--text-muted)',
+  fontSize: 12,
+  color: 'var(--color-text-secondary, var(--text-muted))',
   marginBottom: 4,
+  textTransform: 'uppercase',
+  letterSpacing: '.04em',
+}
+
+const rowLabelStyle = {
+  fontSize: 12,
+  color: 'var(--color-text-secondary, var(--text-muted))',
+  width: 90,
+  flexShrink: 0,
   textTransform: 'uppercase',
   letterSpacing: '.04em',
 }
@@ -394,7 +403,7 @@ function renderSummaryCard({ summary, onEdit }) {
     ['Any', summary.any],
     ['Temporada', summary.temporada],
     ['Ref interna', summary.codi_intern],
-    ['Ref client', summary.codi_client || '—'],
+    ['Ref client', (summary.codi_client && summary.codi_client !== summary.codi_intern) ? summary.codi_client : '—'],
     ['Nom peça', summary.nom_prenda || '—'],
   ]
   return (
@@ -432,37 +441,39 @@ function renderStep1Form({
 }) {
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <label style={{ ...labelStyle, marginBottom: 0, fontSize: 13, color: 'var(--text-muted)', minWidth: 100 }}>Any</label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <span style={rowLabelStyle}>ANY</span>
+          <div style={{ display: 'flex', gap: 8 }}>
             {YEARS.map(y => (
-              <button key={y} onClick={() => setYear(y)} style={chipStyle(year === y)}>
-                <span>{y}</span>
+              <button key={y} onClick={() => setYear(y)} style={{ ...chipStyle(year === y), fontSize: 14 }}>
+                {y}
               </button>
             ))}
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <label style={{ ...labelStyle, marginBottom: 0, fontSize: 13, color: 'var(--text-muted)', minWidth: 100 }}>Temporada</label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <span style={rowLabelStyle}>TEMPORADA</span>
+          <div style={{ display: 'flex', gap: 8 }}>
             {SEASONS.map(s => (
               <button key={s.codi} onClick={() => setSeason(s.codi)} style={chipStyle(season === s.codi)}>
-                <span>{s.label}</span>
-                <span style={{ fontSize: 9, opacity: 0.85 }}>{s.sub}</span>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{s.codi}</div>
+                <div style={{ fontSize: 10 }}>{s.sub}</div>
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      <div style={{
-        marginBottom: 24, padding: '12px 14px', borderRadius: 6,
-        background: 'var(--bg-muted)', border: BORDER_INACTIVE,
-      }}>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>Referència interna</div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--gold)' }}>{previewRef}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <span style={rowLabelStyle}>REFERÈNCIA</span>
+        <div style={{
+          flex: 1, padding: '8px 12px', borderRadius: 6,
+          background: 'var(--bg-muted)', border: BORDER_INACTIVE,
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--gold)' }}>{previewRef}</span>
+        </div>
       </div>
 
       <div style={{ marginBottom: 16 }}>
