@@ -202,3 +202,153 @@ def update_model_step2(request, model_id):
 
     model.save()
     return Response({'id': model.id, 'codi_intern': model.codi_intern})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def poms_suggerits_view(request, model_id):
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    if not model.garment_type:
+        return Response({'poms': [], 'warning': 'Garment type no definit'})
+
+    from fhort.pom.models import GarmentPOMMap
+
+    maps = GarmentPOMMap.objects.filter(
+        garment_type=model.garment_type,
+        actiu=True,
+    ).select_related('pom', 'pom__pom_global').order_by('-is_key', 'ordre')
+
+    construction = (model.construction or '').upper()
+    if 'WOVEN' in construction:
+        maps = maps.filter(applies_woven=True)
+    elif 'KNIT' in construction or 'STRETCH' in construction:
+        maps = maps.filter(applies_knit=True)
+
+    result = []
+    for m in maps:
+        pom = m.pom
+        pg = getattr(pom, 'pom_global', None)
+        result.append({
+            'pom_id': pom.id,
+            'pom_code': pom.codi_client,
+            'nom_en': pg.nom_en if pg else pom.nom_client,
+            'nom_ca': pg.nom_ca if pg else pom.nom_client,
+            'abbreviation': pg.abbreviation if pg else '',
+            'categoria': pg.categoria if pg else '',
+            'is_key': m.is_key,
+            'ordre': m.ordre,
+        })
+
+    return Response({'poms': result, 'total': len(result)})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def taula_mesures_view(request, model_id):
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    from fhort.models_app.models import BaseMeasurement
+
+    size_run = []
+    if model.size_run_model:
+        size_run = [s.strip() for s in model.size_run_model.split('·') if s.strip()]
+
+    base_measurements = BaseMeasurement.objects.filter(
+        model=model,
+        is_active=True,
+    ).select_related('pom', 'pom__pom_global').order_by('pom__codi_client')
+
+    graded_by_pom = {}
+    try:
+        from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
+        sf = SizeFitting.objects.filter(model=model).first()
+        if sf:
+            gv = GradingVersion.objects.filter(
+                size_fitting=sf
+            ).order_by('-data').first()
+            if gv:
+                for spec in GradedSpec.objects.filter(grading_version=gv):
+                    pom_id = spec.pom_id
+                    if pom_id not in graded_by_pom:
+                        graded_by_pom[pom_id] = {}
+                    graded_by_pom[pom_id][spec.size_label] = (
+                        float(spec.graded_value_cm) if spec.graded_value_cm is not None else None
+                    )
+    except Exception:
+        pass
+
+    rows = []
+    for bm in base_measurements:
+        pom = bm.pom
+        pg = getattr(pom, 'pom_global', None)
+        rows.append({
+            'pom_id': pom.id,
+            'pom_code': pom.codi_client,
+            'nom_fitxa': bm.nom_fitxa or '',
+            'nom_en': pg.nom_en if pg else pom.nom_client,
+            'nom_ca': pg.nom_ca if pg else pom.nom_client,
+            'abbreviation': pg.abbreviation if pg else '',
+            'base_value_cm': float(bm.base_value_cm) if bm.base_value_cm is not None else None,
+            'origen': bm.origen,
+            'notes': bm.notes or '',
+            'graded': graded_by_pom.get(pom.id, {}),
+        })
+
+    return Response({
+        'model_id': model.id,
+        'codi_intern': model.codi_intern,
+        'base_size': model.base_size_label,
+        'size_run': size_run,
+        'rows': rows,
+        'total_poms': len(rows),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def set_measurements_view(request, model_id):
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    measurements = request.data.get('measurements', [])
+    if not measurements:
+        return Response({'error': 'measurements és obligatori'}, status=400)
+
+    from fhort.pom.models import POMMaster
+    from fhort.models_app.models import BaseMeasurement
+
+    created = updated = 0
+    errors = []
+
+    for m in measurements:
+        pom_id = m.get('pom_id')
+        value = m.get('base_value_cm')
+        if not pom_id or value is None:
+            errors.append(f'pom_id i base_value_cm obligatoris')
+            continue
+        try:
+            pom = POMMaster.objects.get(id=pom_id)
+            _, was_created = BaseMeasurement.objects.update_or_create(
+                model=model, pom=pom,
+                defaults={
+                    'base_value_cm': float(value),
+                    'notes': m.get('notes', ''),
+                    'origen': 'MANUAL',
+                }
+            )
+            if was_created: created += 1
+            else: updated += 1
+        except POMMaster.DoesNotExist:
+            errors.append(f'POMMaster {pom_id} no trobat')
+
+    return Response({'created': created, 'updated': updated, 'errors': errors},
+                    status=201 if not errors else 207)
