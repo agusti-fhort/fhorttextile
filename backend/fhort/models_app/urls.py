@@ -8,11 +8,13 @@ from .views import (
     analisi_ia_view,
     create_model_wizard,
     generar_grading_view,
+    iso_shrinkage_view,
     next_model_ref,
     poms_suggerits_view,
     reorder_measurements_view,
     set_measurements_view,
     taula_mesures_view,
+    update_fabric_view,
     update_model_step2,
     upload_fitxer_view,
     xat_mesures_view,
@@ -91,6 +93,8 @@ urlpatterns = (
         path('models/<int:model_id>/analisi-ia/', analisi_ia_view),
         path('models/<int:model_id>/xat-mesures/', xat_mesures_view),
         path('models/<int:model_id>/generar-grading/', generar_grading_view),
+        path('models/iso-shrinkage/', iso_shrinkage_view),
+        path('models/<int:model_id>/update-fabric/', update_fabric_view),
     ]
     + _sprint6_paths
     + _sprint7_model_paths

@@ -230,6 +230,15 @@ function TabResum({ model, modelId, onUpdated }) {
     ['Run de talles', model.size_run_model || '—'],
     ['Grading', model.grading_rule_set ? '✓ Configurat' : '—'],
     ['Estat', model.estat],
+    ...(model.fabric_main ? [
+      ['Main Fabric', model.fabric_main],
+      ['Composition', model.fabric_composition || '—'],
+      ['Shrinkage', model.shrinkage_warp != null
+        ? `Warp ${model.shrinkage_warp}% / Weft ${model.shrinkage_weft}% (${model.shrinkage_type})`
+        : model.shrinkage_pct != null
+          ? `${model.shrinkage_pct}% (${model.shrinkage_type})`
+          : '—'],
+    ] : []),
   ]
 
   return (

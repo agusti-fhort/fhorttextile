@@ -196,6 +196,26 @@ class Model(models.Model):
         related_name='design_freezes',
     )
     # --- Fi Sprint 7A ---
+
+    # Teixit i encongiments
+    SHRINKAGE_TYPE_CHOICES = [
+        ('NONE',     'No definit'),
+        ('ISO',      'Estàndard ISO'),
+        ('SUPPLIER', 'Fabricant'),
+        ('CUSTOM',   'Personalitzat'),
+    ]
+    fabric_main        = models.CharField(max_length=200, blank=True, default='')
+    fabric_composition = models.CharField(max_length=200, blank=True, default='')
+    shrinkage_type     = models.CharField(max_length=10, choices=SHRINKAGE_TYPE_CHOICES,
+                                           default='NONE')
+    shrinkage_warp     = models.FloatField(null=True, blank=True,
+                                            help_text='Encongiment ordit/warp (%)')
+    shrinkage_weft     = models.FloatField(null=True, blank=True,
+                                            help_text='Encongiment trama/weft (%)')
+    shrinkage_pct      = models.FloatField(null=True, blank=True,
+                                            help_text='Encongiment únic (%) si no és biaxial')
+    fabric_notes       = models.TextField(blank=True, default='')
+
     class Meta:
         verbose_name = 'Model'
         verbose_name_plural = 'Models'

@@ -17,6 +17,7 @@ import OnboardingWizard from './pages/OnboardingWizard'
 import NouSizeFitting from './pages/NouSizeFitting'
 import ModelWizard from './pages/ModelWizard'
 import ModelMesures from './pages/ModelMesures'
+import ModelTeixit from './pages/ModelTeixit'
 import ModelFitxa from './pages/ModelFitxa'
 import KanbanTasques from './pages/KanbanTasques'
 import Temps from './pages/Temps'
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="models/:id" element={<ModelFitxa />} />
           <Route path="models/:id/editar" element={<ModelWizard />} />
           <Route path="models/:id/mesures" element={<ModelMesures />} />
+          <Route path="models/:id/teixit" element={<ModelTeixit />} />
           <Route path="models/:id/fitxers" element={<ModelFitxa defaultTab="Fitxers" />} />
           <Route path="models/:id/nou-sf" element={<NouSizeFitting />} />
           <Route path="fitting" element={<SizeFittingLlista />} />

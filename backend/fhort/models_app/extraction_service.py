@@ -234,3 +234,90 @@ def check_design_freeze(extracted: dict) -> dict:
         "blockers": blockers,
         "warnings": warnings,
     }
+
+
+def extract_images_from_pdf(pdf_bytes: bytes, codi_intern: str) -> list:
+    """
+    Extreu imatges d'un PDF usant pymupdf.
+    Retorna llista de dicts amb metadades i bytes.
+    No guarda res — el caller decideix què fer.
+    """
+    try:
+        import fitz
+    except ImportError:
+        return []
+
+    results = []
+    counters = {}
+
+    def next_num(tipus):
+        counters[tipus] = counters.get(tipus, 0) + 1
+        return f'{counters[tipus]:03d}'
+
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    except Exception:
+        return []
+
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+
+        # MÈTODE 1: Imatges incrustades (fotos, logos)
+        try:
+            images = page.get_images(full=True)
+            for img in images:
+                try:
+                    xref = img[0]
+                    base_img = doc.extract_image(xref)
+                    w = base_img.get('width', 0)
+                    h = base_img.get('height', 0)
+                    if w < 150 or h < 150:
+                        continue
+                    ext = base_img['ext']
+                    tipus = 'sketch'
+                    nom = f'{codi_intern}_{tipus}_{next_num(tipus)}.{ext}'
+                    results.append({
+                        'nom': nom,
+                        'tipus': tipus,
+                        'categoria': 'Disseny',
+                        'pagina': page_num + 1,
+                        'origen': 'INCRUSTADA',
+                        'amplada': w,
+                        'alcada': h,
+                        'ext': ext,
+                        'bytes': base_img['image'],
+                    })
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # MÈTODE 2: Rasteritzar pàgines amb sketches vectorials
+        try:
+            paths = page.get_drawings()
+            text = page.get_text()
+            pom_patterns = ['B ', 'M ', 'E.', 'D.', 'L.', 'K ', 'A.', 'S.', 'T.']
+            has_pom = sum(1 for p in pom_patterns if p in text) >= 3
+            has_vectors = len(paths) > 15
+
+            if has_vectors and has_pom:
+                mat = fitz.Matrix(2.0, 2.0)
+                pix = page.get_pixmap(matrix=mat, alpha=False)
+                tipus = 'sketch'
+                nom = f'{codi_intern}_{tipus}_{next_num(tipus)}.png'
+                results.append({
+                    'nom': nom,
+                    'tipus': tipus,
+                    'categoria': 'Disseny',
+                    'pagina': page_num + 1,
+                    'origen': 'RASTERITZADA',
+                    'amplada': pix.width,
+                    'alcada': pix.height,
+                    'ext': 'png',
+                    'bytes': pix.tobytes('png'),
+                })
+        except Exception:
+            pass
+
+    doc.close()
+    return results

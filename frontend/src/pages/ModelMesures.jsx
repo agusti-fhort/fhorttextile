@@ -271,13 +271,13 @@ export default function ModelMesures() {
                     {generatingGrading ? '⏳ Generant...' : '⚡ Generar grading automàtic'}
                   </button>
                 )}
-                <button type="button" onClick={() => navigate(`/models/${id}/fitxers`)}
+                <button type="button" onClick={() => navigate(`/models/${id}/teixit`)}
                   style={{
                     padding: '8px 20px', background: 'var(--gold)', color: '#fff',
                     border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500,
                     cursor: 'pointer',
                   }}>
-                  Continuar → Fitxers
+                  Continuar → Teixit
                 </button>
               </div>
             )}
@@ -394,14 +394,14 @@ export default function ModelMesures() {
                 </button>
               )}
             </div>
-            <button type="button" onClick={() => navigate(`/models/${id}/fitxers`)}
+            <button type="button" onClick={() => navigate(`/models/${id}/teixit`)}
               style={{
                 padding: '8px 20px', borderRadius: 6, border: 'none',
                 fontSize: 14, fontWeight: 500,
                 background: 'var(--gold)', color: '#fff', cursor: 'pointer',
                 fontFamily: 'IBM Plex Mono, monospace',
               }}>
-              Continuar → Fitxers i imatges
+              Continuar → Teixit
             </button>
           </div>
         </div>

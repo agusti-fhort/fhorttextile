@@ -206,7 +206,7 @@ def create_from_extraction_view(request):
 
     try:
         from django_tenants.utils import schema_context
-        from fhort.models_app.models import Model, BaseMeasurement
+        from fhort.models_app.models import Model, BaseMeasurement, ModelFitxer
         from fhort.pom.models import POMMaster, GarmentType
 
         tenant_schema = request.tenant.schema_name if hasattr(request, 'tenant') else 'fhort'
@@ -522,6 +522,42 @@ def create_from_extraction_view(request):
                             )
                     except Exception:
                         pass  # No bloquejar si falla l'email
+
+            # Extreure i guardar imatges del PDF si arriba al request
+            try:
+                from fhort.models_app.extraction_service import extract_images_from_pdf
+                from django.core.files.base import ContentFile
+
+                pdf_file = request.FILES.get('file')
+                if pdf_file and pdf_file.name.endswith('.pdf'):
+                    pdf_bytes = pdf_file.read()
+                    imatges = extract_images_from_pdf(pdf_bytes, model.codi_intern)
+
+                    for img_data in imatges:
+                        ultima = ModelFitxer.objects.filter(
+                            model=model, tipus=img_data['tipus']
+                        ).order_by('-id').first()
+                        num = 1
+                        if ultima and ultima.nom_fitxer:
+                            try:
+                                num = int(ultima.nom_fitxer.split('_')[-1].split('.')[0]) + 1
+                            except Exception:
+                                num = 2
+
+                        nom = f'{model.codi_intern}_{img_data["tipus"]}_{num:03d}.{img_data["ext"]}'
+                        content = ContentFile(img_data['bytes'], name=nom)
+                        mf = ModelFitxer(
+                            model=model,
+                            nom_fitxer=nom,
+                            categoria=img_data['categoria'],
+                            tipus=img_data['tipus'],
+                            versio=f'{num:03d}',
+                            mida_bytes=len(img_data['bytes']),
+                            path_servidor=nom,
+                        )
+                        mf.fitxer.save(nom, content, save=True)
+            except Exception:
+                pass
 
             # === GRADING: crear SizeFitting → GradingVersion → GradedSpecs ===
             from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec

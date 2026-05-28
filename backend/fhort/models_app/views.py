@@ -795,3 +795,41 @@ def generar_grading_view(request, model_id):
         'base_size': model.base_size_label,
         'rows': rows,
     })
+
+
+ISO_SHRINKAGE_TABLE = [
+    {'id': 'woven_cotton',    'nom': 'Woven Cotton',    'warp': 3.0, 'weft': 3.0},
+    {'id': 'woven_linen',     'nom': 'Woven Linen',     'warp': 3.0, 'weft': 3.0},
+    {'id': 'woven_viscose',   'nom': 'Woven Viscose',   'warp': 4.0, 'weft': 4.0},
+    {'id': 'woven_silk',      'nom': 'Woven Silk',      'warp': 2.0, 'weft': 2.0},
+    {'id': 'woven_polyester', 'nom': 'Woven Polyester', 'warp': 1.0, 'weft': 1.0},
+    {'id': 'knit_cotton',     'nom': 'Knit Cotton',     'warp': 5.0, 'weft': 5.0},
+    {'id': 'knit_jersey',     'nom': 'Knit Jersey',     'warp': 5.0, 'weft': 5.0},
+    {'id': 'stretch_knit',    'nom': 'Stretch Knit',    'warp': 8.0, 'weft': 8.0},
+    {'id': 'knit_wool',       'nom': 'Knit Wool',       'warp': 6.0, 'weft': 6.0},
+    {'id': 'denim',           'nom': 'Denim',           'warp': 5.0, 'weft': 3.0},
+    {'id': 'technical',       'nom': 'Technical',       'warp': 0.0, 'weft': 0.0},
+]
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def iso_shrinkage_view(request):
+    return Response(ISO_SHRINKAGE_TABLE)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_fabric_view(request, model_id):
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    fields = ['fabric_main', 'fabric_composition', 'shrinkage_type',
+              'shrinkage_warp', 'shrinkage_weft', 'shrinkage_pct', 'fabric_notes']
+    for f in fields:
+        if f in request.data:
+            setattr(model, f, request.data[f])
+    model.save()
+    return Response({'id': model.id, 'fabric_main': model.fabric_main})
