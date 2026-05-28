@@ -49,11 +49,11 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="models" element={<Models />} />
           <Route path="models/nou" element={<ModelWizard />} />
+          <Route path="models/nou-des-de-fitxer" element={<Navigate to="/models/nou" replace />} />
+          <Route path="models/:id" element={<ModelFitxa />} />
           <Route path="models/:id/editar" element={<ModelWizard />} />
           <Route path="models/:id/mesures" element={<ModelMesures />} />
           <Route path="models/:id/fitxers" element={<ModelFitxa defaultTab="Fitxers" />} />
-          <Route path="models/nou-des-de-fitxer" element={<Navigate to="/models/nou" replace />} />
-          <Route path="models/:id" element={<ModelFitxa />} />
           <Route path="models/:id/nou-sf" element={<NouSizeFitting />} />
           <Route path="fitting" element={<SizeFittingLlista />} />
           <Route path="fitting/:id" element={<SizeFittingDetall />} />

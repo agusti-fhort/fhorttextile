@@ -116,8 +116,8 @@ export default function Models() {
           <option value="">Totes les temporades</option>
           {TEMPORADES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        {(cerca || filtreFase || filtreEstat || filtreAny || filtreTemporada) && (
-          <button onClick={() => { setCerca(""); setFiltreFase(""); setFiltreEstat(""); setFiltreAny(""); setFiltreTemporada("") }} style={{
+        {(cerca || filtreFase || filtreAny || filtreTemporada) && (
+          <button onClick={() => { setCerca(""); setFiltreFase(""); setFiltreAny(""); setFiltreTemporada("") }} style={{
             padding: "6px 12px", border: "1px solid #e0d5c5", borderRadius: 4,
             fontSize: 11, fontFamily: "IBM Plex Mono, monospace", cursor: "pointer",
             background: "#fff", color: "#868685",
@@ -187,7 +187,7 @@ export default function Models() {
               textAlign: "center", padding: "40px 0",
               color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace",
             }}>
-              {cerca || filtreFase || filtreEstat || filtreAny || filtreTemporada
+              {cerca || filtreFase || filtreAny || filtreTemporada
                 ? "Sense resultats amb aquest filtre."
                 : "Sense models. Crea el primer!"}
             </div>
