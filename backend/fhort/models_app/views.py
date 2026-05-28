@@ -219,14 +219,7 @@ def poms_suggerits_view(request, model_id):
 
     maps = GarmentPOMMap.objects.filter(
         garment_type=model.garment_type,
-        actiu=True,
     ).select_related('pom', 'pom__pom_global').order_by('-is_key', 'ordre')
-
-    construction = (model.construction or '').upper()
-    if 'WOVEN' in construction:
-        maps = maps.filter(applies_woven=True)
-    elif 'KNIT' in construction or 'STRETCH' in construction:
-        maps = maps.filter(applies_knit=True)
 
     result = []
     for m in maps:
