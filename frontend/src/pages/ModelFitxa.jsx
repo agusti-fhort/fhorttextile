@@ -4,7 +4,6 @@ import TaulaEditable from '../components/TaulaEditable/TaulaEditable'
 
 const API = import.meta.env.VITE_API_URL || ''
 const TABS = ['Resum', 'Mesures', 'Fitting', 'Fitxers', 'Producció']
-const FASES = ['Proto', 'Fit', 'SizeSet', 'PP', 'TOP']
 
 const btnSecondary = {
   background: 'transparent',
@@ -66,22 +65,21 @@ export default function ModelFitxa() {
   return (
     <div style={{ width: '100%', fontFamily: 'IBM Plex Mono, monospace' }}>
       <ModelFitxaHeader model={model} onDelete={handleDelete} />
-      <FaseBar fase={model?.fase_actual} />
 
       <div style={{
-        borderBottom: '1px solid var(--color-border-tertiary, #e0d5c5)',
-        display: 'flex', gap: 0, paddingLeft: '1.5rem',
+        display: 'flex', gap: 8, padding: '0.75rem 1.5rem',
+        borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+        background: 'var(--color-background-primary)',
       }}>
         {TABS.map(tab => (
           <button key={tab} type="button"
             onClick={() => setActiveTab(tab)}
             style={{
-              padding: '10px 20px', border: 'none',
-              borderBottom: activeTab === tab
-                ? '2px solid var(--gold)' : '2px solid transparent',
-              background: 'transparent', cursor: 'pointer', fontSize: 13,
+              padding: '6px 16px', borderRadius: 6, border: 'none',
+              background: activeTab === tab ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
+              color: activeTab === tab ? '#fff' : 'var(--color-text-secondary, #868685)',
+              cursor: 'pointer', fontSize: 13,
               fontWeight: activeTab === tab ? 500 : 400,
-              color: activeTab === tab ? 'var(--gold)' : 'var(--color-text-secondary, #868685)',
               fontFamily: 'IBM Plex Mono, monospace',
             }}>
             {tab}
@@ -98,7 +96,16 @@ export default function ModelFitxa() {
       )}
 
       <div style={{ padding: '1.5rem' }}>
-        {activeTab === 'Resum' && <TabResum model={model} />}
+        {activeTab === 'Resum' && (
+          <TabResum
+            model={model}
+            modelId={parseInt(id)}
+            onUpdated={() => {
+              fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
+                .then(r => r.json()).then(setModel)
+            }}
+          />
+        )}
         {activeTab === 'Mesures' && (
           <TaulaEditable
             rows={taulaRows}
@@ -124,11 +131,10 @@ function ModelFitxaHeader({ model, onDelete }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      gap: 16, flexWrap: 'wrap',
-      padding: '1rem 1.5rem',
+      padding: '0.75rem 1.5rem',
       borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button type="button" onClick={() => navigate('/models')}
           style={{ background: 'none', border: 'none', cursor: 'pointer',
                    fontSize: 13, color: 'var(--color-text-secondary, #868685)',
@@ -136,98 +142,83 @@ function ModelFitxaHeader({ model, onDelete }) {
           ← Models
         </button>
         <span style={{ color: 'var(--color-border-tertiary, #e0d5c5)' }}>›</span>
-        <span style={{ fontSize: 16, fontWeight: 500 }}>
-          {model.nom_prenda || model.codi_intern}
+        <span style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
+                       fontFamily: 'monospace' }}>
+          {model.codi_intern}
         </span>
+        {model.codi_client && model.codi_client !== model.codi_intern && (
+          <>
+            <span style={{ color: 'var(--color-border-tertiary, #e0d5c5)' }}>·</span>
+            <span style={{ fontSize: 13, fontFamily: 'monospace',
+                           color: 'var(--color-text-primary, #1d1d1b)', fontWeight: 500 }}>
+              {model.codi_client}
+            </span>
+          </>
+        )}
+        {model.nom_prenda && (
+          <>
+            <span style={{ color: 'var(--color-border-tertiary, #e0d5c5)' }}>·</span>
+            <span style={{ fontSize: 15, fontWeight: 500,
+                           color: 'var(--color-text-primary, #1d1d1b)' }}>
+              {model.nom_prenda}
+            </span>
+          </>
+        )}
         <span style={{
           fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 500,
-          background: model.estat === 'Nou' ? 'var(--color-background-secondary, #f5f0ea)' : '#e6f4ea',
-          color: model.estat === 'Nou' ? 'var(--color-text-secondary, #868685)' : '#137333',
+          background: 'var(--color-background-secondary, #f5f0ea)',
+          color: 'var(--color-text-secondary, #868685)',
           border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
         }}>
           {model.estat}
         </span>
       </div>
 
-      <div style={{
-        display: 'flex', gap: 20, fontSize: 12, flexWrap: 'wrap',
-        color: 'var(--color-text-secondary, #868685)', alignItems: 'center',
-      }}>
-        <span style={{ fontFamily: 'monospace', fontWeight: 500,
-                       color: 'var(--color-text-primary, #1d1d1b)' }}>
-          {model.codi_intern}
-        </span>
-        {model.codi_client && model.codi_client !== model.codi_intern && (
-          <span>{model.codi_client}</span>
-        )}
-        <span>{model.temporada} {model.any}</span>
-        {model.target && <span>{model.target}</span>}
-        {model.garment_type_nom && <span>{model.garment_type_nom}</span>}
-        {model.construction && <span>{model.construction}</span>}
-        {model.base_size_label && (
-          <span style={{ color: 'var(--gold)' }}>Base: {model.base_size_label}</span>
-        )}
-        {model.size_run_model && (
-          <span style={{ fontFamily: 'monospace' }}>{model.size_run_model}</span>
-        )}
-      </div>
-
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="button"
           onClick={() => navigate(`/models/${model.id}/editar`)}
           style={btnSecondary}>
-          <i className="ti ti-edit" /> Editar
-        </button>
-        <button type="button"
-          onClick={() => navigate(`/models/${model.id}/mesures`)}
-          style={btnSecondary}>
-          <i className="ti ti-ruler" /> Mesures
+          <i className="ti ti-edit" aria-hidden="true" /> Editar
         </button>
         <button type="button" onClick={onDelete}
           style={{ ...btnSecondary, color: '#c5221f', borderColor: '#f5c6c6' }}>
-          <i className="ti ti-trash" /> Esborrar
+          <i className="ti ti-trash" aria-hidden="true" /> Esborrar
         </button>
       </div>
     </div>
   )
 }
 
-function FaseBar({ fase }) {
-  const idx = FASES.indexOf(fase)
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center',
-      padding: '8px 1.5rem',
-      background: 'var(--color-background-secondary, #f5f0ea)',
-      borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-      fontSize: 12, gap: 0,
-      fontFamily: 'IBM Plex Mono, monospace',
-    }}>
-      {FASES.map((f, i) => (
-        <div key={f} style={{ display: 'flex', alignItems: 'center' }}>
-          <span style={{
-            padding: '3px 12px', borderRadius: 20,
-            background: f === fase ? 'var(--gold)' : 'transparent',
-            color: f === fase ? '#fff' : 'var(--color-text-secondary, #868685)',
-            fontWeight: f === fase ? 500 : 400,
-          }}>
-            {i < idx ? '✓ ' : ''}{f}
-          </span>
-          {i < FASES.length - 1 && (
-            <span style={{ color: 'var(--color-border-tertiary, #e0d5c5)', margin: '0 4px' }}>—</span>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
+function TabResum({ model, modelId, onUpdated }) {
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({
+    nom_prenda: model?.nom_prenda || '',
+    codi_client: (model?.codi_client !== model?.codi_intern ? model?.codi_client : '') || '',
+    descripcio: model?.descripcio || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const token = localStorage.getItem('access_token')
 
-function TabResum({ model }) {
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const r = await fetch(`${API}/api/v1/models/${modelId}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          nom_prenda: form.nom_prenda,
+          codi_client: form.codi_client || model.codi_intern,
+          descripcio: form.descripcio,
+        }),
+      })
+      if (r.ok) { setEditing(false); if (onUpdated) onUpdated() }
+    } finally { setSaving(false) }
+  }
+
   if (!model) return null
-  const fields = [
+
+  const readOnlyFields = [
     ['Referència interna', model.codi_intern],
-    ['Referència client', model.codi_client && model.codi_client !== model.codi_intern ? model.codi_client : '—'],
-    ['Nom de la peça', model.nom_prenda || '—'],
     ['Temporada', `${model.temporada} ${model.any}`],
     ['Target', model.target || '—'],
     ['Tipus de peça', model.garment_type_nom || '—'],
@@ -238,22 +229,103 @@ function TabResum({ model }) {
     ['Run de talles', model.size_run_model || '—'],
     ['Grading', model.grading_rule_set ? '✓ Configurat' : '—'],
     ['Estat', model.estat],
-    ['Fase', model.fase_actual],
   ]
 
   return (
-    <div style={{ maxWidth: 600 }}>
+    <div style={{ maxWidth: 640 }}>
+      {editing ? (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+                            display: 'block', marginBottom: 4 }}>
+              Nom de la peça
+            </label>
+            <input value={form.nom_prenda}
+              onChange={e => setForm(f => ({...f, nom_prenda: e.target.value}))}
+              style={{ width: '100%', padding: '6px 10px', fontSize: 13,
+                       border: '1px solid var(--color-border-tertiary, #e0d5c5)', borderRadius: 6 }} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+                            display: 'block', marginBottom: 4 }}>
+              Referència client
+            </label>
+            <input value={form.codi_client}
+              onChange={e => setForm(f => ({...f, codi_client: e.target.value}))}
+              style={{ width: '100%', padding: '6px 10px', fontSize: 13,
+                       border: '1px solid var(--color-border-tertiary, #e0d5c5)', borderRadius: 6 }} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+                            display: 'block', marginBottom: 4 }}>
+              Descripció
+            </label>
+            <textarea value={form.descripcio}
+              onChange={e => setForm(f => ({...f, descripcio: e.target.value}))}
+              rows={3}
+              style={{ width: '100%', padding: '6px 10px', fontSize: 13,
+                       border: '1px solid var(--color-border-tertiary, #e0d5c5)', borderRadius: 6,
+                       resize: 'vertical' }} />
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" onClick={handleSave} disabled={saving}
+              style={{ padding: '6px 16px', background: 'var(--gold)', color: '#fff',
+                       border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
+              {saving ? 'Guardant...' : '✓ Guardar'}
+            </button>
+            <button type="button" onClick={() => setEditing(false)}
+              style={{ padding: '6px 14px', background: 'transparent', fontSize: 13,
+                       border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+                       borderRadius: 6, cursor: 'pointer' }}>
+              Cancel·lar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between',
+                        alignItems: 'flex-start', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 500 }}>
+                {model.nom_prenda || <span style={{color:'var(--color-text-secondary, #868685)'}}>Sense nom</span>}
+              </div>
+              {model.codi_client && model.codi_client !== model.codi_intern && (
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
+                              fontFamily: 'monospace', marginTop: 2 }}>
+                  {model.codi_client}
+                </div>
+              )}
+              {model.descripcio && (
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
+                              marginTop: 6 }}>
+                  {model.descripcio}
+                </div>
+              )}
+            </div>
+            <button type="button" onClick={() => setEditing(true)}
+              style={{ padding: '5px 12px', background: 'transparent', fontSize: 12,
+                       border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+                       borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <i className="ti ti-edit" aria-hidden="true" /> Editar
+            </button>
+          </div>
+        </div>
+      )}
+
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <tbody>
-          {fields.map(([label, value]) => (
-            <tr key={label} style={{ borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)' }}>
-              <td style={{ padding: '8px 0', color: 'var(--color-text-secondary, #868685)',
+          {readOnlyFields.map(([label, value]) => (
+            <tr key={label}
+              style={{ borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)' }}>
+              <td style={{ padding: '7px 0', color: 'var(--color-text-secondary, #868685)',
                            width: 180, fontSize: 12 }}>
                 {label}
               </td>
-              <td style={{ padding: '8px 0',
-                           fontWeight: label === 'Referència interna' ? 500 : 400,
-                           fontFamily: label.includes('Ref') ? 'monospace' : undefined }}>
+              <td style={{ padding: '7px 0',
+                           fontFamily: label === 'Referència interna' || label === 'Run de talles'
+                             ? 'monospace' : undefined,
+                           color: label === 'Referència interna'
+                             ? 'var(--color-text-secondary, #868685)' : 'var(--color-text-primary, #1d1d1b)' }}>
                 {value}
               </td>
             </tr>

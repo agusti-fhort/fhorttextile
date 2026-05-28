@@ -426,7 +426,7 @@ def create_from_extraction_view(request):
             poms_skipped = []
             match_log = []
 
-            for pom_data in extracted.get('poms', []):
+            for i, pom_data in enumerate(extracted.get('poms', [])):
                 base_value = pom_data.get('base_value_cm')
                 if not base_value:
                     continue
@@ -478,6 +478,7 @@ def create_from_extraction_view(request):
                         'origen': 'IMPORTED',
                         'is_active': True,
                         'notes': description,
+                        'ordre': i,
                     },
                 )
                 poms_created += 1

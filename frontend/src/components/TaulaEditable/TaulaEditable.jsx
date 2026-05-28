@@ -372,6 +372,28 @@ function AfegirPOMInline({ onAdd }) {
     return () => clearTimeout(timer)
   }, [query])
 
+  const handleCreatePOM = async (nom) => {
+    try {
+      const r = await fetch(`${API}/api/v1/poms/crear-tenant/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          nom_client: nom,
+          codi_client: nom.toUpperCase().replace(/\s+/g, '_').slice(0, 20),
+          actiu: true,
+          pendent_revisio: true,
+        }),
+      })
+      const d = await r.json()
+      if (r.ok) {
+        onAdd({ id: d.id, codi_client: d.codi_client, nom_client: d.nom_client })
+        setQuery(''); setResults([]); setOpen(false)
+      }
+    } catch (e) {
+      console.error('Error creant POM', e)
+    }
+  }
+
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)}
@@ -394,7 +416,7 @@ function AfegirPOMInline({ onAdd }) {
                  borderRadius: 4, fontSize: 12, width: 220,
                  fontFamily: 'IBM Plex Mono, monospace' }}
       />
-      {results.length > 0 && (
+      {(results.length > 0 || query.length >= 2) && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, marginTop: 4,
           background: 'var(--color-background-primary, #fff)',
@@ -415,6 +437,22 @@ function AfegirPOMInline({ onAdd }) {
               {p.nom_client || p.nom_ca || p.nom_en}
             </div>
           ))}
+          {query.length >= 2 && results.length === 0 && (
+            <div style={{
+              padding: '8px 12px', fontSize: 12,
+              color: 'var(--color-text-secondary, #868685)',
+              fontFamily: 'IBM Plex Mono, monospace',
+            }}>
+              Cap POM trobat per "{query}".{' '}
+              <button type="button"
+                onClick={() => handleCreatePOM(query)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer',
+                         color: 'var(--gold)', fontSize: 12, padding: 0,
+                         fontFamily: 'IBM Plex Mono, monospace' }}>
+                + Crear POM nou "{query}"
+              </button>
+            </div>
+          )}
         </div>
       )}
       <button type="button" onClick={() => { setOpen(false); setQuery('') }}
