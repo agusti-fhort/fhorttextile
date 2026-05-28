@@ -99,10 +99,11 @@ export default function ModelMesures() {
       const formData = new FormData()
       formData.append('file', importFile)
       formData.append('wizard_context', JSON.stringify({
-        target: model?.target,
-        garment_type: model?.garment_type,
-        construction: model?.construction,
-        size_system: model?.size_system,
+        target_codi: model?.target,
+        garment_type_codi: model?.garment_type_nom || model?.garment_type,
+        garment_type_nom: model?.garment_type_nom || '',
+        construction_codi: model?.construction,
+        size_system_codi: model?.size_system_nom || String(model?.size_system || ''),
         size_run: model?.size_run_model,
         base_size: model?.base_size_label,
       }))
@@ -137,7 +138,7 @@ export default function ModelMesures() {
       if (!r.ok) { setError(JSON.stringify(d)); return }
       const taula = await fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders }).then(r => r.json())
       setTaulaRows(taula.rows || [])
-      setMode('manual')
+      setMode('resultat')
       setSaved(true)
     } catch {
       setError('Error creant les mesures')
