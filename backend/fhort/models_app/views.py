@@ -162,3 +162,43 @@ def create_model_wizard(request):
         estat='Nou',
     )
     return Response({'id': model.id, 'codi_intern': model.codi_intern}, status=201)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_model_step2(request, model_id):
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    d = request.data
+    if d.get('garment_type_id'):
+        from fhort.pom.models import GarmentType
+        try:
+            model.garment_type = GarmentType.objects.get(id=d['garment_type_id'])
+        except GarmentType.DoesNotExist:
+            return Response({'error': 'GarmentType no trobat'}, status=400)
+    if d.get('size_system_id'):
+        from fhort.pom.models import SizeSystem
+        try:
+            model.size_system = SizeSystem.objects.get(id=d['size_system_id'])
+        except SizeSystem.DoesNotExist:
+            return Response({'error': 'SizeSystem no trobat'}, status=400)
+    if d.get('grading_rule_set_id'):
+        from fhort.pom.models import GradingRuleSet
+        try:
+            model.grading_rule_set = GradingRuleSet.objects.get(id=d['grading_rule_set_id'])
+        except GradingRuleSet.DoesNotExist:
+            pass
+    if d.get('target'):
+        model.target = d['target']
+    if d.get('construction'):
+        model.construction = d['construction']
+    if d.get('size_run'):
+        model.size_run_model = d['size_run']
+    if d.get('base_size'):
+        model.base_size_label = d['base_size']
+
+    model.save()
+    return Response({'id': model.id, 'codi_intern': model.codi_intern})

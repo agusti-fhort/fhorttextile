@@ -51,6 +51,7 @@ export default function App() {
           <Route path="models" element={<Models />} />
           <Route path="models/nou" element={<ModelWizard />} />
           <Route path="models/:id/editar" element={<ModelWizard />} />
+          <Route path="models/:id/mesures" element={<ModelWizard />} />
           <Route path="models/nou-des-de-fitxer" element={<Navigate to="/models/nou" replace />} />
           <Route path="models/:id" element={<ModelDetall />} />
           <Route path="models/:id/nou-sf" element={<NouSizeFitting />} />

@@ -101,6 +101,8 @@ class Model(models.Model):
         related_name='models',
     )
     fit_type = models.CharField(max_length=20, choices=FIT_CHOICES, default='Regular')
+    target = models.CharField(max_length=30, null=True, blank=True)
+    construction = models.CharField(max_length=20, null=True, blank=True)
     size_system = models.ForeignKey(
         'pom.SizeSystem',
         on_delete=models.SET_NULL,

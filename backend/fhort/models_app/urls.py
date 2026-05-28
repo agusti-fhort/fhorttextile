@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .views import BaseMeasurementViewSet, ModelFitxerViewSet, ModelViewSet, create_model_wizard, next_model_ref
+from .views import BaseMeasurementViewSet, ModelFitxerViewSet, ModelViewSet, create_model_wizard, next_model_ref, update_model_step2
 
 router = DefaultRouter()
 router.register('models', ModelViewSet, basename='model')
@@ -67,6 +67,7 @@ urlpatterns = (
     [
         path('models/next-ref/', next_model_ref),
         path('models/create-wizard/', create_model_wizard),
+        path('models/<int:model_id>/update-step2/', update_model_step2),
     ]
     + _sprint6_paths
     + _sprint7_model_paths
