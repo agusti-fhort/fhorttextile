@@ -83,8 +83,8 @@ export default function ModelWizard() {
     setError('')
     try {
       const payload = {
-        any: year,
-        temporada: season,
+        year: year,
+        season: season,
         codi_client: refClient || null,
         nom_prenda: nomPrenda || null,
         descripcio: descripcio || null,
