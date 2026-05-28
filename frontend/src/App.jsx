@@ -18,6 +18,7 @@ import OnboardingWizard from './pages/OnboardingWizard'
 import NouModel from './pages/NouModel'
 import NouSizeFitting from './pages/NouSizeFitting'
 import ImportWizard from './pages/ImportWizard'
+import ModelWizard from './pages/ModelWizard'
 import KanbanTasques from './pages/KanbanTasques'
 import Temps from './pages/Temps'
 import Avisos from './pages/Avisos'
@@ -48,8 +49,9 @@ export default function App() {
         }>
           <Route index element={<Dashboard />} />
           <Route path="models" element={<Models />} />
-          <Route path="models/nou" element={<NouModel />} />
-          <Route path="models/nou-des-de-fitxer" element={<ImportWizard />} />
+          <Route path="models/nou" element={<ModelWizard />} />
+          <Route path="models/:id/editar" element={<ModelWizard />} />
+          <Route path="models/nou-des-de-fitxer" element={<Navigate to="/models/nou" replace />} />
           <Route path="models/:id" element={<ModelDetall />} />
           <Route path="models/:id/nou-sf" element={<NouSizeFitting />} />
           <Route path="fitting" element={<SizeFittingLlista />} />

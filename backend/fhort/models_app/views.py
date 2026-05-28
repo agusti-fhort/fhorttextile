@@ -1,6 +1,10 @@
+import datetime
+
 from django.db import connection
 from rest_framework import viewsets
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -91,3 +95,70 @@ class ModelServeiViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         from .serializers import ModelServeiSerializer
         return ModelServeiSerializer
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def next_model_ref(request):
+    year = request.GET.get('year', str(datetime.date.today().year))
+    season = request.GET.get('season', 'SS')
+    prefix = 'FTT'
+    year_short = str(year)[-2:]
+    base = f"{prefix}-{season}{year_short}-"
+    from django.db import connection
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT codi_intern FROM models_app_model "
+            "WHERE codi_intern LIKE %s "
+            "ORDER BY codi_intern DESC LIMIT 1",
+            [base + '%']
+        )
+        row = cursor.fetchone()
+    if row:
+        last_num = int(row[0].split('-')[-1])
+        next_num = last_num + 1
+    else:
+        next_num = 1
+    codi = f"{base}{str(next_num).zfill(4)}"
+    return Response({'codi_intern': codi, 'next_number': next_num})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_model_wizard(request):
+    year = request.data.get('year')
+    season = request.data.get('season')
+    ref_client = request.data.get('ref_client', '')
+    nom_prenda = request.data.get('nom_prenda', '')
+    descripcio = request.data.get('descripcio', '')
+
+    if not year or not season:
+        return Response({'error': 'year i season són obligatoris'}, status=400)
+
+    prefix = 'FTT'
+    year_short = str(year)[-2:]
+    base = f"{prefix}-{season}{year_short}-"
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT codi_intern FROM models_app_model "
+            "WHERE codi_intern LIKE %s "
+            "ORDER BY codi_intern DESC LIMIT 1",
+            [base + '%']
+        )
+        row = cursor.fetchone()
+    next_num = (int(row[0].split('-')[-1]) + 1) if row else 1
+    codi_intern = f"{base}{str(next_num).zfill(4)}"
+
+    model = Model.objects.create(
+        codi_intern=codi_intern,
+        codi_client=ref_client or codi_intern,
+        codi_tenant=prefix,
+        any=int(year),
+        temporada=season,
+        sequencial=next_num,
+        nom_prenda=nom_prenda or None,
+        descripcio=descripcio or None,
+        estat='Nou',
+    )
+    return Response({'id': model.id, 'codi_intern': model.codi_intern}, status=201)

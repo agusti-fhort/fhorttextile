@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .views import BaseMeasurementViewSet, ModelFitxerViewSet, ModelViewSet
+from .views import BaseMeasurementViewSet, ModelFitxerViewSet, ModelViewSet, create_model_wizard, next_model_ref
 
 router = DefaultRouter()
 router.register('models', ModelViewSet, basename='model')
@@ -64,7 +64,11 @@ except Exception:
     _sprint17_paths = []
 
 urlpatterns = (
-    _sprint6_paths
+    [
+        path('models/next-ref/', next_model_ref),
+        path('models/create-wizard/', create_model_wizard),
+    ]
+    + _sprint6_paths
     + _sprint7_model_paths
     + _sprint8_paths
     + _sprint17_paths

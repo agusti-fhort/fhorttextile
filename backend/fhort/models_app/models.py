@@ -75,20 +75,22 @@ class Model(models.Model):
     ]
 
     codi_intern = models.CharField(max_length=40, unique=True)
-    codi_client = models.CharField(max_length=80)
+    codi_client = models.CharField(max_length=80, blank=True, default='')
 
     codi_tenant = models.CharField(max_length=3)
     any = models.PositiveSmallIntegerField()
     temporada = models.CharField(max_length=4, choices=TEMPORADA_CHOICES)
     sequencial = models.PositiveIntegerField()
 
-    nom_prenda = models.CharField(max_length=200)
+    nom_prenda = models.CharField(max_length=200, blank=True, null=True)
     descripcio = models.TextField(null=True, blank=True)
     color_referencia = models.CharField(max_length=100, null=True, blank=True)
 
     garment_type = models.ForeignKey(
         'pom.GarmentType',
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='models',
     )
     garment_group = models.ForeignKey(
