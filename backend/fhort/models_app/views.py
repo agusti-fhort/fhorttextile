@@ -256,7 +256,7 @@ def taula_mesures_view(request, model_id):
     base_measurements = BaseMeasurement.objects.filter(
         model=model,
         is_active=True,
-    ).select_related('pom', 'pom__pom_global').order_by('pom__codi_client')
+    ).select_related('pom', 'pom__pom_global').order_by('ordre', 'pom__codi_client')
 
     graded_by_pom = {}
     try:
@@ -282,6 +282,8 @@ def taula_mesures_view(request, model_id):
         pom = bm.pom
         pg = getattr(pom, 'pom_global', None)
         rows.append({
+            'id': bm.id,
+            'ordre': bm.ordre,
             'pom_id': pom.id,
             'pom_code': pom.codi_client,
             'nom_fitxa': bm.nom_fitxa or '',
@@ -392,3 +394,26 @@ def set_measurements_view(request, model_id):
 
     return Response({'created': created, 'updated': updated, 'errors': errors},
                     status=201 if not errors else 207)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reorder_measurements_view(request, model_id):
+    """
+    Actualitza l'ordre de les BaseMeasurements d'un model.
+    Payload: { order: [bm_id_1, bm_id_2, ...] }
+    """
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    order = request.data.get('order', [])
+    if not order:
+        return Response({'error': 'order és obligatori'}, status=400)
+
+    from fhort.models_app.models import BaseMeasurement
+    for i, bm_id in enumerate(order):
+        BaseMeasurement.objects.filter(id=bm_id, model=model).update(ordre=i)
+
+    return Response({'updated': len(order)})

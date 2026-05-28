@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import TaulaEditable from '../components/TaulaEditable/TaulaEditable'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -20,8 +21,6 @@ export default function ModelMesures() {
 
   // Manual
   const [pomsSuggerits, setPomsSuggerits] = useState([])
-  const [measurements, setMeasurements] = useState({}) // { pom_id: value }
-  const [selectedPoms, setSelectedPoms] = useState([])
 
   // Import
   const [importFile, setImportFile] = useState(null)
@@ -32,7 +31,6 @@ export default function ModelMesures() {
   const [taulaRows, setTaulaRows] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -41,9 +39,7 @@ export default function ModelMesures() {
       fetch(`${API}/api/v1/models/${id}/poms-suggerits/`, { headers: authHeaders }).then(r => r.json()),
     ]).then(([modelData, pomsData]) => {
       setModel(modelData)
-      const poms = pomsData.poms || []
-      setPomsSuggerits(poms)
-      setSelectedPoms(poms.filter(p => p.is_key).map(p => p.pom_id))
+      setPomsSuggerits(pomsData.poms || [])
     }).catch(() => setError('Error carregant les dades'))
   }, [id])
 
@@ -54,43 +50,11 @@ export default function ModelMesures() {
       .then(d => {
         if (d.rows && d.rows.length > 0) {
           setTaulaRows(d.rows)
-          const meas = {}
-          d.rows.forEach(r => { meas[r.pom_id] = r.base_value_cm })
-          setMeasurements(meas)
-          setSelectedPoms(d.rows.map(r => r.pom_id))
           setMode('manual')
         }
       })
       .catch(() => {})
   }, [id])
-
-  const handleSaveMeasurements = async () => {
-    const selected = pomsSuggerits.filter(p => selectedPoms.includes(p.pom_id))
-    const toSave = selected
-      .filter(p => measurements[p.pom_id] != null && measurements[p.pom_id] !== '')
-      .map(p => ({ pom_id: p.pom_id, base_value_cm: parseFloat(measurements[p.pom_id]) }))
-
-    if (toSave.length === 0) { setError('Introdueix almenys un valor'); return }
-
-    setSaving(true); setError('')
-    try {
-      const r = await fetch(`${API}/api/v1/models/${id}/set-measurements/`, {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ measurements: toSave }),
-      })
-      const d = await r.json()
-      if (!r.ok) { setError(JSON.stringify(d)); return }
-
-      const taula = await fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders }).then(r => r.json())
-      setTaulaRows(taula.rows || [])
-      setMode('resultat')
-    } catch {
-      setError('Error de connexió')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const handleImport = async () => {
     if (!importFile) return
@@ -137,7 +101,6 @@ export default function ModelMesures() {
       const taula = await fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders }).then(r => r.json())
       setTaulaRows(taula.rows || [])
       setMode('resultat')
-      setSaved(true)
     } catch {
       setError('Error creant les mesures')
     } finally {
@@ -212,46 +175,27 @@ export default function ModelMesures() {
         <div style={{ maxWidth: 1000, margin: '0 auto', padding: '2rem 1rem' }}>
           <ModelSummaryBar model={model} />
 
-          <POMSelector
-            poms={pomsSuggerits}
-            selected={selectedPoms}
-            onToggle={(pomId) => setSelectedPoms(prev =>
-              prev.includes(pomId) ? prev.filter(x => x !== pomId) : [...prev, pomId]
-            )}
-          />
-
-          <MeasurementsTable
-            poms={pomsSuggerits.filter(p => selectedPoms.includes(p.pom_id))}
-            measurements={measurements}
+          <TaulaEditable
+            rows={taulaRows.length > 0 ? taulaRows : pomsSuggerits
+              .filter(p => p.is_key)
+              .map((p, i) => ({
+                id: `tmp-${p.pom_id}`,
+                pom_id: p.pom_id, pom_code: p.pom_code,
+                nom_ca: p.nom_ca, nom_en: p.nom_en, nom_fitxa: '',
+                base_value_cm: null, graded: {}, ordre: i,
+              }))}
+            sizeRun={model?.size_run_model?.split('·').map(s => s.trim()) || []}
             baseSize={model?.base_size_label}
-            sizeRun={model?.size_run_model ? model.size_run_model.split('·') : []}
-            taulaRows={taulaRows}
-            onChange={(pomId, value) => setMeasurements(prev => ({ ...prev, [pomId]: value }))}
+            modelId={parseInt(id)}
+            isImport={false}
+            onSaved={(newRows) => setTaulaRows(newRows)}
           />
-
-          {saved && (
-            <div style={{
-              marginTop: 16, padding: '8px 14px', borderRadius: 8,
-              background: '#EBF8EC', border: '1px solid #A9DFBF',
-              fontSize: 13, color: '#1E8449', fontFamily: 'IBM Plex Mono, monospace',
-            }}>
-              ✓ Mesures guardades.
-            </div>
-          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
             <button type="button" onClick={() => setMode('selector')}
               style={{ padding: '8px 16px', border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
                        borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
               ← Enrere
-            </button>
-            <button type="button" onClick={handleSaveMeasurements} disabled={saving}
-              style={{
-                padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 14, fontWeight: 500,
-                background: saving ? '#ccc' : 'var(--gold)', color: '#fff',
-                cursor: saving ? 'not-allowed' : 'pointer',
-              }}>
-              {saving ? 'Guardant...' : 'Guardar mesures →'}
             </button>
           </div>
         </div>
@@ -332,142 +276,17 @@ export default function ModelMesures() {
             </button>
           </div>
 
-          <TaulaResultat rows={taulaRows}
-                         sizeRun={model?.size_run_model?.split('·') || []}
-                         baseSize={model?.base_size_label} />
+          <TaulaEditable
+            rows={taulaRows}
+            sizeRun={model?.size_run_model?.split('·').map(s => s.trim()) || []}
+            baseSize={model?.base_size_label}
+            modelId={parseInt(id)}
+            isImport={importResult != null}
+            onSaved={(newRows) => setTaulaRows(newRows)}
+          />
         </div>
       )}
     </>
-  )
-}
-
-const thResult = { padding: '8px 12px', textAlign: 'left', fontSize: 12, fontWeight: 500 }
-const tdResult = { padding: '6px 12px', verticalAlign: 'middle', fontSize: 13 }
-
-function TaulaResultat({ rows, sizeRun, baseSize }) {
-  if (!rows || rows.length === 0) {
-    return <p style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>
-      Cap mesura guardada.
-    </p>
-  }
-
-  return (
-    <div style={{ overflowX: 'auto', width: '100%' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
-          <tr style={{ background: 'var(--color-background-secondary)',
-                       borderBottom: '1px solid var(--color-border-tertiary)' }}>
-            <th style={thResult}>Codi POM</th>
-            <th style={thResult}>Nomenclatura</th>
-            <th style={thResult}>Descripció</th>
-            {sizeRun.map(s => (
-              <th key={s} style={{
-                ...thResult, textAlign: 'right', fontFamily: 'monospace',
-                background: s.trim() === baseSize ? '#fdf6ee' : undefined,
-                color: s.trim() === baseSize ? '#7a4a10' : undefined,
-              }}>
-                {s.trim()} {s.trim() === baseSize ? '★' : ''}
-              </th>
-            ))}
-            <th style={{ ...thResult, textAlign: 'right', color: 'var(--color-text-secondary)' }}>
-              Δ S→L
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(row => {
-            const sizes = sizeRun.map(s => s.trim())
-            const firstVal = row.graded?.[sizes[0]]
-            const lastVal = row.graded?.[sizes[sizes.length - 1]]
-            const delta = (firstVal != null && lastVal != null)
-              ? (lastVal - firstVal).toFixed(1)
-              : '—'
-
-            return (
-              <tr key={row.pom_id}
-                style={{ borderBottom: '0.5px solid var(--color-border-tertiary)' }}>
-                <td style={{ ...tdResult, fontFamily: 'monospace',
-                             fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                  {row.pom_code}
-                </td>
-                <td style={{ ...tdResult, fontFamily: 'monospace', color: 'var(--gold)' }}>
-                  <NomFitxaEdit pomId={row.pom_id} value={row.nom_fitxa} />
-                </td>
-                <td style={tdResult}>{row.nom_ca || row.nom_en}</td>
-                {sizeRun.map(s => {
-                  const sl = s.trim()
-                  const val = sl === baseSize
-                    ? row.base_value_cm
-                    : row.graded?.[sl]
-                  return (
-                    <td key={sl} style={{
-                      ...tdResult, textAlign: 'right', fontFamily: 'monospace',
-                      background: sl === baseSize ? '#fefaf5' : undefined,
-                      fontWeight: sl === baseSize ? 500 : 400,
-                    }}>
-                      {val != null ? Number(val).toFixed(1) : '—'}
-                    </td>
-                  )
-                })}
-                <td style={{ ...tdResult, textAlign: 'right', fontFamily: 'monospace',
-                             color: 'var(--color-text-secondary)' }}>
-                  {delta}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function NomFitxaEdit({ pomId, value }) {
-  const [editing, setEditing] = useState(false)
-  const [val, setVal] = useState(value || '')
-  const token = localStorage.getItem('access_token')
-
-  const handleSave = async () => {
-    await fetch(`${API}/api/v1/base-measurements/?pom=${pomId}&page_size=1`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).then(r => r.json()).then(async d => {
-      const bm = d.results?.[0] || d[0]
-      if (bm) {
-        await fetch(`${API}/api/v1/base-measurements/${bm.id}/`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ nom_fitxa: val }),
-        })
-      }
-    })
-    setEditing(false)
-  }
-
-  if (editing) {
-    return (
-      <input
-        autoFocus
-        value={val}
-        onChange={e => setVal(e.target.value)}
-        onBlur={handleSave}
-        onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false) }}
-        style={{
-          width: 60, padding: '2px 6px', border: '1px solid var(--gold)',
-          borderRadius: 4, fontSize: 12, fontFamily: 'monospace', background: '#fdf6ee',
-        }}
-      />
-    )
-  }
-
-  return (
-    <span onClick={() => setEditing(true)}
-      style={{ cursor: 'pointer', padding: '2px 4px', borderRadius: 4,
-               minWidth: 40, display: 'inline-block',
-               color: val ? 'var(--gold)' : 'var(--color-text-secondary)',
-               borderBottom: '1px dashed var(--color-border-tertiary)' }}
-      title="Clic per editar nomenclatura">
-      {val || '—'}
-    </span>
   )
 }
 
@@ -493,109 +312,6 @@ function ModelSummaryBar({ model }) {
           {model.size_run_model}
         </span>
       )}
-    </div>
-  )
-}
-
-function POMSelector({ poms, selected, onToggle }) {
-  const keyPoms = poms.filter(p => p.is_key)
-  const otherPoms = poms.filter(p => !p.is_key)
-
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)', marginBottom: 8 }}>
-        PUNTS DE MESURA — selecciona els que vols incloure
-      </div>
-      {keyPoms.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <span style={{ fontSize: 11, color: 'var(--gold)', marginRight: 8 }}>KEY</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-            {keyPoms.map(p => (
-              <POMChip key={p.pom_id} pom={p} active={selected.includes(p.pom_id)} onToggle={onToggle} />
-            ))}
-          </div>
-        </div>
-      )}
-      {otherPoms.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {otherPoms.map(p => (
-            <POMChip key={p.pom_id} pom={p} active={selected.includes(p.pom_id)} onToggle={onToggle} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function POMChip({ pom, active, onToggle }) {
-  return (
-    <button type="button" onClick={() => onToggle(pom.pom_id)}
-      style={{
-        padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-        border: active ? '1.5px solid var(--gold)' : '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-        background: active ? '#fdf6ee' : 'transparent',
-        color: active ? '#7a4a10' : 'var(--color-text-secondary, #868685)',
-        fontFamily: 'IBM Plex Mono, monospace',
-      }}>
-      <span style={{ fontFamily: 'monospace', marginRight: 4 }}>{pom.pom_code}</span>
-      {pom.nom_ca || pom.nom_en}
-    </button>
-  )
-}
-
-function MeasurementsTable({ poms, measurements, baseSize, sizeRun, taulaRows, onChange }) {
-  const gradedByPom = {}
-  taulaRows.forEach(r => { gradedByPom[r.pom_id] = r.graded || {} })
-
-  return (
-    <div style={{ overflowX: 'auto', marginTop: 16 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
-          <tr style={{ background: 'var(--color-background-secondary, #f5f0ea)' }}>
-            <th style={thStyle}>Codi</th>
-            <th style={thStyle}>Descripció</th>
-            <th style={{ ...thStyle, background: '#fdf6ee', color: '#7a4a10' }}>
-              {baseSize} ★ (base)
-            </th>
-            {sizeRun.filter(s => s !== baseSize).map(s => (
-              <th key={s} style={thStyle}>{s}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {poms.map(p => (
-            <tr key={p.pom_id} style={{ borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)' }}>
-              <td style={{ ...tdStyle, fontFamily: 'monospace', color: 'var(--gold)' }}>
-                {p.pom_code}
-              </td>
-              <td style={tdStyle}>{p.nom_ca || p.nom_en}</td>
-              <td style={{ ...tdStyle, background: '#fefaf5' }}>
-                <input
-                  type="number" step="0.5" min="0"
-                  value={measurements[p.pom_id] ?? ''}
-                  onChange={e => onChange(p.pom_id, e.target.value)}
-                  style={{
-                    width: 70, padding: '4px 6px',
-                    border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-                    borderRadius: 4, fontSize: 13, textAlign: 'right', fontFamily: 'monospace',
-                  }}
-                  placeholder="—"
-                />
-              </td>
-              {sizeRun.filter(s => s !== baseSize).map(s => (
-                <td key={s} style={{
-                  ...tdStyle, textAlign: 'right', fontFamily: 'monospace',
-                  color: 'var(--color-text-secondary, #868685)',
-                }}>
-                  {gradedByPom[p.pom_id]?.[s] != null
-                    ? gradedByPom[p.pom_id][s].toFixed(1)
-                    : '—'}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   )
 }

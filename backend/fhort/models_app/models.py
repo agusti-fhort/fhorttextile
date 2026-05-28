@@ -346,12 +346,13 @@ class BaseMeasurement(models.Model):
     origen = models.CharField(
         max_length=20, choices=ORIGEN_CHOICES, default='STANDARD',
     )
+    ordre = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name = 'Mesura base'
         verbose_name_plural = 'Mesures base'
         unique_together = [('model', 'pom')]
-        ordering = ['model', 'pom']
+        ordering = ['model', 'ordre', 'pom']
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client} = {self.base_value_cm}cm'
