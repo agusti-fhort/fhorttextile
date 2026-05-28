@@ -6,7 +6,6 @@ import Dashboard from './pages/Dashboard'
 import Models from './pages/Models'
 import POMs from './pages/POMs'
 import Tasques from './pages/Tasques'
-import ModelDetall from './pages/ModelDetall'
 import SizeFittingLlista from './pages/SizeFittingLlista'
 import SizeFittingDetall from './pages/SizeFittingDetall'
 import FittingDetall from './pages/FittingDetall'
@@ -18,6 +17,7 @@ import OnboardingWizard from './pages/OnboardingWizard'
 import NouSizeFitting from './pages/NouSizeFitting'
 import ModelWizard from './pages/ModelWizard'
 import ModelMesures from './pages/ModelMesures'
+import ModelFitxa from './pages/ModelFitxa'
 import KanbanTasques from './pages/KanbanTasques'
 import Temps from './pages/Temps'
 import Avisos from './pages/Avisos'
@@ -52,7 +52,7 @@ export default function App() {
           <Route path="models/:id/editar" element={<ModelWizard />} />
           <Route path="models/:id/mesures" element={<ModelMesures />} />
           <Route path="models/nou-des-de-fitxer" element={<Navigate to="/models/nou" replace />} />
-          <Route path="models/:id" element={<ModelDetall />} />
+          <Route path="models/:id" element={<ModelFitxa />} />
           <Route path="models/:id/nou-sf" element={<NouSizeFitting />} />
           <Route path="fitting" element={<SizeFittingLlista />} />
           <Route path="fitting/:id" element={<SizeFittingDetall />} />

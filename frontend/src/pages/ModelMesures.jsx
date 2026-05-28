@@ -284,6 +284,18 @@ export default function ModelMesures() {
             isImport={importResult != null}
             onSaved={(newRows) => setTaulaRows(newRows)}
           />
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+            <button type="button" onClick={() => navigate(`/models/${id}`)}
+              style={{
+                padding: '8px 20px', borderRadius: 6, border: 'none',
+                fontSize: 14, fontWeight: 500,
+                background: 'var(--gold)', color: '#fff', cursor: 'pointer',
+                fontFamily: 'IBM Plex Mono, monospace',
+              }}>
+              Continuar a la fitxa →
+            </button>
+          </div>
         </div>
       )}
     </>

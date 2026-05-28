@@ -60,6 +60,7 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     garment_group_nom = serializers.CharField(source='garment_group.nom', read_only=True)
     responsable_nom = serializers.CharField(source='responsable.nom_complet', read_only=True)
     size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
+    size_system_nom = serializers.CharField(source='size_system.nom', read_only=True)
     talla_base_etiqueta = serializers.CharField(source='talla_base.etiqueta', read_only=True)
 
     class Meta:
