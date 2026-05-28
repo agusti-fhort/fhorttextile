@@ -163,7 +163,7 @@ export default function ModelWizard() {
         // Prefill per si l'usuari clica "editar"
         setYear(d.any)
         setSeason(d.temporada)
-        setRefClient(d.codi_client || '')
+        setRefClient((d.codi_client && d.codi_client !== d.codi_intern) ? d.codi_client : '')
         setNomPrenda(d.nom_prenda || '')
         setDescripcio(d.descripcio || '')
         setPreviewRef(d.codi_intern || '—')
@@ -197,6 +197,7 @@ export default function ModelWizard() {
   }
 
   const handlePatchStep1 = async () => {
+    console.log('handleSaveStep1 cridat', { modelIdParam, codiClient: refClient, nomPrenda })
     setSubmitting(true)
     setError('')
     try {
@@ -210,18 +211,21 @@ export default function ModelWizard() {
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(payload),
       })
+      console.log('PATCH response', r.status)
       const data = await r.json()
       if (!r.ok) throw new Error(data.detail || JSON.stringify(data))
       setSummary(s => ({ ...s, ...payload }))
       setShowStep1(false)
       setSubmitting(false)
     } catch (e) {
+      console.error('PATCH error', e)
       setError(e.message)
       setSubmitting(false)
     }
   }
 
   const handleSaveStep2 = async () => {
+    console.log('handleSaveStep2 cridat', { modelIdParam, target, garmentTypeId: garmentType?.id, sizingResult })
     if (!sizingResult) return
     setSavingStep2(true)
     setError('')
@@ -241,9 +245,11 @@ export default function ModelWizard() {
         body: JSON.stringify(payload),
       })
       const data = await r.json()
+      console.log('PATCH step2 response', r.status, data)
       if (!r.ok) throw new Error(data.detail || JSON.stringify(data))
       navigate(`/models/${modelIdParam}/mesures`)
     } catch (e) {
+      console.error('PATCH step2 error', e)
       setError(e.message)
       setSavingStep2(false)
     }
@@ -286,7 +292,7 @@ export default function ModelWizard() {
                   {TARGET_ORDER.map(codi => (
                     <button
                       key={codi}
-                      onClick={() => { setTarget(codi); setSubStep('B') }}
+                      onClick={() => { if (target !== codi) setSizingResult(null); setTarget(codi); setSubStep('B') }}
                       style={chipStyle(target === codi)}
                     >
                       <span>{TARGET_LABELS[codi]}</span>
@@ -315,7 +321,7 @@ export default function ModelWizard() {
                   {CONSTRUCTIONS.map(c => (
                     <button
                       key={c.codi}
-                      onClick={() => { setConstruction(c.codi); setSubStep('D') }}
+                      onClick={() => { if (construction !== c.codi) setSizingResult(null); setConstruction(c.codi); setSubStep('D') }}
                       style={chipStyle(construction === c.codi)}
                     >
                       <span>{c.label}</span>
@@ -331,7 +337,7 @@ export default function ModelWizard() {
                 {!sizingResult ? (
                   <SizingProfileWizard
                     initialValues={{ target, construction }}
-                    onComplete={(res) => setSizingResult(res)}
+                    onComplete={(res) => { console.log("SizingProfileWizard onComplete", res); if (res && res.size_system_id) setSizingResult(res); }}
                     onCancel={() => setSubStep('C')}
                   />
                 ) : (
@@ -510,7 +516,7 @@ function renderStep1Form({
             }}
           >Cancel·lar</button>
         )}
-        <button onClick={onPrimary} disabled={submitting} style={primaryBtn(submitting)}>
+        <button type="button" onClick={() => onPrimary?.()} disabled={submitting} style={primaryBtn(submitting)}>
           {submitting ? 'Guardant...' : primaryLabel}
         </button>
       </div>
