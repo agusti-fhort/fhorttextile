@@ -619,7 +619,8 @@ function ImportSpinner() {
 function ImportPreview({ result, model, onConfirm, onReject }) {
   const ext = result?.extracted || {}
   const poms = ext.poms || []
-  const sizeRun = ext.sizes || []
+  const sizeRun = (ext.size_run?.value || '').split('·').map(s => s.trim()).filter(Boolean)
+  const baseSize = ext.base_size?.value || model?.base_size_label
   const gradingTable = ext.grading_table || []
   const gradedByCode = {}
   gradingTable.forEach(g => { gradedByCode[g.code] = g.values_by_size || {} })
@@ -633,9 +634,9 @@ function ImportPreview({ result, model, onConfirm, onReject }) {
       }}>
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Dades extretes</div>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', fontSize: 12, color: 'var(--color-text-secondary, #868685)' }}>
-          {ext.header?.brand && <span>Marca: <strong>{ext.header.brand}</strong></span>}
-          {ext.header?.style_name && <span>Estil: <strong>{ext.header.style_name}</strong></span>}
-          {ext.base_size && <span>Talla base: <strong>{ext.base_size}</strong></span>}
+          {ext.brand?.value && <span>Marca: <strong>{ext.brand.value}</strong></span>}
+          {ext.style_name?.value && <span>Estil: <strong>{ext.style_name.value}</strong></span>}
+          {baseSize && <span>Talla base: <strong>{baseSize}</strong></span>}
           {sizeRun.length > 0 && <span>Run: <strong>{sizeRun.join('·')}</strong></span>}
         </div>
         {ext.size_discrepancy && (
@@ -662,7 +663,7 @@ function ImportPreview({ result, model, onConfirm, onReject }) {
               {sizeRun.map(s => (
                 <th key={s} style={{
                   ...thStyle,
-                  background: s === (ext.base_size || model?.base_size_label) ? '#fdf6ee' : undefined,
+                  background: s === baseSize ? '#fdf6ee' : undefined,
                 }}>{s}</th>
               ))}
             </tr>
@@ -682,11 +683,11 @@ function ImportPreview({ result, model, onConfirm, onReject }) {
                 {sizeRun.map(s => (
                   <td key={s} style={{
                     ...tdStyle, textAlign: 'right', fontFamily: 'monospace',
-                    background: s === (ext.base_size || model?.base_size_label) ? '#fefaf5' : undefined,
+                    background: s === baseSize ? '#fefaf5' : undefined,
                   }}>
                     {gradedByCode[p.code]?.[s] != null
                       ? parseFloat(gradedByCode[p.code][s]).toFixed(1)
-                      : (s === ext.base_size ? p.base_value_cm?.toFixed(1) : '—')}
+                      : (s === baseSize ? p.base_value_cm?.toFixed(1) : '—')}
                   </td>
                 ))}
               </tr>

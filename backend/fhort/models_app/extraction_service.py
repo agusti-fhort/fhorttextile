@@ -78,7 +78,7 @@ Afegeix a anomalies_detected (no bloquejant):
 
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = "claude-sonnet-4-5"
+MODEL = "claude-opus-4-5"
 
 
 def _get_api_key() -> str:
@@ -143,7 +143,7 @@ def extract_from_file(file_bytes: bytes, filename: str, wizard_context: dict | N
 
     payload = {
         "model": MODEL,
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "messages": [
             {
                 "role": "user",
