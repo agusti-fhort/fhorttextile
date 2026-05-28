@@ -619,8 +619,9 @@ function ImportSpinner() {
 function ImportPreview({ result, model, onConfirm, onReject }) {
   const ext = result?.extracted || {}
   const poms = ext.poms || []
-  const sizeRun = (ext.size_run?.value || '').split('·').map(s => s.trim()).filter(Boolean)
-  const baseSize = ext.base_size?.value || model?.base_size_label
+  const sizeRunRaw = ext.size_run?.value ?? ext.size_run ?? ''
+  const sizeRun = (typeof sizeRunRaw === 'string' ? sizeRunRaw : '').split('·').map(s => s.trim()).filter(Boolean)
+  const baseSize = (ext.base_size?.value ?? ext.base_size ?? model?.base_size_label) || ''
   const gradingTable = ext.grading_table || []
   const gradedByCode = {}
   gradingTable.forEach(g => { gradedByCode[g.code] = g.values_by_size || {} })
