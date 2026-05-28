@@ -152,7 +152,7 @@ def create_model_wizard(request):
 
     model = Model.objects.create(
         codi_intern=codi_intern,
-        codi_client=ref_client or codi_intern,
+        codi_client=ref_client,
         codi_tenant=prefix,
         any=int(year),
         temporada=season,
