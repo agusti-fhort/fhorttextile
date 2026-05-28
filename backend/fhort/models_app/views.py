@@ -2,7 +2,8 @@ import datetime
 
 from django.db import connection
 from rest_framework import viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -51,7 +52,7 @@ class ModelFitxerViewSet(viewsets.ModelViewSet):
     serializer_class = ModelFitxerSerializer
     queryset = ModelFitxer.objects.select_related('model', 'pujat_per').all()
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['model', 'categoria', 'enviat_ia']
+    filterset_fields = ['model', 'categoria', 'tipus', 'enviat_ia']
     ordering_fields = ['data_pujada']
     ordering = ['-data_pujada']
 
@@ -417,3 +418,294 @@ def reorder_measurements_view(request, model_id):
         BaseMeasurement.objects.filter(id=bm_id, model=model).update(ordre=i)
 
     return Response({'updated': len(order)})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def upload_fitxer_view(request, model_id):
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    fitxer = request.FILES.get('fitxer')
+    if not fitxer:
+        return Response({'error': 'fitxer és obligatori'}, status=400)
+
+    tipus = request.data.get('tipus', 'ALTRES')
+    nom = request.data.get('nom') or fitxer.name
+
+    # versio: incrementa l'última del mateix tipus
+    ultima = ModelFitxer.objects.filter(model=model, tipus=tipus).order_by('-id').first()
+    try:
+        num_prev = int(ultima.versio) if ultima and ultima.versio else 0
+    except (TypeError, ValueError):
+        num_prev = 0
+    versio = str(num_prev + 1)
+
+    # Mapeig de tipus → categoria (existent) per coherència de filtres antics
+    categoria_map = {
+        'PATRO': 'Patro', 'MARCADA': 'Patro', 'ESCALAT': 'Patro',
+        'SKETCH_FLETXES': 'Disseny', 'SKETCH_NET': 'Disseny',
+        'FITXA': 'Document',
+    }
+    categoria = categoria_map.get(tipus, 'Document')
+
+    mf = ModelFitxer.objects.create(
+        model=model,
+        fitxer=fitxer,
+        nom_fitxer=nom,
+        tipus=tipus,
+        categoria=categoria,
+        versio=versio,
+        mida_bytes=fitxer.size,
+        path_servidor=fitxer.name,
+        pujat_per=getattr(request.user, 'profile', None),
+    )
+
+    return Response({
+        'id': mf.id,
+        'nom_fitxer': mf.nom_fitxer,
+        'tipus': mf.tipus,
+        'categoria': mf.categoria,
+        'versio': mf.versio,
+        'url': request.build_absolute_uri(mf.fitxer.url) if mf.fitxer else None,
+    }, status=201)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def analisi_ia_view(request, model_id):
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    import anthropic
+    import base64
+    import json
+    from django.conf import settings
+
+    base_measurements = BaseMeasurement.objects.filter(
+        model=model, is_active=True
+    ).select_related('pom').order_by('ordre')
+
+    mesures_text = "\n".join([
+        f"- {bm.pom.codi_client}: {bm.base_value_cm}cm ({bm.pom.nom_client or ''})"
+        for bm in base_measurements
+    ])
+
+    fitxers_analisi = list(ModelFitxer.objects.filter(
+        model=model,
+        tipus__in=['PATRO', 'ESCALAT', 'SKETCH_FLETXES', 'SKETCH_NET']
+    ).order_by('-id')[:5])
+
+    content_blocks = []
+    for mf in fitxers_analisi:
+        if not mf.fitxer:
+            continue
+        try:
+            with mf.fitxer.open('rb') as f:
+                data = f.read()
+            ext = mf.nom_fitxer.split('.')[-1].lower()
+            if ext == 'pdf':
+                content_blocks.append({
+                    'type': 'document',
+                    'source': {
+                        'type': 'base64',
+                        'media_type': 'application/pdf',
+                        'data': base64.standard_b64encode(data).decode('utf-8'),
+                    },
+                    'title': mf.nom_fitxer,
+                })
+            elif ext in ('jpg', 'jpeg', 'png', 'svg'):
+                media_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                             'png': 'image/png', 'svg': 'image/svg+xml'}
+                content_blocks.append({
+                    'type': 'image',
+                    'source': {
+                        'type': 'base64',
+                        'media_type': media_map.get(ext, 'image/png'),
+                        'data': base64.standard_b64encode(data).decode('utf-8'),
+                    },
+                })
+        except Exception:
+            continue
+
+    if not content_blocks:
+        return Response({'error': 'No hi ha fitxers per analitzar'}, status=400)
+
+    prompt = (
+        f"Ets un expert tècnic en patronatge i especificació de peces de moda.\n\n"
+        f"MODEL: {model.codi_intern} — {model.nom_prenda or ''}\n"
+        f"TARGET: {model.target or ''} | CONSTRUCCIÓ: {model.construction or ''} | "
+        f"FIT: {model.fit_type or ''}\n"
+        f"TALLA BASE: {model.base_size_label or ''} | RUN: {model.size_run_model or ''}\n\n"
+        f"MESURES DE LA TALLA BASE:\n{mesures_text or 'No hi ha mesures registrades.'}\n\n"
+        "Analitza els fitxers adjunts i detecta discrepàncies. Retorna ÚNICAMENT aquest JSON:\n"
+        "{\n"
+        '  "alertes": [\n'
+        "    {\n"
+        '      "tipus": "DISCREPANCIA_TEIXIT|DISCREPANCIA_MESURA|DISCREPANCIA_ESCALAT|AVÍS_SKETCH|ALTRE",\n'
+        '      "gravetat": "CRITICA|IMPORTANT|INFORMATIVA",\n'
+        '      "descripcio": "descripció clara del problema",\n'
+        '      "pom_afectat": "codi POM o null",\n'
+        '      "valor_taula": "valor a la taula o null",\n'
+        '      "valor_patro": "valor al patró o null",\n'
+        '      "accio_suggerida": "què hauria de fer el tècnic"\n'
+        "    }\n"
+        "  ],\n"
+        '  "resum": "resum breu de l\'anàlisi",\n'
+        f'  "fitxers_analitzats": {len(fitxers_analisi)}\n'
+        "}"
+    )
+
+    content_blocks.append({'type': 'text', 'text': prompt})
+
+    try:
+        api_key = getattr(settings, 'ANTHROPIC_API_KEY', None)
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model='claude-opus-4-5',
+            max_tokens=4096,
+            messages=[{'role': 'user', 'content': content_blocks}],
+            extra_headers={'anthropic-beta': 'pdfs-2024-09-25'},
+        )
+        text = response.content[0].text
+        text = text.replace('```json', '').replace('```', '').strip()
+        resultat = json.loads(text)
+        return Response({
+            'model_id': model_id,
+            'analisi': resultat,
+            'fitxers_analitzats': len(fitxers_analisi),
+        })
+    except json.JSONDecodeError as e:
+        return Response({'error': f'Resposta IA no parsejable: {e}'}, status=500)
+    except Exception as e:
+        return Response({'error': f'Error IA: {e}'}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def xat_mesures_view(request, model_id):
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    missatge = (request.data.get('missatge') or '').strip()
+    historial = request.data.get('historial', []) or []
+
+    if not missatge:
+        return Response({'error': 'missatge és obligatori'}, status=400)
+
+    from fhort.pom.models import POMMaster
+
+    base_measurements = BaseMeasurement.objects.filter(
+        model=model, is_active=True
+    ).select_related('pom').order_by('ordre')
+
+    mesures_context = "\n".join([
+        f"ID:{bm.id} | CODI:{bm.pom.codi_client} | "
+        f"NOM:{bm.pom.nom_client or bm.pom.codi_client} | VALOR:{bm.base_value_cm}cm"
+        for bm in base_measurements
+    ])
+
+    system_prompt = (
+        f"Ets un assistent tècnic de patronatge per al model {model.codi_intern}.\n"
+        "Pots fer canvis REALS a les mesures. Quan l'usuari demani un canvi, retorna un JSON d'acció.\n\n"
+        f"MESURES ACTUALS:\n{mesures_context}\n\n"
+        "Respon SEMPRE amb aquest format JSON:\n"
+        "{\n"
+        '  "resposta": "text de resposta a l\'usuari en català",\n'
+        '  "accions": [\n'
+        '    {\n'
+        '      "tipus": "ACTUALITZAR|AFEGIR|ELIMINAR|CAP",\n'
+        '      "bm_id": <id del BaseMeasurement o null si és nou>,\n'
+        '      "pom_codi": "codi del POM",\n'
+        '      "valor": <float o null>,\n'
+        '      "nom_fitxa": "nomenclatura nova o null"\n'
+        '    }\n'
+        '  ]\n'
+        "}\n\n"
+        "Regles:\n"
+        "- Si l'usuari corregeix un valor, usa tipus ACTUALITZAR amb el bm_id corresponent\n"
+        "- Si demana afegir un POM nou, usa tipus AFEGIR (bm_id=null)\n"
+        "- Si demana eliminar, usa tipus ELIMINAR\n"
+        "- Si és una pregunta sense acció, usa tipus CAP i accions=[]\n"
+        "- Sempre confirma l'acció a la resposta en català"
+    )
+
+    import anthropic
+    import json
+    from django.conf import settings
+
+    messages = historial + [{'role': 'user', 'content': missatge}]
+
+    try:
+        client = anthropic.Anthropic(api_key=getattr(settings, 'ANTHROPIC_API_KEY', None))
+        response = client.messages.create(
+            model='claude-sonnet-4-5',
+            max_tokens=1024,
+            system=system_prompt,
+            messages=messages,
+        )
+        text = response.content[0].text.replace('```json', '').replace('```', '').strip()
+        resultat = json.loads(text)
+
+        accions_executades = []
+        for accio in resultat.get('accions', []):
+            tipus = accio.get('tipus')
+            try:
+                if tipus == 'ACTUALITZAR' and accio.get('bm_id'):
+                    bm = BaseMeasurement.objects.get(id=accio['bm_id'], model=model)
+                    if accio.get('valor') is not None:
+                        bm.base_value_cm = float(accio['valor'])
+                    if accio.get('nom_fitxa') is not None:
+                        bm.nom_fitxa = accio['nom_fitxa']
+                    bm.save()
+                    accions_executades.append(
+                        f"Actualitzat {bm.pom.codi_client} = {bm.base_value_cm}cm"
+                    )
+                elif tipus == 'AFEGIR' and accio.get('pom_codi'):
+                    pom = POMMaster.objects.filter(
+                        codi_client__iexact=accio['pom_codi']
+                    ).first()
+                    if pom and accio.get('valor') is not None:
+                        bm, created = BaseMeasurement.objects.update_or_create(
+                            model=model, pom=pom,
+                            defaults={
+                                'base_value_cm': float(accio['valor']),
+                                'origen': 'MANUAL',
+                                'ordre': base_measurements.count(),
+                            },
+                        )
+                        accions_executades.append(
+                            f"{'Afegit' if created else 'Actualitzat'} {pom.codi_client}"
+                        )
+                elif tipus == 'ELIMINAR' and accio.get('bm_id'):
+                    bm = BaseMeasurement.objects.get(id=accio['bm_id'], model=model)
+                    nom = bm.pom.codi_client
+                    bm.is_active = False
+                    bm.save()
+                    accions_executades.append(f"Eliminat {nom}")
+            except Exception as e:
+                accions_executades.append(f"Error: {e}")
+
+        mesures_actualitzades = list(
+            BaseMeasurement.objects.filter(model=model, is_active=True)
+            .select_related('pom').order_by('ordre')
+            .values('id', 'pom__codi_client', 'base_value_cm', 'nom_fitxa', 'ordre')
+        )
+
+        return Response({
+            'resposta': resultat.get('resposta', ''),
+            'accions_executades': accions_executades,
+            'mesures_actualitzades': mesures_actualitzades,
+            'historial_nou': messages + [{'role': 'assistant', 'content': text}],
+        })
+    except json.JSONDecodeError as e:
+        return Response({'error': f'Error parsing IA: {e}'}, status=500)
+    except Exception as e:
+        return Response({'error': f'Error: {e}'}, status=500)

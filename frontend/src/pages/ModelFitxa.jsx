@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import TaulaEditable from '../components/TaulaEditable/TaulaEditable'
+import XatMesures from '../components/XatMesures/XatMesures'
 
 const API = import.meta.env.VITE_API_URL || ''
-const TABS = ['Resum', 'Mesures', 'Fitting', 'Fitxers', 'Producció']
+const TABS = ['Resum', 'Mesures', 'Fitting', 'Fitxers', 'Anàlisi IA', 'Producció']
 
 const btnSecondary = {
   background: 'transparent',
@@ -107,17 +108,28 @@ export default function ModelFitxa() {
           />
         )}
         {activeTab === 'Mesures' && (
-          <TaulaEditable
-            rows={taulaRows}
-            sizeRun={model?.size_run_model?.split('·').map(s => s.trim()) || []}
-            baseSize={model?.base_size_label}
-            modelId={parseInt(id)}
-            isImport={false}
-            onSaved={setTaulaRows}
-          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20 }}>
+            <TaulaEditable
+              rows={taulaRows}
+              sizeRun={(model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean)}
+              baseSize={model?.base_size_label}
+              modelId={parseInt(id)}
+              isImport={false}
+              onSaved={setTaulaRows}
+            />
+            <XatMesures
+              modelId={parseInt(id)}
+              onMesuresUpdated={() => {
+                fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
+                  .then(r => r.json())
+                  .then(d => setTaulaRows(d.rows || []))
+              }}
+            />
+          </div>
         )}
         {activeTab === 'Fitting' && <TabFitting modelId={id} />}
-        {activeTab === 'Fitxers' && <TabFitxers modelId={id} />}
+        {activeTab === 'Fitxers' && <TabFitxers modelId={parseInt(id)} />}
+        {activeTab === 'Anàlisi IA' && <TabAnalisiIA modelId={parseInt(id)} />}
         {activeTab === 'Producció' && <TabProduccio model={model} />}
       </div>
     </div>
@@ -302,12 +314,6 @@ function TabResum({ model, modelId, onUpdated }) {
                 </div>
               )}
             </div>
-            <button type="button" onClick={() => setEditing(true)}
-              style={{ padding: '5px 12px', background: 'transparent', fontSize: 12,
-                       border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-                       borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              <i className="ti ti-edit" aria-hidden="true" /> Editar
-            </button>
           </div>
         </div>
       )}
@@ -345,11 +351,336 @@ function TabFitting() {
   )
 }
 
-function TabFitxers() {
+const TIPUS_CONFIG = {
+  SKETCH_FLETXES: { label: 'Sketch amb fletxes', icon: 'ti-pencil',             color: '#c27a2a' },
+  SKETCH_NET:     { label: 'Sketch net',         icon: 'ti-eye',                color: '#137333' },
+  PATRO:          { label: 'Patró base',         icon: 'ti-vector-triangle',    color: '#185fa5' },
+  MARCADA:        { label: 'Marcada',            icon: 'ti-layout',             color: '#7a4a10' },
+  ESCALAT:        { label: 'Escalat',            icon: 'ti-arrows-maximize',    color: '#5f3dc4' },
+  FITXA:          { label: 'Fitxa tècnica',      icon: 'ti-file-text',          color: '#333' },
+  ALTRES:         { label: 'Altres',             icon: 'ti-file',               color: '#888' },
+}
+
+function TabFitxers({ modelId }) {
+  const token = localStorage.getItem('access_token')
+  const authHeaders = { Authorization: `Bearer ${token}` }
+
+  const [fitxers, setFitxers] = useState({})
+  const [uploading, setUploading] = useState(null)
+  const [popup, setPopup] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    Promise.all(
+      Object.keys(TIPUS_CONFIG).map(tipus =>
+        fetch(`${API}/api/v1/model-fitxers/?model=${modelId}&tipus=${tipus}`, { headers: authHeaders })
+          .then(r => r.json())
+          .then(d => [tipus, d.results || d || []])
+      )
+    ).then(results => {
+      const byTipus = {}
+      results.forEach(([tipus, items]) => { byTipus[tipus] = items })
+      setFitxers(byTipus)
+    }).catch(() => setError('Error carregant fitxers'))
+  }, [modelId])
+
+  const handleUpload = async (tipus, file) => {
+    setUploading(tipus)
+    const formData = new FormData()
+    formData.append('fitxer', file)
+    formData.append('tipus', tipus)
+    formData.append('nom', file.name)
+    try {
+      const r = await fetch(`${API}/api/v1/models/${modelId}/upload-fitxer/`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+      const d = await r.json()
+      if (r.ok) {
+        setFitxers(prev => ({
+          ...prev,
+          [tipus]: [d, ...(prev[tipus] || [])],
+        }))
+      } else {
+        setError(JSON.stringify(d))
+      }
+    } catch {
+      setError('Error pujant el fitxer')
+    } finally {
+      setUploading(null)
+    }
+  }
+
+  const handleDelete = async (fitxerId, tipus) => {
+    if (!window.confirm('Eliminar aquest fitxer?')) return
+    await fetch(`${API}/api/v1/model-fitxers/${fitxerId}/`, {
+      method: 'DELETE', headers: authHeaders,
+    })
+    setFitxers(prev => ({
+      ...prev,
+      [tipus]: (prev[tipus] || []).filter(f => f.id !== fitxerId),
+    }))
+  }
+
   return (
-    <div style={{ color: 'var(--color-text-secondary, #868685)', fontSize: 13, padding: '2rem 0' }}>
-      <i className="ti ti-files" style={{ fontSize: 24, display: 'block', marginBottom: 8 }} />
-      Sketches, patrons i fitxers tècnics — Pas 4 pròximament.
+    <div style={{ width: '100%', fontFamily: 'IBM Plex Mono, monospace' }}>
+      {error && (
+        <div style={{
+          background: '#fee', border: '1px solid #fcc', borderRadius: 6,
+          padding: '8px 12px', marginBottom: 12, fontSize: 13, color: '#c00',
+        }}>{error}</div>
+      )}
+
+      {popup && (
+        <div onClick={() => setPopup(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+            zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 8, padding: 16,
+                     maxWidth: '90vw', maxHeight: '90vh' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{popup.nom}</span>
+              <button type="button" onClick={() => setPopup(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>✕</button>
+            </div>
+            {popup.url?.match(/\.(jpg|jpeg|png|svg)$/i) ? (
+              <img src={popup.url} alt={popup.nom}
+                style={{ maxWidth: '80vw', maxHeight: '80vh', objectFit: 'contain' }} />
+            ) : (
+              <iframe src={popup.url} title={popup.nom}
+                style={{ width: '80vw', height: '80vh', border: 'none' }} />
+            )}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {Object.entries(TIPUS_CONFIG).map(([tipus, config]) => (
+          <div key={tipus}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <i className={`ti ${config.icon}`} aria-hidden="true"
+                style={{ fontSize: 18, color: config.color }} />
+              <span style={{ fontSize: 14, fontWeight: 500 }}>{config.label}</span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)' }}>
+                ({(fitxers[tipus] || []).length})
+              </span>
+              <label style={{
+                marginLeft: 'auto', padding: '4px 12px', fontSize: 12,
+                border: '0.5px solid var(--color-border-tertiary, #e0d5c5)', borderRadius: 6,
+                cursor: 'pointer', color: 'var(--color-text-secondary, #868685)',
+                background: uploading === tipus ? 'var(--color-background-secondary, #f5f0ea)' : 'transparent',
+              }}>
+                {uploading === tipus ? 'Pujant...' : '+ Pujar'}
+                <input type="file" style={{ display: 'none' }}
+                  accept=".pdf,.png,.jpg,.jpeg,.svg,.dxf"
+                  disabled={uploading === tipus}
+                  onChange={e => e.target.files[0] && handleUpload(tipus, e.target.files[0])} />
+              </label>
+            </div>
+
+            {(fitxers[tipus] || []).length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+                            padding: '8px 0', fontStyle: 'italic' }}>
+                Cap fitxer pujat.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {(fitxers[tipus] || []).map(f => (
+                  <FitxerCard key={f.id} fitxer={f} config={config}
+                    onPreview={() => setPopup({ url: f.fitxer || f.url, nom: f.nom_fitxer })}
+                    onDelete={() => handleDelete(f.id, tipus)} />
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FitxerCard({ fitxer, config, onPreview, onDelete }) {
+  const isImage = fitxer.nom_fitxer?.match(/\.(jpg|jpeg|png|svg)$/i)
+
+  return (
+    <div style={{
+      width: 140, border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+      borderRadius: 8, overflow: 'hidden', fontSize: 12,
+      fontFamily: 'IBM Plex Mono, monospace',
+    }}>
+      <div onClick={onPreview}
+        style={{
+          height: 90, background: 'var(--color-background-secondary, #f5f0ea)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', position: 'relative',
+        }}>
+        {isImage && (fitxer.fitxer || fitxer.url) ? (
+          <img src={fitxer.fitxer || fitxer.url} alt={fitxer.nom_fitxer}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <i className={`ti ${config.icon}`} aria-hidden="true"
+            style={{ fontSize: 32, color: config.color }} />
+        )}
+        {fitxer.versio > 1 && (
+          <span style={{
+            position: 'absolute', top: 4, right: 4,
+            background: 'rgba(0,0,0,0.6)', color: '#fff',
+            fontSize: 10, padding: '1px 5px', borderRadius: 10,
+          }}>
+            v{fitxer.versio}
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: '6px 8px' }}>
+        <div style={{
+          fontSize: 11, color: 'var(--color-text-primary, #1d1d1b)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          marginBottom: 4,
+        }} title={fitxer.nom_fitxer}>
+          {fitxer.nom_fitxer}
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button type="button" onClick={onPreview}
+            style={{ flex: 1, padding: '3px 0', fontSize: 11, border: 'none',
+                     background: 'var(--color-background-secondary, #f5f0ea)',
+                     borderRadius: 4, cursor: 'pointer',
+                     fontFamily: 'IBM Plex Mono, monospace' }}>
+            <i className="ti ti-eye" aria-hidden="true" /> Veure
+          </button>
+          <button type="button" onClick={onDelete}
+            style={{ padding: '3px 6px', fontSize: 11, border: 'none',
+                     background: 'transparent', borderRadius: 4,
+                     cursor: 'pointer', color: '#c5221f' }}>
+            <i className="ti ti-trash" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const GRAVETAT_STYLE = {
+  CRITICA:     { bg: '#fce8e6', color: '#c5221f', border: '#f5c6c6' },
+  IMPORTANT:   { bg: '#fff3e0', color: '#c8900a', border: '#f0c040' },
+  INFORMATIVA: { bg: '#e6f4ea', color: '#137333', border: '#a8d5b5' },
+}
+
+function TabAnalisiIA({ modelId }) {
+  const token = localStorage.getItem('access_token')
+  const [analisi, setAnalisi] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleAnalitzar = async () => {
+    setLoading(true); setError(''); setAnalisi(null)
+    try {
+      const r = await fetch(`${API}/api/v1/models/${modelId}/analisi-ia/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      })
+      const d = await r.json()
+      if (r.ok) setAnalisi(d.analisi)
+      else setError(d.error || 'Error desconegut')
+    } catch {
+      setError('Error de connexió')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 800, fontFamily: 'IBM Plex Mono, monospace' }}>
+      <div style={{ marginBottom: 16 }}>
+        <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)', marginBottom: 12 }}>
+          Analitza els fitxers pujats (patrons, escalats, sketches) i detecta
+          discrepàncies amb les mesures registrades.
+          Disponible quan hi ha patrons o escalats pujats.
+        </p>
+        <button type="button" onClick={handleAnalitzar} disabled={loading}
+          style={{
+            padding: '8px 20px', background: loading ? '#ccc' : 'var(--gold)',
+            color: '#fff', border: 'none', borderRadius: 6,
+            fontSize: 13, fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer',
+            fontFamily: 'IBM Plex Mono, monospace',
+          }}>
+          {loading ? (
+            <><i className="ti ti-loader" aria-hidden="true" /> Analitzant...</>
+          ) : (
+            <><i className="ti ti-cpu" aria-hidden="true" /> Llançar anàlisi IA</>
+          )}
+        </button>
+      </div>
+
+      {error && (
+        <div style={{ background: '#fee', border: '1px solid #fcc', borderRadius: 6,
+                      padding: '8px 12px', fontSize: 13, color: '#c00', marginBottom: 12 }}>
+          {error}
+        </div>
+      )}
+
+      {analisi && (
+        <div>
+          <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
+                        marginBottom: 12 }}>
+            {analisi.resum}
+            {' · '}{analisi.fitxers_analitzats} fitxer(s) analitzat(s)
+          </div>
+
+          {(analisi.alertes || []).length === 0 ? (
+            <div style={{ fontSize: 13, color: '#137333', padding: '12px 0' }}>
+              ✓ Cap discrepància detectada.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {analisi.alertes.map((alerta, i) => {
+                const style = GRAVETAT_STYLE[alerta.gravetat] || GRAVETAT_STYLE.INFORMATIVA
+                return (
+                  <div key={i} style={{
+                    background: style.bg, border: `1px solid ${style.border}`,
+                    borderRadius: 8, padding: '12px 14px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8,
+                                  marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: style.color,
+                                     padding: '1px 8px', background: 'rgba(255,255,255,0.6)',
+                                     borderRadius: 20 }}>
+                        {alerta.gravetat}
+                      </span>
+                      <span style={{ fontSize: 11, color: style.color }}>
+                        {alerta.tipus?.replace(/_/g, ' ')}
+                      </span>
+                      {alerta.pom_afectat && (
+                        <span style={{ fontFamily: 'monospace', fontSize: 12,
+                                       color: style.color, fontWeight: 500 }}>
+                          {alerta.pom_afectat}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--color-text-primary, #1d1d1b)',
+                                  marginBottom: 6 }}>
+                      {alerta.descripcio}
+                    </div>
+                    {(alerta.valor_taula || alerta.valor_patro) && (
+                      <div style={{ fontSize: 12, color: style.color, marginBottom: 4 }}>
+                        Taula: {alerta.valor_taula || '—'} → Patró: {alerta.valor_patro || '—'}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+                                  fontStyle: 'italic' }}>
+                      → {alerta.accio_suggerida}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

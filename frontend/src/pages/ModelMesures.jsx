@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import TaulaEditable from '../components/TaulaEditable/TaulaEditable'
+import XatMesures from '../components/XatMesures/XatMesures'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -242,12 +243,22 @@ export default function ModelMesures() {
           )}
 
           {importResult && (
-            <ImportPreview
-              result={importResult}
-              model={model}
-              onConfirm={handleConfirmImport}
-              onReject={() => { setImportResult(null); setImportFile(null) }}
-            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 16 }}>
+              <ImportPreview
+                result={importResult}
+                model={model}
+                onConfirm={handleConfirmImport}
+                onReject={() => { setImportResult(null); setImportFile(null) }}
+              />
+              <XatMesures
+                modelId={parseInt(id)}
+                onMesuresUpdated={() => {
+                  fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
+                    .then(r => r.json())
+                    .then(d => setTaulaRows(d.rows || []))
+                }}
+              />
+            </div>
           )}
 
           <div style={{ marginTop: 16 }}>

@@ -45,11 +45,7 @@ const navGroups = [
   { items: [
     { to: '/', labelKey: 'nav.dashboard', icon: 'ti-layout-dashboard' },
     { to: '/avisos', labelKey: 'nav.avisos', icon: 'ti-alert-triangle', badgeKey: 'alerts' },
-    { labelKey: 'nav.models', icon: 'ti-shirt', children: [
-      { to: '/models',                   labelKey: 'nav.models_list' },
-      { to: '/models/nou',               labelKey: 'nav.models_new' },
-      { to: '/models/nou-des-de-fitxer', labelKey: 'nav.models_from_file' },
-    ]},
+    { to: '/models', labelKey: 'nav.models', icon: 'ti-shirt' },
     { labelKey: 'nav.poms', icon: 'ti-ruler-measure', children: [
       { to: '/size-library',  labelKey: 'nav.size_library' },
       { to: '/poms',          labelKey: 'nav.poms_list' },

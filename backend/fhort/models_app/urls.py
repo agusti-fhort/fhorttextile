@@ -1,7 +1,21 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .views import BaseMeasurementViewSet, ModelFitxerViewSet, ModelViewSet, create_model_wizard, next_model_ref, poms_suggerits_view, reorder_measurements_view, set_measurements_view, taula_mesures_view, update_model_step2
+from .views import (
+    BaseMeasurementViewSet,
+    ModelFitxerViewSet,
+    ModelViewSet,
+    analisi_ia_view,
+    create_model_wizard,
+    next_model_ref,
+    poms_suggerits_view,
+    reorder_measurements_view,
+    set_measurements_view,
+    taula_mesures_view,
+    update_model_step2,
+    upload_fitxer_view,
+    xat_mesures_view,
+)
 
 router = DefaultRouter()
 router.register('models', ModelViewSet, basename='model')
@@ -72,6 +86,9 @@ urlpatterns = (
         path('models/<int:model_id>/taula-mesures/', taula_mesures_view),
         path('models/<int:model_id>/set-measurements/', set_measurements_view),
         path('models/<int:model_id>/reorder-measurements/', reorder_measurements_view),
+        path('models/<int:model_id>/upload-fitxer/', upload_fitxer_view),
+        path('models/<int:model_id>/analisi-ia/', analisi_ia_view),
+        path('models/<int:model_id>/xat-mesures/', xat_mesures_view),
     ]
     + _sprint6_paths
     + _sprint7_model_paths

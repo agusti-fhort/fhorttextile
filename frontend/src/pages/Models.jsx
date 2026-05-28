@@ -1,14 +1,15 @@
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import useAuthStore from "../store/auth"
 import { EstatBadge } from "../components/EstatBadge"
-import { FaseStepper } from "../components/FaseStepper"
-import ImportFromSheetWizard from "../components/ImportFromSheet/ImportFromSheetWizard"
 
 const API = import.meta.env.VITE_API_URL || ""
 
 const FASES = ["Nou", "Disseny", "Tècnic", "Prototip", "Mostres", "Preproducció", "Producció", "Tancat"]
+const TEMPORADES = ["SS", "FW", "RE", "PRE"]
+const anyActual = new Date().getFullYear()
+const ANYS = [anyActual, anyActual + 1, anyActual + 2, anyActual + 3]
 
 export default function Models() {
   const navigate = useNavigate()
@@ -21,8 +22,9 @@ export default function Models() {
   const [cerca, setCerca] = useState("")
   const [filtreFase, setFiltreFase] = useState("")
   const [filtreEstat, setFiltreEstat] = useState("")
+  const [filtreAny, setFiltreAny] = useState("")
+  const [filtreTemporada, setFiltreTemporada] = useState("")
   const [total, setTotal] = useState(0)
-  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -45,6 +47,15 @@ export default function Models() {
       })
       .catch(() => setLoading(false))
   }, [token, cerca, filtreFase, filtreEstat])
+
+  // Filtrat client-side (Any / Temporada — el backend no els suporta com a query params).
+  const modelsFiltered = useMemo(() => {
+    return models.filter(m => {
+      if (filtreAny && String(m.any) !== String(filtreAny)) return false
+      if (filtreTemporada && m.temporada !== filtreTemporada) return false
+      return true
+    })
+  }, [models, filtreAny, filtreTemporada])
 
   const handleDeleteModel = async (modelId, nomPrenda) => {
     if (!confirm(`Esborrar "${nomPrenda}"? Aquesta acció no es pot desfer.`)) return
@@ -73,20 +84,6 @@ export default function Models() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setShowImport(true)} style={{
-            padding: "7px 14px", borderRadius: 4, fontSize: 11, cursor: "pointer",
-            background: "#fff", color: "#c27a2a", border: "1px solid #c27a2a",
-            fontFamily: "IBM Plex Mono, monospace",
-          }}>
-            Importar fitxa tècnica
-          </button>
-          <button onClick={() => navigate("/models/nou-des-de-fitxer")} style={{
-            padding: "7px 14px", borderRadius: 4, fontSize: 11, cursor: "pointer",
-            background: "#fff", color: "#868685", border: "1px solid #e0d5c5",
-            fontFamily: "IBM Plex Mono, monospace",
-          }}>
-            ⬆ Des de fitxer
-          </button>
           <button onClick={() => navigate("/models/nou")} style={{
             padding: "7px 16px", borderRadius: 4, fontSize: 11, cursor: "pointer",
             background: "#f5e6d0", color: "#c27a2a", border: "1px solid #c27a2a",
@@ -123,8 +120,22 @@ export default function Models() {
           <option value="">Tots els estats</option>
           {["Nou", "EnCurs", "Bloquejat", "Tancat"].map(e => <option key={e} value={e}>{e === "EnCurs" ? "En curs" : e}</option>)}
         </select>
-        {(cerca || filtreFase || filtreEstat) && (
-          <button onClick={() => { setCerca(""); setFiltreFase(""); setFiltreEstat("") }} style={{
+        <select value={filtreAny} onChange={e => setFiltreAny(e.target.value)} style={{
+          padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
+          fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
+        }}>
+          <option value="">Tots els anys</option>
+          {ANYS.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select value={filtreTemporada} onChange={e => setFiltreTemporada(e.target.value)} style={{
+          padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
+          fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
+        }}>
+          <option value="">Totes les temporades</option>
+          {TEMPORADES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        {(cerca || filtreFase || filtreEstat || filtreAny || filtreTemporada) && (
+          <button onClick={() => { setCerca(""); setFiltreFase(""); setFiltreEstat(""); setFiltreAny(""); setFiltreTemporada("") }} style={{
             padding: "6px 12px", border: "1px solid #e0d5c5", borderRadius: 4,
             fontSize: 11, fontFamily: "IBM Plex Mono, monospace", cursor: "pointer",
             background: "#fff", color: "#868685",
@@ -139,7 +150,7 @@ export default function Models() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {models.map(m => (
+          {modelsFiltered.map(m => (
             <div
               key={m.id}
               onClick={() => navigate(`/models/${m.id}`)}
@@ -182,11 +193,6 @@ export default function Models() {
                   </button>
                 </div>
               </div>
-              {m.fase_actual && (
-                <div style={{ transform: "scale(0.9)", transformOrigin: "left center", marginTop: 4 }}>
-                  <FaseStepper faseActual={m.fase_actual} />
-                </div>
-              )}
               {m.design_freeze_at && (
                 <div style={{ fontSize: 10, color: "#3b6d11", fontFamily: "IBM Plex Mono, monospace", marginTop: 4 }}>
                   ✓ Design Freeze aprovat
@@ -194,22 +200,17 @@ export default function Models() {
               )}
             </div>
           ))}
-          {models.length === 0 && (
+          {modelsFiltered.length === 0 && (
             <div style={{
               textAlign: "center", padding: "40px 0",
               color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace",
             }}>
-              {cerca || filtreFase || filtreEstat ? "Sense resultats amb aquest filtre." : "Sense models. Crea el primer!"}
+              {cerca || filtreFase || filtreEstat || filtreAny || filtreTemporada
+                ? "Sense resultats amb aquest filtre."
+                : "Sense models. Crea el primer!"}
             </div>
           )}
         </div>
-      )}
-
-      {showImport && (
-        <ImportFromSheetWizard
-          onModelCreated={(modelId) => navigate(`/models/${modelId}`)}
-          onClose={() => setShowImport(false)}
-        />
       )}
     </div>
   )

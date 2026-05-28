@@ -219,6 +219,7 @@ class ModelFitxer(models.Model):
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='fitxers')
     nom_fitxer = models.CharField(max_length=255)
     categoria = models.CharField(max_length=20, choices=CATEGORIA_CHOICES)
+    tipus = models.CharField(max_length=30, default='ALTRES', blank=True)
     versio = models.CharField(max_length=10)
     path_servidor = models.CharField(max_length=500)
     versio_anterior = models.ForeignKey(
