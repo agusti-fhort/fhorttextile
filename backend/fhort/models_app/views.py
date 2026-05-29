@@ -297,11 +297,39 @@ def taula_mesures_view(request, model_id):
             'graded': graded_by_pom.get(pom.id, {}),
         })
 
+    base_size = model.base_size_label
+
+    def _valor_talla(row, size):
+        # El valor de la talla base viu a base_value_cm; la resta, a graded (GradedSpec).
+        if size == base_size:
+            return row['base_value_cm']
+        return row['graded'].get(size)
+
+    # Talles amb almenys un valor real (≠ null) en alguna fila.
+    sizes_amb_dades = [
+        s for s in size_run
+        if any(_valor_talla(r, s) is not None for r in rows)
+    ]
+
+    # Δ = mitjana d'increments entre talles consecutives amb dades; None si <2 valors.
+    deltes = {}
+    for r in rows:
+        valors = [_valor_talla(r, s) for s in sizes_amb_dades]
+        valors = [v for v in valors if v is not None]
+        if len(valors) >= 2:
+            increments = [valors[i + 1] - valors[i] for i in range(len(valors) - 1)]
+            deltes[str(r['pom_id'])] = round(sum(increments) / len(increments), 2)
+        else:
+            deltes[str(r['pom_id'])] = None
+
     return Response({
         'model_id': model.id,
         'codi_intern': model.codi_intern,
-        'base_size': model.base_size_label,
-        'size_run': size_run,
+        'base_size': base_size,
+        'size_run': size_run,               # mantingut per no trencar consumidors
+        'size_run_complet': size_run,
+        'sizes_amb_dades': sizes_amb_dades,
+        'deltes': deltes,
         'rows': rows,
         'total_poms': len(rows),
     })

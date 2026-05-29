@@ -29,6 +29,7 @@ export default function TaulaEditable({
   rows,
   sizeRun,
   baseSize,
+  deltes,
   modelId,
   isImport = false,
   readOnly = false,
@@ -92,6 +93,12 @@ export default function TaulaEditable({
   }
 
   const calcDelta = (row) => {
+    // Δ calculat al backend (mitjana d'increments entre talles amb dades).
+    if (deltes) {
+      const d = deltes[row.pom_id]
+      return d == null ? '—' : `±${d}`
+    }
+    // Fallback local (taula sense deltes del backend, p.ex. files noves sense desar).
     if (!sizeRun || sizeRun.length < 2) return '—'
     const valOf = (s) => s === baseSize ? row.base_value_cm : row.graded?.[s]
     const first = valOf(sizeRun[0])

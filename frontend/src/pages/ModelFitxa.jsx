@@ -23,6 +23,8 @@ export default function ModelFitxa({ defaultTab = 'Mesures' }) {
   const [model, setModel] = useState(null)
   const [activeTab, setActiveTab] = useState(defaultTab)
   const [taulaRows, setTaulaRows] = useState([])
+  const [sizesAmbDades, setSizesAmbDades] = useState(null)
+  const [deltes, setDeltes] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -35,6 +37,8 @@ export default function ModelFitxa({ defaultTab = 'Mesures' }) {
     ]).then(([modelData, taulaData]) => {
       setModel(modelData)
       setTaulaRows(taulaData.rows || [])
+      setSizesAmbDades(taulaData.sizes_amb_dades || null)
+      setDeltes(taulaData.deltes || null)
     }).catch(() => setError('Error carregant el model'))
     .finally(() => setLoading(false))
   }, [id])
@@ -100,6 +104,7 @@ export default function ModelFitxa({ defaultTab = 'Mesures' }) {
           <TabResum
             model={model}
             modelId={parseInt(id)}
+            sizesAmbDades={sizesAmbDades}
             onUpdated={() => {
               fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
                 .then(r => r.json()).then(setModel)
@@ -109,8 +114,11 @@ export default function ModelFitxa({ defaultTab = 'Mesures' }) {
         {activeTab === 'Mesures' && (
           <TaulaEditable
             rows={taulaRows}
-            sizeRun={(model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean)}
+            sizeRun={(sizesAmbDades && sizesAmbDades.length
+              ? sizesAmbDades
+              : (model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean))}
             baseSize={model?.base_size_label}
+            deltes={deltes}
             modelId={parseInt(id)}
             isImport={false}
             onSaved={setTaulaRows}
@@ -190,7 +198,7 @@ function ModelFitxaHeader({ model, onDelete }) {
   )
 }
 
-function TabResum({ model, modelId, onUpdated }) {
+function TabResum({ model, modelId, sizesAmbDades, onUpdated }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
     nom_prenda: model?.nom_prenda || '',
@@ -227,7 +235,9 @@ function TabResum({ model, modelId, onUpdated }) {
     ['Fit type', model.fit_type || '—'],
     ['Sistema de talles', model.size_system_nom || '—'],
     ['Talla base', model.base_size_label || '—'],
-    ['Run de talles', model.size_run_model || '—'],
+    ['Run de talles', (sizesAmbDades && sizesAmbDades.length
+      ? sizesAmbDades.join('·')
+      : model.size_run_model) || '—'],
     ['Grading', model.grading_rule_set ? '✓ Configurat' : '—'],
     ['Estat', model.estat],
     ...(model.fabric_main ? [

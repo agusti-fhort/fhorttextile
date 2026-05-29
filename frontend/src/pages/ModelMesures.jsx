@@ -31,6 +31,8 @@ export default function ModelMesures() {
 
   // Taula final
   const [taulaRows, setTaulaRows] = useState([])
+  const [sizesAmbDades, setSizesAmbDades] = useState(null)
+  const [deltes, setDeltes] = useState(null)
   const [saving, setSaving] = useState(false)
   const [generatingGrading, setGeneratingGrading] = useState(false)
   const [error, setError] = useState('')
@@ -65,6 +67,9 @@ export default function ModelMesures() {
       const d = await r.json()
       if (r.ok) {
         setTaulaRows(d.rows || [])
+        // El grading omple graded per a totes les talles → refresquem columnes/delta.
+        fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
+          .then(r => r.json()).then(refreshTaulaMeta).catch(() => {})
       } else {
         setError(d.error || 'Error generant grading')
       }
@@ -75,11 +80,18 @@ export default function ModelMesures() {
     }
   }
 
+  // Refresca metadades de columnes/delta des de taula-mesures (font única).
+  const refreshTaulaMeta = (d) => {
+    setSizesAmbDades(d.sizes_amb_dades || null)
+    setDeltes(d.deltes || null)
+  }
+
   useEffect(() => {
     if (!id) return
     fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
       .then(r => r.json())
       .then(d => {
+        refreshTaulaMeta(d)
         if (d.rows && d.rows.length > 0) {
           setTaulaRows(d.rows)
           setMode('manual')
@@ -132,6 +144,7 @@ export default function ModelMesures() {
       if (!r.ok) { setError(JSON.stringify(d)); return }
       const taula = await fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders }).then(r => r.json())
       setTaulaRows(taula.rows || [])
+      refreshTaulaMeta(taula)
       setMode('resultat')
     } catch {
       setError('Error creant les mesures')
@@ -246,8 +259,11 @@ export default function ModelMesures() {
                 nom_ca: p.nom_ca, nom_en: p.nom_en, nom_fitxa: '',
                 base_value_cm: null, graded: {}, ordre: i,
               }))}
-            sizeRun={model?.size_run_model?.split('·').map(s => s.trim()) || []}
+            sizeRun={(sizesAmbDades && sizesAmbDades.length
+              ? sizesAmbDades
+              : model?.size_run_model?.split('·').map(s => s.trim())) || []}
             baseSize={model?.base_size_label}
+            deltes={deltes}
             modelId={parseInt(id)}
             isImport={false}
             onSaved={(newRows) => setTaulaRows(newRows)}
@@ -338,7 +354,7 @@ export default function ModelMesures() {
                 onMesuresUpdated={() => {
                   fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
                     .then(r => r.json())
-                    .then(d => setTaulaRows(d.rows || []))
+                    .then(d => { setTaulaRows(d.rows || []); refreshTaulaMeta(d) })
                 }}
               />
             </div>
@@ -372,8 +388,11 @@ export default function ModelMesures() {
 
           <TaulaEditable
             rows={taulaRows}
-            sizeRun={model?.size_run_model?.split('·').map(s => s.trim()) || []}
+            sizeRun={(sizesAmbDades && sizesAmbDades.length
+              ? sizesAmbDades
+              : model?.size_run_model?.split('·').map(s => s.trim())) || []}
             baseSize={model?.base_size_label}
+            deltes={deltes}
             modelId={parseInt(id)}
             isImport={importResult != null}
             onSaved={(newRows) => setTaulaRows(newRows)}
