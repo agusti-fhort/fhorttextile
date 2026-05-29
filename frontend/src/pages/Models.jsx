@@ -21,6 +21,7 @@ export default function Models() {
   const [loading, setLoading] = useState(true)
   const [cerca, setCerca] = useState("")
   const [filtreFase, setFiltreFase] = useState("")
+  const [filtreEstat, setFiltreEstat] = useState("")
   const [filtreAny, setFiltreAny] = useState("")
   const [filtreTemporada, setFiltreTemporada] = useState("")
   const [total, setTotal] = useState(0)
@@ -30,6 +31,7 @@ export default function Models() {
     const params = new URLSearchParams()
     if (cerca) params.set("search", cerca)
     if (filtreFase) params.set("fase_actual", filtreFase)
+    if (filtreEstat) params.set("estat", filtreEstat)
     params.set("ordering", "-data_entrada")
     params.set("limit", "50")
 
@@ -44,7 +46,7 @@ export default function Models() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [token, cerca, filtreFase])
+  }, [token, cerca, filtreFase, filtreEstat])
 
   // Filtrat client-side (Any / Temporada — el backend no els suporta com a query params).
   const modelsFiltered = useMemo(() => {
@@ -102,6 +104,16 @@ export default function Models() {
           <option value="">Totes les fases</option>
           {FASES.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
+        <select value={filtreEstat} onChange={e => setFiltreEstat(e.target.value)} style={{
+          padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
+          fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
+        }}>
+          <option value="">Tots els estats</option>
+          <option value="Nou">Nou</option>
+          <option value="EnCurs">En curs</option>
+          <option value="EnRevisio">En revisió</option>
+          <option value="Tancat">Tancat</option>
+        </select>
         <select value={filtreAny} onChange={e => setFiltreAny(e.target.value)} style={{
           padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
           fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
@@ -116,8 +128,8 @@ export default function Models() {
           <option value="">Totes les temporades</option>
           {TEMPORADES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        {(cerca || filtreFase || filtreAny || filtreTemporada) && (
-          <button onClick={() => { setCerca(""); setFiltreFase(""); setFiltreAny(""); setFiltreTemporada("") }} style={{
+        {(cerca || filtreFase || filtreEstat || filtreAny || filtreTemporada) && (
+          <button onClick={() => { setCerca(""); setFiltreFase(""); setFiltreEstat(""); setFiltreAny(""); setFiltreTemporada("") }} style={{
             padding: "6px 12px", border: "1px solid #e0d5c5", borderRadius: 4,
             fontSize: 11, fontFamily: "IBM Plex Mono, monospace", cursor: "pointer",
             background: "#fff", color: "#868685",
@@ -187,7 +199,7 @@ export default function Models() {
               textAlign: "center", padding: "40px 0",
               color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace",
             }}>
-              {cerca || filtreFase || filtreAny || filtreTemporada
+              {cerca || filtreFase || filtreEstat || filtreAny || filtreTemporada
                 ? "Sense resultats amb aquest filtre."
                 : "Sense models. Crea el primer!"}
             </div>

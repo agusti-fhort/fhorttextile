@@ -74,6 +74,16 @@ const secondaryBtn = {
   fontFamily: 'IBM Plex Mono, monospace',
 }
 
+const cancelLinkStyle = {
+  background: 'none',
+  border: 'none',
+  padding: 0,
+  color: 'var(--color-text-secondary, #868685)',
+  fontSize: 12,
+  cursor: 'pointer',
+  fontFamily: 'IBM Plex Mono, monospace',
+}
+
 const labelStyle = {
   fontSize: 11,
   color: 'var(--color-text-secondary, var(--text-muted, #868685))',
@@ -124,6 +134,8 @@ export default function ModelWizard() {
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  const [showCancelModal, setShowCancelModal] = useState(false)
 
   // sizingResult ara és derivat (Fix 1) — calculat a partir de selProfile+selectedSizes+baseSize.
   const sizingResult = (selProfile && selectedSizes.length > 0 && baseSize) ? {
@@ -261,11 +273,46 @@ export default function ModelWizard() {
   // Fix 3 — banner si el model just s'acaba de crear (sense target)
   const isNewlyCreated = isEditMode && !target
 
+  // Cancel·lar wizard:
+  //  · Pas 1 pur (sense id) → redirect directe, sense esborrar.
+  //  · Model acabat de crear (isNewlyCreated) → modal confirmació → DELETE.
+  //  · Model ja existent en edició → torna enrere sense esborrar ni advertir.
+  const handleCancelClick = () => {
+    if (isNewlyCreated) {
+      setShowCancelModal(true)
+    } else {
+      navigate('/models')
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    setSaving(true)
+    try {
+      await fetch(`${API}/api/v1/models/${id}/delete/`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      })
+    } catch (e) {
+      console.error('Error eliminant model:', e)
+    } finally {
+      setShowCancelModal(false)
+      navigate('/models')
+    }
+  }
+
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '2rem 1rem' }}>
-      <h1 style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 22, marginBottom: '1.5rem', fontWeight: 500 }}>
-        {isEditMode ? 'Editar model' : 'Nou model'}
-      </h1>
+      <div style={{
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+        gap: 16, marginBottom: '1.5rem',
+      }}>
+        <h1 style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 22, fontWeight: 500, margin: 0 }}>
+          {isEditMode ? 'Editar model' : 'Nou model'}
+        </h1>
+        <button type="button" onClick={handleCancelClick} style={cancelLinkStyle}>
+          ✕ Cancel·lar
+        </button>
+      </div>
 
       {isNewlyCreated && (
         <div style={{
@@ -334,6 +381,38 @@ export default function ModelWizard() {
           saving={saving}
           onSave={handleSaveStep2}
         />
+      )}
+
+      {showCancelModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: 10, padding: '24px 28px',
+            maxWidth: 380, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+            fontFamily: 'IBM Plex Mono, monospace',
+          }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 500 }}>
+              Cancel·lar la creació?
+            </h3>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--color-text-secondary, #868685)', lineHeight: 1.5 }}>
+              El model i els seus fitxers s'eliminaran permanentment.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" onClick={() => setShowCancelModal(false)} disabled={saving} style={secondaryBtn}>
+                Continuar editant
+              </button>
+              <button type="button" onClick={handleConfirmDelete} disabled={saving} style={{
+                background: saving ? '#ccc' : '#c0392b', color: '#fff', border: 'none',
+                borderRadius: 6, padding: '6px 16px', fontSize: 12,
+                cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'IBM Plex Mono, monospace',
+              }}>
+                {saving ? 'Eliminant...' : 'Sí, eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
