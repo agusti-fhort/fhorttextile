@@ -117,15 +117,8 @@ def recalcular_fase_actual(model_id: int, excloure_tasca_id: int | None = None) 
     if excloure_tasca_id:
         qs = qs.exclude(pk=excloure_tasca_id)
 
-    # Ordenació numèrica del camp ordre (pot ser text "10", "20", etc.)
-    try:
-        from django.db.models.functions import Cast
-        from django.db.models import IntegerField
-        tasques = list(qs.annotate(
-            ordre_int=Cast('ordre', IntegerField())
-        ).order_by('ordre_int'))
-    except Exception:
-        tasques = list(qs.order_by('ordre'))
+    # Ordenació numèrica pel camp ordre (IntegerField)
+    tasques = list(qs.order_by('ordre'))
 
     if not tasques:
         nova_fase = 'Nou'
@@ -162,21 +155,11 @@ def processar_gate(model_tasca_id: int) -> int:
         return 0
 
     # Tasques Bloquejades posteriors a aquest gate
-    try:
-        from django.db.models.functions import Cast
-        from django.db.models import IntegerField
-        mt_ordre_int = int(mt.ordre) if mt.ordre else 0
-        posteriors = ModelTasca.objects.filter(
-            model=mt.model,
-            estat='Bloquejada',
-        ).annotate(ordre_int=Cast('ordre', IntegerField())).filter(
-            ordre_int__gt=mt_ordre_int
-        ).order_by('ordre_int')
-    except Exception:
-        posteriors = ModelTasca.objects.filter(
-            model=mt.model,
-            estat='Bloquejada',
-        ).order_by('ordre')
+    posteriors = ModelTasca.objects.filter(
+        model=mt.model,
+        estat='Bloquejada',
+        ordre__gt=mt.ordre,
+    ).order_by('ordre')
 
     desblocades = 0
     for t in posteriors:
