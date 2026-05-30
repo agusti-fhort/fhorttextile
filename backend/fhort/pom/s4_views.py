@@ -1,5 +1,5 @@
 """
-fhort/pom/s4_views.py — Sprint S4: Versioning + CM/INCH + Historial
+fhort/pom/s4_views.py — Sprint S4: Versioning + CM/INCH + History
 """
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -7,13 +7,13 @@ from rest_framework.response import Response
 from django.utils import timezone
 
 
-# ─── Conversió d'unitats ──────────────────────────────────────────────────────
+# ─── Unit conversion ─────────────────────────────────────────────────────────
 
 CM_TO_INCH = 0.393701
 INCH_TO_CM = 2.54
 
 def convert_value(value, from_unit, to_unit):
-    """Converteix un valor entre CM i INCH."""
+    """Convert a value between CM and INCH."""
     if from_unit == to_unit or value is None:
         return value
     if from_unit == 'CM' and to_unit == 'INCH':
@@ -23,7 +23,7 @@ def convert_value(value, from_unit, to_unit):
     return value
 
 def get_tenant_unit(request):
-    """Retorna la unitat de mesura del tenant (CM o INCH)."""
+    """Return the tenant's measurement unit (CM or INCH)."""
     try:
         from fhort.accounts.models import TenantConfig
         return TenantConfig.get_or_create_default().unitat_mesura
@@ -38,11 +38,11 @@ def get_tenant_unit(request):
 def update_grading_rule_with_history_view(request, rule_set_id, pom_codi):
     """
     PATCH /api/v1/grading-rule-sets/{id}/regles/{pom_codi}/
-    Actualitza un increment amb registre d'historial.
+    Update an increment with a history record.
     Body: { increment: 2.5, logica: "LINEAR", nota: "Ajust per Brownie SS27" }
 
-    Si el RuleSet és estàndard, retorna error (cal clonar primer).
-    Si és custom, actualitza i registra l'historial.
+    If the RuleSet is standard, return an error (clone first).
+    If it is custom, update and record the history.
     """
     try:
         from fhort.pom.models import GradingRule, GradingRuleSet, GradingRuleHistory
@@ -65,12 +65,12 @@ def update_grading_rule_with_history_view(request, rule_set_id, pom_codi):
         if not rule:
             return Response({'error': f'Regla {pom_codi} no trobada'}, status=404)
 
-        # Guardar valors anteriors
+        # Save previous values
         val_anterior = rule.increment
         logica_anterior = rule.logica
 
-        # Aplicar canvis
-        # Si el tenant usa INCH, convertir a CM per guardar
+        # Apply changes
+        # If the tenant uses INCH, convert to CM before saving
         tenant_unit = get_tenant_unit(request)
         if 'increment' in request.data:
             val_input = float(request.data['increment'])
@@ -81,7 +81,7 @@ def update_grading_rule_with_history_view(request, rule_set_id, pom_codi):
 
         rule.save(update_fields=['increment', 'logica'])
 
-        # Registrar historial. rule.pom es POMMaster; GradingRuleHistory.pom es FK a POMGlobal.
+        # Record history. rule.pom is POMMaster; GradingRuleHistory.pom is FK to POMGlobal.
         pom_global = rule.pom.pom_global if rule.pom_id and rule.pom.pom_global_id else None
         user_nom = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
         GradingRuleHistory.objects.create(
@@ -97,7 +97,7 @@ def update_grading_rule_with_history_view(request, rule_set_id, pom_codi):
             nota=request.data.get('nota', ''),
         )
 
-        # Retornar en la unitat del tenant
+        # Return in the tenant unit
         increment_display = convert_value(float(rule.increment), 'CM', tenant_unit)
 
         return Response({
@@ -122,7 +122,7 @@ def update_grading_rule_with_history_view(request, rule_set_id, pom_codi):
 def grading_rule_history_view(request, rule_set_id):
     """
     GET /api/v1/grading-rule-sets/{id}/historial/
-    Retorna l'historial de canvis d'un RuleSet.
+    Return a RuleSet's change history.
     """
     try:
         from fhort.pom.models import GradingRuleHistory
@@ -156,19 +156,19 @@ def grading_rule_history_view(request, rule_set_id):
 def sizing_profile_versions_view(request, profile_id):
     """
     GET /api/v1/sizing-profiles/{id}/versions/
-    Retorna totes les versions d'un perfil (estàndard + customs del client).
+    Return all versions of a profile (standard + client customs).
     """
     try:
         from fhort.pom.models import SizingProfile
 
         original = SizingProfile.objects.get(pk=profile_id)
 
-        # Buscar root (si és custom, anar al pare)
+        # Find root (if custom, go to the parent)
         root = original
         while root.parent_profile_id:
             root = root.parent_profile
 
-        # Totes les versions d'aquest root
+        # All versions of this root
         versions = list(SizingProfile.objects.filter(
             parent_profile=root
         ).select_related('grading_rule_set').order_by('version'))
@@ -201,7 +201,7 @@ def sizing_profile_versions_view(request, profile_id):
 def grading_rules_with_units_view(request, rule_set_id):
     """
     GET /api/v1/grading-rule-sets/{id}/regles/
-    Retorna totes les regles converties a la unitat del tenant.
+    Return all rules converted to the tenant unit.
     """
     try:
         from fhort.pom.models import GradingRule, GradingRuleSet
@@ -220,12 +220,12 @@ def grading_rules_with_units_view(request, rule_set_id):
                 return p.pom_global.codi
             return p.codi_client or ''
 
-        def _pom_nom_en(p):
+        def _pom_name_en(p):
             if p.pom_global_id and p.pom_global.nom_en:
                 return p.pom_global.nom_en
             return p.nom_client
 
-        def _pom_nom_ca(p):
+        def _pom_name_ca(p):
             if p.pom_global_id and p.pom_global.nom_ca:
                 return p.pom_global.nom_ca
             return p.nom_client
@@ -233,8 +233,8 @@ def grading_rules_with_units_view(request, rule_set_id):
         data = [{
             'pom_id': r.pom_id,
             'pom_codi': _pom_codi(r.pom) if r.pom_id else '',
-            'pom_nom_en': _pom_nom_en(r.pom) if r.pom_id else '',
-            'pom_nom_cat': _pom_nom_ca(r.pom) if r.pom_id else '',
+            'pom_nom_en': _pom_name_en(r.pom) if r.pom_id else '',
+            'pom_nom_cat': _pom_name_ca(r.pom) if r.pom_id else '',
             'categoria_nom': r.pom.categoria.nom_ca or r.pom.categoria.nom_en if (r.pom_id and r.pom.categoria_id) else '',
             'logica': r.logica,
             'increment_cm': float(r.increment),
@@ -262,7 +262,7 @@ def grading_rules_with_units_view(request, rule_set_id):
 def restore_version_view(request, profile_id):
     """
     POST /api/v1/sizing-profiles/{id}/restaurar/
-    Restaura un perfil a la versió estàndard (descarta canvis client).
+    Restore a profile to the standard version (discard client changes).
     Body: { confirmar: true }
     """
     try:
@@ -278,7 +278,7 @@ def restore_version_view(request, profile_id):
 
         original = profile.parent_profile
 
-        # Sincronitzar les regles del custom amb les del pare
+        # Sync the custom rules with the parent's
         original_rules = {r.pom_id: r for r in GradingRule.objects.filter(
             rule_set=original.grading_rule_set
         )}

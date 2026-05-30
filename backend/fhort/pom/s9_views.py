@@ -11,8 +11,8 @@ from rest_framework.response import Response
 def onboarding_status_view(request):
     """
     GET /api/v1/onboarding/status/
-    Retorna l'estat de l'onboarding del tenant.
-    Indica quins passos estan completats i quins falten.
+    Return the tenant's onboarding status.
+    Indicates which steps are completed and which are missing.
     """
     try:
         from fhort.pom.models import (POMMaster, GradingRuleSet, SizeSystem,
@@ -82,7 +82,7 @@ def setup_tenant_from_excel_view(request):
     """
     POST /api/v1/onboarding/setup-from-excel/
     Multipart: file (Excel Master Data Reference v2)
-    Executa el seed complet des de l'Excel.
+    Run the full seed from the Excel file.
     """
     file_obj = request.FILES.get('file')
     if not file_obj:
@@ -95,7 +95,7 @@ def setup_tenant_from_excel_view(request):
         import tempfile, os, pandas as pd
         from django_tenants.utils import schema_context
 
-        # Guardar temporalment
+        # Save temporarily
         with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
             for chunk in file_obj.chunks():
                 tmp.write(chunk)
@@ -216,7 +216,7 @@ def setup_tenant_from_excel_view(request):
 def setup_client_config_view(request):
     """
     POST /api/v1/onboarding/config/
-    Configura les dades bàsiques del tenant.
+    Configure the tenant's basic data.
     Body: { nom_empresa, unitat_mesura, norma_referencia }
     """
     try:

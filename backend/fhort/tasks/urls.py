@@ -54,12 +54,12 @@ except Exception as _e:
 
 # Sprint 3 — grading views
 try:
-    from fhort.pom.grading_views import tancar_base_view, regenerar_talles_view, taula_mesures_view
+    from fhort.pom.grading_views import close_base_view, regenerate_sizes_view, measurements_table_view
     from django.urls import path as _path3
     _sprint3_paths = [
-        _path3('size-fittings/<int:sf_id>/tancar-base/', tancar_base_view),
-        _path3('size-fittings/<int:sf_id>/regenerar-talles/', regenerar_talles_view),
-        _path3('size-fittings/<int:sf_id>/taula-mesures/', taula_mesures_view),
+        _path3('size-fittings/<int:sf_id>/tancar-base/', close_base_view),
+        _path3('size-fittings/<int:sf_id>/regenerar-talles/', regenerate_sizes_view),
+        _path3('size-fittings/<int:sf_id>/taula-mesures/', measurements_table_view),
     ]
     urlpatterns = _sprint3_paths + urlpatterns
 except Exception as _e3:
@@ -100,8 +100,8 @@ try:
         clone_sizing_profile_view,
         update_grading_rule_view,
         tenant_config_view,
-        pom_global_cerca_view,
-        garment_types_per_target_view,
+        pom_global_search_view,
+        garment_types_by_target_view,
     )
     from django.urls import path as _p_s2
     _s2_paths = [
@@ -112,8 +112,8 @@ try:
         _p_s2('sizing-profiles/<int:pk>/clonar/', clone_sizing_profile_view),
         _p_s2('grading-rule-sets/<int:rule_set_id>/regles/<str:pom_codi>/', update_grading_rule_view),
         _p_s2('tenant-config/', tenant_config_view),
-        _p_s2('pom-global/cerca/', pom_global_cerca_view),
-        _p_s2('garment-types-by-target/', garment_types_per_target_view),
+        _p_s2('pom-global/cerca/', pom_global_search_view),
+        _p_s2('garment-types-by-target/', garment_types_by_target_view),
     ]
     urlpatterns = _s2_paths + urlpatterns
 except Exception as _e_s2:

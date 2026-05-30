@@ -29,7 +29,7 @@ def _pom_codi(p):
     return p.codi_client or ''
 
 
-def _pom_nom_en(p):
+def _pom_name_en(p):
     if not p:
         return ''
     if getattr(p, 'pom_global_id', None) and p.pom_global.nom_en:
@@ -42,7 +42,7 @@ def _pom_nom_en(p):
 def fitting_vs_spec_view(request, sf_id, fitting_id):
     """
     GET /api/v1/size-fittings/{sf_id}/fittings/{fitting_id}/vs-spec/
-    Compara fitting vs specs (GradedSpec o fallback BaseMeasurement).
+    Compare fitting vs specs (GradedSpec or BaseMeasurement fallback).
     """
     unit = get_unit(request)
     try:
@@ -63,7 +63,7 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
 
         spec_map = {}
         if gv:
-            # Si tenim grading, agafem un map (pom_id, size_label) → valor
+            # If we have grading, take a (pom_id, size_label) → value map
             specs = GradedSpec.objects.filter(
                 grading_version=gv, is_active=True
             ).select_related('pom')
@@ -72,7 +72,7 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
                 for s in specs
             }
 
-        # Fallback per quan no hi ha grading: BaseMeasurements (talla base)
+        # Fallback when there is no grading: BaseMeasurements (base size)
         base_map = {}
         if model:
             for bm in BaseMeasurement.objects.filter(model=model, is_active=True):
@@ -88,7 +88,7 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
         n_pass = n_fail = n_pend = 0
 
         for line in lines:
-            # Buscar spec segons (pom, talla); fallback a base
+            # Look up spec by (pom, size); fall back to base
             spec_cm = spec_map.get((line.pom_id, line.talla))
             if spec_cm is None:
                 spec_cm = base_map.get(line.pom_id)
@@ -112,7 +112,7 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
             resultats.append({
                 'pom_id': line.pom_id,
                 'codi_client': _pom_codi(line.pom),
-                'nom_en': _pom_nom_en(line.pom),
+                'nom_en': _pom_name_en(line.pom),
                 'talla': line.talla,
                 'is_key': line.pom.is_key_measure if line.pom_id else False,
                 'spec_cm': spec_cm,
@@ -127,7 +127,7 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
                 'unitat': unit,
             })
 
-        # Generar POMAlerts (si el model existeix)
+        # Generate POMAlerts (if the model exists)
         try:
             from fhort.fitting.models import POMAlert
             for r in resultats:
@@ -173,7 +173,7 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
 def model_fitting_history_view(request, model_id):
     """
     GET /api/v1/models/{id}/fitting-history/
-    Historial de tots els fittings d'un model amb count POMs.
+    History of all of a model's fittings with POM count.
     """
     try:
         from fhort.fitting.models import SFFitting, SFFittingLinia, SizeFitting

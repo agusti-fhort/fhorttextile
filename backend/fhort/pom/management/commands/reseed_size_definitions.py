@@ -1,11 +1,11 @@
 """
-Reseed SizeDefinitions des de FHORT_Master_Data_Reference_v2.xlsx (full Size_Definitions).
+Reseed SizeDefinitions from FHORT_Master_Data_Reference_v2.xlsx (Size_Definitions sheet).
 
-Llegeix les files de l'Excel i fa get_or_create per (size_system, etiqueta).
-Si la SizeDefinition existeix → actualitza els camps numèrics.
-Si no existeix → la crea.
+Read the Excel rows and get_or_create per (size_system, etiqueta).
+If the SizeDefinition exists → update the numeric fields.
+If it does not exist → create it.
 
-Mapping de columnes Excel → camps del model:
+Excel column → model field mapping:
   size_label     → etiqueta
   display_order  → ordre
   body_height_cm → body_height_cm
@@ -14,9 +14,9 @@ Mapping de columnes Excel → camps del model:
   body_hip_cm    → body_hip_cm
   age_months_min → age_months_min
   age_months_max → age_months_max
-  notes          → (ignorat, no existeix al model)
+  notes          → (ignored, does not exist on the model)
 
-Executa sobre el tenant 'fhort' via schema_context.
+Runs on the 'fhort' tenant via schema_context.
 """
 
 from pathlib import Path
@@ -31,7 +31,7 @@ HEADER_ROW = 3  # capçalera real (files 1-2 són títol/descripció)
 
 
 def _to_value(cell):
-    """Convert 'NULL' (string) i strings buits a None; tot la resta es retorna tal qual."""
+    """Convert 'NULL' (string) and empty strings to None; everything else is returned as-is."""
     if cell is None:
         return None
     if isinstance(cell, str):
@@ -82,7 +82,7 @@ class Command(BaseCommand):
             return
         ws = wb[SHEET_NAME]
 
-        # Llegim totes les files; la capçalera real és a HEADER_ROW.
+        # Read all rows; the real header is at HEADER_ROW.
         rows = list(ws.iter_rows(values_only=True))
         if len(rows) < HEADER_ROW + 1:
             self.stderr.write(self.style.ERROR('Full sense dades'))

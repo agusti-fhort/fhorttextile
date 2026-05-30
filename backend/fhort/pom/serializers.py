@@ -66,9 +66,9 @@ class GradingRuleSerializer(serializers.ModelSerializer):
     pom_nom_en = serializers.SerializerMethodField()
     pom_nom_ca = serializers.SerializerMethodField()
     pom_abbreviation = serializers.SerializerMethodField()
-    # S16-B fix: codi global (POM-001) per a la columna CODI de la taula,
-    # i categoria global (Upper body, Sleeve, ...) per filtrar regles per
-    # grup de peça al frontend.
+    # S16-B fix: global code (POM-001) for the table's CODI column,
+    # and global category (Upper body, Sleeve, ...) to filter rules by
+    # garment group on the frontend.
     pom_code_global = serializers.SerializerMethodField()
     pom_categoria = serializers.SerializerMethodField()
     talla_base_etiqueta = serializers.CharField(source='talla_base.etiqueta', read_only=True)
@@ -116,7 +116,7 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
     size_system_nom = serializers.CharField(source='size_system.nom', read_only=True)
     regles_count = serializers.IntegerField(source='regles.count', read_only=True)
     regles = GradingRuleSerializer(many=True, read_only=True)
-    # S16-A: array de target codis (M2M). target_codi conservat per compat.
+    # S16-A: array of target codes (M2M). target_codi kept for compatibility.
     targets_codis = serializers.SerializerMethodField()
     target_codi = serializers.SerializerMethodField()
     construction_codi = serializers.SerializerMethodField()
@@ -151,7 +151,7 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
 
 
 class GarmentPOMMapSerializer(serializers.ModelSerializer):
-    # Exposem els camps del POMMaster → POMGlobal per a la UI.
+    # Expose the POMMaster → POMGlobal fields for the UI.
     pom_code = serializers.CharField(source='pom.pom_global.codi', read_only=True)
     name_en = serializers.CharField(source='pom.pom_global.nom_en', read_only=True)
     name_cat = serializers.CharField(source='pom.pom_global.nom_ca', read_only=True)

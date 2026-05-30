@@ -1,11 +1,11 @@
 """
-Substitueix completament el catàleg global de POMs (S12-A).
+Fully replaces the global POM catalog (S12-A).
 
-Operació al schema `public`. Esborra i recrea POMGlobal i POMCategory
-amb el catàleg ampliat de 106 POMs i 15 categories (afegeix
-'Technical / Workwear' i 'Accessories').
+Operates on the `public` schema. Deletes and recreates POMGlobal and POMCategory
+with the extended catalog of 106 POMs and 15 categories (adds
+'Technical / Workwear' and 'Accessories').
 
-Idempotent: es pot reexecutar sense efectes laterals.
+Idempotent: can be re-run with no side effects.
 """
 from django.core.management.base import BaseCommand
 from django.db import transaction

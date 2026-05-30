@@ -1,11 +1,11 @@
 """
-S13-A · Migració GarmentType — Opció B: Global (public) + Tenant reassignat.
+S13-A · GarmentType migration — Option B: Global (public) + reassigned Tenant.
 
-Crea 42 GarmentTypeGlobal canònics al schema public, reassigna els 62
-GarmentType existents al tenant 'fhort' al global correcte i esborra els
-20 duplicats antics.
+Creates 42 canonical GarmentTypeGlobal in the public schema, reassigns the 62
+existing GarmentType in the 'fhort' tenant to the correct global, and deletes the
+20 old duplicates.
 
-Adaptació: el model real fa servir `nom_ca` (no `nom_cat`).
+Adaptation: the real model uses `nom_ca` (not `nom_cat`).
 """
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -66,9 +66,9 @@ GARMENT_TYPE_GLOBALS = [
 ]
 
 
-# codi_client tenant actual → codi global canònic
+# current tenant codi_client → canonical global codi
 MAPPING = {
-    # Ja coincideixen
+    # Already match
     'T_SHIRT':        'T_SHIRT',
     'SHIRT':          'SHIRT',
     'BLOUSE':         'BLOUSE',
@@ -108,7 +108,7 @@ MAPPING = {
     'HAT_CAP':        'HAT_CAP',
     'SCARF':          'SCARF',
     'BELT':           'BELT',
-    # Duplicats antics → global nou
+    # Old duplicates → new global
     'CAM-TOP':        'T_SHIRT',
     'CAM-BRU':        'SHIRT',
     'VAQ-DEN':        'JEANS',
@@ -129,7 +129,7 @@ MAPPING = {
     'ABR-COA':        'COAT',
     'XAQ-BLA':        'JACKET',
     'BAN-BIK':        'SWIMSUIT',
-    # Casos especials conservats amb nou codi
+    # Special cases kept with a new codi
     'PEC-PEL':        'LEATHER_GARMENT',
     'GAB-TRE':        'TRENCH_COAT',
     'PIJ-2PC':        'PYJAMA_SET',
@@ -163,7 +163,7 @@ class Command(BaseCommand):
             if glob not in codis_global:
                 raise ValueError(f"MAPPING {cli!r} apunta a global inexistent: {glob!r}")
 
-        # ── Pas A: crear globals al public ──────────────────────────────────
+        # ── Step A: create globals in public ────────────────────────────────
         self.stdout.write(self.style.WARNING(
             'Pas A: creant 42 GarmentTypeGlobal al schema public...'
         ))
@@ -185,7 +185,7 @@ class Command(BaseCommand):
                     )
             self.stdout.write(f'  {GarmentTypeGlobal.objects.count()} globals creats.')
 
-        # Capturem el mapping global (codi → dades) per usar al tenant
+        # Capture the global mapping (codi → data) to use in the tenant
         with schema_context('public'):
             from fhort.pom.models import GarmentTypeGlobal
             global_data = {
@@ -199,15 +199,15 @@ class Command(BaseCommand):
                 for g in GarmentTypeGlobal.objects.all()
             }
 
-        # ── Pas B: reassignar tenant records ────────────────────────────────
+        # ── Step B: reassign tenant records ─────────────────────────────────
         self.stdout.write(self.style.WARNING(
             f'\nPas B: reassignant GarmentType al tenant {tenant_schema}...'
         ))
         with schema_context(tenant_schema):
             from fhort.pom.models import GarmentType, GarmentTypeGlobal as GTG_tenant
 
-            # GarmentTypeGlobal al tenant és una taula local — cal sincronitzar
-            # amb les dades del public perquè la FK funcioni dins del schema.
+            # GarmentTypeGlobal in the tenant is a local table — must sync
+            # with the public data so the FK works within the schema.
             with transaction.atomic():
                 GTG_tenant.objects.all().delete()
                 for codi, grup, nom_en, nom_ca, nom_es, order in GARMENT_TYPE_GLOBALS:
@@ -247,7 +247,7 @@ class Command(BaseCommand):
                     f'  SENSE MAPPING ({len(no_mapping)}): {no_mapping}'
                 ))
 
-        # ── Pas C: esborrar duplicats ───────────────────────────────────────
+        # ── Step C: delete duplicates ───────────────────────────────────────
         self.stdout.write(self.style.WARNING(
             f'\nPas C: esborrant duplicats antics al tenant {tenant_schema}...'
         ))
@@ -260,7 +260,7 @@ class Command(BaseCommand):
                 f'  {esborrats} registres esborrats (match={n_match}). Detall: {details}'
             )
 
-        # ── Resum ───────────────────────────────────────────────────────────
+        # ── Summary ─────────────────────────────────────────────────────────
         with schema_context('public'):
             from fhort.pom.models import GarmentTypeGlobal
             total_public = GarmentTypeGlobal.objects.count()

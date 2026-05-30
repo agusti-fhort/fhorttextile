@@ -143,7 +143,7 @@ class GradingRuleViewSet(viewsets.ModelViewSet):
     ordering = ['rule_set', 'pom__codi_client']
 
     def destroy(self, request, *args, **kwargs):
-        """No esborrem físicament — marquem inactiu."""
+        """We do not delete physically — we mark as inactive."""
         instance = self.get_object()
         instance.actiu = False
         instance.save(update_fields=['actiu'])
@@ -153,7 +153,7 @@ class GradingRuleViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
-        # Protegir regles de RuleSets de sistema: cal clonar abans de modificar.
+        # Protect rules of system RuleSets: clone before modifying.
         instance = serializer.instance
         if instance.rule_set.is_system_default:
             raise PermissionDenied(
@@ -172,8 +172,8 @@ class GarmentPOMMapViewSet(viewsets.ModelViewSet):
         .all()
     )
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    # Suporta filtre per FK id (`?garment_type=<id>`) i per codi_client
-    # (`?garment_type_codi_client=<codi>` o `?garment_type__codi_client=<codi>`).
+    # Supports filtering by FK id (`?garment_type=<id>`) and by codi_client
+    # (`?garment_type_codi_client=<codi>` or `?garment_type__codi_client=<codi>`).
     filterset_fields = {
         'garment_type': ['exact'],
         'garment_type__codi_client': ['exact'],

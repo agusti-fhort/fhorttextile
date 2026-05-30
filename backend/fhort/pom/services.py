@@ -1,9 +1,9 @@
 """
-pom/services.py — Serveis de grading i mesures.
-Equivalent a les funcions de l'api.py de Frappe:
-  - generar_graded_spec
-  - tancar_base
-  - actualitzar_perfil_client (Welford online)
+pom/services.py — Grading and measurement services.
+Equivalent to the functions in Frappe's api.py:
+  - generate_graded_specs
+  - close_base
+  - update_client_profile (Welford online)
 """
 from __future__ import annotations
 import logging
@@ -15,18 +15,18 @@ logger = logging.getLogger(__name__)
 # GRADING
 # ─────────────────────────────────────────────────────────────────────────────
 
-def generar_graded_specs(size_fitting_id: int) -> int:
+def generate_graded_specs(size_fitting_id: int) -> int:
     """
-    Genera GradedSpec per a totes les talles del Size & Fitting.
+    Generate GradedSpec for every size of the Size & Fitting.
 
-    Flux:
-      1. Llegeix BaseMeasurement de la talla base del model
-      2. Llegeix GradingRules del RuleSet assignat
-      3. Per cada POM × talla, aplica la regla (LINEAR/STEP/FIXED/ZERO/EXCEPTION)
-      4. Crea o actualitza GradedSpec
-      5. Marca SF com a "Talles generades"
+    Flow:
+      1. Read BaseMeasurement of the model's base size
+      2. Read GradingRules of the assigned RuleSet
+      3. For each POM × size, apply the rule (LINEAR/STEP/FIXED/ZERO/EXCEPTION)
+      4. Create or update GradedSpec
+      5. Mark SF as "Talles generades"
 
-    Retorna el nombre de GradedSpec creats/actualitzats.
+    Returns the number of created/updated GradedSpec.
     """
     from fhort.fitting.models import SizeFitting
 
@@ -38,7 +38,7 @@ def generar_graded_specs(size_fitting_id: int) -> int:
 
     model = sf.model
 
-    # Validacions prèvies
+    # Pre-checks
     if not model.grading_rule_set_id:
         raise ValueError(f"El model {model.codi_intern} no té Grading Rule Set assignat.")
     if not model.size_system_id:
@@ -48,7 +48,7 @@ def generar_graded_specs(size_fitting_id: int) -> int:
     if not model.base_size_label:
         raise ValueError(f"El model {model.codi_intern} no té base_size_label definit.")
 
-    # Parse del run de talles (separador ·)
+    # Parse the size run (separator ·)
     size_run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
     base_size = model.base_size_label.strip()
 
@@ -59,11 +59,11 @@ def generar_graded_specs(size_fitting_id: int) -> int:
 
     base_idx = size_run.index(base_size)
 
-    # Carregar regles del RuleSet
+    # Load the RuleSet rules
     rules = _load_grading_rules(model.grading_rule_set_id)
     exceptions = _load_grading_exceptions(model.grading_rule_set_id)
 
-    # Carregar mesures base
+    # Load base measurements
     base_measurements = _load_base_measurements(model.pk)
 
     if not base_measurements:
@@ -72,23 +72,23 @@ def generar_graded_specs(size_fitting_id: int) -> int:
             "Cal entrar les mesures de la talla base primer."
         )
 
-    # Crear nova versió de grading o reutilitzar l'activa
+    # Create a new grading version or reuse the active one
     grading_version = _get_or_create_grading_version(sf)
 
-    # Generar specs
+    # Generate specs
     created = 0
     for pom_id, base_val in base_measurements.items():
         rule = rules.get(pom_id)
 
         for i, size_label in enumerate(size_run):
-            steps = i - base_idx  # negatiu = talla menor, positiu = major
+            steps = i - base_idx  # negative = smaller size, positive = larger
 
             exc = exceptions.get((pom_id, size_label))
             if exc:
                 graded_val = exc['value_cm']
                 gt_applied = 'EXCEPTION'
             elif rule is None:
-                graded_val = base_val  # sense regla = FIXED
+                graded_val = base_val  # no rule = FIXED
                 gt_applied = 'FIXED'
             else:
                 graded_val, gt_applied = _apply_rule(rule, base_val, steps, i, base_idx)
@@ -106,19 +106,19 @@ def generar_graded_specs(size_fitting_id: int) -> int:
             )
             created += 1
 
-    # Marcar SF
+    # Mark SF
     SizeFitting.objects.filter(pk=size_fitting_id).update(
         estat='TallesGenerades'
     )
 
-    logger.info(f"Grading generat per SF {size_fitting_id}: {created} specs")
+    logger.info(f"Grading generated for SF {size_fitting_id}: {created} specs")
     return created
 
 
-def tancar_base(size_fitting_id: int, user_id: int | None = None) -> int:
+def close_base(size_fitting_id: int, user_id: int | None = None) -> int:
     """
-    Tanca la talla base del Size & Fitting i genera les talles.
-    Equivalent al botó 'Tancar base' de Frappe.
+    Close the Size & Fitting base size and generate the sizes.
+    Equivalent to Frappe's 'Tancar base' button.
     """
     from django.utils import timezone
     from fhort.fitting.models import SizeFitting
@@ -133,86 +133,86 @@ def tancar_base(size_fitting_id: int, user_id: int | None = None) -> int:
             f"L'estat actual '{sf.get_estat_display()}' no permet tancar la base."
         )
 
-    # Tancar base
+    # Close base
     SizeFitting.objects.filter(pk=size_fitting_id).update(
         base_tancada=True,
         data_tancament_base=timezone.now(),
         estat='BaseTancada',
     )
 
-    # Generar talles
-    n = generar_graded_specs(size_fitting_id)
+    # Generate sizes
+    n = generate_graded_specs(size_fitting_id)
 
     return n
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CLIENT MESURA PERFIL (Welford online)
+# CLIENT MEASUREMENT PROFILE (Welford online)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def actualitzar_perfil_client(
+def update_client_profile(
     client_id: int,
     garment_type_id: int,
     pom_id: int,
-    talla: str,
-    valor_cm: float,
+    size: str,
+    value_cm: float,
 ) -> object:
     """
-    Actualitza l'estadística online de mesures per client/garment/POM/talla.
-    Usa l'algorisme de Welford per calcular mitjana i desviació
-    sense guardar tots els valors individuals.
+    Update the online measurement statistic per client/garment/POM/size.
+    Uses Welford's algorithm to compute mean and deviation
+    without storing every individual value.
     """
     from django.utils import timezone
 
     try:
         from fhort.pom.models import ClientMesuraPerfil
     except ImportError:
-        logger.warning("ClientMesuraPerfil no trobat, s'omet actualització Welford")
+        logger.warning("ClientMesuraPerfil not found, skipping Welford update")
         return None
 
-    perfil, _ = ClientMesuraPerfil.objects.get_or_create(
+    profile, _ = ClientMesuraPerfil.objects.get_or_create(
         client_id=client_id,
         garment_type_id=garment_type_id,
         pom_id=pom_id,
-        talla=talla,
+        talla=size,
     )
 
     # Welford online algorithm
-    n = (perfil.n_mostres or 0) + 1
-    old_mean = perfil.mitjana or 0.0
-    delta = valor_cm - old_mean
+    n = (profile.n_mostres or 0) + 1
+    old_mean = profile.mitjana or 0.0
+    delta = value_cm - old_mean
     new_mean = old_mean + delta / n
-    delta2 = valor_cm - new_mean
-    new_m2 = (perfil.m2_acum or 0.0) + delta * delta2
+    delta2 = value_cm - new_mean
+    new_m2 = (profile.m2_acum or 0.0) + delta * delta2
 
-    perfil.n_mostres = n
-    perfil.mitjana = round(new_mean, 3)
-    perfil.m2_acum = new_m2
-    perfil.desviacio = round((new_m2 / n) ** 0.5, 3) if n > 1 else 0.0
-    perfil.darrera_actualitzacio = timezone.now()
-    perfil.save()
+    profile.n_mostres = n
+    profile.mitjana = round(new_mean, 3)
+    profile.m2_acum = new_m2
+    profile.desviacio = round((new_m2 / n) ** 0.5, 3) if n > 1 else 0.0
+    profile.darrera_actualitzacio = timezone.now()
+    profile.save()
 
-    return perfil
+    return profile
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HELPERS PRIVATS
+# PRIVATE HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _load_grading_rules(rule_set_id: int) -> dict:
-    """Retorna {pom_id: rule_obj} per al RuleSet donat."""
+    """Return {pom_id: rule_obj} for the given RuleSet."""
     try:
         from fhort.pom.models import GradingRule
         return {r.pom_id: r for r in GradingRule.objects.filter(
             rule_set_id=rule_set_id, actiu=True
         )}
     except Exception as e:
-        logger.warning(f"No s'han pogut carregar GradingRules: {e}")
+        logger.warning(f"Could not load GradingRules: {e}")
         return {}
 
 
 def _load_grading_exceptions(rule_set_id: int) -> dict:
-    """Retorna {(pom_id, size_label): exc_obj}."""
+    """Return {(pom_id, size_label): exc_obj}."""
     try:
         from fhort.pom.models import GradingException
         return {
@@ -222,12 +222,12 @@ def _load_grading_exceptions(rule_set_id: int) -> dict:
             )
         }
     except Exception as e:
-        logger.warning(f"No s'han pogut carregar GradingExceptions: {e}")
+        logger.warning(f"Could not load GradingExceptions: {e}")
         return {}
 
 
 def _load_base_measurements(model_id: int) -> dict:
-    """Retorna {pom_id: base_value_cm}."""
+    """Return {pom_id: base_value_cm}."""
     try:
         from fhort.models_app.models import BaseMeasurement
         return {
@@ -237,12 +237,12 @@ def _load_base_measurements(model_id: int) -> dict:
             )
         }
     except Exception as e:
-        logger.warning(f"No s'han pogut carregar BaseMeasurements: {e}")
+        logger.warning(f"Could not load BaseMeasurements: {e}")
         return {}
 
 
 def _get_or_create_grading_version(sf):
-    """Obté o crea la GradingVersion activa per al SizeFitting."""
+    """Get or create the active GradingVersion for the SizeFitting."""
     try:
         from fhort.fitting.models import GradingVersion
         version = GradingVersion.objects.filter(
@@ -257,7 +257,7 @@ def _get_or_create_grading_version(sf):
             )
         return version
     except Exception:
-        # Fallback si GradingVersion té una estructura diferent
+        # Fallback if GradingVersion has a different structure
         try:
             from fhort.fitting.models import GradingVersion
             version = GradingVersion.objects.filter(
@@ -272,15 +272,15 @@ def _get_or_create_grading_version(sf):
                 )
             return version
         except Exception as e:
-            raise RuntimeError(f"No s'ha pogut obtenir/crear GradingVersion: {e}")
+            raise RuntimeError(f"Could not get/create GradingVersion: {e}")
 
 
 def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int):
-    """Aplica la regla de grading i retorna (graded_value, grading_type_applied).
+    """Apply the grading rule and return (graded_value, grading_type_applied).
 
-    Camps Django reals: rule.logica (was grading_type), rule.increment (DecimalField,
-    was increment_cm). El camp increment_above_xl no existeix al model — getattr
-    fallback al increment normal per STEP.
+    Real Django fields: rule.logica (was grading_type), rule.increment (DecimalField,
+    was increment_cm). The increment_above_xl field does not exist on the model —
+    getattr falls back to the normal increment for STEP.
     """
     grading_type = rule.logica
     increment = float(rule.increment) if rule.increment else 0.0
@@ -289,8 +289,8 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int)
         return base_val + (steps * increment), 'LINEAR'
 
     elif grading_type == 'STEP':
-        # Per a talles grans (>= base + 2 passos), pot aplicar increment diferent.
-        # increment_above_xl no existeix al model — fallback al increment normal.
+        # For large sizes (>= base + 2 steps), a different increment may apply.
+        # increment_above_xl does not exist on the model — fall back to normal increment.
         increment_above = getattr(rule, 'increment_above_xl', None)
         increment_above = float(increment_above) if increment_above else increment
         if steps > 2:
@@ -315,7 +315,7 @@ def _upsert_graded_spec(
     grading_type_applied: str,
     increment_applied_cm: float,
 ):
-    """Crea o actualitza un GradedSpec."""
+    """Create or update a GradedSpec."""
     try:
         from fhort.fitting.models import GradedSpec
         GradedSpec.objects.update_or_create(
@@ -330,5 +330,5 @@ def _upsert_graded_spec(
             }
         )
     except Exception as e:
-        logger.error(f"Error creant GradedSpec pom={pom_id} talla={size_label}: {e}")
+        logger.error(f"Error creating GradedSpec pom={pom_id} size={size_label}: {e}")
         raise

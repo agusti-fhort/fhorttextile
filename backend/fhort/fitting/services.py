@@ -139,13 +139,13 @@ def tancar_fitting(fitting_id: int) -> dict:
             # Actualitzar perfil client (Welford)
             if model.client_id and model.garment_type_id and linia.valor_nou:
                 try:
-                    from fhort.pom.services import actualitzar_perfil_client
-                    actualitzar_perfil_client(
+                    from fhort.pom.services import update_client_profile
+                    update_client_profile(
                         client_id=model.client_id,
                         garment_type_id=model.garment_type_id,
                         pom_id=linia.pom_id,
-                        talla=linia.talla,
-                        valor_cm=linia.valor_nou,
+                        size=linia.talla,
+                        value_cm=linia.valor_nou,
                     )
                 except Exception as e:
                     logger.warning(f"Welford update fallat: {e}")

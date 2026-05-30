@@ -1,5 +1,5 @@
 """
-fhort/pom/s11_views.py — Sprint S11: Notificacions automatiques
+fhort/pom/s11_views.py — Sprint S11: Automatic notifications
 """
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated

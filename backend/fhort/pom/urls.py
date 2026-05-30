@@ -24,21 +24,21 @@ router.register('grading-rule-sets', GradingRuleSetViewSet, basename='grading-ru
 router.register('grading-rules', GradingRuleViewSet, basename='grading-rule')
 router.register('garment-pom-maps', GarmentPOMMapViewSet, basename='garment-pom-map')
 
-# Sprint 7A — wizard de POMs. Els paths 'poms/suggerits/', 'poms/cerca/' i
-# 'poms/crear-tenant/' col·lisionarien amb POMMasterViewSet detail (poms/<pk>/);
-# els posem ABANS del router perquè Django els resolgui primer.
+# Sprint 7A — POM wizard. The 'poms/suggerits/', 'poms/cerca/' and
+# 'poms/crear-tenant/' paths would collide with POMMasterViewSet detail (poms/<pk>/);
+# we put them BEFORE the router so Django resolves them first.
 try:
     from .wizard_views import (
-        poms_suggerits_view,
-        cerca_poms_view,
-        crear_pom_tenant_view,
-        editar_nomenclatura_pom_view,
+        suggested_poms_view,
+        search_poms_view,
+        create_tenant_pom_view,
+        edit_pom_nomenclature_view,
     )
     _sprint7_pom_paths = [
-        path('poms/suggerits/',    poms_suggerits_view),
-        path('poms/cerca/',        cerca_poms_view),
-        path('poms/crear-tenant/', crear_pom_tenant_view),
-        path('poms/<int:pom_id>/nomenclatura/', editar_nomenclatura_pom_view),
+        path('poms/suggerits/',    suggested_poms_view),
+        path('poms/cerca/',        search_poms_view),
+        path('poms/crear-tenant/', create_tenant_pom_view),
+        path('poms/<int:pom_id>/nomenclatura/', edit_pom_nomenclature_view),
     ]
 except Exception:
     _sprint7_pom_paths = []

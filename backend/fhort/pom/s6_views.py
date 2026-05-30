@@ -1,5 +1,5 @@
 """
-fhort/pom/s6_views.py — Sprint S6: HTM tooltips + unitats als fittings
+fhort/pom/s6_views.py — Sprint S6: HTM tooltips + units in fittings
 """
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -28,9 +28,9 @@ def cv(val, unit):
 def pom_htm_view(request, pom_id):
     """
     GET /api/v1/poms/{id}/htm/
-    Retorna les instruccions de mesura disponibles per un POMMaster.
-    El model actual no te camps htm dedicats; usem descripcio_en del global i
-    notes del master. Tolerancies fixes (0.6/1.3) si no hi ha info especifica.
+    Return the available measurement instructions for a POMMaster.
+    The current model has no dedicated htm fields; we use the global's descripcio_en
+    and the master's notes. Fixed tolerances (0.6/1.3) if there is no specific info.
     """
     unit = get_unit(request)
     try:
@@ -77,7 +77,7 @@ def pom_htm_view(request, pom_id):
 def base_measurements_with_units_view(request, model_id):
     """
     GET /api/v1/models/{id}/base-measurements-units/
-    Retorna les BaseMeasurements amb valors convertits a la unitat del tenant.
+    Return the BaseMeasurements with values converted to the tenant unit.
     """
     unit = get_unit(request)
     try:
@@ -125,7 +125,7 @@ def base_measurements_with_units_view(request, model_id):
 def graded_specs_with_units_view(request, sf_id):
     """
     GET /api/v1/size-fittings/{id}/graded-specs-units/
-    Retorna les GradedSpec agrupades per POM amb conversio CM/INCH.
+    Return the GradedSpec grouped by POM with CM/INCH conversion.
     """
     unit = get_unit(request)
     try:
@@ -202,8 +202,8 @@ def graded_specs_with_units_view(request, sf_id):
 def fitting_lines_with_units_view(request, fitting_id):
     """
     GET /api/v1/fittings/{id}/lines-units/
-    SFFittingLinia: pom (POMMaster), nom_pom, talla, valor_vigent (spec), valor_nou (mesurat).
-    Tolerancia fixa 0.6 cm.
+    SFFittingLinia: pom (POMMaster), nom_pom, talla, valor_vigent (spec), valor_nou (measured).
+    Fixed tolerance 0.6 cm.
     """
     unit = get_unit(request)
     try:

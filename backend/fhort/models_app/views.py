@@ -753,7 +753,7 @@ def generar_grading_view(request, model_id):
         return Response({'error': 'Cal configurar talles i talla base'}, status=400)
 
     from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
-    from fhort.pom.services import generar_graded_specs
+    from fhort.pom.services import generate_graded_specs
 
     base_measurements_qs = BaseMeasurement.objects.filter(model=model, is_active=True)
     if not base_measurements_qs.exists():
@@ -781,7 +781,7 @@ def generar_grading_view(request, model_id):
 
     # Cridar el motor existent
     try:
-        graded_count = generar_graded_specs(sf.id)
+        graded_count = generate_graded_specs(sf.id)
     except ValueError as e:
         return Response({'error': str(e)}, status=400)
     except Exception as e:

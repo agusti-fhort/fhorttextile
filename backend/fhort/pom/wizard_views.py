@@ -1,6 +1,6 @@
 """
 fhort/pom/wizard_views.py
-Endpoints per al flux de Design Freeze + Talla Base wizard.
+Endpoints for the Design Freeze + Base Size wizard flow.
 """
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -15,11 +15,11 @@ from django.utils import timezone
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def aprovar_design_freeze_view(request, model_id):
+def approve_design_freeze_view(request, model_id):
     """
     POST /api/v1/models/{id}/aprovar-design-freeze/
-    El tècnic aprova el Design Freeze del model.
-    No requereix mesures — és una aprovació visual/conceptual.
+    The technician approves the model's Design Freeze.
+    Does not require measurements — it is a visual/conceptual approval.
     """
     try:
         from fhort.models_app.models import Model
@@ -50,25 +50,25 @@ def aprovar_design_freeze_view(request, model_id):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# POMs SUGGERITS PER GARMENT TYPE
+# SUGGESTED POMs BY GARMENT TYPE
 # ─────────────────────────────────────────────────────────────────────────────
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def poms_suggerits_view(request):
+def suggested_poms_view(request):
     """
     GET /api/v1/poms/suggerits/?garment_type=X
-    Retorna els POMs suggerits per a un garment_type,
-    amb la nomenclatura del tenant (codi_client, nom_client).
-    Si no hi ha GarmentPOMMap, retorna tots els POMs actius del tenant.
+    Return the suggested POMs for a garment_type,
+    with the tenant nomenclature (codi_client, nom_client).
+    If there is no GarmentPOMMap, return all active tenant POMs.
     """
     garment_type_id = request.query_params.get('garment_type')
 
     try:
         from fhort.pom.models import POMMaster, GarmentPOMMap, GarmentType
 
-        # Intentar carregar des de GarmentPOMMap (no té flag is_active al schema;
-        # cada entrada del mapping es considera vàlida per al seu garment_type).
+        # Try to load from GarmentPOMMap (it has no is_active flag in the schema;
+        # each mapping entry is considered valid for its garment_type).
         if garment_type_id:
             mapped_pom_ids = GarmentPOMMap.objects.filter(
                 garment_type_id=garment_type_id,
@@ -82,7 +82,7 @@ def poms_suggerits_view(request):
                     'categoria__display_order', 'codi_client'
                 )
             else:
-                # Fallback: tots els POMs del tenant
+                # Fallback: all tenant POMs
                 poms = POMMaster.objects.filter(actiu=True).select_related(
                     'categoria', 'pom_global'
                 ).order_by('categoria__display_order', 'codi_client')
@@ -110,17 +110,17 @@ def poms_suggerits_view(request):
 
     except Exception as e:
         import logging
-        logging.getLogger(__name__).exception("Error carregant POMs suggerits")
+        logging.getLogger(__name__).exception("Error loading suggested POMs")
         return Response({'error': str(e)}, status=500)
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def cerca_poms_view(request):
+def search_poms_view(request):
     """
     GET /api/v1/poms/cerca/?q=chest
-    Cerca POMs al catàleg del tenant per codi o nom.
-    Retorna max 20 resultats per a l'autocomplet.
+    Search POMs in the tenant catalog by code or name.
+    Return max 20 results for autocomplete.
     """
     q = request.query_params.get('q', '').strip()
     if len(q) < 2:
@@ -154,21 +154,21 @@ def cerca_poms_view(request):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TALLA BASE: GUARDAR I CONFIRMAR
+# BASE SIZE: SAVE AND CONFIRM
 # ─────────────────────────────────────────────────────────────────────────────
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def guardar_talla_base_view(request, model_id):
+def save_base_size_view(request, model_id):
     """
     POST /api/v1/models/{id}/guardar-talla-base/
     Body: {
       "poms": [
         {"pom_id": 1, "valor_cm": 22.5, "tolerancia_minus": 0.5, "tolerancia_plus": 0.5},
-        {"pom_id": 2, "valor_cm": 0}   ← valor 0 = eliminar
+        {"pom_id": 2, "valor_cm": 0}   ← value 0 = delete
       ]
     }
-    Guarda BaseMeasurements. No tanca la talla base.
+    Save BaseMeasurements. Does not close the base size.
     """
     poms_data = request.data.get('poms', [])
     if not poms_data:
@@ -183,52 +183,52 @@ def guardar_talla_base_view(request, model_id):
             return Response({'error': 'No existeix Size & Fitting per a aquest model'}, status=400)
         sf = sf_qs.first()
 
-        creats = 0
-        eliminats = 0
+        created = 0
+        removed = 0
         for item in poms_data:
             pom_id = item.get('pom_id')
-            valor = item.get('valor_cm', 0)
+            value = item.get('valor_cm', 0)
 
             if not pom_id:
                 continue
 
-            if valor is None or float(valor) == 0:
-                # Eliminar si existeix
+            if value is None or float(value) == 0:
+                # Delete if it exists
                 deleted, _ = BaseMeasurement.objects.filter(
                     model=model, pom_id=pom_id
                 ).delete()
-                eliminats += deleted
+                removed += deleted
             else:
                 BaseMeasurement.objects.update_or_create(
                     model=model,
                     pom_id=pom_id,
                     defaults={
-                        'base_value_cm': float(valor),
+                        'base_value_cm': float(value),
                         'is_active': True,
                         'notes': item.get('notes', ''),
                     }
                 )
-                creats += 1
+                created += 1
 
         return Response({
-            'creats_o_actualitzats': creats,
-            'eliminats': eliminats,
-            'missatge': f'{creats} POMs guardats, {eliminats} eliminats',
+            'creats_o_actualitzats': created,
+            'eliminats': removed,
+            'missatge': f'{created} POMs guardats, {removed} eliminats',
         })
 
     except Exception as e:
         import logging
-        logging.getLogger(__name__).exception("Error guardant talla base")
+        logging.getLogger(__name__).exception("Error saving base size")
         return Response({'error': str(e)}, status=500)
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def confirmar_talla_base_view(request, model_id):
+def confirm_base_size_view(request, model_id):
     """
     POST /api/v1/models/{id}/confirmar-talla-base/
-    Valida que hi ha prou POMs i tanca la talla base.
-    Opcionalment genera les talles si hi ha GradingRuleSet assignat.
+    Validate that there are enough POMs and close the base size.
+    Optionally generate the sizes if a GradingRuleSet is assigned.
     """
     try:
         from fhort.models_app.models import Model, BaseMeasurement
@@ -243,7 +243,7 @@ def confirmar_talla_base_view(request, model_id):
         if sf.base_tancada:
             return Response({'error': 'La talla base ja està tancada'}, status=400)
 
-        # Validar mínim de POMs
+        # Validate minimum number of POMs
         n_poms = BaseMeasurement.objects.filter(model=model, is_active=True).count()
         if n_poms < 3:
             return Response({
@@ -251,24 +251,24 @@ def confirmar_talla_base_view(request, model_id):
                 'poms_actuals': n_poms,
             }, status=400)
 
-        # Tancar talla base
+        # Close the base size
         from django.utils import timezone
         sf.base_tancada = True
         sf.data_tancament_base = timezone.now()
         sf.estat = 'BaseTancada'
         sf.save(update_fields=['base_tancada', 'data_tancament_base', 'estat'])
 
-        # Generar talles si hi ha grading_rule_set i size_run_model
+        # Generate sizes if there is a grading_rule_set and size_run_model
         grading_generated = 0
         if model.grading_rule_set_id and model.size_run_model and model.base_size_label:
             try:
-                from fhort.pom.services import generar_graded_specs
-                grading_generated = generar_graded_specs(sf.id)
+                from fhort.pom.services import generate_graded_specs
+                grading_generated = generate_graded_specs(sf.id)
                 sf.estat = 'TallesGenerades'
                 sf.save(update_fields=['estat'])
             except Exception as e:
                 import logging
-                logging.getLogger(__name__).warning(f"Grading no generat: {e}")
+                logging.getLogger(__name__).warning(f"Grading not generated: {e}")
 
         return Response({
             'missatge': 'Talla base confirmada correctament',
@@ -281,7 +281,7 @@ def confirmar_talla_base_view(request, model_id):
         return Response({'error': 'Model no trobat'}, status=404)
     except Exception as e:
         import logging
-        logging.getLogger(__name__).exception("Error confirmant talla base")
+        logging.getLogger(__name__).exception("Error confirming base size")
         return Response({'error': str(e)}, status=500)
 
 
@@ -290,7 +290,7 @@ def confirmar_talla_base_view(request, model_id):
 def base_measurements_view(request, model_id):
     """
     GET /api/v1/models/{id}/base-measurements/
-    Retorna les BaseMeasurements actuals del model amb dades del POM.
+    Return the model's current BaseMeasurements with POM data.
     """
     try:
         from fhort.models_app.models import BaseMeasurement
@@ -323,36 +323,36 @@ def base_measurements_view(request, model_id):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CREAR POM NOU AL TENANT
+# CREATE NEW TENANT POM
 # ─────────────────────────────────────────────────────────────────────────────
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def crear_pom_tenant_view(request):
+def create_tenant_pom_view(request):
     """
     POST /api/v1/poms/crear-tenant/
-    Crea un POM nou al tenant (sense POMGlobal associat, o amb un de nou).
+    Create a new tenant POM (without an associated POMGlobal, or with a new one).
     Body: {
       codi_client, nom_client, categoria_id,
-      descripcio (opcional), notes (opcional)
+      descripcio (optional), notes (optional)
     }
     """
-    codi = request.data.get('codi_client', '').strip()
-    nom = request.data.get('nom_client', '').strip()
+    code = request.data.get('codi_client', '').strip()
+    name = request.data.get('nom_client', '').strip()
     categoria_id = request.data.get('categoria_id')
 
-    if not codi or not nom:
+    if not code or not name:
         return Response({'error': 'codi_client i nom_client són obligatoris'}, status=400)
 
     try:
         from fhort.pom.models import POMMaster
 
-        if POMMaster.objects.filter(codi_client=codi).exists():
-            return Response({'error': f'Ja existeix un POM amb codi {codi}'}, status=400)
+        if POMMaster.objects.filter(codi_client=code).exists():
+            return Response({'error': f'Ja existeix un POM amb codi {code}'}, status=400)
 
         pom = POMMaster.objects.create(
-            codi_client=codi,
-            nom_client=nom,
+            codi_client=code,
+            nom_client=name,
             categoria_id=categoria_id,
             notes=request.data.get('notes', ''),
             actiu=True,
@@ -362,7 +362,7 @@ def crear_pom_tenant_view(request):
             'id': pom.id,
             'codi_client': pom.codi_client,
             'nom_client': pom.nom_client,
-            'missatge': f'POM {codi} creat correctament',
+            'missatge': f'POM {code} creat correctament',
         }, status=201)
 
     except Exception as e:
@@ -371,10 +371,10 @@ def crear_pom_tenant_view(request):
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
-def editar_nomenclatura_pom_view(request, pom_id):
+def edit_pom_nomenclature_view(request, pom_id):
     """
     PATCH /api/v1/poms/{id}/nomenclatura/
-    Edita codi_client i nom_client d'un POM del tenant.
+    Edit a tenant POM's codi_client and nom_client.
     """
     try:
         from fhort.pom.models import POMMaster

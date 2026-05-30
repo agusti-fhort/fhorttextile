@@ -10,7 +10,7 @@ from rest_framework import status
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def targets_list_view(request):
-    """GET /api/v1/targets/ — Llista tots els targets disponibles."""
+    """GET /api/v1/targets/ — List all available targets."""
     try:
         from fhort.pom.models import Target
         from fhort.pom.s2_serializers import TargetSerializer
@@ -26,7 +26,7 @@ def targets_list_view(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def construction_types_list_view(request):
-    """GET /api/v1/construction-types/ — Llista tipus de construccio."""
+    """GET /api/v1/construction-types/ — List construction types."""
     try:
         from fhort.pom.models import ConstructionType
         from fhort.pom.s2_serializers import ConstructionTypeSerializer
@@ -45,7 +45,7 @@ def sizing_profiles_view(request):
     """
     GET /api/v1/sizing-profiles/
     Query params: target=WOMAN, construction=KNIT, fit_type=REGULAR, garment_type=1
-    Retorna els perfils de sizing filtrats amb size definitions i grading preview.
+    Return the sizing profiles filtered, with size definitions and grading preview.
     """
     try:
         from fhort.pom.models import SizingProfile
@@ -83,7 +83,7 @@ def sizing_profiles_view(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def sizing_profile_detail_view(request, pk):
-    """GET /api/v1/sizing-profiles/{id}/ — Detall complet d'un perfil."""
+    """GET /api/v1/sizing-profiles/{id}/ — Full detail of a profile."""
     try:
         from fhort.pom.models import SizingProfile, GradingRule
         from fhort.pom.s2_serializers import SizingProfileSerializer, GradingRuleLightSerializer
@@ -95,7 +95,7 @@ def sizing_profile_detail_view(request, pk):
 
         data = SizingProfileSerializer(profile).data
 
-        # Totes les regles (no nomes KEY)
+        # All rules (not only KEY)
         all_rules = GradingRule.objects.filter(
             rule_set=profile.grading_rule_set,
             actiu=True
@@ -114,7 +114,7 @@ def sizing_profile_detail_view(request, pk):
 def clone_sizing_profile_view(request, pk):
     """
     POST /api/v1/sizing-profiles/{id}/clonar/
-    Crea una versio client del perfil estandard.
+    Create a client version of the standard profile.
     Body: { nom_client: "Brownie Knit Woman Regular" }
     """
     try:
@@ -124,7 +124,7 @@ def clone_sizing_profile_view(request, pk):
         original = SizingProfile.objects.get(pk=pk)
         nom_client = request.data.get('nom_client', f"Custom v{original.version + 1}")
 
-        # Clonar el GradingRuleSet
+        # Clone the GradingRuleSet
         original_rs = original.grading_rule_set
         nou_rs = GradingRuleSet.objects.create(
             nom=nom_client,
@@ -138,7 +138,7 @@ def clone_sizing_profile_view(request, pk):
             version_number=original_rs.version_number + 1,
         )
 
-        # Copiar totes les regles
+        # Copy all the rules
         rules_creades = 0
         for rule in GradingRule.objects.filter(rule_set=original_rs):
             GradingRule.objects.create(
@@ -151,7 +151,7 @@ def clone_sizing_profile_view(request, pk):
             )
             rules_creades += 1
 
-        # Clonar el SizingProfile
+        # Clone the SizingProfile
         nou_profile = SizingProfile.objects.create(
             target=original.target,
             garment_type=original.garment_type,
@@ -187,7 +187,7 @@ def clone_sizing_profile_view(request, pk):
 def update_grading_rule_view(request, rule_set_id, pom_codi):
     """
     PATCH /api/v1/grading-rule-sets/{id}/regles/{pom_codi}/
-    Actualitza l'increment d'una regla.
+    Update a rule's increment.
     Body: { increment: 2.5, logica: "LINEAR" }
     """
     try:
@@ -231,8 +231,8 @@ def update_grading_rule_view(request, rule_set_id, pom_codi):
 @permission_classes([IsAuthenticated])
 def tenant_config_view(request):
     """
-    GET  /api/v1/tenant-config/ — Retorna la configuracio del tenant
-    PATCH /api/v1/tenant-config/ — Actualitza unitat_mesura o norma_referencia
+    GET  /api/v1/tenant-config/ — Return the tenant configuration
+    PATCH /api/v1/tenant-config/ — Update unitat_mesura or norma_referencia
     """
     try:
         from fhort.accounts.models import TenantConfig
@@ -257,10 +257,10 @@ def tenant_config_view(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def pom_global_cerca_view(request):
+def pom_global_search_view(request):
     """
     GET /api/v1/pom-global/cerca/?q=chest&categoria=Upper+body
-    Cerca POMs al cataleg global per codi o nom.
+    Search POMs in the global catalog by code or name.
     """
     q = request.query_params.get('q', '').strip()
     categoria = request.query_params.get('categoria', '').strip()
@@ -296,10 +296,10 @@ def pom_global_cerca_view(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def garment_types_per_target_view(request):
+def garment_types_by_target_view(request):
     """
     GET /api/v1/garment-types/?target=WOMAN
-    Retorna GarmentTypes filtrats per target (via M2M targets_recomanats).
+    Return GarmentTypes filtered by target (via M2M targets_recomanats).
     """
     target_codi = request.query_params.get('target', '')
     try:
@@ -322,5 +322,5 @@ def garment_types_per_target_view(request):
         return Response({'count': len(results), 'results': results})
     except Exception as e:
         import logging
-        logging.getLogger(__name__).exception("garment_types_per_target_view error")
+        logging.getLogger(__name__).exception("garment_types_by_target_view error")
         return Response({'error': str(e)}, status=500)

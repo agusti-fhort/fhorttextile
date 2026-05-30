@@ -1,17 +1,17 @@
 """
-S14-A · Reseed complet del tenant 'fhort' després de la neteja.
+S14-A · Full reseed of the 'fhort' tenant after cleanup.
 
-Pas A — POMMaster (106, un per POMGlobal)
-Pas B — GarmentPOMMap (~85, des d'Excel)
-Pas C — GradingRuleSet (14) + GradingRule (~59), des d'Excel
-Pas D — SizingProfile (expansió 1 Excel row → N GarmentType del grup)
+Step A — POMMaster (106, one per POMGlobal)
+Step B — GarmentPOMMap (~85, from Excel)
+Step C — GradingRuleSet (14) + GradingRule (~59), from Excel
+Step D — SizingProfile (expand 1 Excel row → N GarmentType of the group)
 
-Adaptacions vs plan original:
-- GarmentPOMMap usa `ordre` (no `display_order`).
-- GradingRule.pom és FK a POMMaster (no POMGlobal); requereix talla_base i valor_base.
-- GradingRule no té camp `increment_above_xl`: es desa a `valors_step['above_xl']`.
-- SizingProfile no té `garment_group`: expandim per GarmentType del grup.
-- size_system del RuleSet es resol des dels SizingProfiles que el referencien (l'Excel no ho dóna directament al sheet RuleSets).
+Adaptations vs original plan:
+- GarmentPOMMap uses `ordre` (not `display_order`).
+- GradingRule.pom is FK to POMMaster (not POMGlobal); requires talla_base and valor_base.
+- GradingRule has no `increment_above_xl` field: stored in `valors_step['above_xl']`.
+- SizingProfile has no `garment_group`: we expand per GarmentType of the group.
+- the RuleSet size_system is resolved from the SizingProfiles that reference it (the Excel does not provide it directly in the RuleSets sheet).
 """
 import openpyxl
 from django.core.management.base import BaseCommand
@@ -74,7 +74,7 @@ class Command(BaseCommand):
         excel_path = opts['excel']
         grading_excel_path = opts['grading_excel']
 
-        # ── Carregar Excels ─────────────────────────────────────────────
+        # ── Load Excels ─────────────────────────────────────────────────
         self.stdout.write(self.style.WARNING(f'Carregant Excel mestre: {excel_path}'))
         wb = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
         self.stdout.write(self.style.WARNING(f'Carregant Excel grading: {grading_excel_path}'))
@@ -100,10 +100,10 @@ class Command(BaseCommand):
             })
 
         # ── GradingRuleSets (NOU dataset v1, 18 RuleSets) ───────────────
-        # Capçalera a fila idx 1: codi_sistema, nom_en, nom_ca, target,
+        # Header at row idx 1: codi_sistema, nom_en, nom_ca, target,
         # construction, fit_type, base_size, grade_increment_ref,
         # is_system_default, norma_ref, notes
-        # Camps norma_ref/notes ignorats: el model GradingRuleSet no els té.
+        # norma_ref/notes fields ignored: the GradingRuleSet model does not have them.
         ws = wb_grad['GradingRuleSets']
         rows = list(ws.iter_rows(values_only=True))
         h = _find_header(rows, 'codi_sistema')
@@ -113,9 +113,9 @@ class Command(BaseCommand):
             if not r or not r[0]:
                 continue
             codi = _str(r[0])
-            # Línies de secció/títol començarien per text descriptiu; les
-            # files de dades són identificades pel codi_sistema (no buit)
-            # i un nom_en a la cel·la r[1].
+            # Section/title lines would start with descriptive text; data
+            # rows are identified by codi_sistema (non-empty)
+            # and a nom_en in cell r[1].
             if not _str(r[1]):
                 continue
             rs_data.append({
@@ -129,11 +129,11 @@ class Command(BaseCommand):
                 'is_system_default': _parse_bool(r[8]),
             })
 
-        # ── GradingRules (NOU dataset v1, ~618 regles + files de secció) ─
-        # Capçalera a fila idx 1: ruleset_codi, pom_code, logica,
+        # ── GradingRules (NEW dataset v1, ~618 rules + section rows) ─
+        # Header at row idx 1: ruleset_codi, pom_code, logica,
         # increment_cm, increment_above_xl_cm, actiu, notes_en, norma_ref
-        # Files de secció: r[1] (pom_code) és None i r[0] conté "—".
-        # Camp notes_en/norma_ref ignorats: el model GradingRule no els té.
+        # Section rows: r[1] (pom_code) is None and r[0] contains "—".
+        # notes_en/norma_ref fields ignored: the GradingRule model does not have them.
         ws = wb_grad['GradingRules']
         rows = list(ws.iter_rows(values_only=True))
         h = _find_header(rows, 'ruleset_codi')
@@ -141,7 +141,7 @@ class Command(BaseCommand):
         rules_data = []
         for r in rows[h+1:]:
             if not r or not r[0] or not r[1]:
-                # Saltar files de secció (pom_code None) i files buides.
+                # Skip section rows (pom_code None) and empty rows.
                 continue
             rules_data.append({
                 'ruleset_codi': _str(r[0]),
@@ -178,7 +178,7 @@ class Command(BaseCommand):
             f'SizingProfiles={len(sp_data)}'
         )
 
-        # ── Mapa rs_codi → size_system_codi (des dels SizingProfiles) ──
+        # ── Map rs_codi → size_system_codi (from the SizingProfiles) ──
         rs_size_system = {}
         rs_target = {}
         for sp in sp_data:
@@ -187,7 +187,7 @@ class Command(BaseCommand):
                 rs_size_system[rsk] = sp['size_system']
                 rs_target[rsk] = sp['target']
 
-        # ── Operacions al tenant ────────────────────────────────────────
+        # ── Tenant operations ───────────────────────────────────────────
         with schema_context(tenant):
             from fhort.pom.models import (
                 POMGlobal, POMMaster, POMCategory,
@@ -199,10 +199,10 @@ class Command(BaseCommand):
 
             with transaction.atomic():
                 # =============================================
-                # PAS 0 · Neteja en ordre invers de dependencia
-                # (idempotència: l'ordre Pas A→D borraria POMMaster
-                # primer, però GradingRule/GarmentPOMMap el PROTECT-en
-                # després d'una primera execució)
+                # STEP 0 · Cleanup in reverse dependency order
+                # (idempotency: the Step A→D order would delete POMMaster
+                # first, but GradingRule/GarmentPOMMap PROTECT it
+                # after a first run)
                 # =============================================
                 self.stdout.write(self.style.WARNING('Pas 0 · Neteja prèvia'))
                 from fhort.pom.models import (
@@ -223,13 +223,13 @@ class Command(BaseCommand):
                         self.stdout.write(f'  {label}: {n} esborrats')
 
                 # =============================================
-                # PAS A · POMMaster (1 per POMGlobal)
+                # STEP A · POMMaster (1 per POMGlobal)
                 # =============================================
                 self.stdout.write(self.style.WARNING('\nPas A · POMMaster'))
-                # POMCategory: agafem només les "noves" (codi == nom de categoria
-                # que coincideix amb POMGlobal.categoria string). Si hi ha
-                # duplicat (CAT-UB + Upper body), preferim la que té display_order > 0
-                # i actiu.
+                # POMCategory: take only the "new" ones (codi == category name
+                # matching the POMGlobal.categoria string). If there is a
+                # duplicate (CAT-UB + Upper body), prefer the one with display_order > 0
+                # and actiu.
                 cat_map = {}
                 for c in POMCategory.objects.filter(actiu=True).order_by('-display_order'):
                     cat_map.setdefault(c.codi, c)
@@ -257,12 +257,12 @@ class Command(BaseCommand):
                     ))
 
                 # =============================================
-                # PAS B · GarmentPOMMap
+                # STEP B · GarmentPOMMap
                 # =============================================
                 self.stdout.write(self.style.WARNING('\nPas B · GarmentPOMMap'))
                 GarmentPOMMap.objects.all().delete()
                 gt_map = {gt.codi_client: gt for gt in GarmentType.objects.all()}
-                # Map POMMaster per POMGlobal.codi (POM-001, POM-002, ...)
+                # Map POMMaster by POMGlobal.codi (POM-001, POM-002, ...)
                 pm_by_pgcodi = {
                     pm.pom_global.codi: pm
                     for pm in POMMaster.objects.select_related('pom_global').all()
@@ -293,7 +293,7 @@ class Command(BaseCommand):
                     self.stdout.write(f'  Saltats: {len(saltats_b)} (mostra: {saltats_b[:5]})')
 
                 # =============================================
-                # PAS C · GradingRuleSet + GradingRule
+                # STEP C · GradingRuleSet + GradingRule
                 # =============================================
                 self.stdout.write(self.style.WARNING('\nPas C · GradingRuleSet + GradingRule'))
                 GradingRule.objects.all().delete()
@@ -326,8 +326,8 @@ class Command(BaseCommand):
                     rs_size_system_obj[d['codi_sistema']] = ss
                 self.stdout.write(f'  GradingRuleSets creats: {len(rs_map)}')
 
-                # Per a cada rule: resoldre talla_base via (size_system de rs, etiqueta = base_size)
-                # Fallback: primer SizeDefinition disponible globalment
+                # For each rule: resolve talla_base via (rs size_system, etiqueta = base_size)
+                # Fallback: first SizeDefinition available globally
                 pm_by_codi_or_pgcodi = {}
                 for pm in POMMaster.objects.select_related('pom_global').all():
                     pm_by_codi_or_pgcodi[pm.codi_client] = pm
@@ -378,11 +378,11 @@ class Command(BaseCommand):
                     self.stdout.write(f'  Saltats: {len(saltats_r)} (mostra: {saltats_r[:5]})')
 
                 # =============================================
-                # PAS D · SizingProfile (expansió per grup)
+                # STEP D · SizingProfile (expansion per group)
                 # =============================================
                 self.stdout.write(self.style.WARNING('\nPas D · SizingProfile'))
                 SizingProfile.objects.all().delete()
-                # GarmentType per grup
+                # GarmentType per group
                 gt_by_group = {}
                 for gt in GarmentType.objects.all():
                     gt_by_group.setdefault(gt.grup, []).append(gt)
@@ -423,7 +423,7 @@ class Command(BaseCommand):
                             notes=d['notes'],
                         ))
                         expandits += 1
-                # Pot haver-hi duplicats per (target, gt, constr, fit) — fem dedup
+                # There may be duplicates per (target, gt, constr, fit) — we dedup
                 seen = set()
                 unique_profiles = []
                 for p in profiles:
@@ -440,7 +440,7 @@ class Command(BaseCommand):
                 if saltats_p:
                     self.stdout.write(f'  Saltats: {len(saltats_p)} (mostra: {saltats_p[:5]})')
 
-        # ── Resum final ─────────────────────────────────────────────────
+        # ── Final summary ───────────────────────────────────────────────
         with schema_context(tenant):
             from fhort.pom.models import (
                 POMMaster, GarmentPOMMap, GradingRuleSet,

@@ -1,5 +1,5 @@
 """
-fhort/pom/s8_views.py — Sprint S8: Exportacio CSV/PDF
+fhort/pom/s8_views.py — Sprint S8: CSV/PDF export
 """
 import csv
 import io
@@ -36,7 +36,7 @@ def _pom_codi(p):
     return p.codi_client or ''
 
 
-def _pom_nom_en(p):
+def _pom_name_en(p):
     if not p:
         return ''
     if getattr(p, 'pom_global_id', None) and p.pom_global.nom_en:
@@ -44,7 +44,7 @@ def _pom_nom_en(p):
     return p.nom_client or ''
 
 
-def _categoria_nom(p):
+def _category_name(p):
     if not p or not getattr(p, 'categoria_id', None):
         return ''
     return p.categoria.nom_ca or p.categoria.nom_en or ''
@@ -77,8 +77,8 @@ def export_grading_csv_view(request, rule_set_id):
         for r in rules:
             writer.writerow([
                 _pom_codi(r.pom),
-                _pom_nom_en(r.pom),
-                _categoria_nom(r.pom),
+                _pom_name_en(r.pom),
+                _category_name(r.pom),
                 r.logica,
                 cv(r.increment, unit),
             ])
@@ -142,8 +142,8 @@ def export_size_set_csv_view(request, profile_id):
         for r in rules:
             writer.writerow([
                 _pom_codi(r.pom),
-                _pom_nom_en(r.pom),
-                _categoria_nom(r.pom),
+                _pom_name_en(r.pom),
+                _category_name(r.pom),
                 r.logica,
                 cv(r.increment, unit),
             ])
@@ -193,7 +193,7 @@ def export_fitting_csv_view(request, fitting_id):
 
             writer.writerow([
                 _pom_codi(line.pom),
-                _pom_nom_en(line.pom) or (line.nom_pom or ''),
+                _pom_name_en(line.pom) or (line.nom_pom or ''),
                 line.talla,
                 cv(spec, unit) if spec is not None else '—',
                 cv(val, unit) if val is not None else '—',
@@ -213,7 +213,7 @@ def export_fitting_csv_view(request, fitting_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def export_model_spec_pdf_view(request, model_id):
-    """GET /api/v1/models/{id}/export/pdf/ — fitxa tecnica del model amb BaseMeasurements."""
+    """GET /api/v1/models/{id}/export/pdf/ — model tech sheet with BaseMeasurements."""
     unit = get_unit(request)
     try:
         from reportlab.lib.pagesizes import A4
@@ -292,8 +292,8 @@ def export_model_spec_pdf_view(request, model_id):
                     val = round(val * CM_TO_INCH, 3)
                 rows.append([
                     _pom_codi(bm.pom),
-                    _pom_nom_en(bm.pom),
-                    _categoria_nom(bm.pom),
+                    _pom_name_en(bm.pom),
+                    _category_name(bm.pom),
                     str(val),
                 ])
             t = Table(rows, colWidths=[2.5*cm, 6*cm, 5*cm, 4.5*cm])

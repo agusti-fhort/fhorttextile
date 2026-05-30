@@ -45,15 +45,15 @@ except Exception:
 # (no col·lisionen amb ModelViewSet detail), però prepended per coherència.
 try:
     from fhort.pom.wizard_views import (
-        aprovar_design_freeze_view,
-        guardar_talla_base_view,
-        confirmar_talla_base_view,
+        approve_design_freeze_view,
+        save_base_size_view,
+        confirm_base_size_view,
         base_measurements_view,
     )
     _sprint7_model_paths = [
-        path('models/<int:model_id>/aprovar-design-freeze/', aprovar_design_freeze_view),
-        path('models/<int:model_id>/guardar-talla-base/',    guardar_talla_base_view),
-        path('models/<int:model_id>/confirmar-talla-base/',  confirmar_talla_base_view),
+        path('models/<int:model_id>/aprovar-design-freeze/', approve_design_freeze_view),
+        path('models/<int:model_id>/guardar-talla-base/',    save_base_size_view),
+        path('models/<int:model_id>/confirmar-talla-base/',  confirm_base_size_view),
         path('models/<int:model_id>/base-measurements/',     base_measurements_view),
     ]
 except Exception:

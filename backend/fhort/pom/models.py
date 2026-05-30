@@ -2,7 +2,7 @@ from django.db import models
 
 
 # ─────────────────────────────────────────────────────────────
-# Catàleg global FHORT (esquema 'public')
+# FHORT global catalog ('public' schema)
 # ─────────────────────────────────────────────────────────────
 
 class POMGlobal(models.Model):
@@ -38,7 +38,7 @@ class POMGlobal(models.Model):
     unitat = models.CharField(max_length=4, choices=UNITAT_CHOICES, default='cm')
     actiu = models.BooleanField(default=True)
 
-    # Sprint S12-A — catàleg ampliat (How To Measure detallat)
+    # Sprint S12-A — extended catalog (detailed How To Measure)
     abbreviation    = models.CharField(max_length=40, blank=True)
     start_point     = models.CharField(max_length=120, blank=True)
     end_point       = models.CharField(max_length=120, blank=True)
@@ -56,7 +56,7 @@ class POMGlobal(models.Model):
     applies_swim    = models.BooleanField(default=False)
     notes           = models.TextField(blank=True)
     iso_ref         = models.CharField(max_length=60, blank=True)
-    # Fi Sprint S12-A
+    # End Sprint S12-A
 
     # Sprint S1 — ISO 8559-1 linkage
     body_measure_iso = models.ForeignKey(
@@ -66,7 +66,7 @@ class POMGlobal(models.Model):
         related_name='poms_globals',
         help_text="Mesura corporal ISO 8559-1 equivalent"
     )
-    # Fi Sprint S1
+    # End Sprint S1
 
     class Meta:
         verbose_name = 'POM global'
@@ -152,11 +152,11 @@ class POMEstadisticaGlobal(models.Model):
 
 
 # ─────────────────────────────────────────────────────────────
-# Catàleg per-tenant (esquema del tenant)
+# Per-tenant catalog (tenant schema)
 # ─────────────────────────────────────────────────────────────
 
 class POMCategory(models.Model):
-    """Categories de POMs (UPPER/LOWER/JK/CD/PL/...). Importat del master data."""
+    """POM categories (UPPER/LOWER/JK/CD/PL/...). Imported from master data."""
 
     codi = models.CharField(max_length=20, unique=True)
     nom_en = models.CharField(max_length=120, blank=True)
@@ -214,9 +214,9 @@ class POMMaster(models.Model):
     def __str__(self):
         return f'{self.codi_client} · {self.nom_client}'
 
-    # ── Properties d'alias per al codi sprint3/4 ────────────────────────────
-    # Resolen TECH_DEBT.md #2. Read-only — no funcionen en ORM (.filter/order_by).
-    # Per ORM, usar les FKs naturals: pom__categoria__display_order, pom__pom_global__nom_ca.
+    # ── Alias properties for the sprint3/4 code ────────────────────────────
+    # Resolve TECH_DEBT.md #2. Read-only — they do not work in the ORM (.filter/order_by).
+    # For the ORM, use the natural FKs: pom__categoria__display_order, pom__pom_global__nom_ca.
     @property
     def pom_code(self):
         return self.codi_client or (self.pom_global.codi if self.pom_global_id else '')
@@ -239,8 +239,8 @@ class POMMaster(models.Model):
 
     @property
     def is_key_measure(self):
-        # No tenim camp equivalent al schema actual. Si calgués distingir
-        # "key measures", afegir un BooleanField explícit al model (migració).
+        # We have no equivalent field in the current schema. If we needed to
+        # distinguish "key measures", add an explicit BooleanField to the model (migration).
         return False
 
 
@@ -307,7 +307,7 @@ class SizeDefinition(models.Model):
 
 
 
-    # Sprint S1 — mesures corporals de referencia
+    # Sprint S1 — reference body measurements
     body_height_cm  = models.DecimalField(max_digits=5, decimal_places=1,
                         null=True, blank=True,
                         help_text="Alcada corporal de referencia (ISO 8559-1)")
@@ -334,7 +334,7 @@ class SizeDefinition(models.Model):
 
 
 class GarmentGroup(models.Model):
-    """Famílies de prendes (SWIMWEAR, OUTERWEAR, BOTTOMS, ...). Importat del master data."""
+    """Garment families (SWIMWEAR, OUTERWEAR, BOTTOMS, ...). Imported from master data."""
 
     codi = models.CharField(max_length=40, unique=True)
     nom = models.CharField(max_length=120)
@@ -363,14 +363,14 @@ class GarmentType(models.Model):
     grup = models.CharField(max_length=40)
     actiu = models.BooleanField(default=True)
 
-    # Sprint S13-A — multiidioma + system flag
+    # Sprint S13-A — multilanguage + system flag
     nom_en = models.CharField(max_length=200, blank=True, default='')
     nom_ca = models.CharField(max_length=200, blank=True, default='')
     nom_es = models.CharField(max_length=200, blank=True, default='')
     is_system = models.BooleanField(default=False,
         help_text="True = ve del catàleg global canònic, no esborrable")
 
-    # Sprint S1 — target i construccio
+    # Sprint S1 — target and construction
     targets_recomanats = models.ManyToManyField(
         'Target',
         blank=True,
@@ -421,10 +421,10 @@ class GradingRuleSet(models.Model):
 
 
 
-    # Sprint S1 — target, construccio, versioning
-    # Sprint S16-A — `target` FK conservada temporalment (related_name renomenat
-    # a *_legacy). El nou `targets` M2M és la font autoritativa; la FK s'eliminarà
-    # en un sprint posterior un cop el codi consumidor estigui actualitzat.
+    # Sprint S1 — target, construction, versioning
+    # Sprint S16-A — `target` FK kept temporarily (related_name renamed
+    # to *_legacy). The new `targets` M2M is the authoritative source; the FK will be
+    # removed in a later sprint once the consuming code is updated.
     target = models.ForeignKey(
         'Target', null=True, blank=True,
         on_delete=models.SET_NULL,
@@ -486,7 +486,7 @@ class GradingRule(models.Model):
     pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='regles_grading')
     talla_base = models.ForeignKey(SizeDefinition, on_delete=models.PROTECT, related_name='regles_base')
     logica = models.CharField(max_length=20, choices=LOGICA_CHOICES)
-    # Sprint S16-A — decimals 4 → 2 (precisió real per mesures de roba en cm)
+    # Sprint S16-A — decimals 4 → 2 (real precision for garment measurements in cm)
     valor_base = models.DecimalField(max_digits=7, decimal_places=2, default=0)
     increment = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     valors_step = models.JSONField(null=True, blank=True)
@@ -502,12 +502,12 @@ class GradingRule(models.Model):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Sprint 3 — Motor de grading (dades de catàleg compartides amb tenants)
-# BaseMeasurement viu a models_app (FK Model), GradedSpec viu a fitting (FK GradingVersion).
+# Sprint 3 — Grading engine (catalog data shared with tenants)
+# BaseMeasurement lives in models_app (FK Model), GradedSpec lives in fitting (FK GradingVersion).
 # ─────────────────────────────────────────────────────────────────────────────
 
 class GradingException(models.Model):
-    """Override puntual per (POM, talla) dins d'un GradingRuleSet."""
+    """Specific override per (POM, size) within a GradingRuleSet."""
     rule_set = models.ForeignKey(GradingRuleSet, on_delete=models.CASCADE, related_name='exceptions')
     pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='grading_exceptions')
     size_label = models.CharField(max_length=20)
@@ -525,10 +525,10 @@ class GradingException(models.Model):
 
 
 class ClientMesuraPerfil(models.Model):
-    """Estadística Welford online per (client, garment_type, POM, talla).
+    """Online Welford statistic per (client, garment_type, POM, size).
 
-    Acumula mean/M2 sense guardar valors individuals. Es va actualitzant
-    cada vegada que un fitting es tanca i una línia ha estat modificada.
+    Accumulates mean/M2 without storing individual values. It is updated
+    every time a fitting is closed and a line has been modified.
     """
     client = models.ForeignKey('tenants.Client', on_delete=models.CASCADE, related_name='mesures_perfil')
     garment_type = models.ForeignKey(GarmentType, on_delete=models.CASCADE, related_name='mesures_perfil')
@@ -552,12 +552,12 @@ class ClientMesuraPerfil(models.Model):
 
 
 # =============================================================================
-# SPRINT S1 — Nous models globals (schema public)
-# Afegit a fhort/pom/models.py
+# SPRINT S1 — New global models (public schema)
+# Added to fhort/pom/models.py
 # =============================================================================
 
 class FitType(models.Model):
-    """Tipus de fit (Slim / Regular / Loose / Oversized). Schema public."""
+    """Fit type (Slim / Regular / Loose / Oversized). Public schema."""
     CODI_CHOICES = [
         ('SLIM','Slim'),
         ('REGULAR','Regular'),
@@ -593,7 +593,7 @@ class FitType(models.Model):
 
 
 class Target(models.Model):
-    """Poblacio objectiu d'una peca de vestir. Schema public."""
+    """Target population of a garment. Public schema."""
     CODI_CHOICES = [
         ('WOMAN','Woman'),('MAN','Man'),('UNISEX_ADULT','Unisex Adult'),
         ('BABY_GIRL','Baby Girl'),('BABY_BOY','Baby Boy'),('BABY_UNISEX','Baby Unisex'),
@@ -631,7 +631,7 @@ class Target(models.Model):
 
 
 class ConstructionType(models.Model):
-    """Tipus de construccio de teixit. Determina grading i tolerancies."""
+    """Fabric construction type. Determines grading and tolerances."""
     CODI_CHOICES = [
         ('WOVEN','Woven (Pla)'),
         ('KNIT','Knit (Punt Jersey)'),
@@ -656,7 +656,7 @@ class ConstructionType(models.Model):
 
 
 class BodyMeasurementISO(models.Model):
-    """Mesures corporals definides per ISO 8559-1:2017. Schema public."""
+    """Body measurements defined by ISO 8559-1:2017. Public schema."""
     CATEGORIA_CHOICES = [
         ('VERTICAL','Vertical measurements (§5.1)'),
         ('WIDTH_DEPTH','Widths and depths (§5.2)'),
@@ -692,9 +692,9 @@ class BodyMeasurementISO(models.Model):
 
 class SizingProfile(models.Model):
     """
-    Perfil de sizing: combinacio target+garment+construction+fit -> size_system+grading.
-    Es el cor del SizingProfileWizard.
-    Schema public (global) — els tenants poden crear versions propies via parent_profile.
+    Sizing profile: combination target+garment+construction+fit -> size_system+grading.
+    It is the heart of the SizingProfileWizard.
+    Public (global) schema — tenants can create their own versions via parent_profile.
     """
     target           = models.ForeignKey('Target', on_delete=models.PROTECT,
                          related_name='sizing_profiles')
@@ -729,8 +729,8 @@ class SizingProfile(models.Model):
 
 class GradingRuleHistory(models.Model):
     """
-    Historial de canvis en una GradingRule.
-    Registra qui ha canviat quin POM, de quin valor a quin, i quan.
+    Change history for a GradingRule.
+    Records who changed which POM, from which value to which, and when.
     """
     rule_set        = models.ForeignKey('GradingRuleSet', on_delete=models.CASCADE,
                         related_name='history')

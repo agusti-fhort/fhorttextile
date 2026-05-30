@@ -1,4 +1,4 @@
-# Sprint 3 — Endpoints grading
+# Sprint 3 — Grading endpoints
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -7,14 +7,14 @@ from rest_framework import status
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def tancar_base_view(request, sf_id):
+def close_base_view(request, sf_id):
     """
     POST /api/v1/size-fittings/{id}/tancar-base/
-    Tanca la talla base i genera les talles automàticament.
+    Close the base size and generate the sizes automatically.
     """
     try:
-        from fhort.pom.services import tancar_base
-        n = tancar_base(int(sf_id), request.user.id)
+        from fhort.pom.services import close_base
+        n = close_base(int(sf_id), request.user.id)
         return Response({
             'graded_specs_creats': n,
             'missatge': f'{n} especificacions generades correctament',
@@ -23,20 +23,20 @@ def tancar_base_view(request, sf_id):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         import logging
-        logging.getLogger(__name__).exception("Error tancant base")
+        logging.getLogger(__name__).exception("Error closing base")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def regenerar_talles_view(request, sf_id):
+def regenerate_sizes_view(request, sf_id):
     """
     POST /api/v1/size-fittings/{id}/regenerar-talles/
-    Regenera les talles (per si s'han canviat regles de grading).
+    Regenerate the sizes (in case grading rules changed).
     """
     try:
-        from fhort.pom.services import generar_graded_specs
-        n = generar_graded_specs(int(sf_id))
+        from fhort.pom.services import generate_graded_specs
+        n = generate_graded_specs(int(sf_id))
         return Response({
             'graded_specs_actualitzats': n,
             'missatge': f'{n} especificacions actualitzades',
@@ -49,10 +49,10 @@ def regenerar_talles_view(request, sf_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def taula_mesures_view(request, sf_id):
+def measurements_table_view(request, sf_id):
     """
     GET /api/v1/size-fittings/{id}/taula-mesures/
-    Retorna la taula POM × talla per mostrar al frontend.
+    Return the POM × size table to display on the frontend.
     Format: { poms: [...], talles: [...], cells: {pom_id: {talla: value}} }
     """
     try:
@@ -66,7 +66,7 @@ def taula_mesures_view(request, sf_id):
         if model.size_run_model:
             size_run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
 
-        # GradedSpecs actius
+        # Active GradedSpecs
         grading_version = None
         try:
             from fhort.fitting.models import GradingVersion
@@ -107,7 +107,7 @@ def taula_mesures_view(request, sf_id):
                     'increment': spec.increment_applied_cm,
                 }
 
-        # BaseMeasurements si no hi ha grading
+        # BaseMeasurements if there is no grading
         if not grading_version:
             try:
                 from fhort.models_app.models import BaseMeasurement
@@ -152,5 +152,5 @@ def taula_mesures_view(request, sf_id):
 
     except Exception as e:
         import logging
-        logging.getLogger(__name__).exception("Error generant taula mesures")
+        logging.getLogger(__name__).exception("Error generating measurements table")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
