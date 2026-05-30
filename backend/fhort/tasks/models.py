@@ -52,7 +52,7 @@ class Tasca(models.Model):
     gate = models.BooleanField(default=False)
     resultat_gate = models.CharField(
         max_length=20,
-        choices=[('OK', 'OK'), ('NO OK', 'NO OK'), ('EXCEPCIÓ', 'EXCEPCIÓ')],
+        choices=[('OK', 'OK'), ('NO_OK', 'No OK'), ('EXCEPCIO', 'Excepció')],
         null=True, blank=True,
     )
     notes = models.TextField(null=True, blank=True)
@@ -119,7 +119,6 @@ class ModelTasca(models.Model):
     slots_base = models.FloatField(null=True, blank=True, default=0)
     slots_reals = models.FloatField(null=True, blank=True, default=0)
     hores_reals = models.FloatField(null=True, blank=True, default=0)
-    cost_real = models.FloatField(null=True, blank=True, default=0)
     tipus_encarrec = models.CharField(
         max_length=20,
         choices=[
