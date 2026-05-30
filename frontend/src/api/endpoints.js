@@ -53,13 +53,25 @@ export const sizeFittings = {
   create: (data) => client.post('/api/v1/size-fittings/', data),
 }
 
-// Sprint 5B.6 — Fitting sessions (capa nova). pieceFittings/pieceFittingLines → A2.
+// Sprint 5B.6 — Fitting sessions (capa nova).
 export const fittingSessions = {
   list: (params) => client.get('/api/v1/fitting-sessions/', { params }),
   get: (id) => client.get(`/api/v1/fitting-sessions/${id}/`),
   create: (data) => client.post('/api/v1/fitting-sessions/', data),
   canAdvance: (id) => client.get(`/api/v1/fitting-sessions/${id}/can-advance/`),
   createPiece: (id, modelId) => client.post(`/api/v1/fitting-sessions/${id}/create-piece/`, { model_id: modelId }),
+}
+
+// Sprint 5B.6-A2 — Piece fittings: graella de treball + gate.
+export const pieceFittings = {
+  get: (id) => client.get(`/api/v1/piece-fittings/${id}/`),
+  setGate: (id, resultat, motiu = '') => client.post(`/api/v1/piece-fittings/${id}/set-gate/`, { resultat, motiu }),
+  close: (id) => client.post(`/api/v1/piece-fittings/${id}/close/`),
+}
+
+// Autosave de cel·la: només PATCH de valor_real / nota.
+export const pieceFittingLines = {
+  update: (id, data) => client.patch(`/api/v1/piece-fitting-lines/${id}/`, data),
 }
 
 export const gradingVersions = {

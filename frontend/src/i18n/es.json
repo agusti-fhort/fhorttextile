@@ -169,6 +169,36 @@
       "Oberta": "Abierta",
       "Tancada": "Cerrada",
       "Anullada": "Anulada"
+    },
+    "grid": {
+      "pom": "POM",
+      "size": "Talla",
+      "theoretical": "Teórico",
+      "actual": "Real",
+      "notes": "Notas",
+      "saving": "Guardando…",
+      "saved": "Guardado ✓",
+      "save_error": "Error al guardar",
+      "evolution": "Evolución",
+      "empty": "Esta pieza no tiene líneas."
+    },
+    "gate": {
+      "title": "Gate de la pieza",
+      "ok": "OK",
+      "no_ok": "No OK",
+      "exception": "Excepción",
+      "reason": "Motivo",
+      "reason_required": "El motivo es obligatorio.",
+      "save_error": "No se ha podido guardar el gate."
+    },
+    "piece": {
+      "select": "Pieza",
+      "create": "Crear pieza",
+      "creating": "Creando…",
+      "none": "Esta sesión aún no tiene ninguna pieza.",
+      "close": "Cerrar pieza",
+      "closing": "Cerrando…",
+      "close_error": "No se ha podido cerrar la pieza."
     }
   }
 }

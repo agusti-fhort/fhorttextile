@@ -169,6 +169,36 @@
       "Oberta": "Open",
       "Tancada": "Closed",
       "Anullada": "Voided"
+    },
+    "grid": {
+      "pom": "POM",
+      "size": "Size",
+      "theoretical": "Theoretical",
+      "actual": "Actual",
+      "notes": "Notes",
+      "saving": "Saving…",
+      "saved": "Saved ✓",
+      "save_error": "Save error",
+      "evolution": "Evolution",
+      "empty": "This piece has no lines."
+    },
+    "gate": {
+      "title": "Piece gate",
+      "ok": "OK",
+      "no_ok": "Not OK",
+      "exception": "Exception",
+      "reason": "Reason",
+      "reason_required": "Reason is required.",
+      "save_error": "Could not save the gate."
+    },
+    "piece": {
+      "select": "Piece",
+      "create": "Create piece",
+      "creating": "Creating…",
+      "none": "This session has no pieces yet.",
+      "close": "Close piece",
+      "closing": "Closing…",
+      "close_error": "Could not close the piece."
     }
   }
 }

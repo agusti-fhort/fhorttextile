@@ -169,6 +169,36 @@
       "Oberta": "Oberta",
       "Tancada": "Tancada",
       "Anullada": "Anul·lada"
+    },
+    "grid": {
+      "pom": "POM",
+      "size": "Talla",
+      "theoretical": "Teòric",
+      "actual": "Real",
+      "notes": "Notes",
+      "saving": "Desant…",
+      "saved": "Desat ✓",
+      "save_error": "Error en desar",
+      "evolution": "Evolució",
+      "empty": "Aquesta peça no té línies."
+    },
+    "gate": {
+      "title": "Gate de la peça",
+      "ok": "OK",
+      "no_ok": "No OK",
+      "exception": "Excepció",
+      "reason": "Motiu",
+      "reason_required": "El motiu és obligatori.",
+      "save_error": "No s'ha pogut desar el gate."
+    },
+    "piece": {
+      "select": "Peça",
+      "create": "Crear peça",
+      "creating": "Creant…",
+      "none": "Aquesta sessió encara no té cap peça.",
+      "close": "Tancar peça",
+      "closing": "Tancant…",
+      "close_error": "No s'ha pogut tancar la peça."
     }
   }
 }
