@@ -198,7 +198,7 @@ export default function Sidebar() {
     pomAlerts.list({ estat: 'Pendent', page_size: 1 })
       .then(res => setAlertsPending(res.data.count || 0))
       .catch(() => {})
-    client.get('/api/v1/onboarding-status/')
+    client.get('/api/v1/onboarding/status/')
       .then(res => {
         const pct = res.data?.percentatge
         if (typeof pct === 'number') setOnboardingPct(pct)
