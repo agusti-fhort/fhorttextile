@@ -33,6 +33,38 @@ class LiniaContracte(models.Model):
         return f'{self.contracte.nom} · {self.descripcio}'
 
 
+class GarmentSet(models.Model):
+    """
+    Commercial multi-piece product (twin set, dress + belt, top + bottom of the
+    same fabric) that is sold and fitted as a single unit but is technically made
+    of N independent pieces.
+
+    Distinction vs GarmentGroup (pom.GarmentGroup):
+      - GarmentGroup is a TAXONOMY/category (SWIMWEAR, OUTERWEAR, BOTTOMS...).
+        Many unrelated Models share a group. It classifies.
+      - GarmentSet is a CONCRETE product instance. Its pieces are specific Models
+        bound to it. It groups the physical pieces of one product.
+
+    Membership is explicit (Model.garment_set FK + Model.piece_number), never
+    parsed from a code string. The base code lives here; each piece Model carries
+    the full stored code (codi_base + '-NN') in its own codi_intern.
+    """
+    codi_base = models.CharField(max_length=40, unique=True)
+    nom_comercial = models.CharField(max_length=200, blank=True, default='')
+    num_pieces = models.PositiveSmallIntegerField(
+        help_text='Nombre de peces del conjunt. Immutable després de la creació.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Garment Set (conjunt)'
+        verbose_name_plural = 'Garment Sets (conjunts)'
+        ordering = ['codi_base']
+
+    def __str__(self):
+        return f'{self.codi_base} ({self.num_pieces} peces)'
+
+
 class Model(models.Model):
     TEMPORADA_CHOICES = [
         ('SS', 'Spring/Summer'),
@@ -100,6 +132,21 @@ class Model(models.Model):
         blank=True,
         related_name='models',
     )
+
+    # --- Sprint A: multi-piece (GarmentSet) ---
+    # Membership in a commercial set is explicit (FK + piece_number), not parsed
+    # from codi_intern. For a single-piece model (~90%) both are null and the
+    # creation flow is unchanged.
+    garment_set = models.ForeignKey(
+        'models_app.GarmentSet',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='peces',
+    )
+    piece_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    # --- End Sprint A ---
+
     fit_type = models.CharField(max_length=20, choices=FIT_CHOICES, default='Regular')
     target = models.CharField(max_length=30, null=True, blank=True)
     construction = models.CharField(max_length=20, null=True, blank=True)

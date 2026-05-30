@@ -1,6 +1,6 @@
 import datetime
 
-from django.db import connection
+from django.db import connection, transaction
 from rest_framework import viewsets
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import BaseMeasurement, Model, ModelFitxer
+from .models import BaseMeasurement, GarmentSet, Model, ModelFitxer
 from .serializers import (
     BaseMeasurementSerializer,
     ModelDetailSerializer,
@@ -132,37 +132,103 @@ def create_model_wizard(request):
     ref_client = request.data.get('ref_client', '')
     nom_prenda = request.data.get('nom_prenda', '')
     descripcio = request.data.get('descripcio', '')
+    # Sprint A — multi-piece (immutable after creation)
+    is_multipiece = bool(request.data.get('is_multipiece', False))
+    num_pieces = request.data.get('num_pieces')
 
     if not year or not season:
         return Response({'error': 'year i season són obligatoris'}, status=400)
+
+    if is_multipiece:
+        try:
+            num_pieces = int(num_pieces)
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'num_pieces ha de ser un enter quan is_multipiece és cert'},
+                status=400,
+            )
+        if num_pieces < 2:
+            return Response(
+                {'error': 'Un conjunt multi-peça necessita num_pieces >= 2'},
+                status=400,
+            )
 
     prefix = 'FTT'
     year_short = str(year)[-2:]
     base = f"{prefix}-{season}{year_short}-"
 
+    # next_num must look ONLY at base codes (FTT-SS26-NNNN), NOT at piece codes
+    # (FTT-SS26-NNNN-NN). A plain LIKE 'base%' would capture piece codes and
+    # split('-')[-1] would return the piece suffix, breaking the sequence.
+    # The regex anchors a 4-digit sequential at the end → piece codes excluded.
+    # We scan BOTH Model.codi_intern base codes AND GarmentSet.codi_base, because
+    # a set's base number is consumed (its pieces are NNNN-01/-02) and must not be
+    # reused by a later single model.
+    base_pattern = f"^{prefix}-{season}{year_short}-[0-9]{{4}}$"
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT codi_intern FROM models_app_model "
-            "WHERE codi_intern LIKE %s "
-            "ORDER BY codi_intern DESC LIMIT 1",
-            [base + '%']
+            "SELECT codi_intern FROM models_app_model WHERE codi_intern ~ %s",
+            [base_pattern]
         )
-        row = cursor.fetchone()
-    next_num = (int(row[0].split('-')[-1]) + 1) if row else 1
-    codi_intern = f"{base}{str(next_num).zfill(4)}"
+        candidates = [r[0] for r in cursor.fetchall()]
+        cursor.execute(
+            "SELECT codi_base FROM models_app_garmentset WHERE codi_base ~ %s",
+            [base_pattern]
+        )
+        candidates += [r[0] for r in cursor.fetchall()]
+    nums = [int(c.split('-')[-1]) for c in candidates]
+    next_num = (max(nums) + 1) if nums else 1
+    codi_base = f"{base}{str(next_num).zfill(4)}"
 
-    model = Model.objects.create(
-        codi_intern=codi_intern,
-        codi_client=ref_client,
-        codi_tenant=prefix,
-        any=int(year),
-        temporada=season,
-        sequencial=next_num,
-        nom_prenda=nom_prenda or None,
-        descripcio=descripcio or None,
-        estat='Nou',
-    )
-    return Response({'id': model.id, 'codi_intern': model.codi_intern}, status=201)
+    # Single piece (~90%): unchanged flow, no GarmentSet.
+    if not is_multipiece:
+        model = Model.objects.create(
+            codi_intern=codi_base,
+            codi_client=ref_client,
+            codi_tenant=prefix,
+            any=int(year),
+            temporada=season,
+            sequencial=next_num,
+            nom_prenda=nom_prenda or None,
+            descripcio=descripcio or None,
+            estat='Nou',
+        )
+        return Response({'id': model.id, 'codi_intern': model.codi_intern}, status=201)
+
+    # Multi-piece: one GarmentSet + N piece Models, codi_intern = codi_base-NN.
+    with transaction.atomic():
+        garment_set = GarmentSet.objects.create(
+            codi_base=codi_base,
+            nom_comercial=nom_prenda or '',
+            num_pieces=num_pieces,
+        )
+        pieces = []
+        for i in range(1, num_pieces + 1):
+            piece = Model.objects.create(
+                codi_intern=f"{codi_base}-{str(i).zfill(2)}",
+                codi_client=ref_client,
+                codi_tenant=prefix,
+                any=int(year),
+                temporada=season,
+                sequencial=next_num,
+                nom_prenda=nom_prenda or None,
+                descripcio=descripcio or None,
+                estat='Nou',
+                garment_set=garment_set,
+                piece_number=i,
+            )
+            pieces.append({
+                'id': piece.id,
+                'codi_intern': piece.codi_intern,
+                'piece_number': piece.piece_number,
+            })
+
+    return Response({
+        'garment_set_id': garment_set.id,
+        'codi_base': garment_set.codi_base,
+        'num_pieces': garment_set.num_pieces,
+        'pieces': pieces,
+    }, status=201)
 
 
 @api_view(['PATCH'])
