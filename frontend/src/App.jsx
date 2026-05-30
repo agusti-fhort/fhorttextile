@@ -9,6 +9,8 @@ import Tasks from './pages/Tasks'
 import SizeFittingList from './pages/SizeFittingList'
 import SizeFittingDetail from './pages/SizeFittingDetail'
 import FittingDetail from './pages/FittingDetail'
+import FittingSessionList from './pages/FittingSessionList'
+import FittingSessionNew from './pages/FittingSessionNew'
 import GradingRuleSets from './pages/GradingRuleSets'
 import SizeSystems from './pages/SizeSystems'
 import SizeLibrary from './pages/SizeLibrary'
@@ -59,8 +61,13 @@ export default function App() {
           <Route path="models/:id/nou-sf" element={<NewSizeFitting />} />
           <Route path="fitting" element={<SizeFittingList />} />
           <Route path="fitting/:id" element={<SizeFittingDetail />} />
+          {/* PENDENT A2: aquesta nidada es retira quan es reescrigui FittingDetail */}
           <Route path="fitting/:sfId/fitting/:id" element={<FittingDetail />} />
-          <Route path="fittings" element={<SizeFittingList />} />
+          {/* 5B.6 — capa nova de sessions de fitting */}
+          <Route path="fittings" element={<FittingSessionList />} />
+          <Route path="fittings/new" element={<FittingSessionNew />} />
+          {/* PENDENT A2: FittingDetail es reescriu per consumir la sessió/graella */}
+          <Route path="fittings/:id" element={<FittingDetail />} />
           <Route path="tasques" element={<Tasks />} />
           <Route path="tasques/catalog" element={<Tasks />} />
           <Route path="tasques/paquets" element={<Tasks />} />

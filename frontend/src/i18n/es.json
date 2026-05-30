@@ -140,5 +140,35 @@
     "create_failed": "No se ha podido crear el modelo",
     "load_failed": "Error cargando los datos",
     "generic": "Se ha producido un error"
+  },
+  "fitting": {
+    "sessions": {
+      "title": "Sesiones de fitting",
+      "empty": "Ninguna sesión de fitting con estos filtros.",
+      "new": "Nueva sesión",
+      "all": "Todas"
+    },
+    "session": {
+      "fase": "Fase",
+      "estat": "Estado",
+      "date": "Fecha",
+      "target": "Objetivo",
+      "model": "Modelo",
+      "model_persona": "Modelo (persona)",
+      "assistents": "Asistentes",
+      "lloc": "Lugar",
+      "notes": "Notas",
+      "responsable": "Responsable",
+      "n_peces": "Piezas",
+      "create": "Crear sesión",
+      "creating": "Creando…",
+      "select_model": "Selecciona un modelo",
+      "create_error": "No se ha podido crear la sesión"
+    },
+    "estats": {
+      "Oberta": "Abierta",
+      "Tancada": "Cerrada",
+      "Anullada": "Anulada"
+    }
   }
 }

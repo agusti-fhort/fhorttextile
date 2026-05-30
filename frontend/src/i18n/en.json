@@ -140,5 +140,35 @@
     "create_failed": "Could not create the model",
     "load_failed": "Error loading data",
     "generic": "An error occurred"
+  },
+  "fitting": {
+    "sessions": {
+      "title": "Fitting sessions",
+      "empty": "No fitting sessions with these filters.",
+      "new": "New session",
+      "all": "All"
+    },
+    "session": {
+      "fase": "Phase",
+      "estat": "Status",
+      "date": "Date",
+      "target": "Target",
+      "model": "Model",
+      "model_persona": "Fit model (person)",
+      "assistents": "Attendees",
+      "lloc": "Location",
+      "notes": "Notes",
+      "responsable": "Responsible",
+      "n_peces": "Pieces",
+      "create": "Create session",
+      "creating": "Creating…",
+      "select_model": "Select a model",
+      "create_error": "Could not create the session"
+    },
+    "estats": {
+      "Oberta": "Open",
+      "Tancada": "Closed",
+      "Anullada": "Voided"
+    }
   }
 }

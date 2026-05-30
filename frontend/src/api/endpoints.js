@@ -53,6 +53,15 @@ export const sizeFittings = {
   create: (data) => client.post('/api/v1/size-fittings/', data),
 }
 
+// Sprint 5B.6 — Fitting sessions (capa nova). pieceFittings/pieceFittingLines → A2.
+export const fittingSessions = {
+  list: (params) => client.get('/api/v1/fitting-sessions/', { params }),
+  get: (id) => client.get(`/api/v1/fitting-sessions/${id}/`),
+  create: (data) => client.post('/api/v1/fitting-sessions/', data),
+  canAdvance: (id) => client.get(`/api/v1/fitting-sessions/${id}/can-advance/`),
+  createPiece: (id, modelId) => client.post(`/api/v1/fitting-sessions/${id}/create-piece/`, { model_id: modelId }),
+}
+
 export const gradingVersions = {
   list: (params) => client.get('/api/v1/grading-versions/', { params }),
 }

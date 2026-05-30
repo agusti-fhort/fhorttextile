@@ -140,5 +140,35 @@
     "create_failed": "No s'ha pogut crear el model",
     "load_failed": "Error carregant les dades",
     "generic": "S'ha produït un error"
+  },
+  "fitting": {
+    "sessions": {
+      "title": "Sessions de fitting",
+      "empty": "Cap sessió de fitting amb aquests filtres.",
+      "new": "Nova sessió",
+      "all": "Totes"
+    },
+    "session": {
+      "fase": "Fase",
+      "estat": "Estat",
+      "date": "Data",
+      "target": "Objectiu",
+      "model": "Model",
+      "model_persona": "Model (persona)",
+      "assistents": "Assistents",
+      "lloc": "Lloc",
+      "notes": "Notes",
+      "responsable": "Responsable",
+      "n_peces": "Peces",
+      "create": "Crear sessió",
+      "creating": "Creant…",
+      "select_model": "Selecciona un model",
+      "create_error": "No s'ha pogut crear la sessió"
+    },
+    "estats": {
+      "Oberta": "Oberta",
+      "Tancada": "Tancada",
+      "Anullada": "Anul·lada"
+    }
   }
 }
