@@ -6,15 +6,15 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
-const gateVariant  = { OK: 'ok', NO_OK: 'err', EXCEPCIO: 'warn', Pendent: 'gray' }
 
 const COL_POM_W = 78
 const COL_NOM_W = 150
 
-// Ordre de talles segons el size run del model: split per '·' (U+00B7) + trim.
+// Ordre de talles segons el size run del model: split per '·' (U+00B7) o ';' + trim
+// (mateixa normalització que el backend, que desa amb '·' però admet ';').
 // Mai alfabètic. Talles presents a les línies que no surtin al run s'afegeixen al final.
 function orderedSizes(sizeRun, present) {
-  const run = (sizeRun || '').split('·').map(s => s.trim()).filter(Boolean)
+  const run = (sizeRun || '').replace(/;/g, '·').split('·').map(s => s.trim()).filter(Boolean)
   const ordered = run.filter(s => present.has(s))
   const extras = [...present].filter(s => !run.includes(s))
   return [...ordered, ...extras]
@@ -90,65 +90,30 @@ function VersionCell({ value, isBase, baseSize, groupStart }) {
 }
 
 // Fit actual (valor_real): única cel·la editable. Vermell+negreta si difereix de Base.
-// Triangle discret de nota a la cantonada; clic obre el popover existent.
-function CurrentFitCell({ line, baseSize, baseValue, value, note, onValue, onNote }) {
-  const { t } = useTranslation()
+// Stepper natiu (fletxes); amplada suficient per "104,75" + fletxes. Sense nota per cel·la
+// (el comentari és global del fitting, viu a Observacions).
+function CurrentFitCell({ line, baseSize, baseValue, value, onValue }) {
   const [realState, saveReal] = useCellAutosave(line?.id, 'valor_real', true)
-  const [notaState, saveNota] = useCellAutosave(line?.id, 'nota', false)
-  const [noteOpen, setNoteOpen] = useState(false)
 
   if (!line) return <td style={cellTd(baseSize, false, baseSize)} />
 
-  const hasNote = (note ?? '').trim() !== ''
   const modified = value !== '' && value != null && baseValue != null
     && Number(value) !== Number(baseValue)
 
   return (
     <td style={{ ...cellTd(baseSize, false, baseSize), position: 'relative' }}>
       <input
-        className="fit-input" type="number" step="0.1" inputMode="decimal" value={value}
+        type="number" step="0.1" value={value}
         onChange={e => { onValue(line.id, e.target.value); saveReal(e.target.value) }}
         style={{
-          font: 'inherit', width: 66, padding: '2px 4px', textAlign: 'right',
+          font: 'inherit', width: 88, padding: '2px 4px', textAlign: 'right',
           border: '1px solid var(--border)', borderRadius: 4, background: 'var(--white)',
           color: modified ? 'var(--err)' : 'var(--text-main)',
           fontWeight: modified ? 700 : 400,
           fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
         }}
       />
-      {/* Triangle de nota a la cantonada (daurat si hi ha nota, tènue si no). */}
-      <button
-        type="button" onClick={() => setNoteOpen(o => !o)}
-        title={hasNote ? note : t('fitting.grid.note')}
-        style={{
-          position: 'absolute', top: 0, right: 0, width: 0, height: 0, padding: 0,
-          border: '5px solid transparent',
-          borderTopColor: hasNote ? 'var(--gold)' : 'var(--border)',
-          borderRightColor: hasNote ? 'var(--gold)' : 'var(--border)',
-          background: 'none', cursor: 'pointer',
-        }}
-      />
       <SaveStatus state={realState} absolute />
-      {noteOpen && (
-        <div style={{
-          position: 'absolute', zIndex: 25, top: '100%', right: 4, marginTop: 4,
-          background: 'var(--white)', border: '0.5px solid var(--border)', borderRadius: 8,
-          padding: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.08)', width: 200, textAlign: 'left',
-        }}>
-          <div style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4 }}>
-            {t('fitting.grid.note')}
-          </div>
-          <textarea
-            value={note} autoFocus
-            onChange={e => { onNote(line.id, e.target.value); saveNota(e.target.value) }}
-            style={{
-              width: '100%', minHeight: 56, resize: 'vertical', padding: '4px 6px', fontSize: 11,
-              border: '0.5px solid var(--border)', borderRadius: 6, boxSizing: 'border-box', color: 'var(--text-main)',
-            }}
-          />
-          <SaveStatus state={notaState} />
-        </div>
-      )}
     </td>
   )
 }
@@ -163,8 +128,9 @@ function EditableContextField({ sessionId, field, label, value }) {
         value={v} onChange={e => { setV(e.target.value); schedule(e.target.value) }}
         placeholder="—"
         style={{
-          width: 120, padding: '2px 6px', fontSize: 11, color: 'var(--text-main)',
-          border: '0.5px solid var(--border)', borderRadius: 6, background: 'var(--white)', boxSizing: 'border-box',
+          width: 120, padding: '1px 2px', fontSize: 11, color: 'var(--text-main)',
+          border: 'none', borderBottom: '1px solid var(--border)', borderRadius: 0,
+          background: 'transparent', boxSizing: 'border-box',
         }}
       />
       <SaveStatus state={state} inline />
@@ -238,84 +204,6 @@ function ModelFilesPanel({ modelId }) {
   )
 }
 
-function GateBar({ piece, onGate, onClose }) {
-  const { t } = useTranslation()
-  const [resultat, setResultat] = useState(piece.gate && piece.gate !== 'Pendent' ? piece.gate : '')
-  const [motiu, setMotiu] = useState(piece.gate_motiu || '')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [closing, setClosing] = useState(false)
-
-  const needsReason = resultat === 'NO_OK' || resultat === 'EXCEPCIO'
-
-  const apply = (value) => {
-    setResultat(value)
-    setError('')
-    const reason = (value === 'NO_OK' || value === 'EXCEPCIO') ? motiu : ''
-    if ((value === 'NO_OK' || value === 'EXCEPCIO') && !reason.trim()) return
-    submit(value, reason)
-  }
-  const submit = (value, reason) => {
-    setBusy(true)
-    onGate(value, reason).catch(() => setError(t('fitting.gate.save_error'))).finally(() => setBusy(false))
-  }
-  const confirmReason = () => {
-    if (!motiu.trim()) { setError(t('fitting.gate.reason_required')); return }
-    submit(resultat, motiu)
-  }
-  const closePiece = () => {
-    setClosing(true); setError('')
-    onClose().catch(() => setError(t('fitting.piece.close_error'))).finally(() => setClosing(false))
-  }
-
-  const btn = (value, label) => {
-    const active = resultat === value
-    const v = gateVariant[value]
-    return (
-      <button key={value} type="button" disabled={busy} onClick={() => apply(value)} style={{
-        background: active ? `var(--${v}-bg)` : 'var(--white)',
-        color: active ? `var(--${v})` : 'var(--text-muted)',
-        border: `1px solid ${active ? `var(--${v})` : 'var(--border)'}`,
-        borderRadius: 8, padding: '6px 14px', fontSize: 12,
-        cursor: busy ? 'default' : 'pointer',
-      }}>{label}</button>
-    )
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 4 }}>{t('fitting.gate.title')}:</span>
-        {btn('OK', t('fitting.gate.ok'))}
-        {btn('NO_OK', t('fitting.gate.no_ok'))}
-        {btn('EXCEPCIO', t('fitting.gate.exception'))}
-        {piece.gate && piece.gate !== 'Pendent' && (
-          <Badge variant={gateVariant[piece.gate] || 'gray'} style={{ marginLeft: 4 }}>{piece.gate}</Badge>
-        )}
-        <button type="button" disabled={closing} onClick={closePiece} style={{
-          marginLeft: 'auto', background: 'var(--white)', color: 'var(--text-muted)',
-          border: '0.5px solid var(--border)', borderRadius: 8, padding: '6px 14px',
-          fontSize: 12, cursor: closing ? 'default' : 'pointer',
-        }}>{closing ? t('fitting.piece.closing') : t('fitting.piece.close')}</button>
-      </div>
-      {needsReason && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <input
-            type="text" value={motiu} placeholder={t('fitting.gate.reason')}
-            onChange={e => setMotiu(e.target.value)}
-            style={{ flex: 1, maxWidth: 360, padding: '6px 10px', fontSize: 12, border: '0.5px solid var(--border)', borderRadius: 8 }}
-          />
-          <button type="button" disabled={busy} onClick={confirmReason} style={{
-            background: 'var(--gold)', color: 'var(--white)', border: 'none',
-            borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer',
-          }}>{t('app.confirm')}</button>
-        </div>
-      )}
-      {error && <div style={{ fontSize: 12, color: 'var(--err)' }}>{error}</div>}
-    </div>
-  )
-}
-
 export default function FittingDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -327,9 +215,8 @@ export default function FittingDetail() {
   const [gridLoading, setGridLoading] = useState(false)
   const [creatingPiece, setCreatingPiece] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
-  // Valors editables lligats al parent → Δ reactiu i remuntatge net per peça.
+  // Valors editables lligats al parent → modificat reactiu i remuntatge net per peça.
   const [reals, setReals] = useState({})
-  const [notes, setNotes] = useState({})
 
   const loadSession = useCallback((selectFirst = false) => {
     return fittingSessions.get(id).then(res => {
@@ -351,9 +238,9 @@ export default function FittingDetail() {
     pieceFittings.get(activePieceId)
       .then(res => {
         setGrid(res.data)
-        const r = {}, n = {}
-        for (const l of res.data.lines || []) { r[l.id] = l.valor_real ?? ''; n[l.id] = l.nota ?? '' }
-        setReals(r); setNotes(n)
+        const r = {}
+        for (const l of res.data.lines || []) { r[l.id] = l.valor_real ?? '' }
+        setReals(r)
       })
       .finally(() => setGridLoading(false))
   }, [activePieceId])
@@ -366,29 +253,16 @@ export default function FittingDetail() {
       .finally(() => setCreatingPiece(false))
   }
 
-  const handleGate = (resultat, motiu) => {
-    return pieceFittings.setGate(activePieceId, resultat, motiu).then(res => {
-      const { gate, gate_motiu, gate_at } = res.data
-      setGrid(g => g ? { ...g, gate, gate_motiu, gate_at } : g)
-      setSession(s => s ? {
-        ...s,
-        piece_fittings: (s.piece_fittings || []).map(p => p.id === activePieceId ? { ...p, gate, gate_motiu } : p),
-      } : s)
-    })
-  }
-
-  const handleClose = () => pieceFittings.close(activePieceId).then(() => loadSession())
-
   if (loading) {
     return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('app.loading')}</div>
   }
   if (!session) return null
 
   const pieces = session.piece_fittings || []
-  const activePiece = pieces.find(p => p.id === activePieceId)
   const lines = grid?.lines || []
   const model = grid?.model || {}
-  const baseLabel = model.base_size_label
+  // Trim perquè base_size_label coincideixi amb les etiquetes de talla (poden venir amb espais).
+  const baseLabel = (model.base_size_label || '').trim()
 
   // Identificació (codi/nom): del grid si hi ha peça; si no, de la primera peça.
   const idCodi = model.codi || pieces[0]?.model_codi || null
@@ -417,7 +291,6 @@ export default function FittingDetail() {
   const groupSpan = versionNumbers.length + 1  // versions read-only + fit actual
 
   const onValue = (lineId, v) => setReals(r => ({ ...r, [lineId]: v }))
-  const onNote = (lineId, v) => setNotes(n => ({ ...n, [lineId]: v }))
 
   const stickyHd = (left, w) => ({
     ...thStyle, position: 'sticky', left, zIndex: 3, minWidth: w, width: w,
@@ -430,8 +303,8 @@ export default function FittingDetail() {
 
   return (
     <div>
-      {/* Capçalera d'identificació rica (sticky a dalt) — B0.3 */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-main)', paddingBottom: 8, marginBottom: '1rem', borderBottom: '0.5px solid var(--border)' }}>
+      {/* Banda d'identificació plana (cream, integrada amb la pàgina; mai card blanca) */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-muted)', padding: '10px 14px', marginBottom: '1rem', borderBottom: '0.5px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
           <button onClick={() => navigate('/fittings')} style={{
             background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: 0, marginRight: 12,
@@ -462,7 +335,7 @@ export default function FittingDetail() {
                 title={wired ? label : `${label} · (B2)`}
                 onClick={wired ? onClick : () => {}}
                 style={{
-                  background: active ? 'var(--gold-pale)' : 'var(--white)',
+                  background: active ? 'var(--gold-pale)' : 'transparent',
                   border: `0.5px solid ${active ? 'var(--gold)' : 'var(--border)'}`, borderRadius: 8,
                   padding: '5px 9px', cursor: 'pointer',
                   color: active ? 'var(--gold)' : 'var(--text-muted)',
@@ -489,7 +362,6 @@ export default function FittingDetail() {
               fontSize: 11, cursor: 'pointer',
             }}>
               {p.model_codi || `#${p.model}`}
-              <Badge variant={gateVariant[p.gate] || 'gray'}>{p.gate}</Badge>
             </button>
           )
         })}
@@ -577,8 +449,7 @@ export default function FittingDetail() {
                           ))
                           cells.push(
                             <CurrentFitCell key={`${s}-cur`} line={line} baseSize={base} baseValue={baseValue}
-                              value={line ? reals[line.id] ?? '' : ''} note={line ? notes[line.id] ?? '' : ''}
-                              onValue={onValue} onNote={onNote} />
+                              value={line ? reals[line.id] ?? '' : ''} onValue={onValue} />
                           )
                           return cells
                         })}
@@ -592,17 +463,6 @@ export default function FittingDetail() {
         </Card>
       )}
 
-      {/* Gate de la peça activa */}
-      {activePiece && lines.length > 0 && (
-        <Card>
-          <GateBar
-            key={activePieceId}
-            piece={{ ...activePiece, gate: grid?.gate ?? activePiece.gate, gate_motiu: grid?.gate_motiu ?? activePiece.gate_motiu }}
-            onGate={handleGate}
-            onClose={handleClose}
-          />
-        </Card>
-      )}
     </div>
   )
 }

@@ -37,8 +37,3 @@ body {
   background: var(--bg-main);
   color: var(--text-main);
 }
-
-/* Fitting grid — input del fit actual sense spinner; cos de text heretat de la cel·la. */
-.fit-input { -moz-appearance: textfield; appearance: textfield; }
-.fit-input::-webkit-outer-spin-button,
-.fit-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }

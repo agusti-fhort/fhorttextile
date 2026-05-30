@@ -197,8 +197,8 @@
     },
     "piece": {
       "select": "Pieza",
-      "create": "Crear pieza",
-      "creating": "Creando…",
+      "create": "Añadir pieza",
+      "creating": "Añadiendo…",
       "none": "Esta sesión aún no tiene ninguna pieza.",
       "close": "Cerrar pieza",
       "closing": "Cerrando…",

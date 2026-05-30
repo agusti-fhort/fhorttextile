@@ -197,8 +197,8 @@
     },
     "piece": {
       "select": "Peça",
-      "create": "Crear peça",
-      "creating": "Creant…",
+      "create": "Afegir peça",
+      "creating": "Afegint…",
       "none": "Aquesta sessió encara no té cap peça.",
       "close": "Tancar peça",
       "closing": "Tancant…",
