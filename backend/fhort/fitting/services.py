@@ -462,3 +462,132 @@ def _active_grading_version(sf):
         .order_by('-version_number')
         .first()
     )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Sprint 5B.4 — Two-level gate + manual phase advance + production seal
+# ═════════════════════════════════════════════════════════════════════════════
+
+_GATE_RESULTS = ('OK', 'NO_OK', 'EXCEPCIO')
+_GATE_ADVANCEABLE = ('OK', 'EXCEPCIO')  # EXCEPCIO = accepted exception → advances
+
+
+def set_piece_gate(
+    piece_fitting_id: int,
+    resultat: str,
+    motiu: str = '',
+    *,
+    user_profile_id: int | None = None,
+):
+    """Set the gate of a PieceFitting (a step AFTER close). Records who/when.
+
+    resultat ∈ {OK, NO_OK, EXCEPCIO}. NO_OK fires the brain stub (future re-opening).
+    """
+    from django.utils import timezone
+    from fhort.fitting.models import PieceFitting
+
+    if resultat not in _GATE_RESULTS:
+        raise ValueError(f"resultat ha de ser un de {_GATE_RESULTS} (rebut: {resultat!r}).")
+
+    pf = PieceFitting.objects.select_related('model').get(pk=piece_fitting_id)
+    pf.gate = resultat
+    pf.gate_motiu = motiu or ''
+    pf.gate_per_id = user_profile_id
+    pf.gate_at = timezone.now()
+    pf.save(update_fields=['gate', 'gate_motiu', 'gate_per', 'gate_at'])
+
+    if resultat == 'NO_OK':
+        # "Fallar és individual": signal the brain so it can later re-open this
+        # piece's tasks. Stub today (no propagation).
+        from fhort.fitting.brain import on_fitting_measurement_changed
+        on_fitting_measurement_changed(
+            piece_fitting_id=pf.pk,
+            model_id=pf.model_id,
+            base_changed=False,
+            new_grading_version_id=None,
+        )
+
+    logger.info(f"PieceFitting {pf.pk} gate set to {resultat}")
+    return pf
+
+
+def session_can_advance(session_id: int) -> bool:
+    """DERIVED (not stored): the session may advance iff every PieceFitting gate is
+    in {OK, EXCEPCIO} and there is at least one piece (none Pendent/NO_OK)."""
+    from fhort.fitting.models import PieceFitting
+
+    gates = list(
+        PieceFitting.objects.filter(session_id=session_id).values_list('gate', flat=True)
+    )
+    if not gates:
+        return False
+    return all(g in _GATE_ADVANCEABLE for g in gates)
+
+
+def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | None = None) -> dict:
+    """Manual phase advance: the responsible person CHOOSES nova_fase (may skip,
+    repeat or go back — we do NOT compute "the next one").
+
+    Guards: session Oberta + session_can_advance + nova_fase ∈ Model.FASE_CHOICES.
+    For each PieceFitting: seal its vigent GradingVersion (aprovada + aprovada_per +
+    data_aprovacio) and set its Model.fase_actual = nova_fase. Closes the session.
+
+    Per-piece TOP guard: a piece already at 'TOP' asked to advance from TOP is a
+    no-op (skipped, reported), not an error.
+    """
+    from django.utils import timezone
+    from fhort.fitting.models import FittingSession, PieceFitting
+    from fhort.models_app.models import Model
+
+    valid_phases = {c[0] for c in Model.FASE_CHOICES}
+    if nova_fase not in valid_phases:
+        raise ValueError(f"nova_fase ha de ser ∈ {sorted(valid_phases)} (rebut: {nova_fase!r}).")
+
+    session = FittingSession.objects.get(pk=session_id)
+    if session.estat != 'Oberta':
+        raise ValueError(f"La sessió ja està {session.estat}; només s'avança des d'Oberta.")
+    if not session_can_advance(session_id):
+        raise ValueError("La sessió no pot avançar: hi ha peces Pendent o NO_OK.")
+
+    pieces = list(
+        PieceFitting.objects.filter(session_id=session_id)
+        .select_related('model', 'grading_version', 'grading_version__size_fitting')
+    )
+
+    now = timezone.now()
+    sealed = []
+    advanced = []
+    skipped_top = []
+
+    for pf in pieces:
+        # TODO(§3.3 — deute conscient): Model.fase_actual el deriva avui tasks
+        # (recalculate_current_phase via signal). Amb tasks=0 no hi ha conflicte;
+        # la reconciliació múscul↔tasques és posterior. Escriptura directa a posta.
+        model = pf.model
+        if model.fase_actual == 'TOP':
+            skipped_top.append(model.pk)
+            continue
+
+        # Seal the vigent (active) GradingVersion of this piece's SizeFitting.
+        version = _active_grading_version(pf.grading_version.size_fitting)
+        if version is not None:
+            version.aprovada = True
+            version.aprovada_per_id = user_profile_id
+            version.data_aprovacio = now
+            version.save(update_fields=['aprovada', 'aprovada_per', 'data_aprovacio'])
+            sealed.append(version.pk)
+
+        Model.objects.filter(pk=model.pk).update(fase_actual=nova_fase)
+        advanced.append(model.pk)
+
+    session.estat = 'Tancada'
+    session.save(update_fields=['estat'])
+
+    result = {
+        'nova_fase': nova_fase,
+        'advanced_models': advanced,
+        'sealed_versions': sealed,
+        'skipped_top_models': skipped_top,
+    }
+    logger.info(f"Session {session_id} advanced: {result}")
+    return result

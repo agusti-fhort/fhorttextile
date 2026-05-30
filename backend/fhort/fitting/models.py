@@ -76,6 +76,16 @@ class GradingVersion(models.Model):
     version_number = models.PositiveIntegerField(default=1)
     is_active = models.BooleanField(default=True)
 
+    # Sprint 5B.4 — production seal (set by advance_phase when a gate is passed).
+    # `aprovada` = sealed as production; who/when for the manual decision.
+    aprovada_per = models.ForeignKey(
+        'accounts.UserProfile',
+        on_delete=models.SET_NULL,
+        related_name='grading_versions_aprovades',
+        null=True, blank=True,
+    )
+    data_aprovacio = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         verbose_name = 'Versió de grading'
         verbose_name_plural = 'Versions de grading'
@@ -336,6 +346,14 @@ class PieceFitting(models.Model):
     )
     gate = models.CharField(max_length=10, choices=GATE_CHOICES, default='Pendent')
     gate_motiu = models.TextField(blank=True, default='')
+    # Sprint 5B.4 — who/when set the gate (manual-decision traceability).
+    gate_per = models.ForeignKey(
+        'accounts.UserProfile',
+        on_delete=models.SET_NULL,
+        related_name='piece_fittings_gated',
+        null=True, blank=True,
+    )
+    gate_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
         'accounts.UserProfile',
