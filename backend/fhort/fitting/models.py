@@ -151,70 +151,9 @@ class POMAlert(models.Model):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Sprint 4 — Fitting wizard (to be replaced by FittingSession/PieceFitting in Sprint 5B)
+# Sprint 4 — Fitting wizard (SFFitting/SFFittingLinia): removed in Sprint 5B.5,
+# replaced by FittingSession / PieceFitting / PieceFittingLine (below).
 # ─────────────────────────────────────────────────────────────────────────────
-
-class SFFitting(models.Model):
-    """Fitting wizard session: tracking of modifications vs GradedSpec."""
-    TIPUS_CHOICES = [
-        ('Proto', 'Proto'),
-        ('Sample', 'Sample'),
-        ('PPS', 'PPS'),
-    ]
-    ESTAT_CHOICES = [
-        ('Obert', 'Obert'),
-        ('Tancat', 'Tancat'),
-        ('Anullat', 'Anul·lat'),
-    ]
-
-    size_fitting = models.ForeignKey(SizeFitting, on_delete=models.CASCADE, related_name='sf_fittings')
-    fitting_num = models.PositiveIntegerField()
-    tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES)
-    estat = models.CharField(max_length=20, choices=ESTAT_CHOICES, default='Obert')
-    responsable = models.ForeignKey(
-        'accounts.UserProfile',
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='sf_fittings_responsable',
-    )
-    data_creacio = models.DateTimeField(auto_now_add=True)
-    data_tancament = models.DateTimeField(null=True, blank=True)
-    notes = models.TextField(null=True, blank=True)
-
-    class Meta:
-        verbose_name = 'SF Fitting (wizard)'
-        verbose_name_plural = 'SF Fittings (wizard)'
-        unique_together = [('size_fitting', 'fitting_num')]
-        ordering = ['size_fitting', 'fitting_num']
-
-    def __str__(self):
-        return f'{self.size_fitting.codi} · SF#{self.fitting_num} ({self.tipus})'
-
-
-class SFFittingLinia(models.Model):
-    """Line of an SFFitting: (POM, talla) with valor_vigent (GradedSpec) and valor_nou (entered)."""
-    ESTAT_CELLA_CHOICES = [
-        ('Pendent', 'Pendent'),
-        ('OK', 'OK'),
-        ('Modificat', 'Modificat'),
-    ]
-
-    fitting = models.ForeignKey(SFFitting, on_delete=models.CASCADE, related_name='linies')
-    pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='sf_fitting_linies')
-    nom_pom = models.CharField(max_length=200)
-    talla = models.CharField(max_length=20)
-    valor_vigent = models.FloatField()
-    valor_nou = models.FloatField(null=True, blank=True)
-    estat_cella = models.CharField(max_length=20, choices=ESTAT_CELLA_CHOICES, default='Pendent')
-    notes = models.TextField(null=True, blank=True)
-
-    class Meta:
-        verbose_name = 'Línia SF Fitting'
-        verbose_name_plural = 'Línies SF Fitting'
-        ordering = ['fitting', 'pom', 'talla']
-
-    def __str__(self):
-        return f'{self.fitting} · {self.nom_pom} @ {self.talla}'
 
 
 # ─────────────────────────────────────────────────────────────────────────────

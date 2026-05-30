@@ -1,5 +1,5 @@
 """
-fhort/pom/s10_views.py — Sprint S10: Fitting vs Size Library
+fhort/pom/s10_views.py — Sprint S10 / 5B.5: Fitting vs Spec (PieceFitting)
 """
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -37,70 +37,62 @@ def _pom_name_en(p):
     return p.nom_client or ''
 
 
+TOL_FALLBACK = 0.6
+
+
+def _tolerance_map(model):
+    """Asymmetric tolerance per pom from BaseMeasurement(model, pom).
+
+    Returns {pom_id: (tol_minus, tol_plus)} with TOL_FALLBACK (0.6) when a bound
+    is unset. POMs without a BaseMeasurement fall back to (0.6, 0.6) on lookup.
+    """
+    from fhort.models_app.models import BaseMeasurement
+    tol = {}
+    for bm in BaseMeasurement.objects.filter(model=model, is_active=True):
+        tm = float(bm.tolerancia_minus) if bm.tolerancia_minus is not None else TOL_FALLBACK
+        tp = float(bm.tolerancia_plus) if bm.tolerancia_plus is not None else TOL_FALLBACK
+        tol[bm.pom_id] = (tm, tp)
+    return tol
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def fitting_vs_spec_view(request, sf_id, fitting_id):
+def fitting_vs_spec_view(request, pf_id):
     """
-    GET /api/v1/size-fittings/{sf_id}/fittings/{fitting_id}/vs-spec/
-    Compare fitting vs specs (GradedSpec or BaseMeasurement fallback).
+    GET /api/v1/fittings/peca/{pf_id}/vs-spec/
+    Compare a PieceFitting's lines: valor_real vs valor_teoric (both on the line).
+    Asymmetric tolerance from BaseMeasurement(model, pom). Generates POMAlerts for FAILs.
     """
     unit = get_unit(request)
     try:
-        from fhort.fitting.models import SFFitting, SFFittingLinia, GradedSpec, GradingVersion
-        from fhort.models_app.models import BaseMeasurement
+        from fhort.fitting.models import PieceFitting, PieceFittingLine
 
-        fitting = SFFitting.objects.select_related(
-            'size_fitting__model'
-        ).get(pk=fitting_id, size_fitting_id=sf_id)
+        pf = PieceFitting.objects.select_related(
+            'model', 'grading_version', 'grading_version__size_fitting',
+        ).get(pk=pf_id)
 
-        sf = fitting.size_fitting
-        model = sf.model if sf else None
-        talla_fitting = None  # SFFitting no te size_label; usem talla de les linies
+        model = pf.model
+        sf = pf.grading_version.size_fitting if pf.grading_version_id else None
 
-        gv = GradingVersion.objects.filter(
-            size_fitting=sf
-        ).order_by('-data', '-id').first()
+        tol_map = _tolerance_map(model)
 
-        spec_map = {}
-        if gv:
-            # If we have grading, take a (pom_id, size_label) → value map
-            specs = GradedSpec.objects.filter(
-                grading_version=gv, is_active=True
-            ).select_related('pom')
-            spec_map = {
-                (s.pom_id, s.size_label): float(s.graded_value_cm) if s.graded_value_cm is not None else None
-                for s in specs
-            }
+        lines = PieceFittingLine.objects.filter(
+            piece_fitting=pf
+        ).select_related('pom', 'pom__pom_global').order_by('pom__codi_client', 'size_label')
 
-        # Fallback when there is no grading: BaseMeasurements (base size)
-        base_map = {}
-        if model:
-            for bm in BaseMeasurement.objects.filter(model=model, is_active=True):
-                if bm.base_value_cm is not None:
-                    base_map[bm.pom_id] = float(bm.base_value_cm)
-
-        lines = SFFittingLinia.objects.filter(
-            fitting=fitting
-        ).select_related('pom', 'pom__pom_global').order_by('pom__codi_client', 'talla')
-
-        TOL_DEFAULT = 0.6
         resultats = []
         n_pass = n_fail = n_pend = 0
 
         for line in lines:
-            # Look up spec by (pom, size); fall back to base
-            spec_cm = spec_map.get((line.pom_id, line.talla))
-            if spec_cm is None:
-                spec_cm = base_map.get(line.pom_id)
-
-            val_cm = float(line.valor_nou) if line.valor_nou is not None else None
-            tol = TOL_DEFAULT
+            spec_cm = float(line.valor_teoric) if line.valor_teoric is not None else None
+            val_cm = float(line.valor_real) if line.valor_real is not None else None
+            tol_minus, tol_plus = tol_map.get(line.pom_id, (TOL_FALLBACK, TOL_FALLBACK))
 
             desv = None
             passa = None
             if val_cm is not None and spec_cm is not None:
                 desv = round(val_cm - spec_cm, 2)
-                passa = abs(desv) <= tol
+                passa = (-tol_minus) <= desv <= tol_plus
 
             if passa is True:
                 n_pass += 1
@@ -109,11 +101,14 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
             else:
                 n_pend += 1
 
+            # The exceeded bound (for single-value display / POMAlert.tolerancia_cm).
+            tol_rellevant = tol_plus if (desv is not None and desv > 0) else tol_minus
+
             resultats.append({
                 'pom_id': line.pom_id,
                 'codi_client': _pom_codi(line.pom),
                 'nom_en': _pom_name_en(line.pom),
-                'talla': line.talla,
+                'talla': line.size_label,
                 'is_key': line.pom.is_key_measure if line.pom_id else False,
                 'spec_cm': spec_cm,
                 'spec_display': cv(spec_cm, unit),
@@ -121,13 +116,16 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
                 'value_display': cv(val_cm, unit),
                 'desviacio_cm': desv,
                 'desviacio_display': cv(desv, unit),
-                'tolerancia_cm': tol,
-                'tolerancia_display': cv(tol, unit),
+                'tolerancia_minus_cm': tol_minus,
+                'tolerancia_plus_cm': tol_plus,
+                'tolerancia_minus_display': cv(tol_minus, unit),
+                'tolerancia_plus_display': cv(tol_plus, unit),
+                'tolerancia_cm': tol_rellevant,
                 'passa': passa,
                 'unitat': unit,
             })
 
-        # Generate POMAlerts (if the model exists)
+        # Generate POMAlerts for FAILs (origen FITTING).
         try:
             from fhort.fitting.models import POMAlert
             for r in resultats:
@@ -139,9 +137,9 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
                         defaults={
                             'desviacio_cm': r['desviacio_cm'],
                             'tolerancia_cm': r['tolerancia_cm'],
-                            'missatge': (f"Fitting {fitting_id}: {r['codi_client']} "
+                            'missatge': (f"Fitting peça {pf_id}: {r['codi_client']} "
                                          f"talla {r['talla']} desvia {r['desviacio_cm']:+.2f}cm "
-                                         f"(tol ±{r['tolerancia_cm']}cm)"),
+                                         f"(tol -{r['tolerancia_minus_cm']}/+{r['tolerancia_plus_cm']}cm)"),
                             'estat': 'Obert',
                             'origen': 'FITTING',
                         }
@@ -150,8 +148,7 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
             pass
 
         return Response({
-            'fitting_id': fitting_id,
-            'talla': talla_fitting,
+            'piece_fitting_id': pf_id,
             'model_nom': model.nom_prenda if model else '',
             'unitat': unit,
             'resum': {'pass': n_pass, 'fail': n_fail, 'pendent': n_pend,
@@ -160,56 +157,9 @@ def fitting_vs_spec_view(request, sf_id, fitting_id):
             'results': resultats,
         })
 
-    except SFFitting.DoesNotExist:
-        return Response({'error': 'Fitting no trobat'}, status=404)
+    except PieceFitting.DoesNotExist:
+        return Response({'error': 'PieceFitting no trobat'}, status=404)
     except Exception as e:
         import logging
         logging.getLogger(__name__).exception('fitting_vs_spec_view error')
-        return Response({'error': str(e)}, status=500)
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def model_fitting_history_view(request, model_id):
-    """
-    GET /api/v1/models/{id}/fitting-history/
-    History of all of a model's fittings with POM count.
-    """
-    try:
-        from fhort.fitting.models import SFFitting, SFFittingLinia, SizeFitting
-        from fhort.models_app.models import Model
-
-        model = Model.objects.get(pk=model_id)
-        sfs = SizeFitting.objects.filter(model=model).order_by('-data_creacio')
-
-        resultats = []
-        for sf in sfs:
-            fittings = SFFitting.objects.filter(size_fitting=sf).order_by('-data_creacio')
-            for fitting in fittings:
-                n_total = SFFittingLinia.objects.filter(fitting=fitting).count()
-                resultats.append({
-                    'sf_id': sf.id,
-                    'sf_codi': sf.codi or '',
-                    'sf_numero': sf.numero,
-                    'sf_tipus': sf.tipus,
-                    'sf_estat': sf.estat,
-                    'fitting_id': fitting.id,
-                    'fitting_num': fitting.fitting_num,
-                    'fitting_estat': fitting.estat,
-                    'fitting_tipus': fitting.tipus,
-                    'data_creacio': fitting.data_creacio.isoformat() if fitting.data_creacio else None,
-                    'data_tancament': fitting.data_tancament.isoformat() if fitting.data_tancament else None,
-                    'n_poms': n_total,
-                })
-
-        return Response({
-            'model_id': model_id,
-            'count': len(resultats),
-            'results': resultats,
-        })
-    except Model.DoesNotExist:
-        return Response({'error': 'Model no trobat'}, status=404)
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).exception('model_fitting_history_view error')
         return Response({'error': str(e)}, status=500)

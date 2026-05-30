@@ -37,17 +37,3 @@ class POMAlertSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('data_creacio',)
 
-
-
-# Sprint 4 — SFFittingLinia serializer
-class SFFittingLiniaUpdateSerializer(serializers.ModelSerializer):
-    """To update valor_nou from the frontend."""
-
-    class Meta:
-        try:
-            from fhort.fitting.models import SFFittingLinia
-            model = SFFittingLinia
-        except ImportError:
-            model = None
-        fields = ['id', 'pom', 'nom_pom', 'talla', 'valor_vigent', 'valor_nou', 'estat_cella']
-        read_only_fields = ['pom', 'nom_pom', 'talla', 'valor_vigent', 'estat_cella']

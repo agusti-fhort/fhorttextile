@@ -158,52 +158,66 @@ def export_size_set_csv_view(request, profile_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def export_fitting_csv_view(request, fitting_id):
-    """GET /api/v1/fittings/{id}/export/csv/"""
+def export_fitting_csv_view(request, pf_id):
+    """GET /api/v1/fittings/peca/{pf_id}/export/csv/
+
+    Exports a PieceFitting: per line spec=valor_teoric, mesurat=valor_real, Δ=val-spec.
+    Asymmetric tolerance from BaseMeasurement(model, pom) with 0.6 fallback;
+    PASS iff -tol_minus <= Δ <= tol_plus.
+    """
     unit = get_unit(request)
+    TOL_FALLBACK = 0.6
     try:
-        from fhort.fitting.models import SFFitting, SFFittingLinia
+        from fhort.fitting.models import PieceFitting, PieceFittingLine
+        from fhort.models_app.models import BaseMeasurement
 
-        fitting = SFFitting.objects.select_related('size_fitting__model').get(pk=fitting_id)
-        lines = SFFittingLinia.objects.filter(
-            fitting=fitting
-        ).select_related('pom', 'pom__pom_global').order_by('pom__codi_client', 'talla')
+        pf = PieceFitting.objects.select_related('model').get(pk=pf_id)
+        model = pf.model
+        lines = PieceFittingLine.objects.filter(
+            piece_fitting=pf
+        ).select_related('pom', 'pom__pom_global').order_by('pom__codi_client', 'size_label')
 
-        nom_model = str(fitting.size_fitting.model) if fitting.size_fitting_id and fitting.size_fitting.model_id else f'fitting_{fitting_id}'
+        tol_map = {}
+        for bm in BaseMeasurement.objects.filter(model=model, is_active=True):
+            tm = float(bm.tolerancia_minus) if bm.tolerancia_minus is not None else TOL_FALLBACK
+            tp = float(bm.tolerancia_plus) if bm.tolerancia_plus is not None else TOL_FALLBACK
+            tol_map[bm.pom_id] = (tm, tp)
+
+        nom_model = str(model) if model else f'piece_{pf_id}'
         response = HttpResponse(content_type='text/csv; charset=utf-8')
-        response['Content-Disposition'] = f'attachment; filename="fitting_{fitting_id}.csv"'
+        response['Content-Disposition'] = f'attachment; filename="fitting_peca_{pf_id}.csv"'
         response.write('﻿')
 
         writer = csv.writer(response)
         writer.writerow(['FHORT Textile Tech — Fitting Report'])
         writer.writerow(['Model', nom_model])
-        writer.writerow(['Fitting num', fitting.fitting_num])
+        writer.writerow(['PieceFitting', pf_id])
         writer.writerow(['Unitats', unit])
         writer.writerow([])
         writer.writerow(['POM', 'Nom', 'Talla', f'Spec ({unit.lower()})',
                          f'Mesurat ({unit.lower()})', f'Δ ({unit.lower()})',
                          f'Tolerancia ({unit.lower()})', 'Resultat'])
 
-        TOL = 0.6
         for line in lines:
-            spec = float(line.valor_vigent) if line.valor_vigent is not None else None
-            val = float(line.valor_nou) if line.valor_nou is not None else None
+            spec = float(line.valor_teoric) if line.valor_teoric is not None else None
+            val = float(line.valor_real) if line.valor_real is not None else None
             desv = round(val - spec, 2) if (val is not None and spec is not None) else None
-            passa = (abs(desv) <= TOL) if desv is not None else None
+            tol_minus, tol_plus = tol_map.get(line.pom_id, (TOL_FALLBACK, TOL_FALLBACK))
+            passa = ((-tol_minus) <= desv <= tol_plus) if desv is not None else None
 
             writer.writerow([
                 _pom_codi(line.pom),
-                _pom_name_en(line.pom) or (line.nom_pom or ''),
-                line.talla,
+                _pom_name_en(line.pom),
+                line.size_label,
                 cv(spec, unit) if spec is not None else '—',
                 cv(val, unit) if val is not None else '—',
                 (f'+{cv(desv, unit)}' if desv and desv > 0 else cv(desv, unit)) if desv is not None else '—',
-                f'±{cv(TOL, unit)}',
+                f'-{cv(tol_minus, unit)}/+{cv(tol_plus, unit)}',
                 'PASS' if passa else 'FAIL' if passa is False else '—',
             ])
         return response
-    except SFFitting.DoesNotExist:
-        return Response({'error': 'Fitting no trobat'}, status=404)
+    except PieceFitting.DoesNotExist:
+        return Response({'error': 'PieceFitting no trobat'}, status=404)
     except Exception as e:
         import logging
         logging.getLogger(__name__).exception('export_fitting_csv error')

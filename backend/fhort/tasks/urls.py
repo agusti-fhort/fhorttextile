@@ -61,22 +61,8 @@ except Exception as _e3:
 
 
 
-# Sprint 4 — fitting wizard
-try:
-    from fhort.fitting.fitting_views import (
-        create_fitting_view, close_fitting_view,
-        cancel_fitting_view, list_fittings_view,
-    )
-    from django.urls import path as _path4
-    _sprint4_paths = [
-        _path4('size-fittings/<int:sf_id>/crear-fitting/', create_fitting_view),
-        _path4('size-fittings/<int:sf_id>/fittings/', list_fittings_view),
-        _path4('fittings/<int:fitting_id>/tancar/', close_fitting_view),
-        _path4('fittings/<int:fitting_id>/anullar/', cancel_fitting_view),
-    ]
-    urlpatterns = _sprint4_paths + urlpatterns
-except Exception as _e4:
-    pass
+# Sprint 4 — fitting wizard: removed in 5B.5 (SFFitting/SFFittingLinia retired).
+# The fitting cycle now lives in fhort.fitting.services (FittingSession/PieceFitting).
 
 # Sprint 6 — AI extraction: lives in fhort.models_app.urls (avoids collision with ModelViewSet detail)
 
@@ -147,14 +133,12 @@ try:
         pom_htm_view,
         base_measurements_with_units_view,
         graded_specs_with_units_view,
-        fitting_lines_with_units_view,
     )
     from django.urls import path as _p_s6
     _s6_paths = [
         _p_s6('poms/<int:pom_id>/htm/', pom_htm_view),
         _p_s6('models/<int:model_id>/base-measurements-units/', base_measurements_with_units_view),
         _p_s6('size-fittings/<int:sf_id>/graded-specs-units/', graded_specs_with_units_view),
-        _p_s6('fittings/<int:fitting_id>/lines-units/', fitting_lines_with_units_view),
     ]
     urlpatterns = _s6_paths + urlpatterns
 except Exception as _e_s6:
@@ -175,7 +159,7 @@ try:
                export_grading_csv_view),
         _p_s8('sizing-profiles/<int:profile_id>/export/csv/',
                export_size_set_csv_view),
-        _p_s8('fittings/<int:fitting_id>/export/csv/',
+        _p_s8('fittings/peca/<int:pf_id>/export/csv/',
                export_fitting_csv_view),
         _p_s8('models/<int:model_id>/export/pdf/',
                export_model_spec_pdf_view),
@@ -205,13 +189,11 @@ except Exception as _e_s9:
 
 # Sprint S10 — Integrated fitting
 try:
-    from fhort.pom.s10_views import fitting_vs_spec_view, model_fitting_history_view
+    from fhort.pom.s10_views import fitting_vs_spec_view
     from django.urls import path as _p_s10
     _s10_paths = [
-        _p_s10('size-fittings/<int:sf_id>/fittings/<int:fitting_id>/vs-spec/',
+        _p_s10('fittings/peca/<int:pf_id>/vs-spec/',
                 fitting_vs_spec_view),
-        _p_s10('models/<int:model_id>/fitting-history/',
-                model_fitting_history_view),
     ]
     urlpatterns = _s10_paths + urlpatterns
 except Exception as _e_s10:
