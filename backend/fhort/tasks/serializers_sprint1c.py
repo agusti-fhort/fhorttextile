@@ -33,7 +33,7 @@ class PaquetServeiSerializer(serializers.ModelSerializer):
 
 
 class PaquetServeiListSerializer(serializers.ModelSerializer):
-    """Versió llista sense tasques nested (més ràpid)."""
+    """List version without nested tasks (faster)."""
     class Meta:
         model = PaquetServei
         fields = ['id', 'nom', 'actiu', 'grup', 'slots_base', 'ordre_popup']

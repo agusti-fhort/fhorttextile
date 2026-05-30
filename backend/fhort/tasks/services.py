@@ -1,25 +1,25 @@
 """
-tasks/services.py — Lògica de negoci per a generació i gestió de tasques.
-Equivalent als Server Scripts de Frappe:
-  - generar_tasques_model
-  - recalcular_fase_actual (after_save + before_delete)
-  - processar_gate
+tasks/services.py — Business logic for task generation and management.
+Equivalent to Frappe Server Scripts:
+  - generate_model_tasks
+  - recalculate_current_phase (after_save + before_delete)
+  - process_gate
 """
 from __future__ import annotations
 
 
-def generar_tasques_model(model_id: int) -> int:
+def generate_model_tasks(model_id: int) -> int:
     """
-    Genera ModelTasca a partir dels PaquetServei assignats al Model.
-    Les tasques fins al primer gate queden Pendents.
-    Les posteriors queden Bloquejades.
-    Retorna el nombre de tasques creades.
+    Generate ModelTasca rows from the PaquetServei assigned to the Model.
+    Tasks up to the first gate stay Pendents.
+    Subsequent tasks stay Bloquejades.
+    Returns the number of created tasks.
     """
     from fhort.models_app.models import Model
     from fhort.tasks.models import PaquetServeiTasca
 
-    # Importació local per evitar imports circulars
-    ModelTasca = _get_model_tasca()
+    # Local import to avoid circular imports
+    ModelTasca = _get_model_task()
 
     model = Model.objects.get(pk=model_id)
 
@@ -35,21 +35,21 @@ def generar_tasques_model(model_id: int) -> int:
             "Elimina-les manualment per regenerar."
         )
 
-    # Recollir tasques de tots els paquets contractats, deduplicant per ordre_base
-    totes_tasques = []
-    ordres_vistos: set[int] = set()
+    # Collect tasks from every contracted package, deduplicating by ordre_base
+    all_tasks = []
+    seen_orders: set[int] = set()
 
-    for servei_model in model.serveis_model.filter(contractat=True).select_related('servei'):
+    for model_service in model.serveis_model.filter(contractat=True).select_related('servei'):
         pst_qs = PaquetServeiTasca.objects.filter(
-            paquet=servei_model.servei
+            paquet=model_service.servei
         ).select_related('tasca').order_by('ordre')
 
         for pst in pst_qs:
             t = pst.tasca
-            if t.ordre_base in ordres_vistos:
+            if t.ordre_base in seen_orders:
                 continue
-            ordres_vistos.add(t.ordre_base)
-            totes_tasques.append({
+            seen_orders.add(t.ordre_base)
+            all_tasks.append({
                 'tasca_ref': t,
                 'ordre_base': t.ordre_base,
                 'nom_tasca': t.nom_tasca,
@@ -57,27 +57,27 @@ def generar_tasques_model(model_id: int) -> int:
                 'tipus_tasca': t.tipus_tasca,
                 'gate': t.gate,
                 'slots_base': t.slots_base,
-                'paquet_origen': servei_model.servei.nom,
+                'paquet_origen': model_service.servei.nom,
             })
 
-    if not totes_tasques:
+    if not all_tasks:
         raise ValueError("No s'han trobat tasques per als serveis assignats.")
 
-    totes_tasques = sorted(totes_tasques, key=lambda x: x['ordre_base'])
+    all_tasks = sorted(all_tasks, key=lambda x: x['ordre_base'])
 
-    # Marcar estats: Pendent fins al primer gate, Bloquejada la resta
-    primer_gate_passat = False
-    for t in totes_tasques:
-        if primer_gate_passat:
+    # Set states: Pendent up to the first gate, Bloquejada for the rest
+    first_gate_passed = False
+    for t in all_tasks:
+        if first_gate_passed:
             t['estat'] = 'Bloquejada'
         else:
             t['estat'] = 'Pendent'
         if t['gate']:
-            primer_gate_passat = True
+            first_gate_passed = True
 
-    # Crear ModelTasca
-    creades = []
-    for t in totes_tasques:
+    # Create ModelTasca rows
+    created = []
+    for t in all_tasks:
         mt = ModelTasca.objects.create(
             model=model,
             tasca=t['tasca_ref'],
@@ -87,94 +87,94 @@ def generar_tasques_model(model_id: int) -> int:
             estat=t['estat'],
             paquet_origen=t['paquet_origen'],
             responsable=model.responsable,
-            # nom_tasca/fase/tipus_tasca viuen a Tasca (FK), no duplicats aquí
+            # nom_tasca/fase/tipus_tasca live on Tasca (FK), not duplicated here
         )
-        creades.append(mt)
+        created.append(mt)
 
-    # Actualitzar model
-    primera_activa = next((t for t in totes_tasques if t['estat'] == 'Pendent'), None)
-    nova_fase = primera_activa['fase'] if primera_activa else totes_tasques[0]['fase']
+    # Update the model
+    first_active = next((t for t in all_tasks if t['estat'] == 'Pendent'), None)
+    new_phase = first_active['fase'] if first_active else all_tasks[0]['fase']
 
     Model.objects.filter(pk=model_id).update(
-        fase_actual=nova_fase,
+        fase_actual=new_phase,
         estat='En curs',
     )
 
-    return len(creades)
+    return len(created)
 
 
-def recalcular_fase_actual(model_id: int, excloure_tasca_id: int | None = None) -> str:
+def recalculate_current_phase(model_id: int, exclude_task_id: int | None = None) -> str:
     """
-    Recalcula Model.fase_actual basant-se en les tasques actives.
-    - Si hi ha tasques Pendents/En curs → fase = la primera d'elles
-    - Si totes Fetes/Bloquejades → fase = 'Tancat'
-    - Si no hi ha tasques → fase = 'Nou'
+    Recompute Model.fase_actual based on the active tasks.
+    - If there are Pendents/En curs tasks → phase = the first of them
+    - If all are Fetes/Bloquejades → phase = 'Tancat'
+    - If there are no tasks → phase = 'Nou'
     """
     from fhort.models_app.models import Model
-    ModelTasca = _get_model_tasca()
+    ModelTasca = _get_model_task()
 
     qs = ModelTasca.objects.filter(model_id=model_id).select_related('tasca')
-    if excloure_tasca_id:
-        qs = qs.exclude(pk=excloure_tasca_id)
+    if exclude_task_id:
+        qs = qs.exclude(pk=exclude_task_id)
 
-    # Ordenació numèrica pel camp ordre (IntegerField)
-    tasques = list(qs.order_by('ordre'))
+    # Numeric ordering by the ordre field (IntegerField)
+    tasks = list(qs.order_by('ordre'))
 
-    if not tasques:
-        nova_fase = 'Nou'
+    if not tasks:
+        new_phase = 'Nou'
     else:
-        fase_activa = next(
-            (t.tasca.fase for t in tasques if t.estat in ('Pendent', 'En curs')),
+        active_phase = next(
+            (t.tasca.fase for t in tasks if t.estat in ('Pendent', 'En curs')),
             None
         )
-        if fase_activa:
-            nova_fase = fase_activa
+        if active_phase:
+            new_phase = active_phase
         else:
-            totes_fetes = all(t.estat in ('Feta', 'Bloquejada') for t in tasques)
-            nova_fase = 'Tancat' if totes_fetes else (tasques[0].tasca.fase or 'Nou')
+            all_done = all(t.estat in ('Feta', 'Bloquejada') for t in tasks)
+            new_phase = 'Tancat' if all_done else (tasks[0].tasca.fase or 'Nou')
 
-    nova_fase = nova_fase or 'Nou'
-    Model.objects.filter(pk=model_id).update(fase_actual=nova_fase)
-    return nova_fase
+    new_phase = new_phase or 'Nou'
+    Model.objects.filter(pk=model_id).update(fase_actual=new_phase)
+    return new_phase
 
 
-def processar_gate(model_tasca_id: int) -> int:
+def process_gate(model_task_id: int) -> int:
     """
-    Quan una ModelTasca de tipus gate passa a 'Feta',
-    desbloqueja les tasques Bloquejades fins al proper gate.
-    Retorna el nombre de tasques desblocades.
+    When a gate-type ModelTasca moves to 'Feta',
+    unblock the Bloquejades tasks up to the next gate.
+    Returns the number of unblocked tasks.
     """
-    ModelTasca = _get_model_tasca()
+    ModelTasca = _get_model_task()
 
     try:
-        mt = ModelTasca.objects.get(pk=model_tasca_id)
+        mt = ModelTasca.objects.get(pk=model_task_id)
     except ModelTasca.DoesNotExist:
         return 0
 
     if not mt.es_gate or mt.estat != 'Feta':
         return 0
 
-    # Tasques Bloquejades posteriors a aquest gate
-    posteriors = ModelTasca.objects.filter(
+    # Bloquejades tasks after this gate
+    subsequent = ModelTasca.objects.filter(
         model=mt.model,
         estat='Bloquejada',
         ordre__gt=mt.ordre,
     ).order_by('ordre')
 
-    desblocades = 0
-    for t in posteriors:
+    unblocked = 0
+    for t in subsequent:
         t.estat = 'Pendent'
         t.save(update_fields=['estat'])
-        desblocades += 1
-        if t.es_gate:  # Para al proper gate
+        unblocked += 1
+        if t.es_gate:  # Stop at the next gate
             break
 
-    recalcular_fase_actual(mt.model_id)
-    return desblocades
+    recalculate_current_phase(mt.model_id)
+    return unblocked
 
 
-def _get_model_tasca():
-    """Importació lazy per evitar imports circulars."""
+def _get_model_task():
+    """Lazy import to avoid circular imports."""
     try:
         from fhort.tasks.models import ModelTasca
         return ModelTasca

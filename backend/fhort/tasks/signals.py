@@ -1,15 +1,15 @@
 """
-tasks/signals.py — Signals per a ModelTasca.
-Equivalent als Server Scripts:
-  - after_save → recalcula fase_actual
-  - before_delete → recalcula fase_actual (exclou la tasca esborrada)
-  - after_save (gate Feta) → desbloqueja tasques
+tasks/signals.py — Signals for ModelTasca.
+Equivalent to Server Scripts:
+  - after_save → recompute fase_actual
+  - before_delete → recompute fase_actual (excluding the deleted task)
+  - after_save (gate Feta) → unblock tasks
 """
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
 
-def _get_model_tasca():
+def _get_model_task():
     try:
         from fhort.tasks.models import ModelTasca
         return ModelTasca
@@ -22,30 +22,30 @@ def _get_model_tasca():
 
 
 @receiver(post_save)
-def after_save_model_tasca(sender, instance, **kwargs):
-    """Recalcula fase_actual del model pare quan canvia una tasca."""
-    ModelTasca = _get_model_tasca()
+def after_save_model_task(sender, instance, **kwargs):
+    """Recompute the parent model's fase_actual when a task changes."""
+    ModelTasca = _get_model_task()
     if ModelTasca is None or sender is not ModelTasca:
         return
     if not instance.model_id:
         return
 
-    from fhort.tasks.services import recalcular_fase_actual, processar_gate
-    recalcular_fase_actual(instance.model_id)
+    from fhort.tasks.services import recalculate_current_phase, process_gate
+    recalculate_current_phase(instance.model_id)
 
-    # Si acaba de passar a Feta i és un gate, desbloqueja
+    # If it just moved to Feta and it is a gate, unblock
     if instance.estat == 'Feta' and instance.es_gate:
-        processar_gate(instance.pk)
+        process_gate(instance.pk)
 
 
 @receiver(post_delete)
-def after_delete_model_tasca(sender, instance, **kwargs):
-    """Recalcula fase_actual excloent la tasca esborrada."""
-    ModelTasca = _get_model_tasca()
+def after_delete_model_task(sender, instance, **kwargs):
+    """Recompute fase_actual excluding the deleted task."""
+    ModelTasca = _get_model_task()
     if ModelTasca is None or sender is not ModelTasca:
         return
     if not instance.model_id:
         return
 
-    from fhort.tasks.services import recalcular_fase_actual
-    recalcular_fase_actual(instance.model_id, excloure_tasca_id=instance.pk)
+    from fhort.tasks.services import recalculate_current_phase
+    recalculate_current_phase(instance.model_id, exclude_task_id=instance.pk)

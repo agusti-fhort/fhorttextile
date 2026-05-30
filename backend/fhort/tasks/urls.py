@@ -10,8 +10,8 @@ router = DefaultRouter()
 router.register('model-tasques', ModelTascaViewSet, basename='model-tasca')
 router.register('timers', TimerEntradaViewSet, basename='timer')
 
-# Sprint 1C — endpoints nous (sprint1c TascaViewSet és més ric que el de views.py).
-# Si sprint1c no existeix encara, caiem al TascaViewSet legacy.
+# Sprint 1C — new endpoints (the sprint1c TascaViewSet is richer than the one in views.py).
+# If sprint1c does not exist yet, we fall back to the legacy TascaViewSet.
 try:
     from fhort.tasks.views_sprint1c import TascaViewSet as _Sprint1CTascaViewSet, PaquetServeiViewSet
     router.register(r'tasques', _Sprint1CTascaViewSet, basename='tasca')
@@ -31,7 +31,7 @@ try:
 except Exception:
     pass
 
-# model-fitxers ja registrat a fhort.models_app.urls
+# model-fitxers already registered in fhort.models_app.urls
 
 urlpatterns = router.urls
 
@@ -39,12 +39,12 @@ urlpatterns = router.urls
 
 # Sprint 2 — action views
 try:
-    from fhort.tasks.action_views import generar_tasques_view, processar_gate_view, resum_tasques_view
+    from fhort.tasks.action_views import generate_tasks_view, process_gate_view, tasks_summary_view
     from django.urls import path as _path
     _sprint2_paths = [
-        _path('models/<int:model_id>/generar-tasques/', generar_tasques_view),
-        _path('models/<int:model_id>/resum-tasques/', resum_tasques_view),
-        _path('model-tasques/<int:tasca_id>/processar-gate/', processar_gate_view),
+        _path('models/<int:model_id>/generar-tasques/', generate_tasks_view),
+        _path('models/<int:model_id>/resum-tasques/', tasks_summary_view),
+        _path('model-tasques/<int:tasca_id>/processar-gate/', process_gate_view),
     ]
     urlpatterns = _sprint2_paths + urlpatterns
 except Exception as _e:
@@ -84,11 +84,11 @@ try:
 except Exception as _e4:
     pass
 
-# Sprint 6 — extracció IA: viu a fhort.models_app.urls (evita col·lisió amb ModelViewSet detail)
+# Sprint 6 — AI extraction: lives in fhort.models_app.urls (avoids collision with ModelViewSet detail)
 
-# Sprint 7A — Design Freeze + Talla Base wizard: paths reubicats a
-# models_app/urls.py (models/...) i pom/urls.py (poms/...) per evitar
-# col·lisions amb els routers detail i amb el prefix duplicat 'v1/'.
+# Sprint 7A — Design Freeze + Base Size wizard: paths relocated to
+# models_app/urls.py (models/...) and pom/urls.py (poms/...) to avoid
+# collisions with the detail routers and with the duplicated 'v1/' prefix.
 
 # Sprint S2 — Sizing + TenantConfig endpoints
 try:
@@ -120,7 +120,7 @@ except Exception as _e_s2:
     import logging
     logging.getLogger(__name__).error(f"Sprint S2 URLs: {_e_s2}")
 
-# Sprint S4 — Versioning + CM/INCH + Historial
+# Sprint S4 — Versioning + CM/INCH + History
 try:
     from fhort.pom.s4_views import (
         update_grading_rule_with_history_view,
@@ -147,7 +147,7 @@ except Exception as _e_s4:
     import logging
     logging.getLogger(__name__).error(f"Sprint S4 URLs: {_e_s4}")
 
-# Sprint S6 — HTM + CM/INCH unificats
+# Sprint S6 — HTM + CM/INCH unified
 try:
     from fhort.pom.s6_views import (
         pom_htm_view,
@@ -167,7 +167,7 @@ except Exception as _e_s6:
     import logging
     logging.getLogger(__name__).error(f"Sprint S6 URLs: {_e_s6}")
 
-# Sprint S8 — Exportació PDF/CSV
+# Sprint S8 — PDF/CSV export
 try:
     from fhort.pom.s8_views import (
         export_grading_csv_view,
@@ -209,7 +209,7 @@ except Exception as _e_s9:
     import logging
     logging.getLogger(__name__).error(f"Sprint S9 URLs: {_e_s9}")
 
-# Sprint S10 — Fitting integrat
+# Sprint S10 — Integrated fitting
 try:
     from fhort.pom.s10_views import fitting_vs_spec_view, model_fitting_history_view
     from django.urls import path as _p_s10
@@ -224,7 +224,7 @@ except Exception as _e_s10:
     import logging
     logging.getLogger(__name__).error(f"Sprint S10 URLs: {_e_s10}")
 
-# Sprint S11 — Notificacions automàtiques
+# Sprint S11 — Automatic notifications
 try:
     from fhort.pom.s11_views import (
         pom_alerts_summary_view,

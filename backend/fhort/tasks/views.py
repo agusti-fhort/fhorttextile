@@ -56,8 +56,8 @@ class TimerEntradaViewSet(viewsets.ModelViewSet):
     ordering = ['-inici']
 
     def _get_profile(self):
-        # El UserProfile s'enllaça via OneToOne amb related_name='profile'.
-        # Al schema 'public' no hi ha UserProfile, així que retornem None.
+        # UserProfile is linked via OneToOne with related_name='profile'.
+        # The 'public' schema has no UserProfile, so we return None.
         if getattr(connection, 'schema_name', None) == 'public':
             return None
         return getattr(self.request.user, 'profile', None)
@@ -83,11 +83,11 @@ class TimerEntradaViewSet(viewsets.ModelViewSet):
         timer = self.get_object()
         if timer.fi is not None:
             raise ValidationError('El timer ja està tancat.')
-        ara = timezone.now()
-        delta = ara - timer.inici
-        minuts = max(0, int(delta.total_seconds() // 60))
-        timer.fi = ara
-        timer.minuts = minuts
+        now = timezone.now()
+        delta = now - timer.inici
+        minutes = max(0, int(delta.total_seconds() // 60))
+        timer.fi = now
+        timer.minuts = minutes
         timer.actiu = False
         timer.save(update_fields=['fi', 'minuts', 'actiu'])
         serializer = self.get_serializer(timer)

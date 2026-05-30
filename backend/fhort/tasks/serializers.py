@@ -42,5 +42,5 @@ class TimerEntradaSerializer(serializers.ModelSerializer):
     class Meta:
         model = TimerEntrada
         fields = '__all__'
-        # tecnic s'assigna automàticament al ViewSet.perform_create
+        # tecnic is assigned automatically in ViewSet.perform_create
         read_only_fields = ('tecnic', 'minuts', 'fi')

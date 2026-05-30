@@ -2,7 +2,7 @@ from django.db import models
 
 
 class Tasca(models.Model):
-    """Catàleg de tasques (tenant). Fusiona TascaCataleg legacy + metadades de procés."""
+    """Task catalog (tenant). Merges legacy TascaCataleg + process metadata."""
     # --- Legacy TascaCataleg ---
     tasca_global = models.ForeignKey(
         'pom.TascaGlobal',
@@ -16,7 +16,7 @@ class Tasca(models.Model):
     activa = models.BooleanField(default=True)
     ordre = models.PositiveIntegerField(default=0)
 
-    # --- Sprint 1B: metadades de procés ---
+    # --- Sprint 1B: process metadata ---
     nom_tasca = models.CharField(max_length=200, null=True, blank=True)
     tipus_tasca = models.CharField(
         max_length=20,
@@ -114,7 +114,7 @@ class ModelTasca(models.Model):
     gate_data = models.DateTimeField(null=True, blank=True)
     gate_notes = models.TextField(null=True, blank=True)
 
-    # --- Sprint 1A: camps nous ---
+    # --- Sprint 1A: new fields ---
     paquet_origen = models.CharField(max_length=200, null=True, blank=True)
     slots_base = models.FloatField(null=True, blank=True, default=0)
     slots_reals = models.FloatField(null=True, blank=True, default=0)
@@ -130,7 +130,7 @@ class ModelTasca(models.Model):
     )
     color_codi = models.CharField(max_length=20, null=True, blank=True)
     item_ref = models.CharField(max_length=100, null=True, blank=True)
-    # --- Fi Sprint 1A ---
+    # --- End Sprint 1A ---
 
     class Meta:
         verbose_name = 'Tasca de model'
@@ -142,11 +142,11 @@ class ModelTasca(models.Model):
 
 
 class TipologiaModel(models.Model):
-    """Tipologia de model amb slots de càrrega per via de producció.
+    """Model typology with load slots per production route.
 
-    NOTA: l'spec demanava IntegerField però els valors reals del master data
-    contenen decimals (3.5, 5.0, 6.5) — usem DecimalField per no perdre precisió.
-    Igualment, patrons_aprox és un range ("10-14"), per això CharField.
+    NOTE: the spec asked for IntegerField but the real master-data values
+    contain decimals (3.5, 5.0, 6.5) — we use DecimalField to avoid losing
+    precision. Likewise, patrons_aprox is a range ("10-14"), hence CharField.
     """
 
     codi = models.CharField(max_length=40, unique=True)
@@ -202,7 +202,7 @@ class TimerEntrada(models.Model):
 
 
 class PaquetServei(models.Model):
-    """Paquet de serveis oferts. Agrupa tasques que s'apliquen juntes."""
+    """Offered service package. Groups tasks that are applied together."""
     nom = models.CharField(max_length=200, unique=True)
     actiu = models.BooleanField(default=True)
     grup = models.CharField(
@@ -231,7 +231,7 @@ class PaquetServei(models.Model):
 
 
 class PaquetServeiTasca(models.Model):
-    """Relació entre PaquetServei i Tasca. Defineix l'ordre i si és opcional."""
+    """Link between PaquetServei and Tasca. Defines the order and whether it is optional."""
     paquet = models.ForeignKey(
         PaquetServei, on_delete=models.CASCADE, related_name='tasques',
     )

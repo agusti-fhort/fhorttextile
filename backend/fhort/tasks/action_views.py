@@ -1,4 +1,4 @@
-# Sprint 2 — Endpoints d'acció per a lògica de negoci
+# Sprint 2 — Action endpoints for business logic
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -7,14 +7,14 @@ from rest_framework import status
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def generar_tasques_view(request, model_id):
+def generate_tasks_view(request, model_id):
     """
     POST /api/v1/models/{id}/generar-tasques/
-    Genera les ModelTasca des dels paquets de servei assignats al model.
+    Generate the ModelTasca rows from the service packages assigned to the model.
     """
     try:
-        from fhort.tasks.services import generar_tasques_model
-        n = generar_tasques_model(int(model_id))
+        from fhort.tasks.services import generate_model_tasks
+        n = generate_model_tasks(int(model_id))
         return Response({
             'tasques_creades': n,
             'missatge': f'{n} tasques generades correctament',
@@ -29,13 +29,13 @@ def generar_tasques_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def processar_gate_view(request, tasca_id):
+def process_gate_view(request, tasca_id):
     """
     POST /api/v1/model-tasques/{id}/processar-gate/
-    Marca el gate com a OK i desbloqueja les tasques de la fase següent.
+    Mark the gate as OK and unblock the tasks of the next phase.
     """
-    from fhort.tasks.services import processar_gate, _get_model_tasca
-    ModelTasca = _get_model_tasca()
+    from fhort.tasks.services import process_gate, _get_model_task
+    ModelTasca = _get_model_task()
 
     try:
         mt = ModelTasca.objects.get(pk=tasca_id)
@@ -49,7 +49,7 @@ def processar_gate_view(request, tasca_id):
     mt.resultat_gate = request.data.get('resultat', 'OK')
     mt.save(update_fields=['estat', 'resultat_gate'])
 
-    n = processar_gate(mt.pk)
+    n = process_gate(mt.pk)
     return Response({
         'desblocades': n,
         'fase_actual': mt.model.fase_actual,
@@ -59,32 +59,32 @@ def processar_gate_view(request, tasca_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def resum_tasques_view(request, model_id):
+def tasks_summary_view(request, model_id):
     """
     GET /api/v1/models/{id}/resum-tasques/
-    Retorna resum per estat i fase de les tasques del model.
+    Return a summary by state and phase of the model's tasks.
     """
-    ModelTasca = _get_model_tasca_local()
-    from fhort.tasks.services import _get_model_tasca
-    ModelTasca = _get_model_tasca()
+    ModelTasca = _get_model_task_local()
+    from fhort.tasks.services import _get_model_task
+    ModelTasca = _get_model_task()
 
-    tasques = ModelTasca.objects.filter(model_id=model_id).values(
+    tasks = ModelTasca.objects.filter(model_id=model_id).values(
         'estat', 'tasca__fase', 'tasca__gate'
     )
 
-    resum = {}
-    for t in tasques:
+    summary = {}
+    for t in tasks:
         estat = t['estat']
-        resum[estat] = resum.get(estat, 0) + 1
+        summary[estat] = summary.get(estat, 0) + 1
 
     return Response({
         'model_id': model_id,
-        'per_estat': resum,
-        'total': sum(resum.values()),
+        'per_estat': summary,
+        'total': sum(summary.values()),
     })
 
 
-def _get_model_tasca_local():
+def _get_model_task_local():
     try:
         from fhort.tasks.models import ModelTasca
         return ModelTasca
