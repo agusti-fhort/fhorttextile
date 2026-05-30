@@ -226,6 +226,11 @@ class Model(models.Model):
     # Last activity (updated on every save via post_save signal)
     darrera_activitat = models.DateTimeField(null=True, blank=True)
 
+    # --- Sprint 3 / F1: root versioning ---
+    # Counter for the measurement table (the root). Incremented when grading is
+    # regenerated (the increment itself is wired in a later sprint; here only the field).
+    measurements_version = models.IntegerField(default=1)
+
     
     # --- Sprint 7A: Design Freeze ---
     design_freeze_at = models.DateTimeField(null=True, blank=True)
@@ -398,6 +403,13 @@ class BaseMeasurement(models.Model):
     notes = models.TextField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # --- Sprint 3 / F1: root versioning ---
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='base_measurements_created',
+    )
+
     # Sprint S14-A
     nom_fitxa = models.CharField(
         max_length=20, blank=True, default='',
@@ -417,3 +429,54 @@ class BaseMeasurement(models.Model):
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client} = {self.base_value_cm}cm'
+
+
+class MeasurementChangeLog(models.Model):
+    """
+    Sprint 3 / F1 — Append-only log of base-measurement value changes.
+
+    BaseMeasurement holds the *current* value (the root state); this log records
+    *every* value change so the differential process table, the re-opening
+    propagation (fora_de_tolerancia) and the z-score evolution can be built later.
+
+    Append-only at application level: rows can only be inserted, never updated or
+    deleted (see save()/delete() overrides).
+    """
+    model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='measurement_changes')
+    pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='measurement_changes')
+    base_measurement = models.ForeignKey(
+        BaseMeasurement, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='change_log',
+    )
+    valor_anterior = models.FloatField(null=True, blank=True)  # null when it is a creation
+    valor_nou = models.FloatField()
+    motiu = models.CharField(max_length=255, blank=True, default='')
+    context = models.CharField(max_length=50)  # 'import' / 'manual' / 'fitting' / ...
+    # Set when the change originates from a fitting (stays null until Sprint 5).
+    fitting_ref = models.ForeignKey(
+        'fitting.SizeFitting', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='measurement_changes',
+    )
+    fora_de_tolerancia = models.BooleanField(default=False)  # drives re-opening propagation (later)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='measurement_changes',
+    )
+
+    class Meta:
+        verbose_name = 'Canvi de mesura'
+        verbose_name_plural = 'Canvis de mesura'
+        ordering = ['model', 'pom', 'created_at']
+
+    def __str__(self):
+        return f'{self.model} · {self.pom.codi_client}: {self.valor_anterior}→{self.valor_nou}cm'
+
+    def save(self, *args, **kwargs):
+        # Append-only: allow INSERT only, never UPDATE.
+        if self.pk is not None:
+            raise ValueError('MeasurementChangeLog is append-only: updates are not allowed.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError('MeasurementChangeLog is append-only: deletes are not allowed.')

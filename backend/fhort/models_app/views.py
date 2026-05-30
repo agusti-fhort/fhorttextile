@@ -77,6 +77,16 @@ class BaseMeasurementViewSet(viewsets.ModelViewSet):
             return BaseMeasurement.objects.none()
         return super().get_queryset()
 
+    # Sprint 3 / F1: tag the request user so the change-log signal can fill created_by.
+    def perform_create(self, serializer):
+        # created_by is set on the instance before the signal fires.
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        # _changed_by takes priority over the original created_by for edits.
+        serializer.instance._changed_by = self.request.user
+        serializer.save()
+
 
 
 # Sprint 1C — ModelServeiViewSet

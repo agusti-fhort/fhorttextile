@@ -140,3 +140,78 @@ def update_last_activity(sender, instance, **kwargs):
 
     from django.utils import timezone
     Model.objects.filter(pk=instance.pk).update(darrera_activitat=timezone.now())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 3 / F1 — Append-only measurement change log
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Maps BaseMeasurement.origen → MeasurementChangeLog.context.
+_ORIGEN_TO_CONTEXT = {
+    'IMPORTED': 'import',
+    'MANUAL': 'manual',
+    'FITTED': 'fitting',
+    'CALCULATED': 'calculated',
+    'STANDARD': 'standard',
+}
+
+
+def _get_base_measurement_class():
+    from fhort.models_app.models import BaseMeasurement
+    return BaseMeasurement
+
+
+@receiver(pre_save)
+def capture_old_measurement_value(sender, instance, **kwargs):
+    """Stash the persisted base_value_cm so post_save can compare and log the delta."""
+    try:
+        BaseMeasurement = _get_base_measurement_class()
+    except Exception:
+        return
+    if sender is not BaseMeasurement:
+        return
+
+    if instance.pk:
+        old = BaseMeasurement.objects.filter(pk=instance.pk).values_list(
+            'base_value_cm', flat=True
+        ).first()
+        instance._old_value = old
+    else:
+        instance._old_value = None
+
+
+@receiver(post_save)
+def log_measurement_change(sender, instance, created, raw=False, **kwargs):
+    """
+    Record an append-only MeasurementChangeLog entry on every value change.
+
+    Only base_value_cm changes (or creations) are logged — reorders, is_active
+    toggles or nom_fitxa edits do not produce an entry. created_by is resolved by
+    priority: instance._changed_by (set on the request) → instance.created_by → null.
+    """
+    try:
+        BaseMeasurement = _get_base_measurement_class()
+    except Exception:
+        return
+    if sender is not BaseMeasurement:
+        return
+    if raw:  # loaddata / fixtures
+        return
+
+    old_value = getattr(instance, '_old_value', None)
+    if not created and old_value == instance.base_value_cm:
+        return  # value unchanged → nothing to log
+
+    from fhort.models_app.models import MeasurementChangeLog
+
+    changed_by = getattr(instance, '_changed_by', None) or getattr(instance, 'created_by', None)
+
+    MeasurementChangeLog.objects.create(
+        model=instance.model,
+        pom=instance.pom,
+        base_measurement=instance,
+        valor_anterior=old_value,
+        valor_nou=instance.base_value_cm,
+        context=_ORIGEN_TO_CONTEXT.get(instance.origen, instance.origen.lower()),
+        created_by=changed_by,
+    )
