@@ -1,9 +1,9 @@
 """
-fitting/services.py — Serveis per al cicle de fitting.
-Flux:
-  1. crear_fitting() → crea SFFitting + línies des de GradedSpec vigent
-  2. L'usuari edita valor_nou en cada SFFittingLinia
-  3. tancar_fitting() → actualitza GradedSpec + actualitza perfil client (Welford)
+fitting/services.py — Services for the fitting cycle.
+Flow:
+  1. create_fitting() → creates SFFitting + lines from the current GradedSpec
+  2. The user edits valor_nou on each SFFittingLinia
+  3. close_fitting() → updates GradedSpec + updates the client profile (Welford)
 """
 from __future__ import annotations
 import logging
@@ -11,16 +11,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def crear_fitting(size_fitting_id: int, tipus: str, user_id: int | None = None) -> tuple:
+def create_fitting(size_fitting_id: int, fitting_type: str, user_id: int | None = None) -> tuple:
     """
-    Crea un nou SFFitting amb les línies poblades des de GradedSpec vigent.
+    Create a new SFFitting with lines populated from the current GradedSpec.
 
-    Paràmetres:
-      - size_fitting_id: pk del SizeFitting
-      - tipus: "Proto" | "Sample" | "PPS"
-      - user_id: pk de l'usuari responsable
+    Parameters:
+      - size_fitting_id: pk of the SizeFitting
+      - fitting_type: "Proto" | "Sample" | "PPS"
+      - user_id: pk of the responsible user
 
-    Retorna: (fitting_obj, linies_creades: int)
+    Returns: (fitting_obj, lines_created: int)
     """
     from fhort.fitting.models import SizeFitting, SFFitting, SFFittingLinia
 
@@ -32,18 +32,18 @@ def crear_fitting(size_fitting_id: int, tipus: str, user_id: int | None = None) 
             "Tanca la base i genera les talles amb el botó corresponent."
         )
 
-    # Número de fitting (autoincrement per SF)
+    # Fitting number (autoincrement per SF)
     fitting_num = SFFitting.objects.filter(size_fitting=sf).count() + 1
 
     fitting = SFFitting.objects.create(
         size_fitting=sf,
         fitting_num=fitting_num,
-        tipus=tipus,
+        tipus=fitting_type,
         estat='Obert',
         responsable_id=user_id,
     )
 
-    # Carregar GradedSpecs vigents
+    # Load the current GradedSpecs
     graded_specs = _get_graded_specs(sf)
 
     if not graded_specs:
@@ -52,7 +52,7 @@ def crear_fitting(size_fitting_id: int, tipus: str, user_id: int | None = None) 
             "Executa 'Generar talles' primer."
         )
 
-    # Crear línies
+    # Create lines
     size_run = []
     if sf.model.size_run_model:
         size_run = [
@@ -61,7 +61,7 @@ def crear_fitting(size_fitting_id: int, tipus: str, user_id: int | None = None) 
             if s.strip()
         ]
 
-    linies_creades = 0
+    lines_created = 0
     for spec in graded_specs:
         SFFittingLinia.objects.create(
             fitting=fitting,
@@ -72,23 +72,23 @@ def crear_fitting(size_fitting_id: int, tipus: str, user_id: int | None = None) 
             valor_nou=None,
             estat_cella='Pendent',
         )
-        linies_creades += 1
+        lines_created += 1
 
     logger.info(
-        f"Fitting #{fitting_num} creat per SF {size_fitting_id}: "
-        f"{linies_creades} línies"
+        f"Fitting #{fitting_num} created for SF {size_fitting_id}: "
+        f"{lines_created} lines"
     )
-    return fitting, linies_creades
+    return fitting, lines_created
 
 
-def tancar_fitting(fitting_id: int) -> dict:
+def close_fitting(fitting_id: int) -> dict:
     """
-    Tanca el fitting i:
-      1. Actualitza GradedSpec amb els valors nous
-      2. Actualitza ClientMesuraPerfil (Welford) per a cada mesura nova
-      3. Marca el fitting com a Tancat
+    Close the fitting and:
+      1. Update GradedSpec with the new values
+      2. Update ClientMesuraPerfil (Welford) for each new measurement
+      3. Mark the fitting as Tancat
 
-    Retorna: {'modificades': int, 'ok': int, 'total': int}
+    Returns: {'modificades': int, 'ok': int, 'total': int}
     """
     from django.utils import timezone
     from fhort.fitting.models import SFFitting, SFFittingLinia
@@ -103,70 +103,70 @@ def tancar_fitting(fitting_id: int) -> dict:
             "Només es poden tancar fittings Oberts."
         )
 
-    linies = list(SFFittingLinia.objects.filter(fitting=fitting).select_related('pom'))
+    lines = list(SFFittingLinia.objects.filter(fitting=fitting).select_related('pom'))
     model = fitting.size_fitting.model
 
-    modificades = 0
+    modified = 0
     ok = 0
     errors = []
 
-    # Obtenir GradedSpec actiu
+    # Get the active GradedSpec
     graded_version = _get_active_grading_version(fitting.size_fitting)
 
-    for linia in linies:
-        if linia.valor_nou is None:
-            linia.estat_cella = 'OK'
+    for line in lines:
+        if line.valor_nou is None:
+            line.estat_cella = 'OK'
             ok += 1
-        elif abs((linia.valor_nou or 0) - (linia.valor_vigent or 0)) < 0.001:
-            linia.estat_cella = 'OK'
+        elif abs((line.valor_nou or 0) - (line.valor_vigent or 0)) < 0.001:
+            line.estat_cella = 'OK'
             ok += 1
         else:
-            linia.estat_cella = 'Modificat'
-            modificades += 1
+            line.estat_cella = 'Modificat'
+            modified += 1
 
-            # Actualitzar GradedSpec
+            # Update GradedSpec
             if graded_version:
                 try:
                     from fhort.pom.models import GradedSpec
                     GradedSpec.objects.filter(
                         grading_version=graded_version,
-                        pom=linia.pom,
-                        size_label=linia.talla,
-                    ).update(graded_value_cm=linia.valor_nou)
+                        pom=line.pom,
+                        size_label=line.talla,
+                    ).update(graded_value_cm=line.valor_nou)
                 except Exception as e:
-                    errors.append(f"GradedSpec pom={linia.pom_id} talla={linia.talla}: {e}")
+                    errors.append(f"GradedSpec pom={line.pom_id} talla={line.talla}: {e}")
 
-            # Actualitzar perfil client (Welford)
-            if model.client_id and model.garment_type_id and linia.valor_nou:
+            # Update client profile (Welford)
+            if model.client_id and model.garment_type_id and line.valor_nou:
                 try:
                     from fhort.pom.services import update_client_profile
                     update_client_profile(
                         client_id=model.client_id,
                         garment_type_id=model.garment_type_id,
-                        pom_id=linia.pom_id,
-                        size=linia.talla,
-                        value_cm=linia.valor_nou,
+                        pom_id=line.pom_id,
+                        size=line.talla,
+                        value_cm=line.valor_nou,
                     )
                 except Exception as e:
-                    logger.warning(f"Welford update fallat: {e}")
+                    logger.warning(f"Welford update failed: {e}")
 
-        linia.save(update_fields=['estat_cella'])
+        line.save(update_fields=['estat_cella'])
 
-    # Tancar el fitting
+    # Close the fitting
     fitting.estat = 'Tancat'
     fitting.data_fi = timezone.now()
     fitting.save(update_fields=['estat', 'data_fi'])
 
     if errors:
-        logger.warning(f"Errors tancant fitting {fitting_id}: {errors}")
+        logger.warning(f"Errors closing fitting {fitting_id}: {errors}")
 
-    result = {'modificades': modificades, 'ok': ok, 'total': len(linies)}
-    logger.info(f"Fitting #{fitting.fitting_num} tancat: {result}")
+    result = {'modificades': modified, 'ok': ok, 'total': len(lines)}
+    logger.info(f"Fitting #{fitting.fitting_num} closed: {result}")
     return result
 
 
-def anullar_fitting(fitting_id: int, motiu: str = '') -> None:
-    """Anul·la un fitting obert."""
+def cancel_fitting(fitting_id: int, reason: str = '') -> None:
+    """Cancel an open fitting."""
     from fhort.fitting.models import SFFitting
 
     fitting = SFFitting.objects.get(pk=fitting_id)
@@ -174,7 +174,7 @@ def anullar_fitting(fitting_id: int, motiu: str = '') -> None:
         raise ValueError(f"Només es poden anul·lar fittings Oberts (estat: {fitting.estat}).")
 
     fitting.estat = 'Anullat'
-    fitting.motiu_anulacio = motiu
+    fitting.motiu_anulacio = reason
     fitting.save(update_fields=['estat', 'motiu_anulacio'])
 
 
@@ -183,7 +183,7 @@ def anullar_fitting(fitting_id: int, motiu: str = '') -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _get_graded_specs(sf):
-    """Obté els GradedSpec vigents ordenats per display_order i talla."""
+    """Get the current GradedSpec ordered by display_order and size."""
     grading_version = _get_active_grading_version(sf)
     if not grading_version:
         return []
@@ -198,12 +198,12 @@ def _get_graded_specs(sf):
             ).order_by('pom__categoria__display_order', 'size_label')
         )
     except Exception as e:
-        logger.error(f"Error carregant GradedSpecs: {e}")
+        logger.error(f"Error loading GradedSpecs: {e}")
         return []
 
 
 def _get_active_grading_version(sf):
-    """Obté la GradingVersion activa per al SizeFitting."""
+    """Get the active GradingVersion for the SizeFitting."""
     for module_path in ['pom.models', 'fitting.models']:
         try:
             import importlib

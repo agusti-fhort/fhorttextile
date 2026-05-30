@@ -42,10 +42,10 @@ class SizeFitting(models.Model):
 
     notes = models.TextField(null=True, blank=True)
 
-    # --- Sprint 1A: camps nous ---
+    # --- Sprint 1A: new fields ---
     base_tancada = models.BooleanField(default=False)
     data_tancament_base = models.DateTimeField(null=True, blank=True)
-    # --- Fi Sprint 1A ---
+    # --- End Sprint 1A ---
 
     class Meta:
         verbose_name = 'Size & Fitting'
@@ -70,7 +70,7 @@ class GradingVersion(models.Model):
     )
     notes = models.TextField(null=True, blank=True)
 
-    # Sprint 3 — motor de grading
+    # Sprint 3 — grading engine
     version_number = models.PositiveIntegerField(default=1)
     is_active = models.BooleanField(default=True)
 
@@ -245,7 +245,7 @@ class POMAlert(models.Model):
     )
     data_resolucio = models.DateTimeField(null=True, blank=True)
 
-    # Sprint S11 — camps addicionals per a vs-spec + check-tolerances
+    # Sprint S11 — extra fields for vs-spec + check-tolerances
     desviacio_cm   = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     tolerancia_cm  = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     missatge       = models.TextField(blank=True)
@@ -265,8 +265,8 @@ class POMAlert(models.Model):
 
 class SessioFitting(models.Model):
     """
-    Sessió de fitting cross-model. Un dia amb un client on es revisen
-    múltiples models en la mateixa sessió presencial.
+    Cross-model fitting session. A day with a client where multiple
+    models are reviewed in the same in-person session.
     """
     client = models.ForeignKey(
         'tenants.Client',
@@ -321,11 +321,11 @@ class SessioFitting(models.Model):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Sprint 4 — Fitting wizard (paral·lel a Fitting/FittingLine simples)
+# Sprint 4 — Fitting wizard (parallel to the simple Fitting/FittingLine)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class SFFitting(models.Model):
-    """Sessió de wizard de fitting: tracking de modificacions vs GradedSpec."""
+    """Fitting wizard session: tracking of modifications vs GradedSpec."""
     TIPUS_CHOICES = [
         ('Proto', 'Proto'),
         ('Sample', 'Sample'),
@@ -362,7 +362,7 @@ class SFFitting(models.Model):
 
 
 class SFFittingLinia(models.Model):
-    """Línia d'un SFFitting: (POM, talla) amb valor_vigent (GradedSpec) i valor_nou (introduït)."""
+    """Line of an SFFitting: (POM, talla) with valor_vigent (GradedSpec) and valor_nou (entered)."""
     ESTAT_CELLA_CHOICES = [
         ('Pendent', 'Pendent'),
         ('OK', 'OK'),
@@ -388,11 +388,11 @@ class SFFittingLinia(models.Model):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Sprint 3 — Output del motor de grading (per GradingVersion)
+# Sprint 3 — Grading engine output (per GradingVersion)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class GradedSpec(models.Model):
-    """Mesura generada per (GradingVersion, POM, talla) — output del motor de grading."""
+    """Measurement generated per (GradingVersion, POM, talla) — grading engine output."""
     GRADING_TYPE_CHOICES = [
         ('LINEAR', 'Linear'),
         ('STEP', 'Step'),

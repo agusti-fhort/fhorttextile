@@ -112,9 +112,9 @@ class POMAlertSerializer(serializers.ModelSerializer):
 
 
 
-# Sprint 4 — Serializer SFFittingLinia
+# Sprint 4 — SFFittingLinia serializer
 class SFFittingLiniaUpdateSerializer(serializers.ModelSerializer):
-    """Per actualitzar valor_nou des del frontend."""
+    """To update valor_nou from the frontend."""
 
     class Meta:
         try:

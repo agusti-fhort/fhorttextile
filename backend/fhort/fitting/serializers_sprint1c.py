@@ -19,4 +19,4 @@ if SessioFitting:
             ]
 
 
-# SFFittingLiniaUpdateSerializer viu a fhort/fitting/serializers.py (canonical)
+# SFFittingLiniaUpdateSerializer lives in fhort/fitting/serializers.py (canonical)

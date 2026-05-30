@@ -8,51 +8,51 @@ from rest_framework.decorators import action
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def crear_fitting_view(request, sf_id):
+def create_fitting_view(request, sf_id):
     """
     POST /api/v1/size-fittings/{id}/crear-fitting/
     Body: {"tipus": "Proto"} | "Sample" | "PPS"
-    Crea un nou fitting amb línies pre-poblades des de GradedSpec.
+    Create a new fitting with lines pre-populated from GradedSpec.
     """
-    tipus = request.data.get('tipus', 'Proto')
-    valid_tipus = ['Proto', 'Sample', 'PPS']
-    if tipus not in valid_tipus:
+    fitting_type = request.data.get('tipus', 'Proto')
+    valid_types = ['Proto', 'Sample', 'PPS']
+    if fitting_type not in valid_types:
         return Response(
-            {'error': f'tipus ha de ser un de: {valid_tipus}'},
+            {'error': f'tipus ha de ser un de: {valid_types}'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
     try:
-        from fhort.fitting.services import crear_fitting
-        fitting, n_linies = crear_fitting(int(sf_id), tipus, request.user.id)
+        from fhort.fitting.services import create_fitting
+        fitting, n_lines = create_fitting(int(sf_id), fitting_type, request.user.id)
 
         return Response({
             'fitting_id': fitting.pk,
             'fitting_num': fitting.fitting_num,
             'tipus': fitting.tipus,
             'estat': fitting.estat,
-            'linies_creades': n_linies,
-            'missatge': f'Fitting #{fitting.fitting_num} creat amb {n_linies} línies',
+            'linies_creades': n_lines,
+            'missatge': f'Fitting #{fitting.fitting_num} creat amb {n_lines} línies',
         }, status=status.HTTP_201_CREATED)
 
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         import logging
-        logging.getLogger(__name__).exception("Error creant fitting")
+        logging.getLogger(__name__).exception("Error creating fitting")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def tancar_fitting_view(request, fitting_id):
+def close_fitting_view(request, fitting_id):
     """
     POST /api/v1/fittings/{id}/tancar/
-    Tanca el fitting i actualitza els GradedSpec amb els valors nous.
+    Close the fitting and update the GradedSpec with the new values.
     """
     try:
-        from fhort.fitting.services import tancar_fitting
-        result = tancar_fitting(int(fitting_id))
+        from fhort.fitting.services import close_fitting
+        result = close_fitting(int(fitting_id))
         return Response({
             **result,
             'missatge': (
@@ -64,18 +64,18 @@ def tancar_fitting_view(request, fitting_id):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         import logging
-        logging.getLogger(__name__).exception("Error tancant fitting")
+        logging.getLogger(__name__).exception("Error closing fitting")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def anullar_fitting_view(request, fitting_id):
+def cancel_fitting_view(request, fitting_id):
     """POST /api/v1/fittings/{id}/anullar/"""
-    motiu = request.data.get('motiu', '')
+    reason = request.data.get('motiu', '')
     try:
-        from fhort.fitting.services import anullar_fitting
-        anullar_fitting(int(fitting_id), motiu)
+        from fhort.fitting.services import cancel_fitting
+        cancel_fitting(int(fitting_id), reason)
         return Response({'missatge': 'Fitting anul·lat correctament'})
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -83,10 +83,10 @@ def anullar_fitting_view(request, fitting_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def llistat_fittings_view(request, sf_id):
+def list_fittings_view(request, sf_id):
     """
     GET /api/v1/size-fittings/{id}/fittings/
-    Retorna tots els fittings d'un SF amb resum de línies.
+    Return all fittings of an SF with a line summary.
     """
     try:
         from fhort.fitting.models import SFFitting
@@ -96,8 +96,8 @@ def llistat_fittings_view(request, sf_id):
 
         data = []
         for f in fittings:
-            n_linies = f.linies.count() if hasattr(f, 'linies') else 0
-            n_modif = f.linies.filter(estat_cella='Modificat').count() if hasattr(f, 'linies') else 0
+            n_lines = f.linies.count() if hasattr(f, 'linies') else 0
+            n_modified = f.linies.filter(estat_cella='Modificat').count() if hasattr(f, 'linies') else 0
             data.append({
                 'id': f.pk,
                 'fitting_num': f.fitting_num,
@@ -106,8 +106,8 @@ def llistat_fittings_view(request, sf_id):
                 'data_inici': f.data_inici,
                 'data_fi': getattr(f, 'data_fi', None),
                 'responsable': str(f.responsable) if f.responsable else None,
-                'n_linies': n_linies,
-                'n_modificades': n_modif,
+                'n_linies': n_lines,
+                'n_modificades': n_modified,
             })
 
         return Response({'sf_id': sf_id, 'fittings': data})
