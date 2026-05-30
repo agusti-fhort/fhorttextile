@@ -40,12 +40,12 @@ export const gradingRules = {
   list: (params) => client.get('/api/v1/grading-rules/', { params }),
 }
 
-export const modelTasques = {
+export const modelTasks = {
   list: (params) => client.get('/api/v1/model-tasques/', { params }),
   listByModel: (modelId) => client.get('/api/v1/model-tasques/', { params: { model: modelId } }),
 }
 // Alias retrocompatible
-export const tasks = modelTasques
+export const tasks = modelTasks
 
 export const sessionsFitting = {
   list: (params) => client.get('/api/v1/sessions-fitting/', { params }),
@@ -87,8 +87,8 @@ export const timers = {
   tancar: (id) => client.post(`/api/v1/timers/${id}/tancar/`),
 }
 
-// NOTA: el backend Django encara no exposa /api/v1/me/.
-// Els callers (Configuracio, KanbanTasques, PerfilUsuari) envolten la crida
+// NOTE: the Django backend does not expose /api/v1/me/ yet.
+// The callers (Settings, KanbanTasks, UserProfilePage) wrap the call
 // with .catch(()=>{}) to fail gracefully while the endpoint does not exist.
 export const me = {
   get: () => client.get('/api/v1/me/'),

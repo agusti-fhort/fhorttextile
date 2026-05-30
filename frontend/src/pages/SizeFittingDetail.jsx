@@ -11,7 +11,7 @@ const statusVariant = {
   'Tancat':          'ok',
 }
 
-export default function SizeFittingDetall() {
+export default function SizeFittingDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [sf, setSf] = useState(null)

@@ -10,7 +10,7 @@ const TIPUS = [
   { value: 'TOP',     label: 'TOP'     },
 ]
 
-export default function NouSizeFitting() {
+export default function NewSizeFitting() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [model, setModel] = useState(null)

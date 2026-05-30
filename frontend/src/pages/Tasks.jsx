@@ -35,7 +35,7 @@ function TabNav({ current }) {
 }
 
 // ── Vista 1: ModelTasques actives ─────────────────────────────────────────────
-function TasquesActives({ token }) {
+function ActiveTasks({ token }) {
   const [tasques, setTasques] = useState([])
   const [loading, setLoading] = useState(true)
   const [filtre, setFiltre] = useState("En curs")
@@ -112,7 +112,7 @@ function TasquesActives({ token }) {
 }
 
 // ── View 2: Task catalog ──────────────────────────────────────────────────────
-function CatalegTasques({ token }) {
+function TaskCatalog({ token }) {
   const [tasques, setTasques] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -180,7 +180,7 @@ function CatalegTasques({ token }) {
 }
 
 // ── Vista 3: Paquets de Servei ────────────────────────────────────────────────
-function PaquetsServei({ token }) {
+function ServicePackages({ token }) {
   const [paquets, setPaquets] = useState([])
   const [loading, setLoading] = useState(true)
   const [obert, setObert] = useState(null)
@@ -263,7 +263,7 @@ function PaquetsServei({ token }) {
 }
 
 // ── Component principal ───────────────────────────────────────────────────────
-export default function Tasques() {
+export default function Tasks() {
   const location = useLocation()
   const token = useAuthStore.getState().token || localStorage.getItem('access_token')
 
@@ -277,9 +277,9 @@ export default function Tasques() {
         Tasques
       </h1>
       <TabNav current={current} />
-      {current === "/tasques" && <TasquesActives token={token} />}
-      {current === "/tasques/catalog" && <CatalegTasques token={token} />}
-      {current === "/tasques/paquets" && <PaquetsServei token={token} />}
+      {current === "/tasques" && <ActiveTasks token={token} />}
+      {current === "/tasques/catalog" && <TaskCatalog token={token} />}
+      {current === "/tasques/paquets" && <ServicePackages token={token} />}
     </div>
   )
 }

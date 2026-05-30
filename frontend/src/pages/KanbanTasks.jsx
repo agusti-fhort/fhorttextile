@@ -10,7 +10,7 @@ const COLUMNES = [
   { key: 'Bloquejada', label: 'Bloquejada', color: 'var(--err)',   icon: 'ti-lock' },
 ]
 
-export default function KanbanTasques() {
+export default function KanbanTasks() {
   const [all, setAll] = useState([])
   const [activeTimers, setActiveTimers] = useState([])
   const [loading, setLoading] = useState(true)

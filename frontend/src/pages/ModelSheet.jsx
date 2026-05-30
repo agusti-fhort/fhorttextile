@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import TaulaEditable from '../components/TaulaEditable/TaulaEditable'
+import EditableTable from '../components/EditableTable/EditableTable'
 
 const API = import.meta.env.VITE_API_URL || ''
 const TABS = ['Resum', 'Mesures', 'Fitting', 'Fitxers', 'Anàlisi IA', 'Producció']
@@ -14,7 +14,7 @@ const btnSecondary = {
   fontFamily: 'IBM Plex Mono, monospace',
 }
 
-export default function ModelFitxa({ defaultTab = 'Mesures' }) {
+export default function ModelSheet({ defaultTab = 'Mesures' }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -68,7 +68,7 @@ export default function ModelFitxa({ defaultTab = 'Mesures' }) {
 
   return (
     <div style={{ width: '100%', fontFamily: 'IBM Plex Mono, monospace' }}>
-      <ModelFitxaHeader model={model} onDelete={handleDelete} />
+      <ModelSheetHeader model={model} onDelete={handleDelete} />
 
       <div style={{
         display: 'flex', gap: 8, padding: '0.75rem 1.5rem',
@@ -101,7 +101,7 @@ export default function ModelFitxa({ defaultTab = 'Mesures' }) {
 
       <div style={{ padding: '1.5rem' }}>
         {activeTab === 'Resum' && (
-          <TabResum
+          <TabSummary
             model={model}
             modelId={parseInt(id)}
             sizesAmbDades={sizesAmbDades}
@@ -112,7 +112,7 @@ export default function ModelFitxa({ defaultTab = 'Mesures' }) {
           />
         )}
         {activeTab === 'Mesures' && (
-          <TaulaEditable
+          <EditableTable
             rows={taulaRows}
             sizeRun={(sizesAmbDades && sizesAmbDades.length
               ? sizesAmbDades
@@ -125,15 +125,15 @@ export default function ModelFitxa({ defaultTab = 'Mesures' }) {
           />
         )}
         {activeTab === 'Fitting' && <TabFitting modelId={id} />}
-        {activeTab === 'Fitxers' && <TabFitxers modelId={parseInt(id)} />}
-        {activeTab === 'Anàlisi IA' && <TabAnalisiIA modelId={parseInt(id)} />}
+        {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
+        {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}
         {activeTab === 'Producció' && <TabProduccio model={model} />}
       </div>
     </div>
   )
 }
 
-function ModelFitxaHeader({ model, onDelete }) {
+function ModelSheetHeader({ model, onDelete }) {
   const navigate = useNavigate()
   if (!model) return null
 
@@ -198,7 +198,7 @@ function ModelFitxaHeader({ model, onDelete }) {
   )
 }
 
-function TabResum({ model, modelId, sizesAmbDades, onUpdated }) {
+function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
     nom_prenda: model?.nom_prenda || '',
@@ -369,7 +369,7 @@ const TIPUS_CONFIG = {
   ALTRES:         { label: 'Altres',             icon: 'ti-file',               color: '#888' },
 }
 
-function TabFitxers({ modelId }) {
+function TabFiles({ modelId }) {
   const token = localStorage.getItem('access_token')
   const authHeaders = { Authorization: `Bearer ${token}` }
 
@@ -497,7 +497,7 @@ function TabFitxers({ modelId }) {
             ) : (
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {(fitxers[tipus] || []).map(f => (
-                  <FitxerCard key={f.id} fitxer={f} config={config}
+                  <FileCard key={f.id} fitxer={f} config={config}
                     onPreview={() => setPopup({ url: f.fitxer || f.url, nom: f.nom_fitxer })}
                     onDelete={() => handleDelete(f.id, tipus)} />
                 ))}
@@ -510,7 +510,7 @@ function TabFitxers({ modelId }) {
   )
 }
 
-function FitxerCard({ fitxer, config, onPreview, onDelete }) {
+function FileCard({ fitxer, config, onPreview, onDelete }) {
   const isImage = fitxer.nom_fitxer?.match(/\.(jpg|jpeg|png|svg)$/i)
 
   return (
@@ -577,7 +577,7 @@ const GRAVETAT_STYLE = {
   INFORMATIVA: { bg: '#e6f4ea', color: '#137333', border: '#a8d5b5' },
 }
 
-function TabAnalisiIA({ modelId }) {
+function TabAIAnalysis({ modelId }) {
   const token = localStorage.getItem('access_token')
   const [analisi, setAnalisi] = useState(null)
   const [loading, setLoading] = useState(false)

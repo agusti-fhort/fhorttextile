@@ -25,7 +25,7 @@ const btnSecondary = {
   borderRadius: 6, padding: '7px 14px', fontSize: 13, cursor: 'pointer',
 }
 
-export default function TaulaEditable({
+export default function EditableTable({
   rows,
   sizeRun,
   baseSize,
@@ -214,7 +214,7 @@ export default function TaulaEditable({
               <tfoot>
                 <tr>
                   <td colSpan={colCount} style={{ padding: '8px 12px' }}>
-                    <AfegirPOMInline onAdd={handleAddRow} />
+                    <AddPOMInline onAdd={handleAddRow} />
                   </td>
                 </tr>
               </tfoot>
@@ -355,7 +355,7 @@ function EditableCell({ value, onChange, mono, gold, right, readOnly }) {
   )
 }
 
-function AfegirPOMInline({ onAdd }) {
+function AddPOMInline({ onAdd }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [open, setOpen] = useState(false)

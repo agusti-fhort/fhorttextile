@@ -5,25 +5,25 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Models from './pages/Models'
 import POMs from './pages/POMs'
-import Tasques from './pages/Tasques'
-import SizeFittingLlista from './pages/SizeFittingLlista'
-import SizeFittingDetall from './pages/SizeFittingDetall'
-import FittingDetall from './pages/FittingDetall'
+import Tasks from './pages/Tasks'
+import SizeFittingList from './pages/SizeFittingList'
+import SizeFittingDetail from './pages/SizeFittingDetail'
+import FittingDetail from './pages/FittingDetail'
 import GradingRuleSets from './pages/GradingRuleSets'
 import SizeSystems from './pages/SizeSystems'
 import SizeLibrary from './pages/SizeLibrary'
 import GarmentPOMMapEditor from './pages/GarmentPOMMapEditor'
 import OnboardingWizard from './pages/OnboardingWizard'
-import NouSizeFitting from './pages/NouSizeFitting'
+import NewSizeFitting from './pages/NewSizeFitting'
 import ModelWizard from './pages/ModelWizard'
-import ModelMesures from './pages/ModelMesures'
-import ModelTeixit from './pages/ModelTeixit'
-import ModelFitxa from './pages/ModelFitxa'
-import KanbanTasques from './pages/KanbanTasques'
-import Temps from './pages/Temps'
-import Avisos from './pages/Avisos'
-import Configuracio from './pages/Configuracio'
-import PerfilUsuari from './pages/PerfilUsuari'
+import ModelMeasurements from './pages/ModelMeasurements'
+import ModelFabric from './pages/ModelFabric'
+import ModelSheet from './pages/ModelSheet'
+import KanbanTasks from './pages/KanbanTasks'
+import TimeTracking from './pages/TimeTracking'
+import Alerts from './pages/Alerts'
+import Settings from './pages/Settings'
+import UserProfilePage from './pages/UserProfilePage'
 import Shell from './components/layout/Shell'
 
 function ProtectedRoute({ children }) {
@@ -51,21 +51,21 @@ export default function App() {
           <Route path="models" element={<Models />} />
           <Route path="models/nou" element={<ModelWizard />} />
           <Route path="models/nou-des-de-fitxer" element={<Navigate to="/models/nou" replace />} />
-          <Route path="models/:id" element={<ModelFitxa />} />
+          <Route path="models/:id" element={<ModelSheet />} />
           <Route path="models/:id/editar" element={<ModelWizard />} />
-          <Route path="models/:id/mesures" element={<ModelMesures />} />
-          <Route path="models/:id/teixit" element={<ModelTeixit />} />
-          <Route path="models/:id/fitxers" element={<ModelFitxa defaultTab="Fitxers" />} />
-          <Route path="models/:id/nou-sf" element={<NouSizeFitting />} />
-          <Route path="fitting" element={<SizeFittingLlista />} />
-          <Route path="fitting/:id" element={<SizeFittingDetall />} />
-          <Route path="fitting/:sfId/fitting/:id" element={<FittingDetall />} />
-          <Route path="fittings" element={<SizeFittingLlista />} />
-          <Route path="tasques" element={<Tasques />} />
-          <Route path="tasques/catalog" element={<Tasques />} />
-          <Route path="tasques/paquets" element={<Tasques />} />
-          <Route path="tasques/kanban" element={<KanbanTasques />} />
-          <Route path="temps" element={<Temps />} />
+          <Route path="models/:id/mesures" element={<ModelMeasurements />} />
+          <Route path="models/:id/teixit" element={<ModelFabric />} />
+          <Route path="models/:id/fitxers" element={<ModelSheet defaultTab="Fitxers" />} />
+          <Route path="models/:id/nou-sf" element={<NewSizeFitting />} />
+          <Route path="fitting" element={<SizeFittingList />} />
+          <Route path="fitting/:id" element={<SizeFittingDetail />} />
+          <Route path="fitting/:sfId/fitting/:id" element={<FittingDetail />} />
+          <Route path="fittings" element={<SizeFittingList />} />
+          <Route path="tasques" element={<Tasks />} />
+          <Route path="tasques/catalog" element={<Tasks />} />
+          <Route path="tasques/paquets" element={<Tasks />} />
+          <Route path="tasques/kanban" element={<KanbanTasks />} />
+          <Route path="temps" element={<TimeTracking />} />
           <Route path="poms" element={<POMs />} />
           <Route path="poms/grading" element={<GradingRuleSets />} />
           <Route path="poms/sizes" element={<SizeSystems />} />
@@ -73,12 +73,12 @@ export default function App() {
           <Route path="garment-pom-map" element={<GarmentPOMMapEditor />} />
           <Route path="garment-pom-map/:id" element={<GarmentPOMMapEditor />} />
           <Route path="onboarding" element={<OnboardingWizard />} />
-          <Route path="configuracio/garment-types" element={<Configuracio />} />
-          <Route path="configuracio/size-systems" element={<Configuracio />} />
-          <Route path="configuracio/grading" element={<Configuracio />} />
-          <Route path="avisos" element={<Avisos />} />
-          <Route path="configuracio" element={<Configuracio />} />
-          <Route path="perfil" element={<PerfilUsuari />} />
+          <Route path="configuracio/garment-types" element={<Settings />} />
+          <Route path="configuracio/size-systems" element={<Settings />} />
+          <Route path="configuracio/grading" element={<Settings />} />
+          <Route path="avisos" element={<Alerts />} />
+          <Route path="configuracio" element={<Settings />} />
+          <Route path="perfil" element={<UserProfilePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

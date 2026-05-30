@@ -19,7 +19,7 @@ const statusVariant = {
   'Corregit': 'ok',
 }
 
-export default function Avisos() {
+export default function Alerts() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [estat, setEstat] = useState('Pendent')

@@ -12,7 +12,7 @@ const statusVariant = {
   error: 'err',
 }
 
-export default function FittingDetall() {
+export default function FittingDetail() {
   const { sfId, id } = useParams()
   const navigate = useNavigate()
   const [fitting, setFitting] = useState(null)

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import useAuthStore from "../store/auth"
 import { EstatBadge } from "../components/EstatBadge"
-import { FaseStepper } from "../components/FaseStepper"
+import { PhaseStepper } from "../components/PhaseStepper"
 
 const API = import.meta.env.VITE_API_URL || ""
 
@@ -219,7 +219,7 @@ export default function Dashboard() {
                   </div>
                   {m.fase_actual && (
                     <div style={{ transform: "scale(0.85)", transformOrigin: "left center" }}>
-                      <FaseStepper faseActual={m.fase_actual} />
+                      <PhaseStepper faseActual={m.fase_actual} />
                     </div>
                   )}
                 </div>

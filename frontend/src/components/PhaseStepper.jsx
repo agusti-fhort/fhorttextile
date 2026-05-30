@@ -18,7 +18,7 @@ const FASE_COLORS = {
   'Tancat':       { bg: '#1d1d1b', text: '#ffffff', border: '#1d1d1b' },
 }
 
-export function FaseStepper({ faseActual, onFaseClick }) {
+export function PhaseStepper({ faseActual, onFaseClick }) {
   const idx = FASES.indexOf(faseActual)
 
   return (

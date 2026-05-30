@@ -16,7 +16,7 @@ const statusVariant = {
   'Tancat':          'ok',
 }
 
-export default function SizeFittingLlista() {
+export default function SizeFittingList() {
   const navigate = useNavigate()
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)

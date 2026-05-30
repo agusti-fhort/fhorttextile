@@ -3,7 +3,7 @@ import { me } from '../api/endpoints'
 import useAuthStore from '../store/auth'
 import Card from '../components/ui/Card'
 
-export default function PerfilUsuari() {
+export default function UserProfilePage() {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const logout = useAuthStore(s => s.logout)

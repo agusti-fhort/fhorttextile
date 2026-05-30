@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 
-export default function XatMesures({ modelId, onMesuresUpdated }) {
+export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
   const API = import.meta.env.VITE_API_URL || ''
   const token = localStorage.getItem('access_token')
 

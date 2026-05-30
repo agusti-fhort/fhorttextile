@@ -274,7 +274,7 @@ function GradingRules({ token }) {
   )
 }
 
-export default function Configuracio() {
+export default function Settings() {
   const location = useLocation()
   const navigate = useNavigate()
   const token = useAuthStore.getState().token || localStorage.getItem('access_token')

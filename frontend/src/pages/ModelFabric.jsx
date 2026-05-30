@@ -22,7 +22,7 @@ const btnSecondary = {
   fontFamily: 'IBM Plex Mono, monospace',
 }
 
-export default function ModelTeixit() {
+export default function ModelFabric() {
   const { id } = useParams()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')

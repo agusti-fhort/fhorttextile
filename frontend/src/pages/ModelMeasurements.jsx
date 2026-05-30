@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import TaulaEditable from '../components/TaulaEditable/TaulaEditable'
-import XatMesures from '../components/XatMesures/XatMesures'
+import EditableTable from '../components/EditableTable/EditableTable'
+import MeasurementsChat from '../components/MeasurementsChat/MeasurementsChat'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -11,7 +11,7 @@ const thStyle = {
 }
 const tdStyle = { padding: '6px 12px', verticalAlign: 'middle' }
 
-export default function ModelMesures() {
+export default function ModelMeasurements() {
   const { id } = useParams()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -250,7 +250,7 @@ export default function ModelMesures() {
             </div>
           )}
 
-          <TaulaEditable
+          <EditableTable
             rows={taulaRows.length > 0 ? taulaRows : pomsSuggerits
               .filter(p => selectedPomIds.includes(p.pom_id))
               .map((p, i) => ({
@@ -349,7 +349,7 @@ export default function ModelMesures() {
                 onConfirm={handleConfirmImport}
                 onReject={() => { setImportResult(null); setImportFile(null) }}
               />
-              <XatMesures
+              <MeasurementsChat
                 modelId={parseInt(id)}
                 onMesuresUpdated={() => {
                   fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
@@ -386,7 +386,7 @@ export default function ModelMesures() {
             </button>
           </div>
 
-          <TaulaEditable
+          <EditableTable
             rows={taulaRows}
             sizeRun={(sizesAmbDades && sizesAmbDades.length
               ? sizesAmbDades

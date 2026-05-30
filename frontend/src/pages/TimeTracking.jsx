@@ -15,7 +15,7 @@ function diffMins(start, end) {
   return Math.max(0, Math.floor((e - s) / 60000))
 }
 
-export default function Temps() {
+export default function TimeTracking() {
   const [allTimers, setAllTimers] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
