@@ -47,19 +47,6 @@ export const modelTasques = {
 // Alias retrocompatible
 export const tasks = modelTasques
 
-export const tasquesCatalog = {
-  list: (params) => client.get('/api/v1/tasques/', { params }),
-}
-
-export const paquetsServei = {
-  list: (params) => client.get('/api/v1/paquets-servei/', { params }),
-}
-
-export const modelServeis = {
-  list: (params) => client.get('/api/v1/model-serveis/', { params }),
-  create: (data) => client.post('/api/v1/model-serveis/', data),
-}
-
 export const sessionsFitting = {
   list: (params) => client.get('/api/v1/sessions-fitting/', { params }),
 }
