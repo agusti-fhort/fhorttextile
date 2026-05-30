@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, pieceFittings, pieceFittingLines } from '../api/endpoints'
+import { fittingSessions, pieceFittings, pieceFittingLines, modelFitxers } from '../api/endpoints'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 
@@ -226,6 +226,72 @@ function EditableContextField({ sessionId, field, label, value }) {
   )
 }
 
+// Panell info de fitxers del model (read-only). 3 grups via filtres del backend.
+function ModelFilesPanel({ modelId }) {
+  const { t } = useTranslation()
+  const [groups, setGroups] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      modelFitxers.list({ model: modelId, categoria: 'Patro' }),
+      modelFitxers.list({ model: modelId, tipus: 'MARCADA' }),
+      modelFitxers.list({ model: modelId, categoria: 'Document' }),
+    ])
+      .then(([p, m, d]) => {
+        if (cancelled) return
+        setGroups({
+          patterns: p.data.results || [],
+          markers: m.data.results || [],
+          documents: d.data.results || [],
+        })
+      })
+      .catch(() => { if (!cancelled) setGroups({ patterns: [], markers: [], documents: [] }) })
+    return () => { cancelled = true }
+  }, [modelId])
+
+  const renderGroup = (label, files) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500, marginBottom: 6 }}>
+        {label}
+      </div>
+      {(!files || files.length === 0) ? (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>{t('fitting.info.no_files')}</div>
+      ) : (
+        files.map(f => {
+          const url = f.fitxer || f.url_extern || null
+          return (
+            <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '3px 0' }}>
+              <i className="ti ti-file" style={{ fontSize: 13, color: 'var(--gold)' }} />
+              <span style={{ color: 'var(--text-main)' }}>{f.nom_fitxer}</span>
+              {url && (
+                <a href={url} target="_blank" rel="noopener noreferrer"
+                  style={{ marginLeft: 4, fontSize: 11, color: 'var(--gold)', textDecoration: 'none' }}>
+                  ↓ {t('fitting.info.download')}
+                </a>
+              )}
+            </div>
+          )
+        })
+      )}
+    </div>
+  )
+
+  return (
+    <Card title={t('fitting.info.title')} icon="ti-info-circle" style={{ marginBottom: '1.5rem' }}>
+      {groups === null ? (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('app.loading')}</div>
+      ) : (
+        <>
+          {renderGroup(t('fitting.info.patterns'), groups.patterns)}
+          {renderGroup(t('fitting.info.markers'), groups.markers)}
+          {renderGroup(t('fitting.info.documents'), groups.documents)}
+        </>
+      )}
+    </Card>
+  )
+}
+
 function GateBar({ piece, onGate, onClose }) {
   const { t } = useTranslation()
   const [resultat, setResultat] = useState(piece.gate && piece.gate !== 'Pendent' ? piece.gate : '')
@@ -314,6 +380,7 @@ export default function FittingDetail() {
   const [grid, setGrid] = useState(null)
   const [gridLoading, setGridLoading] = useState(false)
   const [creatingPiece, setCreatingPiece] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
   // Valors editables lligats al parent → Δ reactiu i remuntatge net per peça.
   const [reals, setReals] = useState({})
   const [notes, setNotes] = useState({})
@@ -428,17 +495,29 @@ export default function FittingDetail() {
           <EditableContextField sessionId={session.id} field="model_persona" label={t('fitting.id.persona')} value={session.model_persona} />
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('fitting.id.responsible')}: {session.responsable_nom || '—'}</span>
           <EditableContextField sessionId={session.id} field="lloc" label={t('fitting.id.location')} value={session.lloc} />
-          {/* STUB B1/B2: el cablejat dels pop-ups (info fitxers / fotos / observacions) és als DOCs B1 i B2 */}
+          {/* Icona Info cablada al panell de fitxers (B1); ti-photo/ti-note stub fins a B2 */}
           <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
-            {[['ti-info-circle', t('fitting.id.info')], ['ti-photo', t('fitting.id.photos')], ['ti-note', t('fitting.id.observations')]].map(([icon, label]) => (
-              <button key={icon} type="button" title={`${label} · (B1/B2)`} onClick={() => {}} style={{
-                background: 'var(--white)', border: '0.5px solid var(--border)', borderRadius: 8,
-                padding: '5px 9px', cursor: 'pointer', color: 'var(--text-muted)',
-              }}><i className={`ti ${icon}`} style={{ fontSize: 14 }} /></button>
+            {[
+              { icon: 'ti-info-circle', label: t('fitting.id.info'), wired: !!session.model, active: infoOpen, onClick: () => setInfoOpen(o => !o) },
+              { icon: 'ti-photo', label: t('fitting.id.photos'), wired: false },
+              { icon: 'ti-note', label: t('fitting.id.observations'), wired: false },
+            ].map(({ icon, label, wired, active, onClick }) => (
+              <button key={icon} type="button"
+                title={wired ? label : `${label} · (B2)`}
+                onClick={wired ? onClick : () => {}}
+                style={{
+                  background: active ? 'var(--gold-pale)' : 'var(--white)',
+                  border: `0.5px solid ${active ? 'var(--gold)' : 'var(--border)'}`, borderRadius: 8,
+                  padding: '5px 9px', cursor: 'pointer',
+                  color: active ? 'var(--gold)' : 'var(--text-muted)',
+                }}><i className={`ti ${icon}`} style={{ fontSize: 14 }} /></button>
             ))}
           </span>
         </div>
       </div>
+
+      {/* Panell info de fitxers del model (toggle des de la icona Info) */}
+      {infoOpen && session.model && <ModelFilesPanel modelId={session.model} />}
 
       {/* Selector de peça */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>

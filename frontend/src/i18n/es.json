@@ -215,6 +215,14 @@
       "info": "Info",
       "photos": "Fotos",
       "observations": "Observaciones"
+    },
+    "info": {
+      "title": "Info del modelo",
+      "patterns": "Patrones",
+      "markers": "Marcadas",
+      "documents": "Documentos",
+      "no_files": "Sin archivos",
+      "download": "Descargar"
     }
   }
 }

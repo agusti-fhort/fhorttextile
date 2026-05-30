@@ -12,6 +12,11 @@ export const models = {
   remove: (id) => client.delete(`/api/v1/models/${id}/`),
 }
 
+// Fitxers del model (read-only) — panell info de fitting (5B.6-B1).
+export const modelFitxers = {
+  list: (params) => client.get('/api/v1/model-fitxers/', { params }),
+}
+
 export const poms = {
   list: (params) => client.get('/api/v1/poms/', { params }),
 }

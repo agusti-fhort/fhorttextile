@@ -215,6 +215,14 @@
       "info": "Info",
       "photos": "Fotos",
       "observations": "Observacions"
+    },
+    "info": {
+      "title": "Info del model",
+      "patterns": "Patrons",
+      "markers": "Marcades",
+      "documents": "Documents",
+      "no_files": "Sense fitxers",
+      "download": "Descarregar"
     }
   }
 }
