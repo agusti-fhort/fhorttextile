@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { fittings, fittingLines, sizeFittings } from '../api/endpoints'
+import { sizeFittings } from '../api/endpoints'
 import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
@@ -24,18 +24,14 @@ export default function FittingDetail() {
   const [vsSpecLoading, setVsSpecLoading] = useState(false)
   const [vsSpecError, setVsSpecError] = useState(null)
 
+  // Sprint 5A: the simple Fitting/FittingLine endpoints were removed (dead models).
+  // This page is rewritten in Sprint 5B over the new fitting structure; for now it
+  // only loads the SizeFitting header. The vs-spec tab (s10) still works.
   useEffect(() => {
     setLoading(true)
-    Promise.all([
-      fittings.list({ size_fitting: sfId, page_size: 100 }),
-      fittingLines.list({ fitting: id, page_size: 500 }),
-      sizeFittings.get(sfId),
-    ]).then(([fRes, lRes, sfRes]) => {
-      const found = (fRes.data.results || []).find(f => String(f.id) === String(id))
-      setFitting(found || null)
-      setLines(lRes.data.results || [])
-      setSf(sfRes.data)
-    }).finally(() => setLoading(false))
+    sizeFittings.get(sfId)
+      .then(sfRes => setSf(sfRes.data))
+      .finally(() => setLoading(false))
   }, [sfId, id])
 
   useEffect(() => {

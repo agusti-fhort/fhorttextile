@@ -47,31 +47,14 @@ export const modelTasks = {
 // Alias retrocompatible
 export const tasks = modelTasks
 
-export const sessionsFitting = {
-  list: (params) => client.get('/api/v1/sessions-fitting/', { params }),
-}
-
 export const sizeFittings = {
   list: (params) => client.get('/api/v1/size-fittings/', { params }),
   get: (id) => client.get(`/api/v1/size-fittings/${id}/`),
   create: (data) => client.post('/api/v1/size-fittings/', data),
 }
 
-export const fittings = {
-  list: (params) => client.get('/api/v1/fittings/', { params }),
-  listByModel: (modelId) => client.get('/api/v1/size-fittings/', { params: { model: modelId } }),
-}
-
 export const gradingVersions = {
   list: (params) => client.get('/api/v1/grading-versions/', { params }),
-}
-
-export const gradedSpecLines = {
-  list: (params) => client.get('/api/v1/graded-spec-lines/', { params }),
-}
-
-export const fittingLines = {
-  list: (params) => client.get('/api/v1/fitting-lines/', { params }),
 }
 
 export const pomAlerts = {

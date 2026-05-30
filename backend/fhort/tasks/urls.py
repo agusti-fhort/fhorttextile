@@ -20,12 +20,6 @@ except Exception:
     router.register('tasques', TascaViewSet, basename='tasca')
 
 try:
-    from fhort.fitting.views_sprint1c import SessioFittingViewSet
-    router.register(r'sessions-fitting', SessioFittingViewSet, basename='sessio-fitting')
-except Exception:
-    pass
-
-try:
     from fhort.models_app.views import ModelServeiViewSet
     router.register(r'model-serveis', ModelServeiViewSet, basename='model-servei')
 except Exception:

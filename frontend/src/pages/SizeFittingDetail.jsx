@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { sizeFittings, gradingVersions, gradedSpecLines } from '../api/endpoints'
+import { sizeFittings, gradingVersions } from '../api/endpoints'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 
@@ -35,12 +35,12 @@ export default function SizeFittingDetail() {
     }).finally(() => setLoading(false))
   }, [id])
 
+  // Sprint 5A: graded-spec-lines endpoint removed (dead model). The grading
+  // lines table is rewritten in Sprint 5B to read GradedSpec; for now it stays
+  // empty so the page renders without the removed endpoint.
   useEffect(() => {
-    if (!activeVersionId) return
-    setLoadingLines(true)
-    gradedSpecLines.list({ grading_version: activeVersionId, page_size: 500 })
-      .then(res => setLines(res.data.results || []))
-      .finally(() => setLoadingLines(false))
+    setLines([])
+    setLoadingLines(false)
   }, [activeVersionId])
 
   if (loading) return (

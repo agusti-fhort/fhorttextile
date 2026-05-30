@@ -4,19 +4,11 @@ from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import IsAuthenticated
 
 from .models import (
-    FitComment,
-    Fitting,
-    FittingLine,
-    GradedSpecLine,
     GradingVersion,
     POMAlert,
     SizeFitting,
 )
 from .serializers import (
-    FitCommentSerializer,
-    FittingLineSerializer,
-    FittingSerializer,
-    GradedSpecLineSerializer,
     GradingVersionSerializer,
     POMAlertSerializer,
     SizeFittingSerializer,
@@ -44,45 +36,6 @@ class GradingVersionViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['size_fitting', 'aprovada']
     ordering = ['-data']
-
-
-class GradedSpecLineViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
-    serializer_class = GradedSpecLineSerializer
-    queryset = GradedSpecLine.objects.select_related('grading_version', 'pom', 'talla').all()
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['grading_version', 'pom', 'estat']
-
-
-class FittingViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
-    serializer_class = FittingSerializer
-    queryset = (
-        Fitting.objects
-        .select_related('size_fitting', 'responsable')
-        .prefetch_related('linies', 'comentaris')
-        .all()
-    )
-    filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['size_fitting', 'tipus', 'estat']
-    ordering_fields = ['data_fitting', 'numero']
-    ordering = ['size_fitting', 'numero']
-
-
-class FittingLineViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
-    serializer_class = FittingLineSerializer
-    queryset = FittingLine.objects.select_related('fitting', 'pom', 'talla').all()
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['fitting', 'pom', 'estat']
-
-
-class FitCommentViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
-    serializer_class = FitCommentSerializer
-    queryset = FitComment.objects.select_related('fitting', 'resolt_en').all()
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['fitting', 'estat', 'tipus']
 
 
 class POMAlertViewSet(viewsets.ModelViewSet):
