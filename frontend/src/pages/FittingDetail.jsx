@@ -5,32 +5,11 @@ import { fittingSessions, pieceFittings, pieceFittingLines, modelFitxers } from 
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 
-// DEUTE (tolerància): el grid serializer NO exposa tolerància per línia, així que
-// fem servir el fallback 0.6 (= default de POMMaster al backend, visualment correcte
-// en el cas habitual). Quan es resolgui al backend, el serializer haurà d'exposar la
-// tolerància per línia escollint entre tolerancia_critica/tolerancia_secundaria segons
-// el flag `is_key` que la línia JA porta — llavors aquí substituir TOL_FALLBACK.
-const TOL_FALLBACK = 0.6
-
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
 const gateVariant  = { OK: 'ok', NO_OK: 'err', EXCEPCIO: 'warn', Pendent: 'gray' }
 
 const COL_POM_W = 78
 const COL_NOM_W = 150
-
-function toleranceClass(real, teoric) {
-  if (real === '' || real == null) return null
-  const r = Number(real)
-  if (Number.isNaN(r) || teoric == null) return null
-  return Math.abs(r - Number(teoric)) > TOL_FALLBACK ? 'out' : 'in'
-}
-
-function realColors(real, teoric) {
-  const c = toleranceClass(real, teoric)
-  if (c === 'out') return { bg: 'var(--err-bg)', fg: 'var(--err)', br: 'var(--err)' }
-  if (c === 'in')  return { bg: 'var(--ok-bg)',  fg: 'var(--ok)',  br: 'var(--ok)' }
-  return { bg: 'var(--white)', fg: 'var(--text-main)', br: 'var(--border)' }
-}
 
 // Ordre de talles segons el size run del model: split per '·' (U+00B7) + trim.
 // Mai alfabètic. Talles presents a les línies que no surtin al run s'afegeixen al final.
@@ -75,7 +54,7 @@ function useSessionField(sessionId, field) {
   return useDebouncedSave(persist)
 }
 
-function SaveStatus({ state, inline }) {
+function SaveStatus({ state, inline, absolute }) {
   const { t } = useTranslation()
   if (state === 'idle') return null
   const map = {
@@ -84,93 +63,72 @@ function SaveStatus({ state, inline }) {
     error:  { txt: t('fitting.grid.save_error'), color: 'var(--err)' },
   }
   const s = map[state]
-  return (
-    <span style={{ fontSize: 9, color: s.color, display: inline ? 'inline-block' : 'block', marginLeft: inline ? 6 : 0, marginTop: inline ? 0 : 1 }}>
-      {s.txt}
-    </span>
-  )
+  // absolute = no ocupa espai (no altera l'alçada de la fila de la graella).
+  const pos = absolute
+    ? { position: 'absolute', bottom: 1, left: 4, fontSize: 8, pointerEvents: 'none' }
+    : { display: inline ? 'inline-block' : 'block', marginLeft: inline ? 6 : 0, marginTop: inline ? 0 : 1, fontSize: 9 }
+  return <span style={{ color: s.color, ...pos }}>{s.txt}</span>
 }
 
-// Valor teòric (read-only, atenuat) + popover d'evolució en hover. Reutilitzat d'A2.
-function TheoreticalValue({ line }) {
-  const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
-  const evo = line.evolucio || []
-  return (
-    <span
-      style={{ position: 'relative', fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', cursor: evo.length ? 'help' : 'default' }}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      {line.valor_teoric ?? t('fitting.grid.no_value')}
-      {evo.length > 0 && <i className="ti ti-history" style={{ fontSize: 10, marginLeft: 3, color: 'var(--gold)' }} />}
-      {open && evo.length > 0 && (
-        <div style={{
-          position: 'absolute', zIndex: 30, top: '100%', left: 0, marginTop: 4,
-          background: 'var(--white)', border: '0.5px solid var(--border)', borderRadius: 8,
-          padding: '6px 8px', boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-          whiteSpace: 'nowrap', textAlign: 'left',
-        }}>
-          <div style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4 }}>
-            {t('fitting.grid.evolution')}
-          </div>
-          {evo.map(e => (
-            <div key={e.version_number} style={{ fontSize: 11, color: e.is_active ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: e.is_active ? 500 : 300 }}>
-              v{e.version_number} · {e.data ? e.data.slice(0, 10) : '—'} · {e.valor_cm}{e.aprovada ? ' ✓' : ''}
-            </div>
-          ))}
-        </div>
-      )}
-    </span>
-  )
-}
-
-const cellTd = (base) => ({
+// Estil base d'una cel·la de valor. baseSize = columna d'una talla base (fons daurat).
+// groupStart = primera columna del grup d'una talla (filet esquerre). groupEnd = última.
+const cellTd = (baseSize, groupStart, groupEnd) => ({
   padding: '5px 8px', borderBottom: '0.5px solid var(--border)', verticalAlign: 'middle',
-  textAlign: 'right',
-  background: base ? 'var(--gold-pale)' : undefined,
-  borderLeft: base ? '1px solid var(--base-hairline)' : undefined,
+  textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+  background: baseSize ? 'var(--gold-pale)' : undefined,
+  borderLeft: groupStart && baseSize ? '1px solid var(--gold)' : '0.5px solid var(--border)',
+  borderRight: groupEnd && baseSize ? '1px solid var(--gold)' : undefined,
 })
 
-function TheoreticalCell({ line, base }) {
-  return <td style={cellTd(base)}>{line ? <TheoreticalValue line={line} /> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+// Valor d'una versió (read-only). isBase = columna Base (v1) → text atenuat.
+function VersionCell({ value, isBase, baseSize, groupStart }) {
+  return (
+    <td style={{ ...cellTd(baseSize, groupStart, false), color: isBase ? 'var(--text-muted)' : 'var(--text-main)' }}>
+      {value == null ? '—' : value}
+    </td>
+  )
 }
 
-// Cel·la real editable + nota (icona + popover). base = columna de talla base.
-function RealCell({ line, base, value, note, onValue, onNote }) {
+// Fit actual (valor_real): única cel·la editable. Vermell+negreta si difereix de Base.
+// Triangle discret de nota a la cantonada; clic obre el popover existent.
+function CurrentFitCell({ line, baseSize, baseValue, value, note, onValue, onNote }) {
   const { t } = useTranslation()
   const [realState, saveReal] = useCellAutosave(line?.id, 'valor_real', true)
   const [notaState, saveNota] = useCellAutosave(line?.id, 'nota', false)
   const [noteOpen, setNoteOpen] = useState(false)
 
-  if (!line) return <td style={cellTd(base)} />
+  if (!line) return <td style={cellTd(baseSize, false, baseSize)} />
 
-  const c = realColors(value, line.valor_teoric)
   const hasNote = (note ?? '').trim() !== ''
+  const modified = value !== '' && value != null && baseValue != null
+    && Number(value) !== Number(baseValue)
 
   return (
-    <td style={{ ...cellTd(base), borderLeft: undefined, position: 'relative' }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <input
-          type="number" step="0.1" value={value}
-          onChange={e => { onValue(line.id, e.target.value); saveReal(e.target.value) }}
-          style={{
-            width: 58, padding: '3px 6px', fontSize: 12, fontVariantNumeric: 'tabular-nums',
-            textAlign: 'right', border: `1px solid ${c.br}`, borderRadius: 6,
-            background: c.bg, color: c.fg, boxSizing: 'border-box',
-          }}
-        />
-        <button
-          type="button" onClick={() => setNoteOpen(o => !o)} title={t('fitting.grid.note')}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: 2, lineHeight: 1,
-            color: hasNote ? 'var(--gold)' : 'var(--text-muted)',
-          }}
-        >
-          <i className={`ti ${hasNote ? 'ti-message-2-filled' : 'ti-message-2'}`} style={{ fontSize: 13 }} />
-        </button>
-      </div>
-      <SaveStatus state={realState} />
+    <td style={{ ...cellTd(baseSize, false, baseSize), position: 'relative' }}>
+      <input
+        className="fit-input" type="number" step="0.1" inputMode="decimal" value={value}
+        onChange={e => { onValue(line.id, e.target.value); saveReal(e.target.value) }}
+        style={{
+          font: 'inherit', width: 66, padding: '2px 4px', textAlign: 'right',
+          border: '1px solid var(--border)', borderRadius: 4, background: 'var(--white)',
+          color: modified ? 'var(--err)' : 'var(--text-main)',
+          fontWeight: modified ? 700 : 400,
+          fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
+        }}
+      />
+      {/* Triangle de nota a la cantonada (daurat si hi ha nota, tènue si no). */}
+      <button
+        type="button" onClick={() => setNoteOpen(o => !o)}
+        title={hasNote ? note : t('fitting.grid.note')}
+        style={{
+          position: 'absolute', top: 0, right: 0, width: 0, height: 0, padding: 0,
+          border: '5px solid transparent',
+          borderTopColor: hasNote ? 'var(--gold)' : 'var(--border)',
+          borderRightColor: hasNote ? 'var(--gold)' : 'var(--border)',
+          background: 'none', cursor: 'pointer',
+        }}
+      />
+      <SaveStatus state={realState} absolute />
       {noteOpen && (
         <div style={{
           position: 'absolute', zIndex: 25, top: '100%', right: 4, marginTop: 4,
@@ -193,18 +151,6 @@ function RealCell({ line, base, value, note, onValue, onNote }) {
       )}
     </td>
   )
-}
-
-function DeltaCell({ baseLine, baseReal }) {
-  const { t } = useTranslation()
-  if (!baseLine || baseReal === '' || baseReal == null) {
-    return <td style={{ ...cellTd(false), color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{t('fitting.grid.no_value')}</td>
-  }
-  const d = Number(baseReal) - Number(baseLine.valor_teoric)
-  const cls = Math.abs(d) > TOL_FALLBACK ? 'out' : 'in'
-  const color = d === 0 ? 'var(--text-muted)' : cls === 'out' ? 'var(--err)' : 'var(--ok)'
-  const txt = `${d > 0 ? '+' : ''}${d.toFixed(1)}`
-  return <td style={{ ...cellTd(false), color, fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{txt}</td>
 }
 
 function EditableContextField({ sessionId, field, label, value }) {
@@ -460,6 +406,16 @@ export default function FittingDetail() {
   }
   const pomRows = [...pomMap.values()]
 
+  // Columnes d'evolució: unió de version_number entre totes les línies (ascendent).
+  // El primer (v1) és Base; els següents (v2..vM) són Fit 1..Fit (M-1); després el fit
+  // actual editable (valor_real). Etiqueta Fit N amb N = version_number - 1.
+  const versionNumbers = [...new Set(
+    lines.flatMap(l => (l.evolucio || []).map(e => e.version_number))
+  )].sort((a, b) => a - b)
+  const versionLabel = (vn, idx) =>
+    idx === 0 ? t('fitting.grid.base') : t('fitting.grid.fit', { n: vn - 1 })
+  const groupSpan = versionNumbers.length + 1  // versions read-only + fit actual
+
   const onValue = (lineId, v) => setReals(r => ({ ...r, [lineId]: v }))
   const onNote = (lineId, v) => setNotes(n => ({ ...n, [lineId]: v }))
 
@@ -560,43 +516,47 @@ export default function FittingDetail() {
             <div style={{ overflowX: 'auto' }}>
               <table key={activePieceId} style={{ borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
-                  {/* Pis 1: talla (colspan 2) */}
+                  {/* Pis 1: talla (colspan = versions + fit actual) */}
                   <tr>
                     <th rowSpan={2} style={stickyHd(0, COL_POM_W)}>{t('fitting.grid.pom')}</th>
                     <th rowSpan={2} style={stickyHd(COL_POM_W, COL_NOM_W)}>{t('fitting.grid.name')}</th>
                     {sizeLabels.map(s => {
                       const base = s === baseLabel
                       return (
-                        <th key={s} colSpan={2} style={{
+                        <th key={s} colSpan={groupSpan} style={{
                           ...thStyle, textAlign: 'center',
                           background: base ? 'var(--gold-pale)' : 'var(--bg-muted)',
-                          borderLeft: base ? '1px solid var(--base-hairline)' : '0.5px solid var(--border)',
+                          borderLeft: base ? '1px solid var(--gold)' : '0.5px solid var(--border)',
+                          borderRight: base ? '1px solid var(--gold)' : undefined,
                         }}>
                           {s}{base && <i className="ti ti-star-filled" style={{ fontSize: 10, marginLeft: 4, color: 'var(--gold)' }} />}
                         </th>
                       )
                     })}
-                    <th rowSpan={2} style={{ ...thStyle, textAlign: 'right', borderLeft: '0.5px solid var(--border)' }}>{t('fitting.grid.delta')}</th>
                   </tr>
-                  {/* Pis 2: teòric | real */}
+                  {/* Pis 2: Base · Fit1..Fit(M-1) · Fit actual */}
                   <tr>
-                    {sizeLabels.map(s => {
+                    {sizeLabels.flatMap(s => {
                       const base = s === baseLabel
-                      const sub = {
+                      const sub = (groupStart, groupEnd) => ({
                         ...thStyle, textAlign: 'right', fontSize: 9, padding: '3px 8px',
                         background: base ? 'var(--gold-pale)' : 'var(--bg-muted)',
-                      }
-                      return [
-                        <th key={`${s}-t`} style={{ ...sub, borderLeft: base ? '1px solid var(--base-hairline)' : '0.5px solid var(--border)' }}>{t('fitting.grid.theoretical')}</th>,
-                        <th key={`${s}-r`} style={sub}>{t('fitting.grid.actual')}</th>,
-                      ]
+                        borderLeft: groupStart && base ? '1px solid var(--gold)' : '0.5px solid var(--border)',
+                        borderRight: groupEnd && base ? '1px solid var(--gold)' : undefined,
+                      })
+                      const cols = versionNumbers.map((vn, idx) => (
+                        <th key={`${s}-v${vn}`} style={sub(idx === 0, false)}>{versionLabel(vn, idx)}</th>
+                      ))
+                      cols.push(
+                        <th key={`${s}-cur`} style={sub(false, true)}>{t('fitting.grid.fit_current')}</th>
+                      )
+                      return cols
                     })}
                   </tr>
                 </thead>
                 <tbody>
                   {pomRows.map((row, i) => {
                     const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-card)'
-                    const baseLine = baseLabel ? row.cells[baseLabel] : null
                     return (
                       <tr key={row.pom_id} style={{ background: rowBg }}>
                         <td style={stickyTd(0, COL_POM_W, rowBg)}>
@@ -605,17 +565,23 @@ export default function FittingDetail() {
                           </span>
                         </td>
                         <td style={{ ...stickyTd(COL_POM_W, COL_NOM_W, rowBg), fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'normal' }}>{row.nom}</td>
-                        {sizeLabels.map(s => {
+                        {sizeLabels.flatMap(s => {
                           const base = s === baseLabel
                           const line = row.cells[s]
-                          return [
-                            <TheoreticalCell key={`${s}-t`} line={line} base={base} />,
-                            <RealCell key={`${s}-r`} line={line} base={base}
+                          const evoMap = new Map((line?.evolucio || []).map(e => [e.version_number, e.valor_cm]))
+                          const baseValue = line?.evolucio?.[0]?.valor_cm ?? null
+                          const cells = versionNumbers.map((vn, idx) => (
+                            <VersionCell key={`${s}-v${vn}`}
+                              value={evoMap.has(vn) ? evoMap.get(vn) : null}
+                              isBase={idx === 0} baseSize={base} groupStart={idx === 0} />
+                          ))
+                          cells.push(
+                            <CurrentFitCell key={`${s}-cur`} line={line} baseSize={base} baseValue={baseValue}
                               value={line ? reals[line.id] ?? '' : ''} note={line ? notes[line.id] ?? '' : ''}
-                              onValue={onValue} onNote={onNote} />,
-                          ]
+                              onValue={onValue} onNote={onNote} />
+                          )
+                          return cells
                         })}
-                        <DeltaCell baseLine={baseLine} baseReal={baseLine ? reals[baseLine.id] : null} />
                       </tr>
                     )
                   })}

@@ -173,8 +173,9 @@
     "grid": {
       "pom": "POM",
       "size": "Talla",
-      "theoretical": "Teòric",
-      "actual": "Real",
+      "base": "Base",
+      "fit": "Fit {{n}}",
+      "fit_current": "Fit actual",
       "notes": "Notes",
       "saving": "Desant…",
       "saved": "Desat ✓",
@@ -182,7 +183,6 @@
       "evolution": "Evolució",
       "empty": "Aquesta peça no té línies.",
       "name": "Nom",
-      "delta": "Δ",
       "note": "Nota",
       "no_value": "—"
     },
