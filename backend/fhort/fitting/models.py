@@ -410,6 +410,12 @@ class GradedSpec(models.Model):
     increment_applied_cm = models.FloatField(default=0.0)
     is_active = models.BooleanField(default=True)
 
+    # Sprint 4 / F2: measurement version this spec was generated from.
+    # Null for the 84 pre-existing specs (unknown origin). The brain (dependency
+    # graph) will later compare generated_from_version < model.measurements_version
+    # to detect stale specs — NOT implemented here, only the link is stored.
+    generated_from_version = models.IntegerField(null=True, blank=True)
+
     class Meta:
         verbose_name = 'Spec generat'
         verbose_name_plural = 'Specs generats'

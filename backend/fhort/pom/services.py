@@ -75,6 +75,9 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     # Create a new grading version or reuse the active one
     grading_version = _get_or_create_grading_version(sf)
 
+    # Sprint 4 / F2: record which measurement version these specs are born from.
+    current_version = model.measurements_version
+
     # Generate specs
     created = 0
     for pom_id, base_val in base_measurements.items():
@@ -103,6 +106,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 graded_value_cm=graded_val,
                 grading_type_applied=gt_applied,
                 increment_applied_cm=increment,
+                generated_from_version=current_version,
             )
             created += 1
 
@@ -314,6 +318,7 @@ def _upsert_graded_spec(
     graded_value_cm: float,
     grading_type_applied: str,
     increment_applied_cm: float,
+    generated_from_version: int | None = None,
 ):
     """Create or update a GradedSpec."""
     try:
@@ -327,6 +332,7 @@ def _upsert_graded_spec(
                 'grading_type_applied': grading_type_applied,
                 'increment_applied_cm': increment_applied_cm,
                 'is_active': True,
+                'generated_from_version': generated_from_version,
             }
         )
     except Exception as e:
