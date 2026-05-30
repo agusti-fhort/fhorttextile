@@ -206,6 +206,12 @@ def log_measurement_change(sender, instance, created, raw=False, **kwargs):
 
     changed_by = getattr(instance, '_changed_by', None) or getattr(instance, 'created_by', None)
 
+    # Sprint 5B.3: the fitting CLOSE may attach optional context before saving the
+    # BaseMeasurement so the log row is traceable to the fitting that caused it.
+    fitting_ref = getattr(instance, '_fitting_ref', None)
+    motiu = getattr(instance, '_motiu', '') or ''
+    fora_de_tolerancia = getattr(instance, '_fora_de_tolerancia', False) or False
+
     MeasurementChangeLog.objects.create(
         model=instance.model,
         pom=instance.pom,
@@ -214,4 +220,7 @@ def log_measurement_change(sender, instance, created, raw=False, **kwargs):
         valor_nou=instance.base_value_cm,
         context=_ORIGEN_TO_CONTEXT.get(instance.origen, instance.origen.lower()),
         created_by=changed_by,
+        fitting_ref=fitting_ref,
+        motiu=motiu,
+        fora_de_tolerancia=fora_de_tolerancia,
     )

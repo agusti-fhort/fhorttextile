@@ -531,12 +531,20 @@ class GradingException(models.Model):
 
 
 class ClientMesuraPerfil(models.Model):
-    """Online Welford statistic per (client, garment_type, POM, size).
+    """Online Welford statistic per (codi_client, garment_type, POM, size).
 
     Accumulates mean/M2 without storing individual values. It is updated
     every time a fitting is closed and a line has been modified.
+
+    Sprint 5B.3: keyed by `codi_client` (the end brand-client within the tenant,
+    from Model.codi_client), not by the tenant-level `client` FK (which lumped all
+    brands of a tenant together). `client` is kept nullable for legacy/optional use.
     """
-    client = models.ForeignKey('tenants.Client', on_delete=models.CASCADE, related_name='mesures_perfil')
+    client = models.ForeignKey(
+        'tenants.Client', on_delete=models.CASCADE, related_name='mesures_perfil',
+        null=True, blank=True,
+    )
+    codi_client = models.CharField(max_length=80, blank=True, default='')
     garment_type = models.ForeignKey(GarmentType, on_delete=models.CASCADE, related_name='mesures_perfil')
     pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='mesures_perfil')
     talla = models.CharField(max_length=20)
@@ -549,11 +557,11 @@ class ClientMesuraPerfil(models.Model):
     class Meta:
         verbose_name = 'Perfil mesures client'
         verbose_name_plural = 'Perfils mesures client'
-        unique_together = [('client', 'garment_type', 'pom', 'talla')]
-        ordering = ['client', 'garment_type', 'pom', 'talla']
+        unique_together = [('codi_client', 'garment_type', 'pom', 'talla')]
+        ordering = ['codi_client', 'garment_type', 'pom', 'talla']
 
     def __str__(self):
-        return f'{self.client_id} · gt{self.garment_type_id} · {self.pom.codi_client} @ {self.talla} (n={self.n_mostres})'
+        return f'{self.codi_client} · gt{self.garment_type_id} · {self.pom.codi_client} @ {self.talla} (n={self.n_mostres})'
 
 
 

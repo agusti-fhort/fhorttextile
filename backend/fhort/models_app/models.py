@@ -485,3 +485,39 @@ class MeasurementChangeLog(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValueError('MeasurementChangeLog is append-only: deletes are not allowed.')
+
+
+class ModelGradingOverride(models.Model):
+    """Sprint 5B.3 — Per-model, per-size grading override from a validated fitting.
+
+    When a fitting validates a real value at a NON-base size, it is stored here,
+    scoped to ONE model — UNLIKE pom.GradingException, which lives on the shared
+    GradingRuleSet (a template) and would leak to every model using that set.
+
+    The grading engine (generate_graded_specs) reads these with PRIORITY over the
+    rule_set exceptions and the rules. The base-size case does NOT come here: it
+    promotes to BaseMeasurement (the root) instead.
+    """
+    model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='grading_overrides')
+    pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='model_grading_overrides')
+    size_label = models.CharField(max_length=20)
+    value_cm = models.FloatField()
+    motiu = models.TextField(blank=True, default='')
+    fitting_ref = models.ForeignKey(
+        'fitting.PieceFitting', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='grading_overrides',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='grading_overrides_created',
+    )
+
+    class Meta:
+        verbose_name = 'Override de grading (model)'
+        verbose_name_plural = 'Overrides de grading (model)'
+        unique_together = [('model', 'pom', 'size_label')]
+        ordering = ['model', 'pom', 'size_label']
+
+    def __str__(self):
+        return f'{self.model} · {self.pom.codi_client} @ {self.size_label} = {self.value_cm}cm'

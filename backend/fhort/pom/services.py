@@ -62,6 +62,8 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     # Load the RuleSet rules
     rules = _load_grading_rules(model.grading_rule_set_id)
     exceptions = _load_grading_exceptions(model.grading_rule_set_id)
+    # Sprint 5B.3: per-model overrides from validated fittings (highest priority).
+    model_overrides = _load_model_overrides(model.pk)
 
     # Load base measurements
     base_measurements = _load_base_measurements(model.pk)
@@ -86,8 +88,13 @@ def generate_graded_specs(size_fitting_id: int) -> int:
         for i, size_label in enumerate(size_run):
             steps = i - base_idx  # negative = smaller size, positive = larger
 
+            override = model_overrides.get((pom_id, size_label))
             exc = exceptions.get((pom_id, size_label))
-            if exc:
+            if override is not None:
+                # Per-model validated-fitting override wins over everything.
+                graded_val = override
+                gt_applied = 'EXCEPTION'
+            elif exc:
                 graded_val = exc['value_cm']
                 gt_applied = 'EXCEPTION'
             elif rule is None:
@@ -155,16 +162,19 @@ def close_base(size_fitting_id: int, user_id: int | None = None) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def update_client_profile(
-    client_id: int,
+    codi_client: str,
     garment_type_id: int,
     pom_id: int,
     size: str,
     value_cm: float,
 ) -> object:
     """
-    Update the online measurement statistic per client/garment/POM/size.
-    Uses Welford's algorithm to compute mean and deviation
-    without storing every individual value.
+    Update the online measurement statistic per codi_client/garment/POM/size.
+    Uses Welford's algorithm to compute mean and deviation without storing every
+    individual value.
+
+    Sprint 5B.3: keyed by `codi_client` (the brand-client within the tenant), not
+    by the tenant-level Client FK.
     """
     from django.utils import timezone
 
@@ -175,7 +185,7 @@ def update_client_profile(
         return None
 
     profile, _ = ClientMesuraPerfil.objects.get_or_create(
-        client_id=client_id,
+        codi_client=codi_client or '',
         garment_type_id=garment_type_id,
         pom_id=pom_id,
         talla=size,
@@ -227,6 +237,19 @@ def _load_grading_exceptions(rule_set_id: int) -> dict:
         }
     except Exception as e:
         logger.warning(f"Could not load GradingExceptions: {e}")
+        return {}
+
+
+def _load_model_overrides(model_id: int) -> dict:
+    """Return {(pom_id, size_label): value_cm} of per-model fitting overrides."""
+    try:
+        from fhort.models_app.models import ModelGradingOverride
+        return {
+            (o.pom_id, o.size_label): o.value_cm
+            for o in ModelGradingOverride.objects.filter(model_id=model_id)
+        }
+    except Exception as e:
+        logger.warning(f"Could not load ModelGradingOverride: {e}")
         return {}
 
 
