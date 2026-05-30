@@ -110,13 +110,6 @@ class Model(models.Model):
         blank=True,
         related_name='models',
     )
-    talla_base = models.ForeignKey(
-        'pom.SizeDefinition',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='models_base',
-    )
     grading_rule_set = models.ForeignKey(
         'pom.GradingRuleSet',
         on_delete=models.SET_NULL,

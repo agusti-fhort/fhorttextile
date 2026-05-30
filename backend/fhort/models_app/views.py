@@ -37,7 +37,7 @@ class ModelViewSet(viewsets.ModelViewSet):
             Model.objects
             .select_related('garment_type', 'garment_group',
                             'responsable', 'responsable__user',
-                            'size_system', 'talla_base', 'grading_rule_set')
+                            'size_system', 'grading_rule_set')
             .all()
         )
 
