@@ -1,7 +1,7 @@
 from django.db import models
 
 
-# Els fitxers físics viuen a /var/www/fhort-textile/storage/{schema_tenant}/{model_codi}/{versio}/
+# Physical files live in /var/www/fhort-textile/storage/{schema_tenant}/{model_codi}/{versio}/
 class FitxerVersio(models.Model):
     CATEGORIA_CHOICES = [
         ('patro', 'Patró'),

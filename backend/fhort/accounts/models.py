@@ -23,9 +23,9 @@ class UserProfile(models.Model):
         return self.nom_complet or self.user.get_username()
 
 
-# Sprint S1 — Configuracio per tenant
+# Sprint S1 — Per-tenant configuration
 class TenantConfig(models.Model):
-    """Configuracio global del tenant. Una sola instancia per tenant."""
+    """Global tenant configuration. A single instance per tenant."""
     UNITAT_CHOICES = [('CM','Centimetres (EU)'),('INCH','Inches (US)')]
     NORMA_CHOICES  = [('ISO_8559','ISO 8559 (EU)'),('ASTM_D13','ASTM D13 (US)')]
 

@@ -8,7 +8,7 @@ User = get_user_model()
 
 
 class MeSerializer(serializers.ModelSerializer):
-    """Perfil de l'usuari autenticat (tenant actual)."""
+    """Profile of the authenticated user (current tenant)."""
 
     full_name = serializers.SerializerMethodField()
     avatar_url = serializers.SerializerMethodField()
@@ -35,8 +35,8 @@ class MeSerializer(serializers.ModelSerializer):
         return getattr(profile, 'nom_complet', '') or obj.username
 
     def get_avatar_url(self, obj):
-        # Si en el futur s'afegeix un ImageField, retornar la seva URL.
-        # Per ara no existeix avatar pujat; deixem el camp però sempre None.
+        # If an ImageField is added in the future, return its URL.
+        # For now there is no uploaded avatar; we keep the field but always None.
         return None
 
     def get_nom_complet(self, obj):
@@ -53,7 +53,7 @@ class MeSerializer(serializers.ModelSerializer):
 
 
 class UserListSerializer(serializers.ModelSerializer):
-    """Per al selector de responsable. Només usuaris actius del tenant."""
+    """For the responsible-person selector. Only active tenant users."""
 
     full_name = serializers.SerializerMethodField()
 

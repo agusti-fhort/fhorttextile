@@ -16,17 +16,17 @@ User = get_user_model()
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def me_view(request):
-    """GET /api/v1/me/ — perfil de l'usuari autenticat al tenant actual."""
+    """GET /api/v1/me/ — profile of the authenticated user in the current tenant."""
     return Response(MeSerializer(request.user).data)
 
 
 class UserViewSet(mixins.ListModelMixin,
                   mixins.RetrieveModelMixin,
                   viewsets.GenericViewSet):
-    """GET /api/v1/users/ — llistat d'usuaris actius del tenant.
+    """GET /api/v1/users/ — list of active users in the tenant.
 
-    Filtra per UserProfile.actiu=True. Al schema 'public' retorna buit
-    perquè els perfils tenant no hi viuen.
+    Filters by UserProfile.actiu=True. On the 'public' schema it returns empty
+    because tenant profiles do not live there.
     """
 
     permission_classes = [IsAuthenticated]
