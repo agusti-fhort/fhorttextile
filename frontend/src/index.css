@@ -12,6 +12,7 @@
   --gold-l:     #c68338;
   --gold-pale:  #f5e6d0;
   --border:     #e0d5c5;
+  --base-hairline: #e3cfa3; /* filet de la columna de talla base (graella fitting) */
 
   /* Aliases legacy (per components existents) */
   --charcoal:   #1d1d1b;

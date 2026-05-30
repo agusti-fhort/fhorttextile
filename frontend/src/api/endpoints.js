@@ -58,6 +58,8 @@ export const fittingSessions = {
   list: (params) => client.get('/api/v1/fitting-sessions/', { params }),
   get: (id) => client.get(`/api/v1/fitting-sessions/${id}/`),
   create: (data) => client.post('/api/v1/fitting-sessions/', data),
+  // PATCH del context (notes/model_persona/assistents/lloc/responsable) — autosave capçalera.
+  update: (id, data) => client.patch(`/api/v1/fitting-sessions/${id}/`, data),
   canAdvance: (id) => client.get(`/api/v1/fitting-sessions/${id}/can-advance/`),
   createPiece: (id, modelId) => client.post(`/api/v1/fitting-sessions/${id}/create-piece/`, { model_id: modelId }),
 }

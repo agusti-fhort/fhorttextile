@@ -180,7 +180,11 @@
       "saved": "Saved ✓",
       "save_error": "Save error",
       "evolution": "Evolution",
-      "empty": "This piece has no lines."
+      "empty": "This piece has no lines.",
+      "name": "Name",
+      "delta": "Δ",
+      "note": "Note",
+      "no_value": "—"
     },
     "gate": {
       "title": "Piece gate",
@@ -199,6 +203,18 @@
       "close": "Close piece",
       "closing": "Closing…",
       "close_error": "Could not close the piece."
+    },
+    "id": {
+      "model": "Model",
+      "garment": "Garment",
+      "collection": "Collection",
+      "client_ref": "Client ref.",
+      "persona": "Fit model",
+      "responsible": "Responsible",
+      "location": "Location",
+      "info": "Info",
+      "photos": "Photos",
+      "observations": "Observations"
     }
   }
 }

@@ -180,7 +180,11 @@
       "saved": "Desat ✓",
       "save_error": "Error en desar",
       "evolution": "Evolució",
-      "empty": "Aquesta peça no té línies."
+      "empty": "Aquesta peça no té línies.",
+      "name": "Nom",
+      "delta": "Δ",
+      "note": "Nota",
+      "no_value": "—"
     },
     "gate": {
       "title": "Gate de la peça",
@@ -199,6 +203,18 @@
       "close": "Tancar peça",
       "closing": "Tancant…",
       "close_error": "No s'ha pogut tancar la peça."
+    },
+    "id": {
+      "model": "Model",
+      "garment": "Peça",
+      "collection": "Col·lecció",
+      "client_ref": "Ref. client",
+      "persona": "Model/persona",
+      "responsible": "Responsable",
+      "location": "Lloc",
+      "info": "Info",
+      "photos": "Fotos",
+      "observations": "Observacions"
     }
   }
 }

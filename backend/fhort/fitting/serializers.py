@@ -111,6 +111,10 @@ class FittingSessionDetailSerializer(serializers.ModelSerializer):
     fase_display = serializers.CharField(source='get_fase_display', read_only=True)
     estat_display = serializers.CharField(source='get_estat_display', read_only=True)
     target = serializers.SerializerMethodField()
+    # Identificació rica derivada del model (read-only; default=None pel cas garment_set).
+    model_codi_client = serializers.CharField(source='model.codi_client', read_only=True, default=None)
+    model_temporada = serializers.CharField(source='model.temporada', read_only=True, default=None)
+    model_any = serializers.IntegerField(source='model.any', read_only=True, default=None)
     piece_fittings = PieceFittingSummarySerializer(many=True, read_only=True)
     photos = FittingPhotoSerializer(many=True, read_only=True)
     can_advance = serializers.SerializerMethodField()
@@ -119,7 +123,9 @@ class FittingSessionDetailSerializer(serializers.ModelSerializer):
         model = FittingSession
         fields = [
             'id', 'data', 'fase', 'fase_display', 'estat', 'estat_display',
-            'model', 'garment_set', 'target', 'model_persona', 'assistents', 'lloc',
+            'model', 'garment_set', 'target',
+            'model_codi_client', 'model_temporada', 'model_any',
+            'model_persona', 'assistents', 'lloc',
             'responsable', 'responsable_nom', 'notes', 'created_at',
             'created_by', 'created_by_nom', 'piece_fittings', 'photos', 'can_advance',
         ]
@@ -179,7 +185,10 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
 
     def get_model(self, obj):
         m = obj.model
-        return {'id': m.id, 'codi': m.codi_intern, 'nom': m.nom_prenda}
+        return {
+            'id': m.id, 'codi': m.codi_intern, 'nom': m.nom_prenda,
+            'base_size_label': m.base_size_label, 'size_run_model': m.size_run_model,
+        }
 
     def get_lines(self, obj):
         sf = obj.grading_version.size_fitting
