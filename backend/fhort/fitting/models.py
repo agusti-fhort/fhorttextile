@@ -1,6 +1,8 @@
 from django.db import models
 from django.conf import settings
 
+from fhort.models_app.models import Model
+
 
 class SizeFitting(models.Model):
     TIPUS_CHOICES = [
@@ -242,3 +244,161 @@ class GradedSpec(models.Model):
 
     def __str__(self):
         return f'v{self.grading_version_id} · {self.pom.codi_client} @ {self.size_label} = {self.graded_value_cm}cm'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 5B.2 — Fitting cycle layer (structure only; services come in 5B.3)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class FittingSession(models.Model):
+    """The event: the fit model tries on the product (a set or a single piece).
+
+    N=1 (single piece) is the common case, modelled as a session with one
+    PieceFitting. The target is EITHER a GarmentSet (multi-piece) OR a Model
+    (single piece), never both and never neither (XOR, enforced by CheckConstraint).
+    """
+    ESTAT_CHOICES = [
+        ('Oberta', 'Oberta'),
+        ('Tancada', 'Tancada'),
+        ('Anullada', 'Anul·lada'),
+    ]
+
+    garment_set = models.ForeignKey(
+        'models_app.GarmentSet',
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='fitting_sessions',
+    )
+    model = models.ForeignKey(
+        'models_app.Model',
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='fitting_sessions',
+    )
+    # Phase lives on the Model/set (Proto/Fit/SizeSet/PP/TOP); reuse its choices.
+    fase = models.CharField(max_length=20, choices=Model.FASE_CHOICES)
+    data = models.DateField()
+    model_persona = models.CharField(max_length=200, blank=True, default='')
+    assistents = models.CharField(max_length=300, blank=True, default='')
+    lloc = models.CharField(max_length=200, blank=True, default='')
+    responsable = models.ForeignKey(
+        'accounts.UserProfile',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='fitting_sessions_responsable',
+    )
+    estat = models.CharField(max_length=20, choices=ESTAT_CHOICES, default='Oberta')
+    notes = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        'accounts.UserProfile',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='fitting_sessions_creades',
+    )
+
+    class Meta:
+        verbose_name = 'Sessió de fitting'
+        verbose_name_plural = 'Sessions de fitting'
+        ordering = ['-data', '-created_at']
+        constraints = [
+            models.CheckConstraint(
+                name='fittingsession_set_xor_model',
+                condition=(
+                    models.Q(garment_set__isnull=False, model__isnull=True) |
+                    models.Q(garment_set__isnull=True, model__isnull=False)
+                ),
+            ),
+        ]
+
+    def __str__(self):
+        target = self.garment_set_id and self.garment_set or self.model
+        return f'FittingSession {self.data} · {target} ({self.fase})'
+
+
+class PieceFitting(models.Model):
+    """One per piece evaluated in the session. Owns an independent gate."""
+    GATE_CHOICES = [
+        ('Pendent', 'Pendent'),
+        ('OK', 'OK'),
+        ('NO_OK', 'No OK'),
+        ('EXCEPCIO', 'Excepció'),
+    ]
+
+    session = models.ForeignKey(
+        FittingSession, on_delete=models.CASCADE, related_name='piece_fittings',
+    )
+    model = models.ForeignKey(
+        'models_app.Model', on_delete=models.PROTECT, related_name='piece_fittings',
+    )
+    grading_version = models.ForeignKey(
+        GradingVersion, on_delete=models.PROTECT, related_name='piece_fittings',
+    )
+    gate = models.CharField(max_length=10, choices=GATE_CHOICES, default='Pendent')
+    gate_motiu = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        'accounts.UserProfile',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='piece_fittings_creats',
+    )
+
+    class Meta:
+        verbose_name = 'Fitting de peça'
+        verbose_name_plural = 'Fittings de peça'
+        ordering = ['session', 'model']
+        unique_together = [('session', 'model')]
+
+    def __str__(self):
+        return f'{self.session_id} · {self.model} [{self.gate}]'
+
+
+class PieceFittingLine(models.Model):
+    """A (POM, size) row: theoretical (grading) vs real (measured) — SEPARATE.
+
+    Only the two current values are stored. The evolution across versions is read
+    dynamically from the GradingVersion history, NOT materialised here.
+    """
+    piece_fitting = models.ForeignKey(
+        PieceFitting, on_delete=models.CASCADE, related_name='linies',
+    )
+    pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='+')
+    size_label = models.CharField(max_length=20)
+    valor_teoric = models.FloatField()
+    valor_real = models.FloatField(null=True, blank=True)
+    nota = models.CharField(max_length=200, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Línia de fitting de peça'
+        verbose_name_plural = 'Línies de fitting de peça'
+        ordering = ['piece_fitting', 'pom', 'size_label']
+        unique_together = [('piece_fitting', 'pom', 'size_label')]
+
+    def __str__(self):
+        return f'{self.piece_fitting_id} · {self.pom.codi_client} @ {self.size_label}'
+
+
+class FittingPhoto(models.Model):
+    """Autonomous photo (FileField pattern like ModelFitxer, not FitxerVersio).
+
+    Belongs to a session; optionally pinned to a specific PieceFitting.
+    """
+    session = models.ForeignKey(
+        FittingSession, on_delete=models.CASCADE, related_name='photos',
+    )
+    piece_fitting = models.ForeignKey(
+        PieceFitting, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='photos',
+    )
+    fitxer = models.ImageField(upload_to='fitting_photos/%Y/%m/')
+    caption = models.CharField(max_length=300, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Foto de fitting'
+        verbose_name_plural = 'Fotos de fitting'
+        ordering = ['session', 'id']
+
+    def __str__(self):
+        return f'{self.session_id} · {self.caption or self.fitxer.name}'

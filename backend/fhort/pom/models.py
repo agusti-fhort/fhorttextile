@@ -194,6 +194,12 @@ class POMMaster(models.Model):
     nom_client = models.CharField(max_length=200)
     notes = models.TextField(blank=True)
     actiu = models.BooleanField(default=True)
+
+    # Sprint 5B.1: standard tolerance for this catalogue POM (asymmetric).
+    # Copied onto BaseMeasurement.tolerancia_minus/plus when measurements are poured
+    # into a model (copy-at-the-moment, like base_value_cm — not a live reference).
+    tolerancia_default_minus = models.DecimalField(max_digits=5, decimal_places=2, default=0.6)
+    tolerancia_default_plus = models.DecimalField(max_digits=5, decimal_places=2, default=0.6)
     pendent_revisio = models.BooleanField(
         default=False,
         verbose_name='Pendent de revisió',

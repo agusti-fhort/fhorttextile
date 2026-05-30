@@ -470,6 +470,13 @@ def create_from_extraction_view(request):
                         'confidence': confidence,
                     })
 
+                # Sprint 5B.1: tolerance from the AI extraction if present, else the catalogue POM.
+                tol_minus = pom_data.get('tolerance_minus')
+                tol_plus = pom_data.get('tolerance_plus')
+                if tol_minus is None:
+                    tol_minus = pm.tolerancia_default_minus
+                if tol_plus is None:
+                    tol_plus = pm.tolerancia_default_plus
                 BaseMeasurement.objects.update_or_create(
                     model=model, pom=pm,
                     defaults={
@@ -479,6 +486,8 @@ def create_from_extraction_view(request):
                         'is_active': True,
                         'notes': description,
                         'ordre': i,
+                        'tolerancia_minus': tol_minus,
+                        'tolerancia_plus': tol_plus,
                     },
                 )
                 poms_created += 1

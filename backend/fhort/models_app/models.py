@@ -410,6 +410,11 @@ class BaseMeasurement(models.Model):
         null=True, blank=True, related_name='base_measurements_created',
     )
 
+    # --- Sprint 5B.1: tolerance copied from the catalogue POM at pour time ---
+    # NULL for the pre-existing measurements; consumers fall back to 0.6 (wired in 5B.4).
+    tolerancia_minus = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    tolerancia_plus = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+
     # Sprint S14-A
     nom_fitxa = models.CharField(
         max_length=20, blank=True, default='',

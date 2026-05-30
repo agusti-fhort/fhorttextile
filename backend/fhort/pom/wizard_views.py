@@ -176,6 +176,7 @@ def save_base_size_view(request, model_id):
 
     try:
         from fhort.models_app.models import Model, BaseMeasurement
+        from fhort.pom.models import POMMaster
 
         model = Model.objects.get(pk=model_id)
         sf_qs = model.size_fittings.filter(numero=1)
@@ -199,6 +200,14 @@ def save_base_size_view(request, model_id):
                 ).delete()
                 removed += deleted
             else:
+                # Sprint 5B.1: tolerance from the payload if present, else the catalogue POM.
+                pom = POMMaster.objects.filter(pk=pom_id).first()
+                tol_minus = item.get('tolerancia_minus')
+                tol_plus = item.get('tolerancia_plus')
+                if tol_minus is None and pom:
+                    tol_minus = pom.tolerancia_default_minus
+                if tol_plus is None and pom:
+                    tol_plus = pom.tolerancia_default_plus
                 BaseMeasurement.objects.update_or_create(
                     model=model,
                     pom_id=pom_id,
@@ -206,6 +215,8 @@ def save_base_size_view(request, model_id):
                         'base_value_cm': float(value),
                         'is_active': True,
                         'notes': item.get('notes', ''),
+                        'tolerancia_minus': tol_minus,
+                        'tolerancia_plus': tol_plus,
                     }
                 )
                 created += 1

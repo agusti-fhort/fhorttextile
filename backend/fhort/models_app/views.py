@@ -443,6 +443,9 @@ def set_measurements_view(request, model_id):
                     'base_value_cm': float(value),
                     'notes': m.get('notes', ''),
                     'origen': 'MANUAL',
+                    # Sprint 5B.1: copy tolerance from the catalogue POM.
+                    'tolerancia_minus': pom.tolerancia_default_minus,
+                    'tolerancia_plus': pom.tolerancia_default_plus,
                 }
             )
             if was_created: created += 1
@@ -783,6 +786,9 @@ def measurements_chat_view(request, model_id):
                                 'base_value_cm': float(accio['valor']),
                                 'origen': 'MANUAL',
                                 'ordre': base_measurements.count(),
+                                # Sprint 5B.1: copy tolerance from the catalogue POM.
+                                'tolerancia_minus': pom.tolerancia_default_minus,
+                                'tolerancia_plus': pom.tolerancia_default_plus,
                             },
                         )
                         accions_executades.append(

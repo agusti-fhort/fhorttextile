@@ -340,6 +340,9 @@ class TechSheetCreateModelView(APIView):
                     'origen': 'IMPORTED',
                     'notes': m.get('description', ''),
                     'is_active': True,
+                    # Sprint 5B.1: copy tolerance from the catalogue POM.
+                    'tolerancia_minus': pom_master.tolerancia_default_minus,
+                    'tolerancia_plus': pom_master.tolerancia_default_plus,
                 },
             )
             created_bm += 1
