@@ -1,9 +1,16 @@
 from rest_framework import serializers
 
+from fhort.models_app.models import Model
+
 from .models import (
     GradingVersion,
     POMAlert,
     SizeFitting,
+    FittingSession,
+    PieceFitting,
+    PieceFittingLine,
+    FittingPhoto,
+    GradedSpec,
 )
 
 
@@ -37,3 +44,181 @@ class POMAlertSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('data_creacio',)
 
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Sprint 5B.6 — Fitting REST API (FittingSession / PieceFitting / lines / photos)
+# Read/write serializers; the service (5B.3/5B.4) holds the business logic.
+# ═════════════════════════════════════════════════════════════════════════════
+
+def _session_target(obj):
+    """Derived {type, id, label} for a session's target (GarmentSet XOR Model)."""
+    if obj.garment_set_id:
+        return {'type': 'garment_set', 'id': obj.garment_set_id, 'label': str(obj.garment_set)}
+    if obj.model_id:
+        return {'type': 'model', 'id': obj.model_id, 'label': str(obj.model)}
+    return None
+
+
+class FittingPhotoSerializer(serializers.ModelSerializer):
+    """fitxer is serialised as an (absolute, if request in context) URL by DRF."""
+
+    class Meta:
+        model = FittingPhoto
+        fields = ['id', 'session', 'piece_fitting', 'fitxer', 'caption', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class PieceFittingSummarySerializer(serializers.ModelSerializer):
+    """Per-piece summary embedded in the session detail (with gate state)."""
+    model_codi = serializers.CharField(source='model.codi_intern', read_only=True)
+    model_nom = serializers.CharField(source='model.nom_prenda', read_only=True)
+    gate_per_nom = serializers.CharField(source='gate_per.nom_complet', read_only=True)
+    n_linies = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PieceFitting
+        fields = [
+            'id', 'model', 'model_codi', 'model_nom', 'grading_version',
+            'gate', 'gate_motiu', 'gate_per_nom', 'gate_at', 'n_linies', 'created_at',
+        ]
+
+    def get_n_linies(self, obj):
+        return obj.linies.count()
+
+
+class FittingSessionListSerializer(serializers.ModelSerializer):
+    responsable_nom = serializers.CharField(source='responsable.nom_complet', read_only=True)
+    fase_display = serializers.CharField(source='get_fase_display', read_only=True)
+    estat_display = serializers.CharField(source='get_estat_display', read_only=True)
+    target = serializers.SerializerMethodField()
+    n_peces = serializers.IntegerField(read_only=True)  # annotated in the viewset queryset
+
+    class Meta:
+        model = FittingSession
+        fields = [
+            'id', 'data', 'fase', 'fase_display', 'estat', 'estat_display',
+            'model', 'garment_set', 'target', 'responsable', 'responsable_nom',
+            'n_peces', 'created_at',
+        ]
+
+    def get_target(self, obj):
+        return _session_target(obj)
+
+
+class FittingSessionDetailSerializer(serializers.ModelSerializer):
+    responsable_nom = serializers.CharField(source='responsable.nom_complet', read_only=True)
+    created_by_nom = serializers.CharField(source='created_by.nom_complet', read_only=True)
+    fase_display = serializers.CharField(source='get_fase_display', read_only=True)
+    estat_display = serializers.CharField(source='get_estat_display', read_only=True)
+    target = serializers.SerializerMethodField()
+    piece_fittings = PieceFittingSummarySerializer(many=True, read_only=True)
+    photos = FittingPhotoSerializer(many=True, read_only=True)
+    can_advance = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FittingSession
+        fields = [
+            'id', 'data', 'fase', 'fase_display', 'estat', 'estat_display',
+            'model', 'garment_set', 'target', 'model_persona', 'assistents', 'lloc',
+            'responsable', 'responsable_nom', 'notes', 'created_at',
+            'created_by', 'created_by_nom', 'piece_fittings', 'photos', 'can_advance',
+        ]
+
+    def get_target(self, obj):
+        return _session_target(obj)
+
+    def get_can_advance(self, obj):
+        from .services import session_can_advance
+        return session_can_advance(obj.pk)
+
+
+class FittingSessionCreateSerializer(serializers.Serializer):
+    """Input for create() — the view delegates to create_session() (XOR enforced)."""
+    fase = serializers.ChoiceField(choices=[c[0] for c in Model.FASE_CHOICES])
+    data = serializers.DateField()
+    model = serializers.IntegerField(required=False, allow_null=True)
+    garment_set = serializers.IntegerField(required=False, allow_null=True)
+    responsable = serializers.IntegerField(required=False, allow_null=True)
+    model_persona = serializers.CharField(required=False, allow_blank=True, default='')
+    assistents = serializers.CharField(required=False, allow_blank=True, default='')
+    lloc = serializers.CharField(required=False, allow_blank=True, default='')
+    notes = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+class FittingSessionUpdateSerializer(serializers.ModelSerializer):
+    """Autosave: only the event-context fields are writable."""
+
+    class Meta:
+        model = FittingSession
+        fields = ['notes', 'model_persona', 'assistents', 'lloc', 'responsable']
+
+
+class PieceFittingLineSerializer(serializers.ModelSerializer):
+    """Autosave for a grid cell: valor_real and nota editable; rest frozen."""
+
+    class Meta:
+        model = PieceFittingLine
+        fields = ['id', 'piece_fitting', 'pom', 'size_label', 'valor_teoric', 'valor_real', 'nota']
+        read_only_fields = ['id', 'piece_fitting', 'pom', 'size_label', 'valor_teoric']
+
+
+class PieceFittingGridSerializer(serializers.ModelSerializer):
+    """Retrieve: the working grid + theoretical evolution across GradingVersions."""
+    model = serializers.SerializerMethodField()
+    grading_version_num = serializers.IntegerField(
+        source='grading_version.version_number', read_only=True)
+    gate_per_nom = serializers.CharField(source='gate_per.nom_complet', read_only=True)
+    lines = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PieceFitting
+        fields = [
+            'id', 'session', 'gate', 'gate_motiu', 'gate_per_nom', 'gate_at',
+            'grading_version', 'grading_version_num', 'model', 'lines', 'created_at',
+        ]
+
+    def get_model(self, obj):
+        m = obj.model
+        return {'id': m.id, 'codi': m.codi_intern, 'nom': m.nom_prenda}
+
+    def get_lines(self, obj):
+        sf = obj.grading_version.size_fitting
+        # All conserved versions of this size_fitting, oldest → newest.
+        versions = list(
+            GradingVersion.objects.filter(size_fitting=sf).order_by('version_number')
+        )
+        # Single query for ALL graded specs of those versions → no N+1.
+        spec_map = {}
+        for s in GradedSpec.objects.filter(grading_version__size_fitting=sf).values(
+            'grading_version_id', 'pom_id', 'size_label', 'graded_value_cm',
+        ):
+            spec_map[(s['grading_version_id'], s['pom_id'], s['size_label'])] = s['graded_value_cm']
+
+        out = []
+        for line in obj.linies.select_related('pom', 'pom__pom_global').all():
+            evolucio = []
+            for v in versions:
+                val = spec_map.get((v.id, line.pom_id, line.size_label))
+                if val is None:
+                    continue
+                evolucio.append({
+                    'version_number': v.version_number,
+                    'data': v.data.isoformat() if v.data else None,
+                    'aprovada': v.aprovada,
+                    'is_active': v.is_active,
+                    'valor_cm': val,
+                })
+            pom = line.pom
+            out.append({
+                'id': line.id,
+                'pom_id': line.pom_id,
+                'codi': pom.pom_code if pom else '',
+                'nom': pom.name_cat if pom else '',
+                'is_key': pom.is_key_measure if pom else False,
+                'size_label': line.size_label,
+                'valor_teoric': line.valor_teoric,
+                'valor_real': line.valor_real,
+                'nota': line.nota,
+                'evolucio': evolucio,
+            })
+        return out
