@@ -28,9 +28,9 @@ class ModelViewSet(viewsets.ModelViewSet):
     queryset = Model.objects.all()
 
     def get_queryset(self):
-        # django-tenants ja restringeix les queries a l'esquema actual del tenant
-        # via la connection. Al schema 'public' no hi ha taules de models, però
-        # retornem un queryset buit per evitar errors a vistes mal encaminades.
+        # django-tenants already restricts queries to the current tenant schema
+        # via the connection. The 'public' schema has no model tables, but we
+        # return an empty queryset to avoid errors in misrouted views.
         if getattr(connection, 'schema_name', None) == 'public':
             return Model.objects.none()
         return (
@@ -72,7 +72,7 @@ class BaseMeasurementViewSet(viewsets.ModelViewSet):
     ordering = ['model', 'id']
 
     def get_queryset(self):
-        # Al schema 'public' no hi ha dades de tenant — retorna queryset buit.
+        # The 'public' schema has no tenant data — return an empty queryset.
         if getattr(connection, 'schema_name', None) == 'public':
             return BaseMeasurement.objects.none()
         return super().get_queryset()
@@ -207,7 +207,7 @@ def update_model_step2(request, model_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def poms_suggerits_view(request, model_id):
+def suggested_poms_view(request, model_id):
     try:
         model = Model.objects.get(id=model_id)
     except Model.DoesNotExist:
@@ -242,7 +242,7 @@ def poms_suggerits_view(request, model_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def taula_mesures_view(request, model_id):
+def measurements_table_view(request, model_id):
     try:
         model = Model.objects.get(id=model_id)
     except Model.DoesNotExist:
@@ -299,37 +299,37 @@ def taula_mesures_view(request, model_id):
 
     base_size = model.base_size_label
 
-    def _valor_talla(row, size):
-        # El valor de la talla base viu a base_value_cm; la resta, a graded (GradedSpec).
+    def _size_value(row, size):
+        # The base-size value lives in base_value_cm; the rest, in graded (GradedSpec).
         if size == base_size:
             return row['base_value_cm']
         return row['graded'].get(size)
 
-    # Talles amb almenys un valor real (≠ null) en alguna fila.
-    sizes_amb_dades = [
+    # Sizes with at least one real value (≠ null) in some row.
+    sizes_with_data = [
         s for s in size_run
-        if any(_valor_talla(r, s) is not None for r in rows)
+        if any(_size_value(r, s) is not None for r in rows)
     ]
 
-    # Δ = mitjana d'increments entre talles consecutives amb dades; None si <2 valors.
-    deltes = {}
+    # Δ = mean of increments between consecutive sizes with data; None if <2 values.
+    deltas = {}
     for r in rows:
-        valors = [_valor_talla(r, s) for s in sizes_amb_dades]
-        valors = [v for v in valors if v is not None]
-        if len(valors) >= 2:
-            increments = [valors[i + 1] - valors[i] for i in range(len(valors) - 1)]
-            deltes[str(r['pom_id'])] = round(sum(increments) / len(increments), 2)
+        values = [_size_value(r, s) for s in sizes_with_data]
+        values = [v for v in values if v is not None]
+        if len(values) >= 2:
+            increments = [values[i + 1] - values[i] for i in range(len(values) - 1)]
+            deltas[str(r['pom_id'])] = round(sum(increments) / len(increments), 2)
         else:
-            deltes[str(r['pom_id'])] = None
+            deltas[str(r['pom_id'])] = None
 
     return Response({
         'model_id': model.id,
         'codi_intern': model.codi_intern,
         'base_size': base_size,
-        'size_run': size_run,               # mantingut per no trencar consumidors
+        'size_run': size_run,               # kept so as not to break consumers
         'size_run_complet': size_run,
-        'sizes_amb_dades': sizes_amb_dades,
-        'deltes': deltes,
+        'sizes_amb_dades': sizes_with_data,
+        'deltes': deltas,
         'rows': rows,
         'total_poms': len(rows),
     })
@@ -429,7 +429,7 @@ def set_measurements_view(request, model_id):
 @permission_classes([IsAuthenticated])
 def reorder_measurements_view(request, model_id):
     """
-    Actualitza l'ordre de les BaseMeasurements d'un model.
+    Update the order of a model's BaseMeasurements.
     Payload: { order: [bm_id_1, bm_id_2, ...] }
     """
     try:
@@ -451,28 +451,28 @@ def reorder_measurements_view(request, model_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
-def upload_fitxer_view(request, model_id):
+def upload_file_view(request, model_id):
     try:
         model = Model.objects.get(id=model_id)
     except Model.DoesNotExist:
         return Response({'error': 'Model no trobat'}, status=404)
 
-    fitxer = request.FILES.get('fitxer')
-    if not fitxer:
+    uploaded_file = request.FILES.get('fitxer')
+    if not uploaded_file:
         return Response({'error': 'fitxer és obligatori'}, status=400)
 
     tipus = request.data.get('tipus', 'ALTRES')
-    nom = request.data.get('nom') or fitxer.name
+    name = request.data.get('nom') or uploaded_file.name
 
-    # versio: incrementa l'última del mateix tipus
-    ultima = ModelFitxer.objects.filter(model=model, tipus=tipus).order_by('-id').first()
+    # version: increment the latest of the same type
+    latest = ModelFitxer.objects.filter(model=model, tipus=tipus).order_by('-id').first()
     try:
-        num_prev = int(ultima.versio) if ultima and ultima.versio else 0
+        prev_num = int(latest.versio) if latest and latest.versio else 0
     except (TypeError, ValueError):
-        num_prev = 0
-    versio = str(num_prev + 1)
+        prev_num = 0
+    version = str(prev_num + 1)
 
-    # Mapeig de tipus → categoria (existent) per coherència de filtres antics
+    # Map type → category (existing) for consistency with old filters
     categoria_map = {
         'PATRO': 'Patro', 'MARCADA': 'Patro', 'ESCALAT': 'Patro',
         'SKETCH_FLETXES': 'Disseny', 'SKETCH_NET': 'Disseny',
@@ -482,13 +482,13 @@ def upload_fitxer_view(request, model_id):
 
     mf = ModelFitxer.objects.create(
         model=model,
-        fitxer=fitxer,
-        nom_fitxer=nom,
+        fitxer=uploaded_file,
+        nom_fitxer=name,
         tipus=tipus,
         categoria=categoria,
-        versio=versio,
-        mida_bytes=fitxer.size,
-        path_servidor=fitxer.name,
+        versio=version,
+        mida_bytes=uploaded_file.size,
+        path_servidor=uploaded_file.name,
         pujat_per=getattr(request.user, 'profile', None),
     )
 
@@ -504,7 +504,7 @@ def upload_fitxer_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def analisi_ia_view(request, model_id):
+def ai_analysis_view(request, model_id):
     try:
         model = Model.objects.get(id=model_id)
     except Model.DoesNotExist:
@@ -602,10 +602,10 @@ def analisi_ia_view(request, model_id):
         )
         text = response.content[0].text
         text = text.replace('```json', '').replace('```', '').strip()
-        resultat = json.loads(text)
+        result = json.loads(text)
         return Response({
             'model_id': model_id,
-            'analisi': resultat,
+            'analisi': result,
             'fitxers_analitzats': len(fitxers_analisi),
         })
     except json.JSONDecodeError as e:
@@ -616,16 +616,16 @@ def analisi_ia_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def xat_mesures_view(request, model_id):
+def measurements_chat_view(request, model_id):
     try:
         model = Model.objects.get(id=model_id)
     except Model.DoesNotExist:
         return Response({'error': 'Model no trobat'}, status=404)
 
-    missatge = (request.data.get('missatge') or '').strip()
-    historial = request.data.get('historial', []) or []
+    message = (request.data.get('missatge') or '').strip()
+    history = request.data.get('historial', []) or []
 
-    if not missatge:
+    if not message:
         return Response({'error': 'missatge és obligatori'}, status=400)
 
     from fhort.pom.models import POMMaster
@@ -669,7 +669,7 @@ def xat_mesures_view(request, model_id):
     import json
     from django.conf import settings
 
-    messages = historial + [{'role': 'user', 'content': missatge}]
+    messages = history + [{'role': 'user', 'content': message}]
 
     try:
         client = anthropic.Anthropic(api_key=getattr(settings, 'ANTHROPIC_API_KEY', None))
@@ -680,10 +680,10 @@ def xat_mesures_view(request, model_id):
             messages=messages,
         )
         text = response.content[0].text.replace('```json', '').replace('```', '').strip()
-        resultat = json.loads(text)
+        result = json.loads(text)
 
         accions_executades = []
-        for accio in resultat.get('accions', []):
+        for accio in result.get('accions', []):
             tipus = accio.get('tipus')
             try:
                 if tipus == 'ACTUALITZAR' and accio.get('bm_id'):
@@ -728,7 +728,7 @@ def xat_mesures_view(request, model_id):
         )
 
         return Response({
-            'resposta': resultat.get('resposta', ''),
+            'resposta': result.get('resposta', ''),
             'accions_executades': accions_executades,
             'mesures_actualitzades': mesures_actualitzades,
             'historial_nou': messages + [{'role': 'assistant', 'content': text}],
@@ -741,7 +741,7 @@ def xat_mesures_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def generar_grading_view(request, model_id):
+def generate_grading_view(request, model_id):
     try:
         model = Model.objects.get(id=model_id)
     except Model.DoesNotExist:
@@ -759,7 +759,7 @@ def generar_grading_view(request, model_id):
     if not base_measurements_qs.exists():
         return Response({'error': 'No hi ha mesures base'}, status=400)
 
-    # Obtenir o crear SizeFitting amb els camps obligatoris reals
+    # Get or create SizeFitting with the real required fields
     sf = SizeFitting.objects.filter(model=model).first()
     if not sf:
         next_num = 1
@@ -779,7 +779,7 @@ def generar_grading_view(request, model_id):
         except Exception as e:
             return Response({'error': f'Error creant SizeFitting: {e}'}, status=500)
 
-    # Cridar el motor existent
+    # Call the existing engine
     try:
         graded_count = generate_graded_specs(sf.id)
     except ValueError as e:
@@ -787,7 +787,7 @@ def generar_grading_view(request, model_id):
     except Exception as e:
         return Response({'error': f'Error generant grading: {e}'}, status=500)
 
-    # Construir resposta tipus taula-mesures
+    # Build a measurements-table-style response
     size_run = [s.strip() for s in model.size_run_model.split('·') if s.strip()]
     gv = GradingVersion.objects.filter(size_fitting=sf).order_by('-data').first()
 

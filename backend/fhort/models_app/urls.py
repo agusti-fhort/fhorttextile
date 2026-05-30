@@ -5,19 +5,19 @@ from .views import (
     BaseMeasurementViewSet,
     ModelFitxerViewSet,
     ModelViewSet,
-    analisi_ia_view,
+    ai_analysis_view,
     create_model_wizard,
-    generar_grading_view,
+    generate_grading_view,
     iso_shrinkage_view,
     next_model_ref,
-    poms_suggerits_view,
+    suggested_poms_view,
     reorder_measurements_view,
     set_measurements_view,
-    taula_mesures_view,
+    measurements_table_view,
     update_fabric_view,
     update_model_step2,
-    upload_fitxer_view,
-    xat_mesures_view,
+    upload_file_view,
+    measurements_chat_view,
 )
 
 router = DefaultRouter()
@@ -25,8 +25,8 @@ router.register('models', ModelViewSet, basename='model')
 router.register('model-fitxers', ModelFitxerViewSet, basename='model-fitxer')
 router.register('base-measurements', BaseMeasurementViewSet, basename='base-measurement')
 
-# Sprint 6 — extracció IA. Paths abans del router perquè 'models/extract-from-file/'
-# no quedi capturat per 'models/<pk>/' del ModelViewSet detail.
+# Sprint 6 — AI extraction. Paths before the router so 'models/extract-from-file/'
+# is not captured by 'models/<pk>/' of the ModelViewSet detail.
 try:
     from .extraction_views import (
         extract_from_file_view,
@@ -41,8 +41,8 @@ try:
 except Exception:
     _sprint6_paths = []
 
-# Sprint 7A — Design Freeze + Talla Base. Paths amb 3+ segments
-# (no col·lisionen amb ModelViewSet detail), però prepended per coherència.
+# Sprint 7A — Design Freeze + Base Size. Paths with 3+ segments
+# (they do not collide with ModelViewSet detail), but prepended for consistency.
 try:
     from fhort.pom.wizard_views import (
         approve_design_freeze_view,
@@ -59,18 +59,18 @@ try:
 except Exception:
     _sprint7_model_paths = []
 
-# Sprint 8 — xat IA d'extracció. Paths abans del router per evitar
-# col·lisió amb 'models/<pk>/' del ModelViewSet detail.
+# Sprint 8 — AI extraction chat. Paths before the router to avoid
+# collision with 'models/<pk>/' of the ModelViewSet detail.
 try:
-    from .chat_views import chat_extraccio_view, iniciar_chat_extraccio_view
+    from .chat_views import extraction_chat_view, start_extraction_chat_view
     _sprint8_paths = [
-        path('models/chat-extraccio/',          chat_extraccio_view),
-        path('models/iniciar-chat-extraccio/',  iniciar_chat_extraccio_view),
+        path('models/chat-extraccio/',          extraction_chat_view),
+        path('models/iniciar-chat-extraccio/',  start_extraction_chat_view),
     ]
 except Exception:
     _sprint8_paths = []
 
-# Sprint S17 — Importació de fitxes tècniques via API Anthropic.
+# Sprint S17 — Technical-sheet import via the Anthropic API.
 try:
     from .tech_sheet_views import TechSheetExtractView, TechSheetCreateModelView
     _sprint17_paths = [
@@ -85,14 +85,14 @@ urlpatterns = (
         path('models/next-ref/', next_model_ref),
         path('models/create-wizard/', create_model_wizard),
         path('models/<int:model_id>/update-step2/', update_model_step2),
-        path('models/<int:model_id>/poms-suggerits/', poms_suggerits_view),
-        path('models/<int:model_id>/taula-mesures/', taula_mesures_view),
+        path('models/<int:model_id>/poms-suggerits/', suggested_poms_view),
+        path('models/<int:model_id>/taula-mesures/', measurements_table_view),
         path('models/<int:model_id>/set-measurements/', set_measurements_view),
         path('models/<int:model_id>/reorder-measurements/', reorder_measurements_view),
-        path('models/<int:model_id>/upload-fitxer/', upload_fitxer_view),
-        path('models/<int:model_id>/analisi-ia/', analisi_ia_view),
-        path('models/<int:model_id>/xat-mesures/', xat_mesures_view),
-        path('models/<int:model_id>/generar-grading/', generar_grading_view),
+        path('models/<int:model_id>/upload-fitxer/', upload_file_view),
+        path('models/<int:model_id>/analisi-ia/', ai_analysis_view),
+        path('models/<int:model_id>/xat-mesures/', measurements_chat_view),
+        path('models/<int:model_id>/generar-grading/', generate_grading_view),
         path('models/iso-shrinkage/', iso_shrinkage_view),
         path('models/<int:model_id>/update-fabric/', update_fabric_view),
     ]

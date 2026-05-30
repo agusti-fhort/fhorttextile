@@ -1,12 +1,12 @@
 """
-Sprint S17 — Importació de fitxes tècniques via API Anthropic.
+Sprint S17 — Technical-sheet import via the Anthropic API.
 
-Dues views:
-- TechSheetExtractView: rep PDF/imatge → crida l'API Anthropic → retorna JSON estructurat.
-  No crea cap Model — és una passa de previsualització perquè l'usuari revisi/corregeixi
-  abans de confirmar la creació.
-- TechSheetCreateModelView: rep les dades extretes (ja confirmades) + overrides
-  manuals → crea el Model i les BaseMeasurements al tenant actual.
+Two views:
+- TechSheetExtractView: receives PDF/image → calls the Anthropic API → returns structured JSON.
+  Does not create any Model — it is a preview step so the user can review/correct
+  before confirming creation.
+- TechSheetCreateModelView: receives the extracted data (already confirmed) + manual
+  overrides → creates the Model and the BaseMeasurements in the current tenant.
 
 Notes d'integració amb l'SDK Anthropic (per skill `claude-api`):
 - Model: `claude-opus-4-7` (recomanat per al perfil del cas d'ús — extracció de
@@ -52,8 +52,8 @@ class TechSheetExtractView(APIView):
     POST /api/v1/models/extract-sheet/
     multipart/form-data: file=<PDF|JPG|PNG|WEBP>
 
-    Retorna JSON estructurat (camp `_meta` afegit per al frontend).
-    No crea cap Model.
+    Return structured JSON (`_meta` field added for the frontend).
+    Does not create any Model.
     """
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser]
@@ -110,9 +110,9 @@ class TechSheetExtractView(APIView):
                 max_tokens=MAX_TOKENS,
                 thinking={'type': 'adaptive'},
                 output_config={'effort': 'high'},
-                # Prompt estable al `system` amb cache_control. A Opus 4.7 el
-                # mínim per a caching és 4096 tokens; el nostre prompt n'és ~750.
-                # La marca no fa cap mal i s'activa automàticament si creix.
+                # Stable prompt in `system` with cache_control. On Opus 4.7 the
+                # minimum for caching is 4096 tokens; our prompt is ~750.
+                # The marker does no harm and activates automatically if it grows.
                 system=[
                     {
                         'type': 'text',
@@ -131,7 +131,7 @@ class TechSheetExtractView(APIView):
                 if getattr(block, 'type', None) == 'text'
             ).strip()
 
-            # Neteja markdown fences defensivament.
+            # Defensively strip markdown fences.
             if response_text.startswith('```'):
                 response_text = response_text.split('\n', 1)[1] if '\n' in response_text else response_text[3:]
                 response_text = response_text.rsplit('```', 1)[0].strip()
@@ -145,7 +145,7 @@ class TechSheetExtractView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
-            # Errors estructurats que el model emet (OUT_OF_SCOPE, NOT_A_TECH_SHEET).
+            # Structured errors the model emits (OUT_OF_SCOPE, NOT_A_TECH_SHEET).
             if isinstance(extracted, dict) and 'error' in extracted and len(extracted) <= 2:
                 return Response(extracted, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
@@ -175,8 +175,8 @@ class TechSheetExtractView(APIView):
                     if m.get('pom_confidence') in ('LOW', 'CUSTOM')
                 ),
                 'blocking_reasons': blocking_reasons,
-                # Telemetria de tokens — útil per monitoring de costos i validació
-                # de cache hits a futur (cache_read_input_tokens > 0 ⇒ cache va).
+                # Token telemetry — useful for cost monitoring and future cache-hit
+                # validation (cache_read_input_tokens > 0 ⇒ cache works).
                 'usage': {
                     'input_tokens': response.usage.input_tokens,
                     'output_tokens': response.usage.output_tokens,
@@ -216,8 +216,8 @@ class TechSheetCreateModelView(APIView):
     POST /api/v1/models/create-from-sheet/
     body: { extracted: {...}, overrides: {garment_type_code?, pom_mappings?{}} }
 
-    Crea el Model i les BaseMeasurements al tenant actual. Salta mesures amb
-    confiança baixa que l'usuari no ha sobreescrit.
+    Create the Model and the BaseMeasurements in the current tenant. Skips
+    low-confidence measurements that the user has not overridden.
     """
     permission_classes = [IsAuthenticated]
 
@@ -236,7 +236,7 @@ class TechSheetCreateModelView(APIView):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        # django-tenants ja ens posa al schema correcte via connection — no cal schema_context.
+        # django-tenants already puts us in the correct schema via connection — no schema_context needed.
         from fhort.pom.models import GarmentType, POMMaster
         from fhort.models_app.models import BaseMeasurement, Model
 
@@ -251,8 +251,8 @@ class TechSheetCreateModelView(APIView):
 
         header = extracted.get('header') or {}
 
-        # Fix 1 (S17): la IA pot retornar `sizes` com a string (ex: "['XXS','XS','S']")
-        # o com a array net. Normalitzem a llista d'strings nets abans de join.
+        # Fix 1 (S17): the AI may return `sizes` as a string (e.g. "['XXS','XS','S']")
+        # or as a clean array. We normalize to a clean list of strings before join.
         raw_sizes = extracted.get('sizes') or []
         if isinstance(raw_sizes, str):
             raw_sizes = re.findall(r'[A-Za-z0-9]+', raw_sizes)
@@ -260,11 +260,11 @@ class TechSheetCreateModelView(APIView):
             str(s).strip() for s in raw_sizes if str(s).strip()
         )
 
-        # Camps NOT NULL del Model que el view ha d'omplir explícitament:
-        # - any: extret del header (`year`) o, defectivament, l'any actual.
-        # - sequencial=1: el signal pre_save del Model recalcula el correlatiu
-        #   real per tenant+any+temporada; cal un valor inicial vàlid per
-        #   satisfer el constraint NOT NULL abans del signal.
+        # NOT NULL Model fields the view must fill explicitly:
+        # - any: taken from the header (`year`) or, by default, the current year.
+        # - sequencial=1: the Model's pre_save signal recomputes the real
+        #   sequential per tenant+any+temporada; a valid initial value is needed
+        #   to satisfy the NOT NULL constraint before the signal.
         try:
             year_value = int(header.get('year') or datetime.date.today().year)
         except (TypeError, ValueError):
@@ -300,7 +300,7 @@ class TechSheetCreateModelView(APIView):
             pom_code = user_mappings.get(client_code) or m.get('pom_code')
             confidence = m.get('pom_confidence', 'LOW')
 
-            # Salta confiances baixes que l'usuari no ha confirmat.
+            # Skip low confidences the user has not confirmed.
             if not pom_code or (confidence in ('LOW', 'CUSTOM') and client_code not in user_mappings):
                 skipped.append({
                     'client_code': client_code,
@@ -309,10 +309,10 @@ class TechSheetCreateModelView(APIView):
                 })
                 continue
 
-            # Fix 2 (S17): pom_global no és unique a POMMaster (un tenant pot
-            # tenir variants personalitzades del mateix POMGlobal). Usem
-            # .filter().first() per evitar MultipleObjectsReturned i loguem
-            # qualsevol miss al `skipped`.
+            # Fix 2 (S17): pom_global is not unique on POMMaster (a tenant may
+            # have custom variants of the same POMGlobal). We use
+            # .filter().first() to avoid MultipleObjectsReturned and log
+            # any miss in `skipped`.
             pom_master = (
                 POMMaster.objects
                 .select_related('pom_global')

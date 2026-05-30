@@ -10,15 +10,15 @@ from rest_framework import status
 
 
 def normalize_size_run(raw):
-    """Converteix qualsevol format de size_run a 'XXS·XS·S·M·L·XL'."""
+    """Convert any size_run format to 'XXS·XS·S·M·L·XL'."""
     if not raw:
         return ''
     if isinstance(raw, list):
         sizes = [str(s).strip() for s in raw if str(s).strip()]
     elif isinstance(raw, str):
-        # Pot ser "['XXS', 'XS', 'S']" o "XXS,XS,S" o "XXS XS S"
+        # Can be "['XXS', 'XS', 'S']" or "XXS,XS,S" or "XXS XS S"
         sizes = _re.findall(r'[A-Z0-9]+', raw.upper())
-        # Filtra tokens que no semblen talles
+        # Filter out tokens that do not look like sizes
         sizes = [s for s in sizes if 1 <= len(s) <= 5]
     else:
         return ''
@@ -26,7 +26,7 @@ def normalize_size_run(raw):
 
 
 def parse_any(raw):
-    """Normalitza l'any a un enter de 4 dígits."""
+    """Normalize the year to a 4-digit integer."""
     if not raw:
         return _dt.date.today().year
     try:
@@ -39,11 +39,11 @@ def parse_any(raw):
 
 
 def _create_pom_alert(model, pom_master, client_code, description, confidence, match_type):
-    """Crea un POMAlert per a matchings incerts (MEDIUM/LOW) o POMs nous creats."""
+    """Create a POMAlert for uncertain matches (MEDIUM/LOW) or newly created POMs."""
     try:
         from fhort.fitting.models import POMAlert
-        # POMAlert.tipus choices reals: 'desviacio', 'fora_rang', 'manca', 'conflicte'.
-        # POMs nous → 'manca' (no és al catàleg); matchings mig → 'conflicte'.
+        # Real POMAlert.tipus choices: 'desviacio', 'fora_rang', 'manca', 'conflicte'.
+        # New POMs → 'manca' (not in the catalog); medium matches → 'conflicte'.
         tipus = 'manca' if match_type == 'auto_created' else 'conflicte'
         if match_type == 'auto_created':
             missatge = (
@@ -66,7 +66,7 @@ def _create_pom_alert(model, pom_master, client_code, description, confidence, m
             creat_per='sistema',
         )
     except Exception:
-        # No bloquejar la importació si falla la creació de l'avís.
+        # Do not block the import if creating the alert fails.
         pass
 
 
@@ -76,10 +76,10 @@ def _create_pom_alert(model, pom_master, client_code, description, confidence, m
 def extract_from_file_view(request):
     """
     POST /api/v1/models/extract-from-file/
-    Multipart: file (obligatori), generate_thumbnail (opcional, default=true)
+    Multipart: file (required), generate_thumbnail (optional, default=true)
 
-    Retorna el JSON d'extracció + resultat del gate de Design Freeze.
-    No crea cap Model — és una operació de preview/anàlisi.
+    Return the extraction JSON + the Design Freeze gate result.
+    Does not create any Model — it is a preview/analysis operation.
     """
     file_obj = request.FILES.get('file')
     if not file_obj:
@@ -142,8 +142,8 @@ def create_from_extraction_view(request):
     POST /api/v1/models/create-from-extraction/
     Body: {extracted: {...}, overrides: {...}}
 
-    Crea un Model + BaseMeasurements des del JSON d'extracció.
-    Només funciona si design_freeze.pass == true.
+    Create a Model + BaseMeasurements from the extraction JSON.
+    Only works if design_freeze.pass == true.
     """
     extracted = request.data.get('extracted')
     overrides = request.data.get('overrides', {})
@@ -166,13 +166,13 @@ def create_from_extraction_view(request):
             return v.get('value') or fallback
         return v or fallback
 
-    # Aplicar overrides de l'usuari, amb fallback al wizard_context
+    # Apply user overrides, with fallback to wizard_context
     style_name = overrides.get('style_name') or val('style_name') or val('style_code')
     temporada = overrides.get('temporada') or val('season', 'SS')
     any_ = overrides.get('any') or val('year')
     base_size = overrides.get('base_size') or val('base_size') or wizard_context.get('base_size')
 
-    # Fix A — size_run normalitzat (wizard com a darrera xarxa)
+    # Fix A — normalized size_run (wizard as the last safety net)
     size_run_raw = (
         overrides.get('size_run')
         or val('size_run')
@@ -180,10 +180,10 @@ def create_from_extraction_view(request):
     )
     size_run = normalize_size_run(size_run_raw)
 
-    # Fix D — any correcte (2 dígits → 4, fallback a l'any actual)
+    # Fix D — correct year (2 digits → 4, fallback to the current year)
     any_value = parse_any(any_)
 
-    # Fix C — codi_client obligatori per al signal pre_save (genera codi_intern)
+    # Fix C — codi_client required for the pre_save signal (generates codi_intern)
     codi_client = (overrides.get('codi_client') or '').strip().upper()
     if not codi_client:
         ref = val('style_reference') or val('style_code') or ''
@@ -193,7 +193,7 @@ def create_from_extraction_view(request):
     if not codi_client:
         codi_client = 'IMP'
 
-    # codi_tenant: prioritat override > tenant logat > primers chars del codi_client
+    # codi_tenant: priority override > logged-in tenant > first chars of codi_client
     tenant_schema_for_codi = (
         request.tenant.schema_name if hasattr(request, 'tenant') and request.tenant else ''
     )
@@ -212,11 +212,11 @@ def create_from_extraction_view(request):
         tenant_schema = request.tenant.schema_name if hasattr(request, 'tenant') else 'fhort'
 
         with schema_context(tenant_schema):
-            # garment_type és NOT NULL al Model. Prioritats:
-            # 1) wizard_context.garment_type_codi → match exacte per codi_client
-            # 2) overrides.garment_type → match per nom/codi (heurístic)
-            # 3) val('garment_type_code') / val('garment_type') → match heurístic
-            # 4) primer GarmentType disponible com a fallback
+            # garment_type is NOT NULL on the Model. Priorities:
+            # 1) wizard_context.garment_type_codi → exact match by codi_client
+            # 2) overrides.garment_type → match by name/code (heuristic)
+            # 3) val('garment_type_code') / val('garment_type') → heuristic match
+            # 4) first available GarmentType as fallback
             gt = None
             wiz_gt_codi = (wizard_context.get('garment_type_codi') or '').strip()
             if wiz_gt_codi:
@@ -243,7 +243,7 @@ def create_from_extraction_view(request):
                     status=422,
                 )
 
-            # Crear el model — o usar l'existent si overrides.model_id
+            # Create the model — or use the existing one if overrides.model_id
             model_id_override = overrides.get('model_id')
             if model_id_override:
                 try:
@@ -273,10 +273,10 @@ def create_from_extraction_view(request):
                 )
 
             # === SIZE SYSTEM ===
-            # Prioritat:
-            #   1) override explícit (size_system = id)
-            #   2) wizard_context.size_system_id (id) o size_system_codi (codi)
-            #   3) heurística (alpha + garment group).
+            # Priority:
+            #   1) explicit override (size_system = id)
+            #   2) wizard_context.size_system_id (id) or size_system_codi (codi)
+            #   3) heuristic (alpha + garment group).
             from fhort.pom.models import SizeSystem
             size_system_assigned = None
             size_system_id = overrides.get('size_system') or wizard_context.get('size_system_id')
@@ -309,11 +309,11 @@ def create_from_extraction_view(request):
                         model.save(update_fields=['size_system'])
                         size_system_assigned = ss.codi
 
-            # Fix B — Match POMMaster amb prioritats: codi exacte, root-code
-            # (codis posicionals tipus D1/G2s/Y5 → arrel D/G/Y), descripció,
-            # sinònims explícits, nom_en del POMGlobal, abbreviation.
+            # Fix B — Match POMMaster with priorities: exact code, root-code
+            # (positional codes like D1/G2s/Y5 → root D/G/Y), description,
+            # explicit synonyms, POMGlobal nom_en, abbreviation.
             SYNONYMS = {
-                # Existents
+                # Existing
                 'waist position':                  'waist position',
                 'hip position':                    'hip position',
                 'front body length':               'body length',
@@ -328,9 +328,9 @@ def create_from_extraction_view(request):
                 'lining length at center front':   'lining length',
                 'lining length at center back':    'lining length',
                 'lining bottom width along hem':   'lining hem width',
-                # NOUS — POMs posicionals Brownie (sobreescriuen els previs en cas
-                # de col·lisió, segons spec S19; les claus duplicades del session
-                # file fan que l'última guanyi).
+                # NEW — Brownie positional POMs (override the previous ones on
+                # collision, per spec S19; duplicate keys in the session
+                # file make the last one win).
                 'waist position':                  'waist position distance',
                 'hip position':                    'hip position distance',
                 'straight back body length':       'body length back',
@@ -344,12 +344,12 @@ def create_from_extraction_view(request):
 
             def find_pom_master(code, description):
                 """
-                Cerca el POMMaster més adequat.
-                Retorna (pom_master, match_type, confidence)
+                Find the most suitable POMMaster.
+                Return (pom_master, match_type, confidence)
                 confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'NO_MATCH'
                 """
-                # Estratègia 0 — codis posicionals lletra+dígit (D1, G2s...).
-                # Només si el codi té dígits/sufix darrere les lletres inicials.
+                # Strategy 0 — positional letter+digit codes (D1, G2s...).
+                # Only if the code has digits/suffix after the initial letters.
                 if code:
                     m = _re.match(r'^([A-Za-z]+)', code)
                     if m and m.group(1) != code:
@@ -360,7 +360,7 @@ def create_from_extraction_view(request):
                         if pm:
                             return pm, 'root_code_match', 'MEDIUM'
 
-                # Estratègia 1 — match exacte per codi_client.
+                # Strategy 1 — exact match by codi_client.
                 pm = POMMaster.objects.filter(
                     codi_client__iexact=code, actiu=True,
                 ).first()
@@ -373,7 +373,7 @@ def create_from_extraction_view(request):
                 desc_clean = description.lower().strip()
                 desc_base = _re.sub(r'\s*[\(\[].*?[\)\]]', '', desc_clean).strip()
 
-                # Estratègia 2 — sinònim explícit (taula curada).
+                # Strategy 2 — explicit synonym (curated table).
                 syn = SYNONYMS.get(desc_clean) or SYNONYMS.get(desc_base)
                 if syn:
                     for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
@@ -387,7 +387,7 @@ def create_from_extraction_view(request):
                         if syn in nom_en or nom_en in syn:
                             return pm, 'synonym_global_match', 'HIGH'
 
-                # Estratègia 3 — match per nom_client (exacte=HIGH, contingut=MEDIUM).
+                # Strategy 3 — match by nom_client (exact=HIGH, contains=MEDIUM).
                 for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
                     nom = (pm.nom_client or '').lower()
                     if desc_base and len(desc_base) > 3:
@@ -396,7 +396,7 @@ def create_from_extraction_view(request):
                         if desc_base in nom or nom in desc_base:
                             return pm, 'description_match', 'MEDIUM'
 
-                # Estratègia 4 — match per nom_en / abbreviation del POMGlobal.
+                # Strategy 4 — match by POMGlobal nom_en / abbreviation.
                 for pm in POMMaster.objects.select_related('pom_global').filter(
                     pom_global__isnull=False, actiu=True,
                 ):
@@ -411,7 +411,7 @@ def create_from_extraction_view(request):
                     if code and code.lower() == abbrev:
                         return pm, 'abbreviation_match', 'HIGH'
 
-                # Estratègia 5 — codis numèrics purs → lining.
+                # Strategy 5 — pure numeric codes → lining.
                 if code and code.isdigit():
                     desc_lower = (description or '').lower()
                     if 'lining' in desc_lower:
@@ -437,7 +437,7 @@ def create_from_extraction_view(request):
                 pm, match_type, confidence = find_pom_master(code, description)
 
                 if not pm:
-                    # No match — crear POMMaster nou marcat com a pendent de revisió.
+                    # No match — create a new POMMaster marked as pending review.
                     nou_codi = f"{code}-M{model.id}"
                     if POMMaster.objects.filter(codi_client=nou_codi).exists():
                         nou_codi = f"{code}-M{model.id}-{_dt.datetime.now().strftime('%H%M%S')}"
@@ -483,13 +483,13 @@ def create_from_extraction_view(request):
                 )
                 poms_created += 1
 
-                # Crear avís per a matchings incerts o POMs nous.
+                # Create an alert for uncertain matches or new POMs.
                 if confidence in ('MEDIUM', 'LOW'):
                     _create_pom_alert(
                         model, pm, code, description, confidence, match_type,
                     )
 
-                # Notificar superadmin per a POMs nous (auto_created).
+                # Notify superadmin for new POMs (auto_created).
                 if match_type == 'auto_created':
                     try:
                         from fhort.accounts.models import UserProfile
@@ -523,7 +523,7 @@ def create_from_extraction_view(request):
                     except Exception:
                         pass  # No bloquejar si falla l'email
 
-            # Extreure i guardar imatges del PDF si arriba al request
+            # Extract and save images from the PDF if it arrives in the request
             try:
                 from fhort.models_app.extraction_service import extract_images_from_pdf
                 from django.core.files.base import ContentFile
@@ -559,7 +559,7 @@ def create_from_extraction_view(request):
             except Exception:
                 pass
 
-            # === GRADING: crear SizeFitting → GradingVersion → GradedSpecs ===
+            # === GRADING: create SizeFitting → GradingVersion → GradedSpecs ===
             from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
 
             grading_table = extracted.get('grading_table', []) or []
@@ -574,7 +574,7 @@ def create_from_extraction_view(request):
                     user_profile = None
 
                 if user_profile is None:
-                    # SizeFitting.creat_per és NOT NULL — no podem crear la cadena.
+                    # SizeFitting.creat_per is NOT NULL — we cannot create the chain.
                     graded_skipped.append({
                         'reason': "No s'ha trobat UserProfile per a l'usuari; "
                                   'cal crear SizeFitting i grading manualment.',
@@ -607,17 +607,17 @@ def create_from_extraction_view(request):
                             },
                         )
 
-                        # Mapa nom_fitxa → POMMaster des de les BaseMeasurements ja creades.
+                        # Map nom_fitxa → POMMaster from the already-created BaseMeasurements.
                         bm_map = {
                             bm.nom_fitxa: bm.pom
                             for bm in BaseMeasurement.objects.filter(model=model)
                             if bm.nom_fitxa
                         }
 
-                        # B1 — Si el wizard ha definit size_run, limitem el grading
-                        # a aquestes talles (filtra columnes extra del document).
-                        # Si size_run està buit, mantenim el comportament actual:
-                        # importem totes les talles que apareixen al document.
+                        # B1 — If the wizard defined size_run, we limit grading
+                        # to those sizes (filters out extra columns from the document).
+                        # If size_run is empty, we keep the current behavior:
+                        # we import every size that appears in the document.
                         wiz_size_run_str = wizard_context.get('size_run', '') or ''
                         wiz_size_labels = {
                             s.strip().upper()
@@ -722,9 +722,9 @@ def create_from_extraction_view(request):
 def delete_model_view(request, model_id):
     """
     DELETE /api/v1/models/<id>/delete/
-    Esborra el model i totes les dades associades en cascada:
+    Delete the model and all associated data in cascade:
     BaseMeasurements, SizeFittings, GradingVersions, GradedSpecs,
-    ModelFitxers (fitxers físics inclosos), POMAlerts, ModelTasques.
+    ModelFitxers (physical files included), POMAlerts, ModelTasques.
     """
     from django.core.files.storage import default_storage
     from fhort.models_app.models import Model, ModelFitxer
@@ -737,7 +737,7 @@ def delete_model_view(request, model_id):
     nom = model.nom_prenda
     codi = model.codi_intern
 
-    # Esborrar fitxers físics associats (no bloquejar si falla)
+    # Delete associated physical files (do not block if it fails)
     try:
         for fitxer in ModelFitxer.objects.filter(model=model):
             if fitxer.fitxer and default_storage.exists(fitxer.fitxer.name):
@@ -745,7 +745,7 @@ def delete_model_view(request, model_id):
     except Exception:
         pass
 
-    # Esborrar el model (cascada BD)
+    # Delete the model (DB cascade)
     model.delete()
 
     return Response({

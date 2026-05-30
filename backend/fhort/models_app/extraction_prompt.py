@@ -1,32 +1,32 @@
 """
-Prompt d'extracció de fitxes tècniques (tech packs / fichas técnicas) per a Claude.
+Technical-sheet (tech packs / fichas técnicas) extraction prompt for Claude.
 
-És un text llarg i ESTABLE que es passa al camp `system` del Messages API amb
-`cache_control: ephemeral`. La part variable de cada crida (PDF/imatge) viatja
-al `user` message → el prefix es manté intacte → cache hit a la 2a crida i
-següents.
+It is a long, STABLE text passed to the Messages API `system` field with
+`cache_control: ephemeral`. The variable part of each call (PDF/image) travels
+in the `user` message → the prefix stays intact → cache hit on the 2nd call and
+later.
 
-Nota sobre el llindar de caching:
-- Opus 4.7: cache només si el prefix ≥ 4096 tokens (~13 KB de text).
-- Sonnet 4.6: cache si el prefix ≥ 2048 tokens (~6.5 KB).
-Aquest prompt són ~3 KB (~750 tokens). Per sota del llindar, el `cache_control`
-és un no-op silenciós (l'API retorna `cache_creation_input_tokens: 0`). Es manté
-el marcador igualment: cap cost extra i s'activarà automàticament si el prompt
-creix.
+Note on the caching threshold:
+- Opus 4.7: cache only if the prefix ≥ 4096 tokens (~13 KB of text).
+- Sonnet 4.6: cache if the prefix ≥ 2048 tokens (~6.5 KB).
+This prompt is ~3 KB (~750 tokens). Below the threshold, `cache_control`
+is a silent no-op (the API returns `cache_creation_input_tokens: 0`). The
+marker is kept anyway: no extra cost and it activates automatically if the
+prompt grows.
 """
 
 
 def build_extraction_prompt(wizard_context=None) -> str:
     """
-    Retorna un bloc de context per prependre al prompt d'extracció.
+    Return a context block to prepend to the extraction prompt.
 
-    Si el wizard ha pre-configurat target/garment_type/size_system/size_run/
-    base_size/etc abans de pujar el fitxer, ho injectem com a context perquè
-    la IA enfoqui POMs rellevants, mapegi correctament la graduació i marqui
-    discrepàncies entre les talles del document i les configurades.
+    If the wizard pre-configured target/garment_type/size_system/size_run/
+    base_size/etc before uploading the file, we inject it as context so
+    the AI focuses on relevant POMs, maps grading correctly and flags
+    discrepancies between the document sizes and the configured ones.
 
-    Si `wizard_context` és buit o None, retorna cadena buida — el prompt base
-    funciona igual que abans.
+    If `wizard_context` is empty or None, return an empty string — the base
+    prompt works the same as before.
     """
     ctx = wizard_context or {}
     if not any(ctx.get(k) for k in (

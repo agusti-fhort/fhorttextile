@@ -1,6 +1,6 @@
 """
 fhort/models_app/extraction_service.py
-Servei d\'extracció de dades de fitxes tècniques via Claude API.
+Technical-sheet data extraction service via the Claude API.
 """
 from __future__ import annotations
 import json
@@ -93,7 +93,7 @@ def _get_api_key() -> str:
 
 
 def _file_to_content_block(file_bytes: bytes, filename: str) -> dict:
-    """Converteix un fitxer en un bloc de contingut per a la Claude API."""
+    """Convert a file into a content block for the Claude API."""
     ext = Path(filename).suffix.lower()
 
     if ext == '.pdf':
@@ -118,7 +118,7 @@ def _file_to_content_block(file_bytes: bytes, filename: str) -> dict:
             }
         }
     else:
-        # Fallback: intenta com a text
+        # Fallback: try as text
         try:
             text = file_bytes.decode('utf-8', errors='replace')
             return {"type": "text", "text": f"Contingut del fitxer {filename}:\n{text[:8000]}"}
@@ -128,11 +128,11 @@ def _file_to_content_block(file_bytes: bytes, filename: str) -> dict:
 
 def extract_from_file(file_bytes: bytes, filename: str, wizard_context: dict | None = None) -> dict:
     """
-    Envia el fitxer a la Claude API i retorna el JSON d\'extracció.
+    Send the file to the Claude API and return the extraction JSON.
 
-    wizard_context: dict opcional amb target, garment_type, size_system,
-    size_run, base_size, construction, fit_type — provinents del wizard
-    abans de la pujada de fitxer.
+    wizard_context: optional dict with target, garment_type, size_system,
+    size_run, base_size, construction, fit_type — coming from the wizard
+    before the file upload.
     """
     from fhort.models_app.extraction_prompt import build_extraction_prompt
 
@@ -175,7 +175,7 @@ def extract_from_file(file_bytes: bytes, filename: str, wizard_context: dict | N
     data = response.json()
     raw_text = data['content'][0]['text']
 
-    # Netejar possibles backticks de markdown
+    # Strip possible markdown backticks
     raw_text = raw_text.strip()
     if raw_text.startswith('```'):
         raw_text = raw_text.split('\n', 1)[1] if '\n' in raw_text else raw_text[3:]
@@ -193,13 +193,13 @@ def extract_from_file(file_bytes: bytes, filename: str, wizard_context: dict | N
 
 def check_design_freeze(extracted: dict) -> dict:
     """
-    Valida els camps obligatoris per al gate de Design Freeze.
-    Retorna {"pass": bool, "blockers": [...], "warnings": [...]}
+    Validate the required fields for the Design Freeze gate.
+    Return {"pass": bool, "blockers": [...], "warnings": [...]}
     """
     blockers = list(extracted.get('design_freeze_blockers', []))
     warnings = list(extracted.get('anomalies_detected', []))
 
-    # Validacions addicionals locals
+    # Additional local validations
     def val(field):
         v = extracted.get(field)
         if isinstance(v, dict):
@@ -238,9 +238,9 @@ def check_design_freeze(extracted: dict) -> dict:
 
 def extract_images_from_pdf(pdf_bytes: bytes, codi_intern: str) -> list:
     """
-    Extreu imatges d'un PDF usant pymupdf.
-    Retorna llista de dicts amb metadades i bytes.
-    No guarda res — el caller decideix què fer.
+    Extract images from a PDF using pymupdf.
+    Return a list of dicts with metadata and bytes.
+    Stores nothing — the caller decides what to do.
     """
     try:
         import fitz
@@ -262,7 +262,7 @@ def extract_images_from_pdf(pdf_bytes: bytes, codi_intern: str) -> list:
     for page_num in range(len(doc)):
         page = doc[page_num]
 
-        # MÈTODE 1: Imatges incrustades (fotos, logos)
+        # METHOD 1: Embedded images (photos, logos)
         try:
             images = page.get_images(full=True)
             for img in images:
@@ -292,7 +292,7 @@ def extract_images_from_pdf(pdf_bytes: bytes, codi_intern: str) -> list:
         except Exception:
             pass
 
-        # MÈTODE 2: Rasteritzar pàgines amb sketches vectorials
+        # METHOD 2: Rasterize pages with vector sketches
         try:
             paths = page.get_drawings()
             text = page.get_text()

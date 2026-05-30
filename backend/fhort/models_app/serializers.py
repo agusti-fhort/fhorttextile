@@ -64,8 +64,8 @@ class ModelDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Model
-        # 'fields = __all__' ja inclou els camps nous origen_patro, versio,
-        # garment_group. Les variants *_nom només són exposades en lectura.
+        # 'fields = __all__' already includes the new fields origen_patro, versio,
+        # garment_group. The *_nom variants are only exposed read-only.
         fields = '__all__'
         read_only_fields = ('codi_intern', 'data_entrada')
 
@@ -73,14 +73,14 @@ class ModelDetailSerializer(serializers.ModelSerializer):
 
 # Sprint S14B — BaseMeasurement CRUD
 class BaseMeasurementSerializer(serializers.ModelSerializer):
-    # Exposem camps del POM via `pom.pom_global` per a la UI.
+    # Expose POM fields via `pom.pom_global` for the UI.
     pom_code = serializers.CharField(source='pom.pom_global.codi', read_only=True)
     pom_name_en = serializers.CharField(source='pom.pom_global.nom_en', read_only=True)
     pom_name_cat = serializers.CharField(source='pom.pom_global.nom_ca', read_only=True)
     pom_abbreviation = serializers.CharField(source='pom.pom_global.abbreviation', read_only=True)
     pom_is_key = serializers.BooleanField(source='pom.pom_global.is_key', read_only=True)
     pom_category = serializers.CharField(source='pom.pom_global.categoria', read_only=True)
-    # Camps legacy del POMMaster (fallback quan no hi ha pom_global associat).
+    # Legacy POMMaster fields (fallback when there is no associated pom_global).
     pom_codi_client = serializers.CharField(source='pom.codi_client', read_only=True)
     pom_nom_client = serializers.CharField(source='pom.nom_client', read_only=True)
 

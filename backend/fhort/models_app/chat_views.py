@@ -1,7 +1,7 @@
 """
 fhort/models_app/chat_views.py
-Endpoint de xat IA per al wizard d'extracció de fitxa tècnica.
-Manté el context del document + extracció + historial de conversa.
+AI chat endpoint for the technical-sheet extraction wizard.
+Keeps the document context + extraction + conversation history.
 """
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
@@ -50,23 +50,23 @@ Cada resposta ha d'estar basada en informació del document."""
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @parser_classes([JSONParser, MultiPartParser, FormParser])
-def chat_extraccio_view(request):
+def extraction_chat_view(request):
     """
     POST /api/v1/models/chat-extraccio/
     Body (JSON):
     {
-      "missatge": "text del tècnic",
-      "historial": [...],          // array de {role, content}
-      "extraccio": {...},           // JSON extret fins ara
-      "file_base64": "...",         // opcional: fitxer en base64
-      "file_type": "application/pdf" // opcional: MIME type
+      "missatge": "technician text",
+      "historial": [...],          // array of {role, content}
+      "extraccio": {...},           // JSON extracted so far
+      "file_base64": "...",         // optional: file in base64
+      "file_type": "application/pdf" // optional: MIME type
     }
     
-    Retorna:
+    Returns:
     {
-      "resposta": "text de la IA",
-      "updates": {...},   // camps nous detectats (si n'hi ha)
-      "historial": [...]  // historial actualitzat
+      "resposta": "AI text",
+      "updates": {...},   // new detected fields (if any)
+      "historial": [...]  // updated history
     }
     """
     missatge = request.data.get('missatge', '').strip()
@@ -89,32 +89,32 @@ def chat_extraccio_view(request):
 
         import httpx
 
-        # Construir el context del document
-        extraccio_resum = _resum_extraccio(extraccio)
+        # Build the document context
+        extraccio_resum = _extraction_summary(extraccio)
 
-        # Missatge del sistema amb context actual
+        # System message with current context
         system_with_context = SYSTEM_PROMPT + f"""
 
 DADES EXTRETES FINS ARA:
 {extraccio_resum}
 
 CAMPS AMB CONFIANÇA BAIXA O BUITS:
-{_camps_pendents(extraccio)}
+{_pending_fields(extraccio)}
 """
 
-        # Construir els missatges
+        # Build the messages
         messages = []
 
-        # Afegir historial previ
+        # Add previous history
         for msg in historial[-10:]:  # Màxim 10 missatges anteriors
             messages.append({
                 'role': msg['role'],
                 'content': msg['content']
             })
 
-        # Missatge nou del tècnic — amb o sense fitxer
+        # New technician message — with or without file
         if file_base64 and len(messages) == 0:
-            # Primer missatge: incloure el document
+            # First message: include the document
             if file_type == 'application/pdf':
                 content = [
                     {
@@ -144,7 +144,7 @@ CAMPS AMB CONFIANÇA BAIXA O BUITS:
 
         messages.append({'role': 'user', 'content': content})
 
-        # Crida a Claude API
+        # Call to the Claude API
         payload = {
             'model': 'claude-sonnet-4-6',
             'max_tokens': 1024,
@@ -170,7 +170,7 @@ CAMPS AMB CONFIANÇA BAIXA O BUITS:
         data = resp.json()
         resposta_text = data['content'][0]['text']
 
-        # Detectar UPDATE_JSON a la resposta
+        # Detect UPDATE_JSON in the response
         updates = {}
         if '<UPDATE_JSON>' in resposta_text and '</UPDATE_JSON>' in resposta_text:
             try:
@@ -178,7 +178,7 @@ CAMPS AMB CONFIANÇA BAIXA O BUITS:
                 end = resposta_text.index('</UPDATE_JSON>')
                 json_str = resposta_text[start:end].strip()
                 updates = json.loads(json_str)
-                # Netejar el tag de la resposta visible
+                # Strip the tag from the visible response
                 resposta_text = resposta_text.replace(
                     resposta_text[resposta_text.index('<UPDATE_JSON>'):
                                    resposta_text.index('</UPDATE_JSON>') + len('</UPDATE_JSON>')],
@@ -187,7 +187,7 @@ CAMPS AMB CONFIANÇA BAIXA O BUITS:
             except Exception:
                 pass
 
-        # Actualitzar historial
+        # Update history
         nou_historial = list(historial) + [
             {'role': 'user', 'content': missatge},
             {'role': 'assistant', 'content': resposta_text},
@@ -208,11 +208,11 @@ CAMPS AMB CONFIANÇA BAIXA O BUITS:
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def iniciar_chat_extraccio_view(request):
+def start_extraction_chat_view(request):
     """
     POST /api/v1/models/iniciar-chat-extraccio/
-    Inicia el xat amb el primer missatge de la IA basant-se 
-    en l'extracció ja feta. No requereix el fitxer de nou.
+    Start the chat with the AI's first message based on
+    the extraction already done. Does not require the file again.
     
     Body: { "extraccio": {...} }
     """
@@ -228,10 +228,10 @@ def iniciar_chat_extraccio_view(request):
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY no configurat")
 
-        pendents = _camps_pendents(extraccio)
-        resum = _resum_extraccio(extraccio)
+        pendents = _pending_fields(extraccio)
+        resum = _extraction_summary(extraccio)
 
-        # Generar el primer missatge de benvinguda de la IA
+        # Generate the AI's first welcome message
         prompt_inici = f"""Acabo d'analitzar el document tècnic. Aquí tens el resum del que he trobat:
 
 {resum}
@@ -278,8 +278,8 @@ Per on vols començar?"""
         return Response({'error': str(e)}, status=500)
 
 
-def _resum_extraccio(extraccio):
-    """Genera un resum llegible de les dades extretes."""
+def _extraction_summary(extraccio):
+    """Generate a readable summary of the extracted data."""
     if not extraccio:
         return "Sense dades extretes."
 
@@ -325,8 +325,8 @@ def _resum_extraccio(extraccio):
     return '\n'.join(lines) if lines else "Document buit o no reconegut."
 
 
-def _camps_pendents(extraccio):
-    """Retorna llista de camps buits o amb confiança baixa."""
+def _pending_fields(extraccio):
+    """Return a list of empty or low-confidence fields."""
     if not extraccio:
         return "Tots els camps pendents."
 

@@ -2,8 +2,8 @@ from django.db import models
 from django.conf import settings
 
 
-# Stubs mínims: l'enunciat exigeix les FKs Model.contracte/linia_contracte
-# però no defineix aquests models. Ampliar quan es construeixi l'app de contractes.
+# Minimal stubs: the spec requires the Model.contracte/linia_contracte FKs
+# but does not define these models. Extend when the contracts app is built.
 class Contracte(models.Model):
     nom = models.CharField(max_length=200)
     referencia = models.CharField(max_length=80, blank=True)
@@ -158,15 +158,15 @@ class Model(models.Model):
     )
     versio = models.CharField(max_length=20, null=True, blank=True)
 
-    # --- Sprint 1A: camps nous (fase_actual ja existeix amb FASE_CHOICES) ---
+    # --- Sprint 1A: new fields (fase_actual already exists with FASE_CHOICES) ---
     familia = models.CharField(max_length=100, null=True, blank=True)
     slots_prev_tecnics = models.FloatField(null=True, blank=True, default=0)
     slots_prev_confeccio = models.FloatField(null=True, blank=True, default=0)
     slots_reals_tecnic = models.FloatField(null=True, blank=True, default=0)
     slots_reals_confeccio = models.FloatField(null=True, blank=True, default=0)
-    # --- Fi Sprint 1A ---
+    # --- End Sprint 1A ---
 
-    # --- Sprint 3/4: configuració de talles per al grading ---
+    # --- Sprint 3/4: size configuration for grading ---
     size_run_model = models.CharField(
         max_length=200, null=True, blank=True,
         help_text="Talles del model separades per · o ; (p.ex. 'XS·S·M·L·XL')",
@@ -176,7 +176,7 @@ class Model(models.Model):
         help_text="Etiqueta de la talla base (ha de coincidir amb un valor de size_run_model)",
     )
 
-    # Última activitat (s'actualitza a cada save via signal post_save)
+    # Last activity (updated on every save via post_save signal)
     darrera_activitat = models.DateTimeField(null=True, blank=True)
 
     
@@ -188,9 +188,9 @@ class Model(models.Model):
         on_delete=models.SET_NULL,
         related_name='design_freezes',
     )
-    # --- Fi Sprint 7A ---
+    # --- End Sprint 7A ---
 
-    # Teixit i encongiments
+    # Fabric and shrinkage
     SHRINKAGE_TYPE_CHOICES = [
         ('NONE',     'No definit'),
         ('ISO',      'Estàndard ISO'),
@@ -280,7 +280,7 @@ class ModelFitxer(models.Model):
 
 
 class ModelServei(models.Model):
-    """Serveis assignats a un Model. Child table del tab Servei."""
+    """Services assigned to a Model. Child table of the Servei tab."""
     model = models.ForeignKey(
         'Model', on_delete=models.CASCADE, related_name='serveis_model',
     )
@@ -330,11 +330,11 @@ class ModelServei(models.Model):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Sprint 3 — Motor de grading
+# Sprint 3 — Grading engine
 # ─────────────────────────────────────────────────────────────────────────────
 
 class BaseMeasurement(models.Model):
-    """Mesures de la talla base introduïdes per al Model abans de generar talles."""
+    """Base-size measurements entered for the Model before generating sizes."""
 
     ORIGEN_CHOICES = [
         ('STANDARD',   'Estàndard (carregat del RuleSet)'),
