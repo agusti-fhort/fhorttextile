@@ -6,14 +6,14 @@ import Badge from '../components/ui/Badge'
 
 const ESTATS = ['Pendent', 'Acceptat', 'Corregit', 'Tots']
 
-const tipusMeta = {
+const typeMeta = {
   desviacio:    { variant: 'warn', icon: 'ti-ruler-2',        label: 'Desviació' },
   fora_rang:    { variant: 'err',  icon: 'ti-alert-triangle', label: 'Fora de rang' },
   manca_mesura: { variant: 'gate', icon: 'ti-question-mark',  label: 'Manca mesura' },
   conflicte:    { variant: 'gray', icon: 'ti-git-merge',      label: 'Conflicte' },
 }
 
-const estatVariant = {
+const statusVariant = {
   'Pendent':  'warn',
   'Acceptat': 'gate',
   'Corregit': 'ok',
@@ -35,7 +35,7 @@ export default function Avisos() {
 
   useEffect(load, [estat])
 
-  const updateEstat = async (id, nouEstat) => {
+  const updateStatus = async (id, nouEstat) => {
     setUpdating(id)
     try {
       await pomAlerts.update(id, { estat: nouEstat })
@@ -45,10 +45,10 @@ export default function Avisos() {
     }
   }
 
-  const resoldre = async (id) => {
+  const resolve = async (id) => {
     setUpdating(id)
     try {
-      // S11 endpoint nou; fallback al PATCH si encara no està desplegat
+      // New S11 endpoint; fallback to PATCH if not yet deployed
       await client.post(`/api/v1/alerts/${id}/resoldre/`)
         .catch(() => pomAlerts.update(id, { estat: 'Corregit' }))
       load()
@@ -109,7 +109,7 @@ export default function Avisos() {
             </thead>
             <tbody>
               {data.map((a, i) => {
-                const meta = tipusMeta[a.tipus] || tipusMeta.desviacio
+                const meta = typeMeta[a.tipus] || typeMeta.desviacio
                 return (
                   <tr key={a.id} style={{
                     borderBottom: i < data.length - 1 ? '0.5px solid var(--gray-l)' : 'none',
@@ -135,7 +135,7 @@ export default function Avisos() {
                       {a.z_score != null ? Number(a.z_score).toFixed(2) : '—'}
                     </td>
                     <td style={{padding: '0.7rem 1rem'}}>
-                      <Badge variant={estatVariant[a.estat] || 'gray'}>{a.estat}</Badge>
+                      <Badge variant={statusVariant[a.estat] || 'gray'}>{a.estat}</Badge>
                     </td>
                     <td style={{padding: '0.7rem 1rem', fontSize: 11, color: 'var(--gray)'}}>
                       {(a.data_creacio || a.created_at || '').slice(0, 10)}
@@ -146,7 +146,7 @@ export default function Avisos() {
                           {a.estat === 'Pendent' && (
                             <button
                               disabled={updating === a.id}
-                              onClick={() => updateEstat(a.id, 'Acceptat')}
+                              onClick={() => updateStatus(a.id, 'Acceptat')}
                               style={btnStyle('var(--gate)')}
                             >
                               Acceptar
@@ -154,7 +154,7 @@ export default function Avisos() {
                           )}
                           <button
                             disabled={updating === a.id}
-                            onClick={() => resoldre(a.id)}
+                            onClick={() => resolve(a.id)}
                             style={btnStyle('var(--ok)')}
                           >
                             Resoldre

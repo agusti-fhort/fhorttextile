@@ -38,7 +38,7 @@ export default function Temps() {
     return d === today && (t.data_fi || !t.actiu)
   })
 
-  const tancarActiu = async () => {
+  const closeActive = async () => {
     if (!actiu) return
     setSubmitting(true)
     try {
@@ -114,7 +114,7 @@ export default function Temps() {
                   Pausa
                 </button>
                 <button
-                  onClick={tancarActiu}
+                  onClick={closeActive}
                   disabled={submitting}
                   style={{
                     background: submitting ? 'rgba(163,45,45,0.5)' : 'var(--err)',

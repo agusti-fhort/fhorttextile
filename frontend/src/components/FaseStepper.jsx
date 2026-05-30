@@ -4,8 +4,8 @@ const FASES = [
   'Mostres', 'Preproducció', 'Producció', 'Tancat'
 ]
 
-// Paleta tema clar: fons gold pàl·lid + text negre per a fases "done";
-// fons gold pur + text negre per a "active"; gris baixa opacitat per "future".
+// Light theme palette: pale gold background + black text for "done" phases;
+// pure gold background + black text for "active"; low-opacity grey for "future".
 // Regla de contrast: text sempre #1d1d1b (sobre fons clar) o #ffffff (sobre fons fosc).
 const FASE_COLORS = {
   'Nou':          { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },

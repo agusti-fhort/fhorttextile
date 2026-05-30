@@ -272,7 +272,7 @@ function UploadStep({ file, setFile, fileRef }) {
         onChange={e => setFile(e.target.files?.[0] || null)}
       />
 
-      {/* Avís document manuscrit */}
+      {/* Handwritten document warning */}
       <div style={{
         marginTop: 14, background: '#fdf6ee', border: '0.5px solid #e0c8a0',
         borderRadius: 8, padding: '10px 12px',

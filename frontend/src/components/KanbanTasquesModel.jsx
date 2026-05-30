@@ -18,7 +18,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(null)
 
-  const fetchTasques = () => {
+  const fetchTasks = () => {
     setLoading(true)
     fetch(`${API}/api/v1/model-tasques/?model=${modelId}`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -31,9 +31,9 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
       .catch(() => setLoading(false))
   }
 
-  useEffect(() => { if (modelId) fetchTasques() }, [modelId])
+  useEffect(() => { if (modelId) fetchTasks() }, [modelId])
 
-  const updateEstat = async (id, nouEstat) => {
+  const updateStatus = async (id, nouEstat) => {
     setUpdating(id)
     try {
       await fetch(`${API}/api/v1/model-tasques/${id}/`, {
@@ -44,14 +44,14 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
         },
         body: JSON.stringify({ estat: nouEstat }),
       })
-      fetchTasques()
+      fetchTasks()
     } catch (e) {
       console.error(e)
     }
     setUpdating(null)
   }
 
-  const processarGate = async (id) => {
+  const processGate = async (id) => {
     setUpdating(id)
     try {
       const r = await fetch(`${API}/api/v1/model-tasques/${id}/processar-gate/`, {
@@ -64,7 +64,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
       })
       const d = await r.json()
       if (d.error) alert(d.error)
-      fetchTasques()
+      fetchTasks()
     } catch (e) {
       console.error(e)
     }
@@ -73,13 +73,13 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
 
   if (loading) return <div style={{ color: 'var(--text-main)', fontSize: 12, padding: 16 }}>Carregant tasques...</div>
 
-  const byEstat = ESTAT_ORDER.reduce((acc, e) => {
+  const byStatus = ESTAT_ORDER.reduce((acc, e) => {
     acc[e] = tasques.filter(t => t.estat === e)
     return acc
   }, {})
 
-  // Agrupa per fase per mostrar separadors
-  const getFaseColor = (fase) => {
+  // Group by phase to show separators
+  const getPhaseColor = (fase) => {
     const map = {
       'Disseny': '#2a4a2a', 'Tècnic': '#2a2a4a', 'Prototip': '#4a2a1a',
       'Mostres': '#4a4a1a', 'Preproducció': '#1a4a4a', 'Producció': '#3a1a4a',
@@ -104,7 +104,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
     <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
       <div style={{ display: 'flex', gap: 12, minWidth: 600, alignItems: 'flex-start' }}>
         {ESTAT_ORDER.map(estat => {
-          const col = byEstat[estat] || []
+          const col = byStatus[estat] || []
           const st = STAT_STYLES[estat]
           return (
             <div key={estat} style={{
@@ -155,7 +155,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
                         fontSize: 9,
                         fontFamily: 'IBM Plex Mono, monospace',
                         color: 'var(--text-muted)',
-                        background: getFaseColor(t.fase),
+                        background: getPhaseColor(t.fase),
                         padding: '1px 5px',
                         borderRadius: 2,
                       }}>
@@ -173,7 +173,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
                       )}
                     </div>
 
-                    {/* Nom tasca */}
+                    {/* Task name */}
                     <div style={{
                       fontSize: 11,
                       color: 'var(--text-muted)',
@@ -198,7 +198,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {t.estat === 'Pendent' && (
                         <button
-                          onClick={() => updateEstat(t.id, 'En curs')}
+                          onClick={() => updateStatus(t.id, 'En curs')}
                           style={{ ...smallBtn, color: '#4a7aaa', borderColor: '#2a3a5a' }}
                         >
                           ▶ Iniciar
@@ -206,7 +206,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
                       )}
                       {t.estat === 'En curs' && !t.gate && (
                         <button
-                          onClick={() => updateEstat(t.id, 'Feta')}
+                          onClick={() => updateStatus(t.id, 'Feta')}
                           style={{ ...smallBtn, color: '#4a9a4a', borderColor: '#2a4a2a' }}
                         >
                           ✓ Fer
@@ -214,7 +214,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
                       )}
                       {t.estat === 'En curs' && t.gate && (
                         <button
-                          onClick={() => processarGate(t.id)}
+                          onClick={() => processGate(t.id)}
                           style={{ ...smallBtn, color: '#c27a2a', borderColor: '#4a3010' }}
                         >
                           ⊙ Gate OK
@@ -222,7 +222,7 @@ export function KanbanTasquesModel({ modelId, token, onGenerarTasques }) {
                       )}
                       {t.estat === 'Feta' && (
                         <button
-                          onClick={() => updateEstat(t.id, 'En curs')}
+                          onClick={() => updateStatus(t.id, 'En curs')}
                           style={{ ...smallBtn, color: 'var(--text-muted)', borderColor: 'var(--border)' }}
                         >
                           ↩ Reobrir

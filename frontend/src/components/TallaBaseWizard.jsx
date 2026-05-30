@@ -88,7 +88,7 @@ function CercaPOMModal({ token, onSelect, onClose }) {
       .catch(() => {})
   }, [token])
 
-  const cerca = useCallback(async (text) => {
+  const search = useCallback(async (text) => {
     if (text.length < 2) { setResults([]); return }
     setLoading(true)
     try {
@@ -102,11 +102,11 @@ function CercaPOMModal({ token, onSelect, onClose }) {
   }, [token])
 
   useEffect(() => {
-    const t = setTimeout(() => cerca(q), 300)
+    const t = setTimeout(() => search(q), 300)
     return () => clearTimeout(t)
-  }, [q, cerca])
+  }, [q, search])
 
-  const handleCrear = async () => {
+  const handleCreate = async () => {
     if (!form.codi_client || !form.nom_client) return
     setSaving(true)
     try {
@@ -199,7 +199,7 @@ function CercaPOMModal({ token, onSelect, onClose }) {
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setNouPom(false)} style={S.btn()}>← Tornar</button>
-              <button onClick={handleCrear} disabled={saving} style={S.btn('primary')}>
+              <button onClick={handleCreate} disabled={saving} style={S.btn('primary')}>
                 {saving ? 'Guardant...' : '+ Crear POM'}
               </button>
             </div>
@@ -229,10 +229,10 @@ export function TallaBaseWizard({ model, sfId, token, onComplete }) {
           headers: { Authorization: `Bearer ${token}` }
         })
         const d1 = await r1.json()
-        const existents = d1.results || []
+        const existing = d1.results || []
 
-        if (existents.length > 0) {
-          setPoms(existents.map(bm => ({
+        if (existing.length > 0) {
+          setPoms(existing.map(bm => ({
             pom_id: bm.pom_id,
             codi_client: bm.codi_client,
             nom_client: bm.nom_client,
@@ -287,7 +287,7 @@ export function TallaBaseWizard({ model, sfId, token, onComplete }) {
     }])
   }
 
-  const handleGuardar = async () => {
+  const handleSave = async () => {
     setSaving(true)
     setMsg(null)
     try {
@@ -310,9 +310,9 @@ export function TallaBaseWizard({ model, sfId, token, onComplete }) {
     setSaving(false)
   }
 
-  const handleConfirmar = async () => {
-    // Primer guardar
-    await handleGuardar()
+  const handleConfirm = async () => {
+    // Save first
+    await handleSave()
     setConfirming(true)
     setMsg(null)
     try {
@@ -335,7 +335,7 @@ export function TallaBaseWizard({ model, sfId, token, onComplete }) {
     setConfirming(false)
   }
 
-  const pomsAmbValor = poms.filter(p => p.valor_cm > 0).length
+  const pomsWithValue = poms.filter(p => p.valor_cm > 0).length
   const baseTancada = sfEstat === 'BaseTancada' || sfEstat === 'TallesGenerades'
 
   if (loading) return (
@@ -346,12 +346,12 @@ export function TallaBaseWizard({ model, sfId, token, onComplete }) {
 
   return (
     <div style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
-      {/* Capçalera */}
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <span style={{ fontSize: 12, color: 'var(--text-main)', fontWeight: 600 }}>Mesures talla base</span>
           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 12 }}>
-            {pomsAmbValor} / {poms.length} POMs amb valor
+            {pomsWithValue} / {poms.length} POMs amb valor
           </span>
         </div>
         {baseTancada && <span style={S.tag('#2a7a2a')}>✓ Talla base confirmada</span>}
@@ -408,21 +408,21 @@ export function TallaBaseWizard({ model, sfId, token, onComplete }) {
           <button onClick={() => setShowCerca(true)} style={S.btn()}>
             + Afegir POM
           </button>
-          <button onClick={handleGuardar} disabled={saving} style={S.btn()}>
+          <button onClick={handleSave} disabled={saving} style={S.btn()}>
             {saving ? 'Guardant...' : '💾 Guardar'}
           </button>
           <button
-            onClick={handleConfirmar}
-            disabled={confirming || pomsAmbValor < 3}
+            onClick={handleConfirm}
+            disabled={confirming || pomsWithValue < 3}
             style={S.btn('primary')}
-            title={pomsAmbValor < 3 ? 'Cal mínim 3 POMs amb valor' : ''}
+            title={pomsWithValue < 3 ? 'Cal mínim 3 POMs amb valor' : ''}
           >
             {confirming ? 'Confirmant...' : '✓ Confirmar talla base'}
           </button>
         </div>
       )}
 
-      {/* Modal cerca */}
+      {/* Search modal */}
       {showCerca && (
         <CercaPOMModal
           token={token}

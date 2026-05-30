@@ -386,9 +386,9 @@ function TabFitxers({ modelId }) {
           .then(d => [tipus, d.results || d || []])
       )
     ).then(results => {
-      const byTipus = {}
-      results.forEach(([tipus, items]) => { byTipus[tipus] = items })
-      setFitxers(byTipus)
+      const byType = {}
+      results.forEach(([tipus, items]) => { byType[tipus] = items })
+      setFitxers(byType)
     }).catch(() => setError('Error carregant fitxers'))
   }, [modelId])
 
@@ -583,7 +583,7 @@ function TabAnalisiIA({ modelId }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleAnalitzar = async () => {
+  const handleAnalyze = async () => {
     setLoading(true); setError(''); setAnalisi(null)
     try {
       const r = await fetch(`${API}/api/v1/models/${modelId}/analisi-ia/`, {
@@ -609,7 +609,7 @@ function TabAnalisiIA({ modelId }) {
           discrepàncies amb les mesures registrades.
           Disponible quan hi ha patrons o escalats pujats.
         </p>
-        <button type="button" onClick={handleAnalitzar} disabled={loading}
+        <button type="button" onClick={handleAnalyze} disabled={loading}
           style={{
             padding: '8px 20px', background: loading ? '#ccc' : 'var(--gold)',
             color: '#fff', border: 'none', borderRadius: 6,

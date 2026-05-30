@@ -7,14 +7,14 @@ const API = import.meta.env.VITE_API_URL || ""
 export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false }) {
   const [cloning, setCloning] = useState(false)
 
-  const sysNom = profile?.size_system?.nom || "—"
+  const sysName = profile?.size_system?.nom || "—"
   const sysUnit = profile?.size_system?.base_unit || ""
   const sizes = profile?.size_definitions || []
   const baseSize = sizes.find((_, i) => i === Math.floor(sizes.length / 2))?.size_label
   const rules = profile?.grading_rules_preview || []
   const isCustom = profile?.is_custom
   const isDefault = profile?.is_default
-  const nom = profile?.grading_rule_set?.nom || sysNom
+  const name = profile?.grading_rule_set?.nom || sysName
 
   const handleClone = async () => {
     if (!onClone) return
@@ -36,7 +36,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#1d1d1b" }}>{sysNom}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#1d1d1b" }}>{sysName}</div>
           {!compact && (
             <div style={{ fontSize: 11, color: "#868685", marginTop: 2 }}>
               {profile?.target?.nom_en} · {profile?.construction?.nom_en} · {profile?.fit_type_nom}
@@ -58,7 +58,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
         </div>
       </div>
 
-      {/* Run de talles */}
+      {/* Size run */}
       {sizes.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
           {sizes.map((s, i) => {

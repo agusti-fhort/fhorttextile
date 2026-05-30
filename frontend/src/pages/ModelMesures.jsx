@@ -58,7 +58,7 @@ export default function ModelMesures() {
     )
   }
 
-  const handleGenerarGrading = async () => {
+  const handleGenerateGrading = async () => {
     setGeneratingGrading(true); setError('')
     try {
       const r = await fetch(`${API}/api/v1/models/${id}/generar-grading/`, {
@@ -67,9 +67,9 @@ export default function ModelMesures() {
       const d = await r.json()
       if (r.ok) {
         setTaulaRows(d.rows || [])
-        // El grading omple graded per a totes les talles → refresquem columnes/delta.
+        // Grading fills graded for all sizes → we refresh columns/delta.
         fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
-          .then(r => r.json()).then(refreshTaulaMeta).catch(() => {})
+          .then(r => r.json()).then(refreshTableMeta).catch(() => {})
       } else {
         setError(d.error || 'Error generant grading')
       }
@@ -80,8 +80,8 @@ export default function ModelMesures() {
     }
   }
 
-  // Refresca metadades de columnes/delta des de taula-mesures (font única).
-  const refreshTaulaMeta = (d) => {
+  // Refresh column/delta metadata from taula-mesures (single source).
+  const refreshTableMeta = (d) => {
     setSizesAmbDades(d.sizes_amb_dades || null)
     setDeltes(d.deltes || null)
   }
@@ -91,7 +91,7 @@ export default function ModelMesures() {
     fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
       .then(r => r.json())
       .then(d => {
-        refreshTaulaMeta(d)
+        refreshTableMeta(d)
         if (d.rows && d.rows.length > 0) {
           setTaulaRows(d.rows)
           setMode('manual')
@@ -142,9 +142,9 @@ export default function ModelMesures() {
       })
       const d = await r.json()
       if (!r.ok) { setError(JSON.stringify(d)); return }
-      const taula = await fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders }).then(r => r.json())
-      setTaulaRows(taula.rows || [])
-      refreshTaulaMeta(taula)
+      const table = await fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders }).then(r => r.json())
+      setTaulaRows(table.rows || [])
+      refreshTableMeta(table)
       setMode('resultat')
     } catch {
       setError('Error creant les mesures')
@@ -278,7 +278,7 @@ export default function ModelMesures() {
             {taulaRows.length > 0 && (
               <div style={{ display: 'flex', gap: 8 }}>
                 {model?.grading_rule_set && (
-                  <button type="button" onClick={handleGenerarGrading} disabled={generatingGrading}
+                  <button type="button" onClick={handleGenerateGrading} disabled={generatingGrading}
                     style={{
                       padding: '8px 16px', border: '0.5px solid var(--gold)',
                       borderRadius: 6, background: 'transparent',
@@ -354,7 +354,7 @@ export default function ModelMesures() {
                 onMesuresUpdated={() => {
                   fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
                     .then(r => r.json())
-                    .then(d => { setTaulaRows(d.rows || []); refreshTaulaMeta(d) })
+                    .then(d => { setTaulaRows(d.rows || []); refreshTableMeta(d) })
                 }}
               />
             </div>
@@ -402,7 +402,7 @@ export default function ModelMesures() {
                         alignItems: 'center', marginTop: 16 }}>
             <div style={{ display: 'flex', gap: 8 }}>
               {model?.grading_rule_set && (
-                <button type="button" onClick={handleGenerarGrading} disabled={generatingGrading}
+                <button type="button" onClick={handleGenerateGrading} disabled={generatingGrading}
                   style={{
                     padding: '8px 16px', border: '0.5px solid var(--gold)',
                     borderRadius: 6, background: 'transparent',

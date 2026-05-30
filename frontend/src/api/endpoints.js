@@ -102,7 +102,7 @@ export const timers = {
 
 // NOTA: el backend Django encara no exposa /api/v1/me/.
 // Els callers (Configuracio, KanbanTasques, PerfilUsuari) envolten la crida
-// amb .catch(()=>{}) per fallar amb gràcia mentre l'endpoint no existeix.
+// with .catch(()=>{}) to fail gracefully while the endpoint does not exist.
 export const me = {
   get: () => client.get('/api/v1/me/'),
 }

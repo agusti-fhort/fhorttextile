@@ -6,7 +6,7 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import { ExportFittingCSV } from '../components/ExportButton'
 
-const estatVariant = {
+const statusVariant = {
   ok:    'ok',
   avis:  'warn',
   error: 'err',
@@ -79,7 +79,7 @@ export default function FittingDetall() {
                 · SF #{sf?.numero ?? '—'}
               </span>
               {fitting?.estat && (
-                <Badge variant={estatVariant[fitting.estat] || 'gray'}>{fitting.estat}</Badge>
+                <Badge variant={statusVariant[fitting.estat] || 'gray'}>{fitting.estat}</Badge>
               )}
             </div>
             <h1 style={{fontSize: 20, fontWeight: 500}}>
@@ -210,7 +210,7 @@ export default function FittingDetall() {
                       {delta == null ? '—' : (delta > 0 ? '+' : '') + delta}
                     </td>
                     <td style={{padding: '0.7rem 1rem'}}>
-                      <Badge variant={estatVariant[l.estat] || 'gray'}>
+                      <Badge variant={statusVariant[l.estat] || 'gray'}>
                         {l.estat || '—'}
                       </Badge>
                     </td>

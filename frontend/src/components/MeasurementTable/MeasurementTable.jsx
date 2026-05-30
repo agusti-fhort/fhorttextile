@@ -3,11 +3,11 @@ import useAuthStore from '../../store/auth'
 
 const API = import.meta.env.VITE_API_URL || ''
 
-// TODO(backend): Només existeix GET /api/v1/models/{id}/base-measurements/.
-// Falten POST/PATCH/DELETE per a edició inline i CRUD de BaseMeasurement.
-// El model BaseMeasurement actual NO té els camps `nom_fitxa` ni `origen`;
-// l'spec els menciona però són opcionals — la UI els mostra si arriben.
-// També falta endpoint per a GradedSpec del model (la vista Grading mostra '—'
+// TODO(backend): Only GET /api/v1/models/{id}/base-measurements/ exists.
+// Missing POST/PATCH/DELETE for inline editing and BaseMeasurement CRUD.
+// The current BaseMeasurement model does NOT have `nom_fitxa` or `origen` fields;
+// the spec mentions them but they are optional — the UI shows them if present.
+// An endpoint for the model's GradedSpec is also missing (the Grading view shows '—'
 // fins que existeixi). Mentrestant: optimistic update local + fallback a mock.
 
 const ORIGEN_LABELS = {
@@ -43,7 +43,7 @@ function normalizeMeasurement(m) {
   }
 }
 
-// Detecta incoherències entre BaseMeasurements (heurístiques de patronatge).
+// Detect inconsistencies between BaseMeasurements (patternmaking heuristics).
 function checkCoherence(measurements) {
   const alerts = []
   const byCode = {}
@@ -124,7 +124,7 @@ export default function MeasurementTable({
   const alerts = useMemo(() => checkCoherence(measurements), [measurements])
   useEffect(() => { alerts.forEach(a => onAlert(a)) }, [alerts])
 
-  // GradedSpec: encara no hi ha endpoint públic per al Model.
+  // GradedSpec: there is no public endpoint for the Model yet.
   // TODO(backend): exposar GET /api/v1/models/{id}/graded-specs/ (o similar).
   // Mentrestant gradedSpecs queda buit i la vista Grading mostra '—'.
   const gradedSpecs = {}
@@ -143,7 +143,7 @@ export default function MeasurementTable({
     setEditingCell(null)
 
     // TODO(backend): endpoint PATCH /api/v1/base-measurements/{id}/ no existeix.
-    // Intentem-ho — si retorna 404/405, mantenim només la edició local i avisem.
+    // Try it — if it returns 404/405, we keep only the local edit and warn.
     if (String(id).startsWith('mock-')) return
     try {
       const res = await fetch(`${API}/api/v1/base-measurements/${id}/`, {
@@ -188,7 +188,7 @@ export default function MeasurementTable({
 
   return (
     <div style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
-      {/* Capçalera */}
+      {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         gap: 10, padding: '10px 0', flexWrap: 'wrap',
@@ -381,7 +381,7 @@ function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
     )
   }
 
-  // Calcula delta entre talles per a un POM
+  // Compute the delta between sizes for a POM
   const calcDelta = (pomId) => {
     const vals = sizeRun.map(s => gradedSpecs[pomId]?.[s])
     const deltas = []

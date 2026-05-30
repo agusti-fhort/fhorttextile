@@ -51,8 +51,8 @@ const GARMENT_GROUPS = [
 ]
 
 // S16-B fix: mapping grup → categories POM rellevants. La taula de regles
-// filtra els POMs pel grup seleccionat, mostrant només els que pertanyen a
-// alguna d'aquestes categories (POMGlobal.categoria és un CharField string).
+// filters POMs by the selected group, showing only those belonging to
+// one of these categories (POMGlobal.categoria is a CharField string).
 const GROUP_POM_CATEGORIES = {
   TOPS:        ['Upper body', 'Sleeve', 'Collar / Neckline', 'Hem / Finish', 'Knitwear-specific', 'Closure / Detail'],
   BOTTOMS:     ['Lower body', 'Waistband', 'Rise', 'Hem / Finish', 'Closure / Detail'],
@@ -83,7 +83,7 @@ export default function GradingRuleSets() {
   const [msg, setMsg] = useState(null)
   // Mapping id → codi de GarmentGroup, per poder filtrar per codi a partir
   // del FK id que retorna el RuleSet (`rs.garment_group`). El serializer no
-  // exposa `garment_group_codi`, només el nom traduït (no usable com a clau).
+  // exposes `garment_group_codi`, only the translated name (not usable as a key).
   const [garmentGroupCodiById, setGarmentGroupCodiById] = useState({})
   const lang = 'ca'
 
@@ -100,7 +100,7 @@ export default function GradingRuleSets() {
 
   useEffect(() => { loadRuleSets() }, [token])
 
-  // Carrega el catàleg de GarmentGroup per resoldre id→codi (un sol cop).
+  // Load the GarmentGroup catalog to resolve id→codi (once).
   useEffect(() => {
     fetch(`${API}/api/v1/garment-groups/?page_size=200`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
@@ -116,7 +116,7 @@ export default function GradingRuleSets() {
 
   // El GradingRuleSetSerializer (S16-A) exposa `targets_codis` (array) +
   // construction_codi + fit_type_codi. Usem-los directament; un RuleSet pot
-  // aplicar a múltiples targets (ex. BABY → 3) gràcies al canvi a M2M.
+  // apply to multiple targets (e.g. BABY → 3) thanks to the M2M change.
   const enrichedRuleSets = allRuleSets
 
   // Helpers per matching M2M targets (un RuleSet apareix sota cada target del array).
@@ -124,16 +124,16 @@ export default function GradingRuleSets() {
     !rs.targets_codis?.length || rs.targets_codis.includes(target)
 
   // Helper per matching garment_group via id→codi map (FK del RuleSet).
-  // RuleSets sense garment_group assignat es consideren compatibles amb qualsevol
-  // grup (passa la condició) — políticament correcte mentre el catàleg actual no
-  // tingui RuleSets específics de grup.
+  // RuleSets without an assigned garment_group are considered compatible with any
+  // group (passes the condition) — acceptable while the current catalog does not
+  // have group-specific RuleSets.
   const matchesGarmentGroup = (rs, groupCodi) => {
     if (!rs.garment_group) return true
     const rsGroupCodi = garmentGroupCodiById[rs.garment_group]
     return rsGroupCodi === groupCodi
   }
 
-  // Targets que apareixen als RuleSets (extret dels arrays targets_codis).
+  // Targets that appear in the RuleSets (extracted from the targets_codis arrays).
   const availableTargetCodes = useMemo(() => {
     const set = new Set()
     for (const rs of enrichedRuleSets) {
@@ -169,8 +169,8 @@ export default function GradingRuleSets() {
     return FITS.filter(f => set.has(f.codi))
   }, [enrichedRuleSets, selectedTarget, selectedConstruction])
 
-  // RuleSets que coincideixen amb la selecció completa (4 filtres).
-  // matchingRuleSets està buit fins que selectedGarmentGroup té valor.
+  // RuleSets matching the full selection (4 filters).
+  // matchingRuleSets is empty until selectedGarmentGroup has a value.
   const matchingRuleSets = useMemo(() => {
     if (!selectedTarget || !selectedConstruction || !selectedFit || !selectedGarmentGroup) return []
     return enrichedRuleSets.filter(rs => {
@@ -182,7 +182,7 @@ export default function GradingRuleSets() {
     })
   }, [enrichedRuleSets, selectedTarget, selectedConstruction, selectedFit, selectedGarmentGroup, garmentGroupCodiById])
 
-  const nom = (obj) => lang === 'ca' ? obj.nom_ca : obj.nom_en
+  const name = (obj) => lang === 'ca' ? obj.nom_ca : obj.nom_en
 
   const totalRegles = useMemo(
     () => allRuleSets.reduce((s, rs) => s + (rs.regles_count ?? rs.regles?.length ?? 0), 0),
@@ -230,7 +230,7 @@ export default function GradingRuleSets() {
   return (
     <div style={{ padding: '0', fontFamily: 'IBM Plex Sans, sans-serif', maxWidth: 1200 }}>
 
-      {/* Títol */}
+      {/* Title */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         marginBottom: '1.5rem', gap: 12,
@@ -353,7 +353,7 @@ export default function GradingRuleSets() {
         </StepSection>
       )}
 
-      {/* Fitxes RuleSet — només amb els 4 filtres seleccionats */}
+      {/* RuleSet cards — only with the 4 filters selected */}
       {selectedGarmentGroup && matchingRuleSets.length > 0 && (
         <div style={{ marginTop: 24 }}>
           {matchingRuleSets.map(rs => (
@@ -379,7 +379,7 @@ export default function GradingRuleSets() {
         </div>
       )}
 
-      {/* Missatge si no hi ha match (amb els 4 filtres aplicats) */}
+      {/* Message when there is no match (with the 4 filters applied) */}
       {selectedGarmentGroup && matchingRuleSets.length === 0 && (
         <div style={{
           marginTop: 24, padding: '2rem', border: '1px dashed #e0d5c5',
@@ -430,7 +430,7 @@ function StepSection({ number, title, children }) {
 }
 
 // ── TargetCard ──────────────────────────────────────────────────────────────
-// Mateix patró que Size Library: nom_en principal (gran), nom_ca secundari (petit gris).
+// Same pattern as Size Library: nom_en primary (large), nom_ca secondary (small grey).
 function TargetCard({ target, selected, available, onClick }) {
   return (
     <div
@@ -461,7 +461,7 @@ function TargetCard({ target, selected, available, onClick }) {
 
 // ── SelectionButton ─────────────────────────────────────────────────────────
 // API S16-B: label + sublabel (en lloc d'`item={...}`). Sublabel es renderitza
-// en una segona línia, més petita i grisa.
+// on a second line, smaller and grey.
 function SelectionButton({ label, sublabel, selected, onClick }) {
   return (
     <button
@@ -499,10 +499,10 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
 
 // ── RuleSetCard ─────────────────────────────────────────────────────────────
 function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEdit, onDelete }) {
-  // S16-B: plegat per defecte (l'usuari ja arriba aquí amb 4 filtres aplicats
-  // i la fitxa és un punt focal, no la llista navegacional anterior).
+  // S16-B: collapsed by default (the user already arrives here with 4 filters applied
+  // and the card is a focal point, not the previous navigational list).
   const [expanded, setExpanded] = useState(false)
-  // Còpia local mutable de regles per inline edit / deactivate sense esperar
+  // Local mutable copy of rules for inline edit / deactivate without waiting
   // refetch complet. Es sincronitza si l'API retorna noves regles (rs.regles).
   const [localRules, setLocalRules] = useState(rs.regles || [])
   useEffect(() => { setLocalRules(rs.regles || []) }, [rs.regles])
@@ -539,7 +539,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
         updateLocalRule(ruleId, updated)
       } else {
         // En cas d'error (p.ex. 403 RuleSet sistema), revertim visualment
-        // recarregant la regla des de l'estat actual de rs.regles.
+        // reloading the rule from the current state of rs.regles.
         const original = (rs.regles || []).find(r => r.id === ruleId)
         if (original) updateLocalRule(ruleId, original)
       }
@@ -564,7 +564,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
     }
   }
 
-  // Capçaleres de la taula (Traducció només si lang ≠ en).
+  // Table headers (translation only if lang ≠ en).
   const showTrad = lang !== 'en'
   const headers = [
     { label: 'Codi',       align: 'left'  },
@@ -612,7 +612,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
               fontSize: 11, color: '#868685', marginTop: 2,
               display: 'flex', gap: 10, flexWrap: 'wrap',
             }}>
-              {/* S16-B: targets array (M2M) — un RuleSet pot aplicar a múltiples targets */}
+              {/* S16-B: targets array (M2M) — a RuleSet can apply to multiple targets */}
               {rs.targets_codis?.length > 0 && (
                 <span>
                   {rs.targets_codis.length > 1 ? 'Targets: ' : 'Target: '}
@@ -796,8 +796,8 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
 }
 
 // ── EditableIncrement ───────────────────────────────────────────────────────
-// Mostra un valor numèric. Si readOnly, es renderitza com a text estàtic.
-// Si editable, click → input numèric inline. Enter desa, Escape cancel·la.
+// Show a numeric value. If readOnly, render as static text.
+// If editable, click → inline numeric input. Enter saves, Escape cancels.
 function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -891,10 +891,10 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
   const [form, setForm] = useState({
     nom:          rs?.nom          || '',
     codi_sistema: rs?.codi_sistema || '',
-    // Target/Construction/Fit no es poden enviar directament com a codi
-    // perquè el backend espera IDs. Mantenim els codis al form per a la UI
+    // Target/Construction/Fit cannot be sent directly as a code
+    // because the backend expects IDs. We keep the codes in the form for the UI
     // i (TODO) caldria endpoint per resoldre codi→id. De moment, els enviem
-    // només si el RuleSet en edició ja en té (passem l'ID original).
+    // only if the RuleSet being edited already has them (we pass the original ID).
     target:       rs?.target       ?? null,
     construction: rs?.construction ?? null,
     fit_type:     rs?.fit_type     ?? null,
@@ -920,8 +920,8 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
       actiu: form.actiu,
       // TODO(backend): cal endpoint /api/v1/targets/, construction-types/,
       // fit-types/ per poder convertir codi → id des del frontend en cas
-      // de creació nova. Mentrestant, només enviem els FKs si vénen de
-      // l'objecte original (edit/clone) o si no s'han modificat.
+      // of a brand-new creation. Meanwhile, we only send the FKs if they come from
+      // the original object (edit/clone) or if they have not been modified.
     }
     if (form.target != null) payload.target = form.target
     if (form.construction != null) payload.construction = form.construction

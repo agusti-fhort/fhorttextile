@@ -40,8 +40,8 @@ export function TaulaMesures({ sfId, token, onUpdate }) {
     if (isNaN(val)) { setEditingCell(null); return }
 
     try {
-      // Per la talla base: actualitza BaseMeasurement
-      // Per altres talles: actualitza GradedSpec via PATCH
+      // For the base size: update BaseMeasurement
+      // For other sizes: update GradedSpec via PATCH
       const endpoint = talla === base_size
         ? `${API}/api/v1/base-measurements/`
         : null  // Implementar si cal editar GradedSpec directament

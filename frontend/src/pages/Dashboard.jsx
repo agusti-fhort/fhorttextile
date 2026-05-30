@@ -30,7 +30,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const token = useAuthStore.getState().token || localStorage.getItem('access_token')
 
-  // Guard auth: redirigeix si no hi ha token (cap fetch s'executarà sense auth)
+  // Auth guard: redirect if there is no token (no fetch will run without auth)
   useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
   const [stats, setStats] = useState({})
   const [recents, setRecents] = useState([])
@@ -70,7 +70,7 @@ export default function Dashboard() {
         const d = avisosRes.value
         const items = Array.isArray(d) ? d : (d.results || d.items || [])
         setAvisos(items)
-        // Resum nou format (S11): { oberts, resolts, top_poms, ... }
+        // New summary format (S11): { oberts, resolts, top_poms, ... }
         if (d && typeof d === 'object' && !Array.isArray(d) && (d.oberts != null || d.top_poms)) {
           setAvisosSummary(d)
         }
@@ -129,7 +129,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Salutació */}
+      {/* Greeting */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 500, color: "#1d1d1b", margin: "0 0 4px" }}>
           {salutacio}{me ? `, ${me.full_name?.split(" ")[0] || me.username}` : ""}.

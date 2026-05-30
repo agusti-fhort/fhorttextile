@@ -3,8 +3,8 @@ import useAuthStore from "../store/auth"
 
 const API = import.meta.env.VITE_API_URL || ""
 
-// Stub mínim: carrega les dades del POM al primer hover i les mostra com a
-// tooltip natiu via title. Substitueix per un floating panel quan calgui.
+// Minimal stub: loads the POM data on first hover and shows it as a
+// native tooltip via title. Replace with a floating panel when needed.
 export function HTMTooltip({ pomId, children }) {
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
   const [info, setInfo] = useState(null)

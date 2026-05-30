@@ -125,7 +125,7 @@ export default function ModelWizard() {
   const [garmentType, setGarmentType] = useState(null)
   const [construction, setConstruction] = useState(null)
 
-  // Sub-pas D — Sistema de talles natiu (Fix 1)
+  // Sub-step D — Native size system (Fix 1)
   const [sizingProfiles, setSizingProfiles] = useState([])
   const [selProfile, setSelProfile] = useState(null)
   const [sizeDefinitions, setSizeDefinitions] = useState([])
@@ -137,7 +137,7 @@ export default function ModelWizard() {
 
   const [showCancelModal, setShowCancelModal] = useState(false)
 
-  // sizingResult ara és derivat (Fix 1) — calculat a partir de selProfile+selectedSizes+baseSize.
+  // sizingResult is now derived (Fix 1) — computed from selProfile+selectedSizes+baseSize.
   const sizingResult = (selProfile && selectedSizes.length > 0 && baseSize) ? {
     size_system_id: selProfile.size_system?.id,
     size_run_model: selectedSizes.join('·'),
@@ -179,7 +179,7 @@ export default function ModelWizard() {
       .catch(() => setError('Error carregant el model'))
   }, [id])
 
-  // Fix 1 — carregar sizing profiles quan target+construction+subStep='D'
+  // Fix 1 — load sizing profiles when target+construction+subStep='D'
   useEffect(() => {
     if (!target || !construction || subStep !== 'D') return
     fetch(`${API}/api/v1/sizing-profiles/?target=${target}&construction=${construction}&page_size=50`,
@@ -189,7 +189,7 @@ export default function ModelWizard() {
       .catch(() => setSizingProfiles([]))
   }, [target, construction, subStep])
 
-  // Fix 1 — carregar talles quan es selecciona un profile
+  // Fix 1 — load sizes when a profile is selected
   useEffect(() => {
     if (!selProfile) return
     const ssId = selProfile.size_system?.id
@@ -270,13 +270,13 @@ export default function ModelWizard() {
     }
   }
 
-  // Fix 3 — banner si el model just s'acaba de crear (sense target)
+  // Fix 3 — banner if the model was just created (without target)
   const isNewlyCreated = isEditMode && !target
 
   // Cancel·lar wizard:
   //  · Pas 1 pur (sense id) → redirect directe, sense esborrar.
-  //  · Model acabat de crear (isNewlyCreated) → modal confirmació → DELETE.
-  //  · Model ja existent en edició → torna enrere sense esborrar ni advertir.
+  //  · Just-created model (isNewlyCreated) → confirmation modal → DELETE.
+  //  · Already-existing model in edit → go back without deleting or warning.
   const handleCancelClick = () => {
     if (isNewlyCreated) {
       setShowCancelModal(true)
@@ -671,7 +671,7 @@ function Step2({
 
       {subStep === 'D' && (
         <Section title="Sistema de talles">
-          {/* D1 — selecció de Size Profile */}
+          {/* D1 — Size Profile selection */}
           <div>
             <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)', marginBottom: 12, fontFamily: 'IBM Plex Mono, monospace' }}>
               Sistema de talles disponible per {target} · {construction}
@@ -701,7 +701,7 @@ function Step2({
             })}
           </div>
 
-          {/* D2 — Run de talles */}
+          {/* D2 — Size run */}
           {selProfile && (
             <div style={{ marginTop: 16 }}>
               <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)', marginBottom: 8, fontFamily: 'IBM Plex Mono, monospace' }}>

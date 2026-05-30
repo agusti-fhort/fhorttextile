@@ -53,8 +53,8 @@ function StepBar({ step }) {
 export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }) {
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
   // Si initialValues.target ja ve seleccionat (p.ex. des d'ImportWizard o
-  // d'una importació via NouModel), saltem el sub-pas Target i comencem a
-  // Construcció. La card Target queda pre-marcada via selTarget.
+  // from an import via NouModel), we skip the Target sub-step and start at
+  // Construction. The Target card is pre-selected via selTarget.
   const [step, setStep] = useState(initialValues.target ? 1 : 0)
 
   // Dades carregades
@@ -106,7 +106,7 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
       })
   }, [token])
 
-  // Carregar profiles quan target+construction seleccionats
+  // Load profiles when target+construction are selected
   useEffect(() => {
     if (!selTarget || !selConstruction) return
     setLoading(true)
@@ -136,7 +136,7 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
       })
   }, [selTarget, selConstruction])
 
-  // Quan selecciona un profile, preseleccionar totes les talles
+  // When a profile is selected, pre-select all sizes
   useEffect(() => {
     if (selProfile) {
       const defs = selProfile.size_definitions || []
@@ -205,7 +205,7 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
         </div>
       )}
 
-      {/* STEP 1 — Construcció */}
+      {/* STEP 1 — Construction */}
       {step === 1 && (
         <div>
           <div style={{ fontSize:11, color:"#868685", marginBottom:12 }}>
@@ -241,9 +241,9 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
 
       {/* STEP 2 — Size Set */}
       {step === 2 && (() => {
-        // Fix S17: dedup per size_system id. Múltiples profiles (per garment_type
-        // diferent) poden compartir el mateix size_system; per a la UI de selecció
-        // de Size Set en mostrem només un per system, prioritzant els `is_default`.
+        // Fix S17: dedup by size_system id. Multiple profiles (per garment_type
+        // different) may share the same size_system; for the Size Set selection UI
+        // we show only one per system, prioritizing `is_default`.
         const uniqueProfiles = Object.values(
           (profiles || []).reduce((acc, p) => {
             const key = p.size_system?.id ?? p.size_system
@@ -271,8 +271,8 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
                     <div style={{ fontSize:13, fontWeight:600, color: isSelected?"#c27a2a":"#1d1d1b" }}>
                       {p.size_system?.nom}
                     </div>
-                    {/* Fix 2 (S15) — subtítol per distingir profiles que comparteixen
-                        size_system: combinació target · construction · fit_type. */}
+                    {/* Fix 2 (S15) — subtitle to distinguish profiles that share
+                        size_system: combination target · construction · fit_type. */}
                     <div style={{
                       fontSize:10, color: isSelected?"#a06622":"#868685",
                       marginTop:3, fontFamily:"IBM Plex Mono, monospace",
@@ -296,7 +296,7 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
 
                 {isSelected && (
                   <div>
-                    {/* Selector de talles */}
+                    {/* Size selector */}
                     <div style={{ fontSize:10, color:"#868685", marginBottom:6 }}>
                       Selecciona les talles del run:
                     </div>
@@ -327,7 +327,7 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
                       })}
                     </div>
 
-                    {/* Selector talla base */}
+                    {/* Base size selector */}
                     {selSizes.length > 0 && (
                       <div>
                         <div style={{ fontSize:10, color:"#868685", marginBottom:6 }}>
@@ -391,7 +391,7 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
         </div>
       )}
 
-      {/* Navegació */}
+      {/* Navigation */}
       <div style={{ display:"flex", gap:8, marginTop:20, justifyContent:"flex-end" }}>
         {step > 0 && (
           <button onClick={() => setStep(s => s-1)} style={{

@@ -4,7 +4,7 @@ import { sizeFittings, gradingVersions, gradedSpecLines } from '../api/endpoints
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 
-const estatVariant = {
+const statusVariant = {
   'Pendent':         'gray',
   'BaseOberta':      'warn',
   'TallesGenerades': 'gate',
@@ -110,7 +110,7 @@ export default function SizeFittingDetall() {
             ['Model',     sf.model_codi || sf.model_codi_intern || sf.model],
             ['Número',    `SF #${sf.numero ?? '—'}`],
             ['Tipus',     sf.tipus],
-            ['Estat',     <Badge key="e" variant={estatVariant[sf.estat] || 'gray'}>{sf.estat}</Badge>],
+            ['Estat',     <Badge key="e" variant={statusVariant[sf.estat] || 'gray'}>{sf.estat}</Badge>],
             ['Data creació', sf.data_creacio || sf.created_at || '—'],
             ['Notes',     sf.notes || '—'],
           ].map(([k, v]) => (

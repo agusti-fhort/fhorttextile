@@ -111,7 +111,7 @@ function TasquesActives({ token }) {
   )
 }
 
-// ── Vista 2: Catàleg de Tasques ───────────────────────────────────────────────
+// ── View 2: Task catalog ──────────────────────────────────────────────────────
 function CatalegTasques({ token }) {
   const [tasques, setTasques] = useState([])
   const [loading, setLoading] = useState(true)
@@ -125,7 +125,7 @@ function CatalegTasques({ token }) {
       .catch(() => setLoading(false))
   }, [token])
 
-  const byFase = tasques.reduce((acc, t) => {
+  const byPhase = tasques.reduce((acc, t) => {
     if (!acc[t.fase]) acc[t.fase] = []
     acc[t.fase].push(t)
     return acc
@@ -138,7 +138,7 @@ function CatalegTasques({ token }) {
       <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace", marginBottom: 16 }}>
         {tasques.length} tasques al catàleg
       </div>
-      {Object.entries(byFase).map(([fase, items]) => (
+      {Object.entries(byPhase).map(([fase, items]) => (
         <div key={fase} style={{ marginBottom: 20 }}>
           <div style={{
             fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
@@ -267,7 +267,7 @@ export default function Tasques() {
   const location = useLocation()
   const token = useAuthStore.getState().token || localStorage.getItem('access_token')
 
-  // Guard auth: redirigeix si no hi ha token (cap fetch s'executarà sense auth)
+  // Auth guard: redirect if there is no token (no fetch will run without auth)
   useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
   const current = location.pathname
 

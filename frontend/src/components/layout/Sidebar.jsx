@@ -39,7 +39,7 @@ const Logo = () => (
   </svg>
 )
 
-// Estructura: 1 sola secció principal amb 5 ítems top-level + submenús expandibles.
+// Structure: a single main section with 5 top-level items + expandable submenus.
 // Dashboard i Avisos queden visibles sempre al top com a accessos directes.
 const navGroups = [
   { items: [
@@ -209,7 +209,7 @@ export default function Sidebar() {
   const badges = { alerts: alertsPending }
   const toggle = (key) => setExpanded(s => ({...s, [key]: !s[key]}))
 
-  // Injecta "Configuració inicial" dins Configuració si onboarding < 100%
+  // Inject "Configuració inicial" under Configuració if onboarding < 100%
   const items = useMemo(() => navGroups[0].items.map(item => {
     if (item.labelKey === 'nav.configuracio' && onboardingPct < 100) {
       return {
@@ -233,8 +233,8 @@ export default function Sidebar() {
     return routes
   }, [items])
 
-  // Match exacte o, si no, el prefix més específic (longest match wins).
-  // '/' només compta com a match exacte per evitar que matchi totes les rutes.
+  // Exact match or, failing that, the most specific prefix (longest match wins).
+  // '/' only counts as an exact match to avoid matching every route.
   const activeRoute = useMemo(() => {
     const path = location.pathname
     const matches = allRoutes.filter(r => {
@@ -245,9 +245,9 @@ export default function Sidebar() {
     return matches[0] || null
   }, [allRoutes, location.pathname])
 
-  // Autoexpansió: si la ruta actual és (o és subruta de) qualsevol child d'un
-  // grup, expandim el grup. startsWith() s'usa NOMÉS aquí, no per al highlight
-  // dels ítems fill (que segueix la lògica de match més específic).
+  // Auto-expand: if the current route is (or is a subroute of) any child of a
+  // group, we expand the group. startsWith() is used ONLY here, not for the highlight
+  // of child items (which follows the most-specific-match logic).
   useEffect(() => {
     const path = location.pathname
     items.forEach(item => {

@@ -3,7 +3,7 @@ import useAuthStore from '../../store/auth'
 
 const API = import.meta.env.VITE_API_URL || ''
 
-// Grups canònics. L'ordre marca l'ordre dels botons.
+// Canonical groups. The order sets the button order.
 const GRUPS = [
   { codi: 'TOPS',        label_cat: 'Parts superiors', label_en: 'Tops',        label_es: 'Partes superiores' },
   { codi: 'BOTTOMS',     label_cat: 'Parts inferiors', label_en: 'Bottoms',     label_es: 'Partes inferiores' },
@@ -14,13 +14,13 @@ const GRUPS = [
   { codi: 'ACCESSORIES', label_cat: 'Complements',     label_en: 'Accessories', label_es: 'Complementos' },
 ]
 
-// TODO(backend): GarmentTypeViewSet és ReadOnlyModelViewSet — POST/PATCH/DELETE
-// retornen 405. Cal convertir-lo a ModelViewSet amb permisos adequats per a la
-// gestió CRUD per tenant. Mentrestant, la UI intenta les operacions i mostra
+// TODO(backend): GarmentTypeViewSet is a ReadOnlyModelViewSet — POST/PATCH/DELETE
+// return 405. It must be converted to a ModelViewSet with proper permissions for
+// per-tenant CRUD management. Meanwhile, the UI attempts the operations and shows
 // l'error si fallen.
 
-// Mock data per a quan el backend no retorna entries per a un grup.
-// Es deriva del catàleg GarmentTypeGlobal canònic.
+// Mock data for when the backend returns no entries for a group.
+// Derived from the canonical GarmentTypeGlobal catalog.
 const MOCK_GT_BY_GROUP = {
   TOPS: [
     { id: 'mock-tops-1', codi_client: 'T_SHIRT',   nom_en: 'T-shirt',      nom_ca: 'Samarreta',   nom_es: 'Camiseta',   grup: 'TOPS', is_system: true,  actiu: true },
@@ -59,7 +59,7 @@ const MOCK_GT_BY_GROUP = {
   ],
 }
 
-function gtNom(t, lang) {
+function gtName(t, lang) {
   if (lang === 'ca') return t.nom_ca || t.nom_cat || t.nom_en || t.nom_client || t.global_nom || ''
   if (lang === 'es') return t.nom_es || t.nom_en || t.nom_client || t.global_nom || ''
   return t.nom_en || t.nom_client || t.global_nom || ''
@@ -107,7 +107,7 @@ export default function GarmentTypeSelector({ onSelect, selectedId = null, lang 
       setMsg({ type: 'error', text: 'No es pot esborrar un tipus de sistema.' })
       return
     }
-    if (!confirm(`Esborrar "${gtNom(t, lang)}"?`)) return
+    if (!confirm(`Esborrar "${gtName(t, lang)}"?`)) return
     try {
       const r = await fetch(`${API}/api/v1/garment-types/${t.id}/`, {
         method: 'DELETE',
@@ -130,7 +130,7 @@ export default function GarmentTypeSelector({ onSelect, selectedId = null, lang 
     setEditTarget({
       id: null,
       codi_client: (t.codi_client || '') + '_COPY',
-      nom_client: t.nom_client || gtNom(t, lang),
+      nom_client: t.nom_client || gtName(t, lang),
       nom_en: (t.nom_en || '') + (t.nom_en ? ' (copy)' : ''),
       nom_ca: (t.nom_ca || '') + (t.nom_ca ? ' (còpia)' : ''),
       nom_es: (t.nom_es || '') + (t.nom_es ? ' (copia)' : ''),
@@ -232,7 +232,7 @@ export default function GarmentTypeSelector({ onSelect, selectedId = null, lang 
             <GarmentTypeCard
               key={t.id}
               tipus={t}
-              nom={gtNom(t, lang)}
+              nom={gtName(t, lang)}
               isSelected={selectedId === t.id}
               onSelect={() => onSelect && onSelect(t)}
               onEdit={() => { setEditTarget(t); setShowModal(true) }}
@@ -385,7 +385,7 @@ function GarmentTypeModal({ tipus, grup, authHeaders, onSave, onError, onClose }
         onSave(saved)
       } else if (res.status === 405) {
         onError('Backend és ReadOnly per a GarmentType — desa local només. TODO: convertir a ModelViewSet.')
-        // Fallback: crear localment per a la demo (id sintètic)
+        // Fallback: create locally for the demo (synthetic id)
         const localId = 'local-' + Date.now()
         onSave({ ...payload, id: isEdit ? tipus.id : localId })
       } else {

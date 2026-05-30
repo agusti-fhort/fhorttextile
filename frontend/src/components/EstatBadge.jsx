@@ -1,5 +1,5 @@
 
-// Paleta tema clar amb alt contrast (text llegible sobre fons)
+// Light theme palette with high contrast (text readable over background)
 const ESTAT_CONFIG = {
   // Model estats
   'Nou':                { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
@@ -14,7 +14,7 @@ const ESTAT_CONFIG = {
   'Normal':             { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
   'Alta':               { bg: '#c27a2a', text: '#1d1d1b', border: '#c27a2a' },
   'Urgent':             { bg: '#a32d2d', text: '#ffffff', border: '#a32d2d' },
-  // SF estats (display labels — coincideix amb get_estat_display())
+  // SF states (display labels — matches get_estat_display())
   'Pendent':            { bg: '#f0dfc0', text: '#1d1d1b', border: '#e0d5c5' },
   'Base oberta':        { bg: '#f5e6d0', text: '#1d1d1b', border: '#e0d5c5' },
   'Base tancada':       { bg: '#c27a2a', text: '#1d1d1b', border: '#c27a2a' },

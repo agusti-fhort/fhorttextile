@@ -114,7 +114,7 @@ export default function ImportConfirmStep({ extracted, onConfirm, onBack, loadin
   return (
     <div style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
 
-      {/* Identificació */}
+      {/* Identification */}
       <Section title="IDENTIFICACIÓ">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
           <F label="Nom prenda" required>
@@ -151,7 +151,7 @@ export default function ImportConfirmStep({ extracted, onConfirm, onBack, loadin
         </div>
       </Section>
 
-      {/* Tipus de prenda */}
+      {/* Garment type */}
       <Section title="TIPUS DE PRENDA">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
           <F label="Garment Type" required>
@@ -176,7 +176,7 @@ export default function ImportConfirmStep({ extracted, onConfirm, onBack, loadin
         </div>
       </Section>
 
-      {/* Sistema de talles */}
+      {/* Size system */}
       <Section title="SISTEMA DE TALLES">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
           <F label="Size System">

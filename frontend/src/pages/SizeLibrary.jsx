@@ -68,7 +68,7 @@ export default function SizeLibrary() {
       })
   }, [token])
 
-  // Carregar profiles quan canvia selecció
+  // Load profiles when the selection changes
   useEffect(() => {
     if (!selectedTarget) { setProfiles([]); return }
     setLoadingProfiles(true)

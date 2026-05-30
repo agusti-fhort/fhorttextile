@@ -4,7 +4,7 @@ import GarmentTypeSelector from '../GarmentTypeSelector/GarmentTypeSelector'
 
 const API = import.meta.env.VITE_API_URL || ''
 
-function gtNom(t, lang = 'ca') {
+function gtName(t, lang = 'ca') {
   if (!t) return ''
   if (lang === 'ca') return t.nom_ca || t.nom_cat || t.nom_en || t.nom_client || t.global_nom || ''
   if (lang === 'es') return t.nom_es || t.nom_en || t.nom_client || t.global_nom || ''
@@ -25,11 +25,11 @@ function grupLabel(grup, lang = 'ca') {
 }
 
 // TODO: endpoint /api/v1/garment-pom-maps/ pendent — l'endpoint hauria de retornar
-// les entrades GarmentPOMMap filtrades per garment_type (codi_client) amb el POMMaster
+// the GarmentPOMMap entries filtered by garment_type (codi_client) with the POMMaster
 // nested i el seu POMGlobal expandit (name_en, name_cat, abbreviation, categoria,
 // is_key, applies_woven/knit/swim, tol_*, etc.).
-// Mentrestant, aquest component intenta /api/v1/garment-pom-maps/?garment_type=<codi>
-// i, si retorna 404 o la resposta no porta els camps rics, recau en MOCK_POMS perquè
+// Meanwhile, this component tries /api/v1/garment-pom-maps/?garment_type=<codi>
+// and, if it returns 404 or the response lacks the rich fields, falls back to MOCK_POMS so
 // la UI sigui usable.
 
 const MOCK_POMS = [
@@ -89,14 +89,14 @@ const MOCK_POMS = [
 
 // Normalitza una resposta de /api/v1/garment-pom-maps/ (o POMMaster fallback) al
 // format esperat per la UI. Cada entrada pot ser:
-//   (a) GarmentPOMMap amb pom nested → pom: { pom_global: {...}, ... }
+//   (a) GarmentPOMMap with nested pom → pom: { pom_global: {...}, ... }
 //   (b) POMMaster directe → { codi_client, pom_global: {...} }
 //   (c) Plain POMGlobal-like → { codi, nom_en, ... }
 // Si no hi ha cap forma reconeguda, retorna null per activar el fallback a mock.
 function normalizePOMs(raw) {
   if (!Array.isArray(raw) || raw.length === 0) return null
   const first = raw[0]
-  // Heurística mínima: detectar quin shape tenim.
+  // Minimal heuristic: detect which shape we have.
   const hasMap = first.pom && (first.pom.pom_global || first.pom.codi_client)
   const hasMaster = first.pom_global || first.codi_client
   const hasFlat = first.name_en || first.pom_code || first.nom_en
@@ -106,7 +106,7 @@ function normalizePOMs(raw) {
     // Cas (a): GarmentPOMMap → desempaquetar pom
     const isKeyFromMap = typeof entry.is_key === 'boolean' ? entry.is_key : undefined
     // entry.pom pot ser l'objecte POMMaster (expandit) o un ID enter (FK no expandit).
-    // Només l'usem com a font si és realment l'objecte; en cas contrari, fem servir l'entrada plana.
+    // We only use it as the source if it is really the object; otherwise we use the flat entry.
     const pomSource = (entry.pom && typeof entry.pom === 'object') ? entry.pom : entry
     const pg = pomSource.pom_global || pomSource
 
@@ -116,8 +116,8 @@ function normalizePOMs(raw) {
       name_cat: pg.nom_ca || pg.name_cat || pg.nom_cat || '',
       category: pg.categoria || pg.category || pomSource.categoria || '',
       abbreviation: pg.abbreviation || pomSource.codi_client || '',
-      // is_key prové del POMGlobal en general, però el GarmentPOMMap pot
-      // sobreescriure'l per a aquesta combinació garment+POM.
+      // is_key generally comes from the POMGlobal, but the GarmentPOMMap can
+      // override it for this garment+POM combination.
       is_key: isKeyFromMap !== undefined ? isKeyFromMap : !!pg.is_key,
       description_en: pg.descripcio_en || pg.description_en || '',
       start_point: pg.start_point || '',
@@ -156,10 +156,10 @@ export default function POMBrowser({
   const [loading, setLoading] = useState(false)
   const [usingMock, setUsingMock] = useState(false)
 
-  // Resol l'objecte GarmentType quan només arriba l'ID per prop (cas wizard assign).
+  // Resolve the GarmentType object when only the ID arrives via prop (wizard assign case).
   useEffect(() => {
     if (!garmentTypeCode) { setSelectedGT(null); return }
-    // Si ja és l'objecte seleccionat, no recarreguem.
+    // If it is already the selected object, do not reload.
     if (selectedGT && String(selectedGT.id) === String(garmentTypeCode)) return
 
     fetch(`${API}/api/v1/garment-types/${garmentTypeCode}/`, {
@@ -168,16 +168,16 @@ export default function POMBrowser({
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => setSelectedGT(data))
       .catch(() => {
-        // Fallback: objecte sintètic amb només l'ID
+        // Fallback: synthetic object with only the ID
         setSelectedGT({ id: garmentTypeCode, nom_en: '', nom_ca: '', grup: '' })
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [garmentTypeCode])
 
-  // Carrega POMs quan canvia el GarmentType seleccionat.
+  // Load POMs when the selected GarmentType changes.
   // Endpoint preferit: /api/v1/garment-pom-maps/?garment_type=<codi_client>.
   // Si l'endpoint no existeix (404) o la resposta no porta els camps rics,
-  // recau a MOCK_POMS amb badge informatiu.
+  // falls back to MOCK_POMS with an informative badge.
   useEffect(() => {
     setSelectedPom(null)
     if (!selectedGT?.id) { setPoms([]); return }
@@ -185,7 +185,7 @@ export default function POMBrowser({
     // Backend GarmentPOMMapViewSet accepta:
     //   ?garment_type=<id>                  (FK exact)
     //   ?garment_type__codi_client=<codi>   (lookup per codi_client del GarmentType)
-    // Si tenim el codi_client el preferim (més estable que un ID intern).
+    // If we have the codi_client we prefer it (more stable than an internal ID).
     const params = new URLSearchParams({ page_size: '500' })
     if (selectedGT.codi_client) {
       params.set('garment_type__codi_client', selectedGT.codi_client)
@@ -274,7 +274,7 @@ export default function POMBrowser({
             </>
           )}
           <span style={{ fontSize: 13, fontWeight: 600, color: '#1d1d1b' }}>
-            {gtNom(selectedGT, lang) || selectedGT.codi_client || '—'}
+            {gtName(selectedGT, lang) || selectedGT.codi_client || '—'}
           </span>
         </div>
 

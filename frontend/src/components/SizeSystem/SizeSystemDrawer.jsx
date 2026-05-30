@@ -59,8 +59,8 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
   }
 
   const handleDeleteSystem = async () => {
-    const nom = sizeSystem.nom || sizeSystem.codi
-    if (!confirm(`Esborrar el sistema de talles ${nom}? Aquesta acció és irreversible.`)) return
+    const name = sizeSystem.nom || sizeSystem.codi
+    if (!confirm(`Esborrar el sistema de talles ${name}? Aquesta acció és irreversible.`)) return
     const res = await fetch(`/api/v1/size-systems/${sizeSystem.id}/`, {
       method: 'DELETE',
       headers: authHeaders(),

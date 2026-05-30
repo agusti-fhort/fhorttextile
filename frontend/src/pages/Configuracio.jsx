@@ -279,7 +279,7 @@ export default function Configuracio() {
   const navigate = useNavigate()
   const token = useAuthStore.getState().token || localStorage.getItem('access_token')
 
-  // Guard auth: redirigeix si no hi ha token (cap fetch s'executarà sense auth)
+  // Auth guard: redirect if there is no token (no fetch will run without auth)
   useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
   const current = location.pathname
 

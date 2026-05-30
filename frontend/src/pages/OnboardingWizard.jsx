@@ -97,7 +97,7 @@ export default function OnboardingWizard() {
         </div>
       )}
 
-      {/* Step 1 — Configuració */}
+      {/* Step 1 — Configuration */}
       {step === 1 && (
         <div>
           <div style={{ marginBottom: 16 }}>
@@ -152,7 +152,7 @@ export default function OnboardingWizard() {
         </div>
       )}
 
-      {/* Step 3 — Verificació */}
+      {/* Step 3 — Verification */}
       {step === 3 && (
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#3b6d11', marginBottom: 16 }}>

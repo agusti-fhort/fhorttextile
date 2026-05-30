@@ -12,7 +12,7 @@ export function XatExtraccio({ extraccio, fileBase64, fileType, onUpdate, onClos
   const [iniciant, setIniciant] = useState(true)
   const messagesEndRef = useRef(null)
 
-  // Iniciar el xat automàticament
+  // Start the chat automatically
   useEffect(() => {
     const iniciar = async () => {
       setIniciant(true)
@@ -40,18 +40,18 @@ export function XatExtraccio({ extraccio, fileBase64, fileType, onUpdate, onClos
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [historial, loading])
 
-  const enviar = async () => {
+  const send = async () => {
     const msg = input.trim()
     if (!msg || loading) return
     setInput("")
     setLoading(true)
 
-    // Afegir missatge de l'usuari immediatament
-    const nouHistorial = [...historial, { role: 'user', content: msg }]
-    setHistorial(nouHistorial)
+    // Add the user's message immediately
+    const newHistory = [...historial, { role: 'user', content: msg }]
+    setHistorial(newHistory)
 
     try {
-      // Incloure el fitxer només al primer missatge real
+      // Include the file only in the first real message
       const isFirstReal = historial.filter(h => h.role === 'user').length === 0
 
       const body = {
@@ -69,16 +69,16 @@ export function XatExtraccio({ extraccio, fileBase64, fileType, onUpdate, onClos
       const d = await r.json()
 
       if (r.ok) {
-        setHistorial(d.historial || [...nouHistorial, { role: 'assistant', content: d.resposta }])
+        setHistorial(d.historial || [...newHistory, { role: 'assistant', content: d.resposta }])
         // Aplicar updates si n'hi ha
         if (d.updates && Object.keys(d.updates).length > 0) {
           onUpdate && onUpdate(d.updates)
         }
       } else {
-        setHistorial([...nouHistorial, { role: 'assistant', content: `Error: ${d.error}` }])
+        setHistorial([...newHistory, { role: 'assistant', content: `Error: ${d.error}` }])
       }
     } catch (e) {
-      setHistorial([...nouHistorial, { role: 'assistant', content: `Error de connexió: ${e.message}` }])
+      setHistorial([...newHistory, { role: 'assistant', content: `Error de connexió: ${e.message}` }])
     }
     setLoading(false)
   }
@@ -86,7 +86,7 @@ export function XatExtraccio({ extraccio, fileBase64, fileType, onUpdate, onClos
   const handleKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      enviar()
+      send()
     }
   }
 
@@ -185,7 +185,7 @@ export function XatExtraccio({ extraccio, fileBase64, fileType, onUpdate, onClos
           }}
         />
         <button
-          onClick={enviar}
+          onClick={send}
           disabled={!input.trim() || loading || iniciant}
           style={{
             padding: '6px 14px', borderRadius: 6,

@@ -13,13 +13,13 @@ export default function XatMesures({ modelId, onMesuresUpdated }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [historial])
 
-  const handleEnviar = async () => {
+  const handleSend = async () => {
     if (!input.trim() || loading) return
-    const missatge = input.trim()
+    const message = input.trim()
     setInput('')
 
-    const nouHistorial = [...historial, { role: 'user', content: missatge }]
-    setHistorial(nouHistorial)
+    const newHistory = [...historial, { role: 'user', content: message }]
+    setHistorial(newHistory)
     setLoading(true)
 
     try {
@@ -27,7 +27,7 @@ export default function XatMesures({ modelId, onMesuresUpdated }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          missatge,
+          missatge: message,
           historial: historial,
         }),
       })
@@ -35,7 +35,7 @@ export default function XatMesures({ modelId, onMesuresUpdated }) {
 
       if (r.ok) {
         setHistorial(d.historial_nou || [
-          ...nouHistorial,
+          ...newHistory,
           { role: 'assistant', content: d.resposta }
         ])
         if (d.accions_executades?.length > 0 && onMesuresUpdated) {
@@ -131,7 +131,7 @@ export default function XatMesures({ modelId, onMesuresUpdated }) {
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleEnviar()}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
           placeholder="Escriu un missatge... (Enter per enviar)"
           disabled={loading}
           style={{
@@ -141,7 +141,7 @@ export default function XatMesures({ modelId, onMesuresUpdated }) {
             fontFamily: 'IBM Plex Mono, monospace',
           }}
         />
-        <button type="button" onClick={handleEnviar} disabled={loading || !input.trim()}
+        <button type="button" onClick={handleSend} disabled={loading || !input.trim()}
           style={{
             padding: '7px 14px', background: loading ? '#ccc' : 'var(--gold)',
             color: '#fff', border: 'none', borderRadius: 6,

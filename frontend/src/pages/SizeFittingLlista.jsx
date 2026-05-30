@@ -9,7 +9,7 @@ import Badge from '../components/ui/Badge'
 const TIPUS = ['', 'Proto', 'Fit', 'SizeSet', 'PP', 'TOP']
 const ESTATS = ['', 'Pendent', 'BaseOberta', 'TallesGenerades', 'Tancat']
 
-const estatVariant = {
+const statusVariant = {
   'Pendent':         'gray',
   'BaseOberta':      'warn',
   'TallesGenerades': 'gate',
@@ -67,7 +67,7 @@ export default function SizeFittingLlista() {
       <Badge variant="gate">{r.tipus}</Badge>
     )},
     { key: 'estat', label: 'Estat', render: r => (
-      <Badge variant={estatVariant[r.estat] || 'gray'}>{r.estat}</Badge>
+      <Badge variant={statusVariant[r.estat] || 'gray'}>{r.estat}</Badge>
     )},
     { key: 'data_creacio', label: 'Data creació', render: r => (
       <span style={{color: 'var(--gray)', fontWeight: 300}}>

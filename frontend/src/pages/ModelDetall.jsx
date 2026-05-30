@@ -540,7 +540,7 @@ function TabControl({ model, token, onUpdate }) {
       .catch(() => {})
   }, [model?.id, token])
 
-  const generarTasques = async () => {
+  const generateTasks = async () => {
     setGenerant(true)
     setMsg(null)
     try {
@@ -611,7 +611,7 @@ function TabControl({ model, token, onUpdate }) {
       <Section title="Tasques">
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <button
-            onClick={generarTasques}
+            onClick={generateTasks}
             disabled={generant}
             style={btnSecondary}
           >
@@ -632,7 +632,7 @@ function TabControl({ model, token, onUpdate }) {
         <KanbanTasquesModel
           modelId={model?.id}
           token={token}
-          onGenerarTasques={generarTasques}
+          onGenerarTasques={generateTasks}
         />
       </Section>
 
@@ -722,7 +722,7 @@ export default function ModelDetall() {
   const token = useAuthStore.getState().token || localStorage.getItem('access_token')
   const [tab, setTab] = useState(0)
 
-  // Guard auth: redirigeix si no hi ha token (cap fetch s'executarà sense auth)
+  // Auth guard: redirect if there is no token (no fetch will run without auth)
   useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
 
   const { model, loading, error, refresh } = useModel(id, token)

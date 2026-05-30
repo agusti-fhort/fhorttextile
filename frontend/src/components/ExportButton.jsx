@@ -62,7 +62,7 @@ export function ExportButton({ url, filename, label = "Exportar", type = "csv" }
   )
 }
 
-// Exportadors específics pre-configurats
+// Pre-configured specific exporters
 export function ExportGradingCSV({ ruleSetId }) {
   return (
     <ExportButton
