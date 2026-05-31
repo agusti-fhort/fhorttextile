@@ -236,7 +236,7 @@ function hasSaveChanges(grid) {
   )
 }
 
-function ReviewScreen({ session, pieces, onBack, onDone }) {
+function ReviewScreen({ session, pieces, onBack, onSaved, onDone }) {
   const { t } = useTranslation()
   const [grids, setGrids] = useState(null)
   const [photos, setPhotos] = useState([])
@@ -262,7 +262,7 @@ function ReviewScreen({ session, pieces, onBack, onDone }) {
   const doSave = () => {
     if (!grids) return
     const toClose = grids.filter(hasSaveChanges)
-    if (!toClose.length) { onDone(); return }
+    if (!toClose.length) { onSaved(); return }
     setBusy(true); setError(null); setProgress({ done: 0, total: toClose.length })
     ;(async () => {
       let done = 0
@@ -275,7 +275,9 @@ function ReviewScreen({ session, pieces, onBack, onDone }) {
           setBusy(false); return
         }
       }
-      setBusy(false); onDone()
+      // Gravat reeixit: NO toquem l'estat de la sessió (segueix Oberta; l'acceptació/fase
+      // es gestiona a part). Sortim a la llista de sessions.
+      setBusy(false); onSaved()
     })()
   }
 
@@ -589,6 +591,7 @@ export default function FittingDetail() {
           session={session}
           pieces={pieces}
           onBack={() => setReviewMode(false)}
+          onSaved={() => navigate('/fittings')}
           onDone={() => { setReviewMode(false); loadSession().then(reloadGrid) }}
         />
       )}
