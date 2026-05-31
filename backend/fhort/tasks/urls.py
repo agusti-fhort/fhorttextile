@@ -34,6 +34,14 @@ try:
 except Exception:
     pass
 
+# Sprint E — confecció: Supplier + Production (read-only). Registered before router.urls.
+try:
+    from fhort.tasks.views_b import SupplierViewSet, ProductionViewSet
+    router.register(r'suppliers', SupplierViewSet, basename='supplier')
+    router.register(r'productions', ProductionViewSet, basename='production')
+except Exception:
+    pass
+
 urlpatterns = router.urls
 
 
@@ -60,6 +68,18 @@ try:
         _path_d('gates/ready/', gate_ready_models_view),
     ]
     urlpatterns = _sprintd_paths + urlpatterns
+except Exception:
+    pass
+
+# Sprint E — confecció: demanar producció + transicions de cicle. Requires schedule_fittings.
+try:
+    from fhort.tasks.views_b import request_production_view, production_status_view
+    from django.urls import path as _path_e
+    _sprinte_paths = [
+        _path_e('models/<int:model_id>/request-production/', request_production_view),
+        _path_e('productions/<int:pk>/status/', production_status_view),
+    ]
+    urlpatterns = _sprinte_paths + urlpatterns
 except Exception:
     pass
 

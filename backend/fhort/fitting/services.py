@@ -8,6 +8,8 @@ removed in Sprint 5B.5 together with the SFFitting/SFFittingLinia models.
 from __future__ import annotations
 import logging
 
+from django.db import transaction
+
 logger = logging.getLogger(__name__)
 
 
@@ -336,6 +338,7 @@ def session_can_advance(session_id: int) -> bool:
     return all(g in _GATE_ADVANCEABLE for g in gates)
 
 
+@transaction.atomic
 def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | None = None) -> dict:
     """Manual phase advance: the responsible person CHOOSES nova_fase (may skip,
     repeat or go back — we do NOT compute "the next one").
@@ -365,6 +368,19 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
         PieceFitting.objects.filter(session_id=session_id)
         .select_related('model', 'grading_version', 'grading_version__size_fitting')
     )
+
+    # Regla dura (Sprint E): pre-check de confecció ABANS de cap mutació, per evitar estat
+    # parcial en sessions multi-model. Els models a TOP se salten (no avancen, no s'exigeixen).
+    from fhort.tasks.services_e import has_delivered_production
+    missing = sorted({
+        pf.model.pk for pf in pieces
+        if pf.model.fase_actual != 'TOP'
+        and not has_delivered_production(pf.model.pk, pf.model.fase_actual)
+    })
+    if missing:
+        raise ValueError(
+            f"No es pot avançar: cap confecció entregada per a la fase actual dels models {missing}."
+        )
 
     now = timezone.now()
     sealed = []

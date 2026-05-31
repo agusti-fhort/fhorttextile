@@ -259,3 +259,46 @@ class GateEvent(models.Model):
 
     def __str__(self):
         return f'{self.model_id}: {self.from_phase}→{self.to_phase}'
+
+
+class Supplier(models.Model):
+    """Destinatari d'una confecció (taller/fàbrica). Esquelètic ara; creix cap a fitxa
+    de proveïdor en un sprint futur."""
+    name = models.CharField(max_length=200)
+    type = models.CharField(max_length=20,
+                            choices=[('workshop', 'Taller'), ('factory', 'Fàbrica')], default='workshop')
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Supplier'
+        verbose_name_plural = 'Suppliers'
+
+    def __str__(self):
+        return self.name
+
+
+class Production(models.Model):
+    """Confecció: encàrrec extern de produir una peça per a una fase. Recurs extern amb
+    cicle propi. Precondició: la fase ha d'haver passat el gate. La seva entrega (Delivered)
+    habilita el fitting executable d'aquella fase."""
+    STATUS_CHOICES = [('Requested', 'Requested'), ('InProgress', 'InProgress'),
+                      ('Delivered', 'Delivered')]
+    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='productions')
+    phase = models.CharField(max_length=20)   # la fase que materialitza (Proto/Fit/...)
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='productions')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Requested')
+    requested_at = models.DateTimeField(auto_now_add=True)
+    expected_at = models.DateField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    requested_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                     null=True, blank=True, related_name='requested_productions')
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+        verbose_name = 'Production'
+        verbose_name_plural = 'Productions'
+
+    def __str__(self):
+        return f'{self.model_id} · {self.phase} · {self.status}'

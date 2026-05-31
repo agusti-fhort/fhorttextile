@@ -5,13 +5,17 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
-from fhort.accounts.capabilities import HasCapability, DEFINE_TASKS, EXECUTE_TASKS, CLOSE_GATES
+from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TASKS,
+                                         CLOSE_GATES, SCHEDULE_FITTINGS)
 from fhort.models_app.models import Model
-from .models import TaskType, ModelTask
-from .serializers_b import TaskTypeSerializer, ModelTaskSerializer
+from .models import TaskType, ModelTask, Supplier, Production
+from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
+                            SupplierSerializer, ProductionSerializer)
 from .services_c import transition_task, TransitionError, rectification_count
 from .services_d import (advance_phase_gate, advance_phases_chain,
                          model_ready_for_gate, GateError)
+from .services_e import (request_production, set_production_status,
+                         ProductionError, has_delivered_production)
 
 
 class TaskTypeViewSet(viewsets.ModelViewSet):
@@ -169,3 +173,73 @@ def gate_ready_models_view(request):
                         'fase_actual': m.fase_actual,
                         'task_count': ModelTask.objects.filter(model_id=m.id).count()})
     return Response({'ready': out}, status=http_status.HTTP_200_OK)
+
+
+class _ScheduleFittings(HasCapability):
+    required_capability = SCHEDULE_FITTINGS
+
+
+class SupplierViewSet(viewsets.ModelViewSet):
+    queryset = Supplier.objects.all()
+    serializer_class = SupplierSerializer
+    filterset_fields = ['active', 'type']
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        p = HasCapability(); self.required_capability = SCHEDULE_FITTINGS
+        return [p]
+
+
+class ProductionViewSet(viewsets.ReadOnlyModelViewSet):
+    """Llistat/detall de confeccions. Creació i transicions via endpoints dedicats."""
+    queryset = Production.objects.select_related('supplier', 'model', 'requested_by').all()
+    serializer_class = ProductionSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['model', 'phase', 'status', 'supplier']
+
+
+@api_view(['POST'])
+@permission_classes([_ScheduleFittings])
+def request_production_view(request, model_id):
+    """POST /api/v1/models/<model_id>/request-production/
+    Body: {"phase":"Proto","supplier_id":1,"expected_at":"2026-06-15","notes":"..."}"""
+    profile = getattr(request.user, 'profile', None)
+    try:
+        model = Model.objects.get(pk=model_id)
+        supplier = Supplier.objects.get(pk=request.data['supplier_id'])
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    except Supplier.DoesNotExist:
+        return Response({'error': 'Supplier no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    except KeyError:
+        return Response({'error': 'supplier_id requerit.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    phase = request.data.get('phase')
+    if not phase:
+        return Response({'error': 'phase requerit.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        p = request_production(model, phase, supplier, profile,
+                               expected_at=request.data.get('expected_at'),
+                               notes=request.data.get('notes'))
+    except ProductionError as e:
+        return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
+    return Response(ProductionSerializer(p).data, status=http_status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([_ScheduleFittings])
+def production_status_view(request, pk):
+    """POST /api/v1/productions/<pk>/status/  Body: {"status":"Delivered"}"""
+    try:
+        prod = Production.objects.get(pk=pk)
+    except Production.DoesNotExist:
+        return Response({'error': 'Production no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+    new_status = request.data.get('status')
+    if not new_status:
+        return Response({'error': 'status requerit.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        prod = set_production_status(prod, new_status)
+    except ProductionError as e:
+        return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
+    return Response(ProductionSerializer(prod).data, status=http_status.HTTP_200_OK)

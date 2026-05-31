@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import TaskType, ModelTask
+from .models import TaskType, ModelTask, Supplier, Production
 from .services_c import rectification_count
 
 
@@ -23,3 +23,19 @@ class ModelTaskSerializer(serializers.ModelSerializer):
 
     def get_rectifications(self, obj):
         return rectification_count(obj)
+
+
+class SupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = ['id', 'name', 'type', 'active']
+
+
+class ProductionSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+
+    class Meta:
+        model = Production
+        fields = ['id', 'model', 'phase', 'supplier', 'supplier_name', 'status',
+                  'requested_at', 'expected_at', 'delivered_at', 'requested_by', 'notes']
+        read_only_fields = ['requested_at', 'delivered_at', 'status', 'requested_by']
