@@ -239,3 +239,23 @@ class TaskTransition(models.Model):
 
     def __str__(self):
         return f'{self.model_task_id}: {self.from_status}→{self.to_status}'
+
+
+class GateEvent(models.Model):
+    """Log d'un gate: acceptació formal que avança la fase d'un Model.
+    Captura qui accepta, quan, des de quina fase i cap a quina (memo §3.5)."""
+    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='gate_events')
+    from_phase = models.CharField(max_length=20, null=True, blank=True)
+    to_phase = models.CharField(max_length=20)
+    by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                           null=True, blank=True, related_name='gate_events')
+    notes = models.TextField(null=True, blank=True)
+    at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['at']
+        verbose_name = 'Gate event'
+        verbose_name_plural = 'Gate events'
+
+    def __str__(self):
+        return f'{self.model_id}: {self.from_phase}→{self.to_phase}'

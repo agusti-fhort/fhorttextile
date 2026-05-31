@@ -389,8 +389,21 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
             version.save(update_fields=['aprovada', 'aprovada_per', 'data_aprovacio'])
             sealed.append(version.pk)
 
+        prev_phase = model.fase_actual
         Model.objects.filter(pk=model.pk).update(fase_actual=nova_fase)
         advanced.append(model.pk)
+
+        try:
+            from fhort.tasks.models import GateEvent
+            GateEvent.objects.create(
+                model_id=model.pk,
+                from_phase=prev_phase,
+                to_phase=nova_fase,
+                by_id=user_profile_id,
+                notes='(via fitting)',
+            )
+        except Exception:
+            pass  # no trencar el fitting si el log falla
 
     session.estat = 'Tancada'
     session.save(update_fields=['estat'])

@@ -50,6 +50,19 @@ try:
 except Exception:
     pass
 
+# Sprint D — gate del responsable (avanç de fase sense sessió). Requires close_gates.
+try:
+    from fhort.tasks.views_b import gate_model_view, gate_bulk_view, gate_ready_models_view
+    from django.urls import path as _path_d
+    _sprintd_paths = [
+        _path_d('models/<int:model_id>/gate/', gate_model_view),
+        _path_d('gates/bulk/', gate_bulk_view),
+        _path_d('gates/ready/', gate_ready_models_view),
+    ]
+    urlpatterns = _sprintd_paths + urlpatterns
+except Exception:
+    pass
+
 
 
 # Sprint 3 — grading views
