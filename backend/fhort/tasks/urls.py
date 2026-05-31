@@ -33,12 +33,10 @@ urlpatterns = router.urls
 
 # Sprint 2 — action views
 try:
-    from fhort.tasks.action_views import generate_tasks_view, process_gate_view, tasks_summary_view
+    from fhort.tasks.action_views import tasks_summary_view
     from django.urls import path as _path
     _sprint2_paths = [
-        _path('models/<int:model_id>/generar-tasques/', generate_tasks_view),
         _path('models/<int:model_id>/resum-tasques/', tasks_summary_view),
-        _path('model-tasques/<int:tasca_id>/processar-gate/', process_gate_view),
     ]
     urlpatterns = _sprint2_paths + urlpatterns
 except Exception as _e:
