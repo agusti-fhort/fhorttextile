@@ -330,11 +330,15 @@ class GarmentTypeItem(models.Model):
 
 class TaskTimeEstimate(models.Model):
     """Cel·la de la matriu d'estimació de temps: (garment_type_item × task_type) → minuts.
-    estimated_minutes NULL = encara no estimat (s'omplirà amb dades reals, Sprint I)."""
+    estimated_minutes = SEED (estimació inicial). n/mean_minutes/m2 = estadística Welford de
+    temps reals observats (Sprint I). El planificador usa mean_minutes si n>=llindar, si no seed."""
     garment_type_item = models.ForeignKey(GarmentTypeItem, on_delete=models.CASCADE,
                                           related_name='time_estimates')
     task_type = models.ForeignKey(TaskType, on_delete=models.CASCADE, related_name='time_estimates')
     estimated_minutes = models.PositiveIntegerField(null=True, blank=True)
+    n = models.PositiveIntegerField(default=0)         # nombre de mostres reals
+    mean_minutes = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # mitjana real
+    m2 = models.DecimalField(max_digits=16, decimal_places=4, default=0)  # acum. variància (Welford)
 
     class Meta:
         unique_together = [('garment_type_item', 'task_type')]

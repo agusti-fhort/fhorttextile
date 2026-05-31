@@ -61,6 +61,9 @@ def transition_task(task, to_status, profile):
         _open_timer(task, profile)
         if task.started_at is None:
             task.started_at = now
+        if frm == 'Done':
+            # Reobrir torna la tasca a oberta; conserva started_at, neteja finished_at
+            task.finished_at = None
 
     elif frm == 'InProgress' and to_status in ('Paused', 'Done'):
         _close_open_timer(task)
@@ -74,6 +77,12 @@ def transition_task(task, to_status, profile):
     task.status = to_status
     task.save()
     _log(task, frm, to_status, profile)
+
+    if to_status == 'Done':
+        # Sprint I: alimentar l'estadística Welford amb el temps real (timers ja tancats;
+        # defensiu, no trenca el tancament de la tasca)
+        from .services_i import record_actual_time
+        record_actual_time(task)
 
     return {'task_id': task.pk, 'status': to_status, 'paused_task_id': paused_task_id}
 
