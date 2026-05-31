@@ -223,6 +223,25 @@
       "documents": "Documentos",
       "no_files": "Sin archivos",
       "download": "Descargar"
+    },
+    "save": {
+      "open": "Grabar el fitting",
+      "title": "Grabar el fitting",
+      "changes": "Cambios",
+      "no_changes": "Sin cambios",
+      "observations": "Observaciones",
+      "no_observations": "Sin observaciones",
+      "images": "Imágenes",
+      "no_images": "Sin imágenes",
+      "send_to": "Enviar a",
+      "send_to_ph": "Direcciones de correo (separadas por comas)",
+      "save": "Grabar",
+      "back": "Volver atrás",
+      "discard": "Descartar",
+      "discard_confirm": "¿Seguro que quieres descartar los cambios? Se restaurarán las medidas al estado de apertura. La sesión, las fotos y las observaciones se conservan.",
+      "saving_progress": "Grabando pieza {{done}} de {{total}}…",
+      "save_error": "Error al grabar la pieza {{piece}}.",
+      "discard_error": "Error al descartar la pieza {{piece}}."
     }
   }
 }

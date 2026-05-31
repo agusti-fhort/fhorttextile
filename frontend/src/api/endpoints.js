@@ -74,11 +74,18 @@ export const pieceFittings = {
   get: (id) => client.get(`/api/v1/piece-fittings/${id}/`),
   setGate: (id, resultat, motiu = '') => client.post(`/api/v1/piece-fittings/${id}/set-gate/`, { resultat, motiu }),
   close: (id) => client.post(`/api/v1/piece-fittings/${id}/close/`),
+  // 5B.6-B3 — revert atòmic de reals a l'estat d'obertura (valor_real := valor_teoric).
+  discard: (id) => client.post(`/api/v1/piece-fittings/${id}/discard/`),
 }
 
 // Autosave de cel·la: només PATCH de valor_real / nota.
 export const pieceFittingLines = {
   update: (id, data) => client.patch(`/api/v1/piece-fitting-lines/${id}/`, data),
+}
+
+// 5B.6-B3 — Fotos de la sessió (llistar; pujada ajornada a B2).
+export const fittingPhotos = {
+  list: (params) => client.get('/api/v1/fitting-photos/', { params }),
 }
 
 export const gradingVersions = {

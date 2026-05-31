@@ -231,6 +231,26 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
     return result
 
 
+def discard_piece_fitting(piece_fitting_id: int) -> dict:
+    """Revert a PieceFitting to its OPENING state: valor_real := valor_teoric for
+    every line, atomically. Pure measurement revert — does NOT touch FittingSession,
+    FittingPhoto, notes, gates, GradingVersion or grading. Returns {'reverted': N}.
+    """
+    from django.db import transaction
+    from django.db.models import F
+    from fhort.fitting.models import PieceFittingLine
+
+    with transaction.atomic():
+        reverted = (
+            PieceFittingLine.objects
+            .filter(piece_fitting_id=piece_fitting_id)
+            .update(valor_real=F('valor_teoric'))
+        )
+
+    logger.info(f"PieceFitting {piece_fitting_id} discarded: {reverted} lines reverted")
+    return {'reverted': reverted}
+
+
 # ── Sprint 5B.3 helpers ──────────────────────────────────────────────────────
 
 def _resolve_working_size_fitting(model):

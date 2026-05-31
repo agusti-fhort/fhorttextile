@@ -196,6 +196,12 @@ class PieceFittingViewSet(mixins.RetrieveModelMixin,
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(result)
 
+    @action(detail=True, methods=['post'])
+    def discard(self, request, pk=None):
+        """Revert valor_real := valor_teoric for all lines (pure measurement revert)."""
+        result = services.discard_piece_fitting(int(pk))
+        return Response(result)
+
 
 class PieceFittingLineViewSet(mixins.UpdateModelMixin,
                               mixins.RetrieveModelMixin,

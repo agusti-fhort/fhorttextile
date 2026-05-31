@@ -223,6 +223,25 @@
       "documents": "Documents",
       "no_files": "Sense fitxers",
       "download": "Descarregar"
+    },
+    "save": {
+      "open": "Gravar el fitting",
+      "title": "Gravar el fitting",
+      "changes": "Canvis",
+      "no_changes": "Sense canvis",
+      "observations": "Observacions",
+      "no_observations": "Sense observacions",
+      "images": "Imatges",
+      "no_images": "Sense imatges",
+      "send_to": "Enviar a",
+      "send_to_ph": "Adreces de correu (separades per comes)",
+      "save": "Gravar",
+      "back": "Tornar enrere",
+      "discard": "Descartar",
+      "discard_confirm": "Segur que vols descartar els canvis? Es restauraran les mesures a l'estat d'obertura. La sessió, les fotos i les observacions es conserven.",
+      "saving_progress": "Gravant peça {{done}} de {{total}}…",
+      "save_error": "Error en gravar la peça {{piece}}.",
+      "discard_error": "Error en descartar la peça {{piece}}."
     }
   }
 }

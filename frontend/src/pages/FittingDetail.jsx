@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, pieceFittings, pieceFittingLines, modelFitxers } from '../api/endpoints'
+import { fittingSessions, pieceFittings, pieceFittingLines, fittingPhotos, modelFitxers } from '../api/endpoints'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 
@@ -204,6 +204,238 @@ function ModelFilesPanel({ modelId }) {
   )
 }
 
+// ── 5B.6-B3 — Pantalla "Gravar el fitting" ───────────────────────────────────
+// Revisió abans de consolidar. Gravar = close per cada peça amb canvis (valor_real ≠
+// valor_teoric). Descartar = revert atòmic de reals a l'obertura (NO toca sessió/fotos/
+// notes). PDF/mail ajornat: "Enviar a" és stub visual, no dispara res.
+
+// Files (POM) d'una peça amb almenys una talla modificada respecte de Base (evolucio[0]).
+function changedRows(grid) {
+  const lines = grid.lines || []
+  const present = new Set(lines.map(l => l.size_label))
+  const sizeLabels = orderedSizes(grid.model?.size_run_model, present)
+  const baseLabel = (grid.model?.base_size_label || '').trim()
+  const pomMap = new Map()
+  for (const l of lines) {
+    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, { pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key, cells: {} })
+    pomMap.get(l.pom_id).cells[l.size_label] = l
+  }
+  const baseOf = (l) => l?.evolucio?.[0]?.valor_cm ?? null
+  const isMod = (l) => {
+    const b = baseOf(l)
+    return l && l.valor_real != null && b != null && Number(l.valor_real) !== Number(b)
+  }
+  const rows = [...pomMap.values()].filter(row => Object.values(row.cells).some(isMod))
+  return { sizeLabels, baseLabel, rows, isMod }
+}
+
+// Una peça té canvis a gravar si alguna línia té valor_real ≠ valor_teoric (el que close aplica).
+function hasSaveChanges(grid) {
+  return (grid.lines || []).some(
+    l => l.valor_real != null && Math.abs(Number(l.valor_real) - Number(l.valor_teoric)) > 1e-6
+  )
+}
+
+function ReviewScreen({ session, pieces, onBack, onDone }) {
+  const { t } = useTranslation()
+  const [grids, setGrids] = useState(null)
+  const [photos, setPhotos] = useState([])
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(null)
+  const [error, setError] = useState(null)
+  // "Enviar a": STUB VISUAL — no dispara res (PDF/mail ajornat).
+  const [sendTo, setSendTo] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      Promise.all(pieces.map(p => pieceFittings.get(p.id).then(r => r.data))),
+      fittingPhotos.list({ session: session.id }).then(r => r.data.results || r.data).catch(() => []),
+    ]).then(([gs, ph]) => {
+      if (cancelled) return
+      setGrids(gs)
+      setPhotos(Array.isArray(ph) ? ph : (ph.results || []))
+    })
+    return () => { cancelled = true }
+  }, [pieces, session.id])
+
+  const doSave = () => {
+    if (!grids) return
+    const toClose = grids.filter(hasSaveChanges)
+    if (!toClose.length) { onDone(); return }
+    setBusy(true); setError(null); setProgress({ done: 0, total: toClose.length })
+    ;(async () => {
+      let done = 0
+      for (const g of toClose) {
+        try {
+          await pieceFittings.close(g.id)
+          done += 1; setProgress({ done, total: toClose.length })
+        } catch (e) {
+          setError(t('fitting.save.save_error', { piece: g.model?.codi || g.id }))
+          setBusy(false); return
+        }
+      }
+      setBusy(false); onDone()
+    })()
+  }
+
+  const doDiscard = () => {
+    if (!window.confirm(t('fitting.save.discard_confirm'))) return
+    setBusy(true); setError(null)
+    ;(async () => {
+      for (const p of pieces) {
+        try {
+          await pieceFittings.discard(p.id)
+        } catch (e) {
+          setError(t('fitting.save.discard_error', { piece: p.model_codi || p.id }))
+          setBusy(false); return
+        }
+      }
+      setBusy(false); onDone()
+    })()
+  }
+
+  const sectionTitle = (icon, label) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500, marginBottom: 10 }}>
+      <i className={`ti ${icon}`} style={{ fontSize: 14, color: 'var(--gold)' }} />{label}
+    </div>
+  )
+  const muted = { fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
+        <button onClick={onBack} disabled={busy} style={{
+          background: 'none', border: 'none', color: 'var(--text-muted)', cursor: busy ? 'default' : 'pointer', fontSize: 12, padding: 0, marginRight: 12,
+        }}>← {t('fitting.save.back')}</button>
+        <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-main)' }}>{t('fitting.save.title')}</span>
+      </div>
+
+      {grids === null ? (
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('app.loading')}</div>
+      ) : (
+        <>
+          {/* a) CANVIS — per peça, files POM amb talles modificades vs Base (vermell) */}
+          <Card title={t('fitting.save.changes')} style={{ marginBottom: '1.25rem' }}>
+            {(() => {
+              const piecesWithChanges = grids.map(g => ({ g, ...changedRows(g) })).filter(x => x.rows.length > 0)
+              if (!piecesWithChanges.length) return <div style={muted}>{t('fitting.save.no_changes')}</div>
+              return piecesWithChanges.map(({ g, sizeLabels, baseLabel, rows, isMod }) => (
+                <div key={g.id} style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-main)', marginBottom: 8 }}>
+                    {g.model?.codi}{g.model?.nom ? ` · ${g.model.nom}` : ''}
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, textAlign: 'left' }}>{t('fitting.grid.pom')}</th>
+                          <th style={{ ...thStyle, textAlign: 'left' }}>{t('fitting.grid.name')}</th>
+                          {sizeLabels.map(s => (
+                            <th key={s} style={{ ...thStyle, textAlign: 'right', background: s === baseLabel ? 'var(--gold-pale)' : undefined }}>{s}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row, i) => {
+                          const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-card)'
+                          return (
+                            <tr key={row.pom_id} style={{ background: rowBg }}>
+                              <td style={{ padding: '5px 10px', borderBottom: '0.5px solid var(--border)', fontWeight: 500, color: 'var(--gold)', whiteSpace: 'nowrap' }}>
+                                {row.codi}{row.is_key && <i className="ti ti-star-filled" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} />}
+                              </td>
+                              <td style={{ padding: '5px 10px', borderBottom: '0.5px solid var(--border)', color: 'var(--text-muted)' }}>{row.nom}</td>
+                              {sizeLabels.map(s => {
+                                const line = row.cells[s]
+                                const mod = isMod(line)
+                                return (
+                                  <td key={s} style={{
+                                    padding: '5px 10px', borderBottom: '0.5px solid var(--border)', textAlign: 'right',
+                                    fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+                                    background: s === baseLabel ? 'var(--gold-pale)' : undefined,
+                                    color: mod ? 'var(--err)' : 'var(--text-main)', fontWeight: mod ? 700 : 400,
+                                  }}>
+                                    {line?.valor_real == null ? '—' : line.valor_real}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))
+            })()}
+          </Card>
+
+          {/* b) OBSERVACIONS — session.notes (lectura) */}
+          <Card title={t('fitting.save.observations')} style={{ marginBottom: '1.25rem' }}>
+            {session.notes ? (
+              <div style={{ fontSize: 13, color: 'var(--text-main)', whiteSpace: 'pre-wrap' }}>{session.notes}</div>
+            ) : <div style={muted}>{t('fitting.save.no_observations')}</div>}
+          </Card>
+
+          {/* c) IMATGES — miniatures (pujada ajornada a B2; aquí només llistar) */}
+          <Card title={t('fitting.save.images')} style={{ marginBottom: '1.25rem' }}>
+            {photos.length === 0 ? (
+              <div style={muted}>{t('fitting.save.no_images')}</div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                {photos.map(f => (
+                  <a key={f.id} href={f.fitxer} target="_blank" rel="noopener noreferrer"
+                    style={{ display: 'block', width: 160, height: 160, borderRadius: 8, overflow: 'hidden', border: '0.5px solid var(--border)' }}>
+                    <img src={f.fitxer} alt={f.caption || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </a>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* d) ENVIAR A — STUB VISUAL: cablejat però NO dispara res (PDF/mail ajornat) */}
+          <Card title={t('fitting.save.send_to')} style={{ marginBottom: '1.25rem' }}>
+            <input
+              type="text" value={sendTo} onChange={e => setSendTo(e.target.value)}
+              placeholder={t('fitting.save.send_to_ph')}
+              style={{
+                width: '100%', maxWidth: 420, padding: '6px 10px', fontSize: 13,
+                border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)',
+                color: 'var(--text-main)', boxSizing: 'border-box',
+              }}
+            />
+          </Card>
+
+          {error && (
+            <div style={{ color: 'var(--err)', fontSize: 12, marginBottom: 12 }}>{error}</div>
+          )}
+          {progress && busy && (
+            <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 12 }}>
+              {t('fitting.save.saving_progress', { done: progress.done, total: progress.total })}
+            </div>
+          )}
+
+          {/* ACCIONS */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4 }}>
+            <button onClick={doSave} disabled={busy} style={{
+              background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 8,
+              padding: '8px 18px', fontSize: 13, fontWeight: 500, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
+            }}>{t('fitting.save.save')}</button>
+            <button onClick={onBack} disabled={busy} style={{
+              background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
+              padding: '8px 18px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
+            }}>{t('fitting.save.back')}</button>
+            <button onClick={doDiscard} disabled={busy} style={{
+              marginLeft: 'auto', background: 'var(--white)', color: 'var(--err)', border: '0.5px solid var(--err)', borderRadius: 8,
+              padding: '8px 18px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
+            }}>{t('fitting.save.discard')}</button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function FittingDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -215,6 +447,7 @@ export default function FittingDetail() {
   const [gridLoading, setGridLoading] = useState(false)
   const [creatingPiece, setCreatingPiece] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
+  const [reviewMode, setReviewMode] = useState(false)
   // Valors editables lligats al parent → modificat reactiu i remuntatge net per peça.
   const [reals, setReals] = useState({})
 
@@ -232,10 +465,10 @@ export default function FittingDetail() {
     loadSession(true).finally(() => setLoading(false))
   }, [loadSession])
 
-  useEffect(() => {
-    if (!activePieceId) { setGrid(null); return }
+  const reloadGrid = useCallback(() => {
+    if (!activePieceId) { setGrid(null); return Promise.resolve() }
     setGridLoading(true)
-    pieceFittings.get(activePieceId)
+    return pieceFittings.get(activePieceId)
       .then(res => {
         setGrid(res.data)
         const r = {}
@@ -244,6 +477,8 @@ export default function FittingDetail() {
       })
       .finally(() => setGridLoading(false))
   }, [activePieceId])
+
+  useEffect(() => { reloadGrid() }, [reloadGrid])
 
   const createPiece = () => {
     if (!session?.model) return
@@ -348,6 +583,17 @@ export default function FittingDetail() {
       {/* Panell info de fitxers del model (toggle des de la icona Info) */}
       {infoOpen && session.model && <ModelFilesPanel modelId={session.model} />}
 
+      {/* Pantalla de revisió "Gravar el fitting" (substitueix la taula de treball) */}
+      {reviewMode && (
+        <ReviewScreen
+          session={session}
+          pieces={pieces}
+          onBack={() => setReviewMode(false)}
+          onDone={() => { setReviewMode(false); loadSession().then(reloadGrid) }}
+        />
+      )}
+
+      {!reviewMode && (<>
       {/* Selector de peça */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 4 }}>{t('fitting.piece.select')}:</span>
@@ -370,6 +616,12 @@ export default function FittingDetail() {
             background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
             borderRadius: 8, padding: '5px 12px', fontSize: 11, cursor: creatingPiece ? 'default' : 'pointer',
           }}>+ {creatingPiece ? t('fitting.piece.creating') : t('fitting.piece.create')}</button>
+        )}
+        {pieces.length > 0 && (
+          <button onClick={() => setReviewMode(true)} style={{
+            marginLeft: 'auto', background: 'var(--gold)', color: 'var(--white)', border: 'none',
+            borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+          }}>{t('fitting.save.open')}</button>
         )}
       </div>
 
@@ -462,6 +714,7 @@ export default function FittingDetail() {
           )}
         </Card>
       )}
+      </>)}
 
     </div>
   )

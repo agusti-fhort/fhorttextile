@@ -223,6 +223,25 @@
       "documents": "Documents",
       "no_files": "No files",
       "download": "Download"
+    },
+    "save": {
+      "open": "Save fitting",
+      "title": "Save fitting",
+      "changes": "Changes",
+      "no_changes": "No changes",
+      "observations": "Observations",
+      "no_observations": "No observations",
+      "images": "Images",
+      "no_images": "No images",
+      "send_to": "Send to",
+      "send_to_ph": "Email addresses (comma-separated)",
+      "save": "Save",
+      "back": "Go back",
+      "discard": "Discard",
+      "discard_confirm": "Discard changes? Measurements will be restored to the opening state. The session, photos and observations are kept.",
+      "saving_progress": "Saving piece {{done}} of {{total}}…",
+      "save_error": "Error saving piece {{piece}}.",
+      "discard_error": "Error discarding piece {{piece}}."
     }
   }
 }
