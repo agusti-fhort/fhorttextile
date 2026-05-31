@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from .models import UserProfile
+from .capabilities import get_capabilities
 
 
 User = get_user_model()
@@ -15,6 +16,7 @@ class MeSerializer(serializers.ModelSerializer):
     nom_complet = serializers.SerializerMethodField()
     rol_nom = serializers.SerializerMethodField()
     color_avatar = serializers.SerializerMethodField()
+    capabilities = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -22,6 +24,7 @@ class MeSerializer(serializers.ModelSerializer):
             'id', 'username', 'first_name', 'last_name', 'email',
             'full_name', 'avatar_url',
             'nom_complet', 'rol_nom', 'color_avatar',
+            'capabilities',
         )
 
     def _profile(self, obj):
@@ -50,6 +53,9 @@ class MeSerializer(serializers.ModelSerializer):
     def get_color_avatar(self, obj):
         profile = self._profile(obj)
         return profile.color_avatar if profile else '#888888'
+
+    def get_capabilities(self, obj):
+        return sorted(get_capabilities(obj))
 
 
 class UserListSerializer(serializers.ModelSerializer):
