@@ -250,3 +250,41 @@ class PaquetServeiTasca(models.Model):
 
     def __str__(self):
         return f"{self.paquet.nom} — {self.tasca.nom_tasca} (#{self.ordre})"
+
+
+class TaskType(models.Model):
+    """Catàleg de tipus de tasca (per-tenant, editable). Pla i simple."""
+    code = models.SlugField(max_length=50, unique=True)
+    name = models.CharField(max_length=200)
+    default_order = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['default_order', 'code']
+        verbose_name = 'Task type'
+        verbose_name_plural = 'Task types'
+
+    def __str__(self):
+        return self.code
+
+
+class ModelTask(models.Model):
+    """Instància de tasca d'un model. Estats nous (Sprint B); temps/log a Sprint C."""
+    STATUS_CHOICES = [('Pending', 'Pending'), ('Paused', 'Paused'),
+                      ('InProgress', 'InProgress'), ('Done', 'Done')]
+    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='model_tasks')
+    task_type = models.ForeignKey(TaskType, on_delete=models.PROTECT, related_name='instances')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    assignee = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                 null=True, blank=True, related_name='assigned_tasks')
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['model', 'order']
+        verbose_name = 'Model task'
+        verbose_name_plural = 'Model tasks'
+
+    def __str__(self):
+        return f'{self.model_id} · {self.task_type.code} ({self.status})'

@@ -27,6 +27,15 @@ except Exception:
 
 # model-fitxers already registered in fhort.models_app.urls
 
+# Sprint B — new task catalog (TaskType) + task instances (ModelTask). Isolated from the
+# legacy Tasca/ModelTasca viewsets above; both coexist. Registered before router.urls.
+try:
+    from fhort.tasks.views_b import TaskTypeViewSet, ModelTaskViewSet
+    router.register(r'task-types', TaskTypeViewSet, basename='task-type')
+    router.register(r'model-task-items', ModelTaskViewSet, basename='model-task-item')
+except Exception:
+    pass
+
 urlpatterns = router.urls
 
 
@@ -40,6 +49,17 @@ try:
     ]
     urlpatterns = _sprint2_paths + urlpatterns
 except Exception as _e:
+    pass
+
+# Sprint B — define tasks of a model (bulk/individual). Requires define_tasks capability.
+try:
+    from fhort.tasks.views_b import define_model_tasks_view
+    from django.urls import path as _path_b
+    _sprintb_paths = [
+        _path_b('models/<int:model_id>/define-tasks/', define_model_tasks_view),
+    ]
+    urlpatterns = _sprintb_paths + urlpatterns
+except Exception:
     pass
 
 
