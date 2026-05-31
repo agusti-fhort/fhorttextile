@@ -43,7 +43,7 @@ class HasCapability(BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        required = getattr(view, "required_capability", None)
+        required = getattr(view, "required_capability", None) or getattr(self, "required_capability", None)
         if required is None:
             return True
         return required in get_capabilities(request.user)
