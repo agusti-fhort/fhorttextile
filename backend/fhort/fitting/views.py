@@ -30,6 +30,11 @@ from .serializers import (
     FittingPhotoSerializer,
 )
 from . import services
+from fhort.accounts.capabilities import HasCapability, SCHEDULE_FITTINGS
+
+
+class _ScheduleFittingsPerm(HasCapability):
+    required_capability = SCHEDULE_FITTINGS
 
 
 def _profile_id(request):
@@ -83,7 +88,7 @@ class POMAlertViewSet(viewsets.ModelViewSet):
 class FittingSessionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['model', 'garment_set', 'fase', 'estat']
+    filterset_fields = ['model', 'garment_set', 'fase', 'estat', 'data', 'responsable']
     ordering_fields = ['data', 'created_at']
     ordering = ['-data', '-created_at']
 
@@ -155,6 +160,36 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(result)
+
+    @action(detail=False, methods=['post'], url_path='schedule',
+            permission_classes=[_ScheduleFittingsPerm])
+    def schedule(self, request):
+        """POST /api/v1/fitting-sessions/schedule/ — programa un fitting (estat Programada).
+        Body: {"fase","data","responsable_id","model_id" XOR "garment_set_id","lloc",
+               "start_time","end_time"}"""
+        d = request.data
+        try:
+            s = services.schedule_session(
+                fase=d.get('fase'), data=d.get('data'),
+                responsable_id=d.get('responsable_id'),
+                model_id=d.get('model_id'), garment_set_id=d.get('garment_set_id'),
+                lloc=d.get('lloc', ''),
+                start_time=d.get('start_time'), end_time=d.get('end_time'))
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(FittingSessionDetailSerializer(s, context={'request': request}).data,
+                        status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='open',
+            permission_classes=[_ScheduleFittingsPerm])
+    def open(self, request, pk=None):
+        """POST /api/v1/fitting-sessions/<pk>/open/ — Programada→Oberta (el dia del fitting)."""
+        try:
+            s = services.open_session(int(pk))
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(FittingSessionDetailSerializer(s, context={'request': request}).data,
+                        status=status.HTTP_200_OK)
 
 
 class PieceFittingViewSet(mixins.RetrieveModelMixin,

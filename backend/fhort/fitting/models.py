@@ -207,6 +207,7 @@ class FittingSession(models.Model):
     (single piece), never both and never neither (XOR, enforced by CheckConstraint).
     """
     ESTAT_CHOICES = [
+        ('Programada', 'Programada'),
         ('Oberta', 'Oberta'),
         ('Tancada', 'Tancada'),
         ('Anullada', 'Anul·lada'),
@@ -227,6 +228,8 @@ class FittingSession(models.Model):
     # Phase lives on the Model/set (Proto/Fit/SizeSet/PP/TOP); reuse its choices.
     fase = models.CharField(max_length=20, choices=Model.FASE_CHOICES)
     data = models.DateField()
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
     model_persona = models.CharField(max_length=200, blank=True, default='')
     assistents = models.CharField(max_length=300, blank=True, default='')
     lloc = models.CharField(max_length=200, blank=True, default='')

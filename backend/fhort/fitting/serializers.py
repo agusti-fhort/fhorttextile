@@ -122,7 +122,7 @@ class FittingSessionDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = FittingSession
         fields = [
-            'id', 'data', 'fase', 'fase_display', 'estat', 'estat_display',
+            'id', 'data', 'start_time', 'end_time', 'fase', 'fase_display', 'estat', 'estat_display',
             'model', 'garment_set', 'target',
             'model_codi_client', 'model_temporada', 'model_any',
             'model_persona', 'assistents', 'lloc',

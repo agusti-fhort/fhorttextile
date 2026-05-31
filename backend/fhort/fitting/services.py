@@ -51,6 +51,30 @@ def create_session(
     )
 
 
+def schedule_session(*, fase, data, responsable_id, model_id=None, garment_set_id=None,
+                     lloc='', start_time=None, end_time=None):
+    """Programa un fitting (estat Programada). El responsable fixa dia (i opcionalment hores).
+    No s'executa fins que s'obre (open_session)."""
+    if bool(model_id) == bool(garment_set_id):
+        raise ValueError("Cal exactament un de model_id o garment_set_id (XOR).")
+    from .models import FittingSession
+    return FittingSession.objects.create(
+        fase=fase, data=data, model_id=model_id, garment_set_id=garment_set_id,
+        responsable_id=responsable_id, lloc=lloc,
+        start_time=start_time, end_time=end_time, estat='Programada')
+
+
+def open_session(session_id):
+    """Obre una sessió Programada (acte del tècnic, el dia del fitting): Programada→Oberta."""
+    from .models import FittingSession
+    s = FittingSession.objects.get(pk=session_id)
+    if s.estat != 'Programada':
+        raise ValueError(f"Només es pot obrir una sessió Programada (estat actual: {s.estat}).")
+    s.estat = 'Oberta'
+    s.save(update_fields=['estat'])
+    return s
+
+
 def create_piece_fitting(session_id: int, model_id: int, *, created_by_id: int | None = None):
     """Create a PieceFitting for one piece and materialise its lines.
 
