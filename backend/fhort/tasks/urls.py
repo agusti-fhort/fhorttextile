@@ -1,13 +1,11 @@
 from rest_framework.routers import DefaultRouter
 
 from .views import (
-    ModelTascaViewSet,
     TascaViewSet,
     TimerEntradaViewSet,
 )
 
 router = DefaultRouter()
-router.register('model-tasques', ModelTascaViewSet, basename='model-tasca')
 router.register('timers', TimerEntradaViewSet, basename='timer')
 
 # Sprint 1C — new endpoints (the sprint1c TascaViewSet is richer than the one in views.py).
@@ -28,7 +26,7 @@ except Exception:
 # model-fitxers already registered in fhort.models_app.urls
 
 # Sprint B — new task catalog (TaskType) + task instances (ModelTask). Isolated from the
-# legacy Tasca/ModelTasca viewsets above; both coexist. Registered before router.urls.
+# legacy Tasca viewset above; both coexist. Registered before router.urls.
 try:
     from fhort.tasks.views_b import TaskTypeViewSet, ModelTaskViewSet
     router.register(r'task-types', TaskTypeViewSet, basename='task-type')
@@ -40,23 +38,13 @@ urlpatterns = router.urls
 
 
 
-# Sprint 2 — action views
-try:
-    from fhort.tasks.action_views import tasks_summary_view
-    from django.urls import path as _path
-    _sprint2_paths = [
-        _path('models/<int:model_id>/resum-tasques/', tasks_summary_view),
-    ]
-    urlpatterns = _sprint2_paths + urlpatterns
-except Exception as _e:
-    pass
-
 # Sprint B — define tasks of a model (bulk/individual). Requires define_tasks capability.
 try:
-    from fhort.tasks.views_b import define_model_tasks_view
+    from fhort.tasks.views_b import define_model_tasks_view, transition_task_view
     from django.urls import path as _path_b
     _sprintb_paths = [
         _path_b('models/<int:model_id>/define-tasks/', define_model_tasks_view),
+        _path_b('model-task-items/<int:pk>/transition/', transition_task_view),
     ]
     urlpatterns = _sprintb_paths + urlpatterns
 except Exception:

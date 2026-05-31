@@ -8,9 +8,8 @@ from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import ModelTasca, Tasca, TimerEntrada
+from .models import Tasca, TimerEntrada
 from .serializers import (
-    ModelTascaSerializer,
     TascaSerializer,
     TimerEntradaSerializer,
 )
@@ -26,32 +25,11 @@ class TascaViewSet(viewsets.ModelViewSet):
     ordering = ['ordre_base', 'ordre']
 
 
-class ModelTascaViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
-    serializer_class = ModelTascaSerializer
-    queryset = (
-        ModelTasca.objects
-        .select_related(
-            'model',
-            'tasca',
-            'tasca__tasca_global',
-            'responsable',
-            'responsable__user',
-            'gate_revisat_per',
-        )
-        .all()
-    )
-    filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['model', 'estat', 'responsable']
-    ordering_fields = ['ordre', 'data_limit']
-    ordering = ['model', 'ordre']
-
-
 class TimerEntradaViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = TimerEntradaSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['model_tasca', 'actiu']
+    filterset_fields = ['model_task', 'actiu']
     ordering_fields = ['inici', 'fi']
     ordering = ['-inici']
 
@@ -65,7 +43,7 @@ class TimerEntradaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = (
             TimerEntrada.objects
-            .select_related('tecnic', 'tecnic__user', 'model_tasca', 'model_tasca__model')
+            .select_related('tecnic', 'tecnic__user', 'model_task', 'model_task__model')
         )
         profile = self._get_profile()
         if profile is None:

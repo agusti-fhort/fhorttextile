@@ -71,76 +71,6 @@ class Tasca(models.Model):
         return self.tasca_global.codi if self.tasca_global_id else f'Tasca#{self.pk}'
 
 
-class ModelTasca(models.Model):
-    ESTAT_CHOICES = [
-        ('Pendent', 'Pendent'),
-        ('EnCurs', 'En curs'),
-        ('Feta', 'Feta'),
-        ('Bloquejada', 'Bloquejada'),
-    ]
-    GATE_CHOICES = [
-        ('OK', 'OK'),
-        ('NO_OK', 'No OK'),
-        ('EXCEPCIO', 'Excepció'),
-    ]
-
-    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='tasques')
-    tasca = models.ForeignKey(Tasca, on_delete=models.PROTECT, related_name='instancies')
-    ordre = models.PositiveIntegerField(default=0)
-    estat = models.CharField(max_length=20, choices=ESTAT_CHOICES, default='Pendent')
-    responsable = models.ForeignKey(
-        'accounts.UserProfile',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='tasques_assignades',
-    )
-    data_limit = models.DateField(null=True, blank=True)
-
-    minuts_assignats = models.PositiveIntegerField()
-    minuts_reals = models.PositiveIntegerField(default=0)
-
-    cost_real = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-
-    es_gate = models.BooleanField(default=False)
-    resultat_gate = models.CharField(max_length=20, choices=GATE_CHOICES, null=True, blank=True)
-    gate_revisat_per = models.ForeignKey(
-        'accounts.UserProfile',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='gates_revisades',
-    )
-    gate_data = models.DateTimeField(null=True, blank=True)
-    gate_notes = models.TextField(null=True, blank=True)
-
-    # --- Sprint 1A: new fields ---
-    paquet_origen = models.CharField(max_length=200, null=True, blank=True)
-    slots_base = models.FloatField(null=True, blank=True, default=0)
-    slots_reals = models.FloatField(null=True, blank=True, default=0)
-    hores_reals = models.FloatField(null=True, blank=True, default=0)
-    tipus_encarrec = models.CharField(
-        max_length=20,
-        choices=[
-            ('Proto', 'Proto'), ('Fit Sample', 'Fit Sample'),
-            ('Size Set', 'Size Set'), ('PP Sample', 'PP Sample'),
-            ('TOP Sample', 'TOP Sample'), ('Producció', 'Producció'),
-        ],
-        null=True, blank=True,
-    )
-    color_codi = models.CharField(max_length=20, null=True, blank=True)
-    item_ref = models.CharField(max_length=100, null=True, blank=True)
-    # --- End Sprint 1A ---
-
-    class Meta:
-        verbose_name = 'Tasca de model'
-        verbose_name_plural = 'Tasques de model'
-        ordering = ['model', 'ordre']
-
-    def __str__(self):
-        return f'{self.model.codi_intern} · {self.tasca} ({self.estat})'
-
-
 class TipologiaModel(models.Model):
     """Model typology with load slots per production route.
 
@@ -184,7 +114,7 @@ class TipologiaModel(models.Model):
 
 
 class TimerEntrada(models.Model):
-    model_tasca = models.ForeignKey(ModelTasca, on_delete=models.CASCADE, related_name='timers')
+    model_task = models.ForeignKey('ModelTask', on_delete=models.CASCADE, related_name='timers')
     tecnic = models.ForeignKey('accounts.UserProfile', on_delete=models.PROTECT, related_name='timers')
     inici = models.DateTimeField()
     fi = models.DateTimeField(null=True, blank=True)
@@ -197,7 +127,7 @@ class TimerEntrada(models.Model):
         ordering = ['-inici']
 
     def __str__(self):
-        return f'{self.tecnic} · {self.model_tasca} · {self.inici:%Y-%m-%d %H:%M}'
+        return f'{self.tecnic} · {self.model_task} · {self.inici:%Y-%m-%d %H:%M}'
 
 
 
@@ -278,6 +208,8 @@ class ModelTask(models.Model):
     assignee = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
                                  null=True, blank=True, related_name='assigned_tasks')
     order = models.PositiveIntegerField(default=0)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -288,3 +220,22 @@ class ModelTask(models.Model):
 
     def __str__(self):
         return f'{self.model_id} · {self.task_type.code} ({self.status})'
+
+
+class TaskTransition(models.Model):
+    """Log immutable de transicions d'estat d'una ModelTask. Base del comptador
+    de rectificacions (Done→InProgress)."""
+    model_task = models.ForeignKey('ModelTask', on_delete=models.CASCADE, related_name='transitions')
+    from_status = models.CharField(max_length=20, null=True, blank=True)
+    to_status = models.CharField(max_length=20)
+    by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                           null=True, blank=True, related_name='task_transitions')
+    at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['at']
+        verbose_name = 'Task transition'
+        verbose_name_plural = 'Task transitions'
+
+    def __str__(self):
+        return f'{self.model_task_id}: {self.from_status}→{self.to_status}'

@@ -1,12 +1,14 @@
 from rest_framework import viewsets, status
+from rest_framework import status as http_status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
-from fhort.accounts.capabilities import HasCapability, DEFINE_TASKS
+from fhort.accounts.capabilities import HasCapability, DEFINE_TASKS, EXECUTE_TASKS
 from .models import TaskType, ModelTask
 from .serializers_b import TaskTypeSerializer, ModelTaskSerializer
+from .services_c import transition_task, TransitionError, rectification_count
 
 
 class TaskTypeViewSet(viewsets.ModelViewSet):
@@ -69,3 +71,31 @@ def define_model_tasks_view(request, model_id):
         created.append(mt.id)
     return Response({'created_ids': created, 'skipped_existing': sorted(existing)},
                     status=status.HTTP_201_CREATED)
+
+
+class _ExecuteTasks(HasCapability):
+    required_capability = EXECUTE_TASKS
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def transition_task_view(request, pk):
+    """POST /api/v1/model-task-items/<pk>/transition/  Body: {"to_status": "InProgress"}
+    Aplica la transició. Retorna la tasca i, si escau, paused_task_id (per l'avís del front)."""
+    from .models import ModelTask
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        task = ModelTask.objects.get(pk=pk)
+    except ModelTask.DoesNotExist:
+        return Response({'error': 'ModelTask no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+    to_status = request.data.get('to_status')
+    if not to_status:
+        return Response({'error': 'to_status requerit.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        result = transition_task(task, to_status, profile)
+    except TransitionError as e:
+        return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
+    return Response(result, status=http_status.HTTP_200_OK)
