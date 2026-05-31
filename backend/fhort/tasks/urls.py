@@ -66,6 +66,18 @@ try:
 except Exception:
     pass
 
+# Sprint H — planificador predictiu: compute + historial de previsions. Requires configure.
+try:
+    from fhort.tasks.views_b import plan_compute_view, plan_snapshots_view
+    from django.urls import path as _path_h
+    _sprinth_paths = [
+        _path_h('plan/compute/', plan_compute_view),
+        _path_h('plan/snapshots/', plan_snapshots_view),
+    ]
+    urlpatterns = _sprinth_paths + urlpatterns
+except Exception:
+    pass
+
 # Sprint D — gate del responsable (avanç de fase sense sessió). Requires close_gates.
 try:
     from fhort.tasks.views_b import gate_model_view, gate_bulk_view, gate_ready_models_view

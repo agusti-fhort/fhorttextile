@@ -187,6 +187,8 @@ class Model(models.Model):
     data_entrada = models.DateField(auto_now_add=True)
     data_objectiu = models.DateField(null=True, blank=True)
     data_tancament = models.DateField(null=True, blank=True)
+    predicted_start = models.DateField(null=True, blank=True)
+    predicted_end = models.DateField(null=True, blank=True)
 
     contracte = models.ForeignKey(
         Contracte,

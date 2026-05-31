@@ -9,7 +9,7 @@ from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TA
                                          CLOSE_GATES, SCHEDULE_FITTINGS, CONFIGURE)
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
-                     GarmentTypeItem, TaskTimeEstimate)
+                     GarmentTypeItem, TaskTimeEstimate, PlanSnapshot)
 from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             SupplierSerializer, ProductionSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer)
@@ -19,6 +19,7 @@ from .services_d import (advance_phase_gate, advance_phases_chain,
 from .services_e import (request_production, set_production_status,
                          ProductionError, has_delivered_production)
 from .services_g import lookup_estimated_minutes
+from .services_h import compute_and_save_plan
 
 
 class TaskTypeViewSet(viewsets.ModelViewSet):
@@ -279,3 +280,37 @@ class TaskTimeEstimateViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         p = HasCapability(); self.required_capability = CONFIGURE
         return [p]
+
+
+@api_view(['POST'])
+@permission_classes([_Configure])
+def plan_compute_view(request):
+    """POST /api/v1/plan/compute/
+    Body: {"start_date":"2026-06-01","model_ids":[110,111],"technician_count":2,
+           "working_minutes_per_day":420,"blocked_dates":["2026-06-03"],"campaign_filter":{...}}"""
+    profile = getattr(request.user, 'profile', None)
+    d = request.data
+    if not d.get('start_date') or not d.get('model_ids'):
+        return Response({'error': 'start_date i model_ids requerits.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        snap = compute_and_save_plan(
+            start_date=d['start_date'], model_ids_ordered=d['model_ids'],
+            technician_count=d.get('technician_count', 1),
+            working_minutes_per_day=d.get('working_minutes_per_day', 420),
+            blocked_dates=d.get('blocked_dates', []),
+            campaign_filter=d.get('campaign_filter', {}), computed_by=profile)
+    except (ValueError, KeyError) as e:
+        return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
+    return Response({'snapshot_id': snap.id, 'result': snap.result},
+                    status=http_status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([_Configure])
+def plan_snapshots_view(request):
+    """GET /api/v1/plan/snapshots/  Historial de previsions (últimes 50)."""
+    out = [{'id': s.id, 'computed_at': s.computed_at, 'start_date': s.start_date,
+            'technician_count': s.technician_count, 'campaign_end': s.result.get('campaign_end'),
+            'model_count': len(s.model_sequence)} for s in PlanSnapshot.objects.all()[:50]]
+    return Response({'snapshots': out}, status=http_status.HTTP_200_OK)

@@ -343,3 +343,31 @@ class TaskTimeEstimate(models.Model):
 
     def __str__(self):
         return f'{self.garment_type_item_id}×{self.task_type_id}={self.estimated_minutes}'
+
+
+class PlanSnapshot(models.Model):
+    """Fotografia immutable d'una previsió de campanya. Cada recàlcul en crea un de nou.
+    Suport del previst-vs-real (§7): el previst es DESA, no es recalcula i s'oblida."""
+    computed_at = models.DateTimeField(auto_now_add=True)
+    computed_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='plan_snapshots')
+    # Inputs desats (per reproduir/auditar el càlcul):
+    start_date = models.DateField()
+    technician_count = models.PositiveIntegerField(default=1)
+    working_minutes_per_day = models.PositiveIntegerField(default=420)  # 7h; input, no constant
+    blocked_dates = models.JSONField(default=list, blank=True)   # ["2026-06-02", ...]
+    model_sequence = models.JSONField(default=list, blank=True)  # [110, 111, ...] ordenat
+    # Metadada de filtre de campanya (no propietat; només context):
+    campaign_filter = models.JSONField(default=dict, blank=True)  # {"temporada":"SS","any":26,"client":"..."}
+    # Output desat:
+    result = models.JSONField(default=dict, blank=True)
+    # {"models": {"110": {"predicted_start":"...","predicted_end":"...","load_minutes":N}, ...},
+    #  "campaign_end": "..."}
+
+    class Meta:
+        ordering = ['-computed_at']
+        verbose_name = 'Plan snapshot'
+        verbose_name_plural = 'Plan snapshots'
+
+    def __str__(self):
+        return f'Plan {self.id} @ {self.computed_at:%Y-%m-%d %H:%M}'
