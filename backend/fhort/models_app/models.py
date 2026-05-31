@@ -132,6 +132,14 @@ class Model(models.Model):
         blank=True,
         related_name='models',
     )
+    # --- Sprint G: garment type variant (complexity node) for time estimation ---
+    garment_type_item = models.ForeignKey(
+        'tasks.GarmentTypeItem',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='models',
+    )
 
     # --- Sprint A: multi-piece (GarmentSet) ---
     # Membership in a commercial set is explicit (FK + piece_number), not parsed

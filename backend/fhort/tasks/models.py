@@ -210,6 +210,8 @@ class ModelTask(models.Model):
     order = models.PositiveIntegerField(default=0)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
+    estimated_minutes = models.PositiveIntegerField(null=True, blank=True,
+                          help_text="Snapshot del temps estimat en crear la tasca (minuts).")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -302,3 +304,42 @@ class Production(models.Model):
 
     def __str__(self):
         return f'{self.model_id} · {self.phase} · {self.status}'
+
+
+class GarmentTypeItem(models.Model):
+    """Variant d'un GarmentType per grau de complexitat (arbre família→variant).
+    Ex: GarmentType 'Pantaló' → items xandall < chino < sastre. El node que tria un
+    model per derivar estimacions de temps i (futur) matching de POMs."""
+    garment_type = models.ForeignKey('pom.GarmentType', on_delete=models.CASCADE,
+                                     related_name='items')
+    code = models.SlugField(max_length=60)
+    name = models.CharField(max_length=200)
+    complexity_order = models.PositiveIntegerField(default=0,
+                         help_text="Ordre de complexitat creixent dins la família")
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['garment_type', 'complexity_order', 'code']
+        unique_together = [('garment_type', 'code')]
+        verbose_name = 'Garment type item'
+        verbose_name_plural = 'Garment type items'
+
+    def __str__(self):
+        return f'{self.garment_type_id}/{self.code}'
+
+
+class TaskTimeEstimate(models.Model):
+    """Cel·la de la matriu d'estimació de temps: (garment_type_item × task_type) → minuts.
+    estimated_minutes NULL = encara no estimat (s'omplirà amb dades reals, Sprint I)."""
+    garment_type_item = models.ForeignKey(GarmentTypeItem, on_delete=models.CASCADE,
+                                          related_name='time_estimates')
+    task_type = models.ForeignKey(TaskType, on_delete=models.CASCADE, related_name='time_estimates')
+    estimated_minutes = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        unique_together = [('garment_type_item', 'task_type')]
+        verbose_name = 'Task time estimate'
+        verbose_name_plural = 'Task time estimates'
+
+    def __str__(self):
+        return f'{self.garment_type_item_id}×{self.task_type_id}={self.estimated_minutes}'

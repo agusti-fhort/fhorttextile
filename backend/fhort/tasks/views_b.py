@@ -6,16 +6,19 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
 from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TASKS,
-                                         CLOSE_GATES, SCHEDULE_FITTINGS)
+                                         CLOSE_GATES, SCHEDULE_FITTINGS, CONFIGURE)
 from fhort.models_app.models import Model
-from .models import TaskType, ModelTask, Supplier, Production
+from .models import (TaskType, ModelTask, Supplier, Production,
+                     GarmentTypeItem, TaskTimeEstimate)
 from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
-                            SupplierSerializer, ProductionSerializer)
+                            SupplierSerializer, ProductionSerializer,
+                            GarmentTypeItemSerializer, TaskTimeEstimateSerializer)
 from .services_c import transition_task, TransitionError, rectification_count
 from .services_d import (advance_phase_gate, advance_phases_chain,
                          model_ready_for_gate, GateError)
 from .services_e import (request_production, set_production_status,
                          ProductionError, has_delivered_production)
+from .services_g import lookup_estimated_minutes
 
 
 class TaskTypeViewSet(viewsets.ModelViewSet):
@@ -67,14 +70,17 @@ def define_model_tasks_view(request, model_id):
                         status=status.HTTP_400_BAD_REQUEST)
     existing = set(ModelTask.objects.filter(model_id=model_id, task_type_id__in=ids)
                    .values_list('task_type_id', flat=True))
+    model = Model.objects.get(pk=model_id)  # instància per al lookup d'estimació (Sprint G)
     created = []
     base_order = (ModelTask.objects.filter(model_id=model_id)
                   .count())  # afegeix al final de l'ordre existent
     for i, t in enumerate(types):
         if t.id in existing:
             continue
+        est = lookup_estimated_minutes(model, t)   # snapshot del temps estimat (None si no n'hi ha)
         mt = ModelTask.objects.create(model_id=model_id, task_type=t,
-                                      order=base_order + i, status='Pending')
+                                      order=base_order + i, status='Pending',
+                                      estimated_minutes=est)
         created.append(mt.id)
     return Response({'created_ids': created, 'skipped_existing': sorted(existing)},
                     status=status.HTTP_201_CREATED)
@@ -243,3 +249,33 @@ def production_status_view(request, pk):
     except ProductionError as e:
         return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
     return Response(ProductionSerializer(prod).data, status=http_status.HTTP_200_OK)
+
+
+class _Configure(HasCapability):
+    required_capability = CONFIGURE
+
+
+class GarmentTypeItemViewSet(viewsets.ModelViewSet):
+    queryset = GarmentTypeItem.objects.select_related('garment_type').all()
+    serializer_class = GarmentTypeItemSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['garment_type', 'active']
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        p = HasCapability(); self.required_capability = CONFIGURE
+        return [p]
+
+
+class TaskTimeEstimateViewSet(viewsets.ModelViewSet):
+    queryset = TaskTimeEstimate.objects.select_related('garment_type_item', 'task_type').all()
+    serializer_class = TaskTimeEstimateSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['garment_type_item', 'task_type']
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        p = HasCapability(); self.required_capability = CONFIGURE
+        return [p]

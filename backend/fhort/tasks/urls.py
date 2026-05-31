@@ -42,6 +42,14 @@ try:
 except Exception:
     pass
 
+# Sprint G — taula de temps: GarmentTypeItem + TaskTimeEstimate. Registered before router.urls.
+try:
+    from fhort.tasks.views_b import GarmentTypeItemViewSet, TaskTimeEstimateViewSet
+    router.register(r'garment-type-items', GarmentTypeItemViewSet, basename='garment-type-item')
+    router.register(r'task-time-estimates', TaskTimeEstimateViewSet, basename='task-time-estimate')
+except Exception:
+    pass
+
 urlpatterns = router.urls
 
 

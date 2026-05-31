@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import TaskType, ModelTask, Supplier, Production
+from .models import (TaskType, ModelTask, Supplier, Production,
+                     GarmentTypeItem, TaskTimeEstimate)
 from .services_c import rectification_count
 
 
@@ -39,3 +40,15 @@ class ProductionSerializer(serializers.ModelSerializer):
         fields = ['id', 'model', 'phase', 'supplier', 'supplier_name', 'status',
                   'requested_at', 'expected_at', 'delivered_at', 'requested_by', 'notes']
         read_only_fields = ['requested_at', 'delivered_at', 'status', 'requested_by']
+
+
+class GarmentTypeItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GarmentTypeItem
+        fields = ['id', 'garment_type', 'code', 'name', 'complexity_order', 'active']
+
+
+class TaskTimeEstimateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskTimeEstimate
+        fields = ['id', 'garment_type_item', 'task_type', 'estimated_minutes']
