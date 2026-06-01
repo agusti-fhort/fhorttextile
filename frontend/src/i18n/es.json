@@ -124,7 +124,18 @@
       "Paused": "Pausadas",
       "InProgress": "En curso",
       "Done": "Hechas"
-    }
+    },
+    "action": {
+      "start": "Iniciar",
+      "resume": "Reanudar",
+      "pause": "Pausar",
+      "finish": "Finalizar",
+      "reopen": "Reabrir"
+    },
+    "toast_paused": "Se ha pausado «{{name}}»",
+    "not_allowed": "No tienes permiso para ejecutar este tipo de tarea.",
+    "transition_error": "No se ha podido cambiar el estado.",
+    "rect": "{{n}} rectif."
   },
   "model": {
     "title": "Modelos",

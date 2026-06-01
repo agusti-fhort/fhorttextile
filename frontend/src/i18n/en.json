@@ -124,7 +124,18 @@
       "Paused": "Paused",
       "InProgress": "In progress",
       "Done": "Done"
-    }
+    },
+    "action": {
+      "start": "Start",
+      "resume": "Resume",
+      "pause": "Pause",
+      "finish": "Finish",
+      "reopen": "Reopen"
+    },
+    "toast_paused": "Paused «{{name}}»",
+    "not_allowed": "You're not allowed to run this task type.",
+    "transition_error": "Could not change the status.",
+    "rect": "{{n}} rework"
   },
   "model": {
     "title": "Models",

@@ -124,7 +124,18 @@
       "Paused": "Pausades",
       "InProgress": "En curs",
       "Done": "Fetes"
-    }
+    },
+    "action": {
+      "start": "Iniciar",
+      "resume": "Reprendre",
+      "pause": "Pausar",
+      "finish": "Finalitzar",
+      "reopen": "Reobrir"
+    },
+    "toast_paused": "S'ha pausat «{{name}}»",
+    "not_allowed": "No tens permès executar aquest tipus de tasca.",
+    "transition_error": "No s'ha pogut canviar l'estat.",
+    "rect": "{{n}} rectif."
   },
   "model": {
     "title": "Models",
