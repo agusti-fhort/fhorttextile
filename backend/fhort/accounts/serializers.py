@@ -63,10 +63,17 @@ class UserListSerializer(serializers.ModelSerializer):
     """For the responsible-person selector. Only active tenant users."""
 
     full_name = serializers.SerializerMethodField()
+    # id = User.id; profile_id = UserProfile.id. ModelTask.assignee és FK a UserProfile, així que
+    # els selectors d'assignació han d'enviar profile_id (no l'id de User) — no depèn de cap coincidència.
+    profile_id = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'full_name', 'email')
+        fields = ('id', 'profile_id', 'username', 'full_name', 'email')
+
+    def get_profile_id(self, obj):
+        p = getattr(obj, 'profile', None)
+        return p.id if p else None
 
     def get_full_name(self, obj):
         full = f'{obj.first_name} {obj.last_name}'.strip()
@@ -95,6 +102,7 @@ class UserAdminSerializer(serializers.ModelSerializer):
     derivats de només-lectura per a la matriu de permisos del front."""
 
     full_name = serializers.SerializerMethodField()
+    profile_id = serializers.SerializerMethodField()   # UserProfile.id (≠ User.id en general)
     rol_nom = serializers.CharField(source='profile.rol_nom')
     actiu = serializers.BooleanField(source='profile.actiu')
     permisos = serializers.JSONField(source='profile.permisos')
@@ -104,11 +112,15 @@ class UserAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            'id', 'username', 'email', 'full_name',
+            'id', 'profile_id', 'username', 'email', 'full_name',
             'rol_nom', 'actiu', 'permisos',
             'capabilities', 'allowed_tasks',
         )
         read_only_fields = ('id', 'username', 'email')
+
+    def get_profile_id(self, obj):
+        p = getattr(obj, 'profile', None)
+        return p.id if p else None
 
     def get_full_name(self, obj):
         full = f'{obj.first_name} {obj.last_name}'.strip()
