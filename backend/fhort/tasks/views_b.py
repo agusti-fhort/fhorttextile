@@ -1,9 +1,10 @@
 from rest_framework import viewsets, status
 from rest_framework import status as http_status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Count, Q
 
 from rest_framework.exceptions import ValidationError
 from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TASKS,
@@ -60,10 +61,72 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         return qs.filter(assignee=profile)
 
     def get_permissions(self):
-        if self.action in ('list', 'retrieve'):
+        if self.action in ('list', 'retrieve', 'by_model'):
             return [IsAuthenticated()]
         perm = HasCapability(); self.required_capability = DEFINE_TASKS
         return [perm]
+
+    @action(detail=False, methods=['get'], url_path='by-model')
+    def by_model(self, request):
+        """GET /api/v1/model-task-items/by-model/  — agregador per a la columna 1 del Kanban.
+
+        Agrupa per model les ModelTask VISIBLES per a l'usuari (reusa el row-level scope de
+        get_queryset(): sense view_team_tasks → només les pròpies). Els comptadors per estat es
+        calculen a la BD (Count + filter=Q), de manera que escala a 600+ models sense carregar files.
+
+        Query params:
+          ?all=true   inclou també els models amb totes les tasques Done (per defecte s'oculten).
+          ?search=    icontains sobre codi_intern OR nom del model (OR).
+
+        Resposta (paginada, mateixa paginació del projecte):
+          [{ model_id, model_codi, model_nom, fase, counts:{pending, paused, in_progress, done} }]
+
+        Ordenació: primer els models amb feina activa/pendent a dalt
+          (-in_progress, -pending, -paused), desempat per codi_intern (unique → ordre estable
+          i determinista per a la paginació).
+        """
+        qs = self.get_queryset()   # ← MATEIX scope que model-task-items/ (no duplicat)
+
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            # Punt d'extensió: quan calgui, afegir aquí col·lecció i garment_type SENSE tocar
+            # el contracte de resposta, p. ex.:
+            #   q |= Q(model__garment_group__nom__icontains=search)
+            #   q |= Q(model__garment_type__nom__icontains=search)
+            q = Q(model__codi_intern__icontains=search) | Q(model__nom_prenda__icontains=search)
+            qs = qs.filter(q)
+
+        agg = (qs.values('model_id', 'model__codi_intern', 'model__nom_prenda', 'model__fase_actual')
+                 .annotate(
+                     pending=Count('id', filter=Q(status='Pending')),
+                     paused=Count('id', filter=Q(status='Paused')),
+                     in_progress=Count('id', filter=Q(status='InProgress')),
+                     done=Count('id', filter=Q(status='Done')),
+                 )
+                 .order_by('-in_progress', '-pending', '-paused', 'model__codi_intern'))
+
+        if request.query_params.get('all') != 'true':
+            # Per defecte només models amb alguna tasca no-Done (HAVING sobre els comptadors).
+            agg = agg.filter(Q(pending__gt=0) | Q(paused__gt=0) | Q(in_progress__gt=0))
+
+        def shape(row):
+            return {
+                'model_id': row['model_id'],
+                'model_codi': row['model__codi_intern'],
+                'model_nom': row['model__nom_prenda'],
+                'fase': row['model__fase_actual'],
+                'counts': {
+                    'pending': row['pending'],
+                    'paused': row['paused'],
+                    'in_progress': row['in_progress'],
+                    'done': row['done'],
+                },
+            }
+
+        page = self.paginate_queryset(agg)
+        if page is not None:
+            return self.get_paginated_response([shape(r) for r in page])
+        return Response([shape(r) for r in agg])
 
     def _validate_assignee(self, serializer):
         """Enforcement Opció A: no es pot assignar una tasca a algú que no la pot fer.
