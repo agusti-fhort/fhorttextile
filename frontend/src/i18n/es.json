@@ -150,7 +150,22 @@
     "gate_done": "Fase avanzada a {{phase}}.",
     "gate_error": "No se ha podido validar el gate.",
     "confirm": "Confirmar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "sort_by": "Ordenar por",
+    "sort_default": "Orden por defecto",
+    "sort_asc": "Ascendente",
+    "sort_desc": "Descendente",
+    "sort": {
+      "codi_intern": "Código", "nom_prenda": "Nombre", "prioritat": "Prioridad",
+      "data_objectiu": "Fecha objetivo", "data_entrada": "Fecha entrada", "temporada": "Temporada"
+    },
+    "filter_temporada": "Temporada", "filter_estat": "Estado", "filter_responsable": "Responsable",
+    "resp_me": "Yo", "resp_all": "Todos",
+    "more_filters": "Más filtros", "clear_filters": "Borrar filtros",
+    "filter_garment_type": "Tipo de prenda", "filter_any": "Año", "filter_prioritat": "Prioridad",
+    "results_n": "{{n}} resultados",
+    "temporades": { "SS": "SS · Primavera/Verano", "FW": "FW · Otoño/Invierno", "CO": "CO · Cruise", "SP": "SP · Especial" },
+    "estats": { "Nou": "Nuevo", "EnCurs": "En curso", "EnRevisio": "En revisión", "Tancat": "Cerrado" }
   },
   "model": {
     "title": "Modelos",

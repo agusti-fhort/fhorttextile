@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
-import { modelTasks, gates, models } from '../api/endpoints'
+import { modelTasks, gates, models, garmentTypes } from '../api/endpoints'
 import TimerWidget from '../components/ui/TimerWidget'
 
 // Tram 4 — Kanban mestre-detall en un sol grid de 5 columnes (sempre visibles):
@@ -31,6 +31,11 @@ const ACTIONS = {
                { to: 'Done', key: 'finish', icon: 'ti-check' }],
   Done:       [{ to: 'InProgress', key: 'reopen', icon: 'ti-rotate-clockwise' }],
 }
+
+// Ordenació (whitelist mirall del backend) i choices reals del Model per als filtres ràpids.
+const SORT_FIELDS = ['codi_intern', 'nom_prenda', 'prioritat', 'data_objectiu', 'data_entrada', 'temporada']
+const TEMPORADES = ['SS', 'FW', 'CO', 'SP']
+const ESTATS = ['Nou', 'EnCurs', 'EnRevisio', 'Tancat']
 
 // Fases del gate (Proto→…→TOP). Validar avança a la següent.
 const PHASES = ['Proto', 'Fit', 'SizeSet', 'PP', 'TOP']
@@ -63,6 +68,18 @@ export default function KanbanTasks() {
   const [page, setPage] = useState(1)
   const [hasNext, setHasNext] = useState(false)
   const [loadingModels, setLoadingModels] = useState(true)
+
+  // Ordenació + filtres ràpids (tot passa al backend; el front no filtra/ordena → escala 600+).
+  const [sortField, setSortField] = useState('')      // '' = ordre per defecte del backend
+  const [sortDir, setSortDir] = useState('asc')
+  const [fTemporada, setFTemporada] = useState('')
+  const [fEstat, setFEstat] = useState('')
+  const [fResponsable, setFResponsable] = useState('') // '' = tots · 'me' = l'usuari actual
+  const [fGarmentType, setFGarmentType] = useState('')
+  const [fAny, setFAny] = useState('')
+  const [fPrioritat, setFPrioritat] = useState('')
+  const [showMore, setShowMore] = useState(false)
+  const [garmentTypeOpts, setGarmentTypeOpts] = useState([])
   const [gateCards, setGateCards] = useState([])
   const [selected, setSelected] = useState(null)   // { type:'model'|'gate', id, ... }
 
@@ -78,10 +95,20 @@ export default function KanbanTasks() {
     toastTimer.current = setTimeout(() => setToast(null), 3000)
   }
 
-  // Càrrega d'una pàgina de by-model. replace=true reinicia (canvi de cerca); si no, hi afegeix (load more).
+  // Càrrega d'una pàgina de by-model amb cerca+ordenació+filtres. replace=true reinicia
+  // (canvi de qualsevol criteri); si no, hi afegeix (load more / scroll).
   const loadPage = useCallback((pageToLoad, replace) => {
     setLoadingModels(true)
-    modelTasks.byModel({ search: search.trim() || undefined, page: pageToLoad })
+    const p = { page: pageToLoad }
+    const s = search.trim(); if (s) p.search = s
+    if (sortField) p.ordering = (sortDir === 'desc' ? '-' : '') + sortField
+    if (fTemporada) p.temporada = fTemporada
+    if (fEstat) p.estat = fEstat
+    if (fResponsable) p.responsable = fResponsable
+    if (fGarmentType) p.garment_type = fGarmentType
+    if (fAny) p.any = fAny
+    if (fPrioritat) p.prioritat = fPrioritat
+    modelTasks.byModel(p)
       .then(res => {
         const data = res.data
         const results = data?.results ?? (Array.isArray(data) ? data : [])
@@ -91,13 +118,24 @@ export default function KanbanTasks() {
       })
       .catch(() => { if (replace) { setModelRows([]); setHasNext(false); setModelsCount(0) } })
       .finally(() => setLoadingModels(false))
-  }, [search])
+  }, [search, sortField, sortDir, fTemporada, fEstat, fResponsable, fGarmentType, fAny, fPrioritat])
 
-  // Cerca amb debounce → reinicia a pàgina 1.
+  // Qualsevol canvi de criteri (debounce) → reinicia a pàgina 1 i recarrega.
   useEffect(() => {
     const id = setTimeout(() => { setPage(1); loadPage(1, true) }, 300)
     return () => clearTimeout(id)
   }, [loadPage])
+
+  // Opcions de tipus de peça per al filtre "Més filtres" (un sol cop).
+  useEffect(() => {
+    garmentTypes.list().then(res => setGarmentTypeOpts(res.data?.results ?? res.data ?? [])).catch(() => {})
+  }, [])
+
+  function clearFilters() {
+    setSortField(''); setSortDir('asc')
+    setFTemporada(''); setFEstat(''); setFResponsable('')
+    setFGarmentType(''); setFAny(''); setFPrioritat('')
+  }
 
   // Prioritat A: cartes de gate (només si close_gates).
   const loadGates = useCallback(() => {
@@ -160,17 +198,83 @@ export default function KanbanTasks() {
         <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('kanban.subtitle')}</p>
       </div>
 
-      {/* Contenidor de cerca SOBRE el grid (aquí hi aniran després filtres rics). */}
-      <div style={{ marginBottom: 14 }}>
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
-          placeholder={t('kanban.search_ph')}
-          style={{
-            fontFamily: MONO, fontSize: 12, padding: '8px 12px', width: '100%', maxWidth: 420,
-            border: '0.5px solid var(--gray-l)', borderRadius: 8, background: 'var(--white)',
-            color: 'var(--text-main)',
-          }}
-        />
+      {/* Barra SOBRE el grid: cerca + ordenació + filtres ràpids (tot va al backend). */}
+      <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder={t('kanban.search_ph')}
+            style={{ ...selS, flex: '0 1 300px', minWidth: 200 }}
+          />
+          {/* Ordenació */}
+          <select value={sortField} onChange={e => setSortField(e.target.value)} style={selS} title={t('kanban.sort_by')}>
+            <option value="">{t('kanban.sort_default')}</option>
+            {SORT_FIELDS.map(f => <option key={f} value={f}>{t(`kanban.sort.${f}`)}</option>)}
+          </select>
+          <button
+            onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
+            disabled={!sortField} title={t(sortDir === 'desc' ? 'kanban.sort_desc' : 'kanban.sort_asc')}
+            style={{ ...selS, cursor: sortField ? 'pointer' : 'default', opacity: sortField ? 1 : 0.5, padding: '6px 9px' }}
+          >
+            <i className={`ti ${sortDir === 'desc' ? 'ti-sort-descending' : 'ti-sort-ascending'}`} style={{ fontSize: 14 }} />
+          </button>
+          {/* Temporada */}
+          <select value={fTemporada} onChange={e => setFTemporada(e.target.value)} style={selS}>
+            <option value="">{t('kanban.filter_temporada')}</option>
+            {TEMPORADES.map(x => <option key={x} value={x}>{t(`kanban.temporades.${x}`)}</option>)}
+          </select>
+          {/* Estat */}
+          <select value={fEstat} onChange={e => setFEstat(e.target.value)} style={selS}>
+            <option value="">{t('kanban.filter_estat')}</option>
+            {ESTATS.map(x => <option key={x} value={x}>{t(`kanban.estats.${x}`)}</option>)}
+          </select>
+          {/* Responsable: Tots / Jo */}
+          <div style={{ display: 'flex', border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
+            {[['', 'resp_all'], ['me', 'resp_me']].map(([val, key]) => (
+              <button key={key} onClick={() => setFResponsable(val)} style={{
+                fontFamily: MONO, fontSize: 11, padding: '6px 10px', border: 'none', cursor: 'pointer',
+                background: fResponsable === val ? CREMA : 'var(--white)',
+                color: fResponsable === val ? AMBER_TEXT : 'var(--gray)',
+                fontWeight: fResponsable === val ? 600 : 400,
+              }}>{t(`kanban.${key}`)}</button>
+            ))}
+          </div>
+          <button onClick={() => setShowMore(s => !s)} style={{
+            ...selS, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <i className={`ti ${showMore ? 'ti-chevron-up' : 'ti-adjustments-horizontal'}`} style={{ fontSize: 13 }} />
+            {t('kanban.more_filters')}
+          </button>
+          <button onClick={clearFilters} style={{
+            fontFamily: MONO, fontSize: 11, padding: '6px 10px', borderRadius: 8,
+            border: '0.5px solid var(--gray-l)', background: 'var(--white)', color: 'var(--gray)', cursor: 'pointer',
+          }}>
+            <i className="ti ti-x" style={{ fontSize: 12 }} /> {t('kanban.clear_filters')}
+          </button>
+          <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 11, color: 'var(--gray)' }}>
+            {t('kanban.results_n', { n: modelsCount })}
+          </span>
+        </div>
+
+        {/* Més filtres */}
+        {showMore && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select value={fGarmentType} onChange={e => setFGarmentType(e.target.value)} style={selS}>
+              <option value="">{t('kanban.filter_garment_type')}</option>
+              {garmentTypeOpts.map(g => (
+                <option key={g.id} value={g.id}>{g.nom_client || g.global_nom || `#${g.id}`}</option>
+              ))}
+            </select>
+            <input
+              type="number" value={fAny} onChange={e => setFAny(e.target.value)}
+              placeholder={t('kanban.filter_any')} style={{ ...selS, width: 110 }}
+            />
+            <select value={fPrioritat} onChange={e => setFPrioritat(e.target.value)} style={selS}>
+              <option value="">{t('kanban.filter_prioritat')}</option>
+              {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Grid únic: columna de models + 4 columnes de treball, sempre visibles. */}
@@ -284,6 +388,10 @@ export default function KanbanTasks() {
 }
 
 const ph = { fontSize: 11, color: 'var(--gray)', textAlign: 'center', padding: '1.2rem', fontWeight: 300 }
+const selS = {
+  fontFamily: MONO, fontSize: 12, padding: '6px 9px', border: '0.5px solid var(--gray-l)',
+  borderRadius: 8, background: 'var(--white)', color: 'var(--text-main)',
+}
 
 function ColTitle({ icon, text, amber }) {
   return (

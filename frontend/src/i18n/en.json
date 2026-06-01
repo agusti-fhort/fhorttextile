@@ -150,7 +150,22 @@
     "gate_done": "Phase advanced to {{phase}}.",
     "gate_error": "Could not validate the gate.",
     "confirm": "Confirm",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "sort_by": "Sort by",
+    "sort_default": "Default order",
+    "sort_asc": "Ascending",
+    "sort_desc": "Descending",
+    "sort": {
+      "codi_intern": "Code", "nom_prenda": "Name", "prioritat": "Priority",
+      "data_objectiu": "Target date", "data_entrada": "Entry date", "temporada": "Season"
+    },
+    "filter_temporada": "Season", "filter_estat": "Status", "filter_responsable": "Owner",
+    "resp_me": "Me", "resp_all": "All",
+    "more_filters": "More filters", "clear_filters": "Clear filters",
+    "filter_garment_type": "Garment type", "filter_any": "Year", "filter_prioritat": "Priority",
+    "results_n": "{{n}} results",
+    "temporades": { "SS": "SS · Spring/Summer", "FW": "FW · Fall/Winter", "CO": "CO · Cruise", "SP": "SP · Special" },
+    "estats": { "Nou": "New", "EnCurs": "In progress", "EnRevisio": "In review", "Tancat": "Closed" }
   },
   "model": {
     "title": "Models",
