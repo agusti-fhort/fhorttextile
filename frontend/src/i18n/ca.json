@@ -76,6 +76,32 @@
       "configure": "Configurar",
       "view_team_tasks": "Veure tasques d'equip",
       "manage_users": "Gestionar usuaris"
+    },
+    "search_ph": "Cerca usuari…",
+    "all_roles": "Tots els rols",
+    "all_tasks": "Totes les tasques",
+    "selected": "{{n}} seleccionats",
+    "select_all": "Selecciona filtrats",
+    "bulk_title": "Accions massives",
+    "bulk_role": "Assignar rol",
+    "bulk_activate": "Activar",
+    "bulk_deactivate": "Desactivar",
+    "bulk_task_add": "Afegir tasca",
+    "bulk_task_remove": "Treure tasca",
+    "pick_role": "Tria rol…",
+    "pick_task": "Tria tasca…",
+    "confirm_title": "Confirmar acció",
+    "confirm_msg": "Aplicaràs «{{action}}» a {{count}} usuari(s). Continuar?",
+    "cancel": "Cancel·lar",
+    "confirm": "Confirmar",
+    "patch_error": "No s'ha pogut desar el canvi.",
+    "bulk_done": "{{updated}} usuaris actualitzats.",
+    "self_lock": "No pots treure't la gestió d'usuaris a tu mateix.",
+    "roles": {
+      "technician": "Tècnic",
+      "product_manager": "Product manager",
+      "manager": "Manager",
+      "admin": "Admin"
     }
   },
   "model": {

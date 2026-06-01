@@ -76,6 +76,32 @@
       "configure": "Configurar",
       "view_team_tasks": "Ver tareas de equipo",
       "manage_users": "Gestionar usuarios"
+    },
+    "search_ph": "Buscar usuario…",
+    "all_roles": "Todos los roles",
+    "all_tasks": "Todas las tareas",
+    "selected": "{{n}} seleccionados",
+    "select_all": "Seleccionar filtrados",
+    "bulk_title": "Acciones masivas",
+    "bulk_role": "Asignar rol",
+    "bulk_activate": "Activar",
+    "bulk_deactivate": "Desactivar",
+    "bulk_task_add": "Añadir tarea",
+    "bulk_task_remove": "Quitar tarea",
+    "pick_role": "Elige rol…",
+    "pick_task": "Elige tarea…",
+    "confirm_title": "Confirmar acción",
+    "confirm_msg": "Aplicarás «{{action}}» a {{count}} usuario(s). ¿Continuar?",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "patch_error": "No se ha podido guardar el cambio.",
+    "bulk_done": "{{updated}} usuarios actualizados.",
+    "self_lock": "No puedes quitarte la gestión de usuarios a ti mismo.",
+    "roles": {
+      "technician": "Técnico",
+      "product_manager": "Product manager",
+      "manager": "Manager",
+      "admin": "Admin"
     }
   },
   "model": {

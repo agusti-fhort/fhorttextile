@@ -76,6 +76,32 @@
       "configure": "Configure",
       "view_team_tasks": "View team tasks",
       "manage_users": "Manage users"
+    },
+    "search_ph": "Search user…",
+    "all_roles": "All roles",
+    "all_tasks": "All tasks",
+    "selected": "{{n}} selected",
+    "select_all": "Select filtered",
+    "bulk_title": "Bulk actions",
+    "bulk_role": "Set role",
+    "bulk_activate": "Activate",
+    "bulk_deactivate": "Deactivate",
+    "bulk_task_add": "Add task",
+    "bulk_task_remove": "Remove task",
+    "pick_role": "Pick role…",
+    "pick_task": "Pick task…",
+    "confirm_title": "Confirm action",
+    "confirm_msg": "You will apply «{{action}}» to {{count}} user(s). Continue?",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "patch_error": "Could not save the change.",
+    "bulk_done": "{{updated}} users updated.",
+    "self_lock": "You can't remove user management from yourself.",
+    "roles": {
+      "technician": "Technician",
+      "product_manager": "Product manager",
+      "manager": "Manager",
+      "admin": "Admin"
     }
   },
   "model": {
