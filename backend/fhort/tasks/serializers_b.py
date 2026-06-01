@@ -13,11 +13,12 @@ class TaskTypeSerializer(serializers.ModelSerializer):
 class ModelTaskSerializer(serializers.ModelSerializer):
     task_type_code = serializers.CharField(source='task_type.code', read_only=True)
     task_type_name = serializers.CharField(source='task_type.name', read_only=True)
+    model_codi = serializers.CharField(source='model.codi_intern', read_only=True)
     rectifications = serializers.SerializerMethodField()
 
     class Meta:
         model = ModelTask
-        fields = ['id', 'model', 'task_type', 'task_type_code', 'task_type_name',
+        fields = ['id', 'model', 'model_codi', 'task_type', 'task_type_code', 'task_type_name',
                   'status', 'assignee', 'order', 'created_at', 'updated_at',
                   'started_at', 'finished_at', 'estimated_minutes', 'rectifications']
         # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
