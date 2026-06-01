@@ -105,10 +105,40 @@ export const productions = {
   setStatus: (id, data) => client.post(`/api/v1/productions/${id}/status/`, data),   // {status}
 }
 
-// Capa de Projecte — planificador predictiu.
+// Capa de Projecte — motor de planificació (sprints A+B). Tots gated `configure`.
+// Les respostes del motor (compute/preview/apply) porten planned_start/end en ISO LOCAL
+// (Europe/Madrid, sense offset) → pintar directe; NO barrejar amb el serializer de tasca (UTC).
 export const plan = {
-  compute: (data) => client.post('/api/v1/plan/compute/', data),
+  // body: {model_ids?:[...], campaign_filter?:{temporada,any}}  (sense res = tot el pendent)
+  // → {snapshot_id, result:{placements:[{task_id,model,task_type,assignee,planned_start,planned_end,locked}], warnings, models}}
+  compute: (body) => client.post('/api/v1/plan/compute/', body),
+  // body: {task_id, new_start:"YYYY-MM-DDTHH:MM:SS"} → {moved_task_id, placements, warnings, impact:[{task_id,model,task_type,old_start,new_start}]} (NO desa)
+  preview: (body) => client.post('/api/v1/plan/preview/', body),
+  // body: {task_id, new_start} → {snapshot_id, result, locked_task_id} (desa + locked)
+  apply: (body) => client.post('/api/v1/plan/apply/', body),
   snapshots: () => client.get('/api/v1/plan/snapshots/'),
+}
+
+// Configuració del calendari d'empresa (singleton del tenant). GET/PUT gated `configure`.
+export const companyCalendar = {
+  get: () => client.get('/api/v1/company-calendar/'),
+  // body: {horaris:{mon:[["08:00","13:00"],...],...}, festius_extra:["YYYY-MM-DD",...]} (parcial)
+  update: (body) => client.put('/api/v1/company-calendar/', body),
+}
+
+// Override de jornada per tècnic. <userId> = User id. gated `configure` o `manage_users`.
+export const jornada = {
+  get: (userId) => client.get(`/api/v1/users/${userId}/jornada/`),
+  // body: {jornada_override: {...mateix format que horaris...} | null}  (null → hereta empresa)
+  update: (userId, body) => client.put(`/api/v1/users/${userId}/jornada/`, body),
+}
+
+// Absències per tècnic (rangs de dates). Filtrable ?user_profile=. gated `configure` o `manage_users`.
+export const absencies = {
+  list: (params) => client.get('/api/v1/absencies/', { params }),   // {user_profile}
+  // body: {user_profile, data_inici, data_fi, motiu?}
+  create: (body) => client.post('/api/v1/absencies/', body),
+  remove: (id) => client.delete(`/api/v1/absencies/${id}/`),
 }
 
 // Capa de Projecte — variants de complexitat (garment-type-items/, ModelViewSet).
