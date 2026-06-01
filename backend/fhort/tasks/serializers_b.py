@@ -20,10 +20,17 @@ class ModelTaskSerializer(serializers.ModelSerializer):
         model = ModelTask
         fields = ['id', 'model', 'model_codi', 'task_type', 'task_type_code', 'task_type_name',
                   'status', 'assignee', 'order', 'created_at', 'updated_at',
-                  'started_at', 'finished_at', 'estimated_minutes', 'rectifications']
+                  'started_at', 'finished_at', 'estimated_minutes', 'rectifications',
+                  'planned_start', 'planned_end', 'planned_locked']
         # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
+        # planned_* els escriu el MOTOR (planning), no el client → read-only.
+        # ⚠️ Fus horari: aquí planned_start/end surten en UTC (USE_TZ=True). El front de
+        # planificació NO ha de barrejar aquesta font amb les respostes del motor
+        # (plan/compute|preview|apply, que van en ISO LOCAL). Aquests camps són per a
+        # referència/llista; el Gantt pinta des de plan/compute (local).
         read_only_fields = ['created_at', 'updated_at',
-                            'started_at', 'finished_at', 'estimated_minutes']
+                            'started_at', 'finished_at', 'estimated_minutes',
+                            'planned_start', 'planned_end', 'planned_locked']
 
     def get_rectifications(self, obj):
         return rectification_count(obj)
