@@ -56,7 +56,29 @@
     "fitting_list": "Listado",
     "fittings_sessions": "Sesiones de fitting",
     "configuracio_general": "General",
-    "users": "Usuarios y roles"
+    "users": "Usuarios y roles",
+    "company_calendar": "Calendario de empresa"
+  },
+  "companyCalendar": {
+    "title": "Calendario de empresa",
+    "subtitle": "Define los tramos horarios laborables por día de la semana",
+    "days": {
+      "mon": "Lunes", "tue": "Martes", "wed": "Miércoles", "thu": "Jueves",
+      "fri": "Viernes", "sat": "Sábado", "sun": "Domingo"
+    },
+    "no_work": "No laborable",
+    "add_tram": "Añadir tramo",
+    "remove_tram": "Quitar tramo",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "saved_ok": "Calendario guardado correctamente.",
+    "save_error": "No se ha podido guardar el calendario.",
+    "load_error": "No se ha podido cargar el calendario.",
+    "loading": "Cargando…",
+    "no_access": "No tienes acceso a esta sección.",
+    "err_incomplete": "{{day}}: hay un tramo con horas incompletas.",
+    "err_start_end": "{{day}}: el inicio debe ser anterior al fin.",
+    "err_overlap": "{{day}}: tramos solapados o desordenados."
   },
   "usersRoles": {
     "title": "Usuarios y roles",

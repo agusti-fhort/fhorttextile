@@ -191,6 +191,7 @@ export default function Sidebar() {
   const logout = useAuthStore(s => s.logout)
   const user = useAuthStore(s => s.user)
   const canManageUsers = !!user?.capabilities?.includes('manage_users')
+  const canConfigure = !!user?.capabilities?.includes('configure')
   const [alertsPending, setAlertsPending] = useState(0)
   const [expanded, setExpanded] = useState({['nav.models']: true})
   const [logoutHover, setLogoutHover] = useState(false)
@@ -222,8 +223,11 @@ export default function Sidebar() {
     if (canManageUsers) {
       children = [...children, { to: '/configuracio/usuaris', labelKey: 'nav.users' }]
     }
+    if (canConfigure) {
+      children = [...children, { to: '/configuracio/calendari', labelKey: 'nav.company_calendar' }]
+    }
     return children === item.children ? item : { ...item, children }
-  }), [onboardingPct, canManageUsers])
+  }), [onboardingPct, canManageUsers, canConfigure])
 
   // Conjunt de totes les rutes del sidebar (leaves + children)
   const allRoutes = useMemo(() => {

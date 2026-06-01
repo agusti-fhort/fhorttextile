@@ -27,6 +27,7 @@ import Alerts from './pages/Alerts'
 import Settings from './pages/Settings'
 import UsersRoles from './pages/UsersRoles'
 import UserProfilePage from './pages/UserProfilePage'
+import CompanyCalendar from './pages/CompanyCalendar'
 import Shell from './components/layout/Shell'
 
 function ProtectedRoute({ children }) {
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="garment-pom-map/:id" element={<GarmentPOMMapEditor />} />
           <Route path="onboarding" element={<OnboardingWizard />} />
           <Route path="configuracio/usuaris" element={<UsersRoles />} />
+          <Route path="configuracio/calendari" element={<CompanyCalendar />} />
           <Route path="configuracio/garment-types" element={<Settings />} />
           <Route path="configuracio/size-systems" element={<Settings />} />
           <Route path="configuracio/grading" element={<Settings />} />

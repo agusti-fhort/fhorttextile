@@ -56,7 +56,29 @@
     "fitting_list": "Llistat",
     "fittings_sessions": "Sessions de fitting",
     "configuracio_general": "General",
-    "users": "Usuaris i rols"
+    "users": "Usuaris i rols",
+    "company_calendar": "Calendari d'empresa"
+  },
+  "companyCalendar": {
+    "title": "Calendari d'empresa",
+    "subtitle": "Defineix els trams horaris laborables per dia de la setmana",
+    "days": {
+      "mon": "Dilluns", "tue": "Dimarts", "wed": "Dimecres", "thu": "Dijous",
+      "fri": "Divendres", "sat": "Dissabte", "sun": "Diumenge"
+    },
+    "no_work": "No laborable",
+    "add_tram": "Afegir tram",
+    "remove_tram": "Treure tram",
+    "save": "Desar",
+    "saving": "Desant…",
+    "saved_ok": "Calendari desat correctament.",
+    "save_error": "No s'ha pogut desar el calendari.",
+    "load_error": "No s'ha pogut carregar el calendari.",
+    "loading": "Carregant…",
+    "no_access": "No tens accés a aquesta secció.",
+    "err_incomplete": "{{day}}: hi ha un tram amb hores incompletes.",
+    "err_start_end": "{{day}}: l'inici ha de ser anterior al fi.",
+    "err_overlap": "{{day}}: hi ha trams solapats o desordenats."
   },
   "usersRoles": {
     "title": "Usuaris i rols",

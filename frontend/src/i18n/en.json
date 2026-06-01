@@ -56,7 +56,29 @@
     "fitting_list": "List",
     "fittings_sessions": "Fitting sessions",
     "configuracio_general": "General",
-    "users": "Users & roles"
+    "users": "Users & roles",
+    "company_calendar": "Company calendar"
+  },
+  "companyCalendar": {
+    "title": "Company calendar",
+    "subtitle": "Define working time slots per day of the week",
+    "days": {
+      "mon": "Monday", "tue": "Tuesday", "wed": "Wednesday", "thu": "Thursday",
+      "fri": "Friday", "sat": "Saturday", "sun": "Sunday"
+    },
+    "no_work": "Non-working",
+    "add_tram": "Add slot",
+    "remove_tram": "Remove slot",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved_ok": "Calendar saved successfully.",
+    "save_error": "Could not save the calendar.",
+    "load_error": "Could not load the calendar.",
+    "loading": "Loading…",
+    "no_access": "You do not have access to this section.",
+    "err_incomplete": "{{day}}: a slot has incomplete times.",
+    "err_start_end": "{{day}}: start must be before end.",
+    "err_overlap": "{{day}}: overlapping or out-of-order slots."
   },
   "usersRoles": {
     "title": "Users & roles",
