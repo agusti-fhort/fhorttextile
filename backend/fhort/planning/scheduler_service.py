@@ -103,6 +103,9 @@ def schedule(model_task_qs, now=None, save=True):
         tasks = list(model_task_qs.select_related('model', 'task_type', 'assignee'))
     else:
         tasks = list(model_task_qs)
+    # Blindatge: el motor MAI planifica ni toca tasques Done (cinturó-i-tirants, no depèn dels
+    # cridadors). Les Done són immutables: conserven assignee/finished_at/planned_* tal com estan.
+    tasks = [t for t in tasks if t.status != 'Done']
     warnings = []
     placements = []          # dicts de sortida
     save_ops = []            # (task, start_naive, end_naive) a desar si save

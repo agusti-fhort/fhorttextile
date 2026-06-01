@@ -45,6 +45,20 @@ def _technician_queue(profile):
             .select_related('model', 'task_type', 'assignee'))
 
 
+def recompute_for_technicians(profile_ids, *, now=None):
+    """Recalcula la cua SENCERA de cada tècnic afectat (totes les seves no-Done, com fa apply),
+    NO només un model → evita solapaments amb la feina ja assignada del tècnic. Done intactes.
+    `profile_ids`: iterable d'ids de UserProfile (es filtren els None i es deduplica)."""
+    from fhort.accounts.models import UserProfile
+    now = now or _now_naive()
+    results = {}
+    for pid in {p for p in profile_ids if p}:
+        prof = UserProfile.objects.filter(pk=pid).first()
+        if prof is not None:
+            results[pid] = schedule(_technician_queue(prof), now=now, save=True)
+    return results
+
+
 def _save_snapshot(result, *, start_date, campaign_filter, computed_by, technician_count):
     """Desa la previsió com a PlanSnapshot immutable (conservat de l'Sprint H)."""
     return PlanSnapshot.objects.create(
@@ -141,3 +155,59 @@ def apply(*, task_id, new_start, computed_by=None, now=None):
                           campaign_filter={'apply_task': task_id},
                           computed_by=computed_by, technician_count=1)
     return {'snapshot_id': snap.id, 'result': result, 'locked_task_id': moved.id}
+
+
+@transaction.atomic
+def assign_model(*, model_id, assignee_id, task_ids=None, now=None):
+    """Assigna el tècnic `assignee_id` a les tasques no-Done del model (totes, o només `task_ids`)
+    i recalcula la cua SENCERA de cada tècnic afectat (el nou + els que perdin tasques). Les Done
+    NO es toquen. Retorna {assigned_count, technician_ids, results}.
+    Llança ValueError si el tècnic no pot fer algun tipus de tasca (allow-list)."""
+    from fhort.accounts.models import UserProfile
+    from fhort.accounts.capabilities import get_allowed_task_types
+    profile = UserProfile.objects.filter(pk=assignee_id).first()
+    if profile is None:
+        raise ValueError('Tècnic (assignee_id) no trobat en aquest tenant.')
+
+    qs = (ModelTask.objects.filter(model_id=model_id).exclude(status='Done')
+          .select_related('task_type', 'assignee'))
+    if task_ids:
+        qs = qs.filter(pk__in=task_ids)
+    tasks = list(qs)
+    if not tasks:
+        raise ValueError('El model no té tasques no-Done per assignar.')
+
+    # Allow-list: el tècnic ha de poder fer cada tipus (admin = bypass via get_allowed_task_types).
+    allowed = get_allowed_task_types(profile.user)
+    blocked = sorted({t.task_type.code for t in tasks if t.task_type.code not in allowed})
+    if blocked:
+        raise ValueError(f"El tècnic no té permès els tipus de tasca: {', '.join(blocked)}.")
+
+    affected = {assignee_id}
+    for t in tasks:
+        if t.assignee_id:
+            affected.add(t.assignee_id)   # el tècnic anterior també cal recalcular-lo
+        t.assignee = profile
+        t.save(update_fields=['assignee', 'updated_at'])
+
+    results = recompute_for_technicians(affected, now=now)
+    return {'assigned_count': len(tasks), 'technician_ids': sorted(affected),
+            'results': results}
+
+
+@transaction.atomic
+def unassign_model(*, model_id, now=None):
+    """Treu el tècnic i buida planned_* de TOTES les tasques no-Done assignades del model
+    (endpoint de servidor: planned_* són read-only al serializer). Recalcula la cua dels tècnics
+    que quedin afectats i neteja Model.predicted_*. Les Done NO es toquen.
+    Retorna {unassigned_count, technician_ids, results}."""
+    from fhort.models_app.models import Model
+    qs = (ModelTask.objects.filter(model_id=model_id).exclude(status='Done')
+          .filter(assignee__isnull=False))
+    affected = set(qs.values_list('assignee_id', flat=True))
+    count = qs.update(assignee=None, planned_start=None, planned_end=None,
+                      planned_locked=False)
+    # El model torna a Pendents: sense tasques no-Done planificades → neteja la previsió del model.
+    Model.objects.filter(pk=model_id).update(predicted_start=None, predicted_end=None)
+    results = recompute_for_technicians(affected, now=now)
+    return {'unassigned_count': count, 'technician_ids': sorted(affected), 'results': results}

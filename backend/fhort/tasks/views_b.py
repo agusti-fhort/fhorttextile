@@ -222,7 +222,19 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         self._validate_assignee(serializer)
+        old_assignee_id = serializer.instance.assignee_id
         serializer.save()
+        new_assignee_id = serializer.instance.assignee_id
+        # Reassignar una tasca (canvi de tècnic) → recalcular la cua SENCERA dels DOS tècnics.
+        if old_assignee_id != new_assignee_id:
+            inst = serializer.instance
+            # Si s'ha desassignat (nou=None), buidar planned_* d'aquesta tasca (read-only al
+            # serializer, així que ho fem aquí) abans de recalcular.
+            if new_assignee_id is None and inst.status != 'Done':
+                ModelTask.objects.filter(pk=inst.pk).update(
+                    planned_start=None, planned_end=None, planned_locked=False)
+            from fhort.planning.plan_service import recompute_for_technicians
+            recompute_for_technicians([old_assignee_id, new_assignee_id])
 
 
 class _DefineTasks(HasCapability):
@@ -260,6 +272,43 @@ def define_model_tasks_view(request, model_id):
         created.append(mt.id)
     return Response({'created_ids': created, 'skipped_existing': sorted(existing)},
                     status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([_DefineTasks])
+def assign_model_view(request, model_id):
+    """POST /api/v1/models/<model_id>/assign/
+    Body: {"assignee_id": <UserProfile id>, "task_ids": [..]?}.
+    Assigna el tècnic a les tasques no-Done del model (totes, o només task_ids) i recalcula la
+    cua SENCERA de cada tècnic afectat (no només aquest model → sense solapaments). Done intactes."""
+    from fhort.planning.plan_service import assign_model
+    if not Model.objects.filter(pk=model_id).exists():
+        return Response({'error': 'Model no trobat.'}, status=status.HTTP_404_NOT_FOUND)
+    assignee_id = request.data.get('assignee_id')
+    if not assignee_id:
+        return Response({'error': 'assignee_id requerit.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        out = assign_model(model_id=model_id, assignee_id=assignee_id,
+                           task_ids=request.data.get('task_ids'))
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(out, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_DefineTasks])
+def unassign_model_view(request, model_id):
+    """POST /api/v1/models/<model_id>/unassign/
+    Treu el tècnic i buida planned_* de les tasques no-Done del model → torna a Pendents i
+    recalcula la cua dels tècnics afectats. Done intactes."""
+    from fhort.planning.plan_service import unassign_model
+    if not Model.objects.filter(pk=model_id).exists():
+        return Response({'error': 'Model no trobat.'}, status=status.HTTP_404_NOT_FOUND)
+    try:
+        out = unassign_model(model_id=model_id)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(out, status=status.HTTP_200_OK)
 
 
 class _ExecuteTasks(HasCapability):
