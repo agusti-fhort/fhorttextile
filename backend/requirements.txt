@@ -1,0 +1,26 @@
+# FHORT Textile Tech — dependències DIRECTES (top-level) del backend.
+# Identificades pels imports reals del codi + apps a settings.py. Versions fixades.
+# El freeze complet (incloent transitives) viu a requirements.lock.
+
+# --- Core web ---
+Django==6.0.5
+djangorestframework==3.17.1
+djangorestframework-simplejwt==5.5.1
+django-tenants==3.10.1
+django-cors-headers==4.9.0
+django-filter==25.2
+drf-spectacular==0.29.0
+psycopg2-binary==2.9.12
+gunicorn==26.0.0
+
+# --- Planificació: calendari laboral / festius / dies hàbils ---
+workalendar==17.0.0
+python-networkdays==1.2
+
+# --- Extracció AI de fitxes tècniques ---
+anthropic==0.104.1
+httpx==0.28.1
+
+# --- Utilitats ---
+python-dotenv==1.2.2
+openpyxl==3.1.5

@@ -14,6 +14,9 @@ class UserProfile(models.Model):
     cost_hora = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     color_avatar = models.CharField(max_length=7, default='#888888')
     permisos = models.JSONField(default=dict, blank=True)
+    # Sprint A (calendari): horari propi del tècnic (mateix format que CompanyCalendar.horaris).
+    # Null → s'usa la jornada de l'empresa (CompanyCalendar).
+    jornada_override = models.JSONField(null=True, blank=True)
 
     class Meta:
         verbose_name = 'Perfil d\'usuari'
