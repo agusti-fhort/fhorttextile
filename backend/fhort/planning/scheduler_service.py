@@ -97,7 +97,12 @@ def schedule(model_task_qs, now=None, save=True):
          'models': {model_id: {predicted_start, predicted_end}}}
     """
     now = now or _now_naive()
-    tasks = list(model_task_qs.select_related('model', 'task_type', 'assignee'))
+    # Accepta un queryset (compute/apply) o una llista d'objectes ja modificats en memòria
+    # (preview: la tasca moguda es fixa sense escriure a la BD).
+    if hasattr(model_task_qs, 'select_related'):
+        tasks = list(model_task_qs.select_related('model', 'task_type', 'assignee'))
+    else:
+        tasks = list(model_task_qs)
     warnings = []
     placements = []          # dicts de sortida
     save_ops = []            # (task, start_naive, end_naive) a desar si save

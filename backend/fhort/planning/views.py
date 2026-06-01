@@ -16,6 +16,8 @@ from fhort.accounts.capabilities import (HasCapability, CONFIGURE, MANAGE_USERS,
 from .models import CompanyCalendar, Absencia
 from .serializers import (CompanyCalendarSerializer, JornadaSerializer,
                           AbsenciaSerializer)
+from . import plan_service
+from fhort.tasks.models import ModelTask, PlanSnapshot
 
 
 class _Configure(HasCapability):
@@ -73,3 +75,74 @@ class AbsenciaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin,
     permission_classes = [_ConfigureOrManageUsers]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['user_profile']
+
+
+# ── Sprint B — motor de planificació (gated configure) ───────────────────────
+@api_view(['POST'])
+@permission_classes([_Configure])
+def plan_compute_view(request):
+    """POST /api/v1/plan/compute/ — planifica un conjunt amb el motor determinista,
+    escriu planned_*/predicted_* i desa un PlanSnapshot.
+    Body (tots opcionals; sense filtre = tot el pendent):
+      {"model_ids":[110,111], "campaign_filter":{"temporada":"SS","any":26}}"""
+    profile = getattr(request.user, 'profile', None)
+    d = request.data
+    try:
+        out = plan_service.compute_and_save(
+            model_ids=d.get('model_ids'), campaign_filter=d.get('campaign_filter'),
+            computed_by=profile)
+    except (ValueError, KeyError) as e:
+        return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
+    return Response(out, status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_Configure])
+def plan_preview_view(request):
+    """POST /api/v1/plan/preview/ — simula reposicionar una tasca SENSE desar.
+    Body: {"task_id":123, "new_start":"2026-06-09T08:00:00"}.
+    Retorna {moved_task_id, placements, warnings, impact}."""
+    d = request.data
+    if not d.get('task_id') or not d.get('new_start'):
+        return Response({'error': 'task_id i new_start requerits.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        out = plan_service.preview(task_id=d['task_id'], new_start=d['new_start'])
+    except ModelTask.DoesNotExist:
+        return Response({'error': 'Tasca no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+    except (ValueError, KeyError) as e:
+        return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
+    return Response(out, status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_Configure])
+def plan_apply_view(request):
+    """POST /api/v1/plan/apply/ — aplica una reposició acceptada: fixa la tasca
+    (planned_locked=True a new_start) i desa el recàlcul de la cua (+ PlanSnapshot).
+    Body: {"task_id":123, "new_start":"2026-06-09T08:00:00"}."""
+    profile = getattr(request.user, 'profile', None)
+    d = request.data
+    if not d.get('task_id') or not d.get('new_start'):
+        return Response({'error': 'task_id i new_start requerits.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        out = plan_service.apply(task_id=d['task_id'], new_start=d['new_start'],
+                                 computed_by=profile)
+    except ModelTask.DoesNotExist:
+        return Response({'error': 'Tasca no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+    except (ValueError, KeyError) as e:
+        return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
+    return Response(out, status=http_status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([_Configure])
+def plan_snapshots_view(request):
+    """GET /api/v1/plan/snapshots/ — historial de previsions (últimes 50)."""
+    out = [{'id': s.id, 'computed_at': s.computed_at, 'start_date': s.start_date,
+            'technician_count': s.technician_count,
+            'campaign_filter': s.campaign_filter,
+            'model_count': len(s.model_sequence)}
+           for s in PlanSnapshot.objects.all()[:50]]
+    return Response({'snapshots': out}, status=http_status.HTTP_200_OK)
