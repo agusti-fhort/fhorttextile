@@ -74,6 +74,14 @@ Fusió tram 8 (Planificador) + assignació en UN motor; `plan/compute` antic per
 - `plan_service.py` + endpoints `plan/compute` (refactor) + `plan/preview` (save=False, NO muta BD) +
   `plan/apply` (locked=True + desa). Tots gated `configure` (deny 403 provat amb Montse).
 - Commits: 88ed31f, c1bffd2, e73efb2.
+- **Assignació + recàlcul per cua sencera (commit 6e81cc7):** `assign_model` / `unassign_model` +
+  `recompute_for_technicians` (recalcula TOTA la cua no-Done del/s tècnic/s afectat/s, com `apply` →
+  **evita solapaments** amb la feina ja assignada; no recalcula "només el model"). Scheduler **Done-safe**:
+  `schedule()` exclou `status='Done'` defensiu (no depèn dels cridadors). Endpoints `POST models/<id>/assign/`
+  `{assignee_id, task_ids?}` i `POST models/<id>/unassign/` (treu assignee + buida `planned_*` + neteja
+  `predicted_*`), gated `define_tasks`. Reassignar una tasca (PATCH `assignee` a `model-task-items`)
+  recalcula les cues dels **dos** tècnics (el vell i el nou). Tasques **Done IMMUTABLES** (autor + finished_at
+  + dates) en tots els casos — provat amb sortida literal.
 - **Nota dates:** es desen UTC (USE_TZ, Europe/Madrid). El front de planificació pinta des del MOTOR (local);
   NO barrejar amb l'UTC del serializer de tasca.
 
@@ -83,22 +91,43 @@ bom, pom, grading (name "Taula de talles"). `default_order` reals verificats (NO
 
 ---
 
-## EN CURS — Front de planificació
+## FRONT DE PLANIFICACIÓ (trams 0–2 FETS · tram 3 pendent)
 **Decisió de Gantt/Calendar:** SVAR core MIT (`wx-react-gantt` + `wx-react-calendar`), React 19 OK. El core
 MIT (timeline/drag/dependències/virtualització milers de tasques) és suficient; les features PRO
 (working-calendar/auto-scheduling) NO calen perquè el motor és nostre. Frappe Gantt = pla B (100% lliure,
 menys potent amb volum). Resta (DHTMLX/Bryntum/DevExtreme) = de pagament, descartades.
 
-**4 trams:**
-- **Tram 0 (backend mini, EN CURS):** exposar `planned_*` al `ModelTaskSerializer` + completar `endpoints.js`
-  (preview/apply/company-calendar/jornada/absencies). Desbloquejant. Additiu, sense migració.
-- **Tram 1:** instal·lar SVAR + config "Calendari d'empresa" (SVAR Calendar) a Configuració.
-- **Tram 2:** pantalla Planificació — carpetes Pendents (`<ModelPickerList>` extret del Kanban + pop-up
-  tècnic/tasques) / Assignades (llista) + `plan/compute`.
-- **Tram 3:** Gantt (SVAR) amb drag → `plan/preview` → modal acceptació → `plan/apply` + vista tècnic
-  read-only en DIES.
+**Trams (0→2 FETS; 3 pendent):**
+- ✅ **Tram 0 (backend mini):** `planned_start/end/locked` exposats al `ModelTaskSerializer` (read-only;
+  comentari de fus UTC). `endpoints.js` complet: `plan.compute/preview/apply/snapshots`, `companyCalendar`,
+  `jornada`, `absencies`. Commits 1ca18a4, 6662a26.
+- ✅ **Tram 1A:** SVAR instal·lat (`wx-react-gantt` + `wx-react-calendar`, MIT, React 19 net, sense
+  conflictes peerDeps). Pantalla **Calendari d'empresa** (`/configuracio/calendari`, gated `configure`,
+  403-safe): editor de **trams horaris per dia** (7 files, inputs hora, +afegir/treure, validació
+  inici<fi/solapaments). Commits 1b343f8, 4d60e7a.
+- ✅ **Tram 1B:** secció **festius extra** (editor de dates) a la mateixa pantalla; desar envia
+  `{horaris, festius_extra}` (anti-regressió verificada: no esborra horaris). Commit 3995dea.
+  NOTA: `festius_extra` és **llista de dates ISO** (sense descripció; afegir-la requeriria canvi backend).
+  **Jornada-per-tècnic i absències AJORNATS conscientment** (calendari únic per a tothom; el motor ja els
+  suportaria). Vacances = es gestionen movent la data del model.
+- ✅ **Tram 2:** pantalla **Planificació** (`/planificacio`, gated `define_tasks`/`configure`, 403-safe).
+  Carpetes **Pendents** (models amb no-Done sense tècnic) / **Assignades** (totes les no-Done amb tècnic).
+  Assignar model (bulk) → **pop-up** (tècnic + tasques opcionals) → `assign` → **compute automàtic**.
+  Assignades: tècnic(s), data inici/temps estimat/data fi previstos, **flag "en risc"**
+  (`planned_end > data_objectiu`), **mestre-detall** a tasques amb **autor de les Done** (col·laboració
+  traçada). Desassignar (Done intactes). Reassignar tasca. Reaprofita el patró cerca/filtres del Kanban.
+  Commits f1d02a2 (fix), e82bef1 (pantalla). Verificat visualment (admin + Montse 403).
+- ⏳ **Tram 3 (pendent):** Gantt (SVAR) amb drag → `plan/preview` → modal acceptació → `plan/apply` +
+  **vista tècnic en DIES** + indicadors de direcció (càrrega per tècnic, models en risc, cost previst =
+  Σ temps×cost_hora) + **code-splitting** (crític quan entri el Gantt).
 
-**Menú:** "Planificació" = subgrup de Projectes; "Calendari d'empresa" = fill de Configuració.
+**LLIÇÓ CLAU — `assignee` és FK a `UserProfile`, NO a `User`:** mai assumir `User.id == UserProfile.id`
+(coincideix avui per casualitat amb 2 usuaris; divergiria en escalar). Els serializers d'usuari
+(`UserListSerializer`/`UserAdminSerializer`) ara exposen **`profile_id`**; el front mapeja i envia
+`profile_id` com a `assignee_id` (selector, mapa de noms, payload) → desacoblat de `User.id`. Fix f1d02a2.
+
+**Menú:** "Planificació" = fill del grup Tasques (gated `define_tasks`/`configure`); "Calendari d'empresa" =
+fill de Configuració (gated `configure`).
 
 ---
 
@@ -110,7 +139,14 @@ menys potent amb volum). Resta (DHTMLX/Bryntum/DevExtreme) = de pagament, descar
 - **Auth per email:** ara login per username; tram futur transversal.
 - **Endurir `transition`:** que comprovi `request.user == assignee` (avui la UI ho amaga però el backend no
   ho força).
-- **Code-splitting (React.lazy):** bundle ~719 kB i pujant. Deute tècnic.
+- **Code-splitting (React.lazy):** bundle ~747 kB i pujant. **CRÍTIC quan entri el Gantt (Tram 3).**
+- **product_manager té `define_tasks` però NO `view_team_tasks`** → a Planning veu només les seves tasques
+  (scope row-level). Decidir si product_manager ha de tenir `view_team_tasks` per assignar a l'equip.
+- **Deep-link a fred a ruta protegida rebota a `/login`** (cursa `initAuth` al useEffect vs `ProtectedRoute`
+  que renderitza amb `isAuthenticated:false`). Afegir estat de loading inicial / inicialitzar des de
+  localStorage. Detectat fent les captures de verificació.
+- **Festius extra amb descripció:** avui `festius_extra` és llista de dates ISO; afegir motiu = canvi backend
+  menor (objectes en comptes de cadenes + ajustar el validador).
 - **Botons Kanban a columnes estretes:** "Finalitzar" va just; resoldre en enriquir les fitxes del Kanban.
 - **Garment Types finder 3 columnes** (POMs, tram futur).
 - **Trams 5 (Calendari fittings: schedule→open, per dia), 6 (Producció mostres: request-production + gate
@@ -129,8 +165,21 @@ menys potent amb volum). Resta (DHTMLX/Bryntum/DevExtreme) = de pagament, descar
 
 ---
 
+## DECISIONS DE PRODUCTE / PRICING (registre nou)
+- **Posicionament:** SaaS de **nínxol tècnic** (oficina tècnica digital + planificació de producció), **NO un
+  PLM**. Complementa Centric/K3/Garem (que no fan la part tècnica), no competeix.
+- **Comprador = direcció** (no el tècnic): valor = visibilitat de capacitat, dates i cost. *"No més dates de
+  lliurament falses."* (Justifica els indicadors de direcció del Tram 3.)
+- **Cost IA ~0,33 €/model** (trivial). Cost real = temps de suport (baix; es tecnifiquen processos coneguts).
+- **Volums reals:** Brownie ~1.200 models/any; LOSAN ~2.400/any. Àncora de preu: ordre dels **30k€** (Garem).
+  Model de preu: **tiers per volum anual + overflow per excés** (absorbeix l'estacionalitat).
+
+---
+
 ## REGISTRE DE COMMITS (sessió 2026-06-01, branca main)
 - Permisos/Usuaris/Kanban: 55ed54a, 50c668f, … , a0ac4b0 (agregador), 19377b9 (ordre+filtres),
   03faa51 (Kanban 5-col), b048904 (5 col iguals), be547ae (sort+filtres), ca6d1f5 (scroll infinit+Responsable gated).
-- Sprint A: 702cd5d, d8e2693, 09ba161.
-- Sprint B: 88ed31f, c1bffd2, e73efb2.
+- Sprint A (calendari): 702cd5d, d8e2693, 09ba161.
+- Sprint B (motor): 88ed31f, c1bffd2, e73efb2; assign/unassign + recompute + Done-safe: 6e81cc7.
+- Front planificació: 1ca18a4 + 6662a26 (Tram 0), 1b343f8 + 4d60e7a (Tram 1A), 3995dea (Tram 1B),
+  f1d02a2 (fix profile_id) + e82bef1 (Tram 2 pantalla).
