@@ -160,7 +160,7 @@
       "data_objectiu": "Data objectiu", "data_entrada": "Data entrada", "temporada": "Temporada"
     },
     "filter_temporada": "Temporada", "filter_estat": "Estat", "filter_responsable": "Responsable",
-    "resp_me": "Jo", "resp_all": "Tots",
+    "resp_me": "Jo", "resp_all": "Tots", "resp_hint": "Models que dirigeixo (responsable, no assignació)",
     "more_filters": "Més filtres", "clear_filters": "Esborra filtres",
     "filter_garment_type": "Tipus de peça", "filter_any": "Any", "filter_prioritat": "Prioritat",
     "results_n": "{{n}} resultats",

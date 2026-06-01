@@ -60,6 +60,7 @@ export default function KanbanTasks() {
   const user = useAuthStore(s => s.user)
   const canExecute = !!user?.capabilities?.includes('execute_tasks')
   const canCloseGates = !!user?.capabilities?.includes('close_gates')
+  const canViewTeam = !!user?.capabilities?.includes('view_team_tasks')
 
   // Columna 1 — models (paginada) + cartes de gate (Prioritat A).
   const [search, setSearch] = useState('')
@@ -89,6 +90,8 @@ export default function KanbanTasks() {
 
   const [toast, setToast] = useState(null)          // { type, text }
   const toastTimer = useRef(null)
+  const loadingRef = useRef(false)                  // guard anti-doble-càrrega del scroll infinit
+  const sentinelRef = useRef(null)                  // observat per l'IntersectionObserver
   function showToast(type, text) {
     setToast({ type, text })
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -98,6 +101,7 @@ export default function KanbanTasks() {
   // Càrrega d'una pàgina de by-model amb cerca+ordenació+filtres. replace=true reinicia
   // (canvi de qualsevol criteri); si no, hi afegeix (load more / scroll).
   const loadPage = useCallback((pageToLoad, replace) => {
+    loadingRef.current = true
     setLoadingModels(true)
     const p = { page: pageToLoad }
     const s = search.trim(); if (s) p.search = s
@@ -117,7 +121,7 @@ export default function KanbanTasks() {
         setModelsCount(typeof data?.count === 'number' ? data.count : results.length)
       })
       .catch(() => { if (replace) { setModelRows([]); setHasNext(false); setModelsCount(0) } })
-      .finally(() => setLoadingModels(false))
+      .finally(() => { loadingRef.current = false; setLoadingModels(false) })
   }, [search, sortField, sortDir, fTemporada, fEstat, fResponsable, fGarmentType, fAny, fPrioritat])
 
   // Qualsevol canvi de criteri (debounce) → reinicia a pàgina 1 i recarrega.
@@ -143,11 +147,24 @@ export default function KanbanTasks() {
   }, [])
   useEffect(() => { if (canCloseGates) loadGates() }, [canCloseGates, loadGates])
 
-  function loadMore() {
+  const loadMore = useCallback(() => {
+    if (loadingRef.current || !hasNext) return
     const next = page + 1
     setPage(next)
     loadPage(next, false)
-  }
+  }, [hasNext, page, loadPage])
+
+  // Scroll infinit: quan el sentinella entra a la vista i hi ha `next`, carrega la pàgina següent.
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasNext) return
+    const obs = new IntersectionObserver(
+      entries => { if (entries[0].isIntersecting) loadMore() },
+      { rootMargin: '150px' },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [hasNext, loadMore])
 
   // Detall: carrega les tasques del model seleccionat (buit si cap selecció).
   const loadDetail = useCallback((modelId) => {
@@ -218,6 +235,11 @@ export default function KanbanTasks() {
           >
             <i className={`ti ${sortDir === 'desc' ? 'ti-sort-descending' : 'ti-sort-ascending'}`} style={{ fontSize: 14 }} />
           </button>
+          {/* Any (primera línia, abans de Temporada) */}
+          <input
+            type="number" value={fAny} onChange={e => setFAny(e.target.value)}
+            placeholder={t('kanban.filter_any')} style={{ ...selS, width: 100 }}
+          />
           {/* Temporada */}
           <select value={fTemporada} onChange={e => setFTemporada(e.target.value)} style={selS}>
             <option value="">{t('kanban.filter_temporada')}</option>
@@ -228,17 +250,23 @@ export default function KanbanTasks() {
             <option value="">{t('kanban.filter_estat')}</option>
             {ESTATS.map(x => <option key={x} value={x}>{t(`kanban.estats.${x}`)}</option>)}
           </select>
-          {/* Responsable: Tots / Jo */}
-          <div style={{ display: 'flex', border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
-            {[['', 'resp_all'], ['me', 'resp_me']].map(([val, key]) => (
-              <button key={key} onClick={() => setFResponsable(val)} style={{
-                fontFamily: MONO, fontSize: 11, padding: '6px 10px', border: 'none', cursor: 'pointer',
-                background: fResponsable === val ? CREMA : 'var(--white)',
-                color: fResponsable === val ? AMBER_TEXT : 'var(--gray)',
-                fontWeight: fResponsable === val ? 600 : 400,
-              }}>{t(`kanban.${key}`)}</button>
-            ))}
-          </div>
+          {/* Responsable (models que DIRIGEIXO, no assignee): només amb view_team_tasks.
+              Sense view_team_tasks l'usuari ja veu només les seves tasques → toggle sense sentit. */}
+          {canViewTeam && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={t('kanban.resp_hint')}>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--gray)' }}>{t('kanban.filter_responsable')}</span>
+              <div style={{ display: 'flex', border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
+                {[['', 'resp_all'], ['me', 'resp_me']].map(([val, key]) => (
+                  <button key={key} onClick={() => setFResponsable(val)} style={{
+                    fontFamily: MONO, fontSize: 11, padding: '6px 10px', border: 'none', cursor: 'pointer',
+                    background: fResponsable === val ? CREMA : 'var(--white)',
+                    color: fResponsable === val ? AMBER_TEXT : 'var(--gray)',
+                    fontWeight: fResponsable === val ? 600 : 400,
+                  }}>{t(`kanban.${key}`)}</button>
+                ))}
+              </div>
+            </div>
+          )}
           <button onClick={() => setShowMore(s => !s)} style={{
             ...selS, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
           }}>
@@ -265,10 +293,6 @@ export default function KanbanTasks() {
                 <option key={g.id} value={g.id}>{g.nom_client || g.global_nom || `#${g.id}`}</option>
               ))}
             </select>
-            <input
-              type="number" value={fAny} onChange={e => setFAny(e.target.value)}
-              placeholder={t('kanban.filter_any')} style={{ ...selS, width: 110 }}
-            />
             <select value={fPrioritat} onChange={e => setFPrioritat(e.target.value)} style={selS}>
               <option value="">{t('kanban.filter_prioritat')}</option>
               {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
@@ -330,14 +354,12 @@ export default function KanbanTasks() {
                 />
               ))}
             </div>
-            {hasNext && (
-              <button onClick={loadMore} disabled={loadingModels} style={{
-                width: '100%', fontFamily: MONO, fontSize: 11, padding: '6px 10px',
-                borderRadius: 6, border: '0.5px solid var(--gray-l)', background: 'var(--white)',
-                cursor: loadingModels ? 'default' : 'pointer', color: 'var(--text-main)',
-              }}>
-                {t('kanban.load_more')}
-              </button>
+            {/* Scroll infinit: sentinella observat + indicador discret de càrrega al peu */}
+            {hasNext && <div ref={sentinelRef} style={{ height: 1 }} aria-hidden="true" />}
+            {loadingModels && modelRows.length > 0 && (
+              <div style={{ ...ph, padding: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <i className="ti ti-loader-2" style={{ fontSize: 12 }} /> {t('kanban.loading')}
+              </div>
             )}
           </div>
         </div>
