@@ -59,6 +59,7 @@ export default function KanbanTasks() {
   // Columna 1 — models (paginada) + cartes de gate (Prioritat A).
   const [search, setSearch] = useState('')
   const [modelRows, setModelRows] = useState([])
+  const [modelsCount, setModelsCount] = useState(0)   // total de la resposta (no només la pàgina)
   const [page, setPage] = useState(1)
   const [hasNext, setHasNext] = useState(false)
   const [loadingModels, setLoadingModels] = useState(true)
@@ -86,8 +87,9 @@ export default function KanbanTasks() {
         const results = data?.results ?? (Array.isArray(data) ? data : [])
         setModelRows(prev => (replace ? results : [...prev, ...results]))
         setHasNext(!!data?.next)
+        setModelsCount(typeof data?.count === 'number' ? data.count : results.length)
       })
-      .catch(() => { if (replace) { setModelRows([]); setHasNext(false) } })
+      .catch(() => { if (replace) { setModelRows([]); setHasNext(false); setModelsCount(0) } })
       .finally(() => setLoadingModels(false))
   }, [search])
 
@@ -176,31 +178,41 @@ export default function KanbanTasks() {
         display: 'grid', gridTemplateColumns: '230px repeat(4, minmax(0, 1fr))',
         gap: '1rem', alignItems: 'start',
       }}>
-        {/* Columna 1 — models (crema) */}
+        {/* Columna 1 — Models (mateixa forma que les d'estat; capçalera taronja pàlid) */}
         <div style={{
-          background: COL1_BG, border: `0.5px solid ${AMBER_BORDER}`, borderRadius: 12,
-          padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0,
+          background: 'var(--white)', border: '0.5px solid #e4e4e2', borderRadius: 12,
+          overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 360, minWidth: 0,
         }}>
-          {/* Prioritat A · per validar (gates) */}
-          {canCloseGates && gateCards.length > 0 && (
-            <div>
-              <ColTitle icon="ti-flag-3" text={t('kanban.priority_a')} amber />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {gateCards.map(g => (
-                  <GateRow
-                    key={`gate-${g.model_id}`} gate={g} t={t}
-                    selected={selected?.type === 'gate' && selected.id === g.model_id}
-                    onClick={() => setSelected({ type: 'gate', id: g.model_id, ...g })}
-                    onValidate={validateGate}
-                  />
-                ))}
+          <div style={{
+            padding: '0.8rem 1rem', borderBottom: '0.5px solid #e4e4e2',
+            display: 'flex', alignItems: 'center', gap: 8, background: COL1_BG,
+          }}>
+            <i className="ti ti-shirt" style={{ fontSize: 14, color: AMBER_TEXT }} />
+            <span style={{ fontSize: 12, fontWeight: 500 }}>{t('kanban.col_models')}</span>
+            <span style={{
+              marginLeft: 'auto', fontSize: 11, color: AMBER_TEXT,
+              padding: '2px 8px', borderRadius: 10, background: 'var(--white)',
+            }}>{modelsCount}</span>
+          </div>
+          <div style={{ flex: 1, padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Prioritat A · per validar (gates) */}
+            {canCloseGates && gateCards.length > 0 && (
+              <div>
+                <ColTitle icon="ti-flag-3" text={t('kanban.priority_a')} amber />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {gateCards.map(g => (
+                    <GateRow
+                      key={`gate-${g.model_id}`} gate={g} t={t}
+                      selected={selected?.type === 'gate' && selected.id === g.model_id}
+                      onClick={() => setSelected({ type: 'gate', id: g.model_id, ...g })}
+                      onValidate={validateGate}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Els meus models */}
-          <div>
-            <ColTitle icon="ti-shirt" text={t('kanban.my_models')} />
+            {/* Llista de models */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {loadingModels && modelRows.length === 0 ? (
                 <div style={ph}>{t('kanban.loading')}</div>
@@ -216,7 +228,7 @@ export default function KanbanTasks() {
             </div>
             {hasNext && (
               <button onClick={loadMore} disabled={loadingModels} style={{
-                marginTop: 8, width: '100%', fontFamily: MONO, fontSize: 11, padding: '6px 10px',
+                width: '100%', fontFamily: MONO, fontSize: 11, padding: '6px 10px',
                 borderRadius: 6, border: '0.5px solid var(--gray-l)', background: 'var(--white)',
                 cursor: loadingModels ? 'default' : 'pointer', color: 'var(--text-main)',
               }}>

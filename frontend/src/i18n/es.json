@@ -137,6 +137,7 @@
     "transition_error": "No se ha podido cambiar el estado.",
     "rect": "{{n}} rectif.",
     "search_ph": "Buscar modelo (código o nombre)…",
+    "col_models": "Modelos",
     "my_models": "Mis modelos",
     "priority_a": "Prioridad A · por validar",
     "select_model": "Selecciona un modelo para ver sus tareas",

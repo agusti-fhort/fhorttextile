@@ -137,6 +137,7 @@
     "transition_error": "No s'ha pogut canviar l'estat.",
     "rect": "{{n}} rectif.",
     "search_ph": "Cerca model (codi o nom)…",
+    "col_models": "Models",
     "my_models": "Els meus models",
     "priority_a": "Prioritat A · per validar",
     "select_model": "Selecciona un model per veure'n les tasques",

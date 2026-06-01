@@ -137,6 +137,7 @@
     "transition_error": "Could not change the status.",
     "rect": "{{n}} rework",
     "search_ph": "Search model (code or name)…",
+    "col_models": "Models",
     "my_models": "My models",
     "priority_a": "Priority A · to validate",
     "select_model": "Select a model to see its tasks",
