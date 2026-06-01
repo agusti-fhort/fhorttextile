@@ -189,6 +189,8 @@ export default function Sidebar() {
   const { t } = useTranslation()
   const location = useLocation()
   const logout = useAuthStore(s => s.logout)
+  const user = useAuthStore(s => s.user)
+  const canManageUsers = !!user?.capabilities?.includes('manage_users')
   const [alertsPending, setAlertsPending] = useState(0)
   const [expanded, setExpanded] = useState({['nav.models']: true})
   const [logoutHover, setLogoutHover] = useState(false)
@@ -209,19 +211,19 @@ export default function Sidebar() {
   const badges = { alerts: alertsPending }
   const toggle = (key) => setExpanded(s => ({...s, [key]: !s[key]}))
 
-  // Inject "Configuració inicial" under Configuració if onboarding < 100%
+  // Injeccions condicionals dins de Configuració: "Configuració inicial" (onboarding < 100%)
+  // i "Usuaris i rols" (només si l'usuari té manage_users).
   const items = useMemo(() => navGroups[0].items.map(item => {
-    if (item.labelKey === 'nav.configuracio' && onboardingPct < 100) {
-      return {
-        ...item,
-        children: [
-          { to: '/onboarding', labelKey: 'nav.onboarding' },
-          ...item.children,
-        ],
-      }
+    if (item.labelKey !== 'nav.configuracio') return item
+    let children = item.children
+    if (onboardingPct < 100) {
+      children = [{ to: '/onboarding', labelKey: 'nav.onboarding' }, ...children]
     }
-    return item
-  }), [onboardingPct])
+    if (canManageUsers) {
+      children = [...children, { to: '/configuracio/usuaris', labelKey: 'nav.users' }]
+    }
+    return children === item.children ? item : { ...item, children }
+  }), [onboardingPct, canManageUsers])
 
   // Conjunt de totes les rutes del sidebar (leaves + children)
   const allRoutes = useMemo(() => {

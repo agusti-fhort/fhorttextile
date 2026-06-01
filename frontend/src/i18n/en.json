@@ -55,7 +55,14 @@
     "tasques_list": "List",
     "fitting_list": "List",
     "fittings_sessions": "Fitting sessions",
-    "configuracio_general": "General"
+    "configuracio_general": "General",
+    "users": "Users & roles"
+  },
+  "usersRoles": {
+    "title": "Users & roles",
+    "subtitle": "Manage roles, capabilities and allowed tasks per user",
+    "no_access": "You don't have access to this section.",
+    "loading": "Loading…"
   },
   "model": {
     "title": "Models",

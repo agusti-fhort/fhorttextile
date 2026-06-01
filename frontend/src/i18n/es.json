@@ -55,7 +55,14 @@
     "tasques_list": "Listado",
     "fitting_list": "Listado",
     "fittings_sessions": "Sesiones de fitting",
-    "configuracio_general": "General"
+    "configuracio_general": "General",
+    "users": "Usuarios y roles"
+  },
+  "usersRoles": {
+    "title": "Usuarios y roles",
+    "subtitle": "Gestiona roles, capacidades y tareas permitidas por usuario",
+    "no_access": "No tienes acceso a esta sección.",
+    "loading": "Cargando…"
   },
   "model": {
     "title": "Modelos",

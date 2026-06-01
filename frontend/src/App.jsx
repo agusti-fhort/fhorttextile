@@ -25,6 +25,7 @@ import KanbanTasks from './pages/KanbanTasks'
 import TimeTracking from './pages/TimeTracking'
 import Alerts from './pages/Alerts'
 import Settings from './pages/Settings'
+import UsersRoles from './pages/UsersRoles'
 import UserProfilePage from './pages/UserProfilePage'
 import Shell from './components/layout/Shell'
 
@@ -77,6 +78,7 @@ export default function App() {
           <Route path="garment-pom-map" element={<GarmentPOMMapEditor />} />
           <Route path="garment-pom-map/:id" element={<GarmentPOMMapEditor />} />
           <Route path="onboarding" element={<OnboardingWizard />} />
+          <Route path="configuracio/usuaris" element={<UsersRoles />} />
           <Route path="configuracio/garment-types" element={<Settings />} />
           <Route path="configuracio/size-systems" element={<Settings />} />
           <Route path="configuracio/grading" element={<Settings />} />

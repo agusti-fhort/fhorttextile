@@ -55,7 +55,14 @@
     "tasques_list": "Llistat",
     "fitting_list": "Llistat",
     "fittings_sessions": "Sessions de fitting",
-    "configuracio_general": "General"
+    "configuracio_general": "General",
+    "users": "Usuaris i rols"
+  },
+  "usersRoles": {
+    "title": "Usuaris i rols",
+    "subtitle": "Gestiona rols, capacitats i tasques permeses per usuari",
+    "no_access": "No tens accés a aquesta secció.",
+    "loading": "Carregant…"
   },
   "model": {
     "title": "Models",
