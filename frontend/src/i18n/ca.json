@@ -78,7 +78,14 @@
     "no_access": "No tens accés a aquesta secció.",
     "err_incomplete": "{{day}}: hi ha un tram amb hores incompletes.",
     "err_start_end": "{{day}}: l'inici ha de ser anterior al fi.",
-    "err_overlap": "{{day}}: hi ha trams solapats o desordenats."
+    "err_overlap": "{{day}}: hi ha trams solapats o desordenats.",
+    "holidays_title": "Festius extra",
+    "holidays_subtitle": "Festius propis de l'empresa, a sobre dels oficials de Catalunya (que el motor ja aplica automàticament). No cal repetir-hi els oficials.",
+    "holidays_empty": "Cap festiu extra definit.",
+    "add_holiday": "Afegir festiu",
+    "remove_holiday": "Treure festiu",
+    "err_holiday_empty": "Hi ha un festiu sense data.",
+    "err_holiday_dup": "Hi ha dates de festiu duplicades."
   },
   "usersRoles": {
     "title": "Usuaris i rols",

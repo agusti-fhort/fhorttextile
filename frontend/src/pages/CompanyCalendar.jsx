@@ -1,12 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { companyCalendar } from '../api/endpoints'
 
-// Tram 1A.2 — Pantalla "Calendari d'empresa": editor de trams horaris per dia (gated configure).
-// Format `horaris`: {"mon":[["08:00","13:00"],["14:00","17:00"]], ..., "sat":[], "sun":[]}.
-// Són hores de RELLOTGE (HH:MM), NO datetimes → cap conversió UTC aquí (el parany UTC és del Gantt, Tram 3).
-// festius_extra NO es toca aquí (Tram 1B): el PUT envia només {horaris} (el backend és partial).
+// Pantalla "Calendari d'empresa" (gated configure):
+//   - Tram 1A.2: editor de trams horaris per dia. Format `horaris`:
+//     {"mon":[["08:00","13:00"],["14:00","17:00"]], ..., "sat":[], "sun":[]} (hores HH:MM, cap UTC).
+//   - Tram 1B: editor de FESTIUS EXTRA propis del tenant. Format `festius_extra`: llista de dates ISO
+//     ["2026-12-24", ...] (el backend valida date.fromisoformat → NOMÉS dates, sense descripció). Són
+//     festius PROPIS, a sobre dels oficials de Catalunya que el motor ja aplica via workalendar.
+// El PUT de company-calendar/ és PARCIAL, però en desar enviem {horaris, festius_extra} (els dos camps)
+// per evitar qualsevol regressió. Dates de calendari, no datetimes → cap conversió UTC.
 
 const MONO = 'IBM Plex Mono, monospace'
 const DOW = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
@@ -39,9 +43,12 @@ export default function CompanyCalendar() {
   const canConfigure = !!me?.capabilities?.includes('configure')
 
   const [horaris, setHoraris] = useState(null)
+  const [festius, setFestius] = useState([])   // [{key, date:'YYYY-MM-DD'}]
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState(null)   // { type:'ok'|'err', text }
+  const keyRef = useRef(0)
+  const nextKey = () => (keyRef.current += 1)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -50,6 +57,8 @@ export default function CompanyCalendar() {
         const h = res.data?.horaris || {}
         // Garantir les 7 claus (dia sense trams = []).
         setHoraris(Object.fromEntries(DOW.map(d => [d, Array.isArray(h[d]) ? h[d] : []])))
+        const fx = Array.isArray(res.data?.festius_extra) ? res.data.festius_extra : []
+        setFestius(fx.map(date => ({ key: nextKey(), date })))
       })
       .catch(() => setFeedback({ type: 'err', text: t('companyCalendar.load_error') }))
       .finally(() => setLoading(false))
@@ -57,25 +66,34 @@ export default function CompanyCalendar() {
 
   useEffect(() => { if (canConfigure) load() }, [canConfigure, load])
 
-  // --- mutacions immutables de l'estat ---
+  // --- mutacions immutables de l'estat (horaris) ---
   const setTram = (day, idx, pos, value) => setHoraris(h => ({
     ...h, [day]: h[day].map((tr, i) => i === idx ? (pos === 0 ? [value, tr[1]] : [tr[0], value]) : tr),
   }))
   const addTram = (day) => setHoraris(h => ({ ...h, [day]: [...h[day], ['09:00', '13:00']] }))
   const removeTram = (day, idx) => setHoraris(h => ({ ...h, [day]: h[day].filter((_, i) => i !== idx) }))
 
+  // --- mutacions de festius extra ---
+  const setFestiuDate = (key, date) => setFestius(f => f.map(x => x.key === key ? { ...x, date } : x))
+  const addFestiu = () => setFestius(f => [...f, { key: nextKey(), date: '' }])
+  const removeFestiu = (key) => setFestius(f => f.filter(x => x.key !== key))
+
   const save = () => {
     const err = validateHoraris(horaris, t)
     if (err) { setFeedback({ type: 'err', text: err }); return }
+    const dates = festius.map(f => f.date)
+    if (dates.some(d => !d)) { setFeedback({ type: 'err', text: t('companyCalendar.err_holiday_empty') }); return }
+    if (new Set(dates).size !== dates.length) { setFeedback({ type: 'err', text: t('companyCalendar.err_holiday_dup') }); return }
+    const festius_extra = [...dates].sort()   // ISO → ordre ascendent
     setSaving(true)
     setFeedback(null)
-    companyCalendar.update({ horaris })
+    companyCalendar.update({ horaris, festius_extra })
       .then(() => setFeedback({ type: 'ok', text: t('companyCalendar.saved_ok') }))
       .catch(e => {
         // Mostrar l'error 400 del backend de forma llegible.
         const data = e?.response?.data
         const msg = typeof data === 'string' ? data
-          : data?.horaris?.[0] || data?.detail || data?.error
+          : data?.horaris?.[0] || data?.festius_extra?.[0] || data?.detail || data?.error
           || (data ? JSON.stringify(data) : t('companyCalendar.save_error'))
         setFeedback({ type: 'err', text: msg })
       })
@@ -157,6 +175,43 @@ export default function CompanyCalendar() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* ── Festius extra (Tram 1B) ───────────────────────────────── */}
+          <div style={{ marginTop: 28, marginBottom: '1rem' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('companyCalendar.holidays_title')}</h2>
+            <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('companyCalendar.holidays_subtitle')}</p>
+          </div>
+
+          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: '14px 16px' }}>
+            {festius.length === 0 && (
+              <span style={{ fontSize: 12, color: 'var(--gray)', fontStyle: 'italic' }}>
+                {t('companyCalendar.holidays_empty')}
+              </span>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {[...festius].sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(f => (
+                <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="date" value={f.date || ''} style={inputS}
+                         onChange={e => setFestiuDate(f.key, e.target.value)} />
+                  <button onClick={() => removeFestiu(f.key)} title={t('companyCalendar.remove_holiday')}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                            color: 'var(--err)', display: 'flex', alignItems: 'center',
+                          }}>
+                    <i className="ti ti-trash" style={{ fontSize: 15 }} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button onClick={addFestiu} style={{
+              marginTop: festius.length ? 8 : 10, background: 'none',
+              border: '0.5px dashed var(--gray-l)', borderRadius: 6, cursor: 'pointer',
+              padding: '4px 10px', fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)',
+              display: 'flex', alignItems: 'center', gap: 5,
+            }}>
+              <i className="ti ti-plus" style={{ fontSize: 13 }} />{t('companyCalendar.add_holiday')}
+            </button>
           </div>
 
           <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>

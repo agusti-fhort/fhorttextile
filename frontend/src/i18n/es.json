@@ -78,7 +78,14 @@
     "no_access": "No tienes acceso a esta sección.",
     "err_incomplete": "{{day}}: hay un tramo con horas incompletas.",
     "err_start_end": "{{day}}: el inicio debe ser anterior al fin.",
-    "err_overlap": "{{day}}: tramos solapados o desordenados."
+    "err_overlap": "{{day}}: tramos solapados o desordenados.",
+    "holidays_title": "Festivos extra",
+    "holidays_subtitle": "Festivos propios de la empresa, además de los oficiales de Cataluña (que el motor ya aplica automáticamente). No hace falta repetir los oficiales.",
+    "holidays_empty": "Ningún festivo extra definido.",
+    "add_holiday": "Añadir festivo",
+    "remove_holiday": "Quitar festivo",
+    "err_holiday_empty": "Hay un festivo sin fecha.",
+    "err_holiday_dup": "Hay fechas de festivo duplicadas."
   },
   "usersRoles": {
     "title": "Usuarios y roles",

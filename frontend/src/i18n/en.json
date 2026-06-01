@@ -78,7 +78,14 @@
     "no_access": "You do not have access to this section.",
     "err_incomplete": "{{day}}: a slot has incomplete times.",
     "err_start_end": "{{day}}: start must be before end.",
-    "err_overlap": "{{day}}: overlapping or out-of-order slots."
+    "err_overlap": "{{day}}: overlapping or out-of-order slots.",
+    "holidays_title": "Extra holidays",
+    "holidays_subtitle": "Company-specific holidays, on top of the official Catalonia ones (already applied automatically by the engine). No need to repeat the official ones here.",
+    "holidays_empty": "No extra holidays defined.",
+    "add_holiday": "Add holiday",
+    "remove_holiday": "Remove holiday",
+    "err_holiday_empty": "A holiday has no date.",
+    "err_holiday_dup": "There are duplicate holiday dates."
   },
   "usersRoles": {
     "title": "Users & roles",
