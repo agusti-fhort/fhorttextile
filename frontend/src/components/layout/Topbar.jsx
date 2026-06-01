@@ -32,6 +32,8 @@ export default function Topbar() {
   const { t } = useTranslation()
   const key = PATH_TO_KEY[pathname]
   const title = key ? t(key) : t('app.title')
+  // El botó "Nou model" és contextual de la secció Models (no global).
+  const showNewModel = pathname === '/models' || pathname.startsWith('/models/')
 
   return (
     <header style={{
@@ -85,25 +87,27 @@ export default function Topbar() {
         >
           <i className="ti ti-user" />
         </button>
-        <button
-          onClick={() => navigate('/models/nou')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: 'var(--gold)',
-            color: 'white',
-            border: 'none',
-            borderRadius: 8,
-            padding: '0 0.9rem',
-            height: 32,
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: 'pointer',
-            fontFamily: 'var(--font)',
-          }}
-        >
-          <i className="ti ti-plus" style={{fontSize: 15}} />
-          {t('model.new')}
-        </button>
+        {showNewModel && (
+          <button
+            onClick={() => navigate('/models/nou')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'var(--gold)',
+              color: 'white',
+              border: 'none',
+              borderRadius: 8,
+              padding: '0 0.9rem',
+              height: 32,
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: 'pointer',
+              fontFamily: 'var(--font)',
+            }}
+          >
+            <i className="ti ti-plus" style={{fontSize: 15}} />
+            {t('model.new')}
+          </button>
+        )}
       </div>
     </header>
   )

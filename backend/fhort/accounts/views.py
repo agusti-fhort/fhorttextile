@@ -11,7 +11,8 @@ from rest_framework.response import Response
 from .models import UserProfile
 from .capabilities import (HasCapability, MANAGE_USERS, ROLE_CAPABILITIES,
                            get_capabilities)
-from .serializers import MeSerializer, UserListSerializer, UserAdminSerializer
+from .serializers import (MeSerializer, UserListSerializer, UserAdminSerializer,
+                          UserCreateSerializer)
 
 
 User = get_user_model()
@@ -40,9 +41,11 @@ def me_view(request):
 
 class UserViewSet(mixins.ListModelMixin,
                   mixins.RetrieveModelMixin,
+                  mixins.CreateModelMixin,
                   mixins.UpdateModelMixin,
                   viewsets.GenericViewSet):
     """GET /api/v1/users/ — list/retrieve d'usuaris actius del tenant (selector + matriu).
+    POST /api/v1/users/ — alta d'usuari (User + profile via signal), gated `manage_users`.
     PATCH /api/v1/users/<id>/ — gestió admin (rol/actiu/permisos), gated `manage_users`.
 
     Filtra per UserProfile.actiu=True. A l'schema 'public' torna buit (els perfils del
@@ -64,13 +67,30 @@ class UserViewSet(mixins.ListModelMixin,
         return [perm]
 
     def get_serializer_class(self):
-        # Escriptura sempre amb el serializer admin. En lectura, els qui poden gestionar
-        # usuaris reben la vista completa (matriu); la resta, el selector mínim.
+        # Alta = serializer de creació. Escriptura/PATCH = serializer admin. En lectura, els qui
+        # poden gestionar usuaris reben la vista completa (matriu); la resta, el selector mínim.
+        if self.action == 'create':
+            return UserCreateSerializer
         if self.action in ('update', 'partial_update'):
             return UserAdminSerializer
         if MANAGE_USERS in get_capabilities(self.request.user):
             return UserAdminSerializer
         return UserListSerializer
+
+    def create(self, request, *args, **kwargs):
+        """POST /api/v1/users/ — alta gated manage_users. Els perfils del tenant no viuen a
+        'public'; allà l'alta no té sentit → 400. Retorna la representació admin del nou usuari."""
+        if getattr(connection, 'schema_name', None) == 'public':
+            return Response({'error': "No es poden crear usuaris des de l'schema 'public'."},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+        ser = self.get_serializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        user = ser.save()
+        # El signal deixa user.profile cachejat amb els valors per defecte; re-consultem fresc
+        # perquè la representació reflecteixi rol_nom/permisos/capabilities reals del nou usuari.
+        user = User.objects.select_related('profile').get(pk=user.pk)
+        out = UserAdminSerializer(user, context=self.get_serializer_context())
+        return Response(out.data, status=http_status.HTTP_201_CREATED)
 
     def get_queryset(self):
         if getattr(connection, 'schema_name', None) == 'public':

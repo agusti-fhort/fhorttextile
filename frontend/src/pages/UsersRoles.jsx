@@ -165,7 +165,7 @@ export default function UsersRoles() {
   }
 
   return (
-    <div>
+    <div style={{ minWidth: 0, maxWidth: '100%' }}>
       <div style={{ marginBottom: '1.2rem' }}>
         <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>{t('usersRoles.title')}</h1>
         <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('usersRoles.subtitle')}</p>
@@ -213,7 +213,7 @@ export default function UsersRoles() {
       ) : rows.length === 0 ? (
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13 }}>{t('usersRoles.empty')}</div>
       ) : (
-        <div style={{ overflowX: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+        <div style={{ overflowX: 'auto', maxWidth: '100%', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
             <thead>
               <tr>

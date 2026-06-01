@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import UserProfile
@@ -142,3 +143,56 @@ class UserAdminSerializer(serializers.ModelSerializer):
                 setattr(profile, attr, profile_data[attr])
         profile.save()
         return instance
+
+
+class UserCreateSerializer(serializers.Serializer):
+    """Alta d'usuari (gated manage_users). Crea el User amb create_user(); el signal post_save
+    crea el UserProfile DINS del tenant i create() l'actualitza amb nom_complet/rol_nom/permisos.
+    NO crea el profile a mà (evita duplicar la feina del signal)."""
+
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField(required=False, allow_blank=True, default='')
+    nom_complet = serializers.CharField(required=False, allow_blank=True, default='')
+    rol_nom = serializers.CharField()
+    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    permisos = serializers.JSONField(required=False, default=dict)
+
+    def validate_username(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("username requerit.")
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Ja existeix un usuari amb aquest username.")
+        return value
+
+    def validate_password(self, value):
+        if not value:
+            raise serializers.ValidationError("password no pot ser buit.")
+        return value
+
+    def validate_rol_nom(self, value):
+        if value not in ROLE_CAPABILITIES:
+            raise serializers.ValidationError(
+                f"Rol desconegut '{value}'. Valors vàlids: {sorted(ROLE_CAPABILITIES)}.")
+        return value
+
+    def validate_permisos(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("permisos ha de ser un objecte JSON.")
+        return value
+
+    def create(self, validated_data):
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=validated_data['username'],
+                email=validated_data.get('email', ''),
+                password=validated_data['password'],
+            )
+            # El signal post_save(User) ja ha creat el UserProfile dins del tenant; el recuperem
+            # i l'actualitzem amb les dades del formulari (no el creem a mà).
+            profile = UserProfile.objects.get(user=user)
+            profile.nom_complet = validated_data.get('nom_complet') or user.username
+            profile.rol_nom = validated_data['rol_nom']
+            profile.permisos = validated_data.get('permisos') or {}
+            profile.save(update_fields=['nom_complet', 'rol_nom', 'permisos'])
+        return user
