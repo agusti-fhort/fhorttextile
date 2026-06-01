@@ -10,6 +10,9 @@ export const models = {
   create: (data) => client.post('/api/v1/models/', data),
   update: (id, data) => client.patch(`/api/v1/models/${id}/`, data),
   remove: (id) => client.delete(`/api/v1/models/${id}/`),
+  // Capa de Projecte: definir tasques d'un model i avançar fase (gate del responsable).
+  defineTasks: (id, data) => client.post(`/api/v1/models/${id}/define-tasks/`, data),   // {task_type_ids:[...]}
+  gate: (id, data) => client.post(`/api/v1/models/${id}/gate/`, data),                   // {to_phase} o {to_phases:[...]}
 }
 
 // Fitxers del model (read-only) — panell info de fitting (5B.6-B1).
@@ -21,8 +24,13 @@ export const poms = {
   list: (params) => client.get('/api/v1/poms/', { params }),
 }
 
+// CRUD complet (GarmentTypeViewSet és ModelViewSet). S'usa al tram 7 (finder 3 columnes).
 export const garmentTypes = {
   list: (params) => client.get('/api/v1/garment-types/', { params }),
+  get: (id) => client.get(`/api/v1/garment-types/${id}/`),
+  create: (data) => client.post('/api/v1/garment-types/', data),
+  update: (id, data) => client.patch(`/api/v1/garment-types/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/garment-types/${id}/`),
 }
 
 export const garmentGroups = {
@@ -45,12 +53,78 @@ export const gradingRules = {
   list: (params) => client.get('/api/v1/grading-rules/', { params }),
 }
 
+// Capa de Projecte — instàncies ModelTask (model-task-items/, ModelViewSet + row-level scope).
+// Filtres reals del backend: ?model & status & task_type & assignee.
 export const modelTasks = {
-  list: (params) => client.get('/api/v1/model-tasques/', { params }),
-  listByModel: (modelId) => client.get('/api/v1/model-tasques/', { params: { model: modelId } }),
+  list: (params) => client.get('/api/v1/model-task-items/', { params }),
+  listByModel: (modelId) => client.get('/api/v1/model-task-items/', { params: { model: modelId } }),
+  get: (id) => client.get(`/api/v1/model-task-items/${id}/`),
+  create: (data) => client.post('/api/v1/model-task-items/', data),
+  // Assignació: PATCH {assignee} (gated define_tasks; 400 si fora de l'allow-list de l'assignee).
+  patch: (id, data) => client.patch(`/api/v1/model-task-items/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/model-task-items/${id}/`),
+  // Màquina d'estats (gated execute_tasks). La resposta pot dur paused_task_id (→ toast 3s).
+  transition: (id, data) => client.post(`/api/v1/model-task-items/${id}/transition/`, data),  // {to_status}
 }
-// Alias retrocompatible
+// Alias retrocompatible (KanbanTasks vell encara importa `tasks`; es reconstrueix al tram 4).
 export const tasks = modelTasks
+
+// Capa de Projecte — catàleg de tipus de tasca (task-types/, ModelViewSet).
+export const taskTypes = {
+  list: (params) => client.get('/api/v1/task-types/', { params }),
+  get: (id) => client.get(`/api/v1/task-types/${id}/`),
+  create: (data) => client.post('/api/v1/task-types/', data),
+  update: (id, data) => client.patch(`/api/v1/task-types/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/task-types/${id}/`),
+}
+
+// Capa de Projecte — gate del responsable (cartes sintètiques al kanban).
+export const gates = {
+  ready: () => client.get('/api/v1/gates/ready/'),
+  bulk: (data) => client.post('/api/v1/gates/bulk/', data),   // {items:[{model_id,to_phase}], notes}
+}
+
+// Capa de Projecte — proveïdors de mostres (suppliers/, ModelViewSet).
+export const suppliers = {
+  list: (params) => client.get('/api/v1/suppliers/', { params }),
+  get: (id) => client.get(`/api/v1/suppliers/${id}/`),
+  create: (data) => client.post('/api/v1/suppliers/', data),
+  update: (id, data) => client.patch(`/api/v1/suppliers/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/suppliers/${id}/`),
+}
+
+// Capa de Projecte — producció de mostres (productions/ és ReadOnlyModelViewSet).
+// Alta = models/<id>/request-production/; canvi d'estat = productions/<id>/status/.
+export const productions = {
+  list: (params) => client.get('/api/v1/productions/', { params }),   // ?model & phase & status & supplier
+  get: (id) => client.get(`/api/v1/productions/${id}/`),
+  requestProduction: (modelId, data) => client.post(`/api/v1/models/${modelId}/request-production/`, data),
+  setStatus: (id, data) => client.post(`/api/v1/productions/${id}/status/`, data),   // {status}
+}
+
+// Capa de Projecte — planificador predictiu.
+export const plan = {
+  compute: (data) => client.post('/api/v1/plan/compute/', data),
+  snapshots: () => client.get('/api/v1/plan/snapshots/'),
+}
+
+// Capa de Projecte — variants de complexitat (garment-type-items/, ModelViewSet).
+export const garmentTypeItems = {
+  list: (params) => client.get('/api/v1/garment-type-items/', { params }),   // ?garment_type & active
+  get: (id) => client.get(`/api/v1/garment-type-items/${id}/`),
+  create: (data) => client.post('/api/v1/garment-type-items/', data),
+  update: (id, data) => client.patch(`/api/v1/garment-type-items/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/garment-type-items/${id}/`),
+}
+
+// Capa de Projecte — matriu de temps (task-time-estimates/, ModelViewSet).
+export const taskTimeEstimates = {
+  list: (params) => client.get('/api/v1/task-time-estimates/', { params }),   // ?garment_type_item & task_type
+  get: (id) => client.get(`/api/v1/task-time-estimates/${id}/`),
+  create: (data) => client.post('/api/v1/task-time-estimates/', data),
+  update: (id, data) => client.patch(`/api/v1/task-time-estimates/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/task-time-estimates/${id}/`),
+}
 
 export const sizeFittings = {
   list: (params) => client.get('/api/v1/size-fittings/', { params }),
@@ -58,15 +132,18 @@ export const sizeFittings = {
   create: (data) => client.post('/api/v1/size-fittings/', data),
 }
 
-// Sprint 5B.6 — Fitting sessions (capa nova).
+// Sprint 5B.6 — Fitting sessions (capa nova). Capa de Projecte: schedule/open al calendari.
 export const fittingSessions = {
-  list: (params) => client.get('/api/v1/fitting-sessions/', { params }),
+  list: (params) => client.get('/api/v1/fitting-sessions/', { params }),   // ?estat & data & responsable & fase & model
   get: (id) => client.get(`/api/v1/fitting-sessions/${id}/`),
   create: (data) => client.post('/api/v1/fitting-sessions/', data),
   // PATCH del context (notes/model_persona/assistents/lloc/responsable) — autosave capçalera.
   update: (id, data) => client.patch(`/api/v1/fitting-sessions/${id}/`, data),
   canAdvance: (id) => client.get(`/api/v1/fitting-sessions/${id}/can-advance/`),
   createPiece: (id, modelId) => client.post(`/api/v1/fitting-sessions/${id}/create-piece/`, { model_id: modelId }),
+  // Calendari: programar (neix Programada) i obrir (Programada → Oberta).
+  schedule: (data) => client.post('/api/v1/fitting-sessions/schedule/', data),
+  open: (id) => client.post(`/api/v1/fitting-sessions/${id}/open/`),
 }
 
 // Sprint 5B.6-A2 — Piece fittings: graella de treball + gate.
@@ -105,9 +182,15 @@ export const timers = {
   tancar: (id) => client.post(`/api/v1/timers/${id}/tancar/`),
 }
 
-// NOTE: the Django backend does not expose /api/v1/me/ yet.
-// The callers (Settings, KanbanTasks, UserProfilePage) wrap the call
-// with .catch(()=>{}) to fail gracefully while the endpoint does not exist.
+// Usuari autenticat (capabilities + rol_nom). El backend SÍ exposa /api/v1/me/.
 export const me = {
   get: () => client.get('/api/v1/me/'),
+}
+
+// Gestió d'usuaris (gated manage_users a l'escriptura). Tram 3: pantalla "Usuaris i rols".
+export const users = {
+  list: (params) => client.get('/api/v1/users/', { params }),   // ?role & can_task & search
+  retrieve: (id) => client.get(`/api/v1/users/${id}/`),
+  patch: (id, data) => client.patch(`/api/v1/users/${id}/`, data),   // {rol_nom, actiu, permisos}
+  bulk: (data) => client.post('/api/v1/users/bulk/', data),   // {user_ids, action, value} -> {updated}
 }
