@@ -62,7 +62,21 @@
     "title": "Usuarios y roles",
     "subtitle": "Gestiona roles, capacidades y tareas permitidas por usuario",
     "no_access": "No tienes acceso a esta sección.",
-    "loading": "Cargando…"
+    "loading": "Cargando…",
+    "col_user": "Usuario",
+    "role": "Rol",
+    "group_scope": "Alcance y gestión",
+    "group_tasks": "Tareas que puede ejecutar",
+    "empty": "No hay usuarios.",
+    "caps": {
+      "execute_tasks": "Ejecutar tareas",
+      "define_tasks": "Definir tareas",
+      "schedule_fittings": "Programar fittings",
+      "close_gates": "Cerrar gates",
+      "configure": "Configurar",
+      "view_team_tasks": "Ver tareas de equipo",
+      "manage_users": "Gestionar usuarios"
+    }
   },
   "model": {
     "title": "Modelos",

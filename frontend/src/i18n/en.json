@@ -62,7 +62,21 @@
     "title": "Users & roles",
     "subtitle": "Manage roles, capabilities and allowed tasks per user",
     "no_access": "You don't have access to this section.",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "col_user": "User",
+    "role": "Role",
+    "group_scope": "Scope & management",
+    "group_tasks": "Tasks they can run",
+    "empty": "No users.",
+    "caps": {
+      "execute_tasks": "Execute tasks",
+      "define_tasks": "Define tasks",
+      "schedule_fittings": "Schedule fittings",
+      "close_gates": "Close gates",
+      "configure": "Configure",
+      "view_team_tasks": "View team tasks",
+      "manage_users": "Manage users"
+    }
   },
   "model": {
     "title": "Models",

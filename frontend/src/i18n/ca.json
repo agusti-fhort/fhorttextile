@@ -62,7 +62,21 @@
     "title": "Usuaris i rols",
     "subtitle": "Gestiona rols, capacitats i tasques permeses per usuari",
     "no_access": "No tens accés a aquesta secció.",
-    "loading": "Carregant…"
+    "loading": "Carregant…",
+    "col_user": "Usuari",
+    "role": "Rol",
+    "group_scope": "Abast i gestió",
+    "group_tasks": "Tasques que pot executar",
+    "empty": "No hi ha usuaris.",
+    "caps": {
+      "execute_tasks": "Executar tasques",
+      "define_tasks": "Definir tasques",
+      "schedule_fittings": "Programar fittings",
+      "close_gates": "Tancar gates",
+      "configure": "Configurar",
+      "view_team_tasks": "Veure tasques d'equip",
+      "manage_users": "Gestionar usuaris"
+    }
   },
   "model": {
     "title": "Models",
