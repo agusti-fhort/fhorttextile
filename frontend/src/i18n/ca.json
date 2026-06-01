@@ -135,7 +135,21 @@
     "toast_paused": "S'ha pausat «{{name}}»",
     "not_allowed": "No tens permès executar aquest tipus de tasca.",
     "transition_error": "No s'ha pogut canviar l'estat.",
-    "rect": "{{n}} rectif."
+    "rect": "{{n}} rectif.",
+    "search_ph": "Cerca model (codi o nom)…",
+    "my_models": "Els meus models",
+    "priority_a": "Prioritat A · per validar",
+    "select_model": "Selecciona un model per veure'n les tasques",
+    "load_more": "Carrega'n més",
+    "no_models": "Cap model amb tasques",
+    "phase": "Fase",
+    "tasks_n": "{{n}} tasques",
+    "gate_validate": "Validar",
+    "gate_confirm": "Validar i avançar a {{phase}}?",
+    "gate_done": "Fase avançada a {{phase}}.",
+    "gate_error": "No s'ha pogut validar el gate.",
+    "confirm": "Confirma",
+    "cancel": "Cancel·la"
   },
   "model": {
     "title": "Models",

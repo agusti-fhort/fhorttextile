@@ -135,7 +135,21 @@
     "toast_paused": "Se ha pausado «{{name}}»",
     "not_allowed": "No tienes permiso para ejecutar este tipo de tarea.",
     "transition_error": "No se ha podido cambiar el estado.",
-    "rect": "{{n}} rectif."
+    "rect": "{{n}} rectif.",
+    "search_ph": "Buscar modelo (código o nombre)…",
+    "my_models": "Mis modelos",
+    "priority_a": "Prioridad A · por validar",
+    "select_model": "Selecciona un modelo para ver sus tareas",
+    "load_more": "Cargar más",
+    "no_models": "Ningún modelo con tareas",
+    "phase": "Fase",
+    "tasks_n": "{{n}} tareas",
+    "gate_validate": "Validar",
+    "gate_confirm": "¿Validar y avanzar a {{phase}}?",
+    "gate_done": "Fase avanzada a {{phase}}.",
+    "gate_error": "No se ha podido validar el gate.",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar"
   },
   "model": {
     "title": "Modelos",

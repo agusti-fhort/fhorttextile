@@ -58,6 +58,9 @@ export const gradingRules = {
 export const modelTasks = {
   list: (params) => client.get('/api/v1/model-task-items/', { params }),
   listByModel: (modelId) => client.get('/api/v1/model-task-items/', { params: { model: modelId } }),
+  // Agregador columna 1 del Kanban: ?search & ?all (per defecte només models amb tasca no-Done).
+  // Resposta paginada: [{model_id, model_codi, model_nom, fase, counts:{pending,paused,in_progress,done}}].
+  byModel: (params) => client.get('/api/v1/model-task-items/by-model/', { params }),
   get: (id) => client.get(`/api/v1/model-task-items/${id}/`),
   create: (data) => client.post('/api/v1/model-task-items/', data),
   // Assignació: PATCH {assignee} (gated define_tasks; 400 si fora de l'allow-list de l'assignee).

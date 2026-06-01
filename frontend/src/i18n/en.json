@@ -135,7 +135,21 @@
     "toast_paused": "Paused «{{name}}»",
     "not_allowed": "You're not allowed to run this task type.",
     "transition_error": "Could not change the status.",
-    "rect": "{{n}} rework"
+    "rect": "{{n}} rework",
+    "search_ph": "Search model (code or name)…",
+    "my_models": "My models",
+    "priority_a": "Priority A · to validate",
+    "select_model": "Select a model to see its tasks",
+    "load_more": "Load more",
+    "no_models": "No models with tasks",
+    "phase": "Phase",
+    "tasks_n": "{{n}} tasks",
+    "gate_validate": "Validate",
+    "gate_confirm": "Validate and advance to {{phase}}?",
+    "gate_done": "Phase advanced to {{phase}}.",
+    "gate_error": "Could not validate the gate.",
+    "confirm": "Confirm",
+    "cancel": "Cancel"
   },
   "model": {
     "title": "Models",
