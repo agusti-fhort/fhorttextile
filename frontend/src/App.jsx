@@ -28,6 +28,7 @@ import Settings from './pages/Settings'
 import UsersRoles from './pages/UsersRoles'
 import UserProfilePage from './pages/UserProfilePage'
 import CompanyCalendar from './pages/CompanyCalendar'
+import Planning from './pages/Planning'
 import Shell from './components/layout/Shell'
 
 function ProtectedRoute({ children }) {
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="tasques/catalog" element={<Tasks />} />
           <Route path="tasques/paquets" element={<Tasks />} />
           <Route path="tasques/kanban" element={<KanbanTasks />} />
+          <Route path="planificacio" element={<Planning />} />
           <Route path="temps" element={<TimeTracking />} />
           <Route path="poms" element={<POMs />} />
           <Route path="poms/grading" element={<GradingRuleSets />} />

@@ -192,6 +192,7 @@ export default function Sidebar() {
   const user = useAuthStore(s => s.user)
   const canManageUsers = !!user?.capabilities?.includes('manage_users')
   const canConfigure = !!user?.capabilities?.includes('configure')
+  const canPlan = !!user?.capabilities?.some(c => c === 'define_tasks' || c === 'configure')
   const [alertsPending, setAlertsPending] = useState(0)
   const [expanded, setExpanded] = useState({['nav.models']: true})
   const [logoutHover, setLogoutHover] = useState(false)
@@ -215,6 +216,11 @@ export default function Sidebar() {
   // Injeccions condicionals dins de Configuració: "Configuració inicial" (onboarding < 100%)
   // i "Usuaris i rols" (només si l'usuari té manage_users).
   const items = useMemo(() => navGroups[0].items.map(item => {
+    // Tasques: injectar "Planificació" (assignació de models a tècnics) si es té define_tasks/configure.
+    if (item.labelKey === 'nav.tasques') {
+      if (!canPlan) return item
+      return { ...item, children: [...item.children, { to: '/planificacio', labelKey: 'nav.planning' }] }
+    }
     if (item.labelKey !== 'nav.configuracio') return item
     let children = item.children
     if (onboardingPct < 100) {
@@ -227,7 +233,7 @@ export default function Sidebar() {
       children = [...children, { to: '/configuracio/calendari', labelKey: 'nav.company_calendar' }]
     }
     return children === item.children ? item : { ...item, children }
-  }), [onboardingPct, canManageUsers, canConfigure])
+  }), [onboardingPct, canManageUsers, canConfigure, canPlan])
 
   // Conjunt de totes les rutes del sidebar (leaves + children)
   const allRoutes = useMemo(() => {

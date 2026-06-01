@@ -13,6 +13,10 @@ export const models = {
   // Capa de Projecte: definir tasques d'un model i avançar fase (gate del responsable).
   defineTasks: (id, data) => client.post(`/api/v1/models/${id}/define-tasks/`, data),   // {task_type_ids:[...]}
   gate: (id, data) => client.post(`/api/v1/models/${id}/gate/`, data),                   // {to_phase} o {to_phases:[...]}
+  // Tram 2 planificació (gated define_tasks): assigna les no-Done a un tècnic + compute de cua
+  // sencera; unassign treu tècnic + buida planned_*. Done sempre intactes.
+  assign: (id, body) => client.post(`/api/v1/models/${id}/assign/`, body),   // {assignee_id, task_ids?}
+  unassign: (id) => client.post(`/api/v1/models/${id}/unassign/`),
 }
 
 // Fitxers del model (read-only) — panell info de fitting (5B.6-B1).
