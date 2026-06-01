@@ -66,6 +66,20 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         perm = HasCapability(); self.required_capability = DEFINE_TASKS
         return [perm]
 
+    # Whitelist d'ordenació pública → camp real del queryset agrupat. Qualsevol valor fora
+    # d'aquí s'ignora (mai es passa el valor cru a .order_by() → cap injecció d'ordering).
+    # Tots els camps de Model referenciats han d'estar a values() perquè order_by no alteri el GROUP BY.
+    _ORDERING = {
+        'nom_prenda': 'model__nom_prenda', 'codi_intern': 'model__codi_intern',
+        'any': 'model__any', 'temporada': 'model__temporada', 'prioritat': 'model__prioritat',
+        'data_entrada': 'model__data_entrada', 'data_objectiu': 'model__data_objectiu',
+        'data_tancament': 'model__data_tancament', 'fase_actual': 'model__fase_actual',
+        'estat': 'model__estat',
+        # comptadors annotats (ordenació opcional):
+        'in_progress': 'in_progress', 'pending': 'pending', 'paused': 'paused', 'done': 'done',
+    }
+    _DEFAULT_ORDER = ('-in_progress', '-pending', '-paused', 'model__codi_intern')
+
     @action(detail=False, methods=['get'], url_path='by-model')
     def by_model(self, request):
         """GET /api/v1/model-task-items/by-model/  — agregador per a la columna 1 del Kanban.
@@ -75,37 +89,88 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         calculen a la BD (Count + filter=Q), de manera que escala a 600+ models sense carregar files.
 
         Query params:
-          ?all=true   inclou també els models amb totes les tasques Done (per defecte s'oculten).
-          ?search=    icontains sobre codi_intern OR nom del model (OR).
+          ?all=true        inclou també els models amb totes les tasques Done (per defecte s'oculten).
+          ?search=         icontains sobre codi_intern OR nom_prenda (OR).
+          ?ordering=       camp de la whitelist _ORDERING (prefix '-' = desc; coma = multi).
+                           Valors fora de la whitelist s'ignoren → es manté l'ordre per defecte.
+          Filtres exactes (additius, AND; valors invàlids ignorats silenciosament):
+            ?temporada= (SS/FW/CO/SP)  ?estat= (Nou/EnCurs/EnRevisio/Tancat)
+            ?fase_actual= (Proto/Fit/SizeSet/PP/TOP)  ?garment_type=<id>  ?any=<int>
+            ?prioritat=<int>  ?responsable=<userprofile_id> | me (perfil de request.user)
 
         Resposta (paginada, mateixa paginació del projecte):
-          [{ model_id, model_codi, model_nom, fase, counts:{pending, paused, in_progress, done} }]
+          [{ model_id, model_codi, model_nom, fase, counts:{pending,paused,in_progress,done},
+             prioritat, temporada, estat, data_objectiu, responsable_id }]
 
-        Ordenació: primer els models amb feina activa/pendent a dalt
-          (-in_progress, -pending, -paused), desempat per codi_intern (unique → ordre estable
-          i determinista per a la paginació).
+        Ordenació per defecte (sense ?ordering): feina activa/pendent a dalt
+          (-in_progress,-pending,-paused), desempat per codi_intern (unique → estable per paginar).
         """
         qs = self.get_queryset()   # ← MATEIX scope que model-task-items/ (no duplicat)
+        qp = request.query_params
 
-        search = (request.query_params.get('search') or '').strip()
+        search = (qp.get('search') or '').strip()
         if search:
             # Punt d'extensió: quan calgui, afegir aquí col·lecció i garment_type SENSE tocar
-            # el contracte de resposta, p. ex.:
-            #   q |= Q(model__garment_group__nom__icontains=search)
-            #   q |= Q(model__garment_type__nom__icontains=search)
+            # el contracte de resposta (p. ex. q |= Q(model__garment_group__nom__icontains=search)).
             q = Q(model__codi_intern__icontains=search) | Q(model__nom_prenda__icontains=search)
             qs = qs.filter(q)
 
-        agg = (qs.values('model_id', 'model__codi_intern', 'model__nom_prenda', 'model__fase_actual')
-                 .annotate(
-                     pending=Count('id', filter=Q(status='Pending')),
-                     paused=Count('id', filter=Q(status='Paused')),
-                     in_progress=Count('id', filter=Q(status='InProgress')),
-                     done=Count('id', filter=Q(status='Done')),
-                 )
-                 .order_by('-in_progress', '-pending', '-paused', 'model__codi_intern'))
+        # --- Filtres exactes opcionals (sobre el queryset abans d'agrupar) ---
+        def _choice_set(choices):
+            return {c[0] for c in choices}
 
-        if request.query_params.get('all') != 'true':
+        temporada = qp.get('temporada')
+        if temporada in _choice_set(Model.TEMPORADA_CHOICES):
+            qs = qs.filter(model__temporada=temporada)
+        estat = qp.get('estat')
+        if estat in _choice_set(Model.ESTAT_CHOICES):
+            qs = qs.filter(model__estat=estat)
+        fase = qp.get('fase_actual')
+        if fase in _choice_set(Model.FASE_CHOICES):
+            qs = qs.filter(model__fase_actual=fase)
+
+        responsable = qp.get('responsable')
+        if responsable == 'me':
+            profile = getattr(request.user, 'profile', None)
+            qs = qs.filter(model__responsable=profile) if profile is not None else qs.none()
+        elif responsable and responsable.isdigit():
+            qs = qs.filter(model__responsable_id=int(responsable))
+
+        garment_type = qp.get('garment_type')
+        if garment_type and garment_type.isdigit():
+            qs = qs.filter(model__garment_type_id=int(garment_type))
+        any_ = qp.get('any')
+        if any_ and any_.isdigit():
+            qs = qs.filter(model__any=int(any_))
+        prioritat = qp.get('prioritat')
+        if prioritat and prioritat.isdigit():
+            qs = qs.filter(model__prioritat=int(prioritat))
+
+        agg = (qs.values(
+                   'model_id', 'model__codi_intern', 'model__nom_prenda', 'model__fase_actual',
+                   'model__estat', 'model__temporada', 'model__prioritat', 'model__data_objectiu',
+                   'model__responsable_id', 'model__any', 'model__data_entrada', 'model__data_tancament',
+               )
+               .annotate(
+                   pending=Count('id', filter=Q(status='Pending')),
+                   paused=Count('id', filter=Q(status='Paused')),
+                   in_progress=Count('id', filter=Q(status='InProgress')),
+                   done=Count('id', filter=Q(status='Done')),
+               ))
+
+        # --- Ordenació: whitelist estricta; default si res vàlid ---
+        order_fields = []
+        for raw in (qp.get('ordering') or '').split(','):
+            raw = raw.strip()
+            if not raw:
+                continue
+            desc = raw.startswith('-')
+            mapped = self._ORDERING.get(raw[1:] if desc else raw)
+            if mapped:
+                order_fields.append(('-' + mapped) if desc else mapped)
+        agg = agg.order_by(*(order_fields or self._DEFAULT_ORDER))
+
+        if qp.get('all') != 'true':
             # Per defecte només models amb alguna tasca no-Done (HAVING sobre els comptadors).
             agg = agg.filter(Q(pending__gt=0) | Q(paused__gt=0) | Q(in_progress__gt=0))
 
@@ -121,6 +186,12 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                     'in_progress': row['in_progress'],
                     'done': row['done'],
                 },
+                # Extres additius (la UI els pot etiquetar sense una segona crida):
+                'prioritat': row['model__prioritat'],
+                'temporada': row['model__temporada'],
+                'estat': row['model__estat'],
+                'data_objectiu': row['model__data_objectiu'],
+                'responsable_id': row['model__responsable_id'],
             }
 
         page = self.paginate_queryset(agg)
