@@ -6,7 +6,8 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
 from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TASKS,
-                                         CLOSE_GATES, SCHEDULE_FITTINGS, CONFIGURE)
+                                         CLOSE_GATES, SCHEDULE_FITTINGS, CONFIGURE,
+                                         VIEW_TEAM_TASKS, get_capabilities)
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
                      GarmentTypeItem, TaskTimeEstimate, PlanSnapshot)
@@ -42,6 +43,19 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
     serializer_class = ModelTaskSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['model', 'status', 'task_type', 'assignee']
+
+    def get_queryset(self):
+        """Row-level scope (Opció A): sense VIEW_TEAM_TASKS, l'usuari només veu les
+        tasques on n'és l'assignee. Els filterset_fields s'apliquen damunt d'aquest abast,
+        de manera que ?assignee=<altre> NO pot tornar tasques alienes. Sense perfil → res."""
+        qs = super().get_queryset()
+        user = self.request.user
+        if VIEW_TEAM_TASKS in get_capabilities(user):
+            return qs
+        profile = getattr(user, 'profile', None)
+        if profile is None:
+            return qs.none()
+        return qs.filter(assignee=profile)
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
