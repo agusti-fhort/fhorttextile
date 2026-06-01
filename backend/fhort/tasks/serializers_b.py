@@ -19,8 +19,10 @@ class ModelTaskSerializer(serializers.ModelSerializer):
         model = ModelTask
         fields = ['id', 'model', 'task_type', 'task_type_code', 'task_type_name',
                   'status', 'assignee', 'order', 'created_at', 'updated_at',
-                  'rectifications']
-        read_only_fields = ['created_at', 'updated_at']
+                  'started_at', 'finished_at', 'estimated_minutes', 'rectifications']
+        # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
+        read_only_fields = ['created_at', 'updated_at',
+                            'started_at', 'finished_at', 'estimated_minutes']
 
     def get_rectifications(self, obj):
         return rectification_count(obj)
