@@ -212,6 +212,13 @@ class ModelTask(models.Model):
     finished_at = models.DateTimeField(null=True, blank=True)
     estimated_minutes = models.PositiveIntegerField(null=True, blank=True,
                           help_text="Snapshot del temps estimat en crear la tasca (minuts).")
+    # Sprint B — planificació per tasca (motor d'scheduling determinista).
+    planned_start = models.DateTimeField(null=True, blank=True,
+                      help_text="Inici previst calculat pel motor (calendari laboral).")
+    planned_end = models.DateTimeField(null=True, blank=True,
+                    help_text="Fi prevista calculada pel motor.")
+    planned_locked = models.BooleanField(default=False,
+                       help_text="Posició manual fixa: el recàlcul es col·loca al voltant.")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
