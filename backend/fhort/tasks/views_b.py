@@ -5,9 +5,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
+from rest_framework.exceptions import ValidationError
 from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TASKS,
                                          CLOSE_GATES, SCHEDULE_FITTINGS, CONFIGURE,
-                                         VIEW_TEAM_TASKS, get_capabilities)
+                                         VIEW_TEAM_TASKS, get_capabilities,
+                                         get_allowed_task_types)
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
                      GarmentTypeItem, TaskTimeEstimate, PlanSnapshot)
@@ -62,6 +64,32 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         perm = HasCapability(); self.required_capability = DEFINE_TASKS
         return [perm]
+
+    def _validate_assignee(self, serializer):
+        """Enforcement Opció A: no es pot assignar una tasca a algú que no la pot fer.
+        Quan un PATCH/POST estableix assignee no-null, exigeix que el task_type.code
+        sigui a l'allow-list de l'assignee (get_allowed_task_types). Admin = bypass."""
+        if 'assignee' not in serializer.validated_data:
+            return
+        assignee = serializer.validated_data.get('assignee')
+        if assignee is None:
+            return   # desassignar sempre permès
+        task_type = serializer.validated_data.get('task_type') or \
+            getattr(serializer.instance, 'task_type', None)
+        if task_type is None:
+            return
+        if task_type.code not in get_allowed_task_types(assignee.user):
+            raise ValidationError(
+                {'assignee': f"L'usuari assignat no té permès el tipus de tasca "
+                             f"'{task_type.code}' (allow-list de tasques)."})
+
+    def perform_create(self, serializer):
+        self._validate_assignee(serializer)
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._validate_assignee(serializer)
+        serializer.save()
 
 
 class _DefineTasks(HasCapability):
@@ -122,6 +150,13 @@ def transition_task_view(request, pk):
     to_status = request.data.get('to_status')
     if not to_status:
         return Response({'error': 'to_status requerit.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    # Enforcement Opció A: arrencar una tasca (→InProgress) exigeix execute_tasks (ja garantit per
+    # _ExecuteTasks) I que el task_type sigui a l'allow-list de qui executa. Admin = bypass.
+    if to_status == 'InProgress' and \
+            task.task_type.code not in get_allowed_task_types(request.user):
+        return Response(
+            {'error': f"No tens permès executar el tipus de tasca '{task.task_type.code}'."},
+            status=http_status.HTTP_403_FORBIDDEN)
     try:
         result = transition_task(task, to_status, profile)
     except TransitionError as e:
