@@ -2,14 +2,15 @@ import django_filters
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import viewsets, mixins
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework import viewsets, mixins, status as http_status
+from rest_framework.decorators import api_view, action, permission_classes
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import UserProfile
-from .capabilities import HasCapability, MANAGE_USERS, get_capabilities
+from .capabilities import (HasCapability, MANAGE_USERS, ROLE_CAPABILITIES,
+                           get_capabilities)
 from .serializers import MeSerializer, UserListSerializer, UserAdminSerializer
 
 
@@ -80,3 +81,52 @@ class UserViewSet(mixins.ListModelMixin,
             .filter(id__in=active_user_ids, is_active=True)
             .select_related('profile')
         )
+
+    @action(detail=False, methods=['post'])
+    def bulk(self, request):
+        """POST /api/v1/users/bulk/ — accions massives (gated manage_users; patró gates/bulk/).
+        Body: {"user_ids":[...], "action":"set_role|set_task|set_active", "value":...}
+          - set_role:   value = "<rol_nom>"
+          - set_active: value = true|false
+          - set_task:   value = {"code":"<TaskType.code>", "on":true|false}  (afegeix/treu de permisos["tasks"])
+        Read-modify-write per usuari. Resposta {"updated": N}. Només afecta perfils del tenant."""
+        user_ids = request.data.get('user_ids') or []
+        op = request.data.get('action')
+        value = request.data.get('value')
+        if not isinstance(user_ids, list) or not user_ids:
+            return Response({'error': 'user_ids ha de ser una llista no buida.'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+        if op not in ('set_role', 'set_task', 'set_active'):
+            return Response({'error': "action ha de ser 'set_role', 'set_task' o 'set_active'."},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+        # Validació del value segons l'acció (abans de tocar res).
+        if op == 'set_role' and value not in ROLE_CAPABILITIES:
+            return Response({'error': f"Rol desconegut '{value}'. Vàlids: {sorted(ROLE_CAPABILITIES)}."},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+        if op == 'set_active' and not isinstance(value, bool):
+            return Response({'error': 'value ha de ser booleà per a set_active.'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+        if op == 'set_task' and (not isinstance(value, dict) or 'code' not in value
+                                 or not isinstance(value.get('on'), bool)):
+            return Response({'error': 'value ha de ser {"code":..., "on":true|false} per a set_task.'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+        # Aplicació (read-modify-write). El filtre per UserProfile manté l'abast dins del tenant.
+        updated = 0
+        for prof in UserProfile.objects.filter(user_id__in=user_ids):
+            if op == 'set_role':
+                prof.rol_nom = value
+            elif op == 'set_active':
+                prof.actiu = value
+            elif op == 'set_task':
+                permisos = dict(prof.permisos or {})
+                tasks = list(permisos.get('tasks', []))
+                code, on = value['code'], value['on']
+                if on and code not in tasks:
+                    tasks.append(code)
+                elif not on and code in tasks:
+                    tasks.remove(code)
+                permisos['tasks'] = tasks
+                prof.permisos = permisos
+            prof.save()
+            updated += 1
+        return Response({'updated': updated}, status=http_status.HTTP_200_OK)
