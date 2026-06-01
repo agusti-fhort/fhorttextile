@@ -191,6 +191,7 @@ export const me = {
 export const users = {
   list: (params) => client.get('/api/v1/users/', { params }),   // ?role & can_task & search
   retrieve: (id) => client.get(`/api/v1/users/${id}/`),
+  create: (data) => client.post('/api/v1/users/', data),   // {username, email, nom_complet, rol_nom, password, permisos?}
   patch: (id, data) => client.patch(`/api/v1/users/${id}/`, data),   // {rol_nom, actiu, permisos}
   bulk: (data) => client.post('/api/v1/users/bulk/', data),   // {user_ids, action, value} -> {updated}
 }

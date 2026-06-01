@@ -57,6 +57,7 @@ export default function UsersRoles() {
   const [selected, setSelected] = useState(new Set())
   const [confirmState, setConfirmState] = useState(null)   // { action, value, label }
   const [feedback, setFeedback] = useState(null)           // { type, text }
+  const [newUserOpen, setNewUserOpen] = useState(false)    // modal "Nou usuari"
 
   // Filtres
   const [search, setSearch] = useState('')
@@ -185,6 +186,15 @@ export default function UsersRoles() {
           <option value="">{t('usersRoles.all_tasks')}</option>
           {taskTypes.map(tt => <option key={tt.id} value={tt.code}>{tt.name}</option>)}
         </select>
+        {/* Botó "Nou usuari" (la pàgina ja està gated per manage_users). */}
+        <button onClick={() => setNewUserOpen(true)} style={{
+          marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
+          background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 6,
+          padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: MONO,
+        }}>
+          <i className="ti ti-plus" style={{ fontSize: 14 }} />
+          {t('usersRoles.new_user')}
+        </button>
       </div>
 
       {/* Barra d'accions massives (apareix amb selecció) */}
@@ -315,6 +325,19 @@ export default function UsersRoles() {
           </div>
         </div>
       )}
+
+      {/* Modal "Nou usuari" (alta amb rol; els toggles fins s'afinen després a la matriu) */}
+      {newUserOpen && (
+        <NewUserModal
+          t={t} roles={ROLES}
+          onClose={() => setNewUserOpen(false)}
+          onCreated={(u) => {
+            setNewUserOpen(false)
+            setFeedback({ type: 'ok', text: t('usersRoles.nu_created', { name: u.full_name || u.username }) })
+            fetchUsers()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -353,6 +376,98 @@ function BulkBar({ t, count, roles, taskTypes, onSetRole, onActive, onTask }) {
       </select>
       <button style={btn} disabled={!taskCode} onClick={() => onTask(taskCode, true)}>{t('usersRoles.bulk_task_add')}</button>
       <button style={btn} disabled={!taskCode} onClick={() => onTask(taskCode, false)}>{t('usersRoles.bulk_task_remove')}</button>
+    </div>
+  )
+}
+
+// Extreu un missatge llegible de la resposta d'error del backend (DRF: {field:[...]} / {error} / {detail}).
+function firstError(data, fallback) {
+  if (!data) return fallback
+  if (typeof data === 'string') return data
+  if (data.error) return data.error
+  if (data.detail) return data.detail
+  const k = Object.keys(data)[0]
+  if (!k) return fallback
+  const v = data[k]
+  return Array.isArray(v) ? v[0] : String(v)
+}
+
+function NewUserModal({ t, roles, onClose, onCreated }) {
+  const [form, setForm] = useState({ username: '', email: '', nom_complet: '', rol_nom: 'technician', password: '' })
+  const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const fieldS = {
+    fontFamily: MONO, fontSize: 13, padding: '8px 10px', width: '100%', boxSizing: 'border-box',
+    border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)',
+  }
+  const labelS = { fontSize: 11, color: AMBER_TEXT, fontFamily: MONO, marginBottom: 4, display: 'block' }
+
+  function submit() {
+    // Validació client mínima; la resta (únic, rol vàlid…) la valida el backend.
+    if (!form.username.trim() || !form.password) { setError(t('usersRoles.nu_required')); return }
+    setSaving(true); setError(null)
+    usersApi.create({
+      username: form.username.trim(), email: form.email.trim(),
+      nom_complet: form.nom_complet.trim(), rol_nom: form.rol_nom, password: form.password,
+    })
+      .then(res => onCreated(res.data))
+      .catch(err => setError(firstError(err?.response?.data, t('usersRoles.patch_error'))))
+      .finally(() => setSaving(false))
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'var(--white)', borderRadius: 12, padding: '1.5rem',
+        maxWidth: 420, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+      }}>
+        <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>{t('usersRoles.nu_title')}</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={labelS}>{t('usersRoles.nu_username')} *</label>
+            <input value={form.username} onChange={e => set('username', e.target.value)} style={fieldS} autoFocus />
+          </div>
+          <div>
+            <label style={labelS}>{t('usersRoles.nu_nom_complet')}</label>
+            <input value={form.nom_complet} onChange={e => set('nom_complet', e.target.value)} style={fieldS} />
+          </div>
+          <div>
+            <label style={labelS}>{t('usersRoles.nu_email')}</label>
+            <input type="email" value={form.email} onChange={e => set('email', e.target.value)} style={fieldS} />
+          </div>
+          <div>
+            <label style={labelS}>{t('usersRoles.role')}</label>
+            <select value={form.rol_nom} onChange={e => set('rol_nom', e.target.value)} style={fieldS}>
+              {roles.map(r => <option key={r} value={r}>{t(`usersRoles.roles.${r}`)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelS}>{t('usersRoles.nu_password')} *</label>
+            <input type="password" value={form.password} onChange={e => set('password', e.target.value)} style={fieldS} />
+            <div style={{ fontSize: 10, color: 'var(--gray)', marginTop: 4 }}>{t('usersRoles.nu_password_hint')}</div>
+          </div>
+        </div>
+        {error && (
+          <div style={{ marginTop: 12, fontSize: 12, padding: '8px 10px', borderRadius: 6,
+                        background: 'var(--err-bg)', color: 'var(--err)' }}>{error}</div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+          <button onClick={onClose} disabled={saving} style={{
+            fontFamily: MONO, fontSize: 13, padding: '8px 14px', borderRadius: 6,
+            cursor: 'pointer', border: '0.5px solid var(--gray-l)', background: 'var(--white)', color: 'var(--gray)',
+          }}>{t('usersRoles.cancel')}</button>
+          <button onClick={submit} disabled={saving} style={{
+            fontFamily: MONO, fontSize: 13, padding: '8px 16px', borderRadius: 6,
+            cursor: saving ? 'default' : 'pointer', border: 'none',
+            background: 'var(--gold)', color: '#fff', fontWeight: 600, opacity: saving ? 0.6 : 1,
+          }}>{t('usersRoles.nu_create')}</button>
+        </div>
+      </div>
     </div>
   )
 }
