@@ -114,6 +114,18 @@
       "admin": "Admin"
     }
   },
+  "kanban": {
+    "title": "Kanban de tasques",
+    "subtitle": "Les meves tasques organitzades per estat",
+    "loading": "Carregant…",
+    "empty_col": "Sense tasques",
+    "status": {
+      "Pending": "Pendents",
+      "Paused": "Pausades",
+      "InProgress": "En curs",
+      "Done": "Fetes"
+    }
+  },
   "model": {
     "title": "Models",
     "new": "Nou model",

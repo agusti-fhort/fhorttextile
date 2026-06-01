@@ -114,6 +114,18 @@
       "admin": "Admin"
     }
   },
+  "kanban": {
+    "title": "Task kanban",
+    "subtitle": "My tasks organised by status",
+    "loading": "Loading…",
+    "empty_col": "No tasks",
+    "status": {
+      "Pending": "Pending",
+      "Paused": "Paused",
+      "InProgress": "In progress",
+      "Done": "Done"
+    }
+  },
   "model": {
     "title": "Models",
     "new": "New model",

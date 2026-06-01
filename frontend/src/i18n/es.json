@@ -114,6 +114,18 @@
       "admin": "Admin"
     }
   },
+  "kanban": {
+    "title": "Kanban de tareas",
+    "subtitle": "Mis tareas organizadas por estado",
+    "loading": "Cargando…",
+    "empty_col": "Sin tareas",
+    "status": {
+      "Pending": "Pendientes",
+      "Paused": "Pausadas",
+      "InProgress": "En curso",
+      "Done": "Hechas"
+    }
+  },
   "model": {
     "title": "Modelos",
     "new": "Nuevo modelo",
