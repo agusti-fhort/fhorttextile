@@ -31,10 +31,30 @@ def advance_phase_gate(model, to_phase, by_profile, notes=None):
     frm = model.fase_actual
     if frm == 'TOP':
         raise GateError('El model ja és a TOP; no es pot avançar més.')
+    # 5B-fix v2: avançar fase NOMÉS canvia el marcador (fase_actual) + GateEvent. Les ModelTask
+    # queden SEMPRE obertes (la fase va en paral·lel); cap anul·lació ni tancament de timers.
     model.fase_actual = to_phase
     model.save(update_fields=['fase_actual'])
     GateEvent.objects.create(model=model, from_phase=frm, to_phase=to_phase,
-                             by=by_profile, notes=notes)
+                             kind='advance', by=by_profile, notes=notes)
+    return {'model_id': model.id, 'from_phase': frm, 'to_phase': to_phase}
+
+
+@transaction.atomic
+def regress_phase(model, to_phase, by_profile, notes=None):
+    """Simètric de l'avanç: RETROCEDIR la fase (reobrir feina d'una fase anterior). NOMÉS canvia
+    fase_actual enrere + GateEvent kind='regress'. Les ModelTask queden obertes (el temps que es
+    refaci suma sobre les mateixes tasques). Guard: cal una fase anterior vàlida."""
+    phases = _valid_phases()
+    if to_phase not in phases:
+        raise GateError(f'Fase no vàlida: {to_phase} (∈ {phases})')
+    frm = model.fase_actual
+    if phases.index(to_phase) >= phases.index(frm):
+        raise GateError(f"'{to_phase}' no és anterior a la fase actual '{frm}'.")
+    model.fase_actual = to_phase
+    model.save(update_fields=['fase_actual'])
+    GateEvent.objects.create(model=model, from_phase=frm, to_phase=to_phase,
+                             kind='regress', by=by_profile, notes=notes)
     return {'model_id': model.id, 'from_phase': frm, 'to_phase': to_phase}
 
 

@@ -38,7 +38,7 @@ const TEMPORADES = ['SS', 'FW', 'CO', 'SP']
 const ESTATS = ['Nou', 'EnCurs', 'EnRevisio', 'Tancat']
 
 // Fases del gate (Proto→…→TOP). Validar avança a la següent.
-const PHASES = ['Proto', 'Fit', 'SizeSet', 'PP', 'TOP']
+const PHASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
 const nextPhase = (p) => { const i = PHASES.indexOf(p); return i >= 0 && i < PHASES.length - 1 ? PHASES[i + 1] : null }
 
 // Segueix la paginació de DRF (PAGE_SIZE=25, sense override) per no truncar tasques/models.

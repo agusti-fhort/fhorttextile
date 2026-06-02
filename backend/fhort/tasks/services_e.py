@@ -15,9 +15,13 @@ def phase_passed_gate(model_id: int, phase: str) -> bool:
 
 @transaction.atomic
 def request_production(model, phase, supplier, by_profile, expected_at=None, notes=None):
-    """Enviar a confecció. Precondició: la fase ha passat el gate (GateEvent existent)."""
-    if not phase_passed_gate(model.id, phase):
-        raise ProductionError(f"La fase '{phase}' no ha passat el gate; no es pot enviar a confecció.")
+    """Enviar a confecció.
+    Gap B (5B): la fase ACTUAL del model (model.fase_actual) es pot enviar a confecció SENSE
+    GateEvent previ — el model ja "viu" en aquesta fase. Les fases FUTURES segueixen exigint
+    que hagin passat el gate (GateEvent to_phase=phase)."""
+    if phase != model.fase_actual and not phase_passed_gate(model.id, phase):
+        raise ProductionError(
+            f"La fase '{phase}' és futura i no ha passat el gate; no es pot enviar a confecció.")
     return Production.objects.create(
         model=model, phase=phase, supplier=supplier, status='Requested',
         requested_by=by_profile, expected_at=expected_at, notes=notes)

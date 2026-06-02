@@ -36,6 +36,7 @@ class TransitionError(Exception):
 
 
 @transaction.atomic
+@transaction.atomic
 def transition_task(task, to_status, profile):
     """Aplica una transició d'estat. Imposa 'una sola InProgress per tècnic' (global):
     en entrar a InProgress, pausa l'altra InProgress del mateix tècnic (tanca timer + log).
@@ -77,6 +78,11 @@ def transition_task(task, to_status, profile):
     task.status = to_status
     task.save()
     _log(task, frm, to_status, profile)
+
+    # Pas 5B-fix: arrencar la PRIMERA tasca treu el model de Pending → Dev.
+    if to_status == 'InProgress':
+        from fhort.models_app.models import Model
+        Model.objects.filter(pk=task.model_id, fase_actual='Pending').update(fase_actual='Dev')
 
     if to_status == 'Done':
         # Sprint I: alimentar l'estadística Welford amb el temps real (timers ja tancats;

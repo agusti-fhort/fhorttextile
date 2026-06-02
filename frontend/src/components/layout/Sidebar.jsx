@@ -48,10 +48,7 @@ const navGroups = [
     { to: '/', labelKey: 'nav.dashboard', icon: 'ti-layout-dashboard' },
     { to: '/avisos', labelKey: 'nav.avisos', icon: 'ti-alert-triangle', badgeKey: 'alerts' },
     { to: '/models', labelKey: 'nav.models', icon: 'ti-shirt' },
-    { labelKey: 'nav.tasques', icon: 'ti-checklist', children: [
-      { to: '/tasques',        labelKey: 'nav.tasques_list' },
-      { to: '/tasques/kanban', labelKey: 'nav.kanban' },
-    ]},
+    { to: '/tasques/kanban', labelKey: 'nav.kanban', icon: 'ti-layout-kanban' },
     { to: '/planificacio', labelKey: 'nav.planning', icon: 'ti-subtask', cap: 'plan' },
     { to: '/planificacio/calendari', labelKey: 'nav.planning_calendar', icon: 'ti-calendar' },
     { to: '/temps', labelKey: 'nav.temps', icon: 'ti-clock' },

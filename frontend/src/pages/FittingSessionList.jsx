@@ -8,7 +8,7 @@ import Table from '../components/ui/Table'
 import Badge from '../components/ui/Badge'
 
 // Backend enums (línia divisòria sagrada — valors en català, no es toquen).
-const FASES = ['', 'Proto', 'Fit', 'SizeSet', 'PP', 'TOP']
+const FASES = ['', 'Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
 const ESTATS = ['', 'Oberta', 'Tancada', 'Anullada']
 
 const estatVariant = {

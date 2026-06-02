@@ -85,8 +85,9 @@ class Model(models.Model):
     ]
 
     FASE_CHOICES = [
+        ('Pending', 'Pending'),
+        ('Dev', 'Dev'),
         ('Proto', 'Proto'),
-        ('Fit', 'Fit'),
         ('SizeSet', 'SizeSet'),
         ('PP', 'PP'),
         ('TOP', 'TOP'),
@@ -176,7 +177,7 @@ class Model(models.Model):
     )
 
     estat = models.CharField(max_length=20, choices=ESTAT_CHOICES, default=ESTAT_NOU)
-    fase_actual = models.CharField(max_length=20, choices=FASE_CHOICES, default='Proto')
+    fase_actual = models.CharField(max_length=20, choices=FASE_CHOICES, default='Pending')
 
     responsable = models.ForeignKey(
         'accounts.UserProfile',

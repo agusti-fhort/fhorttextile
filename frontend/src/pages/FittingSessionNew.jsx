@@ -5,7 +5,7 @@ import { fittingSessions, models } from '../api/endpoints'
 import Card from '../components/ui/Card'
 
 // Backend enum (línia divisòria sagrada — valors en català, no es toquen).
-const FASES = ['Proto', 'Fit', 'SizeSet', 'PP', 'TOP']
+const FASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)

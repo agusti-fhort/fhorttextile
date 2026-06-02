@@ -15,9 +15,11 @@ export const models = {
   createWizard: (data) => client.post('/api/v1/models/create-wizard/', data),    // esquelet COMPLET
   updateStep2: (id, data) => client.patch(`/api/v1/models/${id}/update-step2/`, data),
   destroy: (id) => client.delete(`/api/v1/models/${id}/delete/`),
+  taskLog: (id) => client.get(`/api/v1/models/${id}/task-log/`),   // 5B-fix: log de transicions
   // Capa de Projecte: definir tasques d'un model i avançar fase (gate del responsable).
   defineTasks: (id, data) => client.post(`/api/v1/models/${id}/define-tasks/`, data),   // {task_type_ids:[...]}
   gate: (id, data) => client.post(`/api/v1/models/${id}/gate/`, data),                   // {to_phase} o {to_phases:[...]}
+  regress: (id, data) => client.post(`/api/v1/models/${id}/regress/`, data),             // {to_phase} — retrocés net
   // Tram 2 planificació (gated define_tasks): assigna les no-Done a un tècnic + compute de cua
   // sencera; unassign treu tècnic + buida planned_*. Done sempre intactes.
   assign: (id, body) => client.post(`/api/v1/models/${id}/assign/`, body),   // {assignee_id, task_ids?}

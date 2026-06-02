@@ -253,9 +253,11 @@ class TaskTransition(models.Model):
 class GateEvent(models.Model):
     """Log d'un gate: acceptació formal que avança la fase d'un Model.
     Captura qui accepta, quan, des de quina fase i cap a quina (memo §3.5)."""
+    KIND_CHOICES = [('advance', 'advance'), ('regress', 'regress')]
     model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='gate_events')
     from_phase = models.CharField(max_length=20, null=True, blank=True)
     to_phase = models.CharField(max_length=20)
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default='advance')
     by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
                            null=True, blank=True, related_name='gate_events')
     notes = models.TextField(null=True, blank=True)

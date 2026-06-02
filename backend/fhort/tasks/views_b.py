@@ -13,12 +13,12 @@ from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TA
                                          get_allowed_task_types)
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
-                     GarmentTypeItem, TaskTimeEstimate)
+                     GarmentTypeItem, TaskTimeEstimate, TaskTransition)
 from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             SupplierSerializer, ProductionSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer)
 from .services_c import transition_task, TransitionError, rectification_count
-from .services_d import (advance_phase_gate, advance_phases_chain,
+from .services_d import (advance_phase_gate, advance_phases_chain, regress_phase,
                          model_ready_for_gate, GateError)
 from .services_e import (request_production, set_production_status,
                          ProductionError, has_delivered_production)
@@ -286,6 +286,26 @@ def define_model_tasks_view(request, model_id):
                     status=status.HTTP_201_CREATED)
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def model_task_log_view(request, model_id):
+    """GET /api/v1/models/<model_id>/task-log/ — log informatiu (read-only) de les transicions
+    de les ModelTask del model, ordenat per data/hora desc. Font: TaskTransition."""
+    qs = (TaskTransition.objects
+          .filter(model_task__model_id=model_id)
+          .select_related('model_task__task_type', 'by')
+          .order_by('-at'))
+    log = [{
+        'id': tr.id,
+        'task_type': tr.model_task.task_type.code,
+        'from_status': tr.from_status,
+        'to_status': tr.to_status,
+        'by': (tr.by.nom_complet if tr.by_id else None),
+        'at': tr.at.isoformat(),
+    } for tr in qs[:300]]
+    return Response({'log': log}, status=status.HTTP_200_OK)
+
+
 @api_view(['POST'])
 @permission_classes([_DefineTasks])
 def assign_model_view(request, model_id):
@@ -390,6 +410,28 @@ def gate_model_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([_CloseGates])
+def regress_model_view(request, model_id):
+    """POST /api/v1/models/<model_id>/regress/  Body: {"to_phase":"Proto","notes":"..."}
+    Retrocedeix la fase (reobrir feina anterior). NOMÉS canvia fase_actual + GateEvent kind=regress."""
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil.'}, status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        model = Model.objects.get(pk=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    to_phase = request.data.get('to_phase')
+    if not to_phase:
+        return Response({'error': 'to_phase requerit.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        res = regress_phase(model, to_phase, profile, request.data.get('notes'))
+        return Response(res, status=http_status.HTTP_200_OK)
+    except GateError as e:
+        return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([_CloseGates])
 def gate_bulk_view(request):
     """POST /api/v1/gates/bulk/  Body: {"items":[{"model_id":1,"to_phase":"Fit"}, ...], "notes":"..."}
     Accions de govern post-reunió. NO exigeix model_ready (decisió de govern, no automatisme)."""
@@ -477,13 +519,21 @@ def request_production_view(request, model_id):
     phase = request.data.get('phase')
     if not phase:
         return Response({'error': 'phase requerit.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    # Gap C (5B): guard TOU — múltiples Productions per (model,fase) permeses (cicle de mostres),
+    # però avisem si ja n'hi ha una ACTIVA (Requested/InProgress) al mateix supplier+fase.
+    dup_actiu = Production.objects.filter(
+        model=model, phase=phase, supplier=supplier,
+        status__in=['Requested', 'InProgress']).exists()
     try:
         p = request_production(model, phase, supplier, profile,
                                expected_at=request.data.get('expected_at'),
                                notes=request.data.get('notes'))
     except ProductionError as e:
         return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
-    return Response(ProductionSerializer(p).data, status=http_status.HTTP_201_CREATED)
+    data = ProductionSerializer(p).data
+    data['warning'] = ('Ja hi havia un enviament actiu per a aquesta fase i proveïdor.'
+                       if dup_actiu else None)
+    return Response(data, status=http_status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])

@@ -1,9 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import EditableTable from '../components/EditableTable/EditableTable'
+import Feedback from '../components/ui/Feedback'
+import ActionsMenu from '../components/model/ActionsMenu'
+import ProductionTab from '../components/model/ProductionTab'
+import FittingTab from '../components/model/FittingTab'
+import TaskLog from '../components/model/TaskLog'
 
 const API = import.meta.env.VITE_API_URL || ''
-const TABS = ['Resum', 'Mesures', 'Fitting', 'Fitxers', 'Anàlisi IA', 'Producció']
+const TABS = ['Resum', 'Mesures', 'Fitxers', 'Producció', 'Fitting', 'Anàlisi IA']
 
 const btnSecondary = {
   background: 'transparent',
@@ -20,6 +26,7 @@ export default function ModelSheet({ defaultTab = 'Mesures' }) {
   const token = localStorage.getItem('access_token')
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
+  const { t } = useTranslation()
   const [model, setModel] = useState(null)
   const [activeTab, setActiveTab] = useState(defaultTab)
   const [taulaRows, setTaulaRows] = useState([])
@@ -27,6 +34,12 @@ export default function ModelSheet({ defaultTab = 'Mesures' }) {
   const [deltes, setDeltes] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [feedback, setFeedback] = useState(null)
+
+  const reloadModel = useCallback(() => {
+    fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
+      .then(r => r.json()).then(setModel).catch(() => {})
+  }, [id])
 
   useEffect(() => {
     if (!id) return
@@ -68,7 +81,11 @@ export default function ModelSheet({ defaultTab = 'Mesures' }) {
 
   return (
     <div style={{ width: '100%', fontFamily: 'IBM Plex Mono, monospace' }}>
-      <ModelSheetHeader model={model} onDelete={handleDelete} />
+      <ModelSheetHeader model={model} onDelete={handleDelete} onFeedback={setFeedback} onChanged={reloadModel} />
+
+      <div style={{ padding: '0 1.5rem' }}>
+        <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+      </div>
 
       <div style={{
         display: 'flex', gap: 8, padding: '0.75rem 1.5rem',
@@ -101,15 +118,17 @@ export default function ModelSheet({ defaultTab = 'Mesures' }) {
 
       <div style={{ padding: '1.5rem' }}>
         {activeTab === 'Resum' && (
-          <TabSummary
-            model={model}
-            modelId={parseInt(id)}
-            sizesAmbDades={sizesAmbDades}
-            onUpdated={() => {
-              fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
-                .then(r => r.json()).then(setModel)
-            }}
-          />
+          <>
+            <TabSummary
+              model={model}
+              modelId={parseInt(id)}
+              sizesAmbDades={sizesAmbDades}
+              onUpdated={reloadModel}
+            />
+            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '0.5px solid var(--gray-l)' }}>
+              <TaskLog modelId={parseInt(id)} />
+            </div>
+          </>
         )}
         {activeTab === 'Mesures' && (
           <EditableTable
@@ -124,24 +143,25 @@ export default function ModelSheet({ defaultTab = 'Mesures' }) {
             onSaved={setTaulaRows}
           />
         )}
-        {activeTab === 'Fitting' && <TabFitting modelId={id} />}
+        {activeTab === 'Fitting' && <FittingTab model={model} onFeedback={setFeedback} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}
-        {activeTab === 'Producció' && <TabProduccio model={model} />}
+        {activeTab === 'Producció' && <ProductionTab model={model} onFeedback={setFeedback} onChanged={reloadModel} />}
       </div>
     </div>
   )
 }
 
-function ModelSheetHeader({ model, onDelete }) {
+function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   if (!model) return null
 
   return (
+    <div style={{ borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)' }}>
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '0.75rem 1.5rem',
-      borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button type="button" onClick={() => navigate('/models')}
@@ -181,9 +201,16 @@ function ModelSheetHeader({ model, onDelete }) {
         }}>
           {model.estat}
         </span>
+        <span style={{
+          fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 600,
+          background: 'var(--gold)', color: '#fff',
+        }} title={t('model_sheet.phase')}>
+          {model.fase_actual}
+        </span>
       </div>
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <ActionsMenu model={model} onChanged={onChanged} onFeedback={onFeedback} />
         <button type="button"
           onClick={() => navigate(`/models/${model.id}/editar`)}
           style={btnSecondary}>
@@ -194,6 +221,7 @@ function ModelSheetHeader({ model, onDelete }) {
           <i className="ti ti-trash" aria-hidden="true" /> Esborrar
         </button>
       </div>
+    </div>
     </div>
   )
 }
@@ -351,15 +379,6 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           ))}
         </tbody>
       </table>
-    </div>
-  )
-}
-
-function TabFitting() {
-  return (
-    <div style={{ color: 'var(--color-text-secondary, #868685)', fontSize: 13, padding: '2rem 0' }}>
-      <i className="ti ti-ruler-2" style={{ fontSize: 24, display: 'block', marginBottom: 8 }} />
-      Sessions de fitting — pròximament.
     </div>
   )
 }
@@ -698,11 +717,3 @@ function TabAIAnalysis({ modelId }) {
   )
 }
 
-function TabProduccio() {
-  return (
-    <div style={{ color: 'var(--color-text-secondary, #868685)', fontSize: 13, padding: '2rem 0' }}>
-      <i className="ti ti-list-check" style={{ fontSize: 24, display: 'block', marginBottom: 8 }} />
-      Tasques i estat de producció — pròximament.
-    </div>
-  )
-}

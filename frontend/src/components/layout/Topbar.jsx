@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import LanguageSwitcher from './LanguageSwitcher'
 import { UnitToggle } from '../UnitToggle'
+import useAuthStore from '../../store/auth'
 
 const PATH_TO_KEY = {
   '/':                          'nav.dashboard',
@@ -25,11 +27,30 @@ const PATH_TO_KEY = {
 export default function Topbar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const key = PATH_TO_KEY[pathname]
   const title = key ? t(key) : t('app.title')
-  // El botó "Nou model" és contextual de la secció Models (no global).
-  const showNewModel = pathname === '/models' || pathname.startsWith('/models/')
+  // Pas 5B-fix: el botó "Nou model" surt de la barra global; baixarà a la llista de Models (5C).
+  const showNewModel = false
+
+  // Bloc nom + data + rellotge (esquerra dels icones). Nom des de l'auth store.
+  const user = useAuthStore(s => s.user)
+  const nom = user?.nom_complet || user?.username || ''
+
+  // Rellotge en viu (patró TimerWidget): tick cada segon, mostra HH:MM. Net al desmuntar.
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Locale del i18n → Intl re-formata sol en canviar d'idioma. Data llarga, hora HH:MM.
+  const locale = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
+  const dataRaw = new Intl.DateTimeFormat(locale, {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  }).format(now)
+  const data = dataRaw.charAt(0).toUpperCase() + dataRaw.slice(1)   // majúscula inicial (ca/es minúscules)
+  const hora = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(now)
 
   return (
     <header style={{
@@ -51,6 +72,16 @@ export default function Topbar() {
         <strong style={{color: 'var(--charcoal)', fontWeight: 500}}>{title}</strong>
       </div>
       <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.8rem'}}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          fontSize: 12, color: 'var(--gray)', whiteSpace: 'nowrap',
+        }}>
+          {nom && <span style={{color: 'var(--charcoal)', fontWeight: 500}}>{nom}</span>}
+          {nom && <span style={{opacity: 0.45}}>·</span>}
+          <span>{data}</span>
+          <span style={{opacity: 0.45}}>·</span>
+          <span style={{fontVariantNumeric: 'tabular-nums'}}>{hora}</span>
+        </div>
         <UnitToggle />
         <LanguageSwitcher />
         <button
