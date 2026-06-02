@@ -1,211 +1,225 @@
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { models as modelsApi } from '../api/endpoints'
+import ActionsMenu, { PHASES } from '../components/model/ActionsMenu'
+import Feedback from '../components/ui/Feedback'
+import { EstatBadge } from '../components/EstatBadge'
 
-import { useState, useEffect, useMemo } from "react"
-import { useNavigate } from "react-router-dom"
-import useAuthStore from "../store/auth"
-import { EstatBadge } from "../components/EstatBadge"
-
-const API = import.meta.env.VITE_API_URL || ""
-
-const FASES = ["Nou", "Disseny", "Tècnic", "Prototip", "Mostres", "Preproducció", "Producció", "Tancat"]
-const TEMPORADES = ["SS", "FW", "RE", "PRE"]
-const anyActual = new Date().getFullYear()
-const ANYS = [anyActual, anyActual + 1, anyActual + 2, anyActual + 3]
+const MONO = 'IBM Plex Mono, monospace'
+const SEASONS = ['SS', 'FW', 'CO', 'SP']
+const PAGE_SIZE = 25
+const fmtDate = (v) => v ? new Date(v).toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'
 
 export default function Models() {
   const navigate = useNavigate()
-  const token = useAuthStore.getState().token || localStorage.getItem('access_token')
+  const { t } = useTranslation()
 
-  // Auth guard: redirect if there is no token (no fetch will run without auth)
-  useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
-  const [models, setModels] = useState([])
+  const [items, setItems] = useState([])
+  const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [cerca, setCerca] = useState("")
-  const [filtreFase, setFiltreFase] = useState("")
-  const [filtreEstat, setFiltreEstat] = useState("")
-  const [filtreAny, setFiltreAny] = useState("")
-  const [filtreTemporada, setFiltreTemporada] = useState("")
-  const [total, setTotal] = useState(0)
+  const [feedback, setFeedback] = useState(null)
+  const [search, setSearch] = useState('')
+  const [fase, setFase] = useState('')
+  const [temporada, setTemporada] = useState('')
+  const [page, setPage] = useState(1)
+  const [selected, setSelected] = useState(() => new Set())
+  const [newOpen, setNewOpen] = useState(false)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     setLoading(true)
-    const params = new URLSearchParams()
-    if (cerca) params.set("search", cerca)
-    if (filtreFase) params.set("fase_actual", filtreFase)
-    if (filtreEstat) params.set("estat", filtreEstat)
-    params.set("ordering", "-data_entrada")
-    params.set("limit", "50")
-
-    fetch(`${API}/api/v1/models/?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(r => r.json())
-      .then(d => {
-        const results = Array.isArray(d) ? d : (d.results || [])
-        setModels(results)
-        setTotal(d.count || results.length)
-        setLoading(false)
+    const params = { ordering: '-data_entrada', page, page_size: PAGE_SIZE }
+    if (search) params.search = search
+    if (fase) params.fase_actual = fase
+    if (temporada) params.temporada = temporada
+    modelsApi.list(params)
+      .then(r => {
+        const d = r.data
+        setItems(Array.isArray(d) ? d : (d.results || []))
+        setCount(d.count ?? (Array.isArray(d) ? d.length : 0))
       })
-      .catch(() => setLoading(false))
-  }, [token, cerca, filtreFase, filtreEstat])
+      .catch(() => { setItems([]); setCount(0) })
+      .finally(() => setLoading(false))
+  }, [search, fase, temporada, page])
 
-  // Filtrat client-side (Any / Temporada — el backend no els suporta com a query params).
-  const modelsFiltered = useMemo(() => {
-    return models.filter(m => {
-      if (filtreAny && String(m.any) !== String(filtreAny)) return false
-      if (filtreTemporada && m.temporada !== filtreTemporada) return false
-      return true
-    })
-  }, [models, filtreAny, filtreTemporada])
+  // Debounce de la cerca + reset de pàgina quan canvien filtres.
+  useEffect(() => { setPage(1) }, [search, fase, temporada])
+  useEffect(() => { const id = setTimeout(load, 200); return () => clearTimeout(id) }, [load])
 
-  const handleDeleteModel = async (modelId, nomPrenda) => {
-    if (!confirm(`Esborrar "${nomPrenda}"? Aquesta acció no es pot desfer.`)) return
-    const res = await fetch(`${API}/api/v1/models/${modelId}/delete/`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (res.ok) {
-      setModels(prev => prev.filter(m => m.id !== modelId))
-      setTotal(t => Math.max(0, t - 1))
-    } else {
-      alert(`No s'ha pogut esborrar (HTTP ${res.status})`)
-    }
+  const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
+  const selectedModels = useMemo(() => items.filter(m => selected.has(m.id)), [items, selected])
+  const allOnPage = items.length > 0 && items.every(m => selected.has(m.id))
+
+  const toggle = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleAll = () => setSelected(s => {
+    const n = new Set(s)
+    if (allOnPage) items.forEach(m => n.delete(m.id)); else items.forEach(m => n.add(m.id))
+    return n
+  })
+  const afterAction = () => { setSelected(new Set()); load() }
+
+  const remove = async (m, e) => {
+    e.stopPropagation()
+    if (!window.confirm(t('models_list.confirm_delete', { codi: m.codi_intern }))) return
+    try { await modelsApi.destroy(m.id); setFeedback({ type: 'ok', text: '✓' }); load() }
+    catch { setFeedback({ type: 'err', text: `HTTP` }) }
   }
 
   return (
-    <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
+    <div style={{ padding: '24px', maxWidth: 1240, margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 18, fontFamily: "IBM Plex Mono, monospace", color: "#1d1d1b", fontWeight: 500, margin: 0 }}>
-            Models
-          </h1>
-          <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace", marginTop: 2 }}>
-            {total} models
+          <h1 style={{ fontSize: 18, fontFamily: MONO, color: 'var(--text-main)', fontWeight: 500, margin: 0 }}>{t('models_list.title')}</h1>
+          <div style={{ fontSize: 11, color: 'var(--gray)', fontFamily: MONO, marginTop: 2 }}>
+            {selected.size > 0 ? t('models_list.selected', { n: selected.size }) : t('models_list.count', { n: count })}
           </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <NewModelMenu open={newOpen} setOpen={setNewOpen} navigate={navigate} t={t} />
+          <ActionsMenu targets={selectedModels} onChanged={afterAction} onFeedback={setFeedback} />
         </div>
       </div>
 
-      {/* Filtres */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <input
-          value={cerca}
-          onChange={e => setCerca(e.target.value)}
-          placeholder="Cerca per codi o nom..."
-          style={{
-            padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
-            fontSize: 12, fontFamily: "IBM Plex Mono, monospace", flex: 1, minWidth: 200,
-            background: "#fff", color: "#1d1d1b",
-          }}
-        />
-        <select value={filtreFase} onChange={e => setFiltreFase(e.target.value)} style={{
-          padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
-          fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
-        }}>
-          <option value="">Totes les fases</option>
-          {FASES.map(f => <option key={f} value={f}>{f}</option>)}
+      <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+
+      {/* Toolbar de filtres */}
+      <div style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap', alignItems: 'center' }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('models_list.search_ph')}
+          style={{ ...inp, flex: 1, minWidth: 220 }} />
+        <select value={fase} onChange={e => setFase(e.target.value)} style={inp}>
+          <option value="">{t('models_list.all_phases')}</option>
+          {PHASES.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
-        <select value={filtreEstat} onChange={e => setFiltreEstat(e.target.value)} style={{
-          padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
-          fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
-        }}>
-          <option value="">Tots els estats</option>
-          <option value="Nou">Nou</option>
-          <option value="EnCurs">En curs</option>
-          <option value="EnRevisio">En revisió</option>
-          <option value="Tancat">Tancat</option>
+        <select value={temporada} onChange={e => setTemporada(e.target.value)} style={inp}>
+          <option value="">{t('models_list.all_seasons')}</option>
+          {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={filtreAny} onChange={e => setFiltreAny(e.target.value)} style={{
-          padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
-          fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
-        }}>
-          <option value="">Tots els anys</option>
-          {ANYS.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <select value={filtreTemporada} onChange={e => setFiltreTemporada(e.target.value)} style={{
-          padding: "6px 10px", border: "1px solid #e0d5c5", borderRadius: 4,
-          fontSize: 12, fontFamily: "IBM Plex Mono, monospace", background: "#fff", color: "#1d1d1b",
-        }}>
-          <option value="">Totes les temporades</option>
-          {TEMPORADES.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-        {(cerca || filtreFase || filtreEstat || filtreAny || filtreTemporada) && (
-          <button onClick={() => { setCerca(""); setFiltreFase(""); setFiltreEstat(""); setFiltreAny(""); setFiltreTemporada("") }} style={{
-            padding: "6px 12px", border: "1px solid #e0d5c5", borderRadius: 4,
-            fontSize: 11, fontFamily: "IBM Plex Mono, monospace", cursor: "pointer",
-            background: "#fff", color: "#868685",
-          }}>× Netejar</button>
+        {(search || fase || temporada) && (
+          <button onClick={() => { setSearch(''); setFase(''); setTemporada('') }} style={{ ...inp, cursor: 'pointer', color: 'var(--gray)' }}>× {t('models_list.clear')}</button>
         )}
       </div>
 
+      {/* Select all */}
+      {items.length > 0 && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--gray)', fontFamily: MONO, margin: '0 0 8px 2px', cursor: 'pointer' }}>
+          <input type="checkbox" checked={allOnPage} onChange={toggleAll} />
+          {allOnPage ? '✓' : ''}
+        </label>
+      )}
+
       {/* Llistat */}
       {loading ? (
-        <div style={{ color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace", padding: "20px 0" }}>
-          Carregant models...
+        <div style={{ color: 'var(--gray)', fontSize: 12, fontFamily: MONO, padding: '20px 0' }}>{t('models_list.loading')}</div>
+      ) : items.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--gray)', fontSize: 12, fontFamily: MONO }}>
+          {(search || fase || temporada) ? t('models_list.empty_filtered') : t('models_list.empty')}
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {modelsFiltered.map(m => (
-            <div
-              key={m.id}
-              onClick={() => navigate(`/models/${m.id}`)}
-              style={{
-                border: "1px solid #e0d5c5", borderRadius: 8, padding: "14px 18px",
-                cursor: "pointer", background: "#fff", transition: "all .1s",
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = "#fdf9f5"; e.currentTarget.style.borderColor = "#c27a2a" }}
-              onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#e0d5c5" }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 8 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                    <span style={{
-                      fontFamily: "IBM Plex Mono, monospace", fontSize: 13,
-                      fontWeight: 700, color: "#c27a2a",
-                    }}>{m.codi_intern || m.codi_client}</span>
-                    <span style={{ fontSize: 13, color: "#1d1d1b", fontWeight: 500 }}>{m.nom_prenda}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace" }}>
-                    {m.temporada}{m.any ? ` ${m.any}` : ""}
-                    {m.garment_type_nom && ` · ${m.garment_type_nom}`}
-                    {m.responsable_nom && ` · ${m.responsable_nom}`}
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                  <EstatBadge estat={m.prioritat} size="xs" />
-                  <EstatBadge estat={m.estat} size="xs" />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDeleteModel(m.id, m.nom_prenda) }}
-                    title="Esborrar model"
-                    style={{
-                      fontSize: 10, color: "#C0392B", background: "none",
-                      border: "1px solid #FADBD8", borderRadius: 4,
-                      padding: "2px 8px", cursor: "pointer",
-                      fontFamily: "IBM Plex Mono, monospace",
-                    }}
-                  >
-                    Esborrar
-                  </button>
-                </div>
-              </div>
-              {m.design_freeze_at && (
-                <div style={{ fontSize: 10, color: "#3b6d11", fontFamily: "IBM Plex Mono, monospace", marginTop: 4 }}>
-                  ✓ Design Freeze aprovat
-                </div>
-              )}
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {items.map(m => (
+            <ModelRow key={m.id} m={m} selected={selected.has(m.id)} onToggle={() => toggle(m.id)}
+              onOpen={() => navigate(`/models/${m.id}`)} onDelete={(e) => remove(m, e)} t={t} />
           ))}
-          {modelsFiltered.length === 0 && (
-            <div style={{
-              textAlign: "center", padding: "40px 0",
-              color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace",
-            }}>
-              {cerca || filtreFase || filtreEstat || filtreAny || filtreTemporada
-                ? "Sense resultats amb aquest filtre."
-                : "Sense models. Crea el primer!"}
-            </div>
-          )}
+        </div>
+      )}
+
+      {/* Paginació */}
+      {pages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 18, fontFamily: MONO, fontSize: 12 }}>
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} style={{ ...inp, cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1 }}>← {t('models_list.prev')}</button>
+          <span style={{ color: 'var(--gray)' }}>{t('models_list.page_info', { page, pages })}</span>
+          <button onClick={() => setPage(p => Math.min(pages, p + 1))} disabled={page >= pages} style={{ ...inp, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? 0.4 : 1 }}>{t('models_list.next')} →</button>
         </div>
       )}
     </div>
   )
 }
+
+function ModelRow({ m, selected, onToggle, onOpen, onDelete, t }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'stretch', gap: 12, borderRadius: 8, background: 'var(--white)',
+      border: `1px solid ${selected ? 'var(--gold)' : 'var(--gray-l)'}`,
+      boxShadow: selected ? 'inset 0 0 0 1px var(--gold)' : 'none',
+    }}>
+      {/* Checkbox amb "rowspan" sobre les 2 files */}
+      <label onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', padding: '0 4px 0 14px', cursor: 'pointer' }}>
+        <input type="checkbox" checked={selected} onChange={onToggle} style={{ width: 15, height: 15 }} />
+      </label>
+
+      <div onClick={onOpen} style={{ flex: 1, minWidth: 0, padding: '12px 16px 12px 0', cursor: 'pointer' }}>
+        {/* Fila 1 — descriptiva */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>{m.codi_intern}</span>
+          {m.nom_prenda && <span style={{ fontSize: 13, color: 'var(--text-main)', fontWeight: 500 }}>{m.nom_prenda}</span>}
+          {m.codi_client && <span style={{ fontSize: 11, color: 'var(--gray)', fontFamily: MONO }}>· {m.codi_client}</span>}
+          {m.collection && <span style={{ fontSize: 11, color: 'var(--gray)' }}>· {m.collection}</span>}
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--gray)', fontFamily: MONO }}>{m.temporada}{m.any ? ` ${m.any}` : ''}</span>
+          <EstatBadge estat={m.estat} size="xs" />
+          <button onClick={onDelete} title={t('models_list.delete')} style={delBtn}><i className="ti ti-trash" /></button>
+        </div>
+        {/* Fila 2 — operativa */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr 1.4fr', gap: 12, alignItems: 'center', fontFamily: MONO, fontSize: 11 }}>
+          <span style={faseBadge}>{m.fase_actual}</span>
+          <Cell label={t('models_list.col_entrada')} value={fmtDate(m.entrada_prod)} />
+          <Cell label={t('models_list.col_proto')} value={fmtDate(m.arribada_proto)} />
+          <Cell label={t('models_list.col_fitting')} value={fmtDate(m.fitting_prev)} />
+          <Tecnic label={t('models_list.col_tecnic')} tecnics={m.tecnics} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Cell({ label, value }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gray)' }}>{label}</div>
+      <div style={{ color: value === '—' ? 'var(--gray-l)' : 'var(--text-main)' }}>{value}</div>
+    </div>
+  )
+}
+
+function Tecnic({ label, tecnics }) {
+  const list = tecnics || []
+  const principal = list[0]
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gray)' }}>{label}</div>
+      {principal ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: principal.color || 'var(--gray)', flex: 'none' }} />
+          <span style={{ color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{principal.nom}</span>
+          {list.length > 1 && <span style={{ color: 'var(--gray)' }}>+{list.length - 1}</span>}
+        </div>
+      ) : <div style={{ color: 'var(--gray-l)' }}>—</div>}
+    </div>
+  )
+}
+
+function NewModelMenu({ open, setOpen, navigate, t }) {
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)', borderRadius: 6, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: MONO }}>
+        <i className="ti ti-plus" /> {t('models_list.new_model')} <i className="ti ti-chevron-down" />
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+          <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 41, background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 4, minWidth: 200 }}>
+            <button onClick={() => { setOpen(false); navigate('/models/nou') }} style={menuItem}><i className="ti ti-edit" /> {t('models_list.manual')}</button>
+            <button disabled title={t('models_list.soon')} style={{ ...menuItem, opacity: 0.45, cursor: 'not-allowed' }}>
+              <i className="ti ti-file-spreadsheet" /> {t('models_list.import_excel')} <span style={{ fontSize: 9, color: 'var(--gray)', marginLeft: 'auto' }}>{t('models_list.soon')}</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+const inp = { padding: '6px 10px', border: '0.5px solid var(--gray-l)', borderRadius: 6, fontSize: 12, fontFamily: MONO, background: 'var(--white)', color: 'var(--text-main)' }
+const faseBadge = { fontFamily: MONO, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: 'var(--gold)', color: '#fff', justifySelf: 'start' }
+const delBtn = { fontSize: 12, color: '#C0392B', background: 'none', border: '0.5px solid #FADBD8', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', fontFamily: MONO }
+const menuItem = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 10px', borderRadius: 6, fontFamily: MONO, fontSize: 12, color: 'var(--text-main)', cursor: 'pointer' }

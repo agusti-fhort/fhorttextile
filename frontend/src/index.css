@@ -33,6 +33,9 @@
 
 * { font-family: 'IBM Plex Mono', monospace; box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Checkboxes/radios corporatius daurats (font única; substitueix el blau del navegador). */
+input[type="checkbox"], input[type="radio"] { accent-color: var(--gold); }
+
 body {
   background: var(--bg-main);
   color: var(--text-main);

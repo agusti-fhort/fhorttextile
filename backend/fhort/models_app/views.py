@@ -21,7 +21,7 @@ from .serializers import (
 class ModelViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estat', 'fase_actual', 'garment_type', 'responsable']
+    filterset_fields = ['estat', 'fase_actual', 'garment_type', 'responsable', 'temporada', 'any']
     search_fields = ['codi_intern', 'codi_client', 'nom_prenda']
     ordering_fields = ['prioritat', 'data_objectiu', 'data_entrada']
     ordering = ['-prioritat']
@@ -33,13 +33,36 @@ class ModelViewSet(viewsets.ModelViewSet):
         # return an empty queryset to avoid errors in misrouted views.
         if getattr(connection, 'schema_name', None) == 'public':
             return Model.objects.none()
-        return (
+        qs = (
             Model.objects
             .select_related('garment_type', 'garment_group',
                             'responsable', 'responsable__user',
                             'size_system', 'grading_rule_set')
             .all()
         )
+        if self.action != 'list':
+            return qs
+        # Pas 5C — enriquiment de la LLISTA: 3 dates de cicle (Subquery correlat, sense N+1) +
+        # prefetch dels assignees per al "principal + N" (tècnics).
+        from django.db.models import OuterRef, Subquery, Prefetch
+        from django.utils import timezone
+        from fhort.tasks.models import Production, ModelTask
+        from fhort.fitting.models import FittingSession
+        today = timezone.localdate()
+        return qs.annotate(
+            entrada_prod=Subquery(Production.objects
+                .filter(model=OuterRef('pk'), phase=OuterRef('fase_actual'))
+                .order_by('-requested_at').values('requested_at')[:1]),
+            arribada_proto=Subquery(Production.objects
+                .filter(model=OuterRef('pk'), phase='Proto', delivered_at__isnull=False)
+                .order_by('-delivered_at').values('delivered_at')[:1]),
+            fitting_prev=Subquery(FittingSession.objects
+                .filter(model=OuterRef('pk'), data__gte=today)
+                .order_by('data').values('data')[:1]),
+        ).prefetch_related(Prefetch(
+            'model_tasks',
+            queryset=ModelTask.objects.exclude(assignee__isnull=True).select_related('assignee'),
+        ))
 
     def get_serializer_class(self):
         if self.action == 'list':

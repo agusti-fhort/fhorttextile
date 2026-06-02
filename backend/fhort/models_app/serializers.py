@@ -13,6 +13,13 @@ class ModelFitxerSerializer(serializers.ModelSerializer):
 class ModelListSerializer(serializers.ModelSerializer):
     garment_type = serializers.SerializerMethodField()
     responsable = serializers.SerializerMethodField()
+    garment_type_item_nom = serializers.CharField(source='garment_type_item.name', read_only=True)
+    # Pas 5C — dates del cicle (annotacions Subquery al queryset del ViewSet).
+    entrada_prod = serializers.DateTimeField(read_only=True)
+    arribada_proto = serializers.DateTimeField(read_only=True)
+    fitting_prev = serializers.DateField(read_only=True)
+    # Pas 5C — tècnics = assignees distints de les ModelTask (prefetch, sense N+1).
+    tecnics = serializers.SerializerMethodField()
 
     class Meta:
         model = Model
@@ -21,13 +28,22 @@ class ModelListSerializer(serializers.ModelSerializer):
             'codi_intern',
             'codi_client',
             'nom_prenda',
+            'collection',
+            'temporada',
+            'any',
+            'created_at',
             'garment_type',
+            'garment_type_item_nom',
             'estat',
             'fase_actual',
             'responsable',
             'prioritat',
             'data_objectiu',
-            'collection',
+            # Pas 5C — cicle
+            'entrada_prod',
+            'arribada_proto',
+            'fitting_prev',
+            'tecnics',
             # Sprint 1A
             'slots_prev_tecnics',
             'slots_prev_confeccio',
@@ -40,6 +56,19 @@ class ModelListSerializer(serializers.ModelSerializer):
 
     def get_responsable(self, obj):
         return obj.responsable.nom_complet if obj.responsable_id else None
+
+    def get_tecnics(self, obj):
+        # model_tasks ve prefetchat (només tasques amb assignee) → 0 queries aquí.
+        counter = {}
+        for tk in obj.model_tasks.all():
+            a = tk.assignee
+            if not a:
+                continue
+            c = counter.setdefault(a.id, {'id': a.id, 'nom': a.nom_complet,
+                                          'color': getattr(a, 'color_avatar', None), 'n': 0})
+            c['n'] += 1
+        ordenats = sorted(counter.values(), key=lambda x: (-x['n'], x['nom'] or ''))
+        return [{'id': c['id'], 'nom': c['nom'], 'color': c['color']} for c in ordenats]
 
 
 class ContracteSerializer(serializers.ModelSerializer):
