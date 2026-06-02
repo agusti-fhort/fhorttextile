@@ -71,7 +71,9 @@
     "view_list": "Lista",
     "loading": "Cargando el calendario…",
     "error": "No se ha podido cargar el calendario.",
-    "empty_list": "Sin eventos."
+    "empty_list": "Sin eventos.",
+    "all": "Todos",
+    "at_risk": "En riesgo"
   },
   "planning": {
     "title": "Planificación",

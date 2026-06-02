@@ -71,7 +71,9 @@
     "view_list": "Llista",
     "loading": "Carregant el calendari…",
     "error": "No s'ha pogut carregar el calendari.",
-    "empty_list": "Sense esdeveniments."
+    "empty_list": "Sense esdeveniments.",
+    "all": "Tots",
+    "at_risk": "En risc"
   },
   "planning": {
     "title": "Planificació",

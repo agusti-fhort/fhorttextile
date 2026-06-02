@@ -71,7 +71,9 @@
     "view_list": "List",
     "loading": "Loading the calendar…",
     "error": "Could not load the calendar.",
-    "empty_list": "No events."
+    "empty_list": "No events.",
+    "all": "All",
+    "at_risk": "At risk"
   },
   "planning": {
     "title": "Planning",
