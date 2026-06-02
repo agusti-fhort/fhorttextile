@@ -8,6 +8,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status as http_status
+from datetime import date as _date
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -195,3 +196,74 @@ def plan_current_view(request):
             'en_risc': en_risc,
         })
     return Response({'tasks': tasks}, status=http_status.HTTP_200_OK)
+
+
+# ── Tram 3 Peça 2B-cal — Calendari propi: esdeveniments unificats ────────────
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def calendar_events_view(request):
+    """GET /api/v1/calendar/events/ — esdeveniments UNIFICATS per al calendari propi (agenda).
+
+    Abstracció pensada per agregar fonts futures (fittings, fites) SENSE canviar el contracte:
+    avui només `tipus="tasca"` (ModelTask planificades). Cada event porta el COLOR del tècnic
+    (UserProfile.color_avatar) per pintar-lo i agrupar-lo per cua.
+
+    ACCÉS: IsAuthenticated. SCOPE (al queryset, igual que plan/current):
+      - amb view_team_tasks → totes les tasques planificades.
+      - sense → només les del propi UserProfile.
+
+    PARAMS opcionals start/end (YYYY-MM-DD): acoten per data LOCAL de planned_start (inclusius).
+    Sense params → tot el planificat no-Done.
+
+    DATES: ISO 8601 amb offset Europe/Madrid via timezone.localtime() (p.ex. ...T08:00:00+02:00),
+    MAI UTC cru "Z" → el front pinta directe amb new Date(). en_risc = data LOCAL de planned_end
+    > data_objectiu (DateField); data_objectiu None → False.
+    """
+    qs = (ModelTask.objects
+          .exclude(status='Done')
+          .filter(planned_start__isnull=False)
+          .select_related('model', 'task_type', 'assignee__user'))
+
+    if VIEW_TEAM_TASKS not in get_capabilities(request.user):
+        profile = getattr(request.user, 'profile', None)
+        qs = qs.filter(assignee=profile) if profile is not None else qs.none()
+
+    # Rang opcional sobre la data LOCAL de planned_start (inclusiu a banda i banda).
+    start_raw, end_raw = request.query_params.get('start'), request.query_params.get('end')
+    try:
+        if start_raw:
+            qs = qs.filter(planned_start__date__gte=_date.fromisoformat(start_raw))
+        if end_raw:
+            qs = qs.filter(planned_start__date__lte=_date.fromisoformat(end_raw))
+    except ValueError:
+        return Response({'error': 'start/end han de ser dates YYYY-MM-DD.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+
+    events = []
+    for tk in qs:
+        end_local = timezone.localtime(tk.planned_end).date() if tk.planned_end else None
+        data_obj = tk.model.data_objectiu
+        en_risc = bool(end_local and data_obj and end_local > data_obj)
+        prof = tk.assignee
+        user = getattr(prof, 'user', None)
+        nom = (prof.nom_complet or (user.get_username() if user else None)) if prof else None
+        color = (getattr(prof, 'color_avatar', None) or '#6b7280') if prof else '#6b7280'
+        events.append({
+            'id': f'task-{tk.id}',
+            'tipus': 'tasca',
+            'start': timezone.localtime(tk.planned_start).isoformat() if tk.planned_start else None,
+            'end': timezone.localtime(tk.planned_end).isoformat() if tk.planned_end else None,
+            'titol': f'{tk.model.codi_intern} · {tk.task_type.code}',
+            'tecnic_id': prof.id if prof else None,
+            'tecnic_nom': nom,
+            'color': color,
+            'link': f'/models/{tk.model_id}',
+            'en_risc': en_risc,
+            'meta': {
+                'model_id': tk.model_id,
+                'task_id': tk.id,
+                'task_type': tk.task_type.code,
+                'data_objectiu': data_obj.isoformat() if data_obj else None,
+            },
+        })
+    return Response({'events': events}, status=http_status.HTTP_200_OK)
