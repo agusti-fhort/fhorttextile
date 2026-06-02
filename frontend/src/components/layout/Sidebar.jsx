@@ -63,7 +63,7 @@ const navGroups = [
     { to: '/poms/sizes', labelKey: 'nav.sizes', icon: 'ti-arrows-maximize' },
     { to: '/size-library', labelKey: 'nav.size_library', icon: 'ti-books' },
     { to: '/poms/grading', labelKey: 'nav.grading', icon: 'ti-chart-dots' },
-    { to: '/tasques/catalog', labelKey: 'nav.tasques_catalog', icon: 'ti-list-details' },
+    { to: '/task-types', labelKey: 'nav.tasques_catalog', icon: 'ti-list-details' },
   ]},
   { sectionKey: 'nav.section_sistema', items: [
     { to: '/onboarding', labelKey: 'nav.onboarding', icon: 'ti-rocket', cap: 'onboarding' },

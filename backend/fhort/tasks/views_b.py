@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Q
+from django.db.models import Count, Q, ProtectedError
 
 from rest_framework.exceptions import ValidationError
 from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TASKS,
@@ -37,6 +37,16 @@ class TaskTypeViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         perm = HasCapability(); self.required_capability = DEFINE_TASKS
         return [perm]
+
+    def destroy(self, request, *args, **kwargs):
+        # FK ModelTask.task_type = PROTECT → si el tipus té instàncies, l'esborrat falla.
+        # Retornem 409 net (en lloc d'un 500 cru) perquè el front en mostri el missatge.
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {'detail': "No es pot esborrar: hi ha tasques que l'usen. Desactiva'l en lloc d'esborrar."},
+                status=status.HTTP_409_CONFLICT)
 
 
 class ModelTaskViewSet(viewsets.ModelViewSet):
