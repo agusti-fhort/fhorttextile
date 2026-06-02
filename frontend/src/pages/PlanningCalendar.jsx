@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { companyCalendar, calendar } from '../api/endpoints'
+import Center from '../components/ui/Center'
 
 // Tram 3 — Peça 2B-cal · CALENDARI propi estil agenda (fet a mà, sense llibreries).
 // 2B-cal-2: graella laboral + 4 vistes + lectura del CompanyCalendar real.
@@ -361,9 +362,6 @@ function Pill({ active, onClick, label, color }) {
   )
 }
 
-function Center({ children }) {
-  return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13 }}>{children}</div>
-}
 const navBtn = {
   fontFamily: MONO, fontSize: 12, padding: '7px 14px', border: 'none', cursor: 'pointer',
   background: 'var(--white)', color: 'var(--text-main)',

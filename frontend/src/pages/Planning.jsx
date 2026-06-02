@@ -9,6 +9,10 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import useAuthStore from '../store/auth'
 import { models as modelsApi, modelTasks as modelTaskItems, users as usersApi, plan as planApi } from '../api/endpoints'
+import Center from '../components/ui/Center'
+import Feedback from '../components/ui/Feedback'
+import Modal from '../components/ui/Modal'
+import { selS, primaryBtn } from '../components/ui/buttons'
 
 // Tram 2 — Pantalla "Planificació": dues carpetes Pendents/Assignades (gated define_tasks/configure).
 // Pendents = models amb tasques no-Done SENSE tècnic. Assignades = totes les no-Done amb tècnic.
@@ -21,10 +25,6 @@ const CREMA = 'var(--warn-bg)'
 const AMBER = 'var(--warn)'
 const TZ = 'Europe/Madrid'
 
-const selS = {
-  fontFamily: MONO, fontSize: 12, padding: '6px 10px',
-  border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)',
-}
 const thS = {
   fontFamily: MONO, fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textAlign: 'left',
   padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.04em',
@@ -228,13 +228,7 @@ export default function Planning() {
         <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('planning.subtitle')}</p>
       </div>
 
-      {feedback && (
-        <div style={{
-          fontSize: 12, padding: '8px 12px', borderRadius: 6, marginBottom: 12,
-          background: feedback.type === 'ok' ? 'var(--ok-bg)' : 'var(--err-bg)',
-          color: feedback.type === 'ok' ? 'var(--ok)' : 'var(--err)',
-        }}>{feedback.text}</div>
-      )}
+      <Feedback feedback={feedback} />
 
       {/* Tabs de carpeta + cerca */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
@@ -306,14 +300,6 @@ export default function Planning() {
       )}
     </div>
   )
-}
-
-function Center({ children }) {
-  return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13 }}>{children}</div>
-}
-const primaryBtn = {
-  display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', background: 'var(--gold)', color: '#fff',
-  border: 'none', borderRadius: 6, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: MONO,
 }
 
 // Grup d'una cua de tècnic: capçalera + taula amb DnD (un SortableContext aïllat → drag NOMÉS
@@ -434,37 +420,33 @@ function AssignModal({ t, modal, techOptions, saving, onCancel, onConfirm }) {
     onConfirm(Number(assignee), taskIdsByModel)
   }
   return (
-    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--white)', borderRadius: 12, padding: 22, width: 460, maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto' }}>
-        <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('planning.assign_title')}</h2>
-        <p style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 16 }}>
-          {single ? single.codi : t('planning.n_models', { n: modal.modelIds.length })}
-        </p>
-        <label style={{ fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('planning.choose_tech')}</label>
-        <select value={assignee} onChange={e => setAssignee(e.target.value)} style={{ ...selS, width: '100%', marginTop: 6, marginBottom: 16 }}>
-          <option value="">—</option>
-          {techOptions.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-        </select>
-        {single && (
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('planning.choose_tasks')}</label>
-            <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {single.nonDone.map(x => (
-                <label key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                  <input type="checkbox" checked={taskSel.has(x.id)} onChange={() => toggleTask(x.id)} />
-                  <span style={{ fontFamily: MONO }}>{x.task_type_code}</span>
-                </label>
-              ))}
-            </div>
+    <Modal
+      title={t('planning.assign_title')}
+      subtitle={single ? single.codi : t('planning.n_models', { n: modal.modelIds.length })}
+      cancelLabel={t('planning.cancel')}
+      confirmLabel={t('planning.confirm')}
+      onCancel={onCancel}
+      onConfirm={confirm}
+      confirmDisabled={!assignee || saving || (single && taskSel.size === 0)}
+    >
+      <label style={{ fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('planning.choose_tech')}</label>
+      <select value={assignee} onChange={e => setAssignee(e.target.value)} style={{ ...selS, width: '100%', marginTop: 6 }}>
+        <option value="">—</option>
+        {techOptions.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+      </select>
+      {single && (
+        <div style={{ marginTop: 16 }}>
+          <label style={{ fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('planning.choose_tasks')}</label>
+          <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {single.nonDone.map(x => (
+              <label key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <input type="checkbox" checked={taskSel.has(x.id)} onChange={() => toggleTask(x.id)} />
+                <span style={{ fontFamily: MONO }}>{x.task_type_code}</span>
+              </label>
+            ))}
           </div>
-        )}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button onClick={onCancel} style={{ ...selS, cursor: 'pointer' }}>{t('planning.cancel')}</button>
-          <button onClick={confirm} disabled={!assignee || saving || (single && taskSel.size === 0)} style={{
-            ...primaryBtn, marginLeft: 0, opacity: (!assignee || saving || (single && taskSel.size === 0)) ? 0.5 : 1,
-          }}>{t('planning.confirm')}</button>
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   )
 }

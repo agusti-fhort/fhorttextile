@@ -1,8 +1,8 @@
-export default function Table({ columns, data, onRowClick, loading, empty }) {
+export default function Table({ columns, data, onRowClick, loading, empty, loadingText }) {
   if (loading) {
     return (
       <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-        Carregant...
+        {loadingText || 'Carregant...'}
       </div>
     )
   }
@@ -23,7 +23,7 @@ export default function Table({ columns, data, onRowClick, loading, empty }) {
               fontSize: 10, letterSpacing: '0.1em',
               textTransform: 'uppercase',
               color: 'var(--gray)', fontWeight: 400,
-              borderBottom: '0.5px solid #e4e4e2',
+              borderBottom: '0.5px solid var(--gray-l)',
               textAlign: col.align || 'left', whiteSpace: 'nowrap',
               ...col.headerStyle,
             }}>
