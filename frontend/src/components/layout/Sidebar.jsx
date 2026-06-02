@@ -41,35 +41,35 @@ const Logo = () => (
 
 // Structure: a single main section with 5 top-level items + expandable submenus.
 // Dashboard i Avisos queden visibles sempre al top com a accessos directes.
+// 3 famílies amb capçalera de secció. `cap` = capability requerida (es filtra al component):
+//   'plan' (define_tasks/configure) · 'configure' · 'manage_users' · 'onboarding' (<100%).
 const navGroups = [
-  { items: [
+  { sectionKey: 'nav.section_projectes', items: [
     { to: '/', labelKey: 'nav.dashboard', icon: 'ti-layout-dashboard' },
     { to: '/avisos', labelKey: 'nav.avisos', icon: 'ti-alert-triangle', badgeKey: 'alerts' },
     { to: '/models', labelKey: 'nav.models', icon: 'ti-shirt' },
-    { labelKey: 'nav.poms', icon: 'ti-ruler-measure', children: [
-      { to: '/size-library',  labelKey: 'nav.size_library' },
-      { to: '/poms',          labelKey: 'nav.poms_list' },
-      { to: '/poms/sizes',    labelKey: 'nav.sizes' },
-      { to: '/poms/grading',  labelKey: 'nav.grading' },
-    ]},
     { labelKey: 'nav.tasques', icon: 'ti-checklist', children: [
-      { to: '/tasques',         labelKey: 'nav.tasques_list' },
-      { to: '/tasques/catalog', labelKey: 'nav.tasques_catalog' },
-      { to: '/tasques/paquets', labelKey: 'nav.tasques_paquets' },
-      { to: '/tasques/kanban',  labelKey: 'nav.kanban' },
-      { to: '/planificacio/calendari', labelKey: 'nav.planning_calendar' },
-      { to: '/temps',           labelKey: 'nav.temps' },
+      { to: '/tasques',        labelKey: 'nav.tasques_list' },
+      { to: '/tasques/kanban', labelKey: 'nav.kanban' },
     ]},
-    { labelKey: 'nav.fittings', icon: 'ti-ruler-2', children: [
-      { to: '/fitting',  labelKey: 'nav.fitting_list' },
-      { to: '/fittings', labelKey: 'nav.fittings_sessions' },
-    ]},
-    { labelKey: 'nav.configuracio', icon: 'ti-settings', children: [
-      { to: '/configuracio/garment-types', labelKey: 'nav.garment_types' },
-      { to: '/garment-pom-map',            labelKey: 'nav.garment_pom_map' },
-      { to: '/configuracio',               labelKey: 'nav.configuracio_general' },
-      { to: '/perfil',                     labelKey: 'nav.perfil' },
-    ]},
+    { to: '/planificacio', labelKey: 'nav.planning', icon: 'ti-subtask', cap: 'plan' },
+    { to: '/planificacio/calendari', labelKey: 'nav.planning_calendar', icon: 'ti-calendar' },
+    { to: '/temps', labelKey: 'nav.temps', icon: 'ti-clock' },
+    { to: '/fittings', labelKey: 'nav.fittings', icon: 'ti-ruler-2' },
+  ]},
+  { sectionKey: 'nav.section_config_tecnica', items: [
+    { to: '/garment-pom-map', labelKey: 'nav.garment_pom_map', icon: 'ti-table' },
+    { to: '/poms', labelKey: 'nav.poms_list', icon: 'ti-ruler-measure' },
+    { to: '/poms/sizes', labelKey: 'nav.sizes', icon: 'ti-arrows-maximize' },
+    { to: '/size-library', labelKey: 'nav.size_library', icon: 'ti-books' },
+    { to: '/poms/grading', labelKey: 'nav.grading', icon: 'ti-chart-dots' },
+    { to: '/tasques/catalog', labelKey: 'nav.tasques_catalog', icon: 'ti-list-details' },
+  ]},
+  { sectionKey: 'nav.section_sistema', items: [
+    { to: '/onboarding', labelKey: 'nav.onboarding', icon: 'ti-rocket', cap: 'onboarding' },
+    { to: '/configuracio/calendari', labelKey: 'nav.company_calendar', icon: 'ti-calendar-cog', cap: 'configure' },
+    { to: '/configuracio/usuaris', labelKey: 'nav.users', icon: 'ti-users', cap: 'manage_users' },
+    { to: '/perfil', labelKey: 'nav.perfil', icon: 'ti-user' },
   ]},
 ]
 
@@ -214,37 +214,33 @@ export default function Sidebar() {
   const badges = { alerts: alertsPending }
   const toggle = (key) => setExpanded(s => ({...s, [key]: !s[key]}))
 
-  // Injeccions condicionals dins de Configuració: "Configuració inicial" (onboarding < 100%)
-  // i "Usuaris i rols" (només si l'usuari té manage_users).
-  const items = useMemo(() => navGroups[0].items.map(item => {
-    // Tasques: injectar "Planificació" (assignació de models a tècnics) si es té define_tasks/configure.
-    if (item.labelKey === 'nav.tasques') {
-      if (!canPlan) return item
-      return { ...item, children: [...item.children, { to: '/planificacio', labelKey: 'nav.planning' }] }
+  // Filtra cada secció pels gates (cap). Sense `cap` → sempre visible.
+  const groups = useMemo(() => {
+    const allowed = (it) => {
+      switch (it.cap) {
+        case 'plan': return canPlan
+        case 'configure': return canConfigure
+        case 'manage_users': return canManageUsers
+        case 'onboarding': return onboardingPct < 100
+        default: return true
+      }
     }
-    if (item.labelKey !== 'nav.configuracio') return item
-    let children = item.children
-    if (onboardingPct < 100) {
-      children = [{ to: '/onboarding', labelKey: 'nav.onboarding' }, ...children]
-    }
-    if (canManageUsers) {
-      children = [...children, { to: '/configuracio/usuaris', labelKey: 'nav.users' }]
-    }
-    if (canConfigure) {
-      children = [...children, { to: '/configuracio/calendari', labelKey: 'nav.company_calendar' }]
-    }
-    return children === item.children ? item : { ...item, children }
-  }), [onboardingPct, canManageUsers, canConfigure, canPlan])
+    return navGroups
+      .map(g => ({ sectionKey: g.sectionKey, items: g.items.filter(allowed) }))
+      .filter(g => g.items.length > 0)
+  }, [canPlan, canConfigure, canManageUsers, onboardingPct])
+
+  const allItems = useMemo(() => groups.flatMap(g => g.items), [groups])
 
   // Conjunt de totes les rutes del sidebar (leaves + children)
   const allRoutes = useMemo(() => {
     const routes = []
-    items.forEach(item => {
+    allItems.forEach(item => {
       if (item.to) routes.push(item.to)
       if (item.children) item.children.forEach(c => routes.push(c.to))
     })
     return routes
-  }, [items])
+  }, [allItems])
 
   // Exact match or, failing that, the most specific prefix (longest match wins).
   // '/' only counts as an exact match to avoid matching every route.
@@ -263,7 +259,7 @@ export default function Sidebar() {
   // of child items (which follows the most-specific-match logic).
   useEffect(() => {
     const path = location.pathname
-    items.forEach(item => {
+    allItems.forEach(item => {
       if (!item.children) return
       const hasMatch = item.children.some(c =>
         path === c.to || path.startsWith(c.to + '/')
@@ -272,7 +268,7 @@ export default function Sidebar() {
         setExpanded(s => s[item.labelKey] ? s : { ...s, [item.labelKey]: true })
       }
     })
-  }, [location.pathname, items])
+  }, [location.pathname, allItems])
 
   return (
     <aside style={{
@@ -298,17 +294,25 @@ export default function Sidebar() {
       }}>
         <Logo />
       </div>
-      <div style={{flex: 1, padding: '0.8rem 0'}}>
-        {items.map(item => (
-          <NavItem
-            key={item.to || item.labelKey}
-            item={item}
-            badges={badges}
-            t={t}
-            expanded={!!expanded[item.labelKey]}
-            onToggle={() => toggle(item.labelKey)}
-            activeRoute={activeRoute}
-          />
+      <div style={{flex: 1, padding: '0.4rem 0'}}>
+        {groups.map(g => (
+          <div key={g.sectionKey} style={{ marginBottom: 6 }}>
+            <div style={{
+              fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase',
+              color: C.textMuted, padding: '12px 1.5rem 6px',
+            }}>{t(g.sectionKey)}</div>
+            {g.items.map(item => (
+              <NavItem
+                key={item.to || item.labelKey}
+                item={item}
+                badges={badges}
+                t={t}
+                expanded={!!expanded[item.labelKey]}
+                onToggle={() => toggle(item.labelKey)}
+                activeRoute={activeRoute}
+              />
+            ))}
+          </div>
         ))}
       </div>
       <div style={{

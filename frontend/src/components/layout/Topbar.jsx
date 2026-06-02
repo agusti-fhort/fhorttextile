@@ -8,7 +8,6 @@ const PATH_TO_KEY = {
   '/models':                    'nav.models',
   '/models/nou':                'nav.models_new',
   '/models/nou-des-de-fitxer':  'nav.models_from_file',
-  '/fitting':                   'nav.fitting',
   '/fittings':                  'nav.fittings',
   '/tasques':                   'nav.tasques',
   '/tasques/catalog':           'nav.tasques_catalog',
@@ -19,10 +18,8 @@ const PATH_TO_KEY = {
   '/poms':                      'nav.poms',
   '/poms/grading':              'nav.grading',
   '/poms/sizes':                'nav.sizes',
-  '/configuracio/garment-types':'nav.garment_types',
   '/avisos':                    'nav.avisos',
   '/ia':                        'nav.ia',
-  '/configuracio':              'nav.configuracio',
   '/perfil':                    'nav.perfil',
 }
 
