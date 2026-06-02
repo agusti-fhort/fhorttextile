@@ -4,6 +4,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from fhort.accounts.capabilities import HasCapability, CONFIGURE
 
 from .models import (
     GarmentGroup,
@@ -69,13 +70,19 @@ class SizeDefinitionViewSet(viewsets.ModelViewSet):
 
 
 class GarmentTypeViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
     serializer_class = GarmentTypeSerializer
     queryset = GarmentType.objects.select_related('garment_type_global').all()
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['actiu', 'grup']
     search_fields = ['codi_client', 'nom_client']
     ordering = ['codi_client']
+
+    def get_permissions(self):
+        # Lectura: autenticat. Escriptura: configure (alineat amb GarmentTypeItem/TaskTimeEstimate).
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        perm = HasCapability(); self.required_capability = CONFIGURE
+        return [perm]
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
