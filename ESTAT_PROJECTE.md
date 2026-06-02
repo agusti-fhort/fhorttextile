@@ -117,16 +117,33 @@ menys potent amb volum). Resta (DHTMLX/Bryntum/DevExtreme) = de pagament, descar
   (`planned_end > data_objectiu`), **mestre-detall** a tasques amb **autor de les Done** (col·laboració
   traçada). Desassignar (Done intactes). Reassignar tasca. Reaprofita el patró cerca/filtres del Kanban.
   Commits f1d02a2 (fix), e82bef1 (pantalla). Verificat visualment (admin + Montse 403).
-- ⏳ **Tram 3 (en curs):**
-  - ✅ **Peça 1 — code-splitting per ruta (FETA):** `React.lazy` + `<Suspense>` a `App.jsx` (Login i Shell
-    eager; les 27 pàgines restants lazy). Bundle inicial **746 kB → 394 kB (-47%)**, gzip 207→125 kB; 27
-    chunks de pàgina sota demanda; l'avís Vite >500 kB desaparegut. Abast estricte a `App.jsx` (cap canvi de
-    rutes/auth/layout). Commit **4787b51**.
-  - ⏳ Resta del Tram 3: Gantt (SVAR) amb drag → `plan/preview` → modal acceptació → `plan/apply` +
-    **vista tècnic en DIES** + indicadors de direcció (càrrega per tècnic, models en risc, cost previst =
-    Σ temps×cost_hora). NOTA: el `manualChunks` de vendor (`vite.config.js`) queda per a la **Peça 2 (Gantt
-    SVAR)** — aïllar React/router/SVAR en un chunk de vendor d'un sol cop (l'index inicial encara porta tot
-    el vendor; el code-splitting per ruta només n'ha tret les pàgines).
+- ✅ **Tram 3 — Peça 1 (code-splitting) FETA:** `React.lazy` + `<Suspense>` a `App.jsx` (Login i Shell
+  eager; 27 pàgines lazy). Bundle inicial **746 kB → 394 kB (-47%)**, gzip 207→125 kB; chunks per ruta;
+  avís Vite >500 kB desaparegut. Commits **4787b51** + **532685e** (estat).
+- ✅ **Tram 3 — Peça 2 (CALENDARI propi) FETA.** **GIR DE DISSENY:** el **Gantt SVAR** es va construir
+  (endpoint 2A + Gantt 2B) i es va **DESCARTAR** — problemes de render (tokens de format literals a la
+  capçalera, color de risc no aplicat, tipografia desbordada, una fila per tasca) + ser **de pagament**
+  (features PRO) + decisió de producte: una **vista de calendari tipus agenda** (com l'ERP de la clínica de
+  psicologia) encaixa millor amb tasques curtes en horari laboral, és més entenedora, i prepara **capes
+  futures** (fittings, fites de model) amb esdeveniments **linkables** a tasca/model. El calendari és **fet
+  a mà en React pur** (sense llibreries), chunk lazy **15.8 kB**. Subpeces:
+  - **2A (`a26396a`):** `GET plan/current` (read-only, scope `view_team_tasks`). Es manté **viu al backend**
+    (el wrapper de client es va retirar en netejar el Gantt; l'endpoint segueix disponible).
+  - **2B-cal-1 (`65f59b7`):** `GET calendar/events` — esdeveniment **UNIFICAT** `{id, tipus, start, end,
+    titol, tecnic_id, tecnic_nom, color, link, en_risc, meta}` preparat per a capes futures (`tipus ∈
+    tasca|fitting|fita`; avui només `tasca`). Reaprofita **`UserProfile.color_avatar`** (camp existent,
+    default `#888888`) → **ZERO migració**. Scope al queryset (`view_team_tasks` → totes les cues; sinó
+    propi profile). Dates **ISO amb offset +02:00**. `en_risc = localtime(planned_end).date() > data_objectiu`.
+  - **2B-cal-2 (`230e1d3`):** calendari propi React — **graella laboral** (4 vistes Dia/Setmana/Mes/Llista)
+    que llegeix `CompanyCalendar` (horaris mon..sun, trams `[["HH:MM","HH:MM"]]`, pausa = forat entre trams).
+    Cel·les: **pausa** (gris ratllat) vs **no-laborable** (taronja pàl·lid `#f7ede0`) vs **avui** (daurat).
+    Ruta **`/planificacio/calendari`** ungated (oberta a autenticats), menú al grup Tasques (visible al
+    tècnic). **`Planning.jsx` (gestió, gated `define_tasks`/`configure`) INTACTE.**
+  - **2B-cal-3 (`63e9614`):** esdeveniments sobre la graella — blocs amb **alçada per durada** (`HOUR_PX=60`,
+    1px/min), **color per tècnic** (fons+vora+text), **risc com a OVERLAY** (anell + punt vermell, sense
+    perdre el color del tècnic), solapaments en **lanes**, barra de **PILLS** per tècnic (filtre client-side),
+    vista **Mes** (3 events + "+N") i **Llista** (badge "En risc"), **clic → `/models/<id>`**.
+    **READ-ONLY** (cap edició; el drag entra a la Peça 3).
 
 **LLIÇÓ CLAU — `assignee` és FK a `UserProfile`, NO a `User`:** mai assumir `User.id == UserProfile.id`
 (coincideix avui per casualitat amb 2 usuaris; divergiria en escalar). Els serializers d'usuari
@@ -147,8 +164,16 @@ fill de Configuració (gated `configure`).
 - **Endurir `transition`:** que comprovi `request.user == assignee` (avui la UI ho amaga però el backend no
   ho força).
 - ~~**Code-splitting (React.lazy):** bundle ~747 kB i pujant. CRÍTIC quan entri el Gantt (Tram 3).~~
-  **RESOLT** (Tram 3 peça 1, commit 4787b51): 746→394 kB (-47%), pàgines lazy. Pendent la peça 2:
-  `manualChunks` de vendor a `vite.config.js` per aïllar React/router/SVAR (es farà amb el Gantt).
+  **RESOLT** (Tram 3 Peça 1, commit 4787b51): 746→394 kB (-47%), pàgines lazy.
+- **manualChunks de vendor:** optimització futura **descartada de moment** (guany marginal: el pes
+  d'arrencada ja el va resoldre el code-splitting per ruta; el calendari és lazy i lleuger). **NO és deute.**
+- **LIMITACIÓ — festius CAT al calendari:** la graella NO ombreja els festius oficials de Catalunya
+  (`company-calendar/` només exposa `festius_extra`; els festius CAT viuen al motor via workalendar). El
+  motor sí els salta → columna laboral buida aquell dia (p.ex. 24-juny Sant Joan). Solució futura: exposar
+  els festius CAT resolts a `company-calendar/` (canvi backend menor).
+- **CAVEAT colors de tècnic:** `UserProfile.color_avatar` té default genèric `#888888`; amb molts tècnics
+  col·lidirien al calendari. Possible **2B-cal-1bis**: `get_next_color()` amb paleta fixa (12 colors, com la
+  clínica). No cal amb 2 cues.
 - **product_manager té `define_tasks` però NO `view_team_tasks`** → a Planning veu només les seves tasques
   (scope row-level). Decidir si product_manager ha de tenir `view_team_tasks` per assignar a l'equip.
 - **Deep-link a fred a ruta protegida rebota a `/login`** (cursa `initAuth` al useEffect vs `ProtectedRoute`
@@ -171,6 +196,11 @@ fill de Configuració (gated `configure`).
 - Motor: assignar = planificar (un sol motor). Tècnic veu dies; responsable veu Gantt amb dates/hores.
 - Reposició = sobreescriu amb advertència + acceptació (drag → preview → apply); locked = punt fix.
 - Prioritat: `Model.prioritat` 1-5 tal com està (1=urgent), sense A/B/C, sense migració.
+- **Planificar en el temps ≠ reassignar tècnic:** la reassignació es fa entrant al model; el calendari/
+  planificador només **ordena tasques i mostra dates de lliurament**. El **drag (Peça 3) serà NOMÉS
+  reposició temporal**, mai canvi de tècnic.
+- **Cost NO es modela al motor:** el sistema només extreu **temps**. El càlcul de cost queda per a la capa
+  comercial (es deriva del temps per tècnic/tasca/model). **Cap camp de cost.**
 
 ---
 
@@ -192,3 +222,14 @@ fill de Configuració (gated `configure`).
 - Sprint B (motor): 88ed31f, c1bffd2, e73efb2; assign/unassign + recompute + Done-safe: 6e81cc7.
 - Front planificació: 1ca18a4 + 6662a26 (Tram 0), 1b343f8 + 4d60e7a (Tram 1A), 3995dea (Tram 1B),
   f1d02a2 (fix profile_id) + e82bef1 (Tram 2 pantalla), 4787b51 (Tram 3 peça 1: code-splitting per ruta).
+- Tram 3 Peça 2 (gir Gantt→calendari propi): 532685e (estat Peça 1) · a26396a (2A `plan/current`) ·
+  *[Gantt SVAR 2B construït i DESCARTAT, no committejat]* · 65f59b7 (2B-cal-1 `calendar/events`) ·
+  230e1d3 (2B-cal-2 graella laboral) · 63e9614 (2B-cal-3 esdeveniments).
+
+---
+
+## ESTAT DE LA BD DE PROVA (tenant fhort)
+Dades de prova sembrades per validar el motor i el calendari: **12 models `FTT-SS26-0004..0015`** + **48
+ModelTask planificades** (`planned_*` desats), **2 cues** (Agus 24 / Montse 24), **3 models en risc**
+(0004/0006/0011). Esborrables amb el bloc comentat de `/root/fhort-sessions/seed_planning.py`. Útil per a
+properes sessions i per a la futura **Peça 3** (drag → `plan/preview`/`plan/apply`).
