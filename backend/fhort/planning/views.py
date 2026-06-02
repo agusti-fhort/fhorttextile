@@ -5,14 +5,15 @@
 """
 from rest_framework import viewsets, mixins
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status as http_status
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 
 from fhort.accounts.models import UserProfile
 from fhort.accounts.capabilities import (HasCapability, CONFIGURE, MANAGE_USERS,
-                                         get_capabilities)
+                                         VIEW_TEAM_TASKS, get_capabilities)
 from .models import CompanyCalendar, Absencia
 from .serializers import (CompanyCalendarSerializer, JornadaSerializer,
                           AbsenciaSerializer)
@@ -146,3 +147,51 @@ def plan_snapshots_view(request):
             'model_count': len(s.model_sequence)}
            for s in PlanSnapshot.objects.all()[:50]]
     return Response({'snapshots': out}, status=http_status.HTTP_200_OK)
+
+
+# ── Tram 3 Peça 2A — Gantt read-only: pla vigent ─────────────────────────────
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def plan_current_view(request):
+    """GET /api/v1/plan/current/ — pla vigent (planned_* desats) per pintar el Gantt read-only.
+
+    ACCÉS: qualsevol usuari autenticat (IsAuthenticated). El control fi és per DADES, no per gate:
+    SCOPE (mateix patró que ModelTaskViewSet.get_queryset, tasks/views_b.py):
+      - amb view_team_tasks (manager/admin) → totes les tasques planificades de tots els tècnics.
+      - sense view_team_tasks (technician/product_manager) → NOMÉS les del seu propi UserProfile.
+        El filtre passa al QUERYSET (físic), no al client: Montse rep 24, mai 48.
+
+    DATES: planned_start/end es desen i es retornen en UTC (ISO). El front les pinta en local
+    (Europe/Madrid). `en_risc` SÍ es calcula amb la data LOCAL de planned_end vs data_objectiu
+    (DateField sense hora), perquè un planned_end a les 23:00 local no creui de dia en UTC i
+    marqui risc fals. data_objectiu None → en_risc False.
+    """
+    qs = (ModelTask.objects
+          .exclude(status='Done')
+          .filter(planned_start__isnull=False)
+          .select_related('model', 'task_type', 'assignee__user'))
+
+    if VIEW_TEAM_TASKS not in get_capabilities(request.user):
+        profile = getattr(request.user, 'profile', None)
+        qs = qs.filter(assignee=profile) if profile is not None else qs.none()
+
+    tasks = []
+    for tk in qs:
+        end_local = timezone.localtime(tk.planned_end).date() if tk.planned_end else None
+        data_obj = tk.model.data_objectiu
+        en_risc = bool(end_local and data_obj and end_local > data_obj)
+        prof = tk.assignee
+        user = getattr(prof, 'user', None)
+        nom = (user.get_full_name() or user.username) if user else None
+        tasks.append({
+            'task_id': tk.id,
+            'model': tk.model.codi_intern,
+            'task_type': tk.task_type.code,
+            'assignee': prof.id if prof else None,
+            'assignee_nom': nom,
+            'planned_start': tk.planned_start.isoformat() if tk.planned_start else None,
+            'planned_end': tk.planned_end.isoformat() if tk.planned_end else None,
+            'data_objectiu': data_obj.isoformat() if data_obj else None,
+            'en_risc': en_risc,
+        })
+    return Response({'tasks': tasks}, status=http_status.HTTP_200_OK)
