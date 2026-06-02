@@ -268,3 +268,39 @@ Seed base: **12 models `FTT-SS26-0004..0015`** + **48 ModelTask planificades** (
 - Model **0004 (`FTT-SS26-0004`) DESASSIGNAT** (a Pendents) pel test de `cleanup_queue_order`.
 Per tornar a **línia base** (48 tasques, 2 cues 24-24, sense ordre manual): reiniciar amb el bloc comentat
 de `/root/fhort-sessions/seed_planning.py` **+ esborrar les files de `TechnicianQueueOrder`**.
+
+---
+
+## FASE DE CATÀLEGS I MODEL (planificada)
+Objectiu: completar els catàlegs base amb UI d'edició i refer el funcional de Model (convergència).
+
+**PRINCIPI TRANSVERSAL — coherència d'estil i estructura (val per a TOTES les pàgines noves):**
+- Totes les pàgines noves segueixen el **MATEIX patró visual i estructural des de la construcció**:
+  capçalera (títol + subtítol català), components comuns de taula/formulari/modal/botons, tokens de
+  color i espaiat, tractament uniforme de **loading/buit/error**. **No reinventar per pàgina.**
+- Abans de crear la primera pàgina nova (**TaskType editable**) es **fixa una PÀGINA-PATRÓ de
+  referència** (candidates: les pàgines riques `/poms/grading` o `/poms/sizes`) que serà la plantilla
+  explícita per a totes les noves, **inclosos els refer grans** (Garment Types, Model). *(Tria de la
+  plantilla = decisió pendent, a tancar abans de TaskType.)*
+- Al **tancament de la fase**: repàs general de consistència sobre tot el conjunt per unificar desviacions.
+
+**Ordre d'execució (decidit):**
+1. **Reordenació del menú lateral + neteja de duplicats i capes jubilades:**
+   - **JUBILAR:** `Settings` antic (`configuracio/garment-types|size-systems|grading`) en favor de les
+     pàgines riques (`/poms/sizes`, `/poms/grading`; garment-types es refà a nou). **Capa ANTIGA de
+     fitting** (`/fitting`, `SizeFittingList/Detail`) jubilada en favor de `/fittings` (`FittingSession`).
+   - **REAGRUPAR** el menú per famílies: **PROJECTES** (operativa) · **CONFIGURACIÓ TÈCNICA** (catàlegs)
+     · **SISTEMA** (empresa/usuari). Avui la família de catàlegs està partida (POMs vs Configuració) i
+     la planificació repartida en 3 llocs.
+   - **Forats** per a pantalles noves: Catàleg de tasques (editable), Matriu de temps.
+2. **TaskType (catàleg de tasques):** pantalla amb UI d'**EDICIÓ** (avui `/tasques/catalog` és vista).
+3. **REFER Garment Types complet** (disseny antic desconnectat) + **GarmentTypeItems** + **MATRIU DE
+   TEMPS** per (garment_type_item, task_type) — alimentaria el motor (avui `estimated_minutes` és
+   manual). Peça gran amb disseny propi.
+4. **Revisió/ompliment de catàlegs restants** segons calgui (Supplier si entra Production, etc.).
+5. **REFER el funcional de Model** (ÚLTIM, convergència): llistat de models + fitxa amb pantalles d'estat
+   (tasques, fittings, grading, planificació) + entrada Excel (ImportWizard existent) / manual +
+   configuració de tipologia segons els catàlegs nous.
+
+**DECISIONS:** Paquets de servei (`PaquetServei`/`Tasca`/`PaquetServeiTasca`) **DESCARTATS** (no apliquen,
+sense pantalla). Capa antiga de Fitting i `Settings` antic **JUBILATS**.
