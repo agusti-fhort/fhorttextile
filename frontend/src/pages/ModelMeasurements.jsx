@@ -36,6 +36,7 @@ export default function ModelMeasurements() {
   const [saving, setSaving] = useState(false)
   const [generatingGrading, setGeneratingGrading] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -86,19 +87,30 @@ export default function ModelMeasurements() {
     setDeltes(d.deltes || null)
   }
 
+  // Materialització família→item: en tenir el model, si té garment_type_item, instanciem la
+  // pertinença de POMs de l'item (idempotent) ABANS de carregar la taula. Sense item → avís.
   useEffect(() => {
-    if (!id) return
-    fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
-      .then(r => r.json())
-      .then(d => {
-        refreshTableMeta(d)
-        if (d.rows && d.rows.length > 0) {
-          setTaulaRows(d.rows)
-          setMode('manual')
-        }
-      })
-      .catch(() => {})
-  }, [id])
+    if (!id || !model) return
+    const loadTable = () =>
+      fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
+        .then(r => r.json())
+        .then(d => {
+          refreshTableMeta(d)
+          if (d.rows && d.rows.length > 0) {
+            setTaulaRows(d.rows)
+            setMode('manual')
+          }
+        })
+        .catch(() => {})
+    if (model.garment_type_item) {
+      fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders })
+        .then(() => loadTable())
+        .catch(() => loadTable())
+    } else {
+      setNotice("Aquest model no té tipus d'ítem (garment_type_item) definit: no es materialitzen els POMs de la plantilla.")
+      loadTable()
+    }
+  }, [id, model])
 
   const handleImport = async () => {
     if (!importFile) return
@@ -162,6 +174,15 @@ export default function ModelMeasurements() {
           padding: '0.75rem 1rem', fontSize: 13, color: '#c00',
           fontFamily: 'IBM Plex Mono, monospace',
         }}>{error}</div>
+      )}
+
+      {notice && (
+        <div style={{
+          maxWidth: 1000, margin: '1rem auto 0',
+          background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
+          padding: '0.75rem 1rem', fontSize: 13, color: '#7a5a00',
+          fontFamily: 'IBM Plex Mono, monospace',
+        }}>{notice}</div>
       )}
 
       {mode === 'selector' && (

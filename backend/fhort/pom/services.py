@@ -257,10 +257,11 @@ def _load_base_measurements(model_id: int) -> dict:
     """Return {pom_id: base_value_cm}."""
     try:
         from fhort.models_app.models import BaseMeasurement
+        # Ignora files materialitzades sense valor (base_value_cm=None) → no es graden.
         return {
             bm.pom_id: bm.base_value_cm
             for bm in BaseMeasurement.objects.filter(
-                model_id=model_id, is_active=True
+                model_id=model_id, is_active=True, base_value_cm__isnull=False
             )
         }
     except Exception as e:

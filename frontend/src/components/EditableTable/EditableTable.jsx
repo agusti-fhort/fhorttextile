@@ -270,6 +270,13 @@ function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete,
       <td style={{ ...tdS, fontFamily: 'monospace', fontSize: 11,
                    color: 'var(--color-text-secondary, #868685)' }}>
         {row.pom_code}
+        {row.is_key && (
+          <span style={{
+            marginLeft: 5, fontSize: 8, padding: '1px 4px', borderRadius: 3,
+            background: '#fdf6ee', color: '#c27a2a', border: '0.5px solid #e0c8a0',
+            fontWeight: 600, letterSpacing: '.06em', verticalAlign: 'middle',
+          }}>KEY</span>
+        )}
       </td>
       <td style={tdS}>
         <EditableCell value={row.nom_ca || row.nom_en}

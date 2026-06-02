@@ -175,18 +175,21 @@ class GarmentPOMMapViewSet(viewsets.ModelViewSet):
     serializer_class = GarmentPOMMapSerializer
     queryset = (
         GarmentPOMMap.objects
-        .select_related('garment_type', 'pom', 'pom__pom_global')
+        .select_related('garment_type', 'garment_type_item', 'garment_type_item__garment_type',
+                        'pom', 'pom__pom_global')
         .all()
     )
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    # Supports filtering by FK id (`?garment_type=<id>`) and by codi_client
-    # (`?garment_type_codi_client=<codi>` or `?garment_type__codi_client=<codi>`).
+    # Migration família → item: the ownership axis is garment_type_item; garment_type kept for the
+    # 95 legacy rows. Supports `?garment_type_item=<id>`, `?garment_type=<id>` and codi_client.
     filterset_fields = {
         'garment_type': ['exact'],
         'garment_type__codi_client': ['exact'],
+        'garment_type_item': ['exact'],
         'pom': ['exact'],
         'is_key': ['exact'],
         'obligatori': ['exact'],
+        'pendent_revisio': ['exact'],
     }
-    ordering_fields = ['ordre', 'id']
-    ordering = ['garment_type', 'ordre']
+    ordering_fields = ['ordre', 'id', 'garment_type_item']
+    ordering = ['garment_type_item', 'ordre']

@@ -198,6 +198,11 @@ def log_measurement_change(sender, instance, created, raw=False, **kwargs):
     if raw:  # loaddata / fixtures
         return
 
+    # Materialització família→item: una fila sense valor (base_value_cm=None, p.ex. origen='TEMPLATE')
+    # NO és un canvi de mesura → no genera log. Quan rebi un valor real (None→x) sí es registrarà.
+    if instance.base_value_cm is None:
+        return
+
     old_value = getattr(instance, '_old_value', None)
     if not created and old_value == instance.base_value_cm:
         return  # value unchanged → nothing to log

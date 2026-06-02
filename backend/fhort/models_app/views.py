@@ -161,19 +161,28 @@ def _resolve_garment_def(d):
     """Resol la definició de garment + talles d'un payload d'esquelet (Pas 5A).
     Cada camp és OPCIONAL (es posa només si ve al payload). Retorna (fields, error_msg).
     garment_type_item_id és la BAULA del motor de temps (matriu item×task_type)."""
-    from fhort.pom.models import GarmentType, SizeSystem, GradingRuleSet
+    from fhort.pom.models import GarmentType, GarmentGroup, SizeSystem, GradingRuleSet
     from fhort.tasks.models import GarmentTypeItem
     fields = {}
-    if d.get('garment_type_id'):
+    # Pont família↔item: si arriba l'item, la família (i el grup) es DERIVEN de l'item; el
+    # garment_type_id del payload s'IGNORA → garanteix garment_type == garment_type_item.garment_type.
+    if d.get('garment_type_item_id'):
+        try:
+            item = (GarmentTypeItem.objects.select_related('garment_type')
+                    .get(id=d['garment_type_item_id']))
+        except GarmentTypeItem.DoesNotExist:
+            return None, 'GarmentTypeItem no trobat'
+        fields['garment_type_item'] = item
+        fields['garment_type'] = item.garment_type
+        grp = GarmentGroup.objects.filter(codi=item.garment_type.grup).first()
+        if grp is not None:
+            fields['garment_group'] = grp
+    elif d.get('garment_type_id'):
+        # Legacy: sense item → es respecta el garment_type_id del payload (compatibilitat).
         try:
             fields['garment_type'] = GarmentType.objects.get(id=d['garment_type_id'])
         except GarmentType.DoesNotExist:
             return None, 'GarmentType no trobat'
-    if d.get('garment_type_item_id'):
-        try:
-            fields['garment_type_item'] = GarmentTypeItem.objects.get(id=d['garment_type_item_id'])
-        except GarmentTypeItem.DoesNotExist:
-            return None, 'GarmentTypeItem no trobat'
     if d.get('size_system_id'):
         try:
             fields['size_system'] = SizeSystem.objects.get(id=d['size_system_id'])
@@ -346,13 +355,15 @@ def suggested_poms_view(request, model_id):
     except Model.DoesNotExist:
         return Response({'error': 'Model no trobat'}, status=404)
 
-    if not model.garment_type:
-        return Response({'poms': [], 'warning': 'Garment type no definit'})
+    # Migration família → item: els POMs suggerits surten de l'ITEM (garment_type_item),
+    # no de la família. Si el model no té item definit, no hi ha suggeriment.
+    if not model.garment_type_item_id:
+        return Response({'poms': [], 'warning': 'Garment type item no definit'})
 
     from fhort.pom.models import GarmentPOMMap
 
     maps = GarmentPOMMap.objects.filter(
-        garment_type=model.garment_type,
+        garment_type_item=model.garment_type_item,
     ).select_related('pom', 'pom__pom_global').order_by('-is_key', 'ordre')
 
     result = []
@@ -371,6 +382,47 @@ def suggested_poms_view(request, model_id):
         })
 
     return Response({'poms': result, 'total': len(result)})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def materialize_poms_view(request, model_id):
+    """POST /api/v1/models/<id>/materialitzar-poms/ — instancia la pertinença de POMs de l'item
+    com a BaseMeasurement BUIDES (base_value_cm=None, origen='TEMPLATE'), copiant is_key/ordre de
+    la plantilla GarmentPOMMap. Idempotent (get_or_create per (model,pom)): no toca files existents
+    (amb o sense valor). Les buides NO disparen log (guard al signal). Sense garment_type_item → avís."""
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    if not model.garment_type_item_id:
+        return Response({'materialized': 0, 'skipped': 0,
+                         'warning': 'Garment type item no definit'})
+
+    from fhort.pom.models import GarmentPOMMap
+    from fhort.models_app.models import BaseMeasurement
+
+    maps = (GarmentPOMMap.objects
+            .filter(garment_type_item=model.garment_type_item)
+            .select_related('pom').order_by('ordre'))
+    materialized = skipped = 0
+    for m in maps:
+        _, created = BaseMeasurement.objects.get_or_create(
+            model=model, pom=m.pom,
+            defaults={
+                'base_value_cm': None,        # materialitzada sense valor
+                'origen': 'TEMPLATE',
+                'is_key': m.is_key,
+                'ordre': m.ordre,
+            },
+        )
+        if created:
+            materialized += 1
+        else:
+            skipped += 1
+    return Response({'materialized': materialized, 'skipped': skipped,
+                     'total_template': maps.count()})
 
 
 @api_view(['GET'])
@@ -425,6 +477,7 @@ def measurements_table_view(request, model_id):
             'nom_ca': pg.nom_ca if pg else pom.nom_client,
             'abbreviation': pg.abbreviation if pg else '',
             'base_value_cm': float(bm.base_value_cm) if bm.base_value_cm is not None else None,
+            'is_key': bm.is_key,
             'origen': bm.origen,
             'notes': bm.notes or '',
             'graded': graded_by_pom.get(pom.id, {}),
@@ -510,53 +563,10 @@ def set_measurements_view(request, model_id):
         except POMMaster.DoesNotExist:
             errors.append(f'POMMaster {pom_id} no trobat')
 
-    try:
-        from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
-        from fhort.pom.models import GradingRule, GradingRuleSet
-
-        sf, _ = SizeFitting.objects.get_or_create(
-            model=model,
-            defaults={'size_system': model.size_system}
-        )
-
-        gv = GradingVersion.objects.create(size_fitting=sf)
-
-        size_run = []
-        if model.size_run_model:
-            size_run = [s.strip() for s in model.size_run_model.split('·') if s.strip()]
-
-        base_size = model.base_size_label
-
-        all_bm = BaseMeasurement.objects.filter(model=model, is_active=True)
-        grading_rule_set = model.grading_rule_set
-
-        for bm in all_bm:
-            base_val = float(bm.base_value_cm) if bm.base_value_cm else 0
-
-            for size_label in size_run:
-                if size_label == base_size:
-                    graded_val = base_val
-                else:
-                    delta = 0
-                    if grading_rule_set:
-                        rule = GradingRule.objects.filter(
-                            rule_set=grading_rule_set,
-                            pom=bm.pom,
-                            size_label=size_label,
-                        ).first()
-                        if rule:
-                            delta = float(rule.increment_cm or 0)
-                    graded_val = base_val + delta
-
-                GradedSpec.objects.update_or_create(
-                    grading_version=gv,
-                    pom=bm.pom,
-                    size_label=size_label,
-                    defaults={'graded_value_cm': graded_val}
-                )
-    except Exception:
-        pass
-
+    # NOTE: set-measurements només fa upsert de BaseMeasurement (+ el log via signal). La generació
+    # de GradedSpec viu EXCLUSIVAMENT a generar-grading → generate_graded_specs (l'únic camí que
+    # respecta ModelGradingOverride). El grading inline d'aquí estava trencat (rule.increment_cm no
+    # existeix → delta 0) i clobberava els overrides; eliminat.
     return Response({'created': created, 'updated': updated, 'errors': errors},
                     status=201 if not errors else 207)
 

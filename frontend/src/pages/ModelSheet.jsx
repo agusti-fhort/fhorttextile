@@ -35,6 +35,7 @@ export default function ModelSheet({ defaultTab = 'Mesures' }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState(null)
+  const [hasPomTask, setHasPomTask] = useState(false)
 
   const reloadModel = useCallback(() => {
     fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
@@ -47,11 +48,14 @@ export default function ModelSheet({ defaultTab = 'Mesures' }) {
     Promise.all([
       fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders }).then(r => r.json()),
       fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders }).then(r => r.json()),
-    ]).then(([modelData, taulaData]) => {
+      fetch(`${API}/api/v1/model-task-items/?model=${id}`, { headers: authHeaders }).then(r => r.json()),
+    ]).then(([modelData, taulaData, tasksData]) => {
       setModel(modelData)
       setTaulaRows(taulaData.rows || [])
       setSizesAmbDades(taulaData.sizes_amb_dades || null)
       setDeltes(taulaData.deltes || null)
+      const tasks = tasksData.results || tasksData || []
+      setHasPomTask(Array.isArray(tasks) && tasks.some(tk => tk.task_type_code === 'pom'))
     }).catch(() => setError('Error carregant el model'))
     .finally(() => setLoading(false))
   }, [id])
@@ -131,17 +135,40 @@ export default function ModelSheet({ defaultTab = 'Mesures' }) {
           </>
         )}
         {activeTab === 'Mesures' && (
-          <EditableTable
-            rows={taulaRows}
-            sizeRun={(sizesAmbDades && sizesAmbDades.length
-              ? sizesAmbDades
-              : (model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean))}
-            baseSize={model?.base_size_label}
-            deltes={deltes}
-            modelId={parseInt(id)}
-            isImport={false}
-            onSaved={setTaulaRows}
-          />
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          marginBottom: 10, gap: 12 }}>
+              <span style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+                             fontFamily: 'IBM Plex Mono, monospace' }}>
+                Consulta — l'edició de mides es fa a la tasca de POM.
+              </span>
+              {hasPomTask ? (
+                <button type="button" onClick={() => navigate(`/models/${id}/mesures`)}
+                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+                  <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
+                  Editar a la tasca de POM
+                </button>
+              ) : (
+                <span title="Aquest model no té cap tasca de POM definida"
+                  style={{ ...btnSecondary, opacity: 0.5, cursor: 'not-allowed' }}>
+                  <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
+                  Sense tasca de POM
+                </span>
+              )}
+            </div>
+            <EditableTable
+              rows={taulaRows}
+              sizeRun={(sizesAmbDades && sizesAmbDades.length
+                ? sizesAmbDades
+                : (model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean))}
+              baseSize={model?.base_size_label}
+              deltes={deltes}
+              modelId={parseInt(id)}
+              isImport={false}
+              readOnly={true}
+              onSaved={setTaulaRows}
+            />
+          </div>
         )}
         {activeTab === 'Fitting' && <FittingTab model={model} onFeedback={setFeedback} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}

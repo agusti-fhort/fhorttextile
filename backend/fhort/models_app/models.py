@@ -415,11 +415,16 @@ class BaseMeasurement(models.Model):
         ('MANUAL',     'Introduït manualment'),
         ('FITTED',     'Modificat en fitting'),
         ('CALCULATED', 'Calculat des de talla base + delta'),
+        ('TEMPLATE',   'Materialitzat de plantilla (sense valor encara)'),
     ]
 
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='base_measurements')
     pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='base_measurements')
-    base_value_cm = models.FloatField()
+    # NULL = POM materialitzat de la plantilla de l'item sense valor encara (origen='TEMPLATE').
+    # El signal del log i el motor de grading IGNOREN les files amb base_value_cm=None.
+    base_value_cm = models.FloatField(null=True, blank=True)
+    # Còpia de la plantilla GarmentPOMMap de l'item (snapshot per-model).
+    is_key = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     notes = models.TextField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -161,14 +161,19 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
     applies_knit = serializers.BooleanField(source='pom.pom_global.applies_knit', read_only=True)
     applies_swim = serializers.BooleanField(source='pom.pom_global.applies_swim', read_only=True)
     garment_type_codi = serializers.CharField(source='garment_type.codi_client', read_only=True)
+    # Migration família → item: the ownership axis is garment_type_item. DRF returns None for the
+    # read-only codi/name when the FK is null (legacy família rows), so both axes coexist safely.
+    garment_type_item_codi = serializers.CharField(source='garment_type_item.code', read_only=True)
+    garment_type_item_name = serializers.CharField(source='garment_type_item.name', read_only=True)
 
     class Meta:
         model = GarmentPOMMap
         fields = (
             'id',
             'garment_type', 'garment_type_codi',
+            'garment_type_item', 'garment_type_item_codi', 'garment_type_item_name',
             'pom',
             'pom_code', 'name_en', 'name_cat', 'abbreviation', 'categoria',
             'applies_woven', 'applies_knit', 'applies_swim',
-            'is_key', 'obligatori', 'ordre',
+            'is_key', 'obligatori', 'ordre', 'pendent_revisio',
         )

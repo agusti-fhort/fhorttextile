@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { modelTasks, gates, models, garmentTypes } from '../api/endpoints'
@@ -518,6 +519,9 @@ function GateRow({ gate, selected, onClick, onValidate, t }) {
 // Targeta de tasca (transicions + timer started_at + rectificació + 403). Reutilitzada del tauler previ.
 function TaskCard({ task, canExecute, onTransition, t }) {
   const actions = ACTIONS[task.status] || []
+  const navigate = useNavigate()
+  // Tasca de POM: porta d'entrada a la pantalla de mides de l'item (materialitza la pertinença).
+  const isPom = task.task_type_code === 'pom'
   return (
     <div style={{
       border: '0.5px solid var(--gray-l)', borderRadius: 8,
@@ -542,6 +546,18 @@ function TaskCard({ task, canExecute, onTransition, t }) {
       {task.status === 'InProgress' && task.started_at && (
         <div style={{ marginTop: 6 }}>
           <TimerWidget inici={task.started_at} compact />
+        </div>
+      )}
+      {isPom && (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={() => navigate(`/models/${task.model}/mesures`)} style={{
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px',
+            borderRadius: 6, border: '0.5px solid var(--gold)', background: 'var(--white)',
+            cursor: 'pointer', color: 'var(--gold)', fontWeight: 500,
+          }}>
+            <i className="ti ti-ruler-2" style={{ fontSize: 12 }} />
+            {t('kanban.action.open_poms', 'Obrir mides')}
+          </button>
         </div>
       )}
       {canExecute && actions.length > 0 && (

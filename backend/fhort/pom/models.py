@@ -401,20 +401,33 @@ class GarmentType(models.Model):
 
 
 class GarmentPOMMap(models.Model):
-    garment_type = models.ForeignKey(GarmentType, on_delete=models.CASCADE, related_name='pom_maps')
+    # Migration família → item (transitori): el FK nou és garment_type_item; garment_type (família)
+    # esdevé nul·lable i s'eliminarà al pas de neteja final un cop migrats tots els mapes.
+    garment_type = models.ForeignKey(GarmentType, on_delete=models.CASCADE, related_name='pom_maps',
+                                     null=True, blank=True)
+    # db_constraint=False: 'pom' és app SHARED (taula també a 'public'), però 'tasks' és tenant-only
+    # → un constraint de BD cap a tasks_garmenttypeitem petaria a 'public'. L'FK és lògic (ORM);
+    # el CASCADE l'emula Django al collector. Patró estàndard per a FK que creuen shared↔tenant.
+    garment_type_item = models.ForeignKey('tasks.GarmentTypeItem', on_delete=models.CASCADE,
+                                          related_name='pom_maps', null=True, blank=True,
+                                          db_constraint=False)
     pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='garment_maps')
     obligatori = models.BooleanField(default=False)
     is_key = models.BooleanField(default=False)
     ordre = models.PositiveIntegerField(default=0)
+    # Migration família → item: clons de germà es marquen per revisió (Montse ajusta el delta).
+    pendent_revisio = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = 'Mapa garment ↔ POM'
         verbose_name_plural = 'Mapes garment ↔ POM'
         ordering = ['garment_type', 'ordre']
-        unique_together = [('garment_type', 'pom')]
+        unique_together = [('garment_type', 'pom'), ('garment_type_item', 'pom')]
 
     def __str__(self):
-        return f'{self.garment_type.codi_client} · {self.pom.codi_client}'
+        anchor = self.garment_type_item.code if self.garment_type_item_id else (
+            self.garment_type.codi_client if self.garment_type_id else '?')
+        return f'{anchor} · {self.pom.codi_client}'
 
 
 class GradingRuleSet(models.Model):

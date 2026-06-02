@@ -57,42 +57,29 @@ def approve_design_freeze_view(request, model_id):
 @permission_classes([IsAuthenticated])
 def suggested_poms_view(request):
     """
-    GET /api/v1/poms/suggerits/?garment_type=X
-    Return the suggested POMs for a garment_type,
-    with the tenant nomenclature (codi_client, nom_client).
-    If there is no GarmentPOMMap, return all active tenant POMs.
+    GET /api/v1/poms/suggerits/?garment_type_item=X
+    Return the suggested POMs for a garment_type_item (família → item migration),
+    with the tenant nomenclature (codi_client, nom_client) and the real is_key from the map.
+    No GarmentPOMMap for the item → empty + warning (NO 'all active POMs' fallback: it masked gaps).
     """
-    garment_type_id = request.query_params.get('garment_type')
+    item_id = request.query_params.get('garment_type_item')
 
     try:
-        from fhort.pom.models import POMMaster, GarmentPOMMap, GarmentType
+        from fhort.pom.models import GarmentPOMMap
 
-        # Try to load from GarmentPOMMap (it has no is_active flag in the schema;
-        # each mapping entry is considered valid for its garment_type).
-        if garment_type_id:
-            mapped_pom_ids = GarmentPOMMap.objects.filter(
-                garment_type_id=garment_type_id,
-            ).values_list('pom_id', flat=True)
+        if not item_id:
+            return Response({'count': 0, 'results': [],
+                             'warning': 'garment_type_item requerit'})
 
-            if mapped_pom_ids:
-                poms = POMMaster.objects.filter(
-                    id__in=mapped_pom_ids,
-                    actiu=True,
-                ).select_related('categoria', 'pom_global').order_by(
-                    'categoria__display_order', 'codi_client'
-                )
-            else:
-                # Fallback: all tenant POMs
-                poms = POMMaster.objects.filter(actiu=True).select_related(
-                    'categoria', 'pom_global'
-                ).order_by('categoria__display_order', 'codi_client')
-        else:
-            poms = POMMaster.objects.filter(actiu=True).select_related(
-                'categoria', 'pom_global'
-            ).order_by('categoria__display_order', 'codi_client')
+        # POMs de l'item, amb is_key/ordre reals del mapa (key primer, després ordre).
+        maps = (GarmentPOMMap.objects
+                .filter(garment_type_item_id=item_id)
+                .select_related('pom', 'pom__categoria', 'pom__pom_global')
+                .order_by('-is_key', 'ordre'))
 
         data = []
-        for pom in poms:
+        for m in maps:
+            pom = m.pom
             data.append({
                 'id': pom.id,
                 'codi_client': pom.codi_client,
@@ -102,11 +89,15 @@ def suggested_poms_view(request):
                 'categoria_id': pom.categoria_id,
                 'categoria_nom': pom.categoria.nom_ca if pom.categoria_id else '',
                 'categoria_ordre': pom.categoria.display_order if pom.categoria_id else 99,
-                'is_key_measure': False,
+                'is_key_measure': m.is_key,
+                'ordre': m.ordre,
                 'unitat': pom.pom_global.unitat if pom.pom_global_id else 'cm',
             })
 
-        return Response({'count': len(data), 'results': data})
+        resp = {'count': len(data), 'results': data}
+        if not data:
+            resp['warning'] = 'Cap POM mapejat per a aquest item'
+        return Response(resp)
 
     except Exception as e:
         import logging
@@ -194,11 +185,12 @@ def save_base_size_view(request, model_id):
                 continue
 
             if value is None or float(value) == 0:
-                # Delete if it exists
-                deleted, _ = BaseMeasurement.objects.filter(
+                # Materialització família→item: NO esborrar la fila (la pertinença de l'item es manté);
+                # buidar el valor (base_value_cm=None) deixant-la com a materialitzada sense valor.
+                cleared = BaseMeasurement.objects.filter(
                     model=model, pom_id=pom_id
-                ).delete()
-                removed += deleted
+                ).update(base_value_cm=None)
+                removed += cleared
             else:
                 # Sprint 5B.1: tolerance from the payload if present, else the catalogue POM.
                 pom = POMMaster.objects.filter(pk=pom_id).first()
