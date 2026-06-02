@@ -109,6 +109,9 @@
     "saved_assign": "Modelo asignado y planificado.",
     "saved_unassign": "Modelo desasignado.",
     "saved_reassign": "Tarea reasignada y recalculada.",
+    "saved_reorder": "Cola reordenada y recalculada.",
+    "drag_hint": "Arrastra para reordenar",
+    "models_word": "modelos",
     "error": "Ha ocurrido un error."
   },
   "companyCalendar": {

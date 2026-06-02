@@ -109,6 +109,9 @@
     "saved_assign": "Model assignat i planificat.",
     "saved_unassign": "Model desassignat.",
     "saved_reassign": "Tasca reassignada i recalculada.",
+    "saved_reorder": "Cua reordenada i recalculada.",
+    "drag_hint": "Arrossega per reordenar",
+    "models_word": "models",
     "error": "Hi ha hagut un error."
   },
   "companyCalendar": {

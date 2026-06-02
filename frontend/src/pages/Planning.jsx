@@ -1,7 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable, arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import useAuthStore from '../store/auth'
-import { models as modelsApi, modelTasks as modelTaskItems, users as usersApi } from '../api/endpoints'
+import { models as modelsApi, modelTasks as modelTaskItems, users as usersApi, plan as planApi } from '../api/endpoints'
 
 // Tram 2 — Pantalla "Planificació": dues carpetes Pendents/Assignades (gated define_tasks/configure).
 // Pendents = models amb tasques no-Done SENSE tècnic. Assignades = totes les no-Done amb tècnic.
@@ -71,10 +78,11 @@ export default function Planning() {
   const [selected, setSelected] = useState(new Set())   // model_ids a Pendents
   const [expanded, setExpanded] = useState(new Set())   // model_ids desplegats a Assignades
   const [modal, setModal] = useState(null)              // { modelIds:[], single?:row }
+  const [optimistic, setOptimistic] = useState({})      // { [techId]: [model_ids ordenats] } (reorder òptic)
 
   const load = useCallback(() => {
     setLoading(true)
-    Promise.all([
+    return Promise.all([
       fetchAllPages(modelTaskItems.byModel, { all: 'true' }),
       fetchAllPages(modelTaskItems.list, {}),
       fetchAllPages(usersApi.list, {}),
@@ -122,6 +130,62 @@ export default function Planning() {
     return rows.filter(r => r.folder === tab &&
       (!s || (r.codi || '').toLowerCase().includes(s) || (r.nom || '').toLowerCase().includes(s)))
   }, [rows, tab, search])
+
+  // Assignades AGRUPAT per tècnic: cada model "explotat" per tècnic (apareix al grup de CADA tècnic
+  // que hi té tasques no-Done). predStart/predEnd/temps es calculen sobre les tasques d'AQUELL tècnic.
+  // (Explotat per tècnic, lògicament correcte; pendent de validació visual quan existeixi un model
+  //  repartit entre tècnics — avui NO n'hi ha cap a les dades; no s'assumeix techIds.length===1.)
+  const assignedGroups = useMemo(() => {
+    const s = search.trim().toLowerCase()
+    const groups = {}
+    for (const r of rows) {
+      if (r.folder !== 'assigned') continue
+      if (s && !(r.codi || '').toLowerCase().includes(s) && !(r.nom || '').toLowerCase().includes(s)) continue
+      for (const techId of r.techIds) {
+        const tts = r.tasks.filter(x => x.assignee === techId && x.status !== 'Done')
+        const starts = tts.map(x => x.planned_start).filter(Boolean).sort()
+        const ends = tts.map(x => x.planned_end).filter(Boolean).sort()
+        const predStart = starts.length ? starts[0] : null
+        const predEnd = ends.length ? ends[ends.length - 1] : null
+        const risc = !!(predEnd && r.data_objectiu && localISODate(predEnd) > r.data_objectiu)
+        const temps = tts.reduce((a, x) => a + (x.estimated_minutes || 0), 0)
+        ;(groups[techId] ||= { techId, name: usersById[techId] || `#${techId}`, rows: [] })
+          .rows.push({ ...r, _techId: techId, predStart, predEnd, risc, temps })
+      }
+    }
+    const list = Object.values(groups)
+    for (const g of list) {
+      g.rows.sort((a, b) => (a.predStart || '').localeCompare(b.predStart || ''))   // ordre real planificat
+      const ord = optimistic[g.techId]
+      if (ord) {   // reorder òptic pendent: respecta l'ordre arrossegat fins que load() reconciliï
+        const pos = new Map(ord.map((id, i) => [id, i]))
+        g.rows.sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9))
+      }
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name))
+  }, [rows, search, usersById, optimistic])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  // Drag dins un grup de tècnic → reorder òptic immediat + plan/reorder + load() (reconcilia dates).
+  // Drag NOMÉS dins el grup (cada grup és un SortableContext aïllat → no es pot moure entre tècnics).
+  const onGroupReorder = (techId, rowsOfGroup) => ({ active, over }) => {
+    if (!over || active.id === over.id) return
+    const oldIdx = rowsOfGroup.findIndex(r => r.id === active.id)
+    const newIdx = rowsOfGroup.findIndex(r => r.id === over.id)
+    if (oldIdx < 0 || newIdx < 0) return
+    const model_ids = arrayMove(rowsOfGroup, oldIdx, newIdx).map(r => r.id)
+    setOptimistic(o => ({ ...o, [techId]: model_ids }))
+    setSaving(true); setFeedback(null)
+    planApi.reorder({ assignee_id: techId, model_ids })
+      .then(() => load())
+      .then(() => { setOptimistic(o => { const n = { ...o }; delete n[techId]; return n }); setFeedback({ type: 'ok', text: t('planning.saved_reorder') }) })
+      .catch(e => { setOptimistic(o => { const n = { ...o }; delete n[techId]; return n }); setFeedback({ type: 'err', text: e?.response?.data?.error || t('planning.error') }) })
+      .finally(() => setSaving(false))
+  }
 
   const toggleSel = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   const toggleExp = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -194,12 +258,11 @@ export default function Planning() {
       </div>
 
       {loading ? <Center>{t('planning.loading')}</Center>
-        : filtered.length === 0 ? <Center>{t(tab === 'pending' ? 'planning.empty_pending' : 'planning.empty_assigned')}</Center>
-          : (
-            <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                {tab === 'pending' ? (
-                  <>
+        : tab === 'pending' ? (
+            filtered.length === 0 ? <Center>{t('planning.empty_pending')}</Center>
+              : (
+                <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+                  <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                     <thead><tr>
                       <th style={{ ...thS, width: 34 }}></th>
                       <th style={thS}>{t('planning.col_model')}</th>
@@ -220,29 +283,21 @@ export default function Planning() {
                         </tr>
                       ))}
                     </tbody>
-                  </>
-                ) : (
-                  <>
-                    <thead><tr>
-                      <th style={{ ...thS, width: 28 }}></th>
-                      <th style={thS}>{t('planning.col_model')}</th>
-                      <th style={thS}>{t('planning.col_technician')}</th>
-                      <th style={thS}>{t('planning.col_start')}</th>
-                      <th style={thS}>{t('planning.col_estimate')}</th>
-                      <th style={thS}>{t('planning.col_end')}</th>
-                      <th style={thS}></th>
-                    </tr></thead>
-                    <tbody>
-                      {filtered.map(r => (
-                        <RowAssigned key={r.id} r={r} t={t} usersById={usersById} techOptions={techOptions}
-                                     expanded={expanded.has(r.id)} onToggle={() => toggleExp(r.id)}
-                                     onUnassign={() => doUnassign(r.id)} onReassign={doReassign} saving={saving} />
-                      ))}
-                    </tbody>
-                  </>
-                )}
-              </table>
-            </div>
+                  </table>
+                </div>
+              )
+          ) : (
+            assignedGroups.length === 0 ? <Center>{t('planning.empty_assigned')}</Center>
+              : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                  {assignedGroups.map(g => (
+                    <TechGroup key={g.techId} g={g} t={t} usersById={usersById} techOptions={techOptions}
+                               sensors={sensors} expanded={expanded} onToggle={toggleExp}
+                               onDragEnd={onGroupReorder(g.techId, g.rows)}
+                               onUnassign={doUnassign} onReassign={doReassign} saving={saving} />
+                  ))}
+                </div>
+              )
           )}
 
       {modal && (
@@ -261,22 +316,68 @@ const primaryBtn = {
   border: 'none', borderRadius: 6, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: MONO,
 }
 
-function RowAssigned({ r, t, usersById, techOptions, expanded, onToggle, onUnassign, onReassign, saving }) {
-  const techLabel = r.techIds.length === 1 ? (usersById[r.techIds[0]] || `#${r.techIds[0]}`)
-    : t('planning.several', { n: r.techIds.length })
+// Grup d'una cua de tècnic: capçalera + taula amb DnD (un SortableContext aïllat → drag NOMÉS
+// dins el grup). Reaprofita el patró @dnd-kit d'EditableTable.
+function TechGroup({ g, t, usersById, techOptions, sensors, expanded, onToggle, onDragEnd, onUnassign, onReassign, saving }) {
+  return (
+    <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '0.5px solid var(--gray-l)' }}>
+        <i className="ti ti-user" style={{ fontSize: 14, color: 'var(--gray)' }} />
+        <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 600 }}>{g.name}</span>
+        <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--gray)' }}>· {g.rows.length} {t('planning.models_word')}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)', fontFamily: MONO }}>{t('planning.drag_hint')}</span>
+      </div>
+      <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <thead><tr>
+          <th style={{ ...thS, width: 28 }}></th>
+          <th style={{ ...thS, width: 28 }}></th>
+          <th style={thS}>{t('planning.col_model')}</th>
+          <th style={thS}>{t('planning.col_start')}</th>
+          <th style={thS}>{t('planning.col_estimate')}</th>
+          <th style={thS}>{t('planning.col_end')}</th>
+          <th style={thS}></th>
+        </tr></thead>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={g.rows.map(r => r.id)} strategy={verticalListSortingStrategy}>
+            <tbody>
+              {g.rows.map(r => (
+                <SortableRowAssigned key={r.id} r={r} t={t} usersById={usersById} techOptions={techOptions}
+                  expanded={expanded.has(r.id)} onToggle={() => onToggle(r.id)}
+                  onUnassign={() => onUnassign(r.id)} onReassign={onReassign} saving={saving} />
+              ))}
+            </tbody>
+          </SortableContext>
+        </DndContext>
+      </table>
+    </div>
+  )
+}
+
+function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle, onUnassign, onReassign, saving }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: r.id })
+  const style = {
+    transform: CSS.Transform.toString(transform), transition,
+    opacity: isDragging ? 0.5 : 1,
+    background: isDragging ? CREMA : (expanded ? CREMA : 'transparent'),
+  }
   return (
     <>
-      <tr style={{ cursor: 'pointer', background: expanded ? CREMA : 'transparent' }} onClick={onToggle}>
-        <td style={tdS}><i className={`ti ti-chevron-${expanded ? 'down' : 'right'}`} style={{ fontSize: 14 }} /></td>
-        <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600 }}>
+      <tr ref={setNodeRef} style={style}>
+        <td style={tdS}>
+          <span {...attributes} {...listeners} title={t('planning.drag_hint')}
+            style={{ cursor: 'grab', color: 'var(--text-muted)', fontSize: 15, display: 'inline-block', lineHeight: 1 }}>⠿</span>
+        </td>
+        <td style={{ ...tdS, cursor: 'pointer' }} onClick={onToggle}>
+          <i className={`ti ti-chevron-${expanded ? 'down' : 'right'}`} style={{ fontSize: 14 }} />
+        </td>
+        <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600, cursor: 'pointer' }} onClick={onToggle}>
           {r.codi}{r.risc && <span title={t('planning.at_risk')} style={{ marginLeft: 8, color: 'var(--err)', fontSize: 11, fontWeight: 600 }}>⚠ {t('planning.at_risk')}</span>}
           <div style={{ fontFamily: 'inherit', fontWeight: 400, color: 'var(--gray)', fontSize: 11 }}>{r.nom}</div>
         </td>
-        <td style={tdS}>{techLabel}</td>
         <td style={tdS}>{localDate(r.predStart)}</td>
         <td style={tdS}>{fmtMins(r.temps)}</td>
         <td style={{ ...tdS, color: r.risc ? 'var(--err)' : 'inherit' }}>{localDate(r.predEnd)}</td>
-        <td style={tdS} onClick={e => e.stopPropagation()}>
+        <td style={tdS}>
           <button onClick={onUnassign} disabled={saving} title={t('planning.unassign')} style={{
             background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
             padding: '4px 9px', fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)',

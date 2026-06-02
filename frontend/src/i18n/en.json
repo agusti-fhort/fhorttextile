@@ -109,6 +109,9 @@
     "saved_assign": "Model assigned and scheduled.",
     "saved_unassign": "Model unassigned.",
     "saved_reassign": "Task reassigned and recomputed.",
+    "saved_reorder": "Queue reordered and recomputed.",
+    "drag_hint": "Drag to reorder",
+    "models_word": "models",
     "error": "Something went wrong."
   },
   "companyCalendar": {

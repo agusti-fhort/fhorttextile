@@ -121,6 +121,9 @@ export const plan = {
   // body: {task_id, new_start} → {snapshot_id, result, locked_task_id} (desa + locked)
   apply: (body) => client.post('/api/v1/plan/apply/', body),
   snapshots: () => client.get('/api/v1/plan/snapshots/'),
+  // body: {assignee_id, model_ids:[...ordenats]} → desa l'ordre manual de la cua + recompute.
+  // → {ok, assignee_id, result:{placements,warnings,models}}. Gated define_tasks.
+  reorder: (body) => client.post('/api/v1/plan/reorder/', body),
 }
 
 // Calendari propi (agenda) — esdeveniments unificats per pintar. Accés IsAuthenticated; scope per
