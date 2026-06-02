@@ -144,6 +144,26 @@ menys potent amb volum). Resta (DHTMLX/Bryntum/DevExtreme) = de pagament, descar
     perdre el color del tècnic), solapaments en **lanes**, barra de **PILLS** per tècnic (filtre client-side),
     vista **Mes** (3 events + "+N") i **Llista** (badge "En risc"), **clic → `/models/<id>`**.
     **READ-ONLY** (cap edició; el drag entra a la Peça 3).
+- ✅ **Tram 3 — Peça 3 (ORDRE MANUAL de la cua, drag individual) FETA.** L'usuari reordena models dins
+  la cua d'un tècnic; el motor recalcula respectant aquest ordre. Subpeces:
+  - **3A (`624d1f8`) — backend:** taula nova **`TechnicianQueueOrder(profile, model, position)`** amb
+    **`unique_together (profile, model)`** (NO unique a `position` — la garanteix l'endpoint dins
+    `transaction.atomic`). Endpoint **`POST plan/reorder/` `{assignee_id, model_ids:[...]}`** gated
+    `define_tasks`: desa posicions + `recompute_for_technicians`. **Scheduler** respecta l'ordre manual via
+    clau composta **`(0, position)`** si hi ha fila / **`(1, *ordre_natural)`** si no → manuals primer pel
+    seu `position`, nous/sense-fila al final. L'ordre manual **SUBSTITUEIX** el natural i és **ESTABLE**;
+    `en_risc` es manté (es calcula a la col·locació). Neteja d'òrfenes amb helper **`cleanup_queue_order`**,
+    cridat a `unassign_model` i a la reassignació per-tasca (evita files orfes quan un model surt de la
+    cua d'un tècnic). Migració **0002** auditada al tenant.
+  - **3B (`d7fa76c`) — front:** tab **Assignades AGRUPAT per tècnic** (capçalera + llista per cua); **drag**
+    de files amb **`@dnd-kit`** (un `SortableContext` **aïllat per grup** → no creua tècnics, coherent amb
+    *"planificar ≠ reassignar"*). `onDragEnd`: `arrayMove` **òptic** → `plan/reorder` → `load()` (reconcilia
+    les dates del recompute); **revert + toast** si falla. Ordre dins el grup per `predStart`. **Pendents** no
+    draggables. **Models repartits** (`techIds>1`): **explotats per tècnic** (apareixen a cada grup amb dates
+    calculades només sobre les tasques d'aquell tècnic) — implementat correcte però **NO validat visualment**
+    (cap model repartit a les dades de prova actuals).
+  - ⏳ **3B-2 (pop-up de selecció múltiple) AJORNAT** conscientment (refinament; la reordenació ja la cobreix
+    el drag individual). Veure PENDENTS.
 
 **LLIÇÓ CLAU — `assignee` és FK a `UserProfile`, NO a `User`:** mai assumir `User.id == UserProfile.id`
 (coincideix avui per casualitat amb 2 usuaris; divergiria en escalar). Els serializers d'usuari
@@ -156,6 +176,13 @@ fill de Configuració (gated `configure`).
 ---
 
 ## PENDENTS / DEUTE ANOTAT (no urgents)
+- **3B-2 (pop-up de selecció múltiple) AJORNAT** (no descartat): *"defineix data d'inici del primer model"*
+  → reordenar la selecció + **ancorar el primer**. Requeriria combinar `reorder` + `apply` (fixar data,
+  `locked`) en una transacció (endpoint nou o dues crides). No crític: la reordenació ja la cobreix el
+  **drag individual** (Peça 3B). Decisions de comportament pendents de tancar (data àncora `locked` vs
+  indicació; selecció arbitrària vs col·lecció filtrada).
+- **Models repartits entre tècnics:** l'**explotat per tècnic** a Planning està implementat però **pendent
+  de validació visual** quan existeixi un model repartit real (cap a les dades de prova actuals).
 - **Col·lecció:** NO existeix camp al Model → requereix camp nou + migració + poblar + filtre. Ajornat
   (es farà quan es refaci el Model).
 - **Assignació a ModelSheet:** la cara "per model" de l'assignació, per quan es refaci ModelSheet (ara
@@ -201,6 +228,9 @@ fill de Configuració (gated `configure`).
   reposició temporal**, mai canvi de tècnic.
 - **Cost NO es modela al motor:** el sistema només extreu **temps**. El càlcul de cost queda per a la capa
   comercial (es deriva del temps per tècnic/tasca/model). **Cap camp de cost.**
+- **Ordre manual de la cua = per (tècnic, model), NO per model:** un model pot estar **repartit** entre
+  cues amb posicions diferents → per això una **taula `TechnicianQueueOrder(profile, model, position)`** i
+  no un camp a `Model`.
 
 ---
 
@@ -224,12 +254,17 @@ fill de Configuració (gated `configure`).
   f1d02a2 (fix profile_id) + e82bef1 (Tram 2 pantalla), 4787b51 (Tram 3 peça 1: code-splitting per ruta).
 - Tram 3 Peça 2 (gir Gantt→calendari propi): 532685e (estat Peça 1) · a26396a (2A `plan/current`) ·
   *[Gantt SVAR 2B construït i DESCARTAT, no committejat]* · 65f59b7 (2B-cal-1 `calendar/events`) ·
-  230e1d3 (2B-cal-2 graella laboral) · 63e9614 (2B-cal-3 esdeveniments).
+  230e1d3 (2B-cal-2 graella laboral) · 63e9614 (2B-cal-3 esdeveniments) · bc26051 (2C estat).
+- Tram 3 Peça 3 (ordre manual de cua): 624d1f8 (3A backend `TechnicianQueueOrder` + `plan/reorder`) ·
+  d7fa76c (3B front drag per tècnic).
 
 ---
 
 ## ESTAT DE LA BD DE PROVA (tenant fhort)
-Dades de prova sembrades per validar el motor i el calendari: **12 models `FTT-SS26-0004..0015`** + **48
-ModelTask planificades** (`planned_*` desats), **2 cues** (Agus 24 / Montse 24), **3 models en risc**
-(0004/0006/0011). Esborrables amb el bloc comentat de `/root/fhort-sessions/seed_planning.py`. Útil per a
-properes sessions i per a la futura **Peça 3** (drag → `plan/preview`/`plan/apply`).
+Seed base: **12 models `FTT-SS26-0004..0015`** + **48 ModelTask planificades** (`planned_*`), **2 cues**
+(Agus / Montse), **3 models en risc** (0004/0006/0011).
+**Estat actual = POST-TEST 3A** (la BD s'ha deixat així a propòsit, útil per a 3B):
+- Cua d'Agus **reordenada manualment** (files `TechnicianQueueOrder` per als seus models).
+- Model **0004 (`FTT-SS26-0004`) DESASSIGNAT** (a Pendents) pel test de `cleanup_queue_order`.
+Per tornar a **línia base** (48 tasques, 2 cues 24-24, sense ordre manual): reiniciar amb el bloc comentat
+de `/root/fhort-sessions/seed_planning.py` **+ esborrar les files de `TechnicianQueueOrder`**.
