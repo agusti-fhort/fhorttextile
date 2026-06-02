@@ -76,7 +76,12 @@
     "error": "No se ha podido cargar el calendario.",
     "empty_list": "Sin eventos.",
     "all": "Todos",
-    "at_risk": "En riesgo"
+    "at_risk": "En riesgo",
+    "all_day": "Todo el día",
+    "type_confeccio": "Confección",
+    "type_fitting": "Fitting",
+    "warn_before_production": "Fitting programado antes de la llegada de la confección",
+    "warn_short": "Aviso"
   },
   "task_types": {
     "title": "Catálogo de tipos de tarea",

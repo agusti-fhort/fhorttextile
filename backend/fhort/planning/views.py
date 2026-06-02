@@ -20,7 +20,8 @@ from .models import CompanyCalendar, Absencia, TechnicianQueueOrder
 from .serializers import (CompanyCalendarSerializer, JornadaSerializer,
                           AbsenciaSerializer)
 from . import plan_service
-from fhort.tasks.models import ModelTask, PlanSnapshot
+from fhort.tasks.models import ModelTask, PlanSnapshot, Production
+from fhort.fitting.models import FittingSession
 
 
 class _Configure(HasCapability):
@@ -209,13 +210,18 @@ def plan_current_view(request):
 def calendar_events_view(request):
     """GET /api/v1/calendar/events/ — esdeveniments UNIFICATS per al calendari propi (agenda).
 
-    Abstracció pensada per agregar fonts futures (fittings, fites) SENSE canviar el contracte:
-    avui només `tipus="tasca"` (ModelTask planificades). Cada event porta el COLOR del tècnic
-    (UserProfile.color_avatar) per pintar-lo i agrupar-lo per cua.
+    Agrega TRES fonts sota el mateix contracte:
+      - `tipus="tasca"` (ModelTask planificades): bloc HORARI, color del tècnic
+        (UserProfile.color_avatar), agrupable per cua.
+      - `tipus="confeccio"` (Production): estadi de DURADA en dies (enviament→retorn),
+        `all_day=True`, color fix de tipus, SENSE tècnic (tecnic_id=None).
+      - `tipus="fitting"` (FittingSession): marcador d'un dia, `all_day=True`, color fix,
+        SENSE tècnic. Porta `meta.avis_abans_confeccio` (dependència tova, no en_risc).
 
     ACCÉS: IsAuthenticated. SCOPE (al queryset, igual que plan/current):
       - amb view_team_tasks → totes les tasques planificades.
       - sense → només les del propi UserProfile.
+      - confecció/fitting → SEMPRE visibles a tot autenticat (no tenen tècnic per filtrar).
 
     PARAMS opcionals start/end (YYYY-MM-DD): acoten per data LOCAL de planned_start (inclusius).
     Sense params → tot el planificat no-Done.
@@ -236,13 +242,15 @@ def calendar_events_view(request):
     # Rang opcional sobre la data LOCAL de planned_start (inclusiu a banda i banda).
     start_raw, end_raw = request.query_params.get('start'), request.query_params.get('end')
     try:
-        if start_raw:
-            qs = qs.filter(planned_start__date__gte=_date.fromisoformat(start_raw))
-        if end_raw:
-            qs = qs.filter(planned_start__date__lte=_date.fromisoformat(end_raw))
+        start_d = _date.fromisoformat(start_raw) if start_raw else None
+        end_d = _date.fromisoformat(end_raw) if end_raw else None
     except ValueError:
         return Response({'error': 'start/end han de ser dates YYYY-MM-DD.'},
                         status=http_status.HTTP_400_BAD_REQUEST)
+    if start_d:
+        qs = qs.filter(planned_start__date__gte=start_d)
+    if end_d:
+        qs = qs.filter(planned_start__date__lte=end_d)
 
     events = []
     for tk in qs:
@@ -271,6 +279,82 @@ def calendar_events_view(request):
                 'data_objectiu': data_obj.isoformat() if data_obj else None,
             },
         })
+    # ── Font 'confeccio' (Production) — estadi de durada en DIES, all-day, SENSE tècnic ──
+    # Colors FIXOS per tipus (no per tècnic): confecció = to taller neutre, fitting = blau distint.
+    COLOR_CONFECCIO = '#7c6f64'   # taupe (taller/proveïdor extern)
+    COLOR_FITTING = '#3a7ca5'     # blau (sessió de fitting)
+    # Scope: confecció/fitting NO tenen tècnic → SEMPRE visibles a tot autenticat (cap filtre de perfil).
+    prods = Production.objects.select_related('model', 'supplier')
+    # Filtre per SOLAPAMENT amb el rang demanat (no "inici dins rang"): el tram
+    # [requested_at.date(), expected_at] talla [start, end].
+    if start_d:
+        prods = prods.filter(expected_at__gte=start_d)
+    if end_d:
+        prods = prods.filter(requested_at__date__lte=end_d)
+    for p in prods:
+        req_d = timezone.localtime(p.requested_at).date()
+        # Sense expected_at no hi ha fi de tram → es pinta com a estadi d'un sol dia (el d'enviament).
+        end_date = p.expected_at or req_d
+        events.append({
+            'id': f'confeccio-{p.id}',
+            'tipus': 'confeccio',
+            'start': req_d.isoformat(),
+            'end': end_date.isoformat(),
+            'titol': f'{p.model.codi_intern} · {p.supplier.name} · conf.',
+            'tecnic_id': None,
+            'tecnic_nom': None,
+            'color': COLOR_CONFECCIO,
+            'link': f'/models/{p.model_id}',
+            'en_risc': False,
+            'all_day': True,
+            'meta': {
+                'model_id': p.model_id,
+                'supplier': p.supplier.name,
+                'phase': p.phase,
+                'status': p.status,
+                'expected_at': p.expected_at.isoformat() if p.expected_at else None,
+            },
+        })
+
+    # ── Font 'fitting' (FittingSession) — marcador d'un dia, all-day, SENSE tècnic ──
+    fittings = list(FittingSession.objects.select_related('model', 'garment_set')
+                    .filter(**({'data__gte': start_d} if start_d else {}))
+                    .filter(**({'data__lte': end_d} if end_d else {})))
+    # Dependència TOVA: expected_at de la confecció del mateix (model, fase). Es consulta a banda
+    # (la Production pot caure FORA del rang visible). Si n'hi ha més d'una, en guardem la més tardana.
+    model_ids = {f.model_id for f in fittings if f.model_id}
+    expected_by_key = {}
+    if model_ids:
+        for p in (Production.objects.filter(model_id__in=model_ids, expected_at__isnull=False)
+                  .values('model_id', 'phase', 'expected_at')):
+            key = (p['model_id'], p['phase'])
+            prev = expected_by_key.get(key)
+            if prev is None or p['expected_at'] > prev:
+                expected_by_key[key] = p['expected_at']
+    for f in fittings:
+        target = f.model.codi_intern if f.model_id else (f.garment_set.codi_base if f.garment_set_id else '?')
+        exp = expected_by_key.get((f.model_id, f.fase)) if f.model_id else None
+        avis = bool(exp and f.data < exp)   # avís TOVA (no en_risc): fitting abans de tenir la confecció
+        events.append({
+            'id': f'fitting-{f.id}',
+            'tipus': 'fitting',
+            'start': f.data.isoformat(),
+            'end': f.data.isoformat(),
+            'titol': f'{target} · fitting {f.fase}',
+            'tecnic_id': None,
+            'tecnic_nom': None,
+            'color': COLOR_FITTING,
+            'link': f'/fittings/{f.id}',
+            'en_risc': False,
+            'all_day': True,
+            'meta': {
+                'model_id': f.model_id,
+                'fase': f.fase,
+                'estat': f.estat,
+                'avis_abans_confeccio': avis,
+            },
+        })
+
     return Response({'events': events}, status=http_status.HTTP_200_OK)
 
 

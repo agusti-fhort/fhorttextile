@@ -20,6 +20,10 @@ import Center from '../components/ui/Center'
 // FUS: els events vénen ISO amb offset (+02:00); new Date() els situa en local (Europe/Madrid).
 // NO es fa cap altra manipulació de fus (un 08:00+02:00 cau a la franja 08:00, no desplaçat).
 const MONO = 'IBM Plex Mono, monospace'
+// Colors FIXOS per tipus d'estadi (han de coincidir amb calendar_events_view del backend).
+const COLOR_CONFECCIO = '#7c6f64'   // taupe (confecció/taller extern)
+const COLOR_FITTING = '#3a7ca5'     // blau (sessió de fitting)
+const WARN_YELLOW = '#d9a300'       // avís TOVA (fitting abans de la confecció) — groc, NO vermell
 const DOW = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']   // alineat amb weekday() (0=dilluns)
 const DAY_LABELS = ['Dl', 'Dt', 'Dc', 'Dj', 'Dv', 'Ds', 'Dg']
 const HOUR_PX = 60   // 1px = 1min exacte (tasca 90min = 90px). Coherent amb l'alçada de fila.
@@ -38,13 +42,27 @@ const startOfWeek = (d) => { const x = startOfDay(d); x.setDate(x.getDate() - ((
 const monthName = (d) => cap(new Intl.DateTimeFormat('ca-ES', { month: 'long' }).format(d))
 const weekdayLong = (d) => cap(new Intl.DateTimeFormat('ca-ES', { weekday: 'long' }).format(d))
 
-// Enriqueix un event amb camps derivats (Date + minuts des de mitjanit), sense alterar l'original.
+// Parseja 'YYYY-MM-DD' com a data LOCAL (mitjanit local), SENSE passar per new Date(iso) — que
+// interpretaria el date-only com a mitjanit UTC i a Europe/Madrid el desplaçaria al dia anterior.
+function parseLocalDate(s) {
+  const [y, m, d] = String(s).split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+// Enriqueix un event amb camps derivats, sense alterar l'original.
+//  - all-day (confecció/fitting): _start/_end són dates LOCALS (via parseLocalDate); _allDay=true.
+//    NO calcula minuts horaris → no entra mai a la graella horària (layoutDay/EventBlock).
+//  - horari (tasca): camí clàssic, _sMin/_eMin = minuts des de mitjanit.
 function enrich(e) {
+  if (e.all_day) {
+    const s = parseLocalDate(e.start), en = parseLocalDate(e.end || e.start)
+    return { ...e, _start: s, _end: en, _allDay: true }
+  }
   const s = new Date(e.start), en = new Date(e.end)
   let sMin = s.getHours() * 60 + s.getMinutes()
   let eMin = en.getHours() * 60 + en.getMinutes()
   if (eMin <= sMin) eMin = sMin + 15   // defensiu (no hauria de passar: events dins d'un dia)
-  return { ...e, _start: s, _end: en, _sMin: sMin, _eMin: eMin }
+  return { ...e, _start: s, _end: en, _sMin: sMin, _eMin: eMin, _allDay: false }
 }
 
 // Reparteix els events d'un dia en "lanes" perquè els solapaments no es tapin (width/left = 100/N%).
@@ -136,14 +154,24 @@ export default function PlanningCalendar() {
 
   const today = useMemo(() => startOfDay(new Date()), [])
 
-  // Filtre client-side per tècnic + pills derivats dels events carregats.
-  const shown = useMemo(() => tecnic === '' ? events : events.filter(e => e.tecnic_id === tecnic), [events, tecnic])
+  // Filtre client-side per tècnic. Els estadis SENSE tècnic (confecció/fitting, tecnic_id null)
+  // queden SEMPRE visibles encara que es filtri per un tècnic (no s'amaguen).
+  const shown = useMemo(() => tecnic === '' ? events : events.filter(e => e.tecnic_id === tecnic || e.tecnic_id == null), [events, tecnic])
   const techs = useMemo(() => {
     const m = new Map()
-    for (const e of events) if (!m.has(e.tecnic_id)) m.set(e.tecnic_id, { id: e.tecnic_id, nom: e.tecnic_nom, color: e.color })
+    // EXCLOU tecnic_id null (confecció/fitting) → no genera pill brossa amb nom undefined.
+    for (const e of events) if (e.tecnic_id != null && !m.has(e.tecnic_id)) m.set(e.tecnic_id, { id: e.tecnic_id, nom: e.tecnic_nom, color: e.color })
     return [...m.values()].sort((a, b) => (a.nom || '').localeCompare(b.nom || ''))
   }, [events])
-  const eventsByDay = useCallback((d) => shown.filter(e => sameDay(e._start, d)), [shown])
+  // Rang de dies inclusiu (per als all-day, que poden travessar N dies): _start ≤ d ≤ _end.
+  const inRange = useCallback((e, d) => {
+    const ds = startOfDay(d).getTime()
+    return startOfDay(e._start).getTime() <= ds && ds <= startOfDay(e._end).getTime()
+  }, [])
+  // Horaris (tasca) per dia exacte; all-day per RANG. Mes = unió de tots dos.
+  const timedByDay = useCallback((d) => shown.filter(e => !e._allDay && sameDay(e._start, d)), [shown])
+  const allDayByDay = useCallback((d) => shown.filter(e => e._allDay && inRange(e, d)), [shown, inRange])
+  const monthByDay = useCallback((d) => shown.filter(e => e._allDay ? inRange(e, d) : sameDay(e._start, d)), [shown, inRange])
 
   const openEvent = useCallback((ev) => { if (ev?.link) navigateRouter(ev.link) }, [navigateRouter])
   const openDay = useCallback((d) => { setDate(startOfDay(d)); setView('day') }, [])
@@ -200,6 +228,16 @@ export default function PlanningCalendar() {
         </div>
       )}
 
+      {/* Llegenda dels estadis sense tècnic (color per tipus) */}
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', fontFamily: MONO, fontSize: 11, color: 'var(--gray)' }}>
+        <LegendDot color={COLOR_CONFECCIO} label={t('planning_calendar.type_confeccio')} />
+        <LegendDot color={COLOR_FITTING} label={t('planning_calendar.type_fitting')} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <i className="ti ti-alert-triangle" style={{ color: WARN_YELLOW, fontSize: 13 }} />
+          {t('planning_calendar.warn_before_production')}
+        </span>
+      </div>
+
       {loading ? <Center>{t('planning_calendar.loading')}</Center>
         : error ? <Center>{t('planning_calendar.error')}</Center>
           : (
@@ -207,9 +245,10 @@ export default function PlanningCalendar() {
               {view === 'list'
                 ? <ListView events={shown} onOpen={openEvent} t={t} />
                 : view === 'month'
-                  ? <MonthGrid date={date} today={today} isDayOff={isDayOff} eventsByDay={eventsByDay} onOpen={openEvent} onOpenDay={openDay} />
+                  ? <MonthGrid date={date} today={today} isDayOff={isDayOff} eventsByDay={monthByDay} onOpen={openEvent} onOpenDay={openDay} t={t} />
                   : <TimeGrid days={view === 'day' ? [date] : weekDays(date)} hours={hours} minHour={minHour}
-                              today={today} isWorkingHour={isWorkingHour} offKind={offKind} eventsByDay={eventsByDay} onOpen={openEvent} />}
+                              today={today} isWorkingHour={isWorkingHour} offKind={offKind}
+                              timedByDay={timedByDay} allDayByDay={allDayByDay} onOpen={openEvent} t={t} />}
             </div>
           )}
     </div>
@@ -219,8 +258,10 @@ export default function PlanningCalendar() {
 function weekDays(date) { const a = startOfWeek(date); return Array.from({ length: 7 }, (_, i) => addDays(a, i)) }
 
 // ── Graella DIA/SETMANA: columnes-dia relatives (events absoluts per durada) ──
-function TimeGrid({ days, hours, minHour, today, isWorkingHour, offKind, eventsByDay, onOpen }) {
+//  + FRANJA ALL-DAY a dalt (confecció/fitting): estadis sense hora / de dies, fora de la graella horària.
+function TimeGrid({ days, hours, minHour, today, isWorkingHour, offKind, timedByDay, allDayByDay, onOpen, t }) {
   const bodyH = hours.length * HOUR_PX
+  const hasAllDay = days.some(d => allDayByDay(d).length > 0)
   return (
     <div className="pcal-tg">
       <div className="pcal-tg-head">
@@ -232,12 +273,22 @@ function TimeGrid({ days, hours, minHour, today, isWorkingHour, offKind, eventsB
           </div>
         ))}
       </div>
+      {hasAllDay && (
+        <div className="pcal-tg-allday">
+          <div className="pcal-corner pcal-allday-corner">{t('planning_calendar.all_day')}</div>
+          {days.map((d, i) => (
+            <div key={i} className={`pcal-allday-col${sameDay(d, today) ? ' pcal-today' : ''}`}>
+              {allDayByDay(d).map(ev => <AllDayChip key={ev.id} ev={ev} onOpen={onOpen} t={t} />)}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="pcal-tg-body">
         <div className="pcal-gutter">
           {hours.map(h => <div key={h} className="pcal-timecol" style={{ height: HOUR_PX }}>{pad2(h)}:00</div>)}
         </div>
         {days.map((d, i) => {
-          const placed = layoutDay(eventsByDay(d))
+          const placed = layoutDay(timedByDay(d))
           const isToday = sameDay(d, today)
           return (
             <div key={i} className="pcal-daycol" style={{ height: bodyH }}>
@@ -281,12 +332,36 @@ function EventBlock({ ev, lane, cols, minHour, onOpen }) {
   )
 }
 
+// Chip d'estadi all-day (franja superior de setmana/dia). Color de tipus; avís TOVA = icona groga.
+function AllDayChip({ ev, onOpen, t }) {
+  const avis = ev.meta?.avis_abans_confeccio
+  return (
+    <div className="pcal-adchip" onClick={() => onOpen(ev)}
+      title={`${ev.titol}${avis ? ' · ' + t('planning_calendar.warn_before_production') : ''}`}
+      style={{ background: ev.color + '22', borderLeft: `3px solid ${ev.color}`, color: ev.color }}>
+      {avis && <i className="ti ti-alert-triangle pcal-adchip-warn" style={{ color: WARN_YELLOW }} />}
+      <span className="pcal-adchip-txt">{ev.titol}</span>
+    </div>
+  )
+}
+
+function LegendDot({ color, label }) {
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <span style={{ width: 9, height: 9, borderRadius: 2, background: color, flex: 'none' }} />
+      {label}
+    </span>
+  )
+}
+
 // ── Graella MES: 7×6 amb fins a 3 events/dia + "+N" ──────────────────────────
-function MonthGrid({ date, today, isDayOff, eventsByDay, onOpen, onOpenDay }) {
+function MonthGrid({ date, today, isDayOff, eventsByDay, onOpen, onOpenDay, t }) {
   const first = new Date(date.getFullYear(), date.getMonth(), 1)
   const start = startOfWeek(first)
   const cells = Array.from({ length: 42 }, (_, i) => addDays(start, i))
   const month = date.getMonth()
+  // Ordre: all-day primer (sense hora), després horaris per minut d'inici.
+  const sortKey = (e) => e._allDay ? -1 : e._sMin
   return (
     <div className="pcal-month">
       {DAY_LABELS.map((l, i) => <div key={i} className="pcal-mhead">{l}</div>)}
@@ -294,20 +369,25 @@ function MonthGrid({ date, today, isDayOff, eventsByDay, onOpen, onOpenDay }) {
         const out = d.getMonth() !== month
         const off = isDayOff(d)
         const isToday = sameDay(d, today)
-        const evs = eventsByDay(d).sort((a, b) => a._sMin - b._sMin)
+        const evs = eventsByDay(d).sort((a, b) => sortKey(a) - sortKey(b))
         return (
           <div key={i} className={`pcal-mcell${off ? ' pcal-off' : ''}${out ? ' pcal-dim' : ''}${isToday ? ' pcal-today' : ''}`}
             onClick={() => onOpenDay(d)} title="Obrir el dia">
             <span className="pcal-mnum">{d.getDate()}</span>
             <div className="pcal-mevs">
-              {evs.slice(0, 3).map(ev => (
-                <div key={ev.id} className="pcal-mev" style={{ color: ev.color }}
-                  onClick={(e) => { e.stopPropagation(); onOpen(ev) }} title={ev.titol}>
-                  <span className="pcal-mev-dot" style={{ background: ev.color }} />
-                  {ev.en_risc && <span className="pcal-mev-risc" />}
-                  <span className="pcal-mev-txt">{fmtHM(ev._start)} {ev.titol}</span>
-                </div>
-              ))}
+              {evs.slice(0, 3).map(ev => {
+                const avis = ev.meta?.avis_abans_confeccio
+                return (
+                  <div key={ev.id} className="pcal-mev" style={{ color: ev.color }}
+                    onClick={(e) => { e.stopPropagation(); onOpen(ev) }}
+                    title={`${ev.titol}${avis ? ' · ' + t('planning_calendar.warn_before_production') : ''}`}>
+                    <span className="pcal-mev-dot" style={{ background: ev.color }} />
+                    {ev.en_risc && <span className="pcal-mev-risc" />}
+                    {avis && <i className="ti ti-alert-triangle pcal-mev-warn" style={{ color: WARN_YELLOW }} />}
+                    <span className="pcal-mev-txt">{ev._allDay ? ev.titol : `${fmtHM(ev._start)} ${ev.titol}`}</span>
+                  </div>
+                )
+              })}
               {evs.length > 3 && <div className="pcal-more">+{evs.length - 3}</div>}
             </div>
           </div>
@@ -335,11 +415,16 @@ function ListView({ events, onOpen, t }) {
           <div className="pcal-list-day">{weekdayLong(g.date)} {g.date.getDate()} de {monthName(g.date)} {g.date.getFullYear()}</div>
           {g.items.map(ev => (
             <div key={ev.id} className="pcal-list-item" onClick={() => onOpen(ev)}>
-              <span className="pcal-list-time">{fmtHM(ev._start)}–{fmtHM(ev._end)}</span>
+              <span className="pcal-list-time">{ev._allDay ? t('planning_calendar.all_day') : `${fmtHM(ev._start)}–${fmtHM(ev._end)}`}</span>
               <span className="pcal-list-bar" style={{ background: ev.color }} />
               <span className="pcal-list-title">{ev.titol}</span>
               <span className="pcal-list-tech">{ev.tecnic_nom}</span>
               {ev.en_risc && <span className="pcal-badge-risc">{t('planning_calendar.at_risk')}</span>}
+              {ev.meta?.avis_abans_confeccio && (
+                <span className="pcal-badge-warn" title={t('planning_calendar.warn_before_production')}>
+                  <i className="ti ti-alert-triangle" /> {t('planning_calendar.warn_short')}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -393,6 +478,15 @@ const CSS = `
 .pcal-ev-time { font-weight: 700; }
 .pcal-ev-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pcal-ev-dot { position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--err, #e5484d); }
+/* FRANJA ALL-DAY (confecció/fitting) — sobre la graella horària, alineada amb les columnes-dia. */
+.pcal-tg-allday { display: flex; border-bottom: 0.5px solid var(--gray-l); background: var(--white); }
+.pcal-allday-corner { display: flex; align-items: center; justify-content: flex-end; padding: 2px 6px 0 0; font-family: ${MONO}; font-size: 9px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); }
+.pcal-allday-col { flex: 1; min-width: 90px; display: flex; flex-direction: column; gap: 2px; padding: 3px; border-right: 0.5px solid var(--gray-l); }
+.pcal-allday-col.pcal-today { background: rgba(194,122,42,0.06); }
+.pcal-adchip { display: flex; align-items: center; gap: 4px; box-sizing: border-box; border-radius: 4px; padding: 2px 5px; font-family: ${MONO}; font-size: 10px; line-height: 1.25; cursor: pointer; overflow: hidden; }
+.pcal-adchip:hover { filter: brightness(0.97); }
+.pcal-adchip-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcal-adchip-warn { font-size: 12px; flex: none; }
 .pcal-month { display: grid; grid-template-columns: repeat(7, 1fr); min-width: 560px; }
 .pcal-mhead { text-align: center; padding: 8px 4px; font-family: ${MONO}; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); border-right: 0.5px solid var(--gray-l); border-bottom: 0.5px solid var(--gray-l); background: var(--white); }
 .pcal-mcell { min-height: 96px; padding: 6px; border-right: 0.5px solid var(--gray-l); border-bottom: 0.5px solid var(--gray-l); background: var(--white); cursor: pointer; }
@@ -405,6 +499,7 @@ const CSS = `
 .pcal-mev { display: flex; align-items: center; gap: 4px; font-family: ${MONO}; font-size: 9.5px; white-space: nowrap; overflow: hidden; }
 .pcal-mev-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .pcal-mev-risc { width: 6px; height: 6px; border-radius: 50%; background: var(--err, #e5484d); flex: none; }
+.pcal-mev-warn { font-size: 11px; flex: none; }
 .pcal-mev-txt { overflow: hidden; text-overflow: ellipsis; }
 .pcal-more { font-family: ${MONO}; font-size: 9.5px; color: var(--text-muted); }
 .pcal-list { padding: 4px 0; }
@@ -416,4 +511,5 @@ const CSS = `
 .pcal-list-title { font-family: ${MONO}; font-weight: 500; }
 .pcal-list-tech { color: var(--gray); margin-left: auto; }
 .pcal-badge-risc { font-family: ${MONO}; font-size: 10px; font-weight: 600; color: var(--err, #e5484d); border: 0.5px solid var(--err, #e5484d); border-radius: 999px; padding: 1px 8px; }
+.pcal-badge-warn { display: inline-flex; align-items: center; gap: 4px; font-family: ${MONO}; font-size: 10px; font-weight: 600; color: ${WARN_YELLOW}; border: 0.5px solid ${WARN_YELLOW}; border-radius: 999px; padding: 1px 8px; }
 `

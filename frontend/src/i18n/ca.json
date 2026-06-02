@@ -76,7 +76,12 @@
     "error": "No s'ha pogut carregar el calendari.",
     "empty_list": "Sense esdeveniments.",
     "all": "Tots",
-    "at_risk": "En risc"
+    "at_risk": "En risc",
+    "all_day": "Tot el dia",
+    "type_confeccio": "Confecció",
+    "type_fitting": "Fitting",
+    "warn_before_production": "Fitting programat abans de l'arribada de la confecció",
+    "warn_short": "Avís"
   },
   "task_types": {
     "title": "Catàleg de tipus de tasca",

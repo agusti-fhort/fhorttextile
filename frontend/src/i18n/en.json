@@ -76,7 +76,12 @@
     "error": "Could not load the calendar.",
     "empty_list": "No events.",
     "all": "All",
-    "at_risk": "At risk"
+    "at_risk": "At risk",
+    "all_day": "All day",
+    "type_confeccio": "Production",
+    "type_fitting": "Fitting",
+    "warn_before_production": "Fitting scheduled before production delivery",
+    "warn_short": "Warning"
   },
   "task_types": {
     "title": "Task type catalog",
