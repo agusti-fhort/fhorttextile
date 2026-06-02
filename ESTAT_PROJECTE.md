@@ -1,12 +1,14 @@
 # ESTAT_PROJECTE — FHORT Textile Tech (Capa de Projecte)
 
-> **Actualitzat:** 2026-06-01 · **Servidor:** 178.105.217.125 (fhorttextile.tech, tenant `fhort`)
+> **Actualitzat:** 2026-06-02 · **Servidor:** 178.105.217.125 (fhorttextile.tech, tenant `fhort`)
 > **Stack:** Django 6 + django-tenants + PostgreSQL + DRF + JWT · React 19.2.6 + Vite + Nginx
 > **Repo únic:** `agusti-fhort/fhorttextile`, branca `main`, a `/var/www/fhort-textile` (front + backend).
 > **Servei:** `fhort.service` (Gunicorn). Intèrpret: `backend/venv/bin/python`.
 > **Llengua:** treball en català · codi/UI anglès primari, català subtítol.
-> **ZONES INTOCABLES:** `/var/www/assessment`, `/trading`, `/webs` (+ Nginx). NOMÉS `/var/www/fhort-textile`.
->   (NO confondre amb el servidor 178.105.48.204 = ERP Frappe, màquina diferent; ni amb `fhortclinic`, projecte diferent.)
+> **AQUEST SERVIDOR (178.105.217.125) = NOMÉS FHORT Textile Tech.** L'nginx d'aquí només serveix
+>   `fhorttextile.tech` (vhosts `default` + `fhort-textile`; cap altre projecte). Les antigues "zones
+>   intocables" `assessment`/`trading`/`webs` eren d'un **ALTRE servidor** (ERP Frappe, 178.105.48.204)
+>   i **NO apliquen aquí**. Config de desplegament d'aquest servidor a `docs/deploy.md`.
 
 ---
 
@@ -271,7 +273,9 @@ de `/root/fhort-sessions/seed_planning.py` **+ esborrar les files de `Technician
 
 ---
 
-## FASE DE CATÀLEGS I MODEL (planificada)
+## FASE DE CATÀLEGS I MODEL (pla original — HISTÒRIC)
+> ⚠️ Pla inicial. **L'estat REAL i complet és a la secció «FASE DE CATÀLEGS I MODEL — COMPLETADA» al final del document.**
+
 Objectiu: completar els catàlegs base amb UI d'edició i refer el funcional de Model (convergència).
 
 **PRINCIPI TRANSVERSAL — coherència d'estil i estructura (val per a TOTES les pàgines noves):**
@@ -304,3 +308,73 @@ Objectiu: completar els catàlegs base amb UI d'edició i refer el funcional de 
 
 **DECISIONS:** Paquets de servei (`PaquetServei`/`Tasca`/`PaquetServeiTasca`) **DESCARTATS** (no apliquen,
 sense pantalla). Capa antiga de Fitting i `Settings` antic **JUBILATS**.
+
+---
+
+## FASE DE CATÀLEGS — COMPLETADA
+- **Peça 0** (`3ab51fb`): components base `ui/` (Center, Feedback, Modal, buttons) + Table i18n/token +
+  migració Planning/PlanningCalendar. **Pàgina-patró fixada** (i18n, tokens, api/endpoints, Center/
+  Feedback/Modal/Table, capçalera MONO).
+- **Pas 1** (`f9d20bc`): menú en 3 famílies (PROJECTES / CONFIG TÈCNICA / SISTEMA) + jubilació `Settings`
+  antic i capa Fitting antiga.
+- **Pas 2** (`cc016cc`): TaskType editable (`/task-types`) + destroy 409 + `Tasks.jsx` aprimat.
+- **Pas 3** (`028fd54`): Garment Types mestre-detall + matriu de temps integrada (items × 9 task_types)
+  + gate GarmentType→CONFIGURE.
+- **Pas 4A** (`8cdaaf5`): catàleg Suppliers (`/suppliers`) + destroy 409.
+- **Pas 4B** (`d0bfebe`): confecció (Production) i fitting (FittingSession) al calendari (`calendar/events`
+  + franja all-day a setmana/dia + chips a mes + avís tova fitting<expected_at). Decisions: data enviament
+  = `requested_at`; scope visible a tothom; tipus `confeccio`/`fitting` amb `tecnic_id` null.
+- **Reestructuració Garment Types** (`d8eb2e0`): **17 famílies + 57 items + 513 TaskTimeEstimate** (perfils
+  L/M/P) + camp `descripcio` (GarmentType + Global). **Opció 2** (crear net + desactivar els 42 vells,
+  SENSE esborrar → POM-maps/SizingProfiles intactes apuntant als vells). Seed antic jubilat (`.obsolete`).
+  Accessoris descartats. Nadó ampliat (2 famílies).
+- **Infra nginx** (fora git, a `docs/deploy.md`): `Cache-Control: no-cache` a index.html + immutable a
+  `/assets/` + 404 real per assets inexistents (resol el *chunk stale*).
+
+## PAS 5 — REFER MODEL (nucli COMPLETAT)
+- **5A** (`1d783ea`): wizard d'esquelet **unificat** (identificació + família→ITEM + talles) + camps
+  `collection`/`created_by`/`created_at` + jubilat camp `familia`. **BAULA DEL MOTOR activada:**
+  `Model.garment_type_item` → `lookup_estimated_minutes` → `ModelTask.estimated_minutes` des de la matriu
+  (provat end-to-end: model amb item → define-tasks → tasques amb minuts de la matriu).
+- **5B + 5B-fix** (`66c9252`): **fitxa operativa.** Capçalera amb desplegable **Accions** (ActionsMenu) +
+  estat/fase com a badge (sense stepper). Tabs com a **LOGS**: Resum·Mesures·Fitxers·Producció·Fitting·
+  Anàlisi IA. Log de tasques al Resum (TaskTransition). Producció/Fitting informatius (el "Lliurat"=
+  Delivered a Producció). **CICLE DE FASES: Pending·Dev·Proto·SizeSet·PP·TOP** (eliminat `Fit`; neix
+  Pending). Fase = marcador **PARAL·LEL**, NO toca tasques (sempre obertes). **Auto-Dev** en arrencar 1a
+  tasca (`transition_task`). Avançar/Retrocedir nets (`regress_phase` + `GateEvent.kind` advance/regress).
+  Precondició fitting: `schedule_session` exigeix Production **Delivered** de la fase (bloqueig dur).
+  `ModelTask` sense Cancelled. Menú: Kanban a primer nivell, Llistat de tasques jubilat (`Tasks.jsx` +
+  `/tasques` orfes al repo). Topbar amb nom usuari + data + rellotge.
+- **5C** (`1ca9176`): **llista de models refeta.** Layout fila/fitxa (2 files: descriptiva + operativa
+  Fase/Entrada prod./Arribada proto/Fitting prev./Tècnic). **Selecció múltiple** (checks daurats,
+  1=individual/N=bulk). Desplegable "Nou model" (manual / Excel pròximament). Desplegable **Accions**
+  (ActionsMenu amb `targets[]`, bulk iteratiu + feedback agregat "X fet · Y omesos"; fitting aplica als
+  elegibles). Dades **enriquides** (Subquery correlat per a les 3 dates + prefetch per al tècnic
+  assignees, **sense N+1**). Filtre de fase corregit. Paginació configurable (`DefaultPagination`,
+  `?page_size`). Checks daurats globals (`accent-color: var(--gold)` a index.css).
+
+## DECISIONS DE PRODUCTE CLAU (Pas 5)
+- **Model = esquelet** (wizard fins a talles) + **repositori del que va passant** (la fitxa). POM/sizing/
+  grading es construeixen via **TASQUES**, a posteriori, no al wizard.
+- **Tipologia del model = GarmentTypeItem** (`TipologiaModel` queda jubilable, no s'usa).
+- **Combo-sets** (bikini, pijama, twin-set) = **1 item** cadascun (unitat de patronatge).
+- **Fase paral·lela**, tasques sempre obertes; quan el model s'acaba, ningú hi torna si no se li demana.
+- **Tècnic real = assignees de tasques** (`responsable` sovint null).
+
+## PENDENTS (anotats, no fets)
+- **POM:** redisseny del cicle (entrada mides base/totes, increments/grading, extracció IA). EN CURS en
+  sessió separada. Decisions de fons: POMs a nivell família vs item; quин motor de grading; **repoblar
+  les 95 GarmentPOMMap orfes** (apunten als GarmentTypes vells desactivats).
+- **5A-bis: import Excel → ESQUELET.** La IA extreu `garment_type_code` = codi d'**ITEM**; cal resoldre
+  item→derivar família. `ImportFromSheetWizard` orfe a muntar. Comparteix flux d'extracció amb el POM →
+  decidir junts quин dels dos fluxos (`extract-from-file` vell / `extract-sheet` nou) es queda.
+- **Replanificació per endarreriment:** el motor ja empeny la cua; falta **disparador** (lazy en obrir vs
+  cron). NO hi ha auto-pausa per horari ni infra de processos programats. Peça de planificació.
+- **Neteja final:** extracció duplicada (2 fluxos), orfes (`Tasks.jsx`, `ImportConfirmStep`),
+  `TipologiaModel`, claus i18n velles.
+- **Traduccions ca/es** de les 17 famílies de Garment Types (ara `nom_ca`/`nom_es` = `nom_en` provisional).
+- **POM-maps + SizingProfiles:** re-autoria cap a la nova estructura de 17 famílies.
+
+## DADES DE PROVA AL TENANT `fhort` (a netejar al tancament)
+- Seed planificació (`FTT-SS26-0004..0015`) + **model 131** (`FTT-FW27-0001`, complet amb item+tasques) +
+  Production #3/#4 + FittingSession #9/#10 + models de verificació del 5A/5B/5C.
