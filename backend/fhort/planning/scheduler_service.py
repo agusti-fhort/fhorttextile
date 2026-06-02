@@ -58,6 +58,17 @@ def _task_sort_key(task):
     return (task.task_type.default_order, task.id)
 
 
+def _manual_positions(profile_id, model_ids):
+    """Ordre MANUAL {model_id: position} de la cua d'un tècnic (TechnicianQueueOrder), en UNA query.
+    Només lectura (no crea files). Sense files → dict buit (ordre natural)."""
+    if not model_ids:
+        return {}
+    from .models import TechnicianQueueOrder
+    return dict(TechnicianQueueOrder.objects
+               .filter(profile_id=profile_id, model_id__in=model_ids)
+               .values_list('model_id', 'position'))
+
+
 def _overlaps(start, end, busy):
     """Retorna el primer interval busy (s,e) que se solapa amb [start,end), o None."""
     for bs, be in busy:
@@ -157,12 +168,20 @@ def schedule(model_task_qs, now=None, save=True):
             model_codi[t.model_id] = t.model.codi_intern
         busy.sort()
 
-        # 3) Ordenar la resta: per model (prioritat→data_objectiu→codi_intern), dins per default_order.
+        # 3) Ordenar la resta: ordre MANUAL (TechnicianQueueOrder) si existeix, sinó natural.
+        #    Clau composta: (0, position) per als models amb fila manual → primer, pel seu position;
+        #    (1, *_model_sort_key) per als sense fila → al final, per ordre natural.
         models_seen = {}
         for t in movable:
             models_seen.setdefault(t.model_id, t.model)
+        manual_pos = _manual_positions(tech_id, list(models_seen))   # {model_id: position}, 1 query
+
+        def _order_key(m):
+            p = manual_pos.get(m.id)
+            return (0, p) if p is not None else (1,) + _model_sort_key(m)
+
         ordered_movable = []
-        for m in sorted(models_seen.values(), key=_model_sort_key):
+        for m in sorted(models_seen.values(), key=_order_key):
             ordered_movable.extend(sorted([t for t in movable if t.model_id == m.id],
                                           key=_task_sort_key))
 

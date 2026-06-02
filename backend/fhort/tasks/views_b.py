@@ -233,7 +233,9 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             if new_assignee_id is None and inst.status != 'Done':
                 ModelTask.objects.filter(pk=inst.pk).update(
                     planned_start=None, planned_end=None, planned_locked=False)
-            from fhort.planning.plan_service import recompute_for_technicians
+            from fhort.planning.plan_service import recompute_for_technicians, cleanup_queue_order
+            # Si el model ha sortit de la cua del tècnic vell (o nou=None), esborra l'ordre manual.
+            cleanup_queue_order([old_assignee_id, new_assignee_id], [inst.model_id])
             recompute_for_technicians([old_assignee_id, new_assignee_id])
 
 

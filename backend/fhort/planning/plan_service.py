@@ -59,6 +59,23 @@ def recompute_for_technicians(profile_ids, *, now=None):
     return results
 
 
+def cleanup_queue_order(profile_ids, model_ids):
+    """Esborra files TechnicianQueueOrder(profile, model) on el profile ja NO tingui cap ModelTask
+    no-Done d'aquell model (el model ha sortit de la seva cua). Idempotent. Es crida en desassignar
+    un model i en reassignar tasques entre tècnics."""
+    from .models import TechnicianQueueOrder
+    pids = {p for p in profile_ids if p}
+    mids = {m for m in model_ids if m}
+    if not pids or not mids:
+        return
+    for pid in pids:
+        for mid in mids:
+            still = (ModelTask.objects.filter(assignee_id=pid, model_id=mid)
+                     .exclude(status='Done').exists())
+            if not still:
+                TechnicianQueueOrder.objects.filter(profile_id=pid, model_id=mid).delete()
+
+
 def _save_snapshot(result, *, start_date, campaign_filter, computed_by, technician_count):
     """Desa la previsió com a PlanSnapshot immutable (conservat de l'Sprint H)."""
     return PlanSnapshot.objects.create(
@@ -207,6 +224,8 @@ def unassign_model(*, model_id, now=None):
     affected = set(qs.values_list('assignee_id', flat=True))
     count = qs.update(assignee=None, planned_start=None, planned_end=None,
                       planned_locked=False)
+    # El model surt de la cua dels tècnics afectats → esborra l'ordre manual desat (si n'hi havia).
+    cleanup_queue_order(affected, [model_id])
     # El model torna a Pendents: sense tasques no-Done planificades → neteja la previsió del model.
     Model.objects.filter(pk=model_id).update(predicted_start=None, predicted_end=None)
     results = recompute_for_technicians(affected, now=now)

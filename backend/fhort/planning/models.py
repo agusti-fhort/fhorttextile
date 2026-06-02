@@ -67,3 +67,27 @@ class Absencia(models.Model):
 
     def __str__(self):
         return f'{self.user_profile_id}: {self.data_inici}→{self.data_fi}'
+
+
+class TechnicianQueueOrder(models.Model):
+    """Ordre MANUAL d'un model dins la cua d'un tècnic (Tram 3 Peça 3A).
+    Una fila per (profile, model): `position` és l'ordre del model dins la cua del tècnic.
+    L'scheduler la prioritza sobre l'ordre natural (prioritat→data_objectiu→codi_intern): els models
+    amb fila van primer pel seu `position`; els SENSE fila van al final per ordre natural.
+    Només es creen files quan l'usuari reordena explícitament (assignar NO crea fila → model nou al
+    final). La unicitat de `position` dins d'un profile la garanteix l'endpoint dins transaction.atomic
+    (no com a constraint de BD: hi ha duplicats transitoris durant un reorder bulk)."""
+    profile = models.ForeignKey('accounts.UserProfile', on_delete=models.CASCADE,
+                                related_name='queue_orders')
+    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE,
+                              related_name='queue_orders')
+    position = models.PositiveIntegerField()
+
+    class Meta:
+        unique_together = (('profile', 'model'),)
+        ordering = ['profile_id', 'position']
+        verbose_name = 'Ordre de cua per tècnic'
+        verbose_name_plural = 'Ordres de cua per tècnic'
+
+    def __str__(self):
+        return f'tech {self.profile_id} · model {self.model_id} @ {self.position}'

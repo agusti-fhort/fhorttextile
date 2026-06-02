@@ -10,12 +10,13 @@ from rest_framework.response import Response
 from rest_framework import status as http_status
 from datetime import date as _date
 from django.utils import timezone
+from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 
 from fhort.accounts.models import UserProfile
 from fhort.accounts.capabilities import (HasCapability, CONFIGURE, MANAGE_USERS,
-                                         VIEW_TEAM_TASKS, get_capabilities)
-from .models import CompanyCalendar, Absencia
+                                         VIEW_TEAM_TASKS, DEFINE_TASKS, get_capabilities)
+from .models import CompanyCalendar, Absencia, TechnicianQueueOrder
 from .serializers import (CompanyCalendarSerializer, JornadaSerializer,
                           AbsenciaSerializer)
 from . import plan_service
@@ -24,6 +25,10 @@ from fhort.tasks.models import ModelTask, PlanSnapshot
 
 class _Configure(HasCapability):
     required_capability = CONFIGURE
+
+
+class _DefineTasks(HasCapability):
+    required_capability = DEFINE_TASKS
 
 
 class _ConfigureOrManageUsers(BasePermission):
@@ -267,3 +272,40 @@ def calendar_events_view(request):
             },
         })
     return Response({'events': events}, status=http_status.HTTP_200_OK)
+
+
+# ── Tram 3 Peça 3A — ordre MANUAL de la cua per tècnic ───────────────────────
+@api_view(['POST'])
+@permission_classes([_DefineTasks])
+def plan_reorder_view(request):
+    """POST /api/v1/plan/reorder/ — desa l'ordre MANUAL de la cua d'un tècnic i recalcula.
+    Gated `define_tasks` (com assign/unassign). Body: {assignee_id, model_ids:[...ordenats]}.
+
+    `model_ids` ha de ser la cua del tècnic (cada model amb ≥1 ModelTask no-Done amb aquell
+    assignee); `position` = índex a la llista. S'espera la cua SENCERA: els models de la cua NO
+    inclosos a la llista conserven la fila prèvia (si en tenien) — el front envia tota la cua.
+    Després de desar, recalcula la cua del tècnic (els `planned_*` reflecteixen el nou ordre)."""
+    assignee_id = request.data.get('assignee_id')
+    model_ids = request.data.get('model_ids')
+    if not assignee_id or not isinstance(model_ids, list) or not model_ids:
+        return Response({'error': 'assignee_id i model_ids (llista no buida) requerits.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    if len(set(model_ids)) != len(model_ids):
+        return Response({'error': 'model_ids amb duplicats.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    profile = UserProfile.objects.filter(pk=assignee_id).first()
+    if profile is None:
+        return Response({'error': 'Tècnic no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    # Validació: tots els models pertanyen a la cua del tècnic (≥1 tasca no-Done amb aquell assignee).
+    in_queue = set(ModelTask.objects.filter(assignee_id=assignee_id, model_id__in=model_ids)
+                   .exclude(status='Done').values_list('model_id', flat=True))
+    invalid = [m for m in model_ids if m not in in_queue]
+    if invalid:
+        return Response({'error': f'Models fora de la cua del tècnic: {invalid}.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    with transaction.atomic():
+        for i, mid in enumerate(model_ids):
+            TechnicianQueueOrder.objects.update_or_create(
+                profile=profile, model_id=mid, defaults={'position': i})
+    results = plan_service.recompute_for_technicians([int(assignee_id)])
+    return Response({'ok': True, 'assignee_id': int(assignee_id),
+                     'result': results.get(int(assignee_id))}, status=http_status.HTTP_200_OK)
