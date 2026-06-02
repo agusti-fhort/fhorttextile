@@ -58,7 +58,20 @@
     "configuracio_general": "General",
     "users": "Usuaris i rols",
     "company_calendar": "Calendari d'empresa",
-    "planning": "Planificació"
+    "planning": "Planificació",
+    "planning_calendar": "Calendari"
+  },
+  "planning_calendar": {
+    "title": "Planning Calendar",
+    "subtitle": "Agenda del pla sobre el calendari laboral real",
+    "today": "Avui",
+    "view_day": "Dia",
+    "view_week": "Setmana",
+    "view_month": "Mes",
+    "view_list": "Llista",
+    "loading": "Carregant el calendari…",
+    "error": "No s'ha pogut carregar el calendari.",
+    "empty_list": "Sense esdeveniments."
   },
   "planning": {
     "title": "Planificació",

@@ -57,6 +57,7 @@ const navGroups = [
       { to: '/tasques/catalog', labelKey: 'nav.tasques_catalog' },
       { to: '/tasques/paquets', labelKey: 'nav.tasques_paquets' },
       { to: '/tasques/kanban',  labelKey: 'nav.kanban' },
+      { to: '/planificacio/calendari', labelKey: 'nav.planning_calendar' },
       { to: '/temps',           labelKey: 'nav.temps' },
     ]},
     { labelKey: 'nav.fittings', icon: 'ti-ruler-2', children: [

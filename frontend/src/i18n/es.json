@@ -58,7 +58,20 @@
     "configuracio_general": "General",
     "users": "Usuarios y roles",
     "company_calendar": "Calendario de empresa",
-    "planning": "Planificación"
+    "planning": "Planificación",
+    "planning_calendar": "Calendario"
+  },
+  "planning_calendar": {
+    "title": "Planning Calendar",
+    "subtitle": "Agenda del plan sobre el calendario laboral real",
+    "today": "Hoy",
+    "view_day": "Día",
+    "view_week": "Semana",
+    "view_month": "Mes",
+    "view_list": "Lista",
+    "loading": "Cargando el calendario…",
+    "error": "No se ha podido cargar el calendario.",
+    "empty_list": "Sin eventos."
   },
   "planning": {
     "title": "Planificación",

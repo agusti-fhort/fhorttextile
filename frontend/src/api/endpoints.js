@@ -123,6 +123,14 @@ export const plan = {
   snapshots: () => client.get('/api/v1/plan/snapshots/'),
 }
 
+// Calendari propi (agenda) — esdeveniments unificats per pintar. Accés IsAuthenticated; scope per
+// view_team_tasks al servidor. Dates en ISO amb offset Europe/Madrid (+02:00), NO UTC cru.
+// params opcionals {start:'YYYY-MM-DD', end:'YYYY-MM-DD'} per acotar el rang.
+// → {events:[{id,tipus,start,end,titol,tecnic_id,tecnic_nom,color,link,en_risc,meta}]}
+export const calendar = {
+  events: (params) => client.get('/api/v1/calendar/events/', { params }),
+}
+
 // Configuració del calendari d'empresa (singleton del tenant). GET/PUT gated `configure`.
 export const companyCalendar = {
   get: () => client.get('/api/v1/company-calendar/'),

@@ -31,6 +31,7 @@ const UsersRoles = lazy(() => import('./pages/UsersRoles'))
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
 const CompanyCalendar = lazy(() => import('./pages/CompanyCalendar'))
 const Planning = lazy(() => import('./pages/Planning'))
+const PlanningCalendar = lazy(() => import('./pages/PlanningCalendar'))
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -75,6 +76,9 @@ export default function App() {
           <Route path="tasques/paquets" element={<Tasks />} />
           <Route path="tasques/kanban" element={<KanbanTasks />} />
           <Route path="planificacio" element={<Planning />} />
+          {/* Calendari propi (agenda) read-only: obert a qualsevol autenticat (scope per dades a
+              calendar/events); NO gatejat per canPlan, a diferència de la gestió /planificacio. */}
+          <Route path="planificacio/calendari" element={<PlanningCalendar />} />
           <Route path="temps" element={<TimeTracking />} />
           <Route path="poms" element={<POMs />} />
           <Route path="poms/grading" element={<GradingRuleSets />} />

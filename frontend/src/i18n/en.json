@@ -58,7 +58,20 @@
     "configuracio_general": "General",
     "users": "Users & roles",
     "company_calendar": "Company calendar",
-    "planning": "Planning"
+    "planning": "Planning",
+    "planning_calendar": "Calendar"
+  },
+  "planning_calendar": {
+    "title": "Planning Calendar",
+    "subtitle": "Agenda over the real working calendar",
+    "today": "Today",
+    "view_day": "Day",
+    "view_week": "Week",
+    "view_month": "Month",
+    "view_list": "List",
+    "loading": "Loading the calendar…",
+    "error": "Could not load the calendar.",
+    "empty_list": "No events."
   },
   "planning": {
     "title": "Planning",
