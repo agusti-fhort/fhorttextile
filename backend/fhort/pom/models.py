@@ -87,6 +87,8 @@ class GarmentTypeGlobal(models.Model):
     is_system = models.BooleanField(default=True,
         help_text="True = catàleg canònic, no esborrable")
     display_order = models.PositiveIntegerField(default=0)
+    # Pas previ 5 — descripció de família (construcció)
+    descripcio = models.TextField(blank=True, default='')
 
     class Meta:
         verbose_name = 'Tipus garment global'
@@ -387,6 +389,8 @@ class GarmentType(models.Model):
         help_text="Ex: WOVEN, KNIT, BOTH, STRETCH_KNIT"
     )
     # Fi Sprint S1
+    # Pas previ 5 — descripció de família (construcció)
+    descripcio = models.TextField(blank=True, default='')
 
     class Meta:
         verbose_name = 'Tipus garment (tenant)'

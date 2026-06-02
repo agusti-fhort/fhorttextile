@@ -1,0 +1,17 @@
+# ───────────────────────────────────────────────────────────────────────────
+# OBSOLET — NO USAR.
+#
+# Aquest seed reimposava l'estructura ANTIGA de 42 GarmentTypes (granularitat de
+# peça) i feia ESBORRATS (delete) de globals i duplicats. Perillós: un re-seed
+# accidental reimposaria l'estructura vella i podria xocar amb PROTECT/CASCADE.
+#
+# El canònic ACTUAL és:
+#     python manage.py restructure_garment_types_v2
+# (17 famílies + 57 items + matriu de temps, idempotent, sense esborrats).
+#
+# Fitxer renombrat a *.obsolete a posta: així Django ja NO el descobreix com a
+# management command. Conservat només per a referència històrica.
+# ───────────────────────────────────────────────────────────────────────────
+raise SystemExit(
+    "OBSOLET: aquest seed no s'ha d'executar. Usa 'restructure_garment_types_v2'."
+)
