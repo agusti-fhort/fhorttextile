@@ -1,35 +1,36 @@
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import useAuthStore from './store/auth'
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Models from './pages/Models'
-import POMs from './pages/POMs'
-import Tasks from './pages/Tasks'
-import SizeFittingList from './pages/SizeFittingList'
-import SizeFittingDetail from './pages/SizeFittingDetail'
-import FittingDetail from './pages/FittingDetail'
-import FittingSessionList from './pages/FittingSessionList'
-import FittingSessionNew from './pages/FittingSessionNew'
-import GradingRuleSets from './pages/GradingRuleSets'
-import SizeSystems from './pages/SizeSystems'
-import SizeLibrary from './pages/SizeLibrary'
-import GarmentPOMMapEditor from './pages/GarmentPOMMapEditor'
-import OnboardingWizard from './pages/OnboardingWizard'
-import NewSizeFitting from './pages/NewSizeFitting'
-import ModelWizard from './pages/ModelWizard'
-import ModelMeasurements from './pages/ModelMeasurements'
-import ModelFabric from './pages/ModelFabric'
-import ModelSheet from './pages/ModelSheet'
-import KanbanTasks from './pages/KanbanTasks'
-import TimeTracking from './pages/TimeTracking'
-import Alerts from './pages/Alerts'
-import Settings from './pages/Settings'
-import UsersRoles from './pages/UsersRoles'
-import UserProfilePage from './pages/UserProfilePage'
-import CompanyCalendar from './pages/CompanyCalendar'
-import Planning from './pages/Planning'
 import Shell from './components/layout/Shell'
+
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Models = lazy(() => import('./pages/Models'))
+const POMs = lazy(() => import('./pages/POMs'))
+const Tasks = lazy(() => import('./pages/Tasks'))
+const SizeFittingList = lazy(() => import('./pages/SizeFittingList'))
+const SizeFittingDetail = lazy(() => import('./pages/SizeFittingDetail'))
+const FittingDetail = lazy(() => import('./pages/FittingDetail'))
+const FittingSessionList = lazy(() => import('./pages/FittingSessionList'))
+const FittingSessionNew = lazy(() => import('./pages/FittingSessionNew'))
+const GradingRuleSets = lazy(() => import('./pages/GradingRuleSets'))
+const SizeSystems = lazy(() => import('./pages/SizeSystems'))
+const SizeLibrary = lazy(() => import('./pages/SizeLibrary'))
+const GarmentPOMMapEditor = lazy(() => import('./pages/GarmentPOMMapEditor'))
+const OnboardingWizard = lazy(() => import('./pages/OnboardingWizard'))
+const NewSizeFitting = lazy(() => import('./pages/NewSizeFitting'))
+const ModelWizard = lazy(() => import('./pages/ModelWizard'))
+const ModelMeasurements = lazy(() => import('./pages/ModelMeasurements'))
+const ModelFabric = lazy(() => import('./pages/ModelFabric'))
+const ModelSheet = lazy(() => import('./pages/ModelSheet'))
+const KanbanTasks = lazy(() => import('./pages/KanbanTasks'))
+const TimeTracking = lazy(() => import('./pages/TimeTracking'))
+const Alerts = lazy(() => import('./pages/Alerts'))
+const Settings = lazy(() => import('./pages/Settings'))
+const UsersRoles = lazy(() => import('./pages/UsersRoles'))
+const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
+const CompanyCalendar = lazy(() => import('./pages/CompanyCalendar'))
+const Planning = lazy(() => import('./pages/Planning'))
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -45,6 +46,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <Suspense fallback={<div className="p-8 text-gray-500">Carregant…</div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={
@@ -92,6 +94,7 @@ export default function App() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }
