@@ -226,11 +226,14 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
 
   if (!model) return null
 
+  const fmtDateTime = (v) => v ? new Date(v).toLocaleString('ca-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
   const readOnlyFields = [
     ['Referència interna', model.codi_intern],
     ['Temporada', `${model.temporada} ${model.any}`],
+    ['Col·lecció', model.collection || '—'],
     ['Target', model.target || '—'],
     ['Tipus de peça', model.garment_type_nom || '—'],
+    ['Model (peça)', model.garment_type_item_nom || '—'],
     ['Construcció', model.construction || '—'],
     ['Fit type', model.fit_type || '—'],
     ['Sistema de talles', model.size_system_nom || '—'],
@@ -240,6 +243,8 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
       : model.size_run_model) || '—'],
     ['Grading', model.grading_rule_set ? '✓ Configurat' : '—'],
     ['Estat', model.estat],
+    ['Creat per', model.created_by_nom || '—'],
+    ['Creat el', fmtDateTime(model.created_at)],
     ...(model.fabric_main ? [
       ['Main Fabric', model.fabric_main],
       ['Composition', model.fabric_composition || '—'],

@@ -117,6 +117,8 @@ class Model(models.Model):
     nom_prenda = models.CharField(max_length=200, blank=True, null=True)
     descripcio = models.TextField(null=True, blank=True)
     color_referencia = models.CharField(max_length=100, null=True, blank=True)
+    # Pas 5A — col·lecció/línia comercial (text lliure, capa identificació)
+    collection = models.CharField(max_length=120, blank=True, default='')
 
     garment_type = models.ForeignKey(
         'pom.GarmentType',
@@ -185,6 +187,15 @@ class Model(models.Model):
     )
     prioritat = models.PositiveSmallIntegerField(default=3)
     data_entrada = models.DateField(auto_now_add=True)
+    # Pas 5A — traçabilitat de creació (creador + timestamp). responsable = assignat, no creador.
+    created_by = models.ForeignKey(
+        'accounts.UserProfile',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='models_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
     data_objectiu = models.DateField(null=True, blank=True)
     data_tancament = models.DateField(null=True, blank=True)
     predicted_start = models.DateField(null=True, blank=True)
@@ -216,7 +227,6 @@ class Model(models.Model):
     versio = models.CharField(max_length=20, null=True, blank=True)
 
     # --- Sprint 1A: new fields (fase_actual already exists with FASE_CHOICES) ---
-    familia = models.CharField(max_length=100, null=True, blank=True)
     slots_prev_tecnics = models.FloatField(null=True, blank=True, default=0)
     slots_prev_confeccio = models.FloatField(null=True, blank=True, default=0)
     slots_reals_tecnic = models.FloatField(null=True, blank=True, default=0)

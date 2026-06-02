@@ -10,6 +10,11 @@ export const models = {
   create: (data) => client.post('/api/v1/models/', data),
   update: (id, data) => client.patch(`/api/v1/models/${id}/`, data),
   remove: (id) => client.delete(`/api/v1/models/${id}/`),
+  // Pas 5A — wizard d'esquelet unificat.
+  nextRef: (params) => client.get('/api/v1/models/next-ref/', { params }),       // ?year&season
+  createWizard: (data) => client.post('/api/v1/models/create-wizard/', data),    // esquelet COMPLET
+  updateStep2: (id, data) => client.patch(`/api/v1/models/${id}/update-step2/`, data),
+  destroy: (id) => client.delete(`/api/v1/models/${id}/delete/`),
   // Capa de Projecte: definir tasques d'un model i avançar fase (gate del responsable).
   defineTasks: (id, data) => client.post(`/api/v1/models/${id}/define-tasks/`, data),   // {task_type_ids:[...]}
   gate: (id, data) => client.post(`/api/v1/models/${id}/gate/`, data),                   // {to_phase} o {to_phases:[...]}
@@ -47,6 +52,10 @@ export const sizeSystems = {
 
 export const sizeDefinitions = {
   list: (params) => client.get('/api/v1/size-definitions/', { params }),
+}
+
+export const sizingProfiles = {
+  list: (params) => client.get('/api/v1/sizing-profiles/', { params }),   // ?target&construction
 }
 
 export const gradingRuleSets = {

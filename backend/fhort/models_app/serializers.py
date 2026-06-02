@@ -27,8 +27,8 @@ class ModelListSerializer(serializers.ModelSerializer):
             'responsable',
             'prioritat',
             'data_objectiu',
+            'collection',
             # Sprint 1A
-            'familia',
             'slots_prev_tecnics',
             'slots_prev_confeccio',
             'slots_reals_tecnic',
@@ -59,6 +59,8 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     garment_type_nom = serializers.CharField(source='garment_type.nom_client', read_only=True)
     garment_group_nom = serializers.CharField(source='garment_group.nom', read_only=True)
     responsable_nom = serializers.CharField(source='responsable.nom_complet', read_only=True)
+    created_by_nom = serializers.CharField(source='created_by.nom_complet', read_only=True)
+    garment_type_item_nom = serializers.CharField(source='garment_type_item.name', read_only=True)
     size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
     size_system_nom = serializers.CharField(source='size_system.nom', read_only=True)
 
@@ -67,7 +69,7 @@ class ModelDetailSerializer(serializers.ModelSerializer):
         # 'fields = __all__' already includes the new fields origen_patro, versio,
         # garment_group. The *_nom variants are only exposed read-only.
         fields = '__all__'
-        read_only_fields = ('codi_intern', 'data_entrada')
+        read_only_fields = ('codi_intern', 'data_entrada', 'created_at', 'created_by')
 
 
 

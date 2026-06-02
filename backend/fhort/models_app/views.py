@@ -134,17 +134,63 @@ def next_model_ref(request):
     return Response({'codi_intern': codi, 'next_number': next_num})
 
 
+def _resolve_garment_def(d):
+    """Resol la definició de garment + talles d'un payload d'esquelet (Pas 5A).
+    Cada camp és OPCIONAL (es posa només si ve al payload). Retorna (fields, error_msg).
+    garment_type_item_id és la BAULA del motor de temps (matriu item×task_type)."""
+    from fhort.pom.models import GarmentType, SizeSystem, GradingRuleSet
+    from fhort.tasks.models import GarmentTypeItem
+    fields = {}
+    if d.get('garment_type_id'):
+        try:
+            fields['garment_type'] = GarmentType.objects.get(id=d['garment_type_id'])
+        except GarmentType.DoesNotExist:
+            return None, 'GarmentType no trobat'
+    if d.get('garment_type_item_id'):
+        try:
+            fields['garment_type_item'] = GarmentTypeItem.objects.get(id=d['garment_type_item_id'])
+        except GarmentTypeItem.DoesNotExist:
+            return None, 'GarmentTypeItem no trobat'
+    if d.get('size_system_id'):
+        try:
+            fields['size_system'] = SizeSystem.objects.get(id=d['size_system_id'])
+        except SizeSystem.DoesNotExist:
+            return None, 'SizeSystem no trobat'
+    if d.get('grading_rule_set_id'):
+        try:
+            fields['grading_rule_set'] = GradingRuleSet.objects.get(id=d['grading_rule_set_id'])
+        except GradingRuleSet.DoesNotExist:
+            pass  # tolerant (com el flux original)
+    if d.get('target'):
+        fields['target'] = d['target']
+    if d.get('construction'):
+        fields['construction'] = d['construction']
+    if d.get('size_run'):
+        fields['size_run_model'] = d['size_run']
+    if d.get('base_size'):
+        fields['base_size_label'] = d['base_size']
+    return fields, None
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_model_wizard(request):
+    """Pas 5A — creació UNIFICADA: l'esquelet COMPLET (identificació + garment def + talles)
+    en un sol POST. Desa garment_type_item (baula del motor) i la traçabilitat created_by."""
     year = request.data.get('year')
     season = request.data.get('season')
     ref_client = request.data.get('ref_client', '')
     nom_prenda = request.data.get('nom_prenda', '')
     descripcio = request.data.get('descripcio', '')
+    collection = request.data.get('collection', '')
     # Sprint A — multi-piece (immutable after creation)
     is_multipiece = bool(request.data.get('is_multipiece', False))
     num_pieces = request.data.get('num_pieces')
+
+    garment_fields, gerr = _resolve_garment_def(request.data)
+    if gerr:
+        return Response({'error': gerr}, status=400)
+    creator = getattr(request.user, 'profile', None)
 
     if not year or not season:
         return Response({'error': 'year i season són obligatoris'}, status=400)
@@ -201,7 +247,10 @@ def create_model_wizard(request):
             sequencial=next_num,
             nom_prenda=nom_prenda or None,
             descripcio=descripcio or None,
+            collection=collection or '',
+            created_by=creator,
             estat='Nou',
+            **garment_fields,
         )
         return Response({'id': model.id, 'codi_intern': model.codi_intern}, status=201)
 
@@ -223,9 +272,12 @@ def create_model_wizard(request):
                 sequencial=next_num,
                 nom_prenda=nom_prenda or None,
                 descripcio=descripcio or None,
+                collection=collection or '',
+                created_by=creator,
                 estat='Nou',
                 garment_set=garment_set,
                 piece_number=i,
+                **garment_fields,
             )
             pieces.append({
                 'id': piece.id,
@@ -250,32 +302,14 @@ def update_model_step2(request, model_id):
         return Response({'error': 'Model no trobat'}, status=404)
 
     d = request.data
-    if d.get('garment_type_id'):
-        from fhort.pom.models import GarmentType
-        try:
-            model.garment_type = GarmentType.objects.get(id=d['garment_type_id'])
-        except GarmentType.DoesNotExist:
-            return Response({'error': 'GarmentType no trobat'}, status=400)
-    if d.get('size_system_id'):
-        from fhort.pom.models import SizeSystem
-        try:
-            model.size_system = SizeSystem.objects.get(id=d['size_system_id'])
-        except SizeSystem.DoesNotExist:
-            return Response({'error': 'SizeSystem no trobat'}, status=400)
-    if d.get('grading_rule_set_id'):
-        from fhort.pom.models import GradingRuleSet
-        try:
-            model.grading_rule_set = GradingRuleSet.objects.get(id=d['grading_rule_set_id'])
-        except GradingRuleSet.DoesNotExist:
-            pass
-    if d.get('target'):
-        model.target = d['target']
-    if d.get('construction'):
-        model.construction = d['construction']
-    if d.get('size_run'):
-        model.size_run_model = d['size_run']
-    if d.get('base_size'):
-        model.base_size_label = d['base_size']
+    # Pas 5A — reutilitza el mateix resolutor que la creació (inclou garment_type_item_id).
+    garment_fields, gerr = _resolve_garment_def(d)
+    if gerr:
+        return Response({'error': gerr}, status=400)
+    for k, v in garment_fields.items():
+        setattr(model, k, v)
+    if d.get('collection') is not None:
+        model.collection = d['collection'] or ''
 
     model.save()
     return Response({'id': model.id, 'codi_intern': model.codi_intern})
