@@ -10,6 +10,7 @@ const POMs = lazy(() => import('./pages/POMs'))
 const Tasks = lazy(() => import('./pages/Tasks'))
 const TaskTypes = lazy(() => import('./pages/TaskTypes'))
 const GarmentTypes = lazy(() => import('./pages/GarmentTypes'))
+const Suppliers = lazy(() => import('./pages/Suppliers'))
 const FittingDetail = lazy(() => import('./pages/FittingDetail'))
 const FittingSessionList = lazy(() => import('./pages/FittingSessionList'))
 const FittingSessionNew = lazy(() => import('./pages/FittingSessionNew'))
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="tasques/kanban" element={<KanbanTasks />} />
           <Route path="task-types" element={<TaskTypes />} />
           <Route path="garment-types" element={<GarmentTypes />} />
+          <Route path="suppliers" element={<Suppliers />} />
           <Route path="planificacio" element={<Planning />} />
           {/* Calendari propi (agenda) read-only: obert a qualsevol autenticat (scope per dades a
               calendar/events); NO gatejat per canPlan, a diferència de la gestió /planificacio. */}

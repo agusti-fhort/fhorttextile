@@ -65,6 +65,7 @@ const navGroups = [
     { to: '/size-library', labelKey: 'nav.size_library', icon: 'ti-books' },
     { to: '/poms/grading', labelKey: 'nav.grading', icon: 'ti-chart-dots' },
     { to: '/task-types', labelKey: 'nav.tasques_catalog', icon: 'ti-list-details' },
+    { to: '/suppliers', labelKey: 'nav.suppliers', icon: 'ti-building-factory' },
   ]},
   { sectionKey: 'nav.section_sistema', items: [
     { to: '/onboarding', labelKey: 'nav.onboarding', icon: 'ti-rocket', cap: 'onboarding' },

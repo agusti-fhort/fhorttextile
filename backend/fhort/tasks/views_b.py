@@ -440,6 +440,15 @@ class SupplierViewSet(viewsets.ModelViewSet):
         p = HasCapability(); self.required_capability = SCHEDULE_FITTINGS
         return [p]
 
+    def destroy(self, request, *args, **kwargs):
+        # FK Production.supplier = PROTECT → si té confeccions, l'esborrat falla. 409 net (no 500).
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {'detail': "No es pot esborrar: té confeccions associades. Desactiva'l."},
+                status=status.HTTP_409_CONFLICT)
+
 
 class ProductionViewSet(viewsets.ReadOnlyModelViewSet):
     """Llistat/detall de confeccions. Creació i transicions via endpoints dedicats."""
