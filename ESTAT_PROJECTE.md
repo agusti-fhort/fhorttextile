@@ -117,9 +117,16 @@ menys potent amb volum). Resta (DHTMLX/Bryntum/DevExtreme) = de pagament, descar
   (`planned_end > data_objectiu`), **mestre-detall** a tasques amb **autor de les Done** (col·laboració
   traçada). Desassignar (Done intactes). Reassignar tasca. Reaprofita el patró cerca/filtres del Kanban.
   Commits f1d02a2 (fix), e82bef1 (pantalla). Verificat visualment (admin + Montse 403).
-- ⏳ **Tram 3 (pendent):** Gantt (SVAR) amb drag → `plan/preview` → modal acceptació → `plan/apply` +
-  **vista tècnic en DIES** + indicadors de direcció (càrrega per tècnic, models en risc, cost previst =
-  Σ temps×cost_hora) + **code-splitting** (crític quan entri el Gantt).
+- ⏳ **Tram 3 (en curs):**
+  - ✅ **Peça 1 — code-splitting per ruta (FETA):** `React.lazy` + `<Suspense>` a `App.jsx` (Login i Shell
+    eager; les 27 pàgines restants lazy). Bundle inicial **746 kB → 394 kB (-47%)**, gzip 207→125 kB; 27
+    chunks de pàgina sota demanda; l'avís Vite >500 kB desaparegut. Abast estricte a `App.jsx` (cap canvi de
+    rutes/auth/layout). Commit **4787b51**.
+  - ⏳ Resta del Tram 3: Gantt (SVAR) amb drag → `plan/preview` → modal acceptació → `plan/apply` +
+    **vista tècnic en DIES** + indicadors de direcció (càrrega per tècnic, models en risc, cost previst =
+    Σ temps×cost_hora). NOTA: el `manualChunks` de vendor (`vite.config.js`) queda per a la **Peça 2 (Gantt
+    SVAR)** — aïllar React/router/SVAR en un chunk de vendor d'un sol cop (l'index inicial encara porta tot
+    el vendor; el code-splitting per ruta només n'ha tret les pàgines).
 
 **LLIÇÓ CLAU — `assignee` és FK a `UserProfile`, NO a `User`:** mai assumir `User.id == UserProfile.id`
 (coincideix avui per casualitat amb 2 usuaris; divergiria en escalar). Els serializers d'usuari
@@ -139,7 +146,9 @@ fill de Configuració (gated `configure`).
 - **Auth per email:** ara login per username; tram futur transversal.
 - **Endurir `transition`:** que comprovi `request.user == assignee` (avui la UI ho amaga però el backend no
   ho força).
-- **Code-splitting (React.lazy):** bundle ~747 kB i pujant. **CRÍTIC quan entri el Gantt (Tram 3).**
+- ~~**Code-splitting (React.lazy):** bundle ~747 kB i pujant. CRÍTIC quan entri el Gantt (Tram 3).~~
+  **RESOLT** (Tram 3 peça 1, commit 4787b51): 746→394 kB (-47%), pàgines lazy. Pendent la peça 2:
+  `manualChunks` de vendor a `vite.config.js` per aïllar React/router/SVAR (es farà amb el Gantt).
 - **product_manager té `define_tasks` però NO `view_team_tasks`** → a Planning veu només les seves tasques
   (scope row-level). Decidir si product_manager ha de tenir `view_team_tasks` per assignar a l'equip.
 - **Deep-link a fred a ruta protegida rebota a `/login`** (cursa `initAuth` al useEffect vs `ProtectedRoute`
@@ -182,4 +191,4 @@ fill de Configuració (gated `configure`).
 - Sprint A (calendari): 702cd5d, d8e2693, 09ba161.
 - Sprint B (motor): 88ed31f, c1bffd2, e73efb2; assign/unassign + recompute + Done-safe: 6e81cc7.
 - Front planificació: 1ca18a4 + 6662a26 (Tram 0), 1b343f8 + 4d60e7a (Tram 1A), 3995dea (Tram 1B),
-  f1d02a2 (fix profile_id) + e82bef1 (Tram 2 pantalla).
+  f1d02a2 (fix profile_id) + e82bef1 (Tram 2 pantalla), 4787b51 (Tram 3 peça 1: code-splitting per ruta).
