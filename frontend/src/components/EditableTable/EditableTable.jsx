@@ -123,9 +123,13 @@ export default function EditableTable({
           nom_fitxa: r.nom_fitxa || '',
         }))
 
+      // keep_pom_ids = TOTS els POMs que segueixen a la taula (amb valor o buits/TEMPLATE). El
+      // backend desactiva (is_active=False) els que NO hi siguin → persisteix la X d'eliminar fila.
+      const keep_pom_ids = localRows.map(r => r.pom_id).filter(Boolean)
+
       await fetch(`${API}/api/v1/models/${modelId}/set-measurements/`, {
         method: 'POST', headers: authHeaders,
-        body: JSON.stringify({ measurements }),
+        body: JSON.stringify({ measurements, keep_pom_ids }),
       })
 
       const order = localRows.map(r => r.id).filter(id => id && !String(id).startsWith('tmp-'))

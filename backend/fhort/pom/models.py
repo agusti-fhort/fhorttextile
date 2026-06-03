@@ -413,6 +413,12 @@ class GarmentPOMMap(models.Model):
     pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='garment_maps')
     obligatori = models.BooleanField(default=False)
     is_key = models.BooleanField(default=False)
+    # Sprint Excel-Map · nivell de la cel·la de l'Excel (K/M/O/D). Metadada addicional,
+    # independent d'is_key/obligatori; el loader (load_garment_pom_map) escriu tots tres coherents.
+    nivell = models.CharField(
+        max_length=1, blank=True, default='O',
+        choices=[('K', 'Key'), ('M', 'Mandatory'), ('O', 'Optional'), ('D', 'Detail-dependent')],
+    )
     ordre = models.PositiveIntegerField(default=0)
     # Migration família → item: clons de germà es marquen per revisió (Montse ajusta el delta).
     pendent_revisio = models.BooleanField(default=False)

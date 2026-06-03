@@ -596,44 +596,59 @@ def set_measurements_view(request, model_id):
         return Response({'error': 'Model no trobat'}, status=404)
 
     measurements = request.data.get('measurements', [])
-    if not measurements:
+    # keep_pom_ids: TOTS els pom_id que segueixen a la taula (amb valor O buits/TEMPLATE). Els
+    # BaseMeasurement actius del model el pom dels quals NO hi és → soft-delete (is_active=False),
+    # com fa el xat IA, per persistir la X d'eliminar fila. None = client antic, no desactivar.
+    keep_pom_ids = request.data.get('keep_pom_ids', None)
+    if not measurements and keep_pom_ids is None:
         return Response({'error': 'measurements és obligatori'}, status=400)
 
     from fhort.pom.models import POMMaster
     from fhort.models_app.models import BaseMeasurement
 
-    created = updated = 0
+    created = updated = deactivated = 0
     errors = []
 
-    for m in measurements:
-        pom_id = m.get('pom_id')
-        value = m.get('base_value_cm')
-        if not pom_id or value is None:
-            errors.append(f'pom_id i base_value_cm obligatoris')
-            continue
-        try:
-            pom = POMMaster.objects.get(id=pom_id)
-            _, was_created = BaseMeasurement.objects.update_or_create(
-                model=model, pom=pom,
-                defaults={
-                    'base_value_cm': float(value),
-                    'notes': m.get('notes', ''),
-                    'origen': 'MANUAL',
-                    # Sprint 5B.1: copy tolerance from the catalogue POM.
-                    'tolerancia_minus': pom.tolerancia_default_minus,
-                    'tolerancia_plus': pom.tolerancia_default_plus,
-                }
-            )
-            if was_created: created += 1
-            else: updated += 1
-        except POMMaster.DoesNotExist:
-            errors.append(f'POMMaster {pom_id} no trobat')
+    with transaction.atomic():
+        for m in measurements:
+            pom_id = m.get('pom_id')
+            value = m.get('base_value_cm')
+            if not pom_id or value is None:
+                errors.append(f'pom_id i base_value_cm obligatoris')
+                continue
+            try:
+                pom = POMMaster.objects.get(id=pom_id)
+                _, was_created = BaseMeasurement.objects.update_or_create(
+                    model=model, pom=pom,
+                    defaults={
+                        'base_value_cm': float(value),
+                        'notes': m.get('notes', ''),
+                        'origen': 'MANUAL',
+                        # Re-entrar un valor reactiva una fila prèviament eliminada.
+                        'is_active': True,
+                        # Sprint 5B.1: copy tolerance from the catalogue POM.
+                        'tolerancia_minus': pom.tolerancia_default_minus,
+                        'tolerancia_plus': pom.tolerancia_default_plus,
+                    }
+                )
+                if was_created: created += 1
+                else: updated += 1
+            except POMMaster.DoesNotExist:
+                errors.append(f'POMMaster {pom_id} no trobat')
+
+        if keep_pom_ids is not None:
+            keep = [int(x) for x in keep_pom_ids]
+            deactivated = (BaseMeasurement.objects
+                           .filter(model=model, is_active=True)
+                           .exclude(pom_id__in=keep)
+                           .update(is_active=False))
 
     # NOTE: set-measurements només fa upsert de BaseMeasurement (+ el log via signal). La generació
     # de GradedSpec viu EXCLUSIVAMENT a generar-grading → generate_graded_specs (l'únic camí que
     # respecta ModelGradingOverride). El grading inline d'aquí estava trencat (rule.increment_cm no
     # existeix → delta 0) i clobberava els overrides; eliminat.
-    return Response({'created': created, 'updated': updated, 'errors': errors},
+    return Response({'created': created, 'updated': updated, 'deactivated': deactivated,
+                     'errors': errors},
                     status=201 if not errors else 207)
 
 
@@ -1070,7 +1085,8 @@ def update_fabric_view(request, model_id):
         return Response({'error': 'Model no trobat'}, status=404)
 
     fields = ['fabric_main', 'fabric_composition', 'shrinkage_type',
-              'shrinkage_warp', 'shrinkage_weft', 'shrinkage_pct', 'fabric_notes']
+              'shrinkage_warp', 'shrinkage_weft', 'shrinkage_pct', 'fabric_notes',
+              'shrinkage_iso_key']
     for f in fields:
         if f in request.data:
             setattr(model, f, request.data[f])

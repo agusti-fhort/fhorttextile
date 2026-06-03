@@ -280,6 +280,11 @@ class Model(models.Model):
                                             help_text='Encongiment trama/weft (%)')
     shrinkage_pct      = models.FloatField(null=True, blank=True,
                                             help_text='Encongiment únic (%) si no és biaxial')
+    # Clau del teixit ISO triat (id de la taula ISO_SHRINKAGE_TABLE). Conserva QUIN teixit es va
+    # seleccionar (no només els %), necessari per al shrinkage-com-a-càlcul futur i per desambiguar
+    # teixits amb warp/weft idèntics (Woven Cotton vs Linen).
+    shrinkage_iso_key  = models.CharField(max_length=40, blank=True, default='',
+                                           help_text='Teixit ISO triat (id de la taula ISO)')
     fabric_notes       = models.TextField(blank=True, default='')
 
     class Meta:

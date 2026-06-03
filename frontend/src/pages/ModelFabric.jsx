@@ -38,6 +38,7 @@ export default function ModelFabric() {
     shrinkage_warp: '',
     shrinkage_weft: '',
     shrinkage_pct: '',
+    shrinkage_iso_key: '',
     fabric_notes: '',
   })
   const [biaxial, setBiaxial] = useState(true)
@@ -58,6 +59,7 @@ export default function ModelFabric() {
         shrinkage_warp: modelData.shrinkage_warp ?? '',
         shrinkage_weft: modelData.shrinkage_weft ?? '',
         shrinkage_pct: modelData.shrinkage_pct ?? '',
+        shrinkage_iso_key: modelData.shrinkage_iso_key || '',
         fabric_notes: modelData.fabric_notes || '',
       })
       if (modelData.shrinkage_pct != null) setBiaxial(false)
@@ -68,6 +70,7 @@ export default function ModelFabric() {
     setForm(f => ({
       ...f,
       shrinkage_type: 'ISO',
+      shrinkage_iso_key: isoEntry.id,   // identitat del teixit triat (no només els %)
       shrinkage_warp: isoEntry.warp,
       shrinkage_weft: isoEntry.weft,
       shrinkage_pct: '',
@@ -82,6 +85,8 @@ export default function ModelFabric() {
         fabric_main: form.fabric_main,
         fabric_composition: form.fabric_composition,
         shrinkage_type: form.shrinkage_type,
+        // Desa quin teixit ISO es va triar; buit si la selecció no és ISO.
+        shrinkage_iso_key: form.shrinkage_type === 'ISO' ? form.shrinkage_iso_key : '',
         fabric_notes: form.fabric_notes,
       }
       if (biaxial) {
@@ -184,9 +189,10 @@ export default function ModelFabric() {
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {isoTable.map(entry => {
+              // Selecció per id del teixit (no per warp/weft, que col·lisionen entre teixits:
+              // Woven Cotton i Linen comparteixen 3/3). Així només es marca el xip clicat.
               const active = form.shrinkage_type === 'ISO'
-                && form.shrinkage_warp === entry.warp
-                && form.shrinkage_weft === entry.weft
+                && form.shrinkage_iso_key === entry.id
               return (
                 <button key={entry.id} type="button"
                   onClick={() => handleISOSelect(entry)}
@@ -239,7 +245,8 @@ export default function ModelFabric() {
               <input type="number" step="0.5" min="0" max="30"
                 value={form.shrinkage_warp}
                 onChange={e => setForm(f => ({
-                  ...f, shrinkage_warp: e.target.value, shrinkage_type: 'SUPPLIER'
+                  ...f, shrinkage_warp: e.target.value, shrinkage_type: 'SUPPLIER',
+                  shrinkage_iso_key: ''
                 }))}
                 placeholder="ex: 3"
                 style={{ ...inputStyle, width: 80 }} />
@@ -249,7 +256,8 @@ export default function ModelFabric() {
               <input type="number" step="0.5" min="0" max="30"
                 value={form.shrinkage_weft}
                 onChange={e => setForm(f => ({
-                  ...f, shrinkage_weft: e.target.value, shrinkage_type: 'SUPPLIER'
+                  ...f, shrinkage_weft: e.target.value, shrinkage_type: 'SUPPLIER',
+                  shrinkage_iso_key: ''
                 }))}
                 placeholder="ex: 3"
                 style={{ ...inputStyle, width: 80 }} />
