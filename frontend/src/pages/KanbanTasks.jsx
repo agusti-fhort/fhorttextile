@@ -550,7 +550,16 @@ function TaskCard({ task, canExecute, onTransition, t }) {
       )}
       {isPom && (
         <div style={{ marginTop: 8 }}>
-          <button onClick={() => navigate(`/models/${task.model}/mesures`)} style={{
+          <button onClick={() => {
+            // Sprint B · auto-iniciar: obrir mides posa la tasca pom En curs si estava
+            // Pending/Paused (l'exclusió mútua — auto-pausar l'altra InProgress — la fa
+            // transition_task al backend). Fire-and-forget: navega igualment sense bloquejar,
+            // i si la transició falla no atura l'obertura de la pantalla de mides.
+            if (canExecute && (task.status === 'Pending' || task.status === 'Paused')) {
+              onTransition(task, 'InProgress')
+            }
+            navigate(`/models/${task.model}/mesures`)
+          }} style={{
             display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px',
             borderRadius: 6, border: '0.5px solid var(--gold)', background: 'var(--white)',
             cursor: 'pointer', color: 'var(--gold)', fontWeight: 500,

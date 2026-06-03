@@ -94,12 +94,26 @@ export default function ModelFabric() {
         payload.shrinkage_weft = null
       }
 
+      // 1) Persistir el teixit (com fins ara).
       const r = await fetch(`${API}/api/v1/models/${id}/update-fabric/`, {
         method: 'PATCH', headers: authHeaders,
         body: JSON.stringify(payload),
       })
       if (!r.ok) { const d = await r.json(); setError(JSON.stringify(d)); return }
-      navigate(`/models/${id}/fitxers`)
+
+      // 2) Sprint B · tancar la taula de mides (estat 'Tancat'). Resol/crea el SizeFitting
+      // del model al backend. Si encara no hi ha mides → avís clar, NO navegar.
+      const rc = await fetch(`${API}/api/v1/models/${id}/tancar-taula/`, {
+        method: 'POST', headers: authHeaders,
+      })
+      if (!rc.ok) {
+        const d = await rc.json().catch(() => ({}))
+        setError(d.error || 'No s\'ha pogut tancar la taula.')
+        return
+      }
+
+      // 3) Èxit: el flux de mides es tanca → tornar al Kanban (no a /fitxers).
+      navigate('/tasques/kanban')
     } catch {
       setError('Error de connexió')
     } finally {
@@ -283,7 +297,7 @@ export default function ModelFabric() {
               cursor: saving ? 'not-allowed' : 'pointer',
               fontFamily: 'IBM Plex Mono, monospace',
             }}>
-            {saving ? 'Saving...' : 'Save & Continue →'}
+            {saving ? 'Tancant...' : 'Tancar i finalitzar'}
           </button>
         </div>
       </div>

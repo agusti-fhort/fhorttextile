@@ -10,15 +10,13 @@ from rest_framework import status
 def close_base_view(request, sf_id):
     """
     POST /api/v1/size-fittings/{id}/tancar-base/
-    Close the base size and generate the sizes automatically.
+    Close the measurement table (Sprint B: final state 'Tancat'). Generates the
+    sizes first if needed. close_base now returns a dict (estat/base_tancada/...).
     """
     try:
         from fhort.pom.services import close_base
-        n = close_base(int(sf_id), request.user.id)
-        return Response({
-            'graded_specs_creats': n,
-            'missatge': f'{n} especificacions generades correctament',
-        })
+        result = close_base(int(sf_id), request.user.id)
+        return Response(result)
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:

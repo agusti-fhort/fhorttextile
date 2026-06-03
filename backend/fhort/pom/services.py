@@ -126,35 +126,108 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     return created
 
 
-def close_base(size_fitting_id: int, user_id: int | None = None) -> int:
+# Sprint B — final state of a closed measurement table.
+CLOSED_STATE = 'Tancat'
+# Starting states from which the table may be closed. 'TallesGenerades' is the
+# normal state after grading is generated (the real-world entry point); legacy
+# 'BaseTancada' is tolerated too.
+_CLOSEABLE_FROM = ('Pendent', 'BaseOberta', 'TallesGenerades', 'BaseTancada')
+
+
+def get_or_create_size_fitting(model, user_id: int | None = None):
     """
-    Close the Size & Fitting base size and generate the sizes.
-    Equivalent to Frappe's 'Tancar base' button.
+    Return the model's SizeFitting, creating one if it has none.
+
+    SizeFitting requires numero/codi/tipus/creat_per (creat_per is a non-null
+    PROTECT FK), so we resolve a UserProfile from user_id (falling back to any
+    profile) to satisfy it. This lets the table be closed even for models whose
+    responsible is None and that never had an SF (e.g. model 131). Mirrors the
+    get-or-create pattern in models_app generar-grading.
+    """
+    from fhort.fitting.models import SizeFitting
+    from fhort.accounts.models import UserProfile
+
+    sf = SizeFitting.objects.filter(model=model).order_by('numero').first()
+    if sf:
+        return sf
+
+    next_num = 1
+    codi = f"{model.codi_intern}-SF-{next_num}"
+    while SizeFitting.objects.filter(codi=codi).exists():
+        next_num += 1
+        codi = f"{model.codi_intern}-SF-{next_num}"
+
+    profile = None
+    if user_id is not None:
+        profile = UserProfile.objects.filter(user_id=user_id).first()
+    if profile is None:
+        profile = UserProfile.objects.first()
+
+    return SizeFitting.objects.create(
+        model=model, numero=next_num, codi=codi, tipus='SizeSet', creat_per=profile,
+    )
+
+
+def close_base(size_fitting_id: int, user_id: int | None = None) -> dict:
+    """
+    Close the measurement table for a Size & Fitting. Final state = 'Tancat'.
+
+    State machine (Sprint B):
+      - Valid starting states: Pendent, BaseOberta, TallesGenerades (the normal
+        state after grading), plus legacy BaseTancada.
+      - If sizes were never generated (no GradedSpec) -> generate them first.
+      - Then seal the table: estat='Tancat', base_tancada=True,
+        data_tancament_base=now(). Sealing happens AFTER generation so the
+        'TallesGenerades' written by generate_graded_specs is overridden.
+      - Idempotent: an already-closed table (base_tancada / 'Tancat') returns its
+        current state without re-closing and without a hard error.
+
+    Returns a dict: estat, base_tancada, graded_specs, generated_now, already_closed.
     """
     from django.utils import timezone
-    from fhort.fitting.models import SizeFitting
+    from fhort.fitting.models import SizeFitting, GradedSpec
 
     sf = SizeFitting.objects.get(pk=size_fitting_id)
 
-    if sf.base_tancada:
-        raise ValueError("La talla base ja està tancada.")
+    def _spec_count():
+        return GradedSpec.objects.filter(grading_version__size_fitting=sf).count()
 
-    if sf.estat not in ('BaseOberta', 'Pendent'):
+    # Idempotent: already closed -> soft no-op (no hard error).
+    if sf.base_tancada or sf.estat == CLOSED_STATE:
+        return {
+            'estat': sf.estat,
+            'base_tancada': sf.base_tancada,
+            'graded_specs': _spec_count(),
+            'generated_now': 0,
+            'already_closed': True,
+        }
+
+    if sf.estat not in _CLOSEABLE_FROM:
         raise ValueError(
-            f"L'estat actual '{sf.get_estat_display()}' no permet tancar la base."
+            f"L'estat actual '{sf.get_estat_display()}' no permet tancar la taula."
         )
 
-    # Close base
+    # Generate sizes only if they were not generated yet.
+    generated = 0
+    if not GradedSpec.objects.filter(grading_version__size_fitting=sf).exists():
+        generated = generate_graded_specs(size_fitting_id)  # sets estat='TallesGenerades'
+
+    # Seal the table as closed (final state).
     SizeFitting.objects.filter(pk=size_fitting_id).update(
         base_tancada=True,
         data_tancament_base=timezone.now(),
-        estat='BaseTancada',
+        estat=CLOSED_STATE,
     )
 
-    # Generate sizes
-    n = generate_graded_specs(size_fitting_id)
-
-    return n
+    total = _spec_count()
+    logger.info(f"Table closed for SF {size_fitting_id}: estat=Tancat, specs={total}")
+    return {
+        'estat': CLOSED_STATE,
+        'base_tancada': True,
+        'graded_specs': total,
+        'generated_now': generated,
+        'already_closed': False,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

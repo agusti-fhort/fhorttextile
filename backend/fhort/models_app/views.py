@@ -425,6 +425,72 @@ def materialize_poms_view(request, model_id):
                      'total_template': maps.count()})
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def close_table_view(request, model_id):
+    """POST /api/v1/models/<id>/tancar-taula/ — Sprint B · tancar la taula de mides.
+
+    Resol (o crea, get_or_create_size_fitting) el SizeFitting del model i executa
+    close_base → estat final 'Tancat'. Avís clar si encara no hi ha mides entrades
+    (BaseMeasurement amb valor): no es pot tancar una taula buida."""
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    from fhort.models_app.models import BaseMeasurement
+    # Guarda UX: una taula sense cap mida entrada (només files TEMPLATE buides) no es tanca.
+    if not BaseMeasurement.objects.filter(
+        model=model, is_active=True, base_value_cm__isnull=False
+    ).exists():
+        return Response(
+            {'error': 'Cal introduir mides abans de tancar la taula.'},
+            status=400,
+        )
+
+    from fhort.pom.services import get_or_create_size_fitting, close_base
+    profile = getattr(request.user, 'profile', None)
+    try:
+        # Atòmic (B4): si es tanca la taula, es tanca la tasca. Tot o res.
+        with transaction.atomic():
+            sf = get_or_create_size_fitting(model, request.user.id)
+            result = close_base(sf.id, request.user.id)
+            pom_task = _close_pom_task_for_model(model, profile)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=400)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("Error closing table")
+        return Response({'error': str(e)}, status=500)
+
+    return Response({'sf_id': sf.id, 'pom_task': pom_task, **result})
+
+
+def _close_pom_task_for_model(model, profile):
+    """B4 · en tancar la taula, la tasca POM del model passa a Done via transition_task
+    (l'única porta: status=Done, finished_at, tanca timer, record_actual_time, log).
+    Done només és vàlid des de InProgress → si està Pending/Paused, hi passem primer.
+    Sense tasca pom → no fa res. Ja Done → idempotent."""
+    from fhort.tasks.models import ModelTask
+    from fhort.tasks.services_c import transition_task
+
+    task = (ModelTask.objects
+            .filter(model=model, task_type__code='pom')
+            .order_by('id').first())
+    if not task:
+        return {'closed': False, 'reason': 'no_pom_task'}
+    if task.status == 'Done':
+        return {'closed': False, 'reason': 'already_done', 'task_id': task.id}
+
+    # Done només es pot assolir des de InProgress (ALLOWED a services_c). Pending/Paused
+    # hi passen primer perquè la transició no peti.
+    if task.status in ('Pending', 'Paused'):
+        transition_task(task, 'InProgress', profile)
+        task.refresh_from_db()
+    transition_task(task, 'Done', profile)
+    return {'closed': True, 'task_id': task.id}
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def measurements_table_view(request, model_id):
