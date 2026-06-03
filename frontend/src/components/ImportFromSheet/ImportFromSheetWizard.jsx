@@ -320,6 +320,24 @@ function ExtractionPreview({ extracted, pomOverrides, onOverride }) {
         </div>
       )}
 
+      {/* FASE 1 — avís SUAU si el grading no s'ha extret: els POMs es mostren igualment. */}
+      {extracted.grading_status && extracted.grading_status.status !== 'ok' && (
+        <div style={{
+          background: '#fff9e6', border: '0.5px solid #f0c040',
+          borderRadius: 8, padding: '10px 12px', marginBottom: 14,
+        }}>
+          <strong style={{ color: '#7a5a00', fontSize: 11 }}>
+            {extracted.grading_status.status === 'skipped'
+              ? 'Grading no detectat al document'
+              : 'Grading no extret'}
+          </strong>
+          <p style={{ margin: '4px 0 0', color: '#7a5a00', fontSize: 11 }}>
+            Els POMs i la talla base s'han extret correctament. El grading l'entraràs després
+            a la taula de mides.
+          </p>
+        </div>
+      )}
+
       {/* Header del model */}
       <div style={{
         display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6,

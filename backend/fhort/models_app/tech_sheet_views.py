@@ -36,6 +36,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .extraction_prompt import TECH_SHEET_EXTRACTION_PROMPT
+from .extraction_utils import safe_json_parse, salvage_measurements
 
 logger = logging.getLogger(__name__)
 
@@ -131,25 +132,41 @@ class TechSheetExtractView(APIView):
                 if getattr(block, 'type', None) == 'text'
             ).strip()
 
-            # Defensively strip markdown fences.
-            if response_text.startswith('```'):
-                response_text = response_text.split('\n', 1)[1] if '\n' in response_text else response_text[3:]
-                response_text = response_text.rsplit('```', 1)[0].strip()
-
+            # FASE 1 · Robustesa: parse tolerant. Un grading malformat MAI ha de tombar els POMs.
+            # Si el JSON global no parseja, recuperem les files de mesures una a una (salvage):
+            # els POMs i la base es conserven encara que el grading vingui brut.
+            grading_status = {'status': 'ok', 'detail': ''}
             try:
-                extracted = json.loads(response_text)
-            except json.JSONDecodeError as e:
-                logger.exception('Anthropic returned non-JSON response')
-                return Response(
-                    {'error': 'La IA no ha retornat JSON vàlid', 'detail': str(e)},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+                extracted = safe_json_parse(response_text)
+            except ValueError as e:
+                logger.warning(f'extract-sheet: JSON global invàlid, intentant salvage. {e}')
+                salvaged = salvage_measurements(response_text)
+                if not salvaged:
+                    # Ni amb salvage no hi ha POMs → això sí és un error dur (no hi ha res a mostrar).
+                    return Response(
+                        {'error': 'La IA no ha retornat dades llegibles', 'detail': str(e)},
+                        status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    )
+                extracted = {'measurements': salvaged}
+                grading_status = {
+                    'status': 'error',
+                    'detail': f'JSON global malformat; recuperats {len(salvaged)} POMs per fila. '
+                              f'Grading no fiable, entra\'l després. ({e})',
+                }
 
             # Structured errors the model emits (OUT_OF_SCOPE, NOT_A_TECH_SHEET).
             if isinstance(extracted, dict) and 'error' in extracted and len(extracted) <= 2:
                 return Response(extracted, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
             measurements = extracted.get('measurements', []) or []
+
+            # grading_status quan el parse ha anat bé: hi ha grading multi-talla al document?
+            if grading_status['status'] == 'ok':
+                multi = [m for m in measurements
+                         if len([v for v in (m.get('values') or {}).values() if v is not None]) >= 2]
+                if not multi:
+                    grading_status = {'status': 'skipped',
+                                      'detail': 'Sense graella de grading multi-talla al document.'}
             valid_measurements = [
                 m for m in measurements
                 if any(v is not None for v in (m.get('values') or {}).values())
@@ -175,6 +192,8 @@ class TechSheetExtractView(APIView):
                     if m.get('pom_confidence') in ('LOW', 'CUSTOM')
                 ),
                 'blocking_reasons': blocking_reasons,
+                # FASE 1 — estat del grading (no bloquejant): ok | skipped | error.
+                'grading_status': grading_status,
                 # Token telemetry — useful for cost monitoring and future cache-hit
                 # validation (cache_read_input_tokens > 0 ⇒ cache works).
                 'usage': {
@@ -184,6 +203,8 @@ class TechSheetExtractView(APIView):
                     'cache_read_input_tokens': getattr(response.usage, 'cache_read_input_tokens', 0),
                 },
             }
+            # També top-level perquè el front el llegeixi fàcil.
+            extracted['grading_status'] = grading_status
             return Response(extracted)
 
         except anthropic.RateLimitError as e:

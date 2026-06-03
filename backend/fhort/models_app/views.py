@@ -906,8 +906,9 @@ def measurements_chat_view(request, model_id):
             system=system_prompt,
             messages=messages,
         )
-        text = response.content[0].text.replace('```json', '').replace('```', '').strip()
-        result = json.loads(text)
+        text = response.content[0].text
+        from fhort.models_app.extraction_utils import safe_json_parse
+        result = safe_json_parse(text)   # tolerant: fences, prosa, comes finals…
 
         accions_executades = []
         for accio in result.get('accions', []):
@@ -963,7 +964,7 @@ def measurements_chat_view(request, model_id):
             'mesures_actualitzades': mesures_actualitzades,
             'historial_nou': messages + [{'role': 'assistant', 'content': text}],
         })
-    except json.JSONDecodeError as e:
+    except (ValueError, json.JSONDecodeError) as e:
         return Response({'error': f'Error parsing IA: {e}'}, status=500)
     except Exception as e:
         return Response({'error': f'Error: {e}'}, status=500)

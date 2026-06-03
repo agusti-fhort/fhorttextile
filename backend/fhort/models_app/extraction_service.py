@@ -175,16 +175,11 @@ def extract_from_file(file_bytes: bytes, filename: str, wizard_context: dict | N
     data = response.json()
     raw_text = data['content'][0]['text']
 
-    # Strip possible markdown backticks
-    raw_text = raw_text.strip()
-    if raw_text.startswith('```'):
-        raw_text = raw_text.split('\n', 1)[1] if '\n' in raw_text else raw_text[3:]
-    if raw_text.endswith('```'):
-        raw_text = raw_text.rsplit('```', 1)[0]
-
+    # Parse tolerant (fences markdown, prosa al voltant, comes finals, el·lipsis).
+    from fhort.models_app.extraction_utils import safe_json_parse
     try:
-        result = json.loads(raw_text.strip())
-    except json.JSONDecodeError as e:
+        result = safe_json_parse(raw_text)
+    except ValueError as e:
         logger.error(f"JSON inválid de Claude: {raw_text[:300]}")
         raise ValueError(f"La resposta de Claude no és JSON vàlid: {e}")
 
