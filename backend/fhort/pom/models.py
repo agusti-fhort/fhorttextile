@@ -401,10 +401,9 @@ class GarmentType(models.Model):
 
 
 class GarmentPOMMap(models.Model):
-    # Migration família → item (transitori): el FK nou és garment_type_item; garment_type (família)
-    # esdevé nul·lable i s'eliminarà al pas de neteja final un cop migrats tots els mapes.
-    garment_type = models.ForeignKey(GarmentType, on_delete=models.CASCADE, related_name='pom_maps',
-                                     null=True, blank=True)
+    # Migration família → item (COMPLETADA, PAS 6): la pertinença POM viu únicament a
+    # garment_type_item. El FK legacy garment_type i el seu unique_together s'han eliminat
+    # (migració 0016) un cop migrats i esborrats els 95 mapes legacy.
     # db_constraint=False: 'pom' és app SHARED (taula també a 'public'), però 'tasks' és tenant-only
     # → un constraint de BD cap a tasks_garmenttypeitem petaria a 'public'. L'FK és lògic (ORM);
     # el CASCADE l'emula Django al collector. Patró estàndard per a FK que creuen shared↔tenant.
@@ -421,12 +420,11 @@ class GarmentPOMMap(models.Model):
     class Meta:
         verbose_name = 'Mapa garment ↔ POM'
         verbose_name_plural = 'Mapes garment ↔ POM'
-        ordering = ['garment_type', 'ordre']
-        unique_together = [('garment_type', 'pom'), ('garment_type_item', 'pom')]
+        ordering = ['garment_type_item', 'ordre']
+        unique_together = [('garment_type_item', 'pom')]
 
     def __str__(self):
-        anchor = self.garment_type_item.code if self.garment_type_item_id else (
-            self.garment_type.codi_client if self.garment_type_id else '?')
+        anchor = self.garment_type_item.code if self.garment_type_item_id else '?'
         return f'{anchor} · {self.pom.codi_client}'
 
 

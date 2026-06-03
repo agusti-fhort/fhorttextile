@@ -31,6 +31,61 @@ class POMMasterSerializer(serializers.ModelSerializer):
     pom_global_codi = serializers.CharField(source='pom_global.codi', read_only=True)
     pom_global_nom = serializers.CharField(source='pom_global.nom_en', read_only=True)
 
+    # PAS B5 — bloc complet "com mesurar" per a la vista Catalogue (NOMÉS LECTURA). Mateix patró
+    # que GarmentPOMMapSerializer però arrelat al propi POMMaster: pom_global flat amb fallback
+    # tenant-only. Tots read_only → no afegeixen escriptura (el catàleg es conserva intacte).
+    pom_code = serializers.SerializerMethodField()
+    name_en = serializers.SerializerMethodField()
+    name_cat = serializers.SerializerMethodField()
+    abbreviation = serializers.SerializerMethodField()
+    categoria_nom = serializers.SerializerMethodField()
+    applies_woven = serializers.BooleanField(source='pom_global.applies_woven', read_only=True)
+    applies_knit = serializers.BooleanField(source='pom_global.applies_knit', read_only=True)
+    applies_swim = serializers.BooleanField(source='pom_global.applies_swim', read_only=True)
+    start_point = serializers.CharField(source='pom_global.start_point', read_only=True)
+    end_point = serializers.CharField(source='pom_global.end_point', read_only=True)
+    reference_point = serializers.CharField(source='pom_global.reference_point', read_only=True)
+    scope = serializers.CharField(source='pom_global.scope', read_only=True)
+    orientation = serializers.CharField(source='pom_global.orientation', read_only=True)
+    state = serializers.CharField(source='pom_global.state', read_only=True)
+    line = serializers.CharField(source='pom_global.line', read_only=True)
+    body_section = serializers.CharField(source='pom_global.body_section', read_only=True)
+    tol_prod_cm = serializers.DecimalField(source='pom_global.tol_prod_cm',
+                                           max_digits=5, decimal_places=2, read_only=True)
+    tol_samp_cm = serializers.DecimalField(source='pom_global.tol_samp_cm',
+                                           max_digits=5, decimal_places=2, read_only=True)
+    iso_ref = serializers.CharField(source='pom_global.iso_ref', read_only=True)
+    unitat = serializers.CharField(source='pom_global.unitat', read_only=True)
+    descripcio_en = serializers.CharField(source='pom_global.descripcio_en', read_only=True)
+    descripcio_ca = serializers.CharField(source='pom_global.descripcio_ca', read_only=True)
+    body_measure_iso_codi = serializers.CharField(
+        source='pom_global.body_measure_iso.codi_iso', read_only=True)
+    body_measure_iso_nom = serializers.CharField(
+        source='pom_global.body_measure_iso.nom_en', read_only=True)
+
+    def get_pom_code(self, obj):
+        pg = obj.pom_global
+        return (pg.codi if pg else None) or obj.codi_client
+
+    def get_name_en(self, obj):
+        pg = obj.pom_global
+        return (pg.nom_en if pg else None) or obj.nom_client
+
+    def get_name_cat(self, obj):
+        pg = obj.pom_global
+        return (pg.nom_ca if pg else None) or obj.nom_client
+
+    def get_abbreviation(self, obj):
+        pg = obj.pom_global
+        return (pg.abbreviation if pg else None) or obj.codi_client
+
+    def get_categoria_nom(self, obj):
+        pg = obj.pom_global
+        if pg and pg.categoria:
+            return pg.categoria
+        cat = obj.categoria
+        return (cat.nom_ca or cat.nom_en) if cat else ''
+
     class Meta:
         model = POMMaster
         fields = '__all__'
@@ -151,29 +206,82 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
 
 
 class GarmentPOMMapSerializer(serializers.ModelSerializer):
-    # Expose the POMMaster → POMGlobal fields for the UI.
-    pom_code = serializers.CharField(source='pom.pom_global.codi', read_only=True)
-    name_en = serializers.CharField(source='pom.pom_global.nom_en', read_only=True)
-    name_cat = serializers.CharField(source='pom.pom_global.nom_ca', read_only=True)
-    abbreviation = serializers.CharField(source='pom.pom_global.abbreviation', read_only=True)
-    categoria = serializers.CharField(source='pom.pom_global.categoria', read_only=True)
+    # Display fields amb FALLBACK a POMMaster (tenant-only, pom_global=None → els 19 importats per IA
+    # no han de sortir buits): si no hi ha pom_global, caure a codi_client / nom_client / categoria FK.
+    pom_code = serializers.SerializerMethodField()
+    name_en = serializers.SerializerMethodField()
+    name_cat = serializers.SerializerMethodField()
+    abbreviation = serializers.SerializerMethodField()
+    categoria = serializers.SerializerMethodField()
     applies_woven = serializers.BooleanField(source='pom.pom_global.applies_woven', read_only=True)
     applies_knit = serializers.BooleanField(source='pom.pom_global.applies_knit', read_only=True)
     applies_swim = serializers.BooleanField(source='pom.pom_global.applies_swim', read_only=True)
-    garment_type_codi = serializers.CharField(source='garment_type.codi_client', read_only=True)
-    # Migration família → item: the ownership axis is garment_type_item. DRF returns None for the
-    # read-only codi/name when the FK is null (legacy família rows), so both axes coexist safely.
+
+    # PAS B3-ter — bloc complet "com mesurar" des de pom.pom_global. Quan pom_global és None
+    # (tenant-only, importats per IA) DRF retorna None en travessar el FK nul: el front els pinta
+    # com "—", que és precisament el senyal de camp pendent de definir.
+    start_point = serializers.CharField(source='pom.pom_global.start_point', read_only=True)
+    end_point = serializers.CharField(source='pom.pom_global.end_point', read_only=True)
+    reference_point = serializers.CharField(source='pom.pom_global.reference_point', read_only=True)
+    scope = serializers.CharField(source='pom.pom_global.scope', read_only=True)
+    orientation = serializers.CharField(source='pom.pom_global.orientation', read_only=True)
+    state = serializers.CharField(source='pom.pom_global.state', read_only=True)
+    line = serializers.CharField(source='pom.pom_global.line', read_only=True)
+    body_section = serializers.CharField(source='pom.pom_global.body_section', read_only=True)
+    tol_prod_cm = serializers.DecimalField(source='pom.pom_global.tol_prod_cm',
+                                           max_digits=5, decimal_places=2, read_only=True)
+    tol_samp_cm = serializers.DecimalField(source='pom.pom_global.tol_samp_cm',
+                                           max_digits=5, decimal_places=2, read_only=True)
+    iso_ref = serializers.CharField(source='pom.pom_global.iso_ref', read_only=True)
+    unitat = serializers.CharField(source='pom.pom_global.unitat', read_only=True)
+    descripcio_en = serializers.CharField(source='pom.pom_global.descripcio_en', read_only=True)
+    descripcio_ca = serializers.CharField(source='pom.pom_global.descripcio_ca', read_only=True)
+    body_measure_iso_codi = serializers.CharField(
+        source='pom.pom_global.body_measure_iso.codi_iso', read_only=True)
+    body_measure_iso_nom = serializers.CharField(
+        source='pom.pom_global.body_measure_iso.nom_en', read_only=True)
+
+    # Migration família → item COMPLETADA (PAS 6): la pertinença viu només a garment_type_item;
+    # el FK legacy garment_type s'ha eliminat (migració 0016).
     garment_type_item_codi = serializers.CharField(source='garment_type_item.code', read_only=True)
     garment_type_item_name = serializers.CharField(source='garment_type_item.name', read_only=True)
+
+    def get_pom_code(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.codi if pg else None) or obj.pom.codi_client
+
+    def get_name_en(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.nom_en if pg else None) or obj.pom.nom_client
+
+    def get_name_cat(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.nom_ca if pg else None) or obj.pom.nom_client
+
+    def get_abbreviation(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.abbreviation if pg else None) or obj.pom.codi_client
+
+    def get_categoria(self, obj):
+        pg = obj.pom.pom_global
+        if pg and pg.categoria:
+            return pg.categoria
+        cat = obj.pom.categoria
+        return (cat.nom_ca or cat.nom_en) if cat else ''
 
     class Meta:
         model = GarmentPOMMap
         fields = (
             'id',
-            'garment_type', 'garment_type_codi',
             'garment_type_item', 'garment_type_item_codi', 'garment_type_item_name',
             'pom',
             'pom_code', 'name_en', 'name_cat', 'abbreviation', 'categoria',
             'applies_woven', 'applies_knit', 'applies_swim',
+            # PAS B3-ter — bloc complet "com mesurar"
+            'start_point', 'end_point', 'reference_point',
+            'scope', 'orientation', 'state', 'line', 'body_section',
+            'tol_prod_cm', 'tol_samp_cm', 'iso_ref', 'unitat',
+            'descripcio_en', 'descripcio_ca',
+            'body_measure_iso_codi', 'body_measure_iso_nom',
             'is_key', 'obligatori', 'ordre', 'pendent_revisio',
         )

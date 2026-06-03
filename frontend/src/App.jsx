@@ -17,7 +17,9 @@ const FittingSessionNew = lazy(() => import('./pages/FittingSessionNew'))
 const GradingRuleSets = lazy(() => import('./pages/GradingRuleSets'))
 const SizeSystems = lazy(() => import('./pages/SizeSystems'))
 const SizeLibrary = lazy(() => import('./pages/SizeLibrary'))
-const GarmentPOMMapEditor = lazy(() => import('./pages/GarmentPOMMapEditor'))
+// CODI MORT (jubilat al sprint tasca-POM): GarmentPOMMapEditor.jsx — editor de pertinença per
+// família amb endpoints fantasma (pom-map/* → 404). Substituït per POMBrowser-assign (per item).
+// Fitxer no esborrat; netejar en passada futura amb MeasurementTable.jsx i ImportFromSheetWizard.jsx.
 const OnboardingWizard = lazy(() => import('./pages/OnboardingWizard'))
 const ModelWizard = lazy(() => import('./pages/ModelWizard'))
 const ModelMeasurements = lazy(() => import('./pages/ModelMeasurements'))
@@ -81,8 +83,6 @@ export default function App() {
           <Route path="poms/grading" element={<GradingRuleSets />} />
           <Route path="poms/sizes" element={<SizeSystems />} />
           <Route path="size-library" element={<SizeLibrary />} />
-          <Route path="garment-pom-map" element={<GarmentPOMMapEditor />} />
-          <Route path="garment-pom-map/:id" element={<GarmentPOMMapEditor />} />
           <Route path="onboarding" element={<OnboardingWizard />} />
           <Route path="configuracio/usuaris" element={<UsersRoles />} />
           <Route path="configuracio/calendari" element={<CompanyCalendar />} />

@@ -361,10 +361,41 @@ sense pantalla). Capa antiga de Fitting i `Settings` antic **JUBILATS**.
 - **Fase paral·lela**, tasques sempre obertes; quan el model s'acaba, ningú hi torna si no se li demana.
 - **Tècnic real = assignees de tasques** (`responsable` sovint null).
 
+## SPRINT TASCA-POM — pertinença família→ITEM (FET · commit `452c723`, 2026-06-02)
+**Fet i desplegat (tenant `fhort`):**
+- **Pertinença POM moguda de família (`GarmentType`) a ITEM (`GarmentTypeItem`).** `GarmentPOMMap` amb FK
+  `garment_type_item` (`db_constraint=False` — creua shared↔tenant: `pom` és SHARED, `tasks` tenant-only)
+  + `pendent_revisio`. `garment_type` (família) queda **nul·lable** (drop diferit al Pas 6).
+- **Seed** (`seed_pom_maps_to_items`): els 95 mapes vells = **àncores** d'item + **267 clons** de germans
+  (clons `pendent_revisio=True` per ajust de delta). **362 mapes a item.** 23 items de **8 famílies sense
+  àncora** queden BUITS (per autorar a POMBrowser).
+- **Backfill** (`backfill_model_items`): 16 models legacy → `garment_type_item` assignat, família derivada.
+  **16/16 coherents.**
+- **Pont família tancat:** `Model.garment_type` deriva de `garment_type_item.garment_type`
+  (`_resolve_garment_def`), per construcció.
+- **Motor de grading únic:** `generate_graded_specs`. Grading inline de `set-measurements` **ELIMINAT**
+  (bug `increment_cm` inexistent + ignorava `ModelGradingOverride`).
+- **Materialització:** en obrir `/mesures`, els POMs de l'item s'instancien com a `BaseMeasurement` BUIDES
+  (`origen='TEMPLATE'`, `base_value_cm=NULL`, `is_key`/`ordre` de plantilla). NO disparen log (guard al
+  signal `base_value_cm is None`), NO s'esborren a guardar-talla-base. Endpoint
+  `POST /models/<id>/materialitzar-poms/` (idempotent).
+- **Porta d'entrada:** carta de tasca `pom` al Kanban → botó "Obrir mides" → `/mesures`. **Fitxa de model =
+  consulta** (`EditableTable readOnly`) + enllaç "Editar a la tasca de POM".
+- Migracions: pom `0014`/`0015` + models_app `0028`. **Eixos pertinença i grading independents.**
+
+**Pendent d'aquest sprint:**
+- **Pas 5:** jubilar `/garment-pom-map` (rutes App.jsx + menú; els seus endpoints `pom-map/*` són fantasma/404).
+- **Pas 6:** drop del FK vell `garment_type` a `GarmentPOMMap` (migració, quan POMBrowser-assign validat).
+- **POMBrowser-assign a `/poms`** (autoria de pertinença per Montse): llegir per item, matar `MOCK_POMS`,
+  selector família→item, autorar els 23 items buits. **Backend ja llest** (`GarmentPOMMapViewSet` a item +
+  filterset). Falta **gate de permís**.
+- **Cicle de vida tasques Kanban:** auto-iniciar tasca en obrir-la, exclusió mútua (una en curs), auto-tancar
+  en validar taula, ordenar models amb tasques actives a dalt.
+
 ## PENDENTS (anotats, no fets)
-- **POM:** redisseny del cicle (entrada mides base/totes, increments/grading, extracció IA). EN CURS en
-  sessió separada. Decisions de fons: POMs a nivell família vs item; quин motor de grading; **repoblar
-  les 95 GarmentPOMMap orfes** (apunten als GarmentTypes vells desactivats).
+- **POM:** nucli **FET** — veure secció "SPRINT TASCA-POM". Pertinença a item, materialització TEMPLATE,
+  motor únic, tasca com a porta. Les **95 GarmentPOMMap orfes ja repoblades** (àncores+clons a item).
+  Resta: POMBrowser-assign (autoria Montse), Pas 5/6, cicle de vida Kanban (tot a la secció del sprint).
 - **5A-bis: import Excel → ESQUELET.** La IA extreu `garment_type_code` = codi d'**ITEM**; cal resoldre
   item→derivar família. `ImportFromSheetWizard` orfe a muntar. Comparteix flux d'extracció amb el POM →
   decidir junts quин dels dos fluxos (`extract-from-file` vell / `extract-sheet` nou) es queda.
@@ -373,7 +404,8 @@ sense pantalla). Capa antiga de Fitting i `Settings` antic **JUBILATS**.
 - **Neteja final:** extracció duplicada (2 fluxos), orfes (`Tasks.jsx`, `ImportConfirmStep`),
   `TipologiaModel`, claus i18n velles.
 - **Traduccions ca/es** de les 17 famílies de Garment Types (ara `nom_ca`/`nom_es` = `nom_en` provisional).
-- **POM-maps + SizingProfiles:** re-autoria cap a la nova estructura de 17 famílies.
+- **POM-maps:** ✅ repoblats a item (sprint tasca-POM). **SizingProfiles:** re-autoria cap a la nova
+  estructura de 17 famílies encara pendent.
 
 ## DADES DE PROVA AL TENANT `fhort` (a netejar al tancament)
 - Seed planificació (`FTT-SS26-0004..0015`) + **model 131** (`FTT-FW27-0001`, complet amb item+tasques) +

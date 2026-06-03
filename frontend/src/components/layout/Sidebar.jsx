@@ -56,7 +56,6 @@ const navGroups = [
   ]},
   { sectionKey: 'nav.section_config_tecnica', items: [
     { to: '/garment-types', labelKey: 'nav.garment_types', icon: 'ti-shirt' },
-    { to: '/garment-pom-map', labelKey: 'nav.garment_pom_map', icon: 'ti-table' },
     { to: '/poms', labelKey: 'nav.poms_list', icon: 'ti-ruler-measure' },
     { to: '/poms/sizes', labelKey: 'nav.sizes', icon: 'ti-arrows-maximize' },
     { to: '/size-library', labelKey: 'nav.size_library', icon: 'ti-books' },

@@ -1,4 +1,12 @@
 import { useState, useEffect } from 'react'
+import {
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy,
+  useSortable, arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import useAuthStore from '../../store/auth'
 import GarmentTypeSelector from '../GarmentTypeSelector/GarmentTypeSelector'
 
@@ -24,93 +32,23 @@ function grupLabel(grup, lang = 'ca') {
   return MAP[grup]?.[lang] || grup
 }
 
-// TODO: endpoint /api/v1/garment-pom-maps/ pendent — l'endpoint hauria de retornar
-// the GarmentPOMMap entries filtered by garment_type (codi_client) with the POMMaster
-// nested i el seu POMGlobal expandit (name_en, name_cat, abbreviation, categoria,
-// is_key, applies_woven/knit/swim, tol_*, etc.).
-// Meanwhile, this component tries /api/v1/garment-pom-maps/?garment_type=<codi>
-// and, if it returns 404 or the response lacks the rich fields, falls back to MOCK_POMS so
-// la UI sigui usable.
-
-const MOCK_POMS = [
-  {
-    pom_code: 'POM-001', name_en: 'Chest width', name_cat: 'Ample de pit',
-    category: 'Upper body', abbreviation: 'CH', is_key: true,
-    description_en: 'Half chest measured 2.5 cm below armhole, horizontal seam to seam.',
-    start_point: 'Side seam (left)', end_point: 'Side seam (right)',
-    reference_point: '2.5 cm below armhole',
-    scope: 'GARMENT', orientation: 'HORIZONTAL', state: 'FLAT', body_section: 'TORSO',
-    tol_prod_cm: 1.0, tol_samp_cm: 0.5,
-    applies_woven: true, applies_knit: true, applies_swim: false,
-    iso_ref: 'ISO 8559-2 §4.1',
-  },
-  {
-    pom_code: 'POM-002', name_en: 'Shoulder width', name_cat: 'Ample d\'espatlles',
-    category: 'Upper body', abbreviation: 'SH', is_key: true,
-    description_en: 'Horizontal distance between shoulder points.',
-    start_point: 'Shoulder point left', end_point: 'Shoulder point right',
-    scope: 'GARMENT', orientation: 'HORIZONTAL', state: 'FLAT', body_section: 'TORSO',
-    tol_prod_cm: 0.5, tol_samp_cm: 0.3,
-    applies_woven: true, applies_knit: true, applies_swim: false,
-  },
-  {
-    pom_code: 'POM-003', name_en: 'Waist width', name_cat: 'Ample de cintura',
-    category: 'Upper body', abbreviation: 'WA', is_key: true,
-    description_en: 'Half waist at narrowest point.',
-    scope: 'GARMENT', orientation: 'HORIZONTAL', state: 'FLAT', body_section: 'TORSO',
-    tol_prod_cm: 1.0, tol_samp_cm: 0.5,
-    applies_woven: true, applies_knit: true, applies_swim: true,
-  },
-  {
-    pom_code: 'POM-004', name_en: 'Hip width', name_cat: 'Ample de maluc',
-    category: 'Lower body', abbreviation: 'HP', is_key: true,
-    description_en: 'Half hip at fullest part.',
-    scope: 'GARMENT', orientation: 'HORIZONTAL', state: 'FLAT', body_section: 'TORSO',
-    tol_prod_cm: 1.0, tol_samp_cm: 0.5,
-    applies_woven: true, applies_knit: true, applies_swim: true,
-  },
-  {
-    pom_code: 'POM-010', name_en: 'Sleeve length', name_cat: 'Llargada de màniga',
-    category: 'Sleeves', abbreviation: 'SL',
-    description_en: 'From shoulder point to cuff edge.',
-    scope: 'GARMENT', orientation: 'VERTICAL', state: 'FLAT', body_section: 'ARM',
-    tol_prod_cm: 1.0, tol_samp_cm: 0.5,
-    applies_woven: true, applies_knit: true, applies_swim: false,
-  },
-  {
-    pom_code: 'POM-020', name_en: 'Inseam', name_cat: 'Entrecuixa',
-    category: 'Lower body', abbreviation: 'IS', is_key: true,
-    description_en: 'Inside leg from crotch to hem.',
-    scope: 'GARMENT', orientation: 'VERTICAL', state: 'FLAT', body_section: 'LEG',
-    tol_prod_cm: 1.5, tol_samp_cm: 0.5,
-    applies_woven: true, applies_knit: true, applies_swim: false,
-  },
-]
-
-// Normalitza una resposta de /api/v1/garment-pom-maps/ (o POMMaster fallback) al
-// format esperat per la UI. Cada entrada pot ser:
-//   (a) GarmentPOMMap with nested pom → pom: { pom_global: {...}, ... }
-//   (b) POMMaster directe → { codi_client, pom_global: {...} }
-//   (c) Plain POMGlobal-like → { codi, nom_en, ... }
-// Si no hi ha cap forma reconeguda, retorna null per activar el fallback a mock.
+// Normalitza la resposta de /api/v1/garment-pom-maps/?garment_type_item=<id> (GarmentPOMMapSerializer,
+// camps flat) al format de la UI. Cada entrada porta el seu map_id (id de GarmentPOMMap) i pom_id per
+// poder fer DELETE/POST. Llista buida → [] (estat buit real; SENSE mock).
 function normalizePOMs(raw) {
-  if (!Array.isArray(raw) || raw.length === 0) return null
-  const first = raw[0]
-  // Minimal heuristic: detect which shape we have.
-  const hasMap = first.pom && (first.pom.pom_global || first.pom.codi_client)
-  const hasMaster = first.pom_global || first.codi_client
-  const hasFlat = first.name_en || first.pom_code || first.nom_en
-  if (!hasMap && !hasMaster && !hasFlat) return null
+  if (!Array.isArray(raw)) return []
 
   return raw.map(entry => {
-    // Cas (a): GarmentPOMMap → desempaquetar pom
     const isKeyFromMap = typeof entry.is_key === 'boolean' ? entry.is_key : undefined
-    // entry.pom pot ser l'objecte POMMaster (expandit) o un ID enter (FK no expandit).
-    // We only use it as the source if it is really the object; otherwise we use the flat entry.
     const pomSource = (entry.pom && typeof entry.pom === 'object') ? entry.pom : entry
     const pg = pomSource.pom_global || pomSource
 
     return {
+      // Identificadors per a assign (POST/DELETE):
+      map_id: entry.id,                                   // id de GarmentPOMMap (per DELETE)
+      pom_id: typeof entry.pom === 'number' ? entry.pom : (pomSource.id ?? null),  // per POST
+      pendent_revisio: !!entry.pendent_revisio,           // badge "revisar" als clons
+      ordre: entry.ordre,
       pom_code: pg.codi || pg.pom_code || pomSource.codi_client || '',
       name_en: pg.nom_en || pg.name_en || pomSource.nom_client || '',
       name_cat: pg.nom_ca || pg.name_cat || pg.nom_cat || '',
@@ -120,6 +58,10 @@ function normalizePOMs(raw) {
       // override it for this garment+POM combination.
       is_key: isKeyFromMap !== undefined ? isKeyFromMap : !!pg.is_key,
       description_en: pg.descripcio_en || pg.description_en || '',
+      description_ca: pg.descripcio_ca || pg.description_ca || '',
+      unitat: pg.unitat || '',
+      body_measure_iso_codi: pg.body_measure_iso_codi || '',
+      body_measure_iso_nom: pg.body_measure_iso_nom || '',
       start_point: pg.start_point || '',
       end_point: pg.end_point || '',
       reference_point: pg.reference_point || '',
@@ -148,73 +90,38 @@ export default function POMBrowser({
 }) {
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
 
-  // L'objecte GarmentType complet seleccionat (null = step 'select-type').
-  const [selectedGT, setSelectedGT] = useState(null)
+  // Migració família→item: la pertinença viu a l'ITEM. selectedFamily = només per al breadcrumb;
+  // selectedItem = el GarmentTypeItem real sobre el qual es llegeixen/escriuen els mapes.
+  const [selectedFamily, setSelectedFamily] = useState(null)
+  const [selectedItem, setSelectedItem] = useState(null)
   const [poms, setPoms] = useState([])
+  const [orderedPoms, setOrderedPoms] = useState([])   // còpia ordenable local (assign drag)
   const [search, setSearch] = useState('')
   const [selectedPom, setSelectedPom] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [usingMock, setUsingMock] = useState(false)
+  // Mode assign — persistència + cerca al catàleg + avisos.
+  const [notice, setNotice] = useState(null)
+  const [catalogQuery, setCatalogQuery] = useState('')
+  const [catalogResults, setCatalogResults] = useState([])
 
-  // Resolve the GarmentType object when only the ID arrives via prop (wizard assign case).
-  useEffect(() => {
-    if (!garmentTypeCode) { setSelectedGT(null); return }
-    // If it is already the selected object, do not reload.
-    if (selectedGT && String(selectedGT.id) === String(garmentTypeCode)) return
-
-    fetch(`${API}/api/v1/garment-types/${garmentTypeCode}/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => setSelectedGT(data))
-      .catch(() => {
-        // Fallback: synthetic object with only the ID
-        setSelectedGT({ id: garmentTypeCode, nom_en: '', nom_ca: '', grup: '' })
-      })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [garmentTypeCode])
-
-  // Load POMs when the selected GarmentType changes.
-  // Endpoint preferit: /api/v1/garment-pom-maps/?garment_type=<codi_client>.
-  // Si l'endpoint no existeix (404) o la resposta no porta els camps rics,
-  // falls back to MOCK_POMS with an informative badge.
+  // Carrega els POMs mapejats a l'ITEM seleccionat: garment-pom-maps/?garment_type_item=<id>.
+  // Sense mock: item sense mapes → llista buida (estat buit real). Recarregable via `reloadKey`.
+  const [reloadKey, setReloadKey] = useState(0)
   useEffect(() => {
     setSelectedPom(null)
-    if (!selectedGT?.id) { setPoms([]); return }
+    if (!selectedItem?.id) { setPoms([]); return }
     setLoading(true)
-    // Backend GarmentPOMMapViewSet accepta:
-    //   ?garment_type=<id>                  (FK exact)
-    //   ?garment_type__codi_client=<codi>   (lookup per codi_client del GarmentType)
-    // If we have the codi_client we prefer it (more stable than an internal ID).
-    const params = new URLSearchParams({ page_size: '500' })
-    if (selectedGT.codi_client) {
-      params.set('garment_type__codi_client', selectedGT.codi_client)
-    } else {
-      params.set('garment_type', selectedGT.id)
-    }
+    const params = new URLSearchParams({ garment_type_item: selectedItem.id, page_size: '500' })
     fetch(`${API}/api/v1/garment-pom-maps/?${params}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => {
-        const raw = data.results || data
-        const normalized = normalizePOMs(raw)
-        if (normalized && normalized.length > 0) {
-          setPoms(normalized)
-          setUsingMock(false)
-        } else {
-          setPoms(MOCK_POMS)
-          setUsingMock(true)
-        }
-      })
-      .catch(() => {
-        setPoms(MOCK_POMS)
-        setUsingMock(true)
-      })
+      .then(data => setPoms(normalizePOMs(data.results || data)))
+      .catch(() => setPoms([]))
       .finally(() => setLoading(false))
-  }, [selectedGT, token])
+  }, [selectedItem, token, reloadKey])
 
-  const filtered = poms.filter(p => {
+  const matchSearch = (p) => {
     const q = search.trim().toLowerCase()
     if (!q) return true
     return (
@@ -223,15 +130,100 @@ export default function POMBrowser({
       p.abbreviation?.toLowerCase().includes(q) ||
       p.pom_code?.toLowerCase().includes(q)
     )
-  })
+  }
+  const filtered = poms.filter(matchSearch)            // explore (graella)
+  const assignFiltered = orderedPoms.filter(matchSearch)  // assign (llista, ordre local)
 
-  // ── Step 'select-type' ────────────────────────────────────────────────────
-  if (!selectedGT) {
+  // ── Mode ASSIGN: persistència real (POST/DELETE garment-pom-maps) ──────────
+  const authHeaders = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+  const mappedPomIds = new Set(poms.map(p => p.pom_id))
+
+  // Cerca al catàleg de POMMaster DEL TENANT (poms/cerca/) per afegir-ne de nous a l'ítem.
+  useEffect(() => {
+    if (mode !== 'assign' || catalogQuery.trim().length < 2) { setCatalogResults([]); return }
+    const tmr = setTimeout(() => {
+      fetch(`${API}/api/v1/poms/cerca/?q=${encodeURIComponent(catalogQuery)}`, { headers: authHeaders })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => setCatalogResults(d.results || []))
+        .catch(() => setCatalogResults([]))
+    }, 300)
+    return () => clearTimeout(tmr)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogQuery, mode, token])
+
+  const assignAdd = async (master) => {
+    setNotice(null)
+    const nextOrdre = poms.reduce((m, p) => Math.max(m, p.ordre || 0), 0) + 1
+    try {
+      const r = await fetch(`${API}/api/v1/garment-pom-maps/`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({ garment_type_item: selectedItem.id, pom: master.id, is_key: false, ordre: nextOrdre }),
+      })
+      if (r.status === 403) return setNotice({ type: 'err', text: 'Sense permís per editar la pertinença (cal CONFIGURE).' })
+      if (r.status === 400) return setNotice({ type: 'warn', text: `«${master.codi_client}» ja està assignat a aquest ítem.` })
+      if (!r.ok) return setNotice({ type: 'err', text: 'No s\'ha pogut afegir el POM.' })
+      setCatalogQuery(''); setCatalogResults([]); setReloadKey(k => k + 1)
+    } catch { setNotice({ type: 'err', text: 'Error de connexió.' }) }
+  }
+
+  const assignRemove = async (pom) => {
+    if (!pom.map_id) return
+    setNotice(null)
+    try {
+      const r = await fetch(`${API}/api/v1/garment-pom-maps/${pom.map_id}/`, { method: 'DELETE', headers: authHeaders })
+      if (r.status === 403) return setNotice({ type: 'err', text: 'Sense permís per editar la pertinença (cal CONFIGURE).' })
+      if (!r.ok && r.status !== 204) return setNotice({ type: 'err', text: 'No s\'ha pogut treure el POM.' })
+      setReloadKey(k => k + 1)
+    } catch { setNotice({ type: 'err', text: 'Error de connexió.' }) }
+  }
+
+  // Toggle KEY (is_key editable) → PATCH; gate CONFIGURE al backend.
+  const toggleKey = async (pom) => {
+    if (!pom.map_id) return
+    setNotice(null)
+    try {
+      const r = await fetch(`${API}/api/v1/garment-pom-maps/${pom.map_id}/`, {
+        method: 'PATCH', headers: authHeaders, body: JSON.stringify({ is_key: !pom.is_key }),
+      })
+      if (r.status === 403) return setNotice({ type: 'err', text: 'Sense permís per editar (cal CONFIGURE).' })
+      if (!r.ok) return setNotice({ type: 'err', text: 'No s\'ha pogut canviar KEY.' })
+      setReloadKey(k => k + 1)
+    } catch { setNotice({ type: 'err', text: 'Error de connexió.' }) }
+  }
+
+  // Reordenar (drag) — ordre que veurà el tècnic a la taula de mides. Persisteix ordre via PATCH.
+  useEffect(() => { setOrderedPoms(poms) }, [poms])
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+  const handleDragEnd = async (event) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIdx = orderedPoms.findIndex(p => String(p.map_id) === String(active.id))
+    const newIdx = orderedPoms.findIndex(p => String(p.map_id) === String(over.id))
+    if (oldIdx < 0 || newIdx < 0) return
+    const next = arrayMove(orderedPoms, oldIdx, newIdx)
+    setOrderedPoms(next)   // optimista
+    setNotice(null)
+    try {
+      const results = await Promise.all(next.map((p, i) =>
+        fetch(`${API}/api/v1/garment-pom-maps/${p.map_id}/`, {
+          method: 'PATCH', headers: authHeaders, body: JSON.stringify({ ordre: i + 1 }),
+        })))
+      if (results.some(r => r.status === 403)) setNotice({ type: 'err', text: 'Sense permís per reordenar (cal CONFIGURE).' })
+      else if (results.some(r => !r.ok)) setNotice({ type: 'err', text: 'No s\'ha pogut desar l\'ordre.' })
+      setReloadKey(k => k + 1)   // reconcilia amb la BD
+    } catch { setNotice({ type: 'err', text: 'Error de connexió.' }); setReloadKey(k => k + 1) }
+  }
+
+  // ── Step 'select-type' (família → ITEM, dos nivells) ──────────────────────
+  if (!selectedItem) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <GarmentTypeSelector
           lang={lang}
-          onSelect={(gt) => setSelectedGT(gt)}
+          onSelect={(sel) => { setSelectedFamily(sel.family); setSelectedItem(sel.item) }}
         />
       </div>
     )
@@ -246,9 +238,9 @@ export default function POMBrowser({
         borderBottom: '0.5px solid #e4e4e2', background: '#fff',
         alignItems: 'center', flexWrap: 'wrap',
       }}>
-        {mode === 'explore' && (
+        {(
           <button
-            onClick={() => setSelectedGT(null)}
+            onClick={() => { setSelectedItem(null); setSelectedFamily(null); setNotice(null) }}
             title="Canviar tipus de prenda"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -265,16 +257,24 @@ export default function POMBrowser({
         )}
 
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          {selectedGT.grup && (
+          {selectedFamily?.grup && (
             <>
               <span style={{ fontSize: 10, color: '#868685', textTransform: 'uppercase', letterSpacing: '.08em' }}>
-                {grupLabel(selectedGT.grup, lang)}
+                {grupLabel(selectedFamily.grup, lang)}
+              </span>
+              <span style={{ fontSize: 12, color: '#868685' }}>›</span>
+            </>
+          )}
+          {selectedFamily && (
+            <>
+              <span style={{ fontSize: 12, color: '#868685' }}>
+                {gtName(selectedFamily, lang) || selectedFamily.codi_client}
               </span>
               <span style={{ fontSize: 12, color: '#868685' }}>›</span>
             </>
           )}
           <span style={{ fontSize: 13, fontWeight: 600, color: '#1d1d1b' }}>
-            {gtName(selectedGT, lang) || selectedGT.codi_client || '—'}
+            {selectedItem.name || selectedItem.code || '—'}
           </span>
         </div>
 
@@ -285,57 +285,168 @@ export default function POMBrowser({
           onChange={e => setSearch(e.target.value)}
           style={{ ...selectStyle, width: 280, flex: '0 1 auto', marginLeft: 'auto' }}
         />
-        {usingMock && (
-          <span
-            title="L'endpoint encara no existeix; es mostren dades d'exemple per a la UI"
-            style={{
-              fontSize: 10, color: '#c27a2a', background: '#fdf6ee',
-              border: '0.5px solid #e0c8a0', padding: '3px 8px', borderRadius: 4,
-              fontFamily: 'IBM Plex Mono, monospace',
-            }}>
-            TODO: endpoint /api/v1/garment-pom-maps/ pendent
-          </span>
-        )}
         {mode === 'assign' && (
           <span style={{ fontSize: 11, color: '#868685' }}>
-            {activePoms.length} POMs assignats
+            {poms.length} POMs assignats
           </span>
         )}
       </div>
+
+      {/* Assign — afegir POM del catàleg + avisos */}
+      {mode === 'assign' && (
+        <div style={{ padding: '10px 16px', borderBottom: '0.5px solid #e4e4e2', background: '#fdfbf8' }}>
+          <div style={{ position: 'relative', maxWidth: 480 }}>
+            <input
+              type="text"
+              placeholder="+ Afegir POM del catàleg (codi, nom)…"
+              value={catalogQuery}
+              onChange={e => setCatalogQuery(e.target.value)}
+              style={{ ...selectStyle, width: '100%', boxSizing: 'border-box' }}
+            />
+            {catalogResults.length > 0 && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                background: '#fff', border: '0.5px solid #e0d5c5', borderTop: 'none',
+                borderRadius: '0 0 6px 6px', maxHeight: 240, overflowY: 'auto',
+              }}>
+                {catalogResults.map(res => {
+                  const already = mappedPomIds.has(res.id)
+                  return (
+                    <div key={res.id}
+                      onClick={() => !already && assignAdd(res)}
+                      style={{
+                        padding: '7px 10px', fontSize: 12, cursor: already ? 'default' : 'pointer',
+                        display: 'flex', gap: 8, alignItems: 'center',
+                        borderBottom: '0.5px solid #f5ede0', opacity: already ? 0.45 : 1,
+                      }}
+                      onMouseEnter={e => { if (!already) e.currentTarget.style.background = '#fdf6ee' }}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <span style={{ color: '#c27a2a', fontWeight: 600, minWidth: 70, fontFamily: 'monospace' }}>{res.codi_client}</span>
+                      <span style={{ flex: 1, color: '#1d1d1b' }}>{res.nom_ca || res.nom_client || res.nom_en}</span>
+                      {already && <span style={{ fontSize: 10, color: '#868685' }}>ja assignat</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+          {notice && (
+            <div style={{
+              marginTop: 8, fontSize: 11, padding: '5px 10px', borderRadius: 4,
+              background: notice.type === 'err' ? '#fff0f0' : '#fff9e6',
+              border: `0.5px solid ${notice.type === 'err' ? '#f0a0a0' : '#f0c040'}`,
+              color: notice.type === 'err' ? '#a32d2d' : '#7a5a00',
+              display: 'flex', justifyContent: 'space-between', gap: 12,
+            }}>
+              {notice.text}
+              <button onClick={() => setNotice(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>×</button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
           {loading && <p style={hintStyle}>Carregant POMs...</p>}
-          {!loading && filtered.length === 0 && (
+          {!loading && poms.length === 0 && (
             <p style={{ ...hintStyle, textAlign: 'center', marginTop: 40 }}>
-              Cap POM trobat
+              Cap POM assignat a aquest ítem — afegeix-ne del catàleg.
             </p>
           )}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-            gap: 10,
-          }}>
-            {filtered.map(pom => (
-              <POMCard
-                key={pom.pom_code}
-                pom={pom}
-                mode={mode}
-                isActive={activePoms.includes(pom.pom_code)}
-                isSelected={selectedPom?.pom_code === pom.pom_code}
-                onSelect={() => mode === 'explore'
-                  ? setSelectedPom(selectedPom?.pom_code === pom.pom_code ? null : pom)
-                  : onTogglePom(pom.pom_code)
-                }
-              />
-            ))}
-          </div>
+          {!loading && poms.length > 0 && filtered.length === 0 && (
+            <p style={{ ...hintStyle, textAlign: 'center', marginTop: 40 }}>
+              Cap POM coincideix amb la cerca
+            </p>
+          )}
+
+          {/* ASSIGN → LLISTA (drag-reorder, checkbox, KEY toggle, detall al clic). */}
+          {mode === 'assign' ? (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={assignFiltered.map(p => String(p.map_id))}
+                               strategy={verticalListSortingStrategy}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {assignFiltered.map(pom => (
+                    <POMListRow
+                      key={pom.map_id}
+                      pom={pom}
+                      isSelected={selectedPom?.map_id === pom.map_id}
+                      onRowClick={() => setSelectedPom(selectedPom?.map_id === pom.map_id ? null : pom)}
+                      onRemove={() => assignRemove(pom)}
+                      onToggleKey={() => toggleKey(pom)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          ) : (
+            /* EXPLORE → graella de targetes (intacte). */
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+              gap: 10,
+            }}>
+              {filtered.map(pom => (
+                <POMCard
+                  key={pom.map_id ?? pom.pom_code}
+                  pom={pom}
+                  mode={mode}
+                  isActive={activePoms.includes(pom.pom_code)}
+                  isSelected={selectedPom?.pom_code === pom.pom_code}
+                  onSelect={() => setSelectedPom(selectedPom?.pom_code === pom.pom_code ? null : pom)}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
-        {mode === 'explore' && selectedPom && (
+        {selectedPom && (
           <POMDetailPanel pom={selectedPom} onClose={() => setSelectedPom(null)} />
         )}
       </div>
+    </div>
+  )
+}
+
+function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: String(pom.map_id) })
+  const style = {
+    transform: CSS.Transform.toString(transform), transition,
+    opacity: isDragging ? 0.6 : 1,
+    display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6,
+    border: `0.5px solid ${isSelected ? '#c27a2a' : '#e8e8e6'}`,
+    background: isSelected ? '#fdf6ee' : '#fff', fontSize: 12,
+  }
+  return (
+    <div ref={setNodeRef} style={style}>
+      <span {...attributes} {...listeners} title="Arrossega per reordenar"
+        style={{ cursor: 'grab', color: '#b0b0ad', fontSize: 14, userSelect: 'none', lineHeight: 1 }}>⠿</span>
+      <input type="checkbox" checked readOnly
+        onClick={(e) => { e.stopPropagation(); onRemove() }}
+        title="Desmarca per treure el POM de l'ítem" style={{ cursor: 'pointer' }} />
+      <div onClick={onRowClick} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minWidth: 0 }}>
+        <span style={{ color: '#c27a2a', fontWeight: 600, fontFamily: 'monospace', minWidth: 64 }}>{pom.pom_code}</span>
+        <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <PomNamePair en={pom.name_en} local={pom.name_cat} />
+        </span>
+        {pom.abbreviation && <Pill bg="#f5f0ea" color="#868685" mono>{pom.abbreviation}</Pill>}
+        {pom.applies_woven && <Pill bg="#eef4fc" color="#2a5a8a">W</Pill>}
+        {pom.applies_knit && <Pill bg="#f3edfb" color="#6a3a9a">K</Pill>}
+        {pom.applies_swim && <Pill bg="#e8f5f5" color="#2a7a7a">S</Pill>}
+      </div>
+      {pom.pendent_revisio && (
+        <span title="Clon de plantilla — cal revisar el delta" style={{
+          background: '#fff3e0', color: '#b25a00', fontSize: 9, padding: '2px 6px', borderRadius: 3,
+          fontWeight: 600, letterSpacing: '.06em', border: '0.5px solid #f0c040',
+        }}>REVISAR</span>
+      )}
+      <button type="button" onClick={(e) => { e.stopPropagation(); onToggleKey() }}
+        title="Marca/desmarca KEY" style={{
+          cursor: 'pointer', fontSize: 9, padding: '2px 7px', borderRadius: 3, fontWeight: 600,
+          letterSpacing: '.06em', border: `0.5px solid ${pom.is_key ? '#e0c8a0' : '#e0d5c5'}`,
+          background: pom.is_key ? '#fdf6ee' : '#fff', color: pom.is_key ? '#c27a2a' : '#b0b0ad',
+        }}>KEY</button>
     </div>
   )
 }
@@ -361,6 +472,14 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
         <span style={{ fontSize: 10, color: '#868685', fontWeight: 500 }}>{pom.pom_code}</span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {pom.pendent_revisio && (
+            <span title="Clon de plantilla — cal revisar el delta" style={{
+              background: '#fff3e0', color: '#b25a00',
+              fontSize: 9, padding: '2px 6px', borderRadius: 3,
+              fontWeight: 600, letterSpacing: '.06em',
+              border: '0.5px solid #f0c040',
+            }}>REVISAR</span>
+          )}
           {pom.is_key && (
             <span style={{
               background: '#fdf6ee', color: '#c27a2a',
@@ -375,16 +494,18 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
               checked={isActive}
               onChange={onSelect}
               onClick={e => e.stopPropagation()}
+              title="Desmarca per treure el POM de l'ítem"
               style={{ cursor: 'pointer' }}
             />
           )}
         </div>
       </div>
+      {/* Convenció sector: anglès primari (negre) + nom localitzat (cursiva gris). */}
       <p style={{ fontSize: 13, fontWeight: 500, color: '#1d1d1b', margin: 0, lineHeight: 1.3 }}>
-        {pom.name_en}
+        {pom.name_en || pom.name_cat}
       </p>
-      {pom.name_cat && (
-        <p style={{ fontSize: 11, color: '#868685', margin: '2px 0 0', lineHeight: 1.3 }}>
+      {pom.name_en && pom.name_cat && pom.name_cat !== pom.name_en && (
+        <p style={{ fontSize: 11, color: '#868685', fontStyle: 'italic', margin: '2px 0 0', lineHeight: 1.3 }}>
           {pom.name_cat}
         </p>
       )}
@@ -403,6 +524,21 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
   )
 }
 
+// Convenció sector tèxtil: nom anglès primari (negre), nom localitzat al costat en cursiva gris.
+// Si no hi ha EN → mostra el que hi hagi. Si EN i local coincideixen → només un.
+export function PomNamePair({ en, local }) {
+  const primary = en || local || ''
+  const secondary = en && local && local !== en ? local : ''
+  return (
+    <>
+      <span style={{ color: '#1d1d1b' }}>{primary}</span>
+      {secondary && (
+        <span style={{ color: '#868685', fontStyle: 'italic', marginLeft: 8 }}>{secondary}</span>
+      )}
+    </>
+  )
+}
+
 function Pill({ bg, color, mono, children }) {
   return (
     <span style={{
@@ -414,7 +550,7 @@ function Pill({ bg, color, mono, children }) {
   )
 }
 
-function POMDetailPanel({ pom, onClose }) {
+export function POMDetailPanel({ pom, onClose }) {
   return (
     <div style={{
       width: 340, borderLeft: '0.5px solid #e4e4e2',
@@ -436,35 +572,88 @@ function POMDetailPanel({ pom, onClose }) {
         >×</button>
       </div>
 
-      <dl style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <DetailRow label="Abreviatura" value={pom.abbreviation} />
+      {/* Bloc complet "com mesurar". Els buits es mostren com "—" perquè es vegi
+          què falta definir (típic en POMs tenant-only sense pom_global). */}
+      <DetailSection title="Identificació">
+        <DetailRow label="Codi" value={pom.pom_code} mono />
+        <DetailRow label="Nom EN" value={pom.name_en} />
+        <DetailRow label="Nom local" value={pom.name_cat} />
+        <DetailRow label="Abreviatura" value={pom.abbreviation} mono />
         <DetailRow label="Categoria" value={pom.category} />
-        <DetailRow label="Descripció" value={pom.description_en} multiline />
-        <DetailRow label="Start Point" value={pom.start_point} />
-        <DetailRow label="End Point" value={pom.end_point} />
-        <DetailRow label="Reference Point" value={pom.reference_point} />
+        <DetailRow label="Unitat" value={pom.unitat} />
+      </DetailSection>
+
+      <DetailSection title="Com mesurar">
+        <DetailRow label="Des d'on (start point)" value={pom.start_point} />
+        <DetailRow label="Fins on (end point)" value={pom.end_point} />
+        <DetailRow label="Punt de referència" value={pom.reference_point} />
         <DetailRow label="Scope" value={pom.scope} />
         <DetailRow label="Orientation" value={pom.orientation} />
         <DetailRow label="State" value={pom.state} />
         <DetailRow label="Line" value={pom.line} />
         <DetailRow label="Body Section" value={pom.body_section} />
+      </DetailSection>
+
+      <DetailSection title="Toleràncies">
         <DetailRow
           label="Tol. Producció"
-          value={pom.tol_prod_cm != null ? `±${pom.tol_prod_cm} cm` : null}
+          value={pom.tol_prod_cm != null && pom.tol_prod_cm !== '' ? `±${pom.tol_prod_cm} cm` : null}
         />
         <DetailRow
           label="Tol. Mostra"
-          value={pom.tol_samp_cm != null ? `±${pom.tol_samp_cm} cm` : null}
+          value={pom.tol_samp_cm != null && pom.tol_samp_cm !== '' ? `±${pom.tol_samp_cm} cm` : null}
         />
+      </DetailSection>
+
+      <DetailSection title="Aplica a">
+        <DetailRow label="Teixit pla (woven)" value={boolLabel(pom.applies_woven)} />
+        <DetailRow label="Punt (knit)" value={boolLabel(pom.applies_knit)} />
+        <DetailRow label="Bany (swim)" value={boolLabel(pom.applies_swim)} />
+      </DetailSection>
+
+      <DetailSection title="Referències">
         <DetailRow label="ISO Ref." value={pom.iso_ref} />
-        <DetailRow label="Notes" value={pom.notes} multiline />
-      </dl>
+        <DetailRow
+          label="Mesura corporal ISO"
+          value={
+            pom.body_measure_iso_codi || pom.body_measure_iso_nom
+              ? [pom.body_measure_iso_codi, pom.body_measure_iso_nom].filter(Boolean).join(' · ')
+              : null
+          }
+        />
+      </DetailSection>
+
+      <DetailSection title="Descripcions">
+        <DetailRow label="Descripció EN" value={pom.description_en} multiline />
+        <DetailRow label="Descripció local" value={pom.description_ca} multiline />
+      </DetailSection>
     </div>
   )
 }
 
-function DetailRow({ label, value, multiline = false }) {
-  if (value === null || value === undefined || value === '') return null
+function boolLabel(v) {
+  if (v === true) return 'Sí'
+  if (v === false) return 'No'
+  return null   // undefined/null → "—" (camp sense definir)
+}
+
+function DetailSection({ title, children }) {
+  return (
+    <section style={{ marginBottom: 16 }}>
+      <h3 style={{
+        fontSize: 9, fontWeight: 700, color: '#c27a2a',
+        textTransform: 'uppercase', letterSpacing: '.1em',
+        margin: '0 0 8px', paddingBottom: 4, borderBottom: '0.5px solid #ece2d4',
+      }}>{title}</h3>
+      <dl style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {children}
+      </dl>
+    </section>
+  )
+}
+
+function DetailRow({ label, value, multiline = false, mono = false }) {
+  const empty = value === null || value === undefined || value === ''
   return (
     <div>
       <dt style={{
@@ -472,10 +661,12 @@ function DetailRow({ label, value, multiline = false }) {
         textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 2,
       }}>{label}</dt>
       <dd style={{
-        margin: 0, color: '#1d1d1b',
+        margin: 0,
+        color: empty ? '#c0bdb8' : '#1d1d1b',
         fontSize: multiline ? 11 : 12,
         lineHeight: multiline ? 1.5 : 1.3,
-      }}>{value}</dd>
+        fontFamily: mono && !empty ? 'IBM Plex Mono, monospace' : 'inherit',
+      }}>{empty ? '—' : value}</dd>
     </div>
   )
 }

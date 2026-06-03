@@ -33,7 +33,8 @@ from .serializers import (
 class POMMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = POMMasterSerializer
-    queryset = POMMaster.objects.select_related('pom_global').all()
+    queryset = POMMaster.objects.select_related(
+        'pom_global', 'pom_global__body_measure_iso', 'categoria').all()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['actiu', 'pom_global']
     search_fields = ['codi_client', 'nom_client']
@@ -171,20 +172,26 @@ class GradingRuleViewSet(viewsets.ModelViewSet):
 
 
 class GarmentPOMMapViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
     serializer_class = GarmentPOMMapSerializer
     queryset = (
         GarmentPOMMap.objects
-        .select_related('garment_type', 'garment_type_item', 'garment_type_item__garment_type',
-                        'pom', 'pom__pom_global')
+        .select_related('garment_type_item', 'garment_type_item__garment_type',
+                        'pom', 'pom__pom_global', 'pom__pom_global__body_measure_iso',
+                        'pom__categoria')
         .all()
     )
+
+    def get_permissions(self):
+        # Lectura: autenticat. Escriptura: configure (alineat amb GarmentType/GarmentTypeItem).
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        perm = HasCapability(); self.required_capability = CONFIGURE
+        return [perm]
+
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    # Migration família → item: the ownership axis is garment_type_item; garment_type kept for the
-    # 95 legacy rows. Supports `?garment_type_item=<id>`, `?garment_type=<id>` and codi_client.
+    # Migration família → item COMPLETADA (PAS 6): la pertinença viu només a garment_type_item.
+    # El filtre legacy `?garment_type=` s'ha retirat amb el drop del camp (migració 0016).
     filterset_fields = {
-        'garment_type': ['exact'],
-        'garment_type__codi_client': ['exact'],
         'garment_type_item': ['exact'],
         'pom': ['exact'],
         'is_key': ['exact'],
