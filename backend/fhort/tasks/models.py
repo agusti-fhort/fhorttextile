@@ -226,6 +226,9 @@ class ModelTask(models.Model):
         ordering = ['model', 'order']
         verbose_name = 'Model task'
         verbose_name_plural = 'Model tasks'
+        # Defensa de fons: una tasca de cada tipus per model (la view ja ho comprova;
+        # això ho garanteix a BD contra curses i camins futurs sense check).
+        unique_together = [('model', 'task_type')]
 
     def __str__(self):
         return f'{self.model_id} · {self.task_type.code} ({self.status})'

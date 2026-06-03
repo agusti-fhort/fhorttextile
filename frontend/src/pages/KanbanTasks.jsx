@@ -33,6 +33,9 @@ const ACTIONS = {
   Done:       [{ to: 'InProgress', key: 'reopen', icon: 'ti-rotate-clockwise' }],
 }
 
+// Un model és ACTIU si té alguna tasca InProgress o Paused (dades ja al by-model).
+const isActiveModel = (m) => (m?.counts?.in_progress > 0 || m?.counts?.paused > 0)
+
 // Ordenació (whitelist mirall del backend) i choices reals del Model per als filtres ràpids.
 const SORT_FIELDS = ['codi_intern', 'nom_prenda', 'prioritat', 'data_objectiu', 'data_entrada', 'temporada']
 const TEMPORADES = ['SS', 'FW', 'CO', 'SP']
@@ -178,6 +181,19 @@ export default function KanbanTasks() {
   }, [])
   const selectedId = selected?.id ?? null
   useEffect(() => { loadDetail(selectedId) }, [selectedId, loadDetail])
+
+  // (b) Auto-obrir en entrar: si cap model seleccionat i n'hi ha amb tasques actives
+  // (InProgress/Paused), obre directament el primer (l'ordre ja els posa a dalt).
+  useEffect(() => {
+    if (selected || modelRows.length === 0) return
+    const firstActive = modelRows.find(isActiveModel)
+    if (firstActive) setSelected({ type: 'model', id: firstActive.model_id, ...firstActive })
+  }, [modelRows, selected])
+
+  // (a) Ordre de visualització: models ACTIUS (InProgress/Paused) a dalt, preservant la resta
+  // de l'ordre del backend (sort estable). Sense canvi backend; dades ja al by-model.
+  const displayRows = [...modelRows].sort(
+    (a, b) => (isActiveModel(b) ? 1 : 0) - (isActiveModel(a) ? 1 : 0))
 
   // Transició d'una tasca (reutilitza paused_task_id + 403). Refresca el detall en acabar.
   function doTransition(task, toStatus) {
@@ -347,7 +363,7 @@ export default function KanbanTasks() {
                 <div style={ph}>{t('kanban.loading')}</div>
               ) : modelRows.length === 0 ? (
                 <div style={ph}>{t('kanban.no_models')}</div>
-              ) : modelRows.map(m => (
+              ) : displayRows.map(m => (
                 <ModelRow
                   key={m.model_id} model={m} t={t}
                   selected={selected?.type === 'model' && selected.id === m.model_id}

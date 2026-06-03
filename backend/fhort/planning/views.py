@@ -293,13 +293,15 @@ def calendar_events_view(request):
         prods = prods.filter(requested_at__date__lte=end_d)
     for p in prods:
         req_d = timezone.localtime(p.requested_at).date()
-        # Sense expected_at no hi ha fi de tram → es pinta com a estadi d'un sol dia (el d'enviament).
-        end_date = p.expected_at or req_d
+        # Marcador d'UN SOL DIA al dia d'entrega (expected_at), com fa fitting. Ja no es pinta com a
+        # banda de durada requested→expected (que replicava la confecció a tots els dies del tram).
+        # Sense expected_at, cau al dia d'enviament (requested_at).
+        marker_d = p.expected_at or req_d
         events.append({
             'id': f'confeccio-{p.id}',
             'tipus': 'confeccio',
-            'start': req_d.isoformat(),
-            'end': end_date.isoformat(),
+            'start': marker_d.isoformat(),
+            'end': marker_d.isoformat(),
             'titol': f'{p.model.codi_intern} · {p.supplier.name} · conf.',
             'tecnic_id': None,
             'tecnic_nom': None,
