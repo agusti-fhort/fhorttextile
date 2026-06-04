@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import GarmentTypeSelector from '../components/GarmentTypeSelector/GarmentTypeSelector'
-import CustomerModal from '../components/CustomerModal'
+import CustomerSelector from '../components/CustomerSelector'
 import useAuthStore from '../store/auth'
-import { models, customers, sizingProfiles, sizeDefinitions } from '../api/endpoints'
+import { models, sizingProfiles, sizeDefinitions } from '../api/endpoints'
 
 // Pas 5A — Wizard d'ESQUELET unificat. Un sol flux de creació (3 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles.
@@ -49,8 +49,6 @@ export default function ModelWizard() {
   // Customer (selector) i referència/SKU del client (camp de text) són DOS camps diferents:
   // el primer mana el prefix del codi; el segon (codi_client) és la referència pròpia del client.
   const [customerId, setCustomerId] = useState(null)
-  const [customersList, setCustomersList] = useState([])
-  const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [refClient, setRefClient] = useState('')
   const [nomPrenda, setNomPrenda] = useState('')
   const [descripcio, setDescripcio] = useState('')
@@ -83,15 +81,6 @@ export default function ModelWizard() {
   ), [selProfile, selectedSizes, baseSize])
 
   const resetSizing = () => { setSelProfile(null); setSelectedSizes([]); setBaseSize(null); setSizeDefs([]) }
-
-  // Carrega l'arxiu de clients (per al selector).
-  useEffect(() => {
-    let alive = true
-    customers.list({ ordering: 'codi', page_size: 500 })
-      .then(r => { if (alive) setCustomersList(r.data?.results ?? (Array.isArray(r.data) ? r.data : [])) })
-      .catch(() => { if (alive) setCustomersList([]) })
-    return () => { alive = false }
-  }, [])
 
   // Preview de referència (només create). El prefix surt del customer triat (fallback self-customer).
   useEffect(() => {
@@ -234,17 +223,7 @@ export default function ModelWizard() {
         {block === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Field label={t('model_wizard.customer')}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <select value={customerId || ''} onChange={e => setCustomerId(e.target.value || null)} style={{ ...inputStyle, flex: 1 }}>
-                  <option value="">{t('model_wizard.customer_placeholder')}</option>
-                  {customersList.map(c => (
-                    <option key={c.id} value={c.id}>{c.codi} · {c.nom}</option>
-                  ))}
-                </select>
-                {canConfigure && (
-                  <button type="button" onClick={() => setShowCustomerModal(true)} style={ghostBtn}>{t('model_wizard.customer_new')}</button>
-                )}
-              </div>
+              <CustomerSelector value={customerId} onChange={setCustomerId} allowCreate={canConfigure} onError={setError} />
             </Field>
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
               <Field label={t('model_wizard.year')}>
@@ -392,12 +371,6 @@ export default function ModelWizard() {
         )}
       </div>
 
-      {showCustomerModal && (
-        <CustomerModal mode="create" t={t}
-          onCancel={() => setShowCustomerModal(false)}
-          onSaved={(cust) => { setCustomersList(l => [...l, cust]); setCustomerId(String(cust.id)); setShowCustomerModal(false) }}
-          onError={(text) => setError(text)} />
-      )}
     </div>
   )
 }
