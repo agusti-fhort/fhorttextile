@@ -1,4 +1,33 @@
 {
+  "clients": {
+    "title": "Clients",
+    "subtitle": "Clients servits per l'estudi",
+    "new": "Nou client",
+    "new_title": "Nou client",
+    "edit_title": "Editar client",
+    "col_codi": "Codi",
+    "col_nom": "Nom",
+    "col_active": "Estat",
+    "active": "Actiu",
+    "inactive": "Inactiu",
+    "self": "propi",
+    "edit": "Editar",
+    "activate": "Activar",
+    "deactivate": "Desactivar",
+    "delete": "Esborrar",
+    "cancel": "Cancel·lar",
+    "save": "Desar",
+    "create": "Crear",
+    "loading": "Carregant clients…",
+    "empty": "Cap client.",
+    "error": "No s'ha pogut completar l'operació.",
+    "saved": "Client actualitzat.",
+    "created": "Client creat.",
+    "deleted": "Client esborrat.",
+    "delete_protected": "No es pot esborrar: té models associats. Desactiva'l.",
+    "confirm_delete": "Esborrar el client «{{name}}»?",
+    "required": "Codi i nom obligatoris."
+  },
   "app": {
     "title": "Fhort Textile Tech",
     "loading": "Carregant...",
@@ -23,6 +52,8 @@
     "en": "Anglès"
   },
   "nav": {
+    "section_technical_studio": "Estudi tècnic",
+    "clients": "Clients",
     "section_principal": "Principal",
     "section_operatiu": "Operatiu",
     "section_sistema": "Sistema",
@@ -146,6 +177,10 @@
     "log_who": "Qui"
   },
   "model_wizard": {
+    "customer": "Client",
+    "customer_placeholder": "Tria un client…",
+    "customer_new": "+ Nou client",
+    "customer_required": "Cal triar un client.",
     "title_new": "Nou model",
     "title_edit": "Editar model",
     "cancel": "Cancel·lar",

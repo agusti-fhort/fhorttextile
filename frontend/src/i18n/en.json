@@ -1,4 +1,33 @@
 {
+  "clients": {
+    "title": "Clients",
+    "subtitle": "Customers served by the studio",
+    "new": "New client",
+    "new_title": "New client",
+    "edit_title": "Edit client",
+    "col_codi": "Code",
+    "col_nom": "Name",
+    "col_active": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "self": "self",
+    "edit": "Edit",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "loading": "Loading clients…",
+    "empty": "No clients.",
+    "error": "Could not complete the operation.",
+    "saved": "Client updated.",
+    "created": "Client created.",
+    "deleted": "Client deleted.",
+    "delete_protected": "Cannot delete: it has models. Deactivate it.",
+    "confirm_delete": "Delete client «{{name}}»?",
+    "required": "Code and name are required."
+  },
   "app": {
     "title": "Fhort Textile Tech",
     "loading": "Loading...",
@@ -23,6 +52,8 @@
     "en": "English"
   },
   "nav": {
+    "section_technical_studio": "Technical Studio",
+    "clients": "Clients",
     "section_principal": "Main",
     "section_operatiu": "Operations",
     "section_sistema": "System",
@@ -146,6 +177,10 @@
     "log_who": "Who"
   },
   "model_wizard": {
+    "customer": "Customer",
+    "customer_placeholder": "Select a client…",
+    "customer_new": "+ New client",
+    "customer_required": "Select a client.",
     "title_new": "New model",
     "title_edit": "Edit model",
     "cancel": "Cancel",

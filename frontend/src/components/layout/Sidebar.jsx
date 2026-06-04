@@ -61,6 +61,11 @@ const navGroups = [
     { to: '/size-library', labelKey: 'nav.size_library', icon: 'ti-books' },
     { to: '/poms/grading', labelKey: 'nav.grading', icon: 'ti-chart-dots' },
     { to: '/task-types', labelKey: 'nav.tasques_catalog', icon: 'ti-list-details' },
+  ]},
+  // Estudi tècnic — gestió INTERNA del tenant (NO el backoffice futur de tots els tenants).
+  // Futur (previst, no implementat): Configuració de l'Estudi · Equip/usuaris · Catàleg de serveis/tasques.
+  { sectionKey: 'nav.section_technical_studio', items: [
+    { to: '/clients', labelKey: 'nav.clients', icon: 'ti-users-group' },
     { to: '/suppliers', labelKey: 'nav.suppliers', icon: 'ti-building-factory' },
   ]},
   { sectionKey: 'nav.section_sistema', items: [

@@ -111,6 +111,16 @@ export const suppliers = {
   remove: (id) => client.delete(`/api/v1/suppliers/${id}/`),
 }
 
+// Estudi tècnic — arxiu de clients (customers/, ModelViewSet). Escriptura gated CONFIGURE;
+// remove → 409 si el client té models associats (Model.customer = PROTECT).
+export const customers = {
+  list: (params) => client.get('/api/v1/customers/', { params }),
+  get: (id) => client.get(`/api/v1/customers/${id}/`),
+  create: (data) => client.post('/api/v1/customers/', data),
+  update: (id, data) => client.patch(`/api/v1/customers/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/customers/${id}/`),
+}
+
 // Capa de Projecte — producció de mostres (productions/ és ReadOnlyModelViewSet).
 // Alta = models/<id>/request-production/; canvi d'estat = productions/<id>/status/.
 export const productions = {

@@ -2,7 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import GarmentTypeSelector from '../components/GarmentTypeSelector/GarmentTypeSelector'
-import { models, sizingProfiles, sizeDefinitions } from '../api/endpoints'
+import CustomerModal from '../components/CustomerModal'
+import useAuthStore from '../store/auth'
+import { models, customers, sizingProfiles, sizeDefinitions } from '../api/endpoints'
 
 // Pas 5A — Wizard d'ESQUELET unificat. Un sol flux de creació (3 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles.
@@ -37,11 +39,18 @@ export default function ModelWizard() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const isEditMode = !!id
+  const me = useAuthStore(s => s.user)
+  const canConfigure = !!me?.capabilities?.includes('configure')
 
   const [block, setBlock] = useState(1)
   // Bloc 1 — identificació
   const [year, setYear] = useState(currentYear)
   const [season, setSeason] = useState(null)
+  // Customer (selector) i referència/SKU del client (camp de text) són DOS camps diferents:
+  // el primer mana el prefix del codi; el segon (codi_client) és la referència pròpia del client.
+  const [customerId, setCustomerId] = useState(null)
+  const [customersList, setCustomersList] = useState([])
+  const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [refClient, setRefClient] = useState('')
   const [nomPrenda, setNomPrenda] = useState('')
   const [descripcio, setDescripcio] = useState('')
@@ -75,15 +84,24 @@ export default function ModelWizard() {
 
   const resetSizing = () => { setSelProfile(null); setSelectedSizes([]); setBaseSize(null); setSizeDefs([]) }
 
-  // Preview de referència (només create).
+  // Carrega l'arxiu de clients (per al selector).
+  useEffect(() => {
+    let alive = true
+    customers.list({ ordering: 'codi', page_size: 500 })
+      .then(r => { if (alive) setCustomersList(r.data?.results ?? (Array.isArray(r.data) ? r.data : [])) })
+      .catch(() => { if (alive) setCustomersList([]) })
+    return () => { alive = false }
+  }, [])
+
+  // Preview de referència (només create). El prefix surt del customer triat (fallback self-customer).
   useEffect(() => {
     if (isEditMode || !year || !season) return
     let alive = true
-    models.nextRef({ year, season })
+    models.nextRef({ year, season, customer_id: customerId || undefined })
       .then(r => { if (alive) setPreviewRef(r.data?.codi_intern || '—') })
       .catch(() => { if (alive) setPreviewRef('—') })
     return () => { alive = false }
-  }, [year, season, isEditMode])
+  }, [year, season, customerId, isEditMode])
 
   // Prefill en edició.
   useEffect(() => {
@@ -93,6 +111,8 @@ export default function ModelWizard() {
       if (!alive) return
       const d = r.data
       setYear(d.any); setSeason(d.temporada); setPreviewRef(d.codi_intern)
+      // Prefill: el selector amb el customer (FK), el CAMP DE TEXT amb codi_client (no els creuis).
+      setCustomerId(d.customer != null ? String(d.customer) : null)
       setRefClient(d.codi_client && d.codi_client !== d.codi_intern ? d.codi_client : '')
       setNomPrenda(d.nom_prenda || ''); setDescripcio(d.descripcio || ''); setCollection(d.collection || '')
       setTarget(d.target || null); setConstruction(d.construction || null)
@@ -144,10 +164,13 @@ export default function ModelWizard() {
 
   const handleCreate = async () => {
     if (!season) { setError(t('model_wizard.season_required')); setBlock(1); return }
+    if (!customerId) { setError(t('model_wizard.customer_required')); setBlock(1); return }
     setSaving(true); setError('')
     try {
+      // El selector mana customer_id; ref_client (text) segueix sent codi_client (SKU del client).
       const r = await models.createWizard({
-        year, season, ref_client: refClient, nom_prenda: nomPrenda, descripcio, collection,
+        year, season, customer_id: customerId, ref_client: refClient,
+        nom_prenda: nomPrenda, descripcio, collection,
         ...skeletonPayload(),
       })
       navigate(`/models/${r.data.id}`)
@@ -157,9 +180,11 @@ export default function ModelWizard() {
   }
 
   const handleSaveEdit = async () => {
+    if (!customerId) { setError(t('model_wizard.customer_required')); setBlock(1); return }
     setSaving(true); setError('')
     try {
-      await models.update(id, { codi_client: refClient, nom_prenda: nomPrenda, descripcio, collection })
+      // Edit: el camp FK del serializer és `customer` (rep l'id); codi_client = el camp de text.
+      await models.update(id, { customer: customerId, codi_client: refClient, nom_prenda: nomPrenda, descripcio, collection })
       await models.updateStep2(id, skeletonPayload())
       navigate(`/models/${id}`)
     } catch (e) {
@@ -168,6 +193,11 @@ export default function ModelWizard() {
   }
 
   const BLOCKS = [t('model_wizard.block1'), t('model_wizard.block2'), t('model_wizard.block3')]
+
+  // GATE entre contenidors: el client mana el prefix del codi i l'abast de la seqüència, així que
+  // els passos 2 (Peça) i 3 (Talles) queden bloquejats fins que el pas 1 estigui resolt
+  // (CLIENT + ANY + TEMPORADA → referència interna generada en conseqüència).
+  const block1Resolved = !!(customerId && year && season)
 
   return (
     <div style={{ maxWidth: 820, margin: '0 auto', padding: '2rem 1rem' }}>
@@ -182,15 +212,17 @@ export default function ModelWizard() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
         {BLOCKS.map((label, i) => {
           const n = i + 1, active = block === n
+          const locked = n > 1 && !block1Resolved   // gate: 2 i 3 bloquejats fins resoldre el pas 1
           return (
-            <button key={n} onClick={() => setBlock(n)} style={{
-              flex: 1, minWidth: 120, padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: MONO,
+            <button key={n} disabled={locked} onClick={() => { if (!locked) setBlock(n) }} style={{
+              flex: 1, minWidth: 120, padding: '8px 12px', borderRadius: 8, cursor: locked ? 'not-allowed' : 'pointer', fontFamily: MONO,
               fontSize: 12, fontWeight: active ? 600 : 400, textAlign: 'left',
               background: active ? 'var(--warn-bg)' : 'var(--white)',
               color: active ? 'var(--warn)' : 'var(--gray)',
               border: `0.5px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
+              opacity: locked ? 0.45 : 1,
             }}>
-              <span style={{ opacity: 0.7 }}>{n}.</span> {label}
+              <span style={{ opacity: 0.7 }}>{n}.</span> {label}{locked && ' 🔒'}
             </button>
           )
         })}
@@ -201,6 +233,19 @@ export default function ModelWizard() {
       <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 20 }}>
         {block === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Field label={t('model_wizard.customer')}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select value={customerId || ''} onChange={e => setCustomerId(e.target.value || null)} style={{ ...inputStyle, flex: 1 }}>
+                  <option value="">{t('model_wizard.customer_placeholder')}</option>
+                  {customersList.map(c => (
+                    <option key={c.id} value={c.id}>{c.codi} · {c.nom}</option>
+                  ))}
+                </select>
+                {canConfigure && (
+                  <button type="button" onClick={() => setShowCustomerModal(true)} style={ghostBtn}>{t('model_wizard.customer_new')}</button>
+                )}
+              </div>
+            </Field>
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
               <Field label={t('model_wizard.year')}>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -336,7 +381,9 @@ export default function ModelWizard() {
         <button type="button" disabled={block === 1} onClick={() => setBlock(b => Math.max(1, b - 1))}
           style={{ ...ghostBtn, opacity: block === 1 ? 0.4 : 1 }}>← {t('model_wizard.back')}</button>
         {block < 3 ? (
-          <button type="button" onClick={() => setBlock(b => Math.min(3, b + 1))} style={primaryBtn(false)}>{t('model_wizard.next')} →</button>
+          <button type="button" disabled={block === 1 && !block1Resolved}
+            onClick={() => { if (!(block === 1 && !block1Resolved)) setBlock(b => Math.min(3, b + 1)) }}
+            style={primaryBtn(block === 1 && !block1Resolved)}>{t('model_wizard.next')} →</button>
         ) : (
           <button type="button" disabled={saving} onClick={isEditMode ? handleSaveEdit : handleCreate} style={primaryBtn(saving)}>
             {saving ? (isEditMode ? t('model_wizard.saving') : t('model_wizard.creating'))
@@ -344,6 +391,13 @@ export default function ModelWizard() {
           </button>
         )}
       </div>
+
+      {showCustomerModal && (
+        <CustomerModal mode="create" t={t}
+          onCancel={() => setShowCustomerModal(false)}
+          onSaved={(cust) => { setCustomersList(l => [...l, cust]); setCustomerId(String(cust.id)); setShowCustomerModal(false) }}
+          onError={(text) => setError(text)} />
+      )}
     </div>
   )
 }

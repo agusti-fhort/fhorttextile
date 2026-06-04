@@ -1,4 +1,33 @@
 {
+  "clients": {
+    "title": "Clientes",
+    "subtitle": "Clientes servidos por el estudio",
+    "new": "Nuevo cliente",
+    "new_title": "Nuevo cliente",
+    "edit_title": "Editar cliente",
+    "col_codi": "Código",
+    "col_nom": "Nombre",
+    "col_active": "Estado",
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "self": "propio",
+    "edit": "Editar",
+    "activate": "Activar",
+    "deactivate": "Desactivar",
+    "delete": "Eliminar",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "create": "Crear",
+    "loading": "Cargando clientes…",
+    "empty": "Ningún cliente.",
+    "error": "No se ha podido completar la operación.",
+    "saved": "Cliente actualizado.",
+    "created": "Cliente creado.",
+    "deleted": "Cliente eliminado.",
+    "delete_protected": "No se puede eliminar: tiene modelos asociados. Desactívalo.",
+    "confirm_delete": "¿Eliminar el cliente «{{name}}»?",
+    "required": "Código y nombre obligatorios."
+  },
   "app": {
     "title": "Fhort Textile Tech",
     "loading": "Cargando...",
@@ -23,6 +52,8 @@
     "en": "Inglés"
   },
   "nav": {
+    "section_technical_studio": "Estudio técnico",
+    "clients": "Clientes",
     "section_principal": "Principal",
     "section_operatiu": "Operativo",
     "section_sistema": "Sistema",
@@ -146,6 +177,10 @@
     "log_who": "Quién"
   },
   "model_wizard": {
+    "customer": "Cliente",
+    "customer_placeholder": "Elige un cliente…",
+    "customer_new": "+ Nuevo cliente",
+    "customer_required": "Hay que elegir un cliente.",
     "title_new": "Nuevo modelo",
     "title_edit": "Editar modelo",
     "cancel": "Cancelar",
