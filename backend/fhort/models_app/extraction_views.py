@@ -196,16 +196,9 @@ def create_from_extraction_view(request):
     if not codi_client:
         codi_client = 'IMP'
 
-    # codi_tenant: priority override > logged-in tenant > first chars of codi_client
-    tenant_schema_for_codi = (
-        request.tenant.schema_name if hasattr(request, 'tenant') and request.tenant else ''
-    )
-    codi_tenant = (
-        overrides.get('codi_tenant')
-        or tenant_schema_for_codi
-        or codi_client
-    )
-    codi_tenant = (codi_tenant or 'IMP').upper()[:3]
+    # codi_tenant i prefix del codi_intern: ja NO es deriven aquí. Aquest flux d'import encara
+    # no porta selector de Customer, així que cau al self-customer del tenant (helper
+    # customer_code_for via el signal). codi_client segueix guardant la referència/SKU del client.
 
     try:
         from django_tenants.utils import schema_context
@@ -262,6 +255,7 @@ def create_from_extraction_view(request):
                         status=404,
                     )
             else:
+                from fhort.models_app.services import get_self_customer
                 model = Model.objects.create(
                     nom_prenda=style_name,
                     temporada=temporada[:2].upper() if temporada else 'SS',
@@ -269,7 +263,9 @@ def create_from_extraction_view(request):
                     base_size_label=base_size,
                     size_run_model=size_run,
                     codi_client=codi_client,
-                    codi_tenant=codi_tenant,
+                    # customer → self-customer (sense selector en aquest flux); el signal genera
+                    # codi_intern i codi_tenant a partir del seu codi. Fallback elegant.
+                    customer=get_self_customer(),
                     sequencial=overrides.get('sequencial', 1),
                     responsable_id=request.user.id,
                     garment_type=gt,

@@ -16,8 +16,12 @@ def _get_model_class():
 @receiver(pre_save)
 def generate_model_code(sender, instance, **kwargs):
     """
-    Generate the sequential number and code {CLI}-{YY}-{TT}-{NNNN} when creating a new Model.
-    Equivalent to the Server Script 'Model - Before Insert · Codificació'.
+    Genera sequencial + codi_intern {CUST}-{YY}-{TT}-{NNNN} en crear un Model nou.
+
+    El prefix i l'abast de la seqüència vénen del CUSTOMER (helper customer_code_for),
+    amb fallback al self-customer del tenant — ja NO depèn de codi_client ni de cap
+    hardcode. Si el caller ja ha fixat codi_intern (p.ex. el wizard, que computa el seu
+    propi codi i sequencial), el signal no hi toca res.
     """
     try:
         Model = _get_model_class()
@@ -30,42 +34,38 @@ def generate_model_code(sender, instance, **kwargs):
     if instance.pk:  # Already exists, do not regenerate the code
         return
 
-    # The real Model has no 'client' field (FK); it uses codi_client (CharField) directly.
-    # Defensive: if fields are missing or empty, exit without doing anything.
-    client_id = getattr(instance, 'client_id', None)
-    client_code_raw = getattr(instance, 'codi_client', None)
-    if not (client_id or client_code_raw) or not getattr(instance, 'any', None) or not getattr(instance, 'temporada', None):
+    # El caller ja mana el codi (i el seu sequencial) → no interferir.
+    if getattr(instance, 'codi_intern', None):
         return
 
-    # Client code: from the direct field (if present), or via the client FK (if the schema adds it later)
-    client_code = client_code_raw
-    if not client_code and client_id:
-        try:
-            from fhort.accounts.models import Client
-            client = Client.objects.get(pk=client_id)
-            client_code = getattr(client, 'codi_client', None) or getattr(client, 'code', None)
-            if not client_code:
-                client_code = str(client)[:3].upper()
-        except Exception:
-            client_code = None
-
-    if not client_code:
+    if not getattr(instance, 'any', None) or not getattr(instance, 'temporada', None):
         return
 
-    client_code = client_code.strip().upper()
+    from fhort.models_app.services import resolve_customer_for, customer_code_for
 
-    # MAX sequential per (codi_client, any, temporada)
-    # If a future schema adds a 'client' FK, migrate to client_id; for now
-    # we use codi_client (CharField), which is the real business key on the Model.
+    # Assigna el self-customer si no n'hi ha d'explícit: així la fila queda coherent
+    # (customer_id no queda null quan existeix self-customer) i la seqüència s'escopa bé.
+    if not getattr(instance, 'customer_id', None):
+        cust = resolve_customer_for(instance)
+        if cust is not None:
+            instance.customer = cust
+
+    client_code = customer_code_for(instance)
+
+    # MAX sequencial escopat per customer_id (Pas 4/1b) + any + temporada.
     from django.db import connection
     with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT MAX(sequencial)
-            FROM models_app_model
-            WHERE codi_client = %s
-              AND "any" = %s
-              AND temporada = %s
-        """, [client_code, instance.any, instance.temporada])
+        if getattr(instance, 'customer_id', None):
+            cursor.execute(
+                'SELECT MAX(sequencial) FROM models_app_model '
+                'WHERE customer_id = %s AND "any" = %s AND temporada = %s',
+                [instance.customer_id, instance.any, instance.temporada])
+        else:
+            # Cas degradat (sense self-customer sembrat encara): escopa pels orfes.
+            cursor.execute(
+                'SELECT MAX(sequencial) FROM models_app_model '
+                'WHERE customer_id IS NULL AND "any" = %s AND temporada = %s',
+                [instance.any, instance.temporada])
         row = cursor.fetchone()
 
     next_seq = 1 if (not row or row[0] is None) else int(row[0]) + 1
@@ -74,10 +74,10 @@ def generate_model_code(sender, instance, **kwargs):
     seq4 = str(next_seq).zfill(4)
 
     instance.sequencial = next_seq
-    # The Model has no 'codi' field (it has 'codi_intern'). Generate codi_intern if empty
-    # — if the user already provided it, do not overwrite it.
-    if not getattr(instance, 'codi_intern', None):
-        instance.codi_intern = f"{client_code}-{year2}-{instance.temporada}-{seq4}"
+    # codi_tenant = còpia denormalitzada del codi de customer (només si no ve fixat).
+    if not getattr(instance, 'codi_tenant', None):
+        instance.codi_tenant = client_code
+    instance.codi_intern = f"{client_code}-{year2}-{instance.temporada}-{seq4}"
 
 
 @receiver(post_save)

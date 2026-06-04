@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import (TaskType, ModelTask, Supplier, Production,
-                     GarmentTypeItem, TaskTimeEstimate)
+                     GarmentTypeItem, TaskTimeEstimate, Customer)
 from .services_c import rectification_count
 
 
@@ -40,6 +40,12 @@ class SupplierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Supplier
         fields = ['id', 'name', 'type', 'active']
+
+
+class CustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Customer
+        fields = ['id', 'codi', 'nom', 'active', 'is_self']
 
 
 class ProductionSerializer(serializers.ModelSerializer):

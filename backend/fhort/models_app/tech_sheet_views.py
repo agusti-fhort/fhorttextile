@@ -291,10 +291,13 @@ class TechSheetCreateModelView(APIView):
         except (TypeError, ValueError):
             year_value = datetime.date.today().year
 
+        from fhort.models_app.services import get_self_customer
         model = Model.objects.create(
             nom_prenda=header.get('style_name') or 'Model importat',
             codi_client=header.get('style_reference') or '',
-            codi_tenant=(header.get('style_reference') or 'IMP')[:3].upper(),
+            # customer → self-customer (sense selector en aquest flux); el signal genera
+            # codi_intern i codi_tenant a partir del seu codi.
+            customer=get_self_customer(),
             temporada=header.get('season') or 'SS',
             any=year_value,
             sequencial=1,

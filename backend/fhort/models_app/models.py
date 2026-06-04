@@ -110,8 +110,23 @@ class Model(models.Model):
     ]
 
     codi_intern = models.CharField(max_length=40, unique=True)
+    # SKU/referència pròpia del client per a aquest model (traçabilitat seva). Text lliure;
+    # NO és prefix ni clau tècnica de codi-gen (això ho mana ara `customer`).
     codi_client = models.CharField(max_length=80, blank=True, default='')
 
+    # Client final servit. Font del prefix del codi_intern i de l'abast de la seqüència
+    # (via helper customer_code_for). PROTECT: esborrar un Customer amb models dona 409.
+    # Nullable a BD per a la transició; el wizard l'exigeix.
+    customer = models.ForeignKey(
+        'tasks.Customer',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='models',
+    )
+
+    # DEPRECAT: còpia denormalitzada de customer.codi (la mantenim viva per als índexs/lectures
+    # existents). El codi-gen ja no llegeix d'aquí; s'omple = customer.codi en crear.
     codi_tenant = models.CharField(max_length=3)
     any = models.PositiveSmallIntegerField()
     temporada = models.CharField(max_length=4, choices=TEMPORADA_CHOICES)

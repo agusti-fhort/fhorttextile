@@ -131,12 +131,26 @@ class ModelServeiViewSet(viewsets.ModelViewSet):
         return ModelServeiSerializer
 
 
+def _resolve_customer_code(customer_id):
+    """Codi (3 chars) per a un customer_id donat, amb fallback al self-customer del tenant.
+    Font única del prefix per als endpoints de codi-gen (preview i creació)."""
+    from fhort.tasks.models import Customer
+    from fhort.models_app.services import get_self_customer
+    cust = None
+    if customer_id:
+        cust = Customer.objects.filter(pk=customer_id).first()
+    if cust is None:
+        cust = get_self_customer()
+    return (cust.codi if cust else 'IMP'), cust
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def next_model_ref(request):
     year = request.GET.get('year', str(datetime.date.today().year))
     season = request.GET.get('season', 'SS')
-    prefix = 'FTT'
+    # El prefix surt del customer (la preview ha de portar ?customer_id); fallback self-customer.
+    prefix, _ = _resolve_customer_code(request.GET.get('customer_id'))
     year_short = str(year)[-2:]
     base = f"{prefix}-{season}{year_short}-"
     from django.db import connection
@@ -212,6 +226,7 @@ def create_model_wizard(request):
     year = request.data.get('year')
     season = request.data.get('season')
     ref_client = request.data.get('ref_client', '')
+    customer_id = request.data.get('customer_id')
     nom_prenda = request.data.get('nom_prenda', '')
     descripcio = request.data.get('descripcio', '')
     collection = request.data.get('collection', '')
@@ -241,7 +256,9 @@ def create_model_wizard(request):
                 status=400,
             )
 
-    prefix = 'FTT'
+    # Prefix unificat: codi del customer (fallback self-customer). Escopa la seqüència via
+    # el codi_intern (regex sota), de manera que el next_num ja és per-customer (Pas 4).
+    prefix, customer = _resolve_customer_code(customer_id)
     year_short = str(year)[-2:]
     base = f"{prefix}-{season}{year_short}-"
 
@@ -273,6 +290,7 @@ def create_model_wizard(request):
         model = Model.objects.create(
             codi_intern=codi_base,
             codi_client=ref_client,
+            customer=customer,
             codi_tenant=prefix,
             any=int(year),
             temporada=season,
@@ -298,6 +316,7 @@ def create_model_wizard(request):
             piece = Model.objects.create(
                 codi_intern=f"{codi_base}-{str(i).zfill(2)}",
                 codi_client=ref_client,
+                customer=customer,
                 codi_tenant=prefix,
                 any=int(year),
                 temporada=season,

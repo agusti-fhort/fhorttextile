@@ -13,10 +13,11 @@ from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TA
                                          get_allowed_task_types)
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
-                     GarmentTypeItem, TaskTimeEstimate, TaskTransition)
+                     GarmentTypeItem, TaskTimeEstimate, TaskTransition, Customer)
 from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             SupplierSerializer, ProductionSerializer,
-                            GarmentTypeItemSerializer, TaskTimeEstimateSerializer)
+                            GarmentTypeItemSerializer, TaskTimeEstimateSerializer,
+                            CustomerSerializer)
 from .services_c import transition_task, TransitionError, rectification_count
 from .services_d import (advance_phase_gate, advance_phases_chain, regress_phase,
                          model_ready_for_gate, GateError)
@@ -489,6 +490,27 @@ class SupplierViewSet(viewsets.ModelViewSet):
         except ProtectedError:
             return Response(
                 {'detail': "No es pot esborrar: té confeccions associades. Desactiva'l."},
+                status=status.HTTP_409_CONFLICT)
+
+
+class CustomerViewSet(viewsets.ModelViewSet):
+    queryset = Customer.objects.all()
+    serializer_class = CustomerSerializer
+    filterset_fields = ['active']
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        p = HasCapability(); self.required_capability = CONFIGURE
+        return [p]
+
+    def destroy(self, request, *args, **kwargs):
+        # FK Model.customer = PROTECT → si té models, l'esborrat falla. 409 net (no 500).
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {'detail': "No es pot esborrar: té models associats. Desactiva'l."},
                 status=status.HTTP_409_CONFLICT)
 
 

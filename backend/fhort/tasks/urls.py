@@ -42,6 +42,13 @@ try:
 except Exception:
     pass
 
+# Sprint Customer — arxiu de clients (font del prefix de codi-gen). CRUD; escriptura gated CONFIGURE.
+try:
+    from fhort.tasks.views_b import CustomerViewSet
+    router.register(r'customers', CustomerViewSet, basename='customer')
+except Exception:
+    pass
+
 # Sprint G — taula de temps: GarmentTypeItem + TaskTimeEstimate. Registered before router.urls.
 try:
     from fhort.tasks.views_b import GarmentTypeItemViewSet, TaskTimeEstimateViewSet

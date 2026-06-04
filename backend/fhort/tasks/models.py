@@ -292,6 +292,30 @@ class Supplier(models.Model):
         return self.name
 
 
+class Customer(models.Model):
+    """Client final servit pel tenant (marca/empresa per a qui es treballa un model).
+    Mirall esquelètic de Supplier. El `codi` (3 chars) és la font del prefix del codi_intern
+    dels models i de l'abast de la seqüència. El tenant és client d'ell mateix via is_self=True
+    (self-customer sembrat amb codi = Client.codi_tenant), de manera que el codi-gen mai depèn
+    de cap hardcode."""
+    codi = models.CharField(max_length=3, unique=True)
+    nom = models.CharField(max_length=200)
+    active = models.BooleanField(default=True)
+    is_self = models.BooleanField(default=False,
+                                  help_text="El tenant com a client d'ell mateix (self-customer).")
+    # Ganxo per al registre global de codis del backoffice futur (permeabilitat cross-tenant).
+    # Placeholder sense lògica en aquest sprint.
+    codi_global = models.CharField(max_length=3, null=True, blank=True)
+
+    class Meta:
+        ordering = ['codi']
+        verbose_name = 'Customer'
+        verbose_name_plural = 'Customers'
+
+    def __str__(self):
+        return f'{self.codi} · {self.nom}'
+
+
 class Production(models.Model):
     """Confecció: encàrrec extern de produir una peça per a una fase. Recurs extern amb
     cicle propi. Precondició: la fase ha d'haver passat el gate. La seva entrega (Delivered)
