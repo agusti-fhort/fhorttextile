@@ -36,7 +36,7 @@ export default function GarmentTypes() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [grup, setGrup] = useState('')
-  const [actiu, setActiu] = useState('')
+  const [actiu, setActiu] = useState('true')   // per defecte oculta famílies inactives (catàleg antic)
   const [selectedId, setSelectedId] = useState(null)
   const [items, setItems] = useState([])
   const [detailLoading, setDetailLoading] = useState(false)
