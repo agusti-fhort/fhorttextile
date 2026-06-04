@@ -607,3 +607,84 @@ class ModelGradingOverride(models.Model):
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client} @ {self.size_label} = {self.value_cm}cm'
+
+
+# ───────────────────────── Import massiu de models (bulk) ─────────────────────────
+
+class ModelSequence(models.Model):
+    """Comptador atòmic de seqüencial per (customer, year, season), per a la creació en bulk.
+    El camí manual (1 model) segueix usant el scan MAX(sequencial) del signal generate_model_code;
+    el bulk reserva un rang en una sola operació via reserve_sequence_range() (services.py),
+    amb select_for_update (mateix patró que tasks/services_i.py). El rang cobreix models simples
+    i GarmentSet (el codi_base del set consumeix 1 número, igual que un model simple)."""
+    customer = models.ForeignKey('tasks.Customer', on_delete=models.PROTECT,
+                                 related_name='model_sequences')
+    year = models.PositiveSmallIntegerField()
+    season = models.CharField(max_length=4, choices=Model.TEMPORADA_CHOICES)
+    last_seq = models.PositiveIntegerField(default=0, help_text="Últim seqüencial reservat")
+
+    class Meta:
+        unique_together = [('customer', 'year', 'season')]
+        verbose_name = 'Seqüència de model'
+        verbose_name_plural = 'Seqüències de model'
+
+    def __str__(self):
+        return f'{self.customer.codi} {self.season}{self.year} → {self.last_seq}'
+
+
+class BulkCollectionImport(models.Model):
+    """Staging d'una importació massiva de models des d'Excel (col·lecció): N esquelets en una
+    sola pujada. Conceptualment diferent d'ImportSession (single-model). El Customer és el context
+    de la importació (no una columna). Flux: PUJAT → VALIDANT → PREVISAT → IMPORTAT / DESCARTAT."""
+    ESTAT_CHOICES = [
+        ('PUJAT', 'Pujat'),
+        ('VALIDANT', 'Validant'),
+        ('PREVISAT', 'Previsat'),
+        ('IMPORTAT', 'Importat'),
+        ('DESCARTAT', 'Descartat'),
+    ]
+    customer = models.ForeignKey('tasks.Customer', on_delete=models.PROTECT,
+                                 related_name='bulk_imports')
+    document = models.FileField(upload_to='bulk_imports/%Y/%m/', null=True, blank=True)
+    estat = models.CharField(max_length=20, choices=ESTAT_CHOICES, default='PUJAT')
+    # El tècnic que importa (= request.user.profile). PROTECT, mateixa convenció que SizeFitting.
+    creat_per = models.ForeignKey('accounts.UserProfile', on_delete=models.PROTECT,
+                                  related_name='bulk_imports')
+    creat_at = models.DateTimeField(auto_now_add=True)
+    resum = models.JSONField(default=dict, blank=True)       # {total, ok, errors, avisos, conjunts}
+    resultat = models.JSONField(default=list, blank=True)    # resultats per fila (cache de preview)
+
+    class Meta:
+        ordering = ['-creat_at']
+        verbose_name = 'Importació massiva'
+        verbose_name_plural = 'Importacions massives'
+
+    def __str__(self):
+        return f'BulkImport #{self.pk} {self.customer_id} [{self.estat}]'
+
+
+class BulkCollectionRow(models.Model):
+    """Una fila del staging d'import massiu (resultat de la validació/preview). El Model real
+    es crea al commit parcial (Pas 6) i s'enllaça a model_creat."""
+    ESTAT_CHOICES = [
+        ('OK', 'OK'),
+        ('ERROR', 'Error'),
+        ('AVIS', 'Avís'),
+        ('DUPLICAT', 'Duplicat'),
+    ]
+    importacio = models.ForeignKey(BulkCollectionImport, on_delete=models.CASCADE,
+                                   related_name='rows')
+    row_num = models.PositiveIntegerField(help_text="Número de fila al fitxer Excel")
+    raw_data = models.JSONField(default=dict, blank=True)    # contingut original de la fila
+    estat = models.CharField(max_length=20, choices=ESTAT_CHOICES)
+    errors = models.JSONField(default=list, blank=True)      # [{camp, missatge_client}] llegibles pel client
+    model_creat = models.ForeignKey('models_app.Model', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='bulk_rows')
+
+    class Meta:
+        ordering = ['importacio', 'row_num']
+        verbose_name = 'Fila d\'importació massiva'
+        verbose_name_plural = 'Files d\'importació massiva'
+
+    def __str__(self):
+        return f'Row {self.row_num} [{self.estat}]'

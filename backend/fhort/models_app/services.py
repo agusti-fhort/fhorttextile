@@ -33,3 +33,32 @@ def customer_code_for(model):
     if cust and cust.codi:
         return cust.codi
     return 'IMP'
+
+
+def reserve_sequence_range(customer, year, season, n):
+    """Reserva atòmicament un rang de N seqüencials per a (customer, year, season).
+
+    Retorna (first, last) inclusius (1-indexat dins el comptador). El rang cobreix tant
+    models simples com GarmentSet (el codi_base d'un set consumeix 1 número, igual que un
+    model simple) — qui crida distribueix els números fila a fila.
+
+    Patró select_for_update (mateix que tasks/services_i.py:31): bloqueja la fila del
+    comptador durant la transacció perquè pujades concurrents no col·lisionin. select_for_update
+    funciona per-schema sota django-tenants. El camí manual (signal) NO usa això; segueix amb
+    el scan MAX(sequencial). Només el bulk reserva rang.
+    """
+    from django.db import transaction
+    from fhort.models_app.models import ModelSequence
+
+    if n <= 0:
+        return (0, -1)  # rang buit (cap fila a importar)
+
+    with transaction.atomic():
+        seq, _ = ModelSequence.objects.select_for_update().get_or_create(
+            customer=customer, year=year, season=season,
+        )
+        first = seq.last_seq + 1
+        seq.last_seq = seq.last_seq + n
+        seq.save(update_fields=['last_seq'])
+        last = seq.last_seq
+    return (first, last)
