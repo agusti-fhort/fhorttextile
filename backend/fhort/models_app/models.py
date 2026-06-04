@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.conf import settings
 
@@ -355,6 +357,44 @@ class ModelFitxer(models.Model):
     def __str__(self):
         return f'{self.model.codi_intern} · {self.nom_fitxer} ({self.versio})'
 
+
+class ImportSession(models.Model):
+    ESTAT_CHOICES = [
+        ('INICI','Inici'), ('CRIBRATGE','Cribratge'), ('TALLES','Talles'),
+        ('EXTRACCIO','Extracció'), ('POMS','POMs'),
+        ('MESURES','Mesures'), ('MESURES_OK','Mesures OK'),
+        ('IMPORT','Import'),
+        ('CONFIRMAT','Confirmat'), ('DESCARTAT','Descartat'),
+    ]
+    # Identificació
+    token           = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    creat_per       = models.ForeignKey('accounts.UserProfile', null=True, blank=True,
+                        on_delete=models.SET_NULL, related_name='import_sessions')
+    data_creacio    = models.DateTimeField(auto_now_add=True)
+    actualitzat_at  = models.DateTimeField(auto_now=True)
+    # Estat del flux
+    estat           = models.CharField(max_length=20, choices=ESTAT_CHOICES, default='INICI')
+    # Document origen (PDF, Excel o imatge)
+    document        = models.FileField(upload_to='import_sessions/%Y/%m/',
+                        null=True, blank=True)
+    # Model destí (es crea en confirmar)
+    model           = models.ForeignKey('models_app.Model', null=True, blank=True,
+                        on_delete=models.SET_NULL, related_name='import_sessions')
+    # Resultats per fase
+    model_detectat          = models.JSONField(default=dict, blank=True)
+    tipologia_confirmada    = models.ForeignKey('tasks.GarmentTypeItem', null=True, blank=True,
+                                on_delete=models.SET_NULL)
+    run_conciliat           = models.JSONField(default=dict, blank=True)
+    poms_extrets            = models.JSONField(default=list, blank=True)
+    resultat                = models.JSONField(default=dict, blank=True)
+    historia_xat            = models.JSONField(default=list, blank=True)
+    avisos                  = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-data_creacio']
+
+    def __str__(self):
+        return f'ImportSession {self.token} [{self.estat}]'
 
 
 class ModelServei(models.Model):

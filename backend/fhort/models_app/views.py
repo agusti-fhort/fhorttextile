@@ -574,6 +574,14 @@ def measurements_table_view(request, model_id):
         else:
             deltas[str(r['pom_id'])] = None
 
+    # Taula tancada? (SizeFitting estat='Tancat' → vista de només lectura al frontend)
+    tancat = False
+    try:
+        from fhort.fitting.models import SizeFitting
+        tancat = SizeFitting.objects.filter(model=model, estat='Tancat').exists()
+    except Exception:
+        tancat = False
+
     return Response({
         'model_id': model.id,
         'codi_intern': model.codi_intern,
@@ -584,6 +592,7 @@ def measurements_table_view(request, model_id):
         'deltes': deltas,
         'rows': rows,
         'total_poms': len(rows),
+        'tancat': tancat,
     })
 
 

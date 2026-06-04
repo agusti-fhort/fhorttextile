@@ -90,6 +90,7 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     responsable_nom = serializers.CharField(source='responsable.nom_complet', read_only=True)
     created_by_nom = serializers.CharField(source='created_by.nom_complet', read_only=True)
     garment_type_item_nom = serializers.CharField(source='garment_type_item.name', read_only=True)
+    garment_type_item_code = serializers.CharField(source='garment_type_item.code', read_only=True)
     size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
     size_system_nom = serializers.CharField(source='size_system.nom', read_only=True)
 

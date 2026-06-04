@@ -1,5 +1,8 @@
 # fhort/models_app/extraction_views.py
+import base64 as _base64
 import datetime as _dt
+import io as _io
+import logging as _logging
 import re as _re
 
 from rest_framework.decorators import api_view, permission_classes, parser_classes
@@ -309,119 +312,8 @@ def create_from_extraction_view(request):
                         model.save(update_fields=['size_system'])
                         size_system_assigned = ss.codi
 
-            # Fix B — Match POMMaster with priorities: exact code, root-code
-            # (positional codes like D1/G2s/Y5 → root D/G/Y), description,
-            # explicit synonyms, POMGlobal nom_en, abbreviation.
-            SYNONYMS = {
-                # Existing
-                'waist position':                  'waist position',
-                'hip position':                    'hip position',
-                'front body length':               'body length',
-                'straight back body length':       'body length cb',
-                'side length':                     'side seam',
-                'front armhole curve':             'armhole curve',
-                'neckline width':                  'neck width',
-                'collar height':                   'collar height',
-                'collar width':                    'collar width',
-                'bottom width':                    'skirt sweep',
-                'body zip length':                 'zip length',
-                'lining length at center front':   'lining length',
-                'lining length at center back':    'lining length',
-                'lining bottom width along hem':   'lining hem width',
-                # NEW — Brownie positional POMs (override the previous ones on
-                # collision, per spec S19; duplicate keys in the session
-                # file make the last one win).
-                'waist position':                  'waist position distance',
-                'hip position':                    'hip position distance',
-                'straight back body length':       'body length back',
-                'front armhole curve':             'armhole',
-                'collar width':                    'neck tie length',
-                'body zip length':                 'zip',
-                'lining length at center front':   'lining',
-                'lining length at center back':    'lining',
-                'lining bottom width along hem':   'lining bottom',
-            }
-
-            def find_pom_master(code, description):
-                """
-                Find the most suitable POMMaster.
-                Return (pom_master, match_type, confidence)
-                confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'NO_MATCH'
-                """
-                # Strategy 0 — positional letter+digit codes (D1, G2s...).
-                # Only if the code has digits/suffix after the initial letters.
-                if code:
-                    m = _re.match(r'^([A-Za-z]+)', code)
-                    if m and m.group(1) != code:
-                        root = m.group(1)
-                        pm = POMMaster.objects.filter(
-                            codi_client__iexact=root, actiu=True,
-                        ).first()
-                        if pm:
-                            return pm, 'root_code_match', 'MEDIUM'
-
-                # Strategy 1 — exact match by codi_client.
-                pm = POMMaster.objects.filter(
-                    codi_client__iexact=code, actiu=True,
-                ).first()
-                if pm:
-                    return pm, 'exact_code', 'HIGH'
-
-                if not description:
-                    return None, 'no_match', 'NO_MATCH'
-
-                desc_clean = description.lower().strip()
-                desc_base = _re.sub(r'\s*[\(\[].*?[\)\]]', '', desc_clean).strip()
-
-                # Strategy 2 — explicit synonym (curated table).
-                syn = SYNONYMS.get(desc_clean) or SYNONYMS.get(desc_base)
-                if syn:
-                    for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
-                        nom = (pm.nom_client or '').lower()
-                        if syn in nom or nom in syn:
-                            return pm, 'synonym_match', 'HIGH'
-                    for pm in POMMaster.objects.select_related('pom_global').filter(
-                        pom_global__isnull=False, actiu=True,
-                    ):
-                        nom_en = (pm.pom_global.nom_en or '').lower()
-                        if syn in nom_en or nom_en in syn:
-                            return pm, 'synonym_global_match', 'HIGH'
-
-                # Strategy 3 — match by nom_client (exact=HIGH, contains=MEDIUM).
-                for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
-                    nom = (pm.nom_client or '').lower()
-                    if desc_base and len(desc_base) > 3:
-                        if desc_base == nom:
-                            return pm, 'exact_description', 'HIGH'
-                        if desc_base in nom or nom in desc_base:
-                            return pm, 'description_match', 'MEDIUM'
-
-                # Strategy 4 — match by POMGlobal nom_en / abbreviation.
-                for pm in POMMaster.objects.select_related('pom_global').filter(
-                    pom_global__isnull=False, actiu=True,
-                ):
-                    pg = pm.pom_global
-                    nom_en = (pg.nom_en or '').lower()
-                    abbrev = (pg.abbreviation or '').lower()
-                    if desc_base and len(desc_base) > 3:
-                        if desc_base == nom_en:
-                            return pm, 'global_exact', 'HIGH'
-                        if desc_base in nom_en or nom_en in desc_base:
-                            return pm, 'global_name_match', 'MEDIUM'
-                    if code and code.lower() == abbrev:
-                        return pm, 'abbreviation_match', 'HIGH'
-
-                # Strategy 5 — pure numeric codes → lining.
-                if code and code.isdigit():
-                    desc_lower = (description or '').lower()
-                    if 'lining' in desc_lower:
-                        for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
-                            nom = (pm.nom_client or '').lower()
-                            if 'lining' in nom:
-                                return pm, 'numeric_lining_match', 'MEDIUM'
-
-                return None, 'no_match', 'NO_MATCH'
-
+            # Matching POMMaster: usa la funció de mòdul find_pom_master (extreta per
+            # poder-la reutilitzar des de l'extracció per sessió, W2).
             poms_created = 0
             poms_skipped = []
             match_log = []
@@ -764,3 +656,866 @@ def delete_model_view(request, model_id):
         'codi': codi,
         'message': f'Model "{nom}" ({codi}) esborrat correctament.',
     })
+
+
+# =====================================================================
+# F2.2/F2.3 — Importació guiada per sessió (ImportSession)
+# Crida 1: cribratge barat (tipologia, nº models, run de talles).
+# =====================================================================
+
+CRIBRATGE_MODEL = 'claude-opus-4-7'
+
+# RETURN ONLY VALID JSON — cap prosa, cap markdown. Visió barata, sense thinking.
+CRIBRATGE_PROMPT = """You are a fast triage system for fashion tech-sheet documents.
+Look at the document and return ONLY a single valid JSON object. No prose, no markdown fences.
+
+Detect, at a glance (do NOT extract measurements):
+- How many INDEPENDENT garment models/styles the document contains (distinct style names or codes).
+- The garment typology, in English (dress, trousers, shirt, skirt, jacket, pyjama...).
+- The target gender/age segment.
+- The size-run labels exactly as printed, in order.
+- Which size system those labels belong to.
+
+Return EXACTLY this shape:
+{
+  "num_models": <int>,
+  "models_detectats": [{"nom": "<style name or code>", "pagina": <int>, "descripcio": "<short>"}],
+  "tipologia_detectada": "<dress|trousers|shirt|skirt|...>",
+  "genere_detectat": "<woman|man|unisex|baby|kids>",
+  "run_talles_document": ["<label1>", "<label2>", "..."],
+  "sistema_talles": "<letters|age_months|age_years|numeric|height_cm|unknown>"
+}
+
+Rules:
+- num_models counts distinct styles/patterns. Two patterns on the same page = 2.
+- Use the EXACT size labels printed in the document, preserving their order.
+- letters = XS/S/M/L..., numeric = 34/36/38..., age_months = 0M/3M/6M..., age_years = 6Y/8Y...,
+  height_cm = 50/56/62... (cm body height for baby/kids). If unsure, "unknown".
+- Output ONLY the JSON object, nothing else."""
+
+
+def _excel_to_text(file_bytes: bytes) -> str:
+    """Converteix un .xlsx/.xls a text tabulat perquè la IA en llegeixi el contingut."""
+    import openpyxl
+    wb = openpyxl.load_workbook(_io.BytesIO(file_bytes), data_only=True, read_only=True)
+    lines = []
+    for ws in wb.worksheets:
+        lines.append(f'### Full: {ws.title}')
+        for row in ws.iter_rows(values_only=True):
+            cells = ['' if c is None else str(c) for c in row]
+            if any(cells):
+                lines.append('\t'.join(cells))
+    wb.close()
+    return '\n'.join(lines)
+
+
+def _cribratge_content_block(file_bytes: bytes, filename: str, content_type: str) -> dict:
+    """Bloc de contingut per a la API segons el tipus de fitxa origen (PDF/imatge/Excel)."""
+    name = (filename or '').lower()
+    ct = (content_type or '').lower()
+
+    if ct == 'application/pdf' or name.endswith('.pdf'):
+        return {
+            'type': 'document',
+            'source': {
+                'type': 'base64',
+                'media_type': 'application/pdf',
+                'data': _base64.standard_b64encode(file_bytes).decode(),
+            },
+        }
+    if name.endswith(('.xlsx', '.xls')) or 'spreadsheet' in ct or 'excel' in ct:
+        text = _excel_to_text(file_bytes)
+        return {'type': 'text', 'text': f'Contingut del full de càlcul (fitxa Excel):\n{text[:12000]}'}
+
+    # Imatge (jpg/png/webp)
+    if ct in ('image/jpeg', 'image/png', 'image/webp'):
+        media = ct
+    elif name.endswith('.png'):
+        media = 'image/png'
+    elif name.endswith('.webp'):
+        media = 'image/webp'
+    else:
+        media = 'image/jpeg'
+    return {
+        'type': 'image',
+        'source': {
+            'type': 'base64',
+            'media_type': media,
+            'data': _base64.standard_b64encode(file_bytes).decode(),
+        },
+    }
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def import_session_cribratge_view(request):
+    """
+    POST /api/v1/import-sessions/cribratge/
+    multipart: document (fitxer), model_id, garment_type_item_code
+
+    Crida 1 — cribratge barat (visió, Opus, tokens baixos, sense thinking): detecta nº de
+    models al document, tipologia, gènere i el run de talles. SEMPRE retorna resultats; el
+    gating (bloqueig de talles, confirmació multi-model) és el pas F2.3.
+    """
+    import anthropic
+    from django.conf import settings
+    from django.core.files.base import ContentFile
+
+    from fhort.accounts.models import UserProfile
+    from fhort.models_app.models import ImportSession, Model
+    from fhort.models_app.extraction_utils import safe_json_parse
+    from fhort.tasks.models import GarmentTypeItem
+
+    file_obj = request.FILES.get('document')
+    if not file_obj:
+        return Response({'error': 'Cal adjuntar un fitxer (camp "document")'}, status=400)
+
+    model_id = request.data.get('model_id')
+    if not model_id:
+        return Response({'error': 'Cal indicar model_id'}, status=400)
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': f'Model {model_id} no trobat'}, status=404)
+
+    item_code = (request.data.get('garment_type_item_code') or '').strip()
+    item = None
+    if item_code:
+        # Prefer the item already on the model if its code matches; else look up by code.
+        if model.garment_type_item_id and model.garment_type_item.code == item_code:
+            item = model.garment_type_item
+        else:
+            item = GarmentTypeItem.objects.filter(code=item_code).first()
+
+    profile = UserProfile.objects.filter(user=request.user).first()
+
+    api_key = getattr(settings, 'ANTHROPIC_API_KEY', '')
+    if not api_key:
+        return Response({'error': 'ANTHROPIC_API_KEY no configurada al backend'}, status=500)
+
+    # Crea la sessió i desa el document origen.
+    session = ImportSession.objects.create(
+        estat='CRIBRATGE', creat_per=profile, model=model, tipologia_confirmada=item,
+    )
+    file_bytes = file_obj.read()
+    session.document.save(file_obj.name, ContentFile(file_bytes), save=True)
+
+    content_block = _cribratge_content_block(file_bytes, file_obj.name, file_obj.content_type)
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model=CRIBRATGE_MODEL,
+            max_tokens=900,
+            system=CRIBRATGE_PROMPT,
+            messages=[{'role': 'user', 'content': [content_block]}],
+        )
+        raw = ''.join(
+            b.text for b in response.content if getattr(b, 'type', None) == 'text'
+        ).strip()
+    except Exception as e:
+        _logging.getLogger(__name__).exception('Cribratge: error a la crida Claude')
+        return Response({'error': f'Error a la crida de cribratge: {e}', 'token': str(session.token)},
+                        status=502)
+
+    # Parse tolerant (Fase 1).
+    try:
+        resultat = safe_json_parse(raw)
+    except ValueError as e:
+        session.avisos = (session.avisos or []) + [f'Cribratge: JSON invàlid ({e})']
+        session.save(update_fields=['avisos', 'actualitzat_at'])
+        return Response({'error': f'Cribratge: resposta no parsejable ({e})',
+                         'token': str(session.token), 'raw': raw[:500]}, status=422)
+
+    num_models = resultat.get('num_models') or len(resultat.get('models_detectats') or []) or 0
+    models_detectats = resultat.get('models_detectats') or []
+    tipologia = resultat.get('tipologia_detectada') or ''
+    genere = resultat.get('genere_detectat') or ''
+    run_document = resultat.get('run_talles_document') or []
+    sistema = resultat.get('sistema_talles') or 'unknown'
+
+    run_configurat = [
+        s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()
+    ]
+
+    # Desa a la sessió (no fa gating; només cribratge).
+    session.model_detectat = models_detectats
+    session.run_conciliat = {
+        'document': run_document,
+        'sistema': sistema,
+        'configurat': run_configurat,
+        'estat': 'PENDENT',
+    }
+    # Persisteix el cribratge cru per a F2.3 (gènere/tipologia) sense tocar `resultat` definitiu.
+    session.resultat = {**(session.resultat or {}), 'cribratge': resultat}
+    session.estat = 'CRIBRATGE'
+    session.save()
+
+    plausible_genere = genere in ('woman', 'man', 'unisex', 'baby', 'kids')
+    pot_continuar = bool(num_models == 1 and tipologia and tipologia != 'unknown' and plausible_genere)
+
+    return Response({
+        'token': str(session.token),
+        'estat': session.estat,
+        'num_models': num_models,
+        'model_detectat': models_detectats,
+        'tipologia_detectada': tipologia,
+        'genere_detectat': genere,
+        'run_talles_document': run_document,
+        'sistema_talles': sistema,
+        'run_configurat': run_configurat,
+        'pot_continuar': pot_continuar,
+    }, status=200)
+
+
+def _norm_label(s):
+    return (s or '').strip().upper()
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def import_session_talles_view(request, token):
+    """
+    PATCH /api/v1/import-sessions/<token>/talles/  (Pas W1 — reconciliació de talles)
+
+    Rep:
+      - talles_seleccionades: llista de labels (del document) que el tècnic confirma com a
+        columnes finals de la taula.
+      - accio: 'alinear' | 'mapejar' | 'res'.
+      - mapeig_talles: dict opcional {label_doc: label_model} per a 'mapejar'.
+
+    Gating per labels: una talla seleccionada té "destí" si coincideix amb el run configurat,
+    amb una talla del SizeSystem, o amb una entrada del mapeig. Si 'alinear' → adopta el run
+    seleccionat com a run del model (totes passen a tenir destí). ready=True quan TOTES en tenen.
+    """
+    from fhort.models_app.models import ImportSession
+
+    session = ImportSession.objects.filter(token=token).select_related(
+        'model', 'model__size_system',
+    ).first()
+    if not session:
+        return Response({'error': 'Sessió no trobada'}, status=404)
+    model = session.model
+    if not model:
+        return Response({'error': 'La sessió no té model associat'}, status=400)
+
+    talles_sel = [str(t).strip() for t in (request.data.get('talles_seleccionades') or []) if str(t).strip()]
+    accio = (request.data.get('accio') or 'res').strip()
+    mapeig = request.data.get('mapeig_talles') or {}
+
+    # Run configurat actual del model.
+    configurat = [
+        s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()
+    ]
+
+    # 'alinear' → adopta el run seleccionat (del document) com a run del model.
+    if accio == 'alinear' and talles_sel:
+        model.size_run_model = '·'.join(talles_sel)
+        model.save(update_fields=['size_run_model'])
+        configurat = list(talles_sel)
+
+    # Labels disponibles com a destí: run configurat + talles del SizeSystem + mapeig.
+    system_labels = []
+    if model.size_system_id:
+        system_labels = list(model.size_system.talles.values_list('etiqueta', flat=True))
+    destins = {_norm_label(x) for x in configurat} | {_norm_label(x) for x in system_labels}
+    destins |= {_norm_label(v) for v in mapeig.values()}
+    mapeig_norm = {_norm_label(k) for k in mapeig.keys()}
+
+    sense_desti = [t for t in talles_sel
+                   if _norm_label(t) not in destins and _norm_label(t) not in mapeig_norm]
+    ready = bool(talles_sel) and not sense_desti
+
+    rc = dict(session.run_conciliat or {})
+    rc.update({
+        'configurat': configurat,
+        'seleccionades': talles_sel,
+        'mapeig': mapeig,
+        'sense_desti': sense_desti,
+        'estat': 'RESOLT' if ready else 'PENDENT',
+    })
+    session.run_conciliat = rc
+    if ready:
+        session.estat = 'TALLES'
+    session.save(update_fields=['run_conciliat', 'estat', 'actualitzat_at'])
+
+    return Response({
+        'ready': ready,
+        'estat': session.estat,
+        'run_conciliat': rc,
+        'size_run_model': model.size_run_model,
+        'sense_desti': sense_desti,
+    }, status=200)
+
+
+# ─────────────────────── Matching POMMaster (compartit) ───────────────────────
+# Extret de create_from_extraction_view perquè l'extracció per sessió (W2) i la creació
+# directa des d'extracció comparteixin EXACTAMENT la mateixa lògica de matching.
+_POM_SYNONYMS = {
+    # Existing
+    'waist position':                  'waist position',
+    'hip position':                    'hip position',
+    'front body length':               'body length',
+    'straight back body length':       'body length cb',
+    'side length':                     'side seam',
+    'front armhole curve':             'armhole curve',
+    'neckline width':                  'neck width',
+    'collar height':                   'collar height',
+    'collar width':                    'collar width',
+    'bottom width':                    'skirt sweep',
+    'body zip length':                 'zip length',
+    'lining length at center front':   'lining length',
+    'lining length at center back':    'lining length',
+    'lining bottom width along hem':   'lining hem width',
+    # NEW — Brownie positional POMs (override the previous ones on collision, per spec
+    # S19; duplicate keys make the last one win).
+    'waist position':                  'waist position distance',
+    'hip position':                    'hip position distance',
+    'straight back body length':       'body length back',
+    'front armhole curve':             'armhole',
+    'collar width':                    'neck tie length',
+    'body zip length':                 'zip',
+    'lining length at center front':   'lining',
+    'lining length at center back':    'lining',
+    'lining bottom width along hem':   'lining bottom',
+}
+
+
+def find_pom_master(code, description):
+    """
+    Find the most suitable POMMaster.
+    Return (pom_master, match_type, confidence)
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'NO_MATCH'
+    """
+    from fhort.pom.models import POMMaster
+
+    # Strategy 0 — positional letter+digit codes (D1, G2s...).
+    if code:
+        m = _re.match(r'^([A-Za-z]+)', code)
+        if m and m.group(1) != code:
+            root = m.group(1)
+            pm = POMMaster.objects.filter(codi_client__iexact=root, actiu=True).first()
+            if pm:
+                return pm, 'root_code_match', 'MEDIUM'
+
+    # Strategy 1 — exact match by codi_client.
+    pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).first()
+    if pm:
+        return pm, 'exact_code', 'HIGH'
+
+    if not description:
+        return None, 'no_match', 'NO_MATCH'
+
+    desc_clean = description.lower().strip()
+    desc_base = _re.sub(r'\s*[\(\[].*?[\)\]]', '', desc_clean).strip()
+
+    # Strategy 2 — explicit synonym (curated table).
+    syn = _POM_SYNONYMS.get(desc_clean) or _POM_SYNONYMS.get(desc_base)
+    if syn:
+        for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
+            nom = (pm.nom_client or '').lower()
+            if syn in nom or nom in syn:
+                return pm, 'synonym_match', 'HIGH'
+        for pm in POMMaster.objects.select_related('pom_global').filter(
+            pom_global__isnull=False, actiu=True,
+        ):
+            nom_en = (pm.pom_global.nom_en or '').lower()
+            if syn in nom_en or nom_en in syn:
+                return pm, 'synonym_global_match', 'HIGH'
+
+    # Strategy 3 — match by nom_client (exact=HIGH, contains=MEDIUM).
+    for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
+        nom = (pm.nom_client or '').lower()
+        if desc_base and len(desc_base) > 3:
+            if desc_base == nom:
+                return pm, 'exact_description', 'HIGH'
+            if desc_base in nom or nom in desc_base:
+                return pm, 'description_match', 'MEDIUM'
+
+    # Strategy 4 — match by POMGlobal nom_en / abbreviation.
+    for pm in POMMaster.objects.select_related('pom_global').filter(
+        pom_global__isnull=False, actiu=True,
+    ):
+        pg = pm.pom_global
+        nom_en = (pg.nom_en or '').lower()
+        abbrev = (pg.abbreviation or '').lower()
+        if desc_base and len(desc_base) > 3:
+            if desc_base == nom_en:
+                return pm, 'global_exact', 'HIGH'
+            if desc_base in nom_en or nom_en in desc_base:
+                return pm, 'global_name_match', 'MEDIUM'
+        if code and code.lower() == abbrev:
+            return pm, 'abbreviation_match', 'HIGH'
+
+    # Strategy 5 — pure numeric codes → lining.
+    if code and code.isdigit():
+        desc_lower = (description or '').lower()
+        if 'lining' in desc_lower:
+            for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
+                nom = (pm.nom_client or '').lower()
+                if 'lining' in nom:
+                    return pm, 'numeric_lining_match', 'MEDIUM'
+
+    return None, 'no_match', 'NO_MATCH'
+
+
+# ═══════════════════════════ W2 — Extracció POMs ═══════════════════════════
+EXTRACCIO_MODEL = 'claude-opus-4-7'
+EXTRACCIO_MAX_TOKENS = 16000
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def import_session_extraccio_view(request, token):
+    """
+    POST /api/v1/import-sessions/<token>/extraccio/  (Pas W2 — Crida 2: extracció completa)
+
+    Re-llegeix el document desat a la sessió i fa l'extracció completa (POMs + valors +
+    grading) amb visió Opus 16k. Per cada POM crida find_pom_master i desa el matching a
+    session.poms_extrets. Desa l'extracció completa a session.resultat. estat→'POMS'.
+    SEMPRE retorna (mai bloqueja: salvage de Fase 1 si el JSON global falla).
+    """
+    import anthropic
+    from django.conf import settings
+
+    from fhort.models_app.models import ImportSession
+    from fhort.models_app.extraction_prompt import TECH_SHEET_EXTRACTION_PROMPT
+    from fhort.models_app.extraction_utils import safe_json_parse, salvage_measurements
+
+    session = ImportSession.objects.filter(token=token).select_related('model').first()
+    if not session:
+        return Response({'error': 'Sessió no trobada'}, status=404)
+    if not session.document:
+        return Response({'error': 'La sessió no té document desat'}, status=400)
+
+    api_key = getattr(settings, 'ANTHROPIC_API_KEY', '')
+    if not api_key:
+        return Response({'error': 'ANTHROPIC_API_KEY no configurada al backend'}, status=500)
+
+    # Llegeix el document desat al Pas 1.
+    try:
+        session.document.open('rb')
+        file_bytes = session.document.read()
+    finally:
+        session.document.close()
+
+    avisos = list(session.avisos or [])
+    detectats = session.model_detectat or []
+    if len(detectats) > 1:
+        avisos.append(
+            f'Document multi-model ({len(detectats)} detectats); extracció del model principal.'
+        )
+
+    content_block = _cribratge_content_block(file_bytes, session.document.name, '')
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model=EXTRACCIO_MODEL,
+            max_tokens=EXTRACCIO_MAX_TOKENS,
+            thinking={'type': 'adaptive'},
+            output_config={'effort': 'high'},
+            system=[{'type': 'text', 'text': TECH_SHEET_EXTRACTION_PROMPT,
+                     'cache_control': {'type': 'ephemeral'}}],
+            messages=[{'role': 'user', 'content': [content_block]}],
+        )
+        raw = ''.join(
+            b.text for b in response.content if getattr(b, 'type', None) == 'text'
+        ).strip()
+    except Exception as e:
+        _logging.getLogger(__name__).exception('Extracció W2: error a la crida Claude')
+        return Response({'error': f'Error a la crida d\'extracció: {e}'}, status=502)
+
+    # Parse tolerant (Fase 1) amb salvage per fila.
+    grading_status = {'status': 'ok', 'detail': ''}
+    try:
+        extracted = safe_json_parse(raw)
+    except ValueError as e:
+        salvaged = salvage_measurements(raw)
+        if not salvaged:
+            session.avisos = avisos + [f'Extracció: JSON il·legible ({e})']
+            session.save(update_fields=['avisos', 'actualitzat_at'])
+            return Response({'error': 'La IA no ha retornat dades llegibles',
+                             'detail': str(e)}, status=422)
+        extracted = {'measurements': salvaged}
+        grading_status = {'status': 'error',
+                          'detail': f'JSON global malformat; recuperats {len(salvaged)} POMs per fila. ({e})'}
+        avisos.append(grading_status['detail'])
+
+    measurements = extracted.get('measurements', []) or []
+
+    # Matching POM per fila.
+    poms_extrets = []
+    n_low, n_nomatch = 0, 0
+    for i, msr in enumerate(measurements):
+        codi_fitxa = (msr.get('client_code') or msr.get('code') or '').strip()
+        descripcio = (msr.get('description') or '').strip()
+        pm, match_type, confidence = find_pom_master(codi_fitxa, descripcio)
+        if confidence == 'LOW':
+            n_low += 1
+        if pm is None:
+            n_nomatch += 1
+        poms_extrets.append({
+            'codi_fitxa': codi_fitxa,
+            'descripcio': descripcio,
+            'pom_master_id': pm.id if pm else None,
+            'pom_codi': pm.codi_client if pm else None,
+            'pom_nom': (pm.nom_client if pm else None),
+            'match_type': match_type,
+            'confidence': confidence,
+            'values': msr.get('values') or {},
+            'actiu': bool(pm),  # per defecte només actius els que tenen match
+            'ordre': i,
+        })
+
+    if n_nomatch:
+        avisos.append(f'{n_nomatch} POM(s) sense match al catàleg — cal revisar o afegir manualment.')
+    if n_low:
+        avisos.append(f'{n_low} POM(s) amb confiança baixa — recomanada revisió.')
+
+    session.resultat = {**(session.resultat or {}), 'extraccio': extracted,
+                        'grading_status': grading_status}
+    session.poms_extrets = poms_extrets
+    session.avisos = avisos
+    session.estat = 'POMS'
+    session.save(update_fields=['resultat', 'poms_extrets', 'avisos', 'estat', 'actualitzat_at'])
+
+    return Response({
+        'estat': session.estat,
+        'poms_extrets': poms_extrets,
+        'header': extracted.get('header') or {},
+        'base_size': extracted.get('base_size'),
+        'sizes': extracted.get('sizes') or [],
+        'grading_status': grading_status,
+        'avisos': avisos,
+    }, status=200)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def import_session_poms_view(request, token):
+    """
+    PATCH /api/v1/import-sessions/<token>/poms/  (Pas W2 — confirmació de POMs)
+
+    Rep poms_confirmats (llista de pom_master_id actius). Marca actiu per cada POM extret;
+    els pom_master_id confirmats que no hi siguin (afegits manualment del catàleg) s'incorporen.
+    estat→'MESURES'.
+    """
+    from fhort.models_app.models import ImportSession
+    from fhort.pom.models import POMMaster
+
+    session = ImportSession.objects.filter(token=token).first()
+    if not session:
+        return Response({'error': 'Sessió no trobada'}, status=404)
+
+    confirmats = [int(x) for x in (request.data.get('poms_confirmats') or []) if str(x).isdigit()]
+    confirmats_set = set(confirmats)
+
+    poms = list(session.poms_extrets or [])
+    existents = {p.get('pom_master_id') for p in poms if p.get('pom_master_id')}
+    for p in poms:
+        if p.get('pom_master_id'):
+            p['actiu'] = p['pom_master_id'] in confirmats_set
+
+    # Afegir POMs confirmats que no eren a l'extracció (afegits manualment).
+    for pid in confirmats_set - existents:
+        pm = POMMaster.objects.filter(id=pid, actiu=True).first()
+        if not pm:
+            continue
+        poms.append({
+            'codi_fitxa': '',
+            'descripcio': pm.nom_client or '',
+            'pom_master_id': pm.id,
+            'pom_codi': pm.codi_client,
+            'pom_nom': pm.nom_client,
+            'match_type': 'manual',
+            'confidence': 'HIGH',
+            'values': {},
+            'actiu': True,
+            'ordre': len(poms),
+        })
+
+    session.poms_extrets = poms
+    session.estat = 'MESURES'
+    session.save(update_fields=['poms_extrets', 'estat', 'actualitzat_at'])
+
+    actius = [p for p in poms if p.get('actiu')]
+    return Response({'ok': True, 'estat': session.estat,
+                     'poms_actius': len(actius), 'poms_extrets': poms}, status=200)
+
+
+# ═══════════════════════════ W3 — Mesures ═══════════════════════════
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def import_session_grading_preview_view(request, token):
+    """
+    POST /api/v1/import-sessions/<token>/grading-preview/  (Pas W3 — preview de grading)
+
+    Calcula el grading SENSE persistir (reutilitza el motor via preview_graded_specs) per
+    omplir talles buides a la taula del wizard. NO crea SizeFitting/GradedSpec — això és
+    feina del desament definitiu (W5). Rep base_values {pom_master_id: valor}.
+    """
+    from fhort.models_app.models import ImportSession
+    from fhort.pom.services import preview_graded_specs
+
+    session = ImportSession.objects.filter(token=token).select_related('model').first()
+    if not session:
+        return Response({'error': 'Sessió no trobada'}, status=404)
+    model = session.model
+    if not model:
+        return Response({'error': 'La sessió no té model associat'}, status=400)
+    if not model.grading_rule_set_id:
+        return Response({'error': 'El model no té GradingRuleSet configurat', 'grading': {}}, status=400)
+
+    raw = request.data.get('base_values') or {}
+    base_values = {}
+    for k, v in raw.items():
+        if not str(k).isdigit() or v in (None, ''):
+            continue
+        try:
+            base_values[int(k)] = float(v)
+        except (TypeError, ValueError):
+            continue
+
+    grading = preview_graded_specs(model, base_values)
+    # Claus a string per a JSON consistent al frontend.
+    grading = {str(pid): row for pid, row in grading.items()}
+    return Response({'grading': grading, 'base_size': model.base_size_label,
+                     'size_run': (model.size_run_model or '').split('·')}, status=200)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def import_session_mesures_view(request, token):
+    """
+    PATCH /api/v1/import-sessions/<token>/mesures/  (Pas W3 — desa valors de la taula)
+
+    Rep mesures [{pom_master_id, talla_label, valor}]. Desa a session.resultat['mesures'].
+    estat→'MESURES_OK'.
+    """
+    from fhort.models_app.models import ImportSession
+
+    session = ImportSession.objects.filter(token=token).first()
+    if not session:
+        return Response({'error': 'Sessió no trobada'}, status=404)
+
+    mesures = request.data.get('mesures') or []
+    # Normalitza a llista neta de {pom_master_id, talla_label, valor}.
+    net = []
+    for m in mesures:
+        pid = m.get('pom_master_id')
+        talla = m.get('talla_label')
+        valor = m.get('valor')
+        if pid is None or talla in (None, ''):
+            continue
+        net.append({'pom_master_id': pid, 'talla_label': talla, 'valor': valor})
+
+    session.resultat = {**(session.resultat or {}), 'mesures': net}
+    session.estat = 'MESURES_OK'
+    session.save(update_fields=['resultat', 'estat', 'actualitzat_at'])
+
+    return Response({'ok': True, 'estat': session.estat, 'n_valors': len(net)}, status=200)
+
+
+# ═══════════════════════════ W4 — Teixit ═══════════════════════════
+_TEIXIT_FIELDS = ['fabric_main', 'fabric_composition', 'shrinkage_type', 'shrinkage_warp',
+                  'shrinkage_weft', 'shrinkage_pct', 'shrinkage_iso_key', 'fabric_notes']
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def import_session_teixit_view(request, token):
+    """
+    PATCH /api/v1/import-sessions/<token>/teixit/  (Pas W4 — desa el teixit a la sessió)
+
+    Desa els camps de teixit a session.resultat['teixit'] (no toca el model fins a W5).
+    Opcional (es pot ometre amb skip).
+    """
+    from fhort.models_app.models import ImportSession
+
+    session = ImportSession.objects.filter(token=token).first()
+    if not session:
+        return Response({'error': 'Sessió no trobada'}, status=404)
+
+    teixit = {f: request.data.get(f) for f in _TEIXIT_FIELDS if f in request.data}
+    session.resultat = {**(session.resultat or {}), 'teixit': teixit}
+    session.save(update_fields=['resultat', 'actualitzat_at'])
+    return Response({'ok': True, 'teixit': teixit}, status=200)
+
+
+# ═══════════════════════════ W5 — Confirmar i guardar ═══════════════════════════
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def import_session_confirmar_view(request, token):
+    """
+    POST /api/v1/import-sessions/<token>/confirmar/  (Pas W5 — desament definitiu)
+
+    NORMES INAMOVIBLES:
+      1. Mana el document: crea NOMÉS BaseMeasurement dels POMs confirmats (Pas 2). NO
+         materialitza la plantilla de l'item (no crida materialize_poms_view) i elimina les
+         files buides de plantilla preexistents (base_value_cm=None).
+      2. Grading final tancat: SizeFitting + GradingVersion v1 + GradedSpec des dels valors
+         del Pas 3.
+      3. NO sessions de fitting (cap FittingSession).
+      4. PDF → ModelFitxer(categoria='Document', versio NNN, naming {codi}_DOCUMENT_{NNN});
+         re-import → versio_anterior apunta a l'anterior.
+      5. session.estat='CONFIRMAT'.
+    """
+    import os
+    from django.db import transaction
+    from django.core.files.base import ContentFile
+
+    from fhort.models_app.models import ImportSession, BaseMeasurement, ModelFitxer
+    from fhort.accounts.models import UserProfile
+    from fhort.pom.models import POMMaster
+    from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
+
+    session = ImportSession.objects.filter(token=token).select_related('model').first()
+    if not session:
+        return Response({'error': 'Sessió no trobada'}, status=404)
+    model = session.model
+    if not model:
+        return Response({'error': 'La sessió no té model associat'}, status=400)
+
+    user_profile = UserProfile.objects.filter(user=request.user).first()
+
+    poms = [p for p in (session.poms_extrets or []) if p.get('actiu') and p.get('pom_master_id')]
+    if not poms:
+        return Response({'error': 'No hi ha POMs confirmats per importar'}, status=400)
+
+    # mesures (Pas 3) → {pom_id: {talla: valor}}
+    valors = {}
+    for m in (session.resultat or {}).get('mesures', []):
+        try:
+            pid = int(m['pom_master_id'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        valors.setdefault(pid, {})[m['talla_label']] = m['valor']
+
+    base_size = (model.base_size_label or '').strip()
+
+    with transaction.atomic():
+        # ── 1. Mana el document: neteja files buides de plantilla i crea NOMÉS els confirmats.
+        BaseMeasurement.objects.filter(model=model, base_value_cm__isnull=True).delete()
+
+        n_bm = 0
+        confirmed_pom_ids = []
+        for i, p in enumerate(poms):
+            pid = int(p['pom_master_id'])
+            pm = POMMaster.objects.filter(id=pid).first()
+            if not pm:
+                continue
+            base_val = valors.get(pid, {}).get(base_size)
+            BaseMeasurement.objects.update_or_create(
+                model=model, pom=pm,
+                defaults={
+                    'base_value_cm': base_val,
+                    'nom_fitxa': p.get('codi_fitxa') or '',
+                    'origen': 'IMPORTED',
+                    'is_active': True,
+                    'ordre': i,
+                    'notes': p.get('descripcio') or '',
+                },
+            )
+            confirmed_pom_ids.append(pid)
+            n_bm += 1
+
+        # ── 2 + 3. Grading final TANCAT (SizeFitting + GradingVersion v1 + GradedSpec). Cap FittingSession.
+        next_num = 1
+        while SizeFitting.objects.filter(model=model, numero=next_num).exists():
+            next_num += 1
+        sf_codi = f"IMP-{model.id}-{next_num}"
+        while SizeFitting.objects.filter(codi=sf_codi).exists():
+            next_num += 1
+            sf_codi = f"IMP-{model.id}-{next_num}"
+        size_fitting = SizeFitting.objects.create(
+            model=model, numero=next_num, codi=sf_codi, tipus='SizeSet',
+            estat='Tancat', base_tancada=True, creat_per=user_profile,
+            notes="Importació guiada (wizard). Grading tancat des de la fitxa.",
+        )
+        grading_version = GradingVersion.objects.create(
+            size_fitting=size_fitting, version_number=1, nom='Importació (v1)',
+            aprovada=True, is_active=True, creat_per=user_profile,
+            notes='Generat des de la importació guiada de fitxa tècnica.',
+        )
+
+        n_specs = 0
+        for pid in confirmed_pom_ids:
+            pm = POMMaster.objects.filter(id=pid).first()
+            if not pm:
+                continue
+            base_val = valors.get(pid, {}).get(base_size)
+            for talla, val in (valors.get(pid) or {}).items():
+                if val in (None, ''):
+                    continue
+                try:
+                    v = float(val)
+                except (TypeError, ValueError):
+                    continue
+                bv = None
+                try:
+                    bv = float(base_val) if base_val not in (None, '') else None
+                except (TypeError, ValueError):
+                    bv = None
+                gtype = 'FIXED' if (bv is not None and abs(v - bv) < 0.01) else 'LINEAR'
+                GradedSpec.objects.update_or_create(
+                    grading_version=grading_version, pom=pm, size_label=str(talla).strip(),
+                    defaults={'graded_value_cm': v, 'grading_type_applied': gtype,
+                              'increment_applied_cm': 0, 'is_active': True},
+                )
+                n_specs += 1
+
+        # ── 4. PDF/document → ModelFitxer(categoria='Document') amb versionat (re-import = v2).
+        doc_fitxer = None
+        if session.document:
+            anterior = ModelFitxer.objects.filter(
+                model=model, categoria='Document',
+            ).order_by('-id').first()
+            num = 1
+            if anterior:
+                try:
+                    num = int(str(anterior.versio).strip()) + 1
+                except (TypeError, ValueError):
+                    num = 2
+            ext = os.path.splitext(session.document.name)[1] or '.pdf'
+            nom = f"{model.codi_intern}_DOCUMENT_{num:03d}{ext}"
+            try:
+                session.document.open('rb')
+                doc_bytes = session.document.read()
+            finally:
+                session.document.close()
+            doc_fitxer = ModelFitxer(
+                model=model, nom_fitxer=nom, categoria='Document', tipus='DOCUMENT',
+                versio=f'{num:03d}', versio_anterior=anterior, path_servidor=nom,
+                mida_bytes=len(doc_bytes), pujat_per=user_profile,
+                descripcio='Document origen de la importació guiada.',
+            )
+            doc_fitxer.fitxer.save(nom, ContentFile(doc_bytes), save=True)
+
+        # ── 5. Teixit (si informat al Pas 4) → camps del model.
+        teixit = (session.resultat or {}).get('teixit') or {}
+        teixit_aplicat = False
+        for f in _TEIXIT_FIELDS:
+            if f in teixit and teixit[f] not in (None, ''):
+                setattr(model, f, teixit[f])
+                teixit_aplicat = True
+        if teixit_aplicat:
+            model.save()
+
+        # ── 6. Tanca la sessió.
+        session.estat = 'CONFIRMAT'
+        session.save(update_fields=['estat', 'actualitzat_at'])
+
+    return Response({
+        'ok': True,
+        'estat': session.estat,
+        'model_id': model.id,
+        'model_codi': model.codi_intern,
+        'base_measurements': n_bm,
+        'graded_specs': n_specs,
+        'size_fitting': size_fitting.codi,
+        'document_fitxer': (doc_fitxer.nom_fitxer if doc_fitxer else None),
+        'teixit_aplicat': teixit_aplicat,
+        'message': f'Importació confirmada: {n_bm} POMs, {n_specs} valors de grading (tancat).',
+    }, status=201)

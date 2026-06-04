@@ -19,7 +19,7 @@ const SizeSystems = lazy(() => import('./pages/SizeSystems'))
 const SizeLibrary = lazy(() => import('./pages/SizeLibrary'))
 // CODI MORT (jubilat al sprint tasca-POM): GarmentPOMMapEditor.jsx — editor de pertinença per
 // família amb endpoints fantasma (pom-map/* → 404). Substituït per POMBrowser-assign (per item).
-// Fitxer no esborrat; netejar en passada futura amb MeasurementTable.jsx i ImportFromSheetWizard.jsx.
+// Fitxer no esborrat; netejar en passada futura amb MeasurementTable.jsx.
 const OnboardingWizard = lazy(() => import('./pages/OnboardingWizard'))
 const ModelWizard = lazy(() => import('./pages/ModelWizard'))
 const ModelMeasurements = lazy(() => import('./pages/ModelMeasurements'))

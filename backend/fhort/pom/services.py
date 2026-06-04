@@ -126,6 +126,54 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     return created
 
 
+def preview_graded_specs(model, base_values: dict) -> dict:
+    """
+    Càlcul de grading SENSE persistència (preview per al wizard d'importació, W3).
+
+    Reutilitza EXACTAMENT la mateixa lògica que generate_graded_specs (regles, excepcions,
+    overrides per-model, _apply_rule) però sobre valors base en memòria, sense crear cap
+    SizeFitting/GradingVersion/GradedSpec. Pensat per omplir talles buides a la taula del
+    wizard abans del desament definitiu (W5).
+
+    base_values: {pom_id (POMMaster): base_value_cm}
+    Retorna: {pom_id: {size_label: graded_value}} (buit si manquen rule_set/run/base).
+    """
+    if not (model.grading_rule_set_id and model.size_run_model and model.base_size_label):
+        return {}
+    size_run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
+    base_size = model.base_size_label.strip()
+    if base_size not in size_run:
+        return {}
+    base_idx = size_run.index(base_size)
+
+    rules = _load_grading_rules(model.grading_rule_set_id)
+    exceptions = _load_grading_exceptions(model.grading_rule_set_id)
+    model_overrides = _load_model_overrides(model.pk)
+
+    out = {}
+    for pom_id, base_val in base_values.items():
+        if base_val is None:
+            continue
+        base_val = float(base_val)
+        rule = rules.get(pom_id)
+        row = {}
+        for i, size_label in enumerate(size_run):
+            steps = i - base_idx
+            override = model_overrides.get((pom_id, size_label))
+            exc = exceptions.get((pom_id, size_label))
+            if override is not None:
+                graded_val = float(override)
+            elif exc:
+                graded_val = float(exc['value_cm'])
+            elif rule is None:
+                graded_val = base_val  # sense regla = FIXED
+            else:
+                graded_val, _ = _apply_rule(rule, base_val, steps, i, base_idx)
+            row[size_label] = round(graded_val, 2)
+        out[pom_id] = row
+    return out
+
+
 # Sprint B — final state of a closed measurement table.
 CLOSED_STATE = 'Tancat'
 # Starting states from which the table may be closed. 'TallesGenerades' is the
