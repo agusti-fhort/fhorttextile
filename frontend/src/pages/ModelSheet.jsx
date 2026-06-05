@@ -11,6 +11,45 @@ import TaskLog from '../components/model/TaskLog'
 const API = import.meta.env.VITE_API_URL || ''
 const TABS = ['Resum', 'Mesures', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', 'Anàlisi IA']
 
+// ── Helpers de viabilitat (purs) ──────────────────────────────────────────
+// Aproximació estàndard: dl-dv laborables, sense festius. Jornada 420 min/dia.
+function restarDiesLaborables(dataISO, dies) {
+  if (!dataISO || !dies || dies <= 0) return null
+  const d = new Date(dataISO + 'T00:00:00')
+  let restants = Math.ceil(dies)
+  while (restants > 0) {
+    d.setDate(d.getDate() - 1)
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) restants--   // 0=diumenge, 6=dissabte
+  }
+  return d.toISOString().slice(0, 10)
+}
+
+function afegirDiesLaborables(dataISO, dies) {
+  if (!dataISO || !dies || dies <= 0) return null
+  const d = new Date(dataISO + 'T00:00:00')
+  let restants = Math.ceil(dies)
+  while (restants > 0) {
+    d.setDate(d.getDate() + 1)
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) restants--
+  }
+  return d.toISOString().slice(0, 10)
+}
+
+// Retorna { latestStart, semafor, diesNecessaris }. semafor: on_track|at_risk|critical
+function calcViabilitat(totalMinuts, dataObjectiu, predictedEnd) {
+  if (!totalMinuts || !dataObjectiu) return null
+  const diesNecessaris = totalMinuts / 420   // jornada 1 tècnic
+  const latestStart = restarDiesLaborables(dataObjectiu, Math.ceil(diesNecessaris))
+  const avui = new Date().toISOString().slice(0, 10)
+  let semafor = 'on_track'
+  if (predictedEnd && predictedEnd > dataObjectiu) {
+    semafor = latestStart && latestStart < avui ? 'critical' : 'at_risk'
+  }
+  return { latestStart, semafor, diesNecessaris }
+}
+
 const btnSecondary = {
   background: 'transparent',
   border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
@@ -382,6 +421,35 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
   const [saving, setSaving] = useState(false)
   const token = localStorage.getItem('access_token')
 
+  // ── Viabilitat: estat del panell + total de minuts de les tasques ─────────
+  const [numTecnics, setNumTecnics] = useState(1)
+  const [modeCalc, setModeCalc] = useState('fi')   // 'fi'=inici→fi · 'inici'=fi→inici
+  const [inputData, setInputData] = useState(
+    model?.predicted_start?.slice(0, 10) || new Date().toISOString().slice(0, 10)
+  )
+  const [totalMinuts, setTotalMinuts] = useState(null)
+  const [loadingMinuts, setLoadingMinuts] = useState(true)
+
+  // ── Deadline (data_objectiu): edició inline pròpia ────────────────────────
+  const [editingDeadline, setEditingDeadline] = useState(false)
+  const [deadlineVal, setDeadlineVal] = useState(model?.data_objectiu || '')
+  const [savingDeadline, setSavingDeadline] = useState(false)
+
+  useEffect(() => {
+    if (!modelId) return
+    const tk = localStorage.getItem('access_token')
+    fetch(`${API}/api/v1/model-task-items/?model=${modelId}`,
+      { headers: { Authorization: `Bearer ${tk}` } })
+      .then(r => (r.ok ? r.json() : { results: [] }))
+      .then(data => {
+        const items = data.results || data
+        const total = items.reduce((s, item) => s + (item.estimated_minutes || 0), 0)
+        setTotalMinuts(total)
+        setLoadingMinuts(false)
+      })
+      .catch(() => setLoadingMinuts(false))
+  }, [modelId])
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -399,6 +467,48 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
   }
 
   if (!model) return null
+
+  const saveDeadline = async () => {
+    setSavingDeadline(true)
+    try {
+      const r = await fetch(`${API}/api/v1/models/${modelId}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ data_objectiu: deadlineVal || null }),
+      })
+      if (r.ok) { setEditingDeadline(false); if (onUpdated) onUpdated() }
+    } finally { setSavingDeadline(false) }
+  }
+
+  // Cel·la del deadline: edició inline (date input + ✓/✕) o display (gold / sense).
+  const deadlineCell = editingDeadline ? (
+    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+      <input type="date" value={deadlineVal} onChange={e => setDeadlineVal(e.target.value)}
+        style={{ padding: '3px 6px', fontSize: 12, fontFamily: 'IBM Plex Mono, monospace',
+                 border: '1px solid var(--border)', borderRadius: 4 }} />
+      <button type="button" onClick={saveDeadline} disabled={savingDeadline}
+        style={{ padding: '3px 10px', background: 'var(--gold)', color: '#fff', border: 'none',
+                 borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>
+        {savingDeadline ? '…' : '✓'}
+      </button>
+      <button type="button" onClick={() => { setDeadlineVal(model.data_objectiu || ''); setEditingDeadline(false) }}
+        style={{ padding: '3px 8px', background: 'transparent', border: '0.5px solid var(--border)',
+                 borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>
+        ✕
+      </button>
+    </span>
+  ) : (
+    <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+      {model.data_objectiu
+        ? <strong style={{ color: 'var(--gold)' }}>{model.data_objectiu}</strong>
+        : <span style={{ color: 'var(--text-muted)' }}>— Sense deadline</span>}
+      <button type="button" onClick={() => setEditingDeadline(true)} title="Editar deadline"
+        style={{ background: 'transparent', border: 'none', cursor: 'pointer',
+                 color: 'var(--text-muted)', fontSize: 12, padding: 0 }}>
+        <i className="ti ti-pencil" />
+      </button>
+    </span>
+  )
 
   const fmtDateTime = (v) => v ? new Date(v).toLocaleString('ca-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
   const readOnlyFields = [
@@ -428,7 +538,22 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           ? `${model.shrinkage_pct}% (${model.shrinkage_type})`
           : '—'],
     ] : []),
+    ['Deadline', deadlineCell],
   ]
+
+  // ── Viabilitat: càlculs derivats (render) ─────────────────────────────────
+  const diesBase = totalMinuts ? totalMinuts / 420 : null
+  const diesAjustats = diesBase ? diesBase / numTecnics : null
+  const dataFiCalc = modeCalc === 'fi' && diesAjustats
+    ? afegirDiesLaborables(inputData, Math.ceil(diesAjustats))
+    : null
+  const dataIniciCalc = modeCalc === 'inici' && diesAjustats
+    ? restarDiesLaborables(model.data_objectiu, Math.ceil(diesAjustats))
+    : null
+  const viab = totalMinuts
+    ? calcViabilitat(totalMinuts, model.data_objectiu, model.predicted_end?.slice(0, 10))
+    : null
+  const avuiISO = new Date().toISOString().slice(0, 10)
 
   return (
     <div style={{ maxWidth: 640 }}>
@@ -525,6 +650,177 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           ))}
         </tbody>
       </table>
+
+      {model.data_objectiu && (
+        <div style={{
+          marginTop: '24px',
+          border: '1px solid var(--border)',
+          borderRadius: '4px',
+          overflow: 'hidden',
+          fontFamily: 'IBM Plex Mono, monospace',
+        }}>
+          {/* Capçalera del panel */}
+          <div style={{
+            background: 'var(--bg-sidebar)',
+            borderBottom: '1px solid var(--hairline)',
+            padding: '8px 12px',
+            display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: '11px', fontWeight: 600,
+              color: 'var(--gold)', textTransform: 'uppercase',
+              letterSpacing: '0.05em' }}>
+              Viabilitat del model
+            </span>
+            {viab && (
+              <span style={{
+                fontSize: '10px', padding: '2px 8px',
+                background: viab.semafor === 'on_track' ? '#dcfce7'
+                           : viab.semafor === 'at_risk'  ? '#fef9c3'
+                           : '#fee2e2',
+                color: viab.semafor === 'on_track' ? '#166534'
+                     : viab.semafor === 'at_risk'  ? '#854d0e'
+                     : '#991b1b',
+                border: `1px solid ${
+                  viab.semafor === 'on_track' ? '#86efac'
+                : viab.semafor === 'at_risk'  ? '#fde047'
+                : '#fca5a5'}`,
+              }}>
+                {viab.semafor === 'on_track' ? 'En termini'
+               : viab.semafor === 'at_risk'  ? 'En risc'
+               : 'Crític'}
+              </span>
+            )}
+          </div>
+
+          {/* Cos del panel */}
+          <div style={{ padding: '12px', background: 'var(--bg-muted)' }}>
+            {loadingMinuts ? (
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Calculant...
+              </p>
+            ) : !totalMinuts ? (
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Sense tasques estimades. Assigna temps a les tasques
+                per calcular la viabilitat.
+              </p>
+            ) : (
+              <>
+                {/* Fila d'info base */}
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)',
+                  marginBottom: '12px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                  <span>
+                    {Math.round(totalMinuts / 60 * 10) / 10} h estimades
+                  </span>
+                  {viab?.latestStart && (
+                    <span>
+                      Inici màxim:
+                      <strong style={{ color: viab.semafor === 'critical'
+                        ? 'var(--err)' : 'var(--text-main)',
+                        marginLeft: '4px' }}>
+                        {viab.latestStart}
+                      </strong>
+                    </span>
+                  )}
+                  {model.data_objectiu && (
+                    <span>Deadline: {model.data_objectiu}</span>
+                  )}
+                </div>
+
+                {/* Calculadora interactiva */}
+                <div style={{ display: 'flex', gap: '8px',
+                  alignItems: 'center', flexWrap: 'wrap',
+                  fontSize: '11px' }}>
+
+                  {/* Toggle mode */}
+                  <select
+                    value={modeCalc}
+                    onChange={e => setModeCalc(e.target.value)}
+                    style={{ fontFamily: 'IBM Plex Mono, monospace',
+                      fontSize: '11px', padding: '4px 6px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--bg-card)' }}>
+                    <option value="fi">Data inici → calcula fi</option>
+                    <option value="inici">
+                      Data fi (deadline) → calcula inici
+                    </option>
+                  </select>
+
+                  {/* Input data (només en mode 'fi') */}
+                  {modeCalc === 'fi' && (
+                    <input type="date" value={inputData}
+                      onChange={e => setInputData(e.target.value)}
+                      style={{ fontFamily: 'IBM Plex Mono, monospace',
+                        fontSize: '11px', padding: '4px 6px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--bg-card)' }}
+                    />
+                  )}
+
+                  {/* Nº tècnics */}
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {[1, 2, 3, 4].map(n => (
+                      <button key={n} onClick={() => setNumTecnics(n)}
+                        style={{
+                          fontFamily: 'IBM Plex Mono, monospace',
+                          fontSize: '11px', padding: '4px 10px',
+                          cursor: 'pointer',
+                          background: numTecnics === n
+                            ? 'var(--gold)' : 'transparent',
+                          color: numTecnics === n
+                            ? '#fff' : 'var(--text-main)',
+                          border: '1px solid var(--border)',
+                        }}>
+                        {n}T
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Resultat */}
+                  {modeCalc === 'fi' && dataFiCalc && (
+                    <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>
+                      → Fi estimada:
+                      <strong style={{
+                        color: model.data_objectiu && dataFiCalc > model.data_objectiu
+                          ? 'var(--err)' : 'var(--ok)',
+                        marginLeft: '4px'
+                      }}>
+                        {dataFiCalc}
+                      </strong>
+                      {model.data_objectiu && dataFiCalc > model.data_objectiu &&
+                        <span style={{ color: 'var(--err)', marginLeft: '6px', fontSize: '10px' }}>
+                          ⚠ fora de deadline
+                        </span>
+                      }
+                    </span>
+                  )}
+                  {modeCalc === 'inici' && dataIniciCalc && (
+                    <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>
+                      → Inici necessari:
+                      <strong style={{
+                        color: dataIniciCalc < avuiISO ? 'var(--err)' : 'var(--ok)',
+                        marginLeft: '4px'
+                      }}>
+                        {dataIniciCalc}
+                      </strong>
+                      {dataIniciCalc < avuiISO &&
+                        <span style={{ color: 'var(--err)', marginLeft: '6px', fontSize: '10px' }}>
+                          ⚠ data passada
+                        </span>
+                      }
+                    </span>
+                  )}
+                </div>
+
+                <p style={{ marginTop: '8px', fontSize: '10px', color: 'var(--text-muted)' }}>
+                  Estimació orientativa · jornada 420 min/dia ·
+                  dies laborables (dl-dv) · sense festius
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

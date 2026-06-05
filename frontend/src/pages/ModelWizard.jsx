@@ -53,6 +53,7 @@ export default function ModelWizard() {
   const [nomPrenda, setNomPrenda] = useState('')
   const [descripcio, setDescripcio] = useState('')
   const [collection, setCollection] = useState('')
+  const [dataObjectiu, setDataObjectiu] = useState('')   // deadline (opcional)
   const [previewRef, setPreviewRef] = useState('—')
   // Bloc 2 — garment
   const [target, setTarget] = useState(null)
@@ -104,6 +105,7 @@ export default function ModelWizard() {
       setCustomerId(d.customer != null ? String(d.customer) : null)
       setRefClient(d.codi_client && d.codi_client !== d.codi_intern ? d.codi_client : '')
       setNomPrenda(d.nom_prenda || ''); setDescripcio(d.descripcio || ''); setCollection(d.collection || '')
+      setDataObjectiu(d.data_objectiu || '')
       setTarget(d.target || null); setConstruction(d.construction || null)
       if (d.garment_type) setFamily({ id: d.garment_type, nom_en: d.garment_type_nom })
       if (d.garment_type_item) setItem({ id: d.garment_type_item, name: d.garment_type_item_nom })
@@ -160,6 +162,7 @@ export default function ModelWizard() {
       const r = await models.createWizard({
         year, season, customer_id: customerId, ref_client: refClient,
         nom_prenda: nomPrenda, descripcio, collection,
+        data_objectiu: dataObjectiu || null,
         ...skeletonPayload(),
       })
       navigate(`/models/${r.data.id}`)
@@ -173,7 +176,7 @@ export default function ModelWizard() {
     setSaving(true); setError('')
     try {
       // Edit: el camp FK del serializer és `customer` (rep l'id); codi_client = el camp de text.
-      await models.update(id, { customer: customerId, codi_client: refClient, nom_prenda: nomPrenda, descripcio, collection })
+      await models.update(id, { customer: customerId, codi_client: refClient, nom_prenda: nomPrenda, descripcio, collection, data_objectiu: dataObjectiu || null })
       await models.updateStep2(id, skeletonPayload())
       navigate(`/models/${id}`)
     } catch (e) {
@@ -251,6 +254,9 @@ export default function ModelWizard() {
             <TextInput label={t('model_wizard.nom_prenda')} value={nomPrenda} onChange={setNomPrenda} />
             <Field label={t('model_wizard.descripcio')}>
               <textarea value={descripcio} onChange={e => setDescripcio(e.target.value)} style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }} />
+            </Field>
+            <Field label="Deadline (opcional)">
+              <input type="date" value={dataObjectiu} onChange={e => setDataObjectiu(e.target.value)} style={inputStyle} />
             </Field>
           </div>
         )}

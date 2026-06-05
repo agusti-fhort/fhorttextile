@@ -1196,10 +1196,11 @@ def import_session_poms_view(request, token):
 
     Rep poms_confirmats (llista de pom_master_id actius). Marca actiu per cada POM extret;
     els pom_master_id confirmats que no hi siguin (afegits manualment del catàleg) s'incorporen.
-    estat→'MESURES'.
+    Rep també poms_tenant_only (llista d'ordres de files NO_MATCH que el tècnic vol crear com
+    a POMMaster tenant-only: pom_global=None, codi_client=codi_fitxa). estat→'MESURES'.
     """
     from fhort.models_app.models import ImportSession
-    from fhort.pom.models import POMMaster
+    from fhort.pom.models import POMMaster, POMCategory
 
     session = ImportSession.objects.filter(token=token).first()
     if not session:
@@ -1207,12 +1208,47 @@ def import_session_poms_view(request, token):
 
     confirmats = [int(x) for x in (request.data.get('poms_confirmats') or []) if str(x).isdigit()]
     confirmats_set = set(confirmats)
+    tenant_only_ordres = {
+        int(x) for x in (request.data.get('poms_tenant_only') or [])
+        if str(x).lstrip('-').isdigit()
+    }
 
     poms = list(session.poms_extrets or [])
     existents = {p.get('pom_master_id') for p in poms if p.get('pom_master_id')}
     for p in poms:
         if p.get('pom_master_id'):
             p['actiu'] = p['pom_master_id'] in confirmats_set
+
+    # POMs sense match triats pel tècnic → crear (o reutilitzar) POMMaster tenant-only.
+    if tenant_only_ordres:
+        categoria_default = (POMCategory.objects.filter(actiu=True)
+                             .order_by('display_order', 'codi').first())
+        for p in poms:
+            if p.get('pom_master_id') or p.get('ordre') not in tenant_only_ordres:
+                continue
+            codi = (p.get('codi_fitxa') or '').strip()
+            if not codi:
+                continue
+            descripcio = (p.get('descripcio') or '').strip()
+            pm, _created = POMMaster.objects.get_or_create(
+                pom_global=None,
+                codi_client=codi,
+                defaults={
+                    'nom_client': descripcio or codi,
+                    'actiu': True,
+                    'categoria': categoria_default,
+                    'pendent_revisio': True,
+                    'origen_import': str(session.token),
+                    'notes': f'Creat automàticament per import, fitxa {session.token}',
+                },
+            )
+            p['pom_master_id'] = pm.id
+            p['pom_codi'] = pm.codi_client
+            p['pom_nom'] = pm.nom_client
+            p['match_type'] = 'tenant_only'
+            p['confidence'] = 'TENANT_ONLY'
+            p['actiu'] = True
+            existents.add(pm.id)
 
     # Afegir POMs confirmats que no eren a l'extracció (afegits manualment).
     for pid in confirmats_set - existents:

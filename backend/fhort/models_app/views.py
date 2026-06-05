@@ -230,6 +230,7 @@ def create_model_wizard(request):
     nom_prenda = request.data.get('nom_prenda', '')
     descripcio = request.data.get('descripcio', '')
     collection = request.data.get('collection', '')
+    data_objectiu = request.data.get('data_objectiu') or None   # deadline (opcional)
     # Sprint A — multi-piece (immutable after creation)
     is_multipiece = bool(request.data.get('is_multipiece', False))
     num_pieces = request.data.get('num_pieces')
@@ -300,6 +301,7 @@ def create_model_wizard(request):
             collection=collection or '',
             created_by=creator,
             estat='Nou',
+            data_objectiu=data_objectiu,
             **garment_fields,
         )
         return Response({'id': model.id, 'codi_intern': model.codi_intern}, status=201)
@@ -326,6 +328,7 @@ def create_model_wizard(request):
                 collection=collection or '',
                 created_by=creator,
                 estat='Nou',
+                data_objectiu=data_objectiu,
                 garment_set=garment_set,
                 piece_number=i,
                 **garment_fields,

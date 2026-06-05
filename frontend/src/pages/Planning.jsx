@@ -51,6 +51,33 @@ function fmtMins(m) {
   return h ? (mm ? `${h}h ${mm}m` : `${h}h`) : `${mm}m`
 }
 
+// ── Helpers de viabilitat (purs) ──────────────────────────────────────────
+// Aproximació estàndard: dl-dv laborables, sense festius. Jornada 420 min/dia.
+function restarDiesLaborables(dataISO, dies) {
+  if (!dataISO || !dies || dies <= 0) return null
+  const d = new Date(dataISO + 'T00:00:00')
+  let restants = Math.ceil(dies)
+  while (restants > 0) {
+    d.setDate(d.getDate() - 1)
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) restants--   // 0=diumenge, 6=dissabte
+  }
+  return d.toISOString().slice(0, 10)
+}
+
+// Retorna { latestStart, semafor, diesNecessaris }. semafor: on_track|at_risk|critical
+function calcViabilitat(totalMinuts, dataObjectiu, predictedEnd) {
+  if (!totalMinuts || !dataObjectiu) return null
+  const diesNecessaris = totalMinuts / 420
+  const latestStart = restarDiesLaborables(dataObjectiu, Math.ceil(diesNecessaris))
+  const avui = new Date().toISOString().slice(0, 10)
+  let semafor = 'on_track'
+  if (predictedEnd && predictedEnd > dataObjectiu) {
+    semafor = latestStart && latestStart < avui ? 'critical' : 'at_risk'
+  }
+  return { latestStart, semafor, diesNecessaris }
+}
+
 async function fetchAllPages(apiFn, baseParams = {}) {
   const out = []; let page = 1
   for (;;) {
@@ -106,13 +133,15 @@ export default function Planning() {
         const ends = nonDone.map(x => x.planned_end).filter(Boolean).sort()
         const predEnd = ends.length ? ends[ends.length - 1] : null
         const risc = !!(predEnd && m.data_objectiu && localISODate(predEnd) > m.data_objectiu)
+        const temps = nonDone.reduce((s, x) => s + (x.estimated_minutes || 0), 0)
+        const viab = calcViabilitat(temps, m.data_objectiu, localISODate(predEnd))
         out.push({
           id: m.model_id, codi: m.model_codi, nom: m.model_nom, prioritat: m.prioritat,
           data_objectiu: m.data_objectiu, temporada: m.temporada,
           folder: unassigned.length ? 'pending' : 'assigned',
           nonDoneCount: nonDone.length, techIds,
           predStart: starts.length ? starts[0] : null, predEnd,
-          temps: nonDone.reduce((s, x) => s + (x.estimated_minutes || 0), 0),
+          temps, viab,
           risc, tasks: ts.slice().sort((a, b) => (a.task_type_code || '').localeCompare(b.task_type_code || '')),
           nonDone,
         })
@@ -149,8 +178,9 @@ export default function Planning() {
         const predEnd = ends.length ? ends[ends.length - 1] : null
         const risc = !!(predEnd && r.data_objectiu && localISODate(predEnd) > r.data_objectiu)
         const temps = tts.reduce((a, x) => a + (x.estimated_minutes || 0), 0)
+        const viab = calcViabilitat(temps, r.data_objectiu, localISODate(predEnd))
         ;(groups[techId] ||= { techId, name: usersById[techId] || `#${techId}`, rows: [] })
-          .rows.push({ ...r, _techId: techId, predStart, predEnd, risc, temps })
+          .rows.push({ ...r, _techId: techId, predStart, predEnd, risc, temps, viab })
       }
     }
     const list = Object.values(groups)
@@ -263,6 +293,7 @@ export default function Planning() {
                       <th style={thS}>{t('planning.col_name')}</th>
                       <th style={thS}>{t('planning.col_priority')}</th>
                       <th style={thS}>{t('planning.col_deadline')}</th>
+                      <th style={thS}>Inici màxim</th>
                       <th style={thS}>{t('planning.col_pending_count')}</th>
                     </tr></thead>
                     <tbody>
@@ -273,6 +304,9 @@ export default function Planning() {
                           <td style={tdS}>{r.nom}</td>
                           <td style={tdS}>{r.prioritat}</td>
                           <td style={tdS}>{r.data_objectiu || '—'}</td>
+                          <td style={{ ...tdS, color: (r.viab?.latestStart && r.viab.latestStart < new Date().toISOString().slice(0, 10)) ? 'var(--err)' : 'inherit' }}>
+                            {r.viab?.latestStart || '—'}
+                          </td>
                           <td style={tdS}>{r.nonDoneCount}</td>
                         </tr>
                       ))}
@@ -357,7 +391,10 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
           <i className={`ti ti-chevron-${expanded ? 'down' : 'right'}`} style={{ fontSize: 14 }} />
         </td>
         <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600, cursor: 'pointer' }} onClick={onToggle}>
-          {r.codi}{r.risc && <span title={t('planning.at_risk')} style={{ marginLeft: 8, color: 'var(--err)', fontSize: 11, fontWeight: 600 }}>⚠ {t('planning.at_risk')}</span>}
+          {r.codi}
+          {r.viab?.semafor === 'critical' && <span style={{ marginLeft: 8, color: 'var(--err)', fontSize: 11, fontWeight: 600 }}>Crític</span>}
+          {r.viab?.semafor === 'at_risk' && <span style={{ marginLeft: 8, color: 'var(--warn)', fontSize: 11, fontWeight: 600 }}>En risc</span>}
+          {r.viab?.semafor === 'on_track' && <span style={{ marginLeft: 8, color: 'var(--ok)', fontSize: 11 }}>En termini</span>}
           <div style={{ fontFamily: 'inherit', fontWeight: 400, color: 'var(--gray)', fontSize: 11 }}>{r.nom}</div>
         </td>
         <td style={tdS}>{localDate(r.predStart)}</td>

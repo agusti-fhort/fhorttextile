@@ -195,6 +195,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const togglePom = (idx) => setPomsExtrets(pomsExtrets.map((p, i) =>
     i === idx ? { ...p, actiu: !p.actiu } : p))
 
+  // POM sense match → marcar/desmarcar com a tenant-only (s'activa i s'afegirà al catàleg).
+  const toggleTenantOnly = (idx) => setPomsExtrets(pomsExtrets.map((p, i) =>
+    i === idx ? { ...p, tenant_only: !p.tenant_only, actiu: !p.tenant_only } : p))
+
   const loadCataleg = async () => {
     if (cataleg) { setShowAddPom(true); return }
     try {
@@ -218,14 +222,20 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const handleContinuePoms = async () => {
     setSavingPoms(true); setError('')
     const ids = pomsExtrets.filter(p => p.actiu && p.pom_master_id).map(p => p.pom_master_id)
+    const tenantOnly = pomsExtrets
+      .filter(p => p.actiu && !p.pom_master_id && p.tenant_only)
+      .map(p => p.ordre)
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/poms/`, {
         method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ poms_confirmats: ids }),
+        body: JSON.stringify({ poms_confirmats: ids, poms_tenant_only: tenantOnly }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setError(data.error || `Error ${res.status}`); setSavingPoms(false); return }
-      buildTaula()
+      // El backend retorna els POMs amb els pom_master_id tenant-only ja assignats.
+      const updated = data.poms_extrets || pomsExtrets
+      setPomsExtrets(updated)
+      buildTaula(updated)
       setStep(3)
     } catch (e) { setError(`Error de connexió: ${String(e)}`) }
     setSavingPoms(false)
@@ -240,9 +250,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     : (extraccioMeta?.base_size && tallesSel.includes(extraccioMeta.base_size))
       ? extraccioMeta.base_size : tallesSel[0]
 
-  const buildTaula = () => {
+  const buildTaula = (src) => {
     const t = {}
-    for (const p of (pomsExtrets || []).filter(x => x.actiu)) {
+    for (const p of (src || pomsExtrets || []).filter(x => x.actiu)) {
       const row = {}
       for (const talla of tallesSel) {
         const v = (p.values || {})[talla]
@@ -589,29 +599,44 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                   const low = conf === 'LOW' || conf === 'NO_MATCH'
                   const med = conf === 'MEDIUM'
                   const noMatch = !p.pom_master_id
+                  const tenantOnly = noMatch && !!p.tenant_only
                   return (
                     <div key={idx} style={{
                       display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
                       borderTop: idx ? `1px solid ${BORDER}` : 'none',
-                      background: !p.actiu ? '#f7f7f5' : low ? '#fdf3ee' : '#fff',
+                      background: !p.actiu ? '#f7f7f5' : tenantOnly ? '#f3f0fb' : low ? '#fdf3ee' : '#fff',
                       opacity: p.actiu ? 1 : 0.55,
                     }}>
-                      <input type="checkbox" checked={!!p.actiu} onChange={() => togglePom(idx)}
-                        disabled={noMatch && !p.actiu} />
+                      <input type="checkbox" checked={!!p.actiu}
+                        onChange={() => noMatch ? toggleTenantOnly(idx) : togglePom(idx)} />
                       <div style={{ flex: '0 0 90px', fontWeight: 600, fontSize: 13 }}>
                         {p.codi_fitxa || '—'}
                       </div>
                       <div style={{ fontSize: 16, color: '#868685' }}>→</div>
                       <div style={{ flex: 1, fontSize: 13 }}>
                         {noMatch
-                          ? <span style={{ color: '#a32d2d' }}>Sense match — {p.descripcio || 'sense descripció'}</span>
+                          ? (tenantOnly
+                              ? <span style={{ color: '#5b3fa3' }}>
+                                  {p.descripcio || 'sense descripció'}
+                                  <span style={{ marginLeft: 8, fontSize: 11, color: '#868685' }}>
+                                    · s'afegirà al catàleg del tenant
+                                  </span>
+                                </span>
+                              : <span style={{ color: '#a32d2d' }}>
+                                  Sense match — {p.descripcio || 'sense descripció'}
+                                  <span onClick={() => toggleTenantOnly(idx)}
+                                    style={{ marginLeft: 8, fontSize: 12, color: GOLD,
+                                             cursor: 'pointer', textDecoration: 'underline' }}>
+                                    Afegir com a propi
+                                  </span>
+                                </span>)
                           : <><b>{p.pom_codi}</b> · {p.pom_nom || p.descripcio}</>}
                       </div>
                       <span style={{
                         fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
-                        background: noMatch ? '#fff0f0' : low ? '#fdf6ee' : med ? '#fdf6ee' : '#f0f9f0',
-                        color: noMatch ? '#a32d2d' : (low || med) ? '#c27a2a' : '#3b6d11',
-                      }}>{noMatch ? 'sense match' : conf.toLowerCase()}</span>
+                        background: tenantOnly ? '#ede7fb' : noMatch ? '#fff0f0' : (low || med) ? '#fdf6ee' : '#f0f9f0',
+                        color: tenantOnly ? '#5b3fa3' : noMatch ? '#a32d2d' : (low || med) ? '#c27a2a' : '#3b6d11',
+                      }}>{tenantOnly ? 'tenant-only' : noMatch ? 'sense match' : conf.toLowerCase()}</span>
                     </div>
                   )
                 })}
