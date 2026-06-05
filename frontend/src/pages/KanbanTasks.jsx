@@ -594,7 +594,7 @@ function TaskCard({ task, canExecute, onTransition, t }) {
             if (canExecute && (task.status === 'Pending' || task.status === 'Paused')) {
               onTransition(task, 'InProgress')
             }
-            navigate(`/models/${task.model}/fitxa`)
+            navigate(`/models/${task.model}/fitxa?task_id=${task.id}`)
           }} style={{
             display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px',
             borderRadius: 6, border: '0.5px solid var(--gold)', background: 'var(--white)',

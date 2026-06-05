@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -100,77 +100,189 @@ const hasSavedTemplate = (tj) =>
   tj && typeof tj === 'object' && Array.isArray(tj.schemas) && tj.schemas.length > 0
 
 // ---- Taules graduades (F3) — SVG → PNG → image schema -----------------------
-// Geometria de columnes (px de disseny). 'finals' omet la columna nom_ca per estalviar espai.
-const TBL = { codiW: 24, nomEnW: 80, nomCaW: 80, sizeW: 18, rowH: 12, headerH: 12 }
+// ─── Generador de taula SVG ────────────────────────────────────────────────
+// Principis:
+// - Mai trunca: les amplades de columna s'adapten al contingut real (calcColWidths).
+//   L'SVG creix tant com calgui i el tècnic l'escala al Designer.
+// - Nomenclatura = abbreviation || codi_client (el que va al dibuix), en vermell.
+// - L'SVG té viewBox intrínsec → escala proporcional quan el tècnic redimensiona
+//   la caixa al Designer (tota la imatge creix/minva com una foto, no el contenidor).
+// - Capçalera negra, files alternes blanc/#f5f5f5 gris molt clar, vores #e0d5c5.
 
-const escXml = (s) => String(s ?? '')
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+const escXml = (s) =>
+  String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                 .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 
-// Dimensions px de la taula (compartides entre el render SVG i el càlcul de mida en mm).
-function tableDims(data, tableType) {
+// Aproximació d'amplada de text en px (monospace 7px ≈ 5.5px per caràcter)
+const textPx = (s, fSize = 7) => String(s ?? '').length * fSize * 0.62 + 8
+
+// Calcula amplades mínimes de cada columna segons el contingut real
+function calcColWidths(data, tableType) {
   const showCa = tableType !== 'finals'
-  const leftW = TBL.codiW + TBL.nomEnW + (showCa ? TBL.nomCaW : 0)
-  const w = leftW + (data.size_labels?.length || 0) * TBL.sizeW
-  const h = TBL.headerH + (data.rows?.length || 0) * TBL.rowH
-  return { w, h }
-}
+  const sizes  = data.size_labels || []
 
-// Funció pura: { size_labels, rows } + tableType → SVG string (estil fix decidit).
-function generateTableSVG(data, tableType) {
-  const showCa = tableType !== 'finals'
-  const sizes = data.size_labels || []
-  const rows = data.rows || []
-  const left = showCa
-    ? [{ label: 'POM', w: TBL.codiW, kind: 'codi' }, { label: 'Name (EN)', w: TBL.nomEnW, kind: 'en' }, { label: 'Nom (CA)', w: TBL.nomCaW, kind: 'ca' }]
-    : [{ label: 'POM', w: TBL.codiW, kind: 'codi' }, { label: 'Name (EN)', w: TBL.nomEnW, kind: 'en' }]
-  const cols = [...left, ...sizes.map(s => ({ label: s, w: TBL.sizeW, kind: 'size', size: s }))]
-  const { w: totalW, h: totalH } = tableDims(data, tableType)
+  // Amplada mínima per capçalera + contingut de cada columna
+  let codiW = textPx('REF', 6.5)
+  let enW   = textPx('Name (EN)', 6.5)
+  let caW   = showCa ? textPx('Nom (CA)', 6.5) : 0
+  const sizeWs = sizes.map(s => textPx(s, 6.5))
 
-  // x acumulat per columna
-  let acc = 0
-  const colX = cols.map(c => { const x = acc; acc += c.w; return x })
-
-  let body = `<rect x="0" y="0" width="${totalW}" height="${TBL.headerH}" fill="#c27a2a"/>`
-  cols.forEach((c, i) => {
-    body += `<text x="${colX[i] + c.w / 2}" y="${TBL.headerH / 2 + 2.5}" font-family="sans-serif" font-size="7" fill="#ffffff" text-anchor="middle">${escXml(c.label)}</text>`
-  })
-  rows.forEach((row, ri) => {
-    const y = TBL.headerH + ri * TBL.rowH
-    const ty = y + TBL.rowH / 2 + 2.5
-    body += `<rect x="0" y="${y}" width="${totalW}" height="${TBL.rowH}" fill="${ri % 2 === 0 ? '#ffffff' : '#f5f0e8'}"/>`
-    cols.forEach((c, i) => {
-      const x = colX[i]
-      if (c.kind === 'codi') {
-        body += `<text x="${x + 3}" y="${ty}" font-family="sans-serif" font-size="7" font-weight="bold" fill="#c27a2a">${escXml(row.codi)}</text>`
-      } else if (c.kind === 'en') {
-        body += `<text x="${x + 3}" y="${ty}" font-family="sans-serif" font-size="7" fill="#111827">${escXml(row.nom_en)}</text>`
-      } else if (c.kind === 'ca') {
-        body += `<text x="${x + 3}" y="${ty}" font-family="sans-serif" font-size="6.5" font-style="italic" fill="#6b7280">${escXml(row.nom_ca)}</text>`
-      } else {
-        const v = row.valors ? row.valors[c.size] : undefined
-        body += `<text x="${x + c.w / 2}" y="${ty}" font-family="sans-serif" font-size="7" fill="#111827" text-anchor="middle">${escXml(v === undefined || v === null ? '–' : v)}</text>`
-      }
+  data.rows.forEach(row => {
+    const ref = row.abbreviation || row.codi_client || row.codi || ''
+    codiW = Math.max(codiW, textPx(ref, 7))
+    enW   = Math.max(enW,   textPx(row.nom_en, 7))
+    if (showCa)
+      caW = Math.max(caW, textPx(row.nom_ca, 7))
+    sizes.forEach((s, i) => {
+      const v = row.valors?.[s]
+      const t = v === undefined || v === null ? '–' : String(v)
+      sizeWs[i] = Math.max(sizeWs[i], textPx(t, 7))
     })
   })
-  body += `<rect x="0" y="0" width="${totalW}" height="${totalH}" fill="none" stroke="#e0d5c5" stroke-width="1"/>`
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}">${body}</svg>`
+
+  // Arrodonir a enter + padding mínim
+  return {
+    codiW:  Math.ceil(codiW),
+    enW:    Math.ceil(enW),
+    caW:    Math.ceil(caW),
+    sizeWs: sizeWs.map(w => Math.ceil(w)),
+  }
 }
 
-// Rasteritza un SVG string a PNG dataURL (mateix patró que P4 del spike), x3 per nitidesa.
-function svgToPngDataURL(svgStr) {
+function generateTableSVG(data, tableType) {
+  if (!data?.rows?.length) return null
+  const showCa = tableType !== 'finals'
+  const sizes = data.size_labels || []
+
+  const ROW_H = 14
+  const HDR_H = 16
+
+  // Amplades dinàmiques segons contingut (mai trunca)
+  const { codiW, enW, caW, sizeWs } = calcColWidths(data, tableType)
+
+  // Columnes: definició amb amplada calculada
+  const cols = [
+    { label: 'REF',        w: codiW, kind: 'codi' },
+    { label: 'Name (EN)',  w: enW,   kind: 'en'   },
+    ...(showCa ? [{ label: 'Nom (CA)', w: caW, kind: 'ca' }] : []),
+    ...sizes.map((s, i) => ({ label: s, w: sizeWs[i], kind: 'size', size: s })),
+  ]
+
+  // Posicions X acumulades
+  const colX = []
+  cols.reduce((acc, c) => { colX.push(acc); return acc + c.w }, 0)
+
+  const totalW = cols.reduce((acc, c) => acc + c.w, 0)
+  const totalH = HDR_H + data.rows.length * ROW_H
+
+  // Capçalera
+  let hdr = `<rect x="0" y="0" width="${totalW}" height="${HDR_H}" fill="#111827"/>`
+  cols.forEach((c, i) => {
+    const tx = c.kind === 'size' || c.kind === 'codi'
+      ? colX[i] + c.w / 2
+      : colX[i] + 4
+    const anchor = c.kind === 'size' || c.kind === 'codi' ? 'middle' : 'start'
+    hdr += `<text x="${tx}" y="${HDR_H / 2 + 2.5}"
+      font-family="monospace" font-size="6.5" fill="#ffffff"
+      text-anchor="${anchor}" dominant-baseline="middle">
+      ${escXml(c.label)}</text>`
+  })
+
+  // Files de dades
+  let body = ''
+  data.rows.forEach((row, ri) => {
+    const y    = HDR_H + ri * ROW_H
+    const ty   = y + ROW_H / 2
+    const fill = ri % 2 === 0 ? '#ffffff' : '#f7f7f7'
+
+    body += `<rect x="0" y="${y}" width="${totalW}" height="${ROW_H}" fill="${fill}"/>`
+
+    // Línia separadora horitzontal lleugera
+    body += `<line x1="0" y1="${y}" x2="${totalW}" y2="${y}"
+      stroke="#e0d5c5" stroke-width="0.4"/>`
+
+    cols.forEach((c, i) => {
+      let txt, color, weight = 'normal', style = 'normal'
+      let anchor = 'start', tx = colX[i] + 4
+
+      if (c.kind === 'codi') {
+        // Nomenclatura = abbreviation o codi_client (el que va al dibuix)
+        txt    = row.abbreviation || row.codi_client || row.codi || ''
+        color  = '#dc2626'   // vermell
+        weight = 'bold'
+        anchor = 'middle'
+        tx     = colX[i] + c.w / 2
+      } else if (c.kind === 'en') {
+        txt   = row.nom_en || ''
+        color = '#1d1d1b'
+      } else if (c.kind === 'ca') {
+        txt   = row.nom_ca || ''
+        color = '#6b7280'
+        style = 'italic'
+      } else {
+        // Valor de talla
+        const v = row.valors?.[c.size]
+        txt    = v === undefined || v === null ? '–' : String(v)
+        color  = '#1d1d1b'
+        anchor = 'middle'
+        tx     = colX[i] + c.w / 2
+      }
+
+      body += `<text x="${tx}" y="${ty}"
+        font-family="monospace" font-size="7"
+        font-weight="${weight}" font-style="${style}"
+        fill="${color}" text-anchor="${anchor}"
+        dominant-baseline="middle">
+        ${escXml(txt)}</text>`
+    })
+  })
+
+  // Línies verticals separadores de columna
+  let vlines = ''
+  cols.forEach((_, i) => {
+    if (i === 0) return
+    vlines += `<line x1="${colX[i]}" y1="0" x2="${colX[i]}" y2="${totalH}"
+      stroke="#e0d5c5" stroke-width="0.4"/>`
+  })
+
+  // Vora exterior
+  const border = `<rect x="0" y="0" width="${totalW}" height="${totalH}"
+    fill="none" stroke="#c27a2a" stroke-width="0.8"/>`
+
+  // SVG amb viewBox intrínsec → escala proporcional com una foto
+  return `<svg xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 ${totalW} ${totalH}"
+    width="${totalW}" height="${totalH}">
+    ${hdr}${body}${vlines}${border}
+  </svg>`
+}
+
+// tableDims ja no és necessari per al SVG (viewBox és intrínsec),
+// però svgToPngDataURL el necessita per calcular el canvas.
+// Extreu les mides del SVG generat en lloc de recalcular:
+function tableDimsFromSVG(svg) {
+  const m = svg?.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/)
+  return m ? { w: parseFloat(m[1]), h: parseFloat(m[2]) } : { w: 400, h: 200 }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Rasteritza un SVG string a PNG dataURL (mateix patró que P4 del spike).
+// outW/outH opcionals: píxels de sortida explícits (ja escalats). Si s'ometen,
+// cau al comportament per defecte (mida natural del SVG × 3 per nitidesa).
+function svgToPngDataURL(svgStr, outW, outH) {
   return new Promise((resolve, reject) => {
     const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)))
     const img = new Image()
     img.onload = () => {
-      const scale = 3
       const w = img.naturalWidth || 1
       const h = img.naturalHeight || 1
+      const cw = outW || w * 3
+      const ch = outH || h * 3
       const c = document.createElement('canvas')
-      c.width = w * scale; c.height = h * scale
+      c.width = cw; c.height = ch
       const ctx = c.getContext('2d')
-      ctx.scale(scale, scale)
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h)
-      ctx.drawImage(img, 0, 0)
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cw, ch)
+      ctx.drawImage(img, 0, 0, cw, ch)
       try { resolve(c.toDataURL('image/png')) } catch (e) { reject(e) }
     }
     img.onerror = () => reject(new Error('SVG → Image load failed'))
@@ -184,13 +296,17 @@ function svgToPngDataURL(svgStr) {
 export default function TechSheetEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const taskId = searchParams.get('task_id')  // null → mode consulta (sense tasca)
+  const isEditMode = !!taskId
   const token = localStorage.getItem('access_token')
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
   const uploadHeaders = { Authorization: `Bearer ${token}` }
 
   const [sheet, setSheet] = useState(null)
   const [model, setModel] = useState(null)
-  const [lockState, setLockState] = useState('loading') // 'loading' | 'owned' | 'conflict' | 'error'
+  // 'loading' | 'owned' | 'conflict' | 'error' | 'readonly' (consulta, sense lock)
+  const [lockState, setLockState] = useState(isEditMode ? 'loading' : 'readonly')
   const [conflict, setConflict] = useState(null)
 
   const [fitxers, setFitxers] = useState([])
@@ -302,22 +418,38 @@ export default function TechSheetEditor() {
       .then(data => { if (!cancelled) setSheet(data) })
       .catch(() => {})
 
-    fetch(`${API}/api/v1/models/${id}/tech-sheet/lock/`, { method: 'POST', headers: authHeaders })
-      .then(async r => {
-        if (cancelled) return
-        if (r.ok) { setSheet(await r.json()); setLockState('owned') }
-        else if (r.status === 409) { setConflict(await r.json()); setLockState('conflict') }
-        else { setLockState('error') }
-      })
-      .catch(() => { if (!cancelled) setLockState('error') })
+    // Mode edició (obert des del Kanban amb task_id): adquirim el lock.
+    // Mode consulta (sense task_id): NO bloquegem; lockState ja és 'readonly' (estat inicial).
+    if (isEditMode) {
+      fetch(`${API}/api/v1/models/${id}/tech-sheet/lock/`, { method: 'POST', headers: authHeaders })
+        .then(async r => {
+          if (cancelled) return
+          if (r.ok) { setSheet(await r.json()); setLockState('owned') }
+          else if (r.status === 409) { setConflict(await r.json()); setLockState('conflict') }
+          else { setLockState('error') }
+        })
+        .catch(() => { if (!cancelled) setLockState('error') })
+    }
 
     loadFitxers()
 
     return () => {
       cancelled = true
-      fetch(`${API}/api/v1/models/${id}/tech-sheet/unlock/`, {
-        method: 'POST', headers: authHeaders, keepalive: true,
-      }).catch(() => {})
+      // Només en mode edició: pausa la tasca i allibera el lock que vam adquirir.
+      // keepalive perquè s'enviï encara que el tècnic tanqui la pestanya.
+      if (isEditMode) {
+        if (taskId) {
+          fetch(`${API}/api/v1/model-task-items/${taskId}/transition/`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to_status: 'Paused' }),
+            keepalive: true,
+          }).catch(() => {})
+        }
+        fetch(`${API}/api/v1/models/${id}/tech-sheet/unlock/`, {
+          method: 'POST', headers: authHeaders, keepalive: true,
+        }).catch(() => {})
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
@@ -526,9 +658,13 @@ export default function TechSheetEditor() {
       if (!r.ok) return // 404 si no hi ha GradingVersion activa → silenci
       const data = await r.json()
       if (!data.rows || data.rows.length === 0) return
-      const png = await svgToPngDataURL(generateTableSVG(data, tableType))
+      const svg = generateTableSVG(data, tableType)
+      if (!svg) return
+      const dims = tableDimsFromSVG(svg)
+      const png = await svgToPngDataURL(svg, dims.w * 3, dims.h * 3)
+      // x3 per a resolució alta (300dpi equivalent)
       // px de disseny → mm, mantenint proporció, acotat a l'amplada de la caixa útil.
-      const { w: pxW, h: pxH } = tableDims(data, tableType)
+      const { w: pxW, h: pxH } = dims
       const PX_TO_MM = 0.34
       let wmm = pxW * PX_TO_MM
       let hmm = pxH * PX_TO_MM
@@ -571,6 +707,7 @@ export default function TechSheetEditor() {
   const READONLY_BADGE = { bg: '#f5f0e8', fg: '#868685', border: '1px solid #e0d5c5' }
   const badge = (() => {
     if (lockState === 'loading') return { text: 'Carregant…', ...READONLY_BADGE }
+    if (lockState === 'readonly') return { text: 'Consultant', ...READONLY_BADGE }
     if (lockState === 'owned') return { text: 'Editant', bg: '#c27a2a', fg: '#ffffff', border: 'none' }
     if (lockState === 'conflict') return {
       text: `Bloquejada per ${conflict?.locked_by || 'un altre usuari'}`,
@@ -614,6 +751,7 @@ export default function TechSheetEditor() {
           style={{
             ...headerBtn, borderColor: '#c27a2a', color: '#c27a2a',
             opacity: designerState !== 'ready' || lockState !== 'owned' ? 0.5 : 1,
+            display: isEditMode ? undefined : 'none',  // Desar ocult en mode consulta
           }}>
           <i className="ti ti-device-floppy" style={{ fontSize: 14 }} /> {manualSaveLabel}
         </button>
@@ -754,12 +892,13 @@ export default function TechSheetEditor() {
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             margin: '0.8rem 1rem', padding: '8px', fontSize: 12, fontWeight: 500,
             borderRadius: 6, border: '0.5px dashed var(--gold)', color: 'var(--gold)',
-            cursor: uploading ? 'default' : 'pointer',
+            cursor: (uploading || !isEditMode) ? 'default' : 'pointer',
             background: uploading ? 'var(--gray-l)' : 'transparent',
+            opacity: isEditMode ? 1 : 0.5,
           }}>
             <i className="ti ti-upload" style={{ fontSize: 13 }} />
             {uploading ? 'Pujant…' : 'Pujar fitxer'}
-            <input type="file" hidden disabled={uploading}
+            <input type="file" hidden disabled={uploading || !isEditMode}
               onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleUpload(f) }} />
           </label>
 
@@ -789,14 +928,14 @@ export default function TechSheetEditor() {
                     </div>
                     <button
                       onClick={() => addAssetToCanvas(f)}
-                      disabled={!hasUrl || designerState !== 'ready' || addingId === f.id}
+                      disabled={!hasUrl || designerState !== 'ready' || addingId === f.id || !isEditMode}
                       title={hasUrl ? 'Afegir al llenç' : 'Sense URL de fitxer'}
                       style={{
                         marginTop: 4, marginRight: 4, display: 'inline-flex', alignItems: 'center', gap: 4,
                         fontSize: 10, padding: '3px 8px', border: 'none', borderRadius: 5,
                         background: '#c27a2a', color: '#ffffff', fontFamily: 'IBM Plex Mono, monospace',
-                        cursor: (!hasUrl || designerState !== 'ready') ? 'default' : 'pointer',
-                        opacity: (!hasUrl || designerState !== 'ready') ? 0.45 : 1,
+                        cursor: (!hasUrl || designerState !== 'ready' || !isEditMode) ? 'default' : 'pointer',
+                        opacity: (!hasUrl || designerState !== 'ready' || !isEditMode) ? 0.45 : 1,
                       }}>
                       <i className="ti ti-photo-plus" style={{ fontSize: 12 }} />
                       {addingId === f.id ? 'Afegint…' : 'Afegir al llenç'}
@@ -826,8 +965,8 @@ export default function TechSheetEditor() {
                     fontSize: 10, padding: '3px 8px', borderRadius: 5, border: 'none',
                     background: '#c27a2a', color: '#ffffff', fontFamily: 'IBM Plex Mono, monospace',
                     marginTop: 4, marginRight: 4,
-                    cursor: designerState !== 'ready' ? 'default' : 'pointer',
-                    opacity: designerState !== 'ready' || busy ? 0.45 : 1,
+                    cursor: (designerState !== 'ready' || !isEditMode) ? 'default' : 'pointer',
+                    opacity: (designerState !== 'ready' || busy || !isEditMode) ? 0.45 : 1,
                   })
                   return (
                     <div key={sf.id} style={{
@@ -839,13 +978,13 @@ export default function TechSheetEditor() {
                       </div>
                       <div style={{ display: 'flex', gap: 4, marginTop: 1 }}>
                         <button onClick={() => handleAddTable(sf.id, 'graded')}
-                          disabled={designerState !== 'ready' || addingTable === gradedKey}
+                          disabled={designerState !== 'ready' || addingTable === gradedKey || !isEditMode}
                           style={tableBtn(addingTable === gradedKey)}>
                           <i className="ti ti-table" style={{ fontSize: 12 }} />
                           {addingTable === gradedKey ? 'Afegint…' : 'Taula graduada'}
                         </button>
                         <button onClick={() => handleAddTable(sf.id, 'finals')}
-                          disabled={designerState !== 'ready' || addingTable === finalsKey}
+                          disabled={designerState !== 'ready' || addingTable === finalsKey || !isEditMode}
                           style={tableBtn(addingTable === finalsKey)}>
                           <i className="ti ti-ruler" style={{ fontSize: 12 }} />
                           {addingTable === finalsKey ? 'Afegint…' : 'Talles finals'}

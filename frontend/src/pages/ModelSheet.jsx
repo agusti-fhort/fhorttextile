@@ -9,7 +9,7 @@ import FittingTab from '../components/model/FittingTab'
 import TaskLog from '../components/model/TaskLog'
 
 const API = import.meta.env.VITE_API_URL || ''
-const TABS = ['Resum', 'Mesures', 'Fitxers', 'Producció', 'Fitting', 'Anàlisi IA']
+const TABS = ['Resum', 'Mesures', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', 'Anàlisi IA']
 
 const btnSecondary = {
   background: 'transparent',
@@ -20,7 +20,7 @@ const btnSecondary = {
   fontFamily: 'IBM Plex Mono, monospace',
 }
 
-export default function ModelSheet({ defaultTab = 'Mesures' }) {
+export default function ModelSheet({ defaultTab = 'Resum' }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -172,9 +172,128 @@ export default function ModelSheet({ defaultTab = 'Mesures' }) {
         )}
         {activeTab === 'Fitting' && <FittingTab model={model} onFeedback={setFeedback} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
+        {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}
         {activeTab === 'Producció' && <ProductionTab model={model} onFeedback={setFeedback} onChanged={reloadModel} />}
       </div>
+    </div>
+  )
+}
+
+// Pestanya "Fitxa tècnica": resum read-only + accessos a l'editor (/fitxa).
+// Consulta des del Model obre sense task_id → mode consulta. L'edició registrada
+// es fa des del Kanban (que passa ?task_id=...). Vegeu TechSheetEditor.
+function TechSheetTab({ modelId, navigate }) {
+  const [sheet, setSheet]   = useState(null)
+  const [loading, setLoading] = useState(true)
+  const token   = localStorage.getItem('access_token')
+  const headers = { Authorization: `Bearer ${token}` }
+
+  useEffect(() => {
+    fetch(`${API}/api/v1/models/${modelId}/tech-sheet/`, { headers })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { setSheet(data); setLoading(false) })
+      .catch(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelId])
+
+  if (loading) return (
+    <div style={{ padding: '24px', color: 'var(--text-muted)',
+      fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>
+      Carregant...
+    </div>
+  )
+
+  // Estil compartit per botons outline discrets
+  const btnOutline = {
+    background: 'transparent',
+    border: '1px solid var(--border)',
+    color: 'var(--text-main)',
+    fontFamily: 'IBM Plex Mono, monospace',
+    fontSize: '11px',
+    padding: '5px 12px',
+    cursor: 'pointer',
+  }
+
+  // --- NO HI HA FITXA ---
+  if (!sheet || !sheet.has_content) {
+    return (
+      <div style={{ padding: '24px',
+        fontFamily: 'IBM Plex Mono, monospace' }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: '12px',
+          marginBottom: '16px' }}>
+          Encara no hi ha fitxa tècnica per a aquest model.
+        </p>
+        <button
+          onClick={() => navigate(`/models/${modelId}/fitxa`)}
+          style={{ ...btnOutline, borderColor: 'var(--gold)',
+            color: 'var(--gold)' }}>
+          Crear fitxa tècnica
+        </button>
+      </div>
+    )
+  }
+
+  // --- HI HA FITXA ---
+  // Nombre de pàgines (calculat al serializer; no enviem template_json sencer).
+  const numPages = sheet.num_pages || '—'
+
+  // Format data
+  const updatedAt = sheet.updated_at
+    ? new Date(sheet.updated_at).toLocaleDateString('ca-ES',
+        { day:'2-digit', month:'2-digit', year:'numeric' })
+    : '—'
+
+  return (
+    <div style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
+
+      {/* Barra superior: info + botons */}
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 16px',
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--bg-muted)',
+      }}>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)',
+          display: 'flex', gap: '16px' }}>
+          <span>v{sheet.versio}</span>
+          <span>{sheet.estat}</span>
+          <span>{numPages} pàgines</span>
+          <span>Actualitzat: {updatedAt}</span>
+          {sheet.locked_by_username && (
+            <span style={{ color: 'var(--warn)' }}>
+              Editant: {sheet.locked_by_username}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => navigate(`/models/${modelId}/fitxa`)}
+            style={btnOutline}>
+            Previsualitzar
+          </button>
+          <button
+            onClick={() => navigate(`/models/${modelId}/fitxa`)}
+            style={btnOutline}>
+            Modificar
+          </button>
+        </div>
+      </div>
+
+      {/* Cos: resum de l'estat */}
+      <div style={{ padding: '16px', fontSize: '12px',
+        color: 'var(--text-muted)' }}>
+        <p>
+          La fitxa es pot editar des del Kanban (tasca
+          <strong style={{ color: 'var(--text-main)' }}>
+            {' '}Fitxa tècnica
+          </strong>
+          ) o des del botó Modificar.
+          El PDF definitiu es generarà en congelar la fitxa.
+        </p>
+      </div>
+
     </div>
   )
 }
