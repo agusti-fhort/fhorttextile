@@ -688,3 +688,8 @@ class BulkCollectionRow(models.Model):
 
     def __str__(self):
         return f'Row {self.row_num} [{self.estat}]'
+
+
+# Fitxa tècnica editable (editor full-screen). Definit a tech_sheet_models.py i importat
+# aquí perquè Django el descobreixi dins l'app `models_app` (migracions → models_app/).
+from .tech_sheet_models import TechSheet  # noqa: E402,F401

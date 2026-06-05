@@ -123,6 +123,22 @@ try:
 except Exception:
     _bulk_paths = []
 
+# Editor de fitxa tècnica (estat + lock col·laboratiu). Paths de 3 segments → no col·lisionen
+# amb el detall del router (models/<pk>/), però es prepended per consistència amb la resta.
+try:
+    from .tech_sheet_editor_views import (
+        TechSheetDetailView,
+        TechSheetLockView,
+        TechSheetUnlockView,
+    )
+    _techsheet_editor_paths = [
+        path('models/<int:model_id>/tech-sheet/',        TechSheetDetailView.as_view(), name='tech-sheet-detail'),
+        path('models/<int:model_id>/tech-sheet/lock/',   TechSheetLockView.as_view(),   name='tech-sheet-lock'),
+        path('models/<int:model_id>/tech-sheet/unlock/', TechSheetUnlockView.as_view(), name='tech-sheet-unlock'),
+    ]
+except Exception:
+    _techsheet_editor_paths = []
+
 urlpatterns = (
     [
         path('models/next-ref/', next_model_ref),
@@ -146,5 +162,6 @@ urlpatterns = (
     + _sprint8_paths
     + _sprint17_paths
     + _bulk_paths
+    + _techsheet_editor_paths
     + router.urls
 )

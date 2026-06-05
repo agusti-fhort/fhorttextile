@@ -27,6 +27,7 @@ const BulkImportWizard = lazy(() => import('./pages/BulkImportWizard'))
 const ModelMeasurements = lazy(() => import('./pages/ModelMeasurements'))
 const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
+const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
 const KanbanTasks = lazy(() => import('./pages/KanbanTasks'))
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
 const Alerts = lazy(() => import('./pages/Alerts'))
@@ -53,6 +54,12 @@ export default function App() {
       <Suspense fallback={<div className="p-8 text-gray-500">Carregant…</div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        {/* Fitxa tècnica: editor full-screen FORA del Shell (sense sidebar), però protegit. */}
+        <Route path="/models/:id/fitxa" element={
+          <ProtectedRoute>
+            <TechSheetEditor />
+          </ProtectedRoute>
+        } />
         <Route path="/" element={
           <ProtectedRoute>
             <Shell />

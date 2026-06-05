@@ -538,6 +538,8 @@ function TaskCard({ task, canExecute, onTransition, t }) {
   const navigate = useNavigate()
   // Tasca de POM: porta d'entrada a la pantalla de mides de l'item (materialitza la pertinença).
   const isPom = task.task_type_code === 'pom'
+  // Tasca de fitxa tècnica: porta d'entrada a l'editor full-screen de la fitxa.
+  const isTechSheet = task.task_type_code === 'tech_sheet'
   return (
     <div style={{
       border: '0.5px solid var(--gray-l)', borderRadius: 8,
@@ -582,6 +584,24 @@ function TaskCard({ task, canExecute, onTransition, t }) {
           }}>
             <i className="ti ti-ruler-2" style={{ fontSize: 12 }} />
             {t('kanban.action.open_poms', 'Obrir mides')}
+          </button>
+        </div>
+      )}
+      {isTechSheet && (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={() => {
+            // Mateix patró que isPom: auto-iniciar (fire-and-forget) i obrir l'editor de fitxa.
+            if (canExecute && (task.status === 'Pending' || task.status === 'Paused')) {
+              onTransition(task, 'InProgress')
+            }
+            navigate(`/models/${task.model}/fitxa`)
+          }} style={{
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px',
+            borderRadius: 6, border: '0.5px solid var(--gold)', background: 'var(--white)',
+            cursor: 'pointer', color: 'var(--gold)', fontWeight: 500,
+          }}>
+            <i className="ti ti-file-text" style={{ fontSize: 12 }} />
+            {t('kanban.action.open_tech_sheet', 'Obrir fitxa')}
           </button>
         </div>
       )}
