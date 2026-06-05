@@ -130,11 +130,13 @@ try:
         TechSheetDetailView,
         TechSheetLockView,
         TechSheetUnlockView,
+        TechSheetUpdateView,
     )
     _techsheet_editor_paths = [
         path('models/<int:model_id>/tech-sheet/',        TechSheetDetailView.as_view(), name='tech-sheet-detail'),
         path('models/<int:model_id>/tech-sheet/lock/',   TechSheetLockView.as_view(),   name='tech-sheet-lock'),
         path('models/<int:model_id>/tech-sheet/unlock/', TechSheetUnlockView.as_view(), name='tech-sheet-unlock'),
+        path('models/<int:model_id>/tech-sheet/update/', TechSheetUpdateView.as_view(), name='tech-sheet-update'),
     ]
 except Exception:
     _techsheet_editor_paths = []

@@ -3,9 +3,10 @@
 NOU. No toca tech_sheet_views.py (Sprint S17, extracció IA per CREAR models). Aquí gestionem
 la fitxa persistent d'un Model existent:
 
-- TechSheetDetailView  GET  models/<model_id>/tech-sheet/         → get_or_create + serialitza
-- TechSheetLockView    POST models/<model_id>/tech-sheet/lock/    → adquireix el lock (o força a >30min)
-- TechSheetUnlockView  POST models/<model_id>/tech-sheet/unlock/  → allibera (propietari o `configure`)
+- TechSheetDetailView  GET   models/<model_id>/tech-sheet/         → get_or_create + serialitza
+- TechSheetLockView    POST  models/<model_id>/tech-sheet/lock/    → adquireix el lock (o força a >30min)
+- TechSheetUnlockView  POST  models/<model_id>/tech-sheet/unlock/  → allibera (propietari o `configure`)
+- TechSheetUpdateView  PATCH models/<model_id>/tech-sheet/update/  → desa template_json (només propietari del lock)
 
 El lock és cooperatiu (no transaccional fort): és una porta UX per evitar dos editors alhora,
 amb caducitat automàtica a 30 min perquè una pestanya tancada sense unlock no bloquegi per sempre.
@@ -99,4 +100,35 @@ class TechSheetUnlockView(APIView):
         sheet.locked_by = None
         sheet.locked_at = None
         sheet.save(update_fields=['locked_by', 'locked_at', 'updated_at'])
+        return Response(TechSheetSerializer(sheet).data)
+
+
+class TechSheetUpdateView(APIView):
+    """Desa el contingut de la fitxa (template pdfme). Autosave del frontend (debounce).
+
+    Només l'usuari que té el lock pot escriure: és la garantia d'integritat de l'edició
+    col·laborativa (el lock dona dret exclusiu d'escriptura). Sense lock o lock d'un altre → 403."""
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, model_id):
+        sheet = _get_sheet(model_id)
+
+        if sheet.locked_by_id != request.user.id:
+            return Response(
+                {
+                    'detail': 'Has de tenir el lock per desar la fitxa.',
+                    'locked_by': sheet.locked_by.get_username() if sheet.locked_by_id else None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if 'template_json' not in request.data:
+            return Response(
+                {'detail': 'Falta template_json.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        sheet.template_json = request.data['template_json']
+        sheet.last_editor = request.user
+        sheet.save(update_fields=['template_json', 'last_editor', 'updated_at'])
         return Response(TechSheetSerializer(sheet).data)
