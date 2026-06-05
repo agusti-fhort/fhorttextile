@@ -18,7 +18,7 @@ export default function ModelMeasurements() {
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   const [model, setModel] = useState(null)
-  const [mode, setMode] = useState('selector') // 'selector' | 'manual' | 'import' | 'resultat'
+  const [mode, setMode] = useState('loading') // 'loading' | 'selector' | 'manual' | 'import' | 'resultat'
 
   // Manual
   const [pomsSuggerits, setPomsSuggerits] = useState([])
@@ -96,11 +96,9 @@ export default function ModelMeasurements() {
           }
           // La pantalla d'opcions SEMPRE espera que l'usuari triï (manual/import).
           // Única excepció: si la taula ja està TANCADA → directe a la vista de lectura.
-          if (d.tancat) {
-            setMode('resultat')
-          }
+          setMode(d.tancat ? 'resultat' : 'selector')
         })
-        .catch(() => {})
+        .catch(() => setMode('selector'))
     if (model.garment_type_item) {
       fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders })
         .then(() => loadTable())
@@ -129,6 +127,12 @@ export default function ModelMeasurements() {
           padding: '0.75rem 1rem', fontSize: 13, color: '#7a5a00',
           fontFamily: 'IBM Plex Mono, monospace',
         }}>{notice}</div>
+      )}
+
+      {mode === 'loading' && !error && (
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+          Carregant…
+        </div>
       )}
 
       {mode === 'selector' && (
