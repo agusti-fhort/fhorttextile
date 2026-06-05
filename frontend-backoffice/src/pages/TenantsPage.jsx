@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
-import { IconEye, IconRefresh, IconAlertTriangle, IconLoader2 } from '@tabler/icons-react'
+import { useNavigate } from 'react-router-dom'
+import { IconEye, IconRefresh, IconAlertTriangle, IconLoader2, IconPlus } from '@tabler/icons-react'
 import { getTenants, MOCK_TENANTS } from '../api/tenants'
 import { ESTAT_ORDRE, estatConfig, normalitzaEstat } from '../config/estats'
-import TenantDetailPanel from './TenantDetailPanel'
+import useAuthStore from '../store/authStore'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -42,12 +43,16 @@ function Badge({ estat }) {
 }
 
 export default function TenantsPage() {
+  const navigate = useNavigate()
+  const rol = useAuthStore((s) => s.rol)
+  const userRol = useAuthStore((s) => s.user?.rol)
+  const isAdmin = (rol || userRol || '').toString().toUpperCase() === 'ADMIN'
+
   const [tab, setTab] = useState('tots')
   const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [mock, setMock] = useState(false)
-  const [selected, setSelected] = useState(null)
 
   const load = useCallback(async (estatKey) => {
     setLoading(true)
@@ -73,28 +78,37 @@ export default function TenantsPage() {
 
   useEffect(() => { load(tab) }, [tab, load])
 
-  const handleUpdated = (updated) => {
-    // Refresca la fila i recarrega la vista actual.
-    setSelected(updated)
-    load(tab)
-  }
-
   return (
     <div style={{ padding: '28px 32px', fontFamily: MONO, minHeight: '100vh' }}>
       {/* Capçalera */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 6 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-main)', margin: 0 }}>Tenants</h1>
-        <button
-          type="button"
-          onClick={() => load(tab)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 7, background: 'var(--bg-card)',
-            border: '1px solid var(--border)', borderRadius: 8, padding: '8px 13px',
-            fontFamily: MONO, fontSize: 12, color: 'var(--text-main)', cursor: 'pointer',
-          }}
-        >
-          <IconRefresh size={15} stroke={1.7} /> Refrescar
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => load(tab)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7, background: 'var(--bg-card)',
+              border: '1px solid var(--border)', borderRadius: 8, padding: '8px 13px',
+              fontFamily: MONO, fontSize: 12, color: 'var(--text-main)', cursor: 'pointer',
+            }}
+          >
+            <IconRefresh size={15} stroke={1.7} /> Refrescar
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => navigate('/tenants/new')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7, background: 'var(--gold)',
+                border: 'none', borderRadius: 8, padding: '8px 14px',
+                fontFamily: MONO, fontSize: 12, fontWeight: 600, color: '#fff', cursor: 'pointer',
+              }}
+            >
+              <IconPlus size={15} stroke={2} /> Nou tenant
+            </button>
+          )}
+        </div>
       </div>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 20px' }}>
         Clients de la plataforma · gestió d'estats i dades fiscals
@@ -166,7 +180,11 @@ export default function TenantsPage() {
             </thead>
             <tbody>
               {tenants.map((t) => (
-                <tr key={t.id ?? t.codi_tenant}>
+                <tr
+                  key={t.id ?? t.codi_tenant}
+                  onClick={() => navigate(`/tenants/${t.codi_tenant}`)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <td style={{ ...tdStyle, fontWeight: 600, color: 'var(--text-muted)' }}>#{t.codi_tenant}</td>
                   <td style={{ ...tdStyle, fontWeight: 600 }}>{t.nom}</td>
                   <td style={tdStyle}>{t.tipologia || '—'}</td>
@@ -176,7 +194,7 @@ export default function TenantsPage() {
                   <td style={{ ...tdStyle, textAlign: 'right' }}>
                     <button
                       type="button"
-                      onClick={() => setSelected(t)}
+                      onClick={(e) => { e.stopPropagation(); navigate(`/tenants/${t.codi_tenant}`) }}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                         background: 'transparent', border: '1px solid var(--border)', borderRadius: 7,
@@ -192,15 +210,6 @@ export default function TenantsPage() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {/* Drawer de detall */}
-      {selected && (
-        <TenantDetailPanel
-          tenant={selected}
-          onClose={() => setSelected(null)}
-          onUpdated={handleUpdated}
-        />
       )}
     </div>
   )

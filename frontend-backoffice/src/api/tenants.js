@@ -16,6 +16,23 @@ export const updateEstat = (id, estat, motiu) =>
 export const getPlans = () =>
   client.get(`${BASE}/plans/`).then((r) => r.data)
 
+// ── Sprint 3: crear/editar tenant + contactes ─────────────────────────────
+export const createTenant = (data) =>
+  client.post(`${BASE}/tenants/`, data).then((r) => r.data)
+
+export const updateTenant = (codi, data) =>
+  client.patch(`${BASE}/tenants/${codi}/`, data).then((r) => r.data)
+
+export const getContactes = (codi) =>
+  client.get(`${BASE}/tenants/${codi}/contactes/`).then((r) => r.data)
+
+export const createContacte = (codi, data) =>
+  client.post(`${BASE}/tenants/${codi}/contactes/`, data).then((r) => r.data)
+
+// DELETE per ruta /contactes/{id}/ (action contacte_detail del ClientViewSet).
+export const deleteContacte = (codi, id) =>
+  client.delete(`${BASE}/tenants/${codi}/contactes/${id}/`).then((r) => r.data)
+
 // ── Dades de mostra ───────────────────────────────────────────────────────
 // El backend del Sprint 2 pot no estar migrat encara. Les pàgines fan servir
 // aquestes dades com a fallback (amb avís visible) per poder desenvolupar la UI.
@@ -55,7 +72,13 @@ export const MOCK_TENANTS = [
 ]
 
 export const MOCK_PLANS = [
-  { id: 1, nom: 'Starter' },
-  { id: 2, nom: 'Pro' },
-  { id: 3, nom: 'Enterprise' },
+  { id: 1, nom: 'Solo', models_inclosos: 5, preu_model_extra: '4.0000', moneda_pla: 'EUR' },
+  { id: 2, nom: 'Studio', models_inclosos: 20, preu_model_extra: '3.5000', moneda_pla: 'EUR' },
+  { id: 3, nom: 'Brand', models_inclosos: 60, preu_model_extra: '3.0000', moneda_pla: 'EUR' },
+  { id: 4, nom: 'Enterprise', models_inclosos: 200, preu_model_extra: '2.5000', moneda_pla: 'EUR' },
+]
+
+export const MOCK_CONTACTES = [
+  { id: 1, nom: 'Marta', cognom: 'Vidal', carrec: 'Direcció', email: 'marta@exemple.cat', telefon: '+34 600 000 000', principal: true },
+  { id: 2, nom: 'Jordi', cognom: 'Roca', carrec: 'Comptabilitat', email: 'compta@exemple.cat', telefon: '+34 600 111 111', principal: false },
 ]

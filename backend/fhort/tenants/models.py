@@ -1,6 +1,13 @@
 from django.db import models
 from django_tenants.models import DomainMixin, TenantMixin
 
+# Estats membres de la UE (ISO 3166-1 alpha-2). Pivot per al règim de VAT.
+PAISOS_UE = frozenset({
+    'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR',
+    'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK',
+    'SI', 'ES', 'SE',
+})
+
 
 class Plan(models.Model):
     NOM_SOLO = 'Solo'
@@ -82,6 +89,22 @@ class Client(TenantMixin):
         (METODE_SEPA, 'SEPA'),
     ]
 
+    # Fiscalitat internacional (Sprint 3).
+    TIPUS_B2B = 'b2b'
+    TIPUS_B2C = 'b2c'
+    TIPUS_CLIENT_CHOICES = [(TIPUS_B2B, 'B2B'), (TIPUS_B2C, 'B2C')]
+
+    REGIM_ESPANYOL = 'espanyol'
+    REGIM_REVERSE_CHARGE_UE = 'reverse_charge_ue'
+    REGIM_OSS_UE = 'oss_ue'
+    REGIM_FORA_UE = 'fora_ue'
+    REGIM_VAT_CHOICES = [
+        (REGIM_ESPANYOL, 'IVA Espanyol'),
+        (REGIM_REVERSE_CHARGE_UE, 'Reverse Charge UE'),
+        (REGIM_OSS_UE, 'OSS UE'),
+        (REGIM_FORA_UE, 'Fora UE'),
+    ]
+
     nom = models.CharField(max_length=200)
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name='clients', null=True, blank=True)
     tipologia = models.CharField(max_length=20, choices=TIPOLOGIA_CHOICES)
@@ -102,9 +125,28 @@ class Client(TenantMixin):
     # Dades fiscals (facturació internacional).
     rao_social = models.CharField(max_length=200, blank=True)
     nif = models.CharField(max_length=20, blank=True)
-    adreca_fiscal = models.TextField(blank=True)
-    pais = models.CharField(max_length=2, default='ES')  # ISO 3166-1 alpha-2
+    adreca_fiscal = models.TextField(blank=True)  # LEGACY: substituït per l'adreça estructurada; es buidarà via migració de dades.
+    pais = models.CharField(max_length=2, default='ES')  # ISO 3166-1 alpha-2 — pivot fiscal
     email_facturacio = models.EmailField(blank=True)
+
+    # Adreça estructurada internacional (Sprint 3).
+    adreca_linia1 = models.CharField(max_length=200, blank=True)
+    adreca_linia2 = models.CharField(max_length=200, blank=True)
+    ciutat = models.CharField(max_length=100, blank=True)
+    estat_provincia = models.CharField(max_length=100, blank=True)
+    codi_postal = models.CharField(max_length=20, blank=True)
+
+    # VAT internacional (Sprint 3). regim_vat es deriva via recalcular_regim_vat().
+    vat_number = models.CharField(
+        max_length=50, blank=True,
+        help_text='NIF fiscal internacional (VAT/EIN/etc.)',
+    )
+    vat_validat = models.BooleanField(default=False)
+    vat_validat_data = models.DateTimeField(null=True, blank=True)
+    tipus_client = models.CharField(
+        max_length=10, blank=True, choices=TIPUS_CLIENT_CHOICES, default=TIPUS_B2B,
+    )
+    regim_vat = models.CharField(max_length=30, blank=True, choices=REGIM_VAT_CHOICES)
 
     # Pagaments — NOMÉS referències Stripe, mai dades sensibles.
     stripe_customer_id = models.CharField(max_length=100, blank=True)
@@ -115,6 +157,16 @@ class Client(TenantMixin):
     data_suspensio = models.DateField(null=True, blank=True)
     data_baixa = models.DateField(null=True, blank=True)
     motiu_baixa = models.TextField(blank=True)
+
+    # Gratuïtat / context comercial (Sprint 3).
+    gratis_fins = models.DateField(
+        null=True, blank=True,
+        help_text='Null=gratuïtat perpètua. Data=prova/promoció fins aquella data.',
+    )
+    nota_comercial = models.TextField(
+        blank=True,
+        help_text='Context comercial intern: motiu prova, acord especial, etc.',
+    )
 
     auto_create_schema = True
     auto_drop_schema = False
@@ -131,6 +183,57 @@ class Client(TenantMixin):
         """Pont de compatibilitat: codi que abans llegia `actiu` (bool)."""
         return self.estat == self.ESTAT_ACTIU
 
+    @property
+    def es_gratuit(self):
+        """True si el tenant NO s'ha de facturar aquest mes: gratuïtat perpètua
+        (gratis_fins=None) o prova/promoció encara vigent (gratis_fins>=avui)."""
+        from django.utils import timezone
+        return self.gratis_fins is None or self.gratis_fins >= timezone.now().date()
+
+    def recalcular_regim_vat(self):
+        """Deriva regim_vat de pais + tipus_client + vat_number."""
+        if self.pais == 'ES':
+            self.regim_vat = self.REGIM_ESPANYOL
+        elif self.pais in PAISOS_UE:
+            if self.tipus_client == self.TIPUS_B2B and self.vat_number:
+                self.regim_vat = self.REGIM_REVERSE_CHARGE_UE
+            else:
+                self.regim_vat = self.REGIM_OSS_UE
+        else:
+            self.regim_vat = self.REGIM_FORA_UE
+        return self.regim_vat
+
+    def save(self, *args, **kwargs):
+        # Manté regim_vat sempre coherent. super() (TenantMixin) gestiona la
+        # creació del schema quan auto_create_schema=True.
+        self.recalcular_regim_vat()
+        super().save(*args, **kwargs)
+
 
 class Domain(DomainMixin):
     pass
+
+
+class TenantContacte(models.Model):
+    """Contactes d'un tenant (registre al public; mai dins del seu schema)."""
+
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='contactes')
+    nom = models.CharField(max_length=100)
+    cognom = models.CharField(max_length=100, blank=True)
+    carrec = models.CharField(max_length=100, blank=True)
+    email = models.EmailField(blank=True)
+    telefon = models.CharField(max_length=30, blank=True)
+    principal = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-principal', 'nom']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['client'],
+                condition=models.Q(principal=True),
+                name='unic_contacte_principal_per_client',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.nom} {self.cognom}'.strip()
