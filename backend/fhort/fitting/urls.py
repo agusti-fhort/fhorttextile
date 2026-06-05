@@ -1,5 +1,7 @@
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .graded_spec_views import GradedSpecTableView
 from .views import (
     GradingVersionViewSet,
     POMAlertViewSet,
@@ -20,4 +22,7 @@ router.register('piece-fittings', PieceFittingViewSet, basename='piece-fitting')
 router.register('piece-fitting-lines', PieceFittingLineViewSet, basename='piece-fitting-line')
 router.register('fitting-photos', FittingPhotoViewSet, basename='fitting-photo')
 
-urlpatterns = router.urls
+urlpatterns = router.urls + [
+    # F3 — taula de specs graduades (GradingVersion activa) per a la fitxa tècnica.
+    path('fitting/<int:sf_id>/graded-table/', GradedSpecTableView.as_view(), name='graded-spec-table'),
+]

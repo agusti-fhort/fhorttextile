@@ -38,6 +38,85 @@ function buildBaseTemplate(meta, defs) {
 const hasSavedTemplate = (tj) =>
   tj && typeof tj === 'object' && Array.isArray(tj.schemas) && tj.schemas.length > 0
 
+// ---- Taules graduades (F3) — SVG → PNG → image schema -----------------------
+// Geometria de columnes (px de disseny). 'finals' omet la columna nom_ca per estalviar espai.
+const TBL = { codiW: 24, nomEnW: 80, nomCaW: 80, sizeW: 18, rowH: 12, headerH: 12 }
+
+const escXml = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+// Dimensions px de la taula (compartides entre el render SVG i el càlcul de mida en mm).
+function tableDims(data, tableType) {
+  const showCa = tableType !== 'finals'
+  const leftW = TBL.codiW + TBL.nomEnW + (showCa ? TBL.nomCaW : 0)
+  const w = leftW + (data.size_labels?.length || 0) * TBL.sizeW
+  const h = TBL.headerH + (data.rows?.length || 0) * TBL.rowH
+  return { w, h }
+}
+
+// Funció pura: { size_labels, rows } + tableType → SVG string (estil fix decidit).
+function generateTableSVG(data, tableType) {
+  const showCa = tableType !== 'finals'
+  const sizes = data.size_labels || []
+  const rows = data.rows || []
+  const left = showCa
+    ? [{ label: 'POM', w: TBL.codiW, kind: 'codi' }, { label: 'Name (EN)', w: TBL.nomEnW, kind: 'en' }, { label: 'Nom (CA)', w: TBL.nomCaW, kind: 'ca' }]
+    : [{ label: 'POM', w: TBL.codiW, kind: 'codi' }, { label: 'Name (EN)', w: TBL.nomEnW, kind: 'en' }]
+  const cols = [...left, ...sizes.map(s => ({ label: s, w: TBL.sizeW, kind: 'size', size: s }))]
+  const { w: totalW, h: totalH } = tableDims(data, tableType)
+
+  // x acumulat per columna
+  let acc = 0
+  const colX = cols.map(c => { const x = acc; acc += c.w; return x })
+
+  let body = `<rect x="0" y="0" width="${totalW}" height="${TBL.headerH}" fill="#c27a2a"/>`
+  cols.forEach((c, i) => {
+    body += `<text x="${colX[i] + c.w / 2}" y="${TBL.headerH / 2 + 2.5}" font-family="sans-serif" font-size="7" fill="#ffffff" text-anchor="middle">${escXml(c.label)}</text>`
+  })
+  rows.forEach((row, ri) => {
+    const y = TBL.headerH + ri * TBL.rowH
+    const ty = y + TBL.rowH / 2 + 2.5
+    body += `<rect x="0" y="${y}" width="${totalW}" height="${TBL.rowH}" fill="${ri % 2 === 0 ? '#ffffff' : '#f5f0e8'}"/>`
+    cols.forEach((c, i) => {
+      const x = colX[i]
+      if (c.kind === 'codi') {
+        body += `<text x="${x + 3}" y="${ty}" font-family="sans-serif" font-size="7" font-weight="bold" fill="#c27a2a">${escXml(row.codi)}</text>`
+      } else if (c.kind === 'en') {
+        body += `<text x="${x + 3}" y="${ty}" font-family="sans-serif" font-size="7" fill="#111827">${escXml(row.nom_en)}</text>`
+      } else if (c.kind === 'ca') {
+        body += `<text x="${x + 3}" y="${ty}" font-family="sans-serif" font-size="6.5" font-style="italic" fill="#6b7280">${escXml(row.nom_ca)}</text>`
+      } else {
+        const v = row.valors ? row.valors[c.size] : undefined
+        body += `<text x="${x + c.w / 2}" y="${ty}" font-family="sans-serif" font-size="7" fill="#111827" text-anchor="middle">${escXml(v === undefined || v === null ? '–' : v)}</text>`
+      }
+    })
+  })
+  body += `<rect x="0" y="0" width="${totalW}" height="${totalH}" fill="none" stroke="#e0d5c5" stroke-width="1"/>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}">${body}</svg>`
+}
+
+// Rasteritza un SVG string a PNG dataURL (mateix patró que P4 del spike), x3 per nitidesa.
+function svgToPngDataURL(svgStr) {
+  return new Promise((resolve, reject) => {
+    const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)))
+    const img = new Image()
+    img.onload = () => {
+      const scale = 3
+      const w = img.naturalWidth || 1
+      const h = img.naturalHeight || 1
+      const c = document.createElement('canvas')
+      c.width = w * scale; c.height = h * scale
+      const ctx = c.getContext('2d')
+      ctx.scale(scale, scale)
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h)
+      ctx.drawImage(img, 0, 0)
+      try { resolve(c.toDataURL('image/png')) } catch (e) { reject(e) }
+    }
+    img.onerror = () => reject(new Error('SVG → Image load failed'))
+    img.src = url
+  })
+}
+
 // Editor de fitxa tècnica — pantalla full-screen, FORA del layout principal (sense sidebar).
 // pdfme es carrega amb dynamic import() dins useEffect (lazy: el bundle pesat només entra
 // quan aquest component es munta, no afecta la resta de l'app).
@@ -55,6 +134,8 @@ export default function TechSheetEditor() {
 
   const [fitxers, setFitxers] = useState([])
   const [uploading, setUploading] = useState(false)
+  const [sizeFittings, setSizeFittings] = useState([])
+  const [addingTable, setAddingTable] = useState(null) // `${sfId}-${tableType}` en curs
 
   // pdfme Designer
   const canvasRef = useRef(null)
@@ -104,6 +185,12 @@ export default function TechSheetEditor() {
     fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
       .then(r => (r.ok ? r.json() : null))
       .then(data => { if (!cancelled && data) setModel(data) })
+      .catch(() => {})
+
+    // Size fittings del model (per a la secció "Taules disponibles").
+    fetch(`${API}/api/v1/size-fittings/?model=${id}`, { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d) setSizeFittings(d.results || d || []) })
       .catch(() => {})
 
     fetch(`${API}/api/v1/models/${id}/tech-sheet/`, { headers: authHeaders })
@@ -162,7 +249,7 @@ export default function TechSheetEditor() {
         const meta = {
           modelCode: model?.codi_intern || `#${id}`,
           modelName: model?.nom_prenda || '',
-          customerName: model?.codi_client || '',
+          customerName: model?.customer_nom || model?.codi_client || '',
           version: sheet?.versio ?? 1,
           authorNames: model?.responsable_nom || model?.created_by_nom || '',
         }
@@ -170,7 +257,22 @@ export default function TechSheetEditor() {
           ? sheet.template_json
           : buildBaseTemplate(meta, defs)
 
-        const designer = new Designer({ domContainer: canvasRef.current, template: tpl, plugins })
+        const designer = new Designer({
+          domContainer: canvasRef.current,
+          template: tpl,
+          plugins,
+          // pdfme 6: el theme va sota options.theme (no top-level), sinó és un no-op.
+          options: {
+            theme: {
+              token: {
+                colorPrimary: '#c27a2a',
+                colorBgContainer: '#ffffff',
+                colorBgLayout: '#f5f0e8',
+                fontFamily: 'IBM Plex Mono, monospace',
+              },
+            },
+          },
+        })
         designer.onChangeTemplate(t => debouncedSave(t))
         designerRef.current = designer
         setDesignerState('ready')
@@ -205,11 +307,32 @@ export default function TechSheetEditor() {
     }
   }
 
-  // Croquis: afegir un asset (fitxer) com a image schema al llenç.
-  const addAssetToCanvas = async (f) => {
+  // Afegeix una imatge (dataURL) com a image schema a la pàgina 0 del Designer. Compartit
+  // entre croquis (fitxers) i taules graduades. Autosave es dispara via onChangeTemplate.
+  const addImageToCanvas = (dataURL, width, height) => {
     const designer = designerRef.current
     const P = pdfmeRef.current
     if (!designer || !P) return
+    const tpl = designer.getTemplate()
+    // Nom únic: avança el comptador fins a un nom lliure (evita col·lisió amb assets desats).
+    const used = new Set(tpl.schemas.flat().map(s => s.name))
+    while (used.has(`asset_${assetSeq.current}`)) assetSeq.current += 1
+    const asset = mk(P.defs.imageDef, {
+      name: `asset_${assetSeq.current}`, type: 'image',
+      position: { x: 15, y: 35 }, width, height, content: dataURL,
+    })
+    assetSeq.current += 1
+    const next = {
+      ...tpl,
+      schemas: tpl.schemas.length ? tpl.schemas.map((pg, i) => (i === 0 ? [...pg, asset] : pg)) : [[asset]],
+    }
+    designer.updateTemplate(next)
+    debouncedSave(next)
+  }
+
+  // Croquis: afegir un asset (fitxer) com a image schema al llenç.
+  const addAssetToCanvas = async (f) => {
+    if (!designerRef.current || !pdfmeRef.current) return
     let url = f.url_extern
     if (!url && f.fitxer) url = f.fitxer.startsWith('http') ? f.fitxer : `${API}${f.fitxer}`
     if (!url) return
@@ -222,23 +345,32 @@ export default function TechSheetEditor() {
         fr.onerror = () => rej(new Error('FileReader error'))
         fr.readAsDataURL(blob)
       })
-      const tpl = designer.getTemplate()
-      // Nom únic: avança el comptador fins a un nom lliure (evita col·lisió amb assets desats).
-      const used = new Set(tpl.schemas.flat().map(s => s.name))
-      while (used.has(`asset_${assetSeq.current}`)) assetSeq.current += 1
-      const asset = mk(P.defs.imageDef, {
-        name: `asset_${assetSeq.current}`, type: 'image',
-        position: { x: 15, y: 35 }, width: 80, height: 60, content: dataURL,
-      })
-      assetSeq.current += 1
-      const next = {
-        ...tpl,
-        schemas: tpl.schemas.length ? tpl.schemas.map((pg, i) => (i === 0 ? [...pg, asset] : pg)) : [[asset]],
-      }
-      designer.updateTemplate(next)
-      debouncedSave(next)
+      addImageToCanvas(dataURL, 80, 60)
     } catch { /* silenci: el croquis no s'afegeix; no trenca l'editor */ }
     finally { setAddingId(null) }
+  }
+
+  // Taula graduada / talles finals: GET graded-table → SVG → PNG → image schema al llenç.
+  const handleAddTable = async (sfId, tableType) => {
+    if (!designerRef.current || !pdfmeRef.current) return
+    const key = `${sfId}-${tableType}`
+    setAddingTable(key)
+    try {
+      const r = await fetch(`${API}/api/v1/fitting/${sfId}/graded-table/`, { headers: authHeaders })
+      if (!r.ok) return // 404 si no hi ha GradingVersion activa → silenci
+      const data = await r.json()
+      if (!data.rows || data.rows.length === 0) return
+      const png = await svgToPngDataURL(generateTableSVG(data, tableType))
+      // px de disseny → mm, mantenint proporció, acotat a l'amplada de la caixa útil.
+      const { w: pxW, h: pxH } = tableDims(data, tableType)
+      const PX_TO_MM = 0.34
+      let wmm = pxW * PX_TO_MM
+      let hmm = pxH * PX_TO_MM
+      const MAXW = 257
+      if (wmm > MAXW) { const k = MAXW / wmm; wmm = MAXW; hmm *= k }
+      addImageToCanvas(png, wmm, hmm)
+    } catch { /* silenci: la taula no s'afegeix; no trenca l'editor */ }
+    finally { setAddingTable(null) }
   }
 
   // Exportar PDF (WYSIWYG: la mateixa template del Designer).
@@ -265,38 +397,43 @@ export default function TechSheetEditor() {
     }
   }
 
+  const READONLY_BADGE = { bg: '#f5f0e8', fg: '#868685', border: '1px solid #e0d5c5' }
   const badge = (() => {
-    if (lockState === 'loading') return { text: 'Carregant…', bg: 'var(--gray-l)', fg: 'var(--text-main)' }
-    if (lockState === 'owned') return { text: 'Editant', bg: 'var(--gold)', fg: 'var(--white)' }
+    if (lockState === 'loading') return { text: 'Carregant…', ...READONLY_BADGE }
+    if (lockState === 'owned') return { text: 'Editant', bg: '#c27a2a', fg: '#ffffff', border: 'none' }
     if (lockState === 'conflict') return {
       text: `Bloquejada per ${conflict?.locked_by || 'un altre usuari'}`,
-      bg: 'var(--warn-bg)', fg: 'var(--warn)',
+      ...READONLY_BADGE,
     }
-    return { text: 'Error de bloqueig', bg: 'var(--warn-bg)', fg: 'var(--warn)' }
+    return { text: 'Error de bloqueig', ...READONLY_BADGE }
   })()
 
   const saveLabel = { saving: 'Desant…', saved: 'Desat', error: 'Error desant', readonly: 'Només lectura' }[saveState]
 
   const headerBtn = {
-    display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '6px 10px',
-    borderRadius: 6, border: '0.5px solid var(--gray-l)', background: 'var(--white)',
-    cursor: 'pointer', color: 'var(--text-main)',
+    display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '5px 10px',
+    borderRadius: 6, border: '1px solid #e0d5c5', background: 'transparent',
+    cursor: 'pointer', color: '#1d1d1b', fontFamily: 'IBM Plex Mono, monospace',
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg, #faf7f2)' }}>
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg, #faf7f2)', fontFamily: 'IBM Plex Mono, monospace' }}>
       <header style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '0.7rem 1.2rem', borderBottom: '0.5px solid var(--gray-l)', background: 'var(--white)',
+        padding: '0.7rem 1.2rem', borderBottom: '1px solid #e3cfa3', background: '#f0dfc0',
+        fontFamily: 'IBM Plex Mono, monospace', color: '#1d1d1b',
       }}>
         <button onClick={() => navigate(`/models/${id}`)} style={headerBtn}>
           <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> Tornar al model
         </button>
         <button onClick={onExport} disabled={designerState !== 'ready' || exporting}
-          style={{ ...headerBtn, borderColor: 'var(--gold)', color: 'var(--gold)', opacity: designerState !== 'ready' || exporting ? 0.5 : 1 }}>
+          style={{
+            ...headerBtn, background: '#c27a2a', border: 'none', color: '#ffffff',
+            opacity: designerState !== 'ready' || exporting ? 0.5 : 1,
+          }}>
           <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? 'Exportant…' : 'Exportar PDF'}
         </button>
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-main)' }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: '#1d1d1b' }}>
           {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
         </span>
         {sheet?.estat === 'tancat' && (
@@ -305,13 +442,14 @@ export default function TechSheetEditor() {
           </span>
         )}
         {saveLabel && (
-          <span style={{ fontSize: 11, color: saveState === 'error' ? 'var(--warn)' : 'var(--text-muted, #999)' }}>
+          <span style={{ fontSize: 11, color: '#868685', fontFamily: 'IBM Plex Mono, monospace' }}>
             {saveLabel}
           </span>
         )}
         <span style={{
-          marginLeft: 'auto', fontSize: 11, fontWeight: 500, padding: '3px 10px',
-          borderRadius: 10, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap',
+          marginLeft: 'auto', fontSize: 10, fontWeight: 500, padding: '2px 7px',
+          borderRadius: 10, background: badge.bg, color: badge.fg, border: badge.border,
+          whiteSpace: 'nowrap', fontFamily: 'IBM Plex Mono, monospace',
         }}>
           {badge.text}
         </span>
@@ -338,18 +476,22 @@ export default function TechSheetEditor() {
 
         {/* Panell d'assets inline — fitxers del model + pujada + afegir al llenç (croquis). */}
         <aside style={{
-          width: 320, flexShrink: 0, borderLeft: '0.5px solid var(--gray-l)',
-          background: 'var(--white)', display: 'flex', flexDirection: 'column', minHeight: 0,
+          width: 320, flexShrink: 0, borderLeft: '1px solid #e0d5c5',
+          background: '#f5f0e8', display: 'flex', flexDirection: 'column', minHeight: 0,
+          fontFamily: 'IBM Plex Mono, monospace',
         }}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '0.7rem 1rem', borderBottom: '0.5px solid var(--gray-l)',
+            padding: '0.7rem 1rem', borderBottom: '1px solid #e3cfa3',
           }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
+            <span style={{
+              fontSize: 11, fontWeight: 600, color: '#c27a2a',
+              textTransform: 'uppercase', letterSpacing: '0.05em',
+            }}>
               <i className="ti ti-paperclip" style={{ fontSize: 13, marginRight: 6 }} />
               Assets del model
             </span>
-            <span style={{ fontSize: 11, color: 'var(--text-muted, #999)' }}>{fitxers.length}</span>
+            <span style={{ fontSize: 11, color: '#868685' }}>{fitxers.length}</span>
           </div>
 
           <label style={{
@@ -374,14 +516,17 @@ export default function TechSheetEditor() {
               fitxers.map(f => {
                 const hasUrl = !!(f.url_extern || f.fitxer)
                 return (
-                  <div key={f.id} style={{ padding: '7px 0', borderBottom: '0.5px solid var(--gray-l)' }}>
+                  <div key={f.id} style={{
+                    background: '#fafafa', border: '1px solid #e0d5c5', padding: '6px 8px',
+                    marginBottom: 4, fontSize: 11, fontFamily: 'IBM Plex Mono, monospace',
+                  }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <i className="ti ti-file" style={{ fontSize: 14, color: 'var(--text-muted, #999)', flexShrink: 0 }} />
+                      <i className="ti ti-file" style={{ fontSize: 14, color: '#868685', flexShrink: 0 }} />
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.nom_fitxer}>
+                        <div style={{ fontSize: 11, color: '#1d1d1b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.nom_fitxer}>
                           {f.nom_fitxer}
                         </div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted, #999)' }}>
+                        <div style={{ fontSize: 10, color: '#868685' }}>
                           {f.tipus}{f.versio ? ` · v${f.versio}` : ''}
                         </div>
                       </div>
@@ -391,9 +536,9 @@ export default function TechSheetEditor() {
                       disabled={!hasUrl || designerState !== 'ready' || addingId === f.id}
                       title={hasUrl ? 'Afegir al llenç' : 'Sense URL de fitxer'}
                       style={{
-                        marginTop: 5, display: 'flex', alignItems: 'center', gap: 4, fontSize: 11,
-                        padding: '3px 8px', borderRadius: 5, border: '0.5px solid var(--gold)',
-                        background: 'var(--white)', color: 'var(--gold)',
+                        marginTop: 4, marginRight: 4, display: 'inline-flex', alignItems: 'center', gap: 4,
+                        fontSize: 10, padding: '3px 8px', border: 'none', borderRadius: 5,
+                        background: '#c27a2a', color: '#ffffff', fontFamily: 'IBM Plex Mono, monospace',
                         cursor: (!hasUrl || designerState !== 'ready') ? 'default' : 'pointer',
                         opacity: (!hasUrl || designerState !== 'ready') ? 0.45 : 1,
                       }}>
@@ -404,6 +549,57 @@ export default function TechSheetEditor() {
                 )
               })
             )}
+
+            {/* Taules disponibles (F3) — size fittings del model → taula graduada / talles finals. */}
+            <section style={{ borderTop: '1px solid #e3cfa3', margin: '12px 0', paddingTop: 12 }}>
+              <div style={{
+                fontSize: 11, fontWeight: 600, color: '#c27a2a',
+                textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8,
+              }}>
+                <i className="ti ti-table" style={{ fontSize: 13, marginRight: 6 }} />
+                Taules disponibles
+              </div>
+              {sizeFittings.length === 0 ? (
+                <p style={{ fontSize: 11, color: '#868685' }}>Cap size fitting.</p>
+              ) : (
+                sizeFittings.map(sf => {
+                  const gradedKey = `${sf.id}-graded`
+                  const finalsKey = `${sf.id}-finals`
+                  const tableBtn = (busy) => ({
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                    fontSize: 10, padding: '3px 8px', borderRadius: 5, border: 'none',
+                    background: '#c27a2a', color: '#ffffff', fontFamily: 'IBM Plex Mono, monospace',
+                    marginTop: 4, marginRight: 4,
+                    cursor: designerState !== 'ready' ? 'default' : 'pointer',
+                    opacity: designerState !== 'ready' || busy ? 0.45 : 1,
+                  })
+                  return (
+                    <div key={sf.id} style={{
+                      background: '#fafafa', border: '1px solid #e0d5c5', padding: '6px 8px',
+                      marginBottom: 4, fontSize: 11, fontFamily: 'IBM Plex Mono, monospace',
+                    }}>
+                      <div style={{ fontSize: 11, color: '#1d1d1b' }}>
+                        {sf.codi}{sf.tipus ? ` · ${sf.tipus}` : ''}
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, marginTop: 1 }}>
+                        <button onClick={() => handleAddTable(sf.id, 'graded')}
+                          disabled={designerState !== 'ready' || addingTable === gradedKey}
+                          style={tableBtn(addingTable === gradedKey)}>
+                          <i className="ti ti-table" style={{ fontSize: 12 }} />
+                          {addingTable === gradedKey ? 'Afegint…' : 'Taula graduada'}
+                        </button>
+                        <button onClick={() => handleAddTable(sf.id, 'finals')}
+                          disabled={designerState !== 'ready' || addingTable === finalsKey}
+                          style={tableBtn(addingTable === finalsKey)}>
+                          <i className="ti ti-ruler" style={{ fontSize: 12 }} />
+                          {addingTable === finalsKey ? 'Afegint…' : 'Talles finals'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </section>
           </div>
         </aside>
       </main>
