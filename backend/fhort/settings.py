@@ -53,6 +53,9 @@ SHARED_APPS = [
     # 'pom' viu en SHARED i TENANT: els models *Global viuen a 'public'
     # i la resta es repliquen a cada tenant per a FKs cross-schema.
     'fhort.pom',
+
+    # Backoffice: capa de control de negoci. NOMÉS public (mai a TENANT_APPS).
+    'fhort.backoffice',
 ]
 
 # Apps per-tenant: viuen dins de l'esquema de cada client.
@@ -90,6 +93,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'fhort.urls'
+PUBLIC_SCHEMA_URLCONF = 'fhort.urls_public'
 
 TEMPLATES = [
     {
