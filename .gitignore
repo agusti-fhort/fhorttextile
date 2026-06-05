@@ -8,3 +8,4 @@ frontend/dist/
 backend/.env
 frontend/.env
 frontend/.env.development
+backoffice/dist/
