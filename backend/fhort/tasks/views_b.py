@@ -271,6 +271,8 @@ def define_model_tasks_view(request, model_id):
                         status=status.HTTP_400_BAD_REQUEST)
     existing = set(ModelTask.objects.filter(model_id=model_id, task_type_id__in=ids)
                    .values_list('task_type_id', flat=True))
+    if not Model.objects.filter(pk=model_id).exists():
+        return Response({'error': 'Model no trobat.'}, status=status.HTTP_404_NOT_FOUND)
     model = Model.objects.get(pk=model_id)  # instància per al lookup d'estimació (Sprint G)
     created = []
     base_order = (ModelTask.objects.filter(model_id=model_id)
