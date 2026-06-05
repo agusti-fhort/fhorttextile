@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+:root {
+  /* Paleta tema clar */
+  --bg-main:    #ffffff;
+  --bg-sidebar: #f0dfc0;
+  --bg-card:    #fafafa;
+  --bg-muted:   #f5f0e8;
+  --text-main:  #1d1d1b;
+  --text-muted: #868685;
+  --gold:       #c27a2a;
+  --gold-l:     #c68338;
+  --gold-pale:  #f5e6d0;
+  --border:     #e0d5c5;
+  --base-hairline: #e3cfa3; /* filet de la columna de talla base (graella fitting) */
+
+  /* Aliases legacy (per components existents) */
+  --charcoal:   #1d1d1b;
+  --gray:       #868685;
+  --gray-l:     #f0f0f0;
+  --white:      #ffffff;
+
+  /* Estats (per badges puntuals — mantenir contrast) */
+  --ok:         #3b6d11;
+  --ok-bg:      #eaf3de;
+  --warn:       #854f0b;
+  --warn-bg:    #faeeda;
+  --err:        #a32d2d;
+  --err-bg:     #fcebeb;
+  --gate:       #534ab7;
+  --gate-bg:    #eeedfe;
+}
+
+* { font-family: 'IBM Plex Mono', monospace; box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Checkboxes/radios corporatius daurats (font única; substitueix el blau del navegador). */
+input[type="checkbox"], input[type="radio"] { accent-color: var(--gold); }
+
+body {
+  background: var(--bg-main);
+  color: var(--text-main);
+}
