@@ -106,6 +106,23 @@ try:
 except Exception:
     _sprint17_paths = []
 
+# Sprint Bulk — import massiu de models per Excel (col·lecció).
+try:
+    from .bulk_import_views import (
+        template_view as bulk_template_view,
+        upload_view as bulk_upload_view,
+        commit_view as bulk_commit_view,
+        errors_report_view as bulk_errors_report_view,
+    )
+    _bulk_paths = [
+        path('bulk-import/template/', bulk_template_view, name='bulk-import-template'),
+        path('bulk-import/upload/', bulk_upload_view, name='bulk-import-upload'),
+        path('bulk-import/<int:import_id>/commit/', bulk_commit_view, name='bulk-import-commit'),
+        path('bulk-import/<int:import_id>/errors-report/', bulk_errors_report_view, name='bulk-import-errors-report'),
+    ]
+except Exception:
+    _bulk_paths = []
+
 urlpatterns = (
     [
         path('models/next-ref/', next_model_ref),
@@ -128,5 +145,6 @@ urlpatterns = (
     + _sprint7_model_paths
     + _sprint8_paths
     + _sprint17_paths
+    + _bulk_paths
     + router.urls
 )
