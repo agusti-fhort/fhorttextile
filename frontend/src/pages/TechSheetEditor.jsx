@@ -16,6 +16,53 @@ const mk = (def, over) => ({ ...def, ...over })
 // Nom del rectangle-guia de la caixa útil (s'elimina del PDF a l'export — només guia d'editor).
 const USEFUL_BOX_NAME = 'useful_box_border'
 
+// Miniatures de pàgina (canvas 30%): fons blanc + bandes staticSchema + placeholders de blocs.
+// Pura (no Date/random); usa canvas. Retorna array de dataURL, un per pàgina.
+function generateThumbnails(template) {
+  const pages = template?.schemas || []
+  const bp = template?.basePdf
+  const W = (bp && bp.width) || 297
+  const H = (bp && bp.height) || 210
+  const staticS = (bp && Array.isArray(bp.staticSchema)) ? bp.staticSchema : []
+  const thumbW = 89
+  const scale = thumbW / W
+  const thumbH = Math.round(H * scale)
+  return pages.map(pageSchemas => {
+    const c = document.createElement('canvas')
+    c.width = thumbW; c.height = thumbH
+    const ctx = c.getContext('2d')
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, thumbW, thumbH)
+    // Bandes/caixa de la capçalera i peu (només rectangles, sense text).
+    staticS.forEach(s => {
+      if (s.type !== 'rectangle') return
+      const x = (s.position?.x || 0) * scale, y = (s.position?.y || 0) * scale
+      const w = (s.width || 0) * scale, h = (s.height || 0) * scale
+      if (s.color) { ctx.fillStyle = s.color; ctx.fillRect(x, y, w, h) }
+      if (s.borderColor) { ctx.strokeStyle = s.borderColor; ctx.lineWidth = 0.5; ctx.strokeRect(x, y, w, h) }
+    })
+    // Blocs de contingut → placeholders crema/gold.
+    ;(pageSchemas || []).forEach(b => {
+      const x = (b.position?.x || 0) * scale, y = (b.position?.y || 0) * scale
+      const w = (b.width || 0) * scale, h = (b.height || 0) * scale
+      ctx.fillStyle = '#f0dfc0'; ctx.fillRect(x, y, w, h)
+      ctx.strokeStyle = '#c27a2a'; ctx.lineWidth = 0.5; ctx.strokeRect(x, y, w, h)
+    })
+    return c.toDataURL('image/png')
+  })
+}
+
+// pdfme 6 no té API per navegar a una pàgina → fallback: troba el contenidor scrollable del Designer.
+function findScroller(root) {
+  const all = root.querySelectorAll('*')
+  for (const el of all) {
+    if (el.scrollHeight > el.clientHeight + 4) {
+      const oy = getComputedStyle(el).overflowY
+      if (oy === 'auto' || oy === 'scroll') return el
+    }
+  }
+  return null
+}
+
 const joinDot = (...xs) => xs.map(x => (x == null ? '' : String(x)).trim()).filter(Boolean).join(' · ')
 const pad2 = (n) => String(n).padStart(2, '0')
 const formatDateDDMMYYYY = (d) => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`
@@ -167,6 +214,9 @@ export default function TechSheetEditor() {
   const [addingId, setAddingId] = useState(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fsHover, setFsHover] = useState(false)
+  const [currentPageIndex, setCurrentPageIndex] = useState(0)
+  const [pageThumbnails, setPageThumbnails] = useState([]) // array de dataURL, un per pàgina
+  const [hoveredPage, setHoveredPage] = useState(null)
 
   useEffect(() => { ownedRef.current = lockState === 'owned' }, [lockState])
 
@@ -345,8 +395,11 @@ export default function TechSheetEditor() {
             },
           },
         })
-        designer.onChangeTemplate(t => debouncedSave(t))
+        designer.onChangeTemplate(t => { debouncedSave(t); setPageThumbnails(generateThumbnails(t)) })
+        // Sincronitza el highlight de miniatures quan l'usuari canvia de pàgina (scroll/UI pdfme).
+        designer.onPageChange?.(({ currentPage }) => setCurrentPageIndex((currentPage || 1) - 1))
         designerRef.current = designer
+        setPageThumbnails(generateThumbnails(tpl)) // miniatures inicials
         setDesignerState('ready')
       } catch (e) {
         if (!disposed) { setDesignerErr(String(e?.message || e)); setDesignerState('error') }
@@ -379,8 +432,18 @@ export default function TechSheetEditor() {
     }
   }
 
-  // Afegeix una imatge (dataURL) com a image schema a la pàgina 0 del Designer. Compartit
-  // entre croquis (fitxers) i taules graduades. Autosave es dispara via onChangeTemplate.
+  // Aplica una template nova: actualitza el Designer, refresca miniatures i dispara autosave.
+  // (updateTemplate programàtic no dispara onChangeTemplate, així que ho fem aquí explícitament.)
+  const applyTemplate = (next) => {
+    const designer = designerRef.current
+    if (!designer) return
+    designer.updateTemplate(next)
+    setPageThumbnails(generateThumbnails(next))
+    debouncedSave(next)
+  }
+
+  // Afegeix una imatge (dataURL) com a image schema a la pàgina ACTUAL del Designer. Compartit
+  // entre croquis (fitxers) i taules graduades.
   const addImageToCanvas = (dataURL, width, height) => {
     const designer = designerRef.current
     const P = pdfmeRef.current
@@ -394,12 +457,43 @@ export default function TechSheetEditor() {
       position: { x: 15, y: 35 }, width, height, content: dataURL,
     })
     assetSeq.current += 1
-    const next = {
-      ...tpl,
-      schemas: tpl.schemas.length ? tpl.schemas.map((pg, i) => (i === 0 ? [...pg, asset] : pg)) : [[asset]],
+    const pages = tpl.schemas.length ? tpl.schemas : [[]]
+    const target = Math.min(currentPageIndex, pages.length - 1)
+    const next = { ...tpl, schemas: pages.map((pg, i) => (i === target ? [...pg, asset] : pg)) }
+    applyTemplate(next)
+  }
+
+  // Afegeix una pàgina buida al final i hi navega.
+  const addPage = () => {
+    const designer = designerRef.current
+    if (!designer || !ownedRef.current) return
+    const tpl = designer.getTemplate()
+    const next = { ...tpl, schemas: [...tpl.schemas, []] }
+    applyTemplate(next)
+    setCurrentPageIndex(next.schemas.length - 1)
+  }
+
+  // Esborra una pàgina (mai l'última). Confirmació.
+  const removePage = (index) => {
+    const designer = designerRef.current
+    if (!designer || !ownedRef.current) return
+    const tpl = designer.getTemplate()
+    if (tpl.schemas.length <= 1) return
+    if (!window.confirm('Esborrar aquesta pàgina?')) return
+    const next = { ...tpl, schemas: tpl.schemas.filter((_, i) => i !== index) }
+    applyTemplate(next)
+    setCurrentPageIndex(ci => Math.min(ci, next.schemas.length - 1))
+  }
+
+  // Navega a una pàgina. pdfme 6 no té API de navegació → scroll proporcional al contenidor.
+  const navigateToPage = (index) => {
+    setCurrentPageIndex(index)
+    const cont = canvasRef.current
+    const scroller = cont && findScroller(cont)
+    if (scroller) {
+      const total = designerRef.current?.getTotalPages?.() || pageThumbnails.length || 1
+      scroller.scrollTo({ top: (scroller.scrollHeight / total) * index, behavior: 'smooth' })
     }
-    designer.updateTemplate(next)
-    debouncedSave(next)
   }
 
   // Croquis: afegir un asset (fitxer) com a image schema al llenç.
@@ -533,6 +627,11 @@ export default function TechSheetEditor() {
         <span style={{ fontSize: 14, fontWeight: 600, color: '#1d1d1b' }}>
           {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
         </span>
+        {pageThumbnails.length > 0 && (
+          <span style={{ fontSize: 11, color: '#868685', fontFamily: 'IBM Plex Mono, monospace' }}>
+            Pàgina {currentPageIndex + 1} de {pageThumbnails.length}
+          </span>
+        )}
         {sheet?.estat === 'tancat' && (
           <span style={{ fontSize: 11, color: 'var(--text-muted, #999)' }}>
             <i className="ti ti-lock" style={{ fontSize: 11, marginRight: 4 }} />Fitxa tancada
@@ -563,6 +662,56 @@ export default function TechSheetEditor() {
       </header>
 
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        {/* Panell de miniatures de pàgines — a l'esquerra del Designer. */}
+        <div style={{
+          width: 110, flexShrink: 0, background: '#f5f0e8', borderRight: '1px solid #e0d5c5',
+          overflowY: 'auto', padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          <div style={{
+            color: '#c27a2a', fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
+            letterSpacing: '0.05em', marginBottom: 4,
+          }}>
+            Pàgines
+          </div>
+          <button onClick={addPage}
+            disabled={designerState !== 'ready' || lockState !== 'owned'}
+            style={{
+              fontSize: 9, padding: '3px 6px', border: '1px solid #c27a2a', borderRadius: 4,
+              background: 'transparent', color: '#c27a2a', fontFamily: 'IBM Plex Mono, monospace',
+              marginBottom: 4, cursor: (designerState !== 'ready' || lockState !== 'owned') ? 'default' : 'pointer',
+              opacity: (designerState !== 'ready' || lockState !== 'owned') ? 0.45 : 1,
+            }}>
+            + Pàgina
+          </button>
+          {pageThumbnails.map((src, i) => (
+            <div key={i}
+              onClick={() => navigateToPage(i)}
+              onMouseEnter={() => setHoveredPage(i)} onMouseLeave={() => setHoveredPage(null)}
+              style={{ position: 'relative', cursor: 'pointer' }}>
+              <div style={{
+                width: 98, borderRadius: 3, overflow: 'hidden',
+                border: currentPageIndex === i ? '2px solid #c27a2a' : '1px solid #e0d5c5',
+              }}>
+                <img src={src} alt={`Pàgina ${i + 1}`} style={{ width: '100%', height: 'auto', display: 'block' }} />
+              </div>
+              <div style={{ fontSize: 9, color: '#868685', textAlign: 'center', marginTop: 2 }}>
+                Pàg. {i + 1}
+              </div>
+              {pageThumbnails.length > 1 && hoveredPage === i && lockState === 'owned' && (
+                <button onClick={(e) => { e.stopPropagation(); removePage(i) }}
+                  title="Esborrar pàgina"
+                  style={{
+                    position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: '#ffffff',
+                    border: 'none', fontSize: 9, lineHeight: '14px', width: 14, height: 14, padding: 0,
+                    borderRadius: 2, cursor: 'pointer',
+                  }}>
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
         {/* Cos central — el Designer pdfme es munta a canvasRef. */}
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
           <div ref={canvasRef} style={{ position: 'absolute', inset: 0, '--pdf-ui-non-printable-bg': '#f9f9f9' }} />
