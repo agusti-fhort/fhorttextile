@@ -1,6 +1,6 @@
 # ESTAT_PROJECTE — FHORT Textile Tech (Capa de Projecte)
 
-> **Actualitzat:** 2026-06-02 · **Servidor:** 178.105.217.125 (fhorttextile.tech, tenant `fhort`)
+> **Actualitzat:** 2026-06-05 · **Servidor:** 178.105.217.125 (fhorttextile.tech, tenant `fhort`)
 > **Stack:** Django 6 + django-tenants + PostgreSQL + DRF + JWT · React 19.2.6 + Vite + Nginx
 > **Repo únic:** `agusti-fhort/fhorttextile`, branca `main`, a `/var/www/fhort-textile` (front + backend).
 > **Servei:** `fhort.service` (Gunicorn). Intèrpret: `backend/venv/bin/python`.
@@ -9,6 +9,159 @@
 >   `fhorttextile.tech` (vhosts `default` + `fhort-textile`; cap altre projecte). Les antigues "zones
 >   intocables" `assessment`/`trading`/`webs` eren d'un **ALTRE servidor** (ERP Frappe, 178.105.48.204)
 >   i **NO apliquen aquí**. Config de desplegament d'aquest servidor a `docs/deploy.md`.
+
+---
+
+## ACTUALITZACIÓ 2026-06-05 — Customer entity + Import massiu de col·lecció (bulk) + reconciliacions
+
+### Commits recents (cec844e → c9bcbb7 = HEAD, verificats a `git log`)
+| hash | data | resum |
+|---|---|---|
+| `cec844e` | 04/06 | Fix Garment Types: filtre `actiu` per defecte (oculta famílies inactives) |
+| `eabe4d1` | 04/06 | **Customer entity** (`tasks.Customer`) + codi-gen de model unificat per client |
+| `3bf08e9` | 04/06 | Pàgina **Clients** (`/clients`) + wizard de model **client-first** amb gate |
+| `edcf8bf` | 04/06 | Refactor: extret component `CustomerSelector` |
+| `80e09b7` | 04/06 | **Bulk import staging:** `BulkCollectionImport`/`BulkCollectionRow` + `ModelSequence` (comptador atòmic) |
+| `90e19a7` | 05/06 | **Bulk import motor:** matching engine + generació de plantilla + pipeline d'import |
+| `c9bcbb7` | 05/06 | **BulkImportWizard frontend** (stepper de 4 passos) |
+
+### Funcionalitats implementades i COMPLETES (afegits d'aquest bloc)
+- **Entitat Customer** (`tasks.Customer`, mirall esquelètic de `Supplier`): `codi` (3 chars, únic) =
+  **font del prefix del `codi_intern`** dels models i abast de la seqüència. El tenant és **client d'ell
+  mateix** (`is_self=True`, self-customer sembrat amb `codi = Client.codi_tenant`) → el codi-gen mai depèn
+  de cap hardcode. Camp placeholder `codi_global` (ganxo per al registre cross-tenant del backoffice futur).
+  Migracions tasks `0019`+`0020` (seed self-customer) + models_app `0032` (`Model.customer`).
+  - **Codi-gen unificat per client:** `generate_model_code` deriva el prefix del `customer.codi` (camí
+    manual = scan `MAX(sequencial)` al signal, sense canvis de contracte de l'API).
+  - **Flux client-first** (front): pàgina **Clients** (`/clients`, `Customers.jsx` + `CustomerModal`) i
+    **wizard de model** que demana el client primer (gate), amb component reutilitzable `CustomerSelector`.
+- **Import massiu de col·lecció (bulk)** — N esquelets de model en una sola pujada d'Excel, **conceptualment
+  separat de l'`ImportSession` single-model** del wizard de 5 passos. El **Customer és el context** de la
+  importació (no una columna). Migració models_app `0033`.
+  - **Staging** (`BulkCollectionImport` + `BulkCollectionRow`): flux `PUJAT → VALIDANT → PREVISAT → IMPORTAT
+    / DESCARTAT`; cada fila desa `raw_data`, `estat` (OK/ERROR/AVIS/DUPLICAT), `errors` **llegibles pel
+    client** i FK `model_creat` (enllaç al Model real, creat al commit parcial).
+  - **`ModelSequence`** (comptador atòmic per `(customer, year, season)`, `unique_together`): el bulk
+    **reserva un rang sencer** en una sola operació (`reserve_sequence_range`, `select_for_update`, mateix
+    patró que `tasks/services_i.py`) → sense col·lisions de seqüencial en creació massiva. El `codi_base`
+    d'un `GarmentSet` consumeix 1 número, igual que un model simple.
+  - **Motor** (`bulk_import_service.py` + `matching.py`): matching `run_talles + target → SizeSystem`
+    (`MatchResult` amb score 0..1, avisos no bloquejants, errors llegibles; ignora sistemes inactius/buits)
+    + generació de plantilla Excel + pipeline d'import.
+  - **Endpoints** (`bulk_import_views.py` + `urls.py`): `bulk-import/template/` (GET plantilla) ·
+    `bulk-import/upload/` (POST staging+preview) · `bulk-import/<id>/commit/` (POST creació parcial) ·
+    `bulk-import/<id>/errors-report/`.
+  - **Front:** `BulkImportWizard.jsx` (stepper de **4 passos**), entrada des de `Models.jsx`.
+
+### Reconciliacions de catàleg POM (xifres REALS a BD, tenant `fhort` 2026-06-05)
+- **125 POMGlobal** (tots actius) · **144 POMMaster** · **19 POMMaster tenant-only** (`pom_global=None`)
+  reconciliats via `reconcile_tenant_poms` (commit `72c3d42`). Maps POM dels **items baby autoritzats**
+  (`author_baby_pom_maps`, `d3a7d73`). Catàleg canònic complet i estable. *(Nota: la xifra real de
+  POMGlobal és 125, no 116.)*
+
+### Falsos positius tancats (revisats — NO són bugs)
+- **Assignació de tasques en bulk:** té **check explícit + `unique_together(model, task_type)`** (commit
+  `34e7e62`) → **0 duplicats** possibles. No cal acció.
+- **Modal de Planning:** **exclou `Done` per disseny** (el scheduler és Done-safe i les tasques finalitzades
+  són immutables) → comportament correcte, no un defecte.
+
+### Migracions cap (per app, actualitzades aquest bloc)
+models_app `0033` · pom `0017` · fitting `0012` · tasks `0020` · planning `0002`.
+
+---
+
+## ACTUALITZACIÓ 2026-06-04 — Import Wizard + Catàleg POM nadó + neteja BD
+
+### Commits recents (9e7ff11 → 75064db, verificats a `git log`)
+| hash | data | resum |
+|---|---|---|
+| `9e7ff11` | 03/06 | POM System: Browser-assign per item + Catalogue read-only + neteja família→item (drop FK `garment_type`) |
+| `11624f5` | 03/06 | Sprint B: tancament de taula (`Tancat`) + cicle de vida tasca POM (auto-iniciar en obrir, auto-tancar en finalitzar) |
+| `e1469b5` | 03/06 | Catàleg POM +10 (flounce/yoke/estats) + camp nivell K/M/O/D + càrrega pertinença per item + correcció inch→cm + fix soft-delete POM + selecció teixit ISO |
+| `34e7e62` | 03/06 | Grup A: `unique_together(model,task_type)` + calendari confecció marcador a data entrega + Kanban actius a dalt i auto-obrir |
+| `046f7f7` | 03/06 | **Fase 1 robustesa extracció:** parse tolerant (`safe_json_parse`) + salvage per fila + `grading_status` no bloquejant (el grading mai tomba els POMs) |
+| `1511a94` | 03/06 | Runs de talles comercials: command `seed_commercial_size_runs` (KIDS_AGE_COM + BABY_MONTHS_COM) |
+| `aace69b` | 04/06 | Catàleg POM nadó +9 (peu/entrecuix/elàstic/half moon): command `seed_baby_poms` |
+| `72c3d42` | 04/06 | Reconciliació POMMaster tenant-only: command `reconcile_tenant_poms` |
+| `d3a7d73` | 04/06 | Pertinença POM items baby: command `author_baby_pom_maps` |
+| `75064db` | 04/06 | **Wizard import 5 passos** (talles→POMs→mesures→teixit→guardar) + fix pantalla opcions manual/import |
+
+### Funcionalitats implementades i COMPLETES (afegits d'aquest bloc)
+- **Import Wizard de 5 passos** (`ImportWizard.jsx`, substitueix `ImportFromSheetWizard` jubilat). Importa
+  una fitxa tècnica (PDF/Excel/imatge) **dins d'un Model existent**. Estat persistit a `ImportSession`
+  (tenant). Verificat end-to-end contra l'API real (no validat visualment encara):
+  - **W1 Talles** (`cribratge/` + `talles/`): Crida 1 barata (Opus, ~900 tokens, sense thinking) detecta
+    nº models, tipologia, gènere, run de talles. **Gating bloquejant**: si una talla del document no té
+    destí al run configurat → "Continuar" desactivat fins resoldre (treure talla o **Alinear** el run).
+  - **W2 POMs** (`extraccio/` + `poms/`): Crida 2 (Opus 16k, visió) extreu POMs+valors+grading;
+    `find_pom_master` (extret a funció de **mòdul** compartida) matcheja **nomenclatura client → POM canònic**
+    (exact_code/synonym/description…); badge de confiança; activar/desactivar/afegir del catàleg.
+  - **W3 Mesures** (`grading-preview/` + `mesures/`): taula editable POMs×talles amb valors del document;
+    botó **Generar grading** que omple **només** talles buides via `preview_graded_specs` (motor reutilitzat,
+    **sense persistir**); talla base ressaltada.
+  - **W4 Teixit** (`teixit/`): formulari de teixit (camps de ModelFabric + ISO), opcional/skip.
+  - **W5 Guardar** (`confirmar/`): **NORMES INAMOVIBLES** verificades — *mana el document* (crea NOMÉS
+    BaseMeasurement dels POMs confirmats, **sense fusió de plantilla** i eliminant files buides preexistents);
+    grading final **tancat** (SizeFitting `Tancat` + GradingVersion v1 + GradedSpec); **cap FittingSession**;
+    PDF → **ModelFitxer(`Document`)** amb naming `{codi}_DOCUMENT_{NNN}` i **`versio_anterior`** (re-import = v2).
+- **Fix pantalla d'opcions manual/import** (`ModelMeasurements.jsx`): ja **NO auto-salta a `manual`** quan el
+  model té POMs; sempre espera que l'usuari triï. Excepció: taula **Tancada** → directe a vista lectura
+  (nou flag `tancat` a `taula-mesures/`, des de `SizeFitting.estat='Tancat'`).
+- **Fase 1 robustesa extracció** (`extraction_utils.py`): `safe_json_parse` (tolera fences/prosa/comes
+  finals/el·lipsis) + `salvage_measurements` (recupera files POM una a una) → el grading malformat mai tomba
+  els POMs. Usat per tot el wizard.
+- **Catàleg POM nadó complet**: +9 POMs nadó + reconciliació tenant-only + pertinença a items baby + runs de
+  talles comercials (KIDS_AGE_COM, BABY_MONTHS_COM).
+
+### Pendents actius (ordenats per prioritat)
+1. **Validació VISUAL end-to-end del wizard** (Kanban → obrir mides → Importar → W1..W5 → model amb mesures).
+   El backend i les normes estan verificats a nivell de BD; falta la passada visual amb una fitxa real
+   (la Brownie no és a la màquina).
+2. **Decidir el flux d'extracció únic:** ara conviuen `extract-from-file` (vell) i `extract-sheet` (S17) a
+   més del wizard nou. El wizard és el principal → jubilar/retirar els fluxos vells i el seu codi.
+3. **SizingProfiles:** re-autoria cap a la nova estructura de 17 famílies (17 perfils encara apunten a l'antiga).
+4. **POMBrowser-assign:** gate de permís + autorar els 23 items buits (8 famílies sense àncora).
+5. **Pas 6 POM:** drop del FK vell `garment_type` a `GarmentPOMMap` (migració, quan POMBrowser-assign validat).
+6. **Replanificació per endarreriment:** el motor empeny la cua; falta **disparador** (lazy en obrir vs cron).
+7. **Trams 5 (calendari fittings schedule→open) i 6 (producció mostres + gate)** — diagnosticats, no construïts.
+8. **3B-2** (pop-up de selecció múltiple a Planning) i **explotat per tècnic** de models repartits (validació visual).
+9. **Neteja menor:** `TipologiaModel` jubilable, claus i18n velles, traduccions ca/es de les 17 famílies.
+
+### Arquitectura actual (apps · models · estructura)
+- **Apps backend** (`backend/fhort/`): `models_app` (10 models), `pom` (22, **shared+tenant**: els `*Global`
+  viuen a `public`), `fitting` (8), `tasks` (14), `planning` (3), `accounts` (2), `tenants` (3, **shared**),
+  `files` (1). django-tenants: `SHARED_APPS` (tenants, pom) vs `TENANT_APPS` (la resta).
+- **Models clau:**
+  - `models_app`: **Model** (esquelet + repositori; `garment_type_item` = baula del motor de temps),
+    **BaseMeasurement** (mesura base per POM; `origen` IMPORTED/TEMPLATE…), **ModelFitxer** (fitxers amb
+    versionat `versio`/`versio_anterior`, categoria `Document` per a la fitxa origen), **ImportSession** (NOU).
+  - `fitting`: **SizeFitting** (contenidor de grading; estat `Tancat`) → **GradingVersion** (v1, `aprovada`)
+    → **GradedSpec** (valor per POM×talla). **FittingSession**/**PieceFitting** = capa de proves (try-on),
+    separada del grading.
+  - `pom`: **POMGlobal/POMMaster** (catàleg), **GarmentPOMMap** (pertinença per `garment_type_item`),
+    **SizeSystem/SizeDefinition** (talles amb edat/alçada), **GradingRuleSet/GradingRule**, **SizingProfile**.
+  - `tasks`: **GarmentType/GarmentTypeItem** (17 famílies / 57+ items), **TaskType** (9), **ModelTask**,
+    **TaskTimeEstimate** (matriu de temps), **TechnicianQueueOrder** (ordre manual de cua).
+- **`ImportSession`** (`models_app`, migracions **0030**+**0031**, tenant-scoped): PK enter + `token` UUID;
+  `estat` (INICI/CRIBRATGE/TALLES/EXTRACCIO/POMS/MESURES/MESURES_OK/IMPORT/CONFIRMAT/DESCARTAT);
+  `document` FileField (`import_sessions/%Y/%m/`); FK `model`, FK `creat_per`, FK `tipologia_confirmada`
+  (`tasks.GarmentTypeItem`); JSON `model_detectat`/`run_conciliat`/`poms_extrets`/`resultat`/`historia_xat`/`avisos`.
+- **Endpoints wizard** (`extraction_views.py` + `urls.py`): `import-sessions/cribratge|<token>/talles|
+  extraccio|poms|grading-preview|mesures|teixit|confirmar`. Helpers reutilitzats: `find_pom_master` (mòdul),
+  `preview_graded_specs` (`pom/services.py`, no-persistent).
+- **Migracions cap (per app):** models_app `0031`, pom `0017`, fitting `0012`, tasks `0018`, planning `0002`.
+
+### Estat de la BD (tenant `fhort`) — BUIDAT 2026-06-04
+**Tots els Models i dades dependents esborrats** (cascade des de Model, prèvia eliminació de FittingSession
+per desbloquejar `PieceFitting` PROTECT): 14 Models + 168 BaseMeasurement + 294 GradedSpec + 6 GradingVersion
++ 4 SizeFitting + 3 FittingSession + 46 ModelTask + dependents. Counts ara **a 0** (Model, SizeFitting,
+GradingVersion, GradedSpec, BaseMeasurement, FittingSession, PieceFitting, ModelTask, ImportSession,
+ModelFitxer, GarmentSet). **Catàleg/config INTACTE:** POMGlobal 125 · POMMaster 144 · GarmentPOMMap 1529 ·
+GarmentTypeItem 58 · GarmentType 59 · TaskType 9 · SizingProfile 17 · UserProfile 2. Tenant net per provar
+el wizard d'import des de zero.
+
+> ⚠️ Les seccions inferiors («ESTAT DE LA BD DE PROVA», «DADES DE PROVA AL TENANT») descriuen l'estat
+> **anterior** a aquesta neteja i queden com a HISTÒRIC.
 
 ---
 
@@ -178,6 +331,17 @@ fill de Configuració (gated `configure`).
 ---
 
 ## PENDENTS / DEUTE ANOTAT (no urgents)
+- **Deute nou (sessió 2026-06-05, entitat Customer):**
+  - **Rename `codi_client` → `referencia_client`** al `Model` (ajornat): la referència del client al model
+    es diu encara `codi_client`, que ara xoca conceptualment amb `Customer.codi`. Renombrar (~20 llocs,
+    canvi trivial mecànic + migració). No urgent.
+  - **Feed de `MeasurementStat` (Welford) ha de passar a `model.customer.codi`** (`fitting/services.py:~211`,
+    `update_client_profile(codi_client=model.codi_client, …)`): amb `Customer` ja existent, l'estadística
+    s'ha de keyar per `model.customer.codi`, no per `model.codi_client`. **Canvi d'1 línia**, ajornat al
+    sprint de mesures.
+  - **Atomicitat del camí MANUAL del signal de codi-gen** (`generate_model_code`): fa **read-then-write
+    sense lock** (scan `MAX(sequencial)`), a diferència del bulk (`select_for_update`). **Risc baix** (alta
+    manual = 1 model, poca concurrència), ajornat.
 - **3B-2 (pop-up de selecció múltiple) AJORNAT** (no descartat): *"defineix data d'inici del primer model"*
   → reordenar la selecció + **ancorar el primer**. Requeriria combinar `reorder` + `apply` (fixar data,
   `locked`) en una transacció (endpoint nou o dues crides). No crític: la reordenació ja la cobreix el
@@ -396,13 +560,14 @@ sense pantalla). Capa antiga de Fitting i `Settings` antic **JUBILATS**.
 - **POM:** nucli **FET** — veure secció "SPRINT TASCA-POM". Pertinença a item, materialització TEMPLATE,
   motor únic, tasca com a porta. Les **95 GarmentPOMMap orfes ja repoblades** (àncores+clons a item).
   Resta: POMBrowser-assign (autoria Montse), Pas 5/6, cicle de vida Kanban (tot a la secció del sprint).
-- **5A-bis: import Excel → ESQUELET.** La IA extreu `garment_type_code` = codi d'**ITEM**; cal resoldre
-  item→derivar família. `ImportFromSheetWizard` orfe a muntar. Comparteix flux d'extracció amb el POM →
-  decidir junts quин dels dos fluxos (`extract-from-file` vell / `extract-sheet` nou) es queda.
+- ~~**5A-bis: import Excel → ESQUELET.**~~ **SUPERAT pel Import Wizard de 5 passos** (commit `75064db`,
+  veure secció «ACTUALITZACIÓ 2026-06-04»): el wizard importa fitxa tècnica dins un Model existent.
+  `ImportFromSheetWizard` + `ImportConfirmStep` **eliminats** (codi mort). Queda pendent **decidir el flux
+  d'extracció únic** (`extract-from-file` vell / `extract-sheet` S17 / wizard nou) i retirar els vells.
 - **Replanificació per endarreriment:** el motor ja empeny la cua; falta **disparador** (lazy en obrir vs
   cron). NO hi ha auto-pausa per horari ni infra de processos programats. Peça de planificació.
-- **Neteja final:** extracció duplicada (2 fluxos), orfes (`Tasks.jsx`, `ImportConfirmStep`),
-  `TipologiaModel`, claus i18n velles.
+- **Neteja final:** extracció duplicada (`extract-from-file` / `extract-sheet`), orfe `Tasks.jsx`,
+  `TipologiaModel`, claus i18n velles. *(`ImportConfirmStep`/`ImportFromSheetWizard` ja eliminats al `75064db`.)*
 - **Traduccions ca/es** de les 17 famílies de Garment Types (ara `nom_ca`/`nom_es` = `nom_en` provisional).
 - **POM-maps:** ✅ repoblats a item (sprint tasca-POM). **SizingProfiles:** re-autoria cap a la nova
   estructura de 17 famílies encara pendent.
