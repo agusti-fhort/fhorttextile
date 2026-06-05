@@ -121,6 +121,21 @@ export const customers = {
   remove: (id) => client.delete(`/api/v1/customers/${id}/`),
 }
 
+// Import massiu de models per Excel. template/errorsReport són descàrregues binàries
+// (responseType blob); upload és multipart (Content-Type undefined → axios posa el boundary).
+export const bulkImport = {
+  template: (customerId) => client.get('/api/v1/bulk-import/template/', {
+    params: { customer_id: customerId }, responseType: 'blob',
+  }),
+  upload: (formData) => client.post('/api/v1/bulk-import/upload/', formData, {
+    headers: { 'Content-Type': undefined },
+  }),
+  commit: (id) => client.post(`/api/v1/bulk-import/${id}/commit/`),
+  errorsReport: (id) => client.get(`/api/v1/bulk-import/${id}/errors-report/`, {
+    responseType: 'blob',
+  }),
+}
+
 // Capa de Projecte — producció de mostres (productions/ és ReadOnlyModelViewSet).
 // Alta = models/<id>/request-production/; canvi d'estat = productions/<id>/status/.
 export const productions = {

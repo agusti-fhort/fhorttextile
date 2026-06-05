@@ -23,6 +23,7 @@ const SizeLibrary = lazy(() => import('./pages/SizeLibrary'))
 // Fitxer no esborrat; netejar en passada futura amb MeasurementTable.jsx.
 const OnboardingWizard = lazy(() => import('./pages/OnboardingWizard'))
 const ModelWizard = lazy(() => import('./pages/ModelWizard'))
+const BulkImportWizard = lazy(() => import('./pages/BulkImportWizard'))
 const ModelMeasurements = lazy(() => import('./pages/ModelMeasurements'))
 const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
@@ -60,6 +61,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="models" element={<Models />} />
           <Route path="models/nou" element={<ModelWizard />} />
+          <Route path="models/importar-colleccio" element={<BulkImportWizard />} />
           <Route path="models/nou-des-de-fitxer" element={<Navigate to="/models/nou" replace />} />
           <Route path="models/:id" element={<ModelSheet />} />
           <Route path="models/:id/editar" element={<ModelWizard />} />

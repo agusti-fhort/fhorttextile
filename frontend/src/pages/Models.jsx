@@ -209,8 +209,8 @@ function NewModelMenu({ open, setOpen, navigate, t }) {
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
           <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 41, background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 4, minWidth: 200 }}>
             <button onClick={() => { setOpen(false); navigate('/models/nou') }} style={menuItem}><i className="ti ti-edit" /> {t('models_list.manual')}</button>
-            <button disabled title={t('models_list.soon')} style={{ ...menuItem, opacity: 0.45, cursor: 'not-allowed' }}>
-              <i className="ti ti-file-spreadsheet" /> {t('models_list.import_excel')} <span style={{ fontSize: 9, color: 'var(--gray)', marginLeft: 'auto' }}>{t('models_list.soon')}</span>
+            <button onClick={() => { setOpen(false); navigate('/models/importar-colleccio') }} style={menuItem}>
+              <i className="ti ti-file-spreadsheet" /> {t('nav.import_collection')}
             </button>
           </div>
         </>
