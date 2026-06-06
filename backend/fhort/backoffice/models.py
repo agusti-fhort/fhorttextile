@@ -58,3 +58,20 @@ class BackofficeActionLog(models.Model):
 
     def __str__(self):
         return f'{self.accio} @ {self.timestamp:%Y-%m-%d %H:%M}'
+
+
+class ModelConsumptionEvent(models.Model):
+    """Sprint 4: esdeveniment de consum a PUBLIC. El que FHORT factura (recompte).
+    Mínim absolut: cap codi ni nom de model. Referència fluixa per codi_client +
+    opaque_ref (rep el MATEIX UUID que el ConsumptionRecord del tenant via senyal a 4.2).
+    Total a facturar = COUNT() per {codi_client, period}."""
+    codi_client = models.CharField(max_length=3)   # = Client.codi_tenant (ref fluixa)
+    period = models.CharField(max_length=7)         # 'YYYY-MM'
+    opaque_ref = models.UUIDField(unique=True)      # SENSE default: el valor ve del tenant
+    merited_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ['-merited_at']
+
+    def __str__(self):
+        return f'{self.codi_client} · {self.period} · {self.opaque_ref}'

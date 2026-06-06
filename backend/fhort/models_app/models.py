@@ -196,6 +196,10 @@ class Model(models.Model):
     estat = models.CharField(max_length=20, choices=ESTAT_CHOICES, default=ESTAT_NOU)
     fase_actual = models.CharField(max_length=20, choices=FASE_CHOICES, default='Pending')
 
+    consumption_started_at = models.DateTimeField(null=True, blank=True)
+    # Sprint 4: data en què el model va iniciar la primera tasca (meritació).
+    # NULL = encara no ha consumit màquina. L'omple el servei a Sprint 4.2.
+
     responsable = models.ForeignKey(
         'accounts.UserProfile',
         on_delete=models.SET_NULL,
@@ -688,6 +692,26 @@ class BulkCollectionRow(models.Model):
 
     def __str__(self):
         return f'Row {self.row_num} [{self.estat}]'
+
+
+class ConsumptionRecord(models.Model):
+    """Sprint 4: albarà de consum. Viu al TENANT, el veu el client.
+    Àncora immutable del fet 'aquest model va meritar'. El detall viu/creixent
+    (tasques, temps, usuaris) es calcula sobre TaskTransition, NO es duplica aquí."""
+    model = models.OneToOneField(
+        'models_app.Model', on_delete=models.CASCADE, related_name='consumption_record'
+    )
+    code_snapshot = models.CharField(max_length=40)            # snapshot de codi_intern
+    name_snapshot = models.CharField(max_length=200, blank=True, default='')  # snapshot de nom_prenda
+    period = models.CharField(max_length=7)                    # 'YYYY-MM'
+    opaque_ref = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    merited_at = models.DateTimeField()                        # set explícit pel servei (4.2)
+
+    class Meta:
+        ordering = ['-merited_at']
+
+    def __str__(self):
+        return f'{self.code_snapshot} · {self.period}'
 
 
 # Fitxa tècnica editable (editor full-screen). Definit a tech_sheet_models.py i importat
