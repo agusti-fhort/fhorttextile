@@ -6,6 +6,7 @@ from .views import (
     ModelFitxerViewSet,
     ModelViewSet,
     ai_analysis_view,
+    consumption_delivery_view,
     create_model_wizard,
     generate_grading_view,
     iso_shrinkage_view,
@@ -158,6 +159,7 @@ urlpatterns = (
         path('models/<int:model_id>/generar-grading/', generate_grading_view),
         path('models/iso-shrinkage/', iso_shrinkage_view),
         path('models/<int:model_id>/update-fabric/', update_fabric_view),
+        path('models/<int:model_id>/albara/', consumption_delivery_view),
     ]
     + _sprint6_paths
     + _sprint7_model_paths

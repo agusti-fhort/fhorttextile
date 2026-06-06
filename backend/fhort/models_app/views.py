@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import BaseMeasurement, GarmentSet, Model, ModelFitxer
+from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer
 from .serializers import (
     BaseMeasurementSerializer,
     ModelDetailSerializer,
@@ -1124,3 +1124,82 @@ def update_fabric_view(request, model_id):
             setattr(model, f, request.data[f])
     model.save()
     return Response({'id': model.id, 'fabric_main': model.fabric_main})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def consumption_delivery_view(request, model_id):
+    """Sprint 4.3: albarà-repositori VIU d'un model.
+    Capçalera immutable (ConsumptionRecord) + cos calculat sobre producció
+    (ModelTask/TimerEntrada/TaskTransition). Tot intra-tenant. Agregació en
+    Python sobre dades prefetchades → una sola consulta (sense N+1).
+    Timers oberts (minuts NULL) NO es compten (B1-a: només temps consolidat)."""
+    try:
+        model = Model.objects.select_related('consumption_record').prefetch_related(
+            'model_tasks__task_type',
+            'model_tasks__timers__tecnic',
+            'model_tasks__transitions__by',
+        ).get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    rec = getattr(model, 'consumption_record', None)
+    if rec is None:
+        return Response({'merited': False, 'model_id': model.id})
+
+    steps = []
+    total_minutes = 0
+    rectifications = 0
+    per_tech = {}   # tecnic_id -> {'label':..., 'minutes':int}
+    history = []
+
+    tasks = sorted(model.model_tasks.all(), key=lambda t: (t.order, t.id))
+    for mt in tasks:
+        task_minutes = 0
+        for tm in mt.timers.all():
+            if tm.minuts is None:        # timer obert → no consolidat (B1-a)
+                continue
+            task_minutes += tm.minuts
+            total_minutes += tm.minuts
+            if tm.tecnic_id is not None:
+                label = (tm.tecnic.nom_complet or tm.tecnic.user.get_username()) if tm.tecnic else str(tm.tecnic_id)
+                slot = per_tech.setdefault(tm.tecnic_id, {'technician_id': tm.tecnic_id, 'label': label, 'minutes': 0})
+                slot['minutes'] += tm.minuts
+        steps.append({
+            'task_type': mt.task_type.name if mt.task_type_id else None,
+            'status': mt.status,
+            'minutes': task_minutes,
+            'started_at': mt.started_at,
+            'finished_at': mt.finished_at,
+        })
+        for tr in mt.transitions.all():
+            if tr.from_status == 'Done' and tr.to_status == 'InProgress':
+                rectifications += 1
+            by_label = None
+            if tr.by_id is not None and tr.by:
+                by_label = tr.by.nom_complet or tr.by.user.get_username()
+            history.append({
+                'task_type': mt.task_type.name if mt.task_type_id else None,
+                'from': tr.from_status,
+                'to': tr.to_status,
+                'by': by_label,
+                'at': tr.at,
+            })
+
+    history.sort(key=lambda h: (h['at'] is None, h['at']))
+
+    return Response({
+        'merited': True,
+        'model_id': model.id,
+        'header': {
+            'code': rec.code_snapshot,
+            'name': rec.name_snapshot,
+            'period': rec.period,
+            'merited_at': rec.merited_at,
+            'opaque_ref': str(rec.opaque_ref),
+        },
+        'steps': steps,
+        'totals': {'total_minutes': total_minutes, 'rectifications': rectifications},
+        'per_technician': list(per_tech.values()),
+        'history': history,
+    })
