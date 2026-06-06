@@ -1,7 +1,11 @@
 """Sprint C: màquina d'estats del kanban del tècnic + timer server-side."""
+import logging
+
 from django.db import transaction
 from django.utils import timezone
 from .models import ModelTask, TimerEntrada, TaskTransition
+
+logger = logging.getLogger(__name__)
 
 # Transicions permeses (from -> {to})
 ALLOWED = {
@@ -81,8 +85,39 @@ def transition_task(task, to_status, profile):
 
     # Pas 5B-fix: arrencar la PRIMERA tasca treu el model de Pending → Dev.
     if to_status == 'InProgress':
-        from fhort.models_app.models import Model
+        from fhort.models_app.models import Model, ConsumptionRecord
+        from fhort.tasks.signals import model_consumption_started
+
+        # MÓN TÈCNIC (sagrat): la fase passa a Dev com avui, fora de tota lògica de facturació.
         Model.objects.filter(pk=task.model_id, fase_actual='Pending').update(fase_actual='Dev')
+
+        # MÓN FACTURACIÓ (N10: no-fatal, aïllat — mai bloqueja la transició del tècnic).
+        try:
+            with transaction.atomic():
+                rows = Model.objects.filter(
+                    pk=task.model_id, consumption_started_at__isnull=True
+                ).update(consumption_started_at=now)
+                if rows:  # primera vegada que aquest model arrenca → meritar
+                    model = Model.objects.select_related('customer').get(pk=task.model_id)
+                    record = ConsumptionRecord.objects.create(
+                        model=model,
+                        code_snapshot=model.codi_intern,
+                        name_snapshot=model.nom_prenda or '',
+                        period=now.strftime('%Y-%m'),
+                        merited_at=now,
+                    )
+                    model_consumption_started.send(
+                        sender=Model,
+                        codi_client=model.customer.codi,
+                        period=record.period,
+                        opaque_ref=record.opaque_ref,
+                        merited_at=now,
+                    )
+        except Exception:
+            logger.exception(
+                "meritacio fallida model=%s task=%s", task.model_id, task.pk
+            )
+            # NO re-raise: el tecnic ja te la transicio feta; el forat es reconcilia despres.
 
     if to_status == 'Done':
         # Sprint I: alimentar l'estadística Welford amb el temps real (timers ja tancats;
