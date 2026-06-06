@@ -7,9 +7,10 @@ import ActionsMenu from '../components/model/ActionsMenu'
 import ProductionTab from '../components/model/ProductionTab'
 import FittingTab from '../components/model/FittingTab'
 import TaskLog from '../components/model/TaskLog'
+import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 
 const API = import.meta.env.VITE_API_URL || ''
-const TABS = ['Resum', 'Mesures', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', 'Anàlisi IA']
+const TABS = ['Resum', 'Mesures', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
 
 // ── Helpers de viabilitat (purs) ──────────────────────────────────────────
 // Aproximació estàndard: dl-dv laborables, sense festius. Jornada 420 min/dia.
@@ -214,6 +215,7 @@ export default function ModelSheet({ defaultTab = 'Resum' }) {
         {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}
         {activeTab === 'Producció' && <ProductionTab model={model} onFeedback={setFeedback} onChanged={reloadModel} />}
+        {activeTab === "Registre d'activitat" && <RegistreActivitatTab modelId={id} />}
       </div>
     </div>
   )

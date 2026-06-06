@@ -1,4 +1,20 @@
 {
+  "albara": {
+    "tab": "Activity log",
+    "period": "Period",
+    "meritedAt": "Activity start",
+    "totalTime": "Total time",
+    "steps": "Steps",
+    "rectifications": "Rectifications",
+    "taskType": "Task",
+    "status": "Status",
+    "time": "Time",
+    "start": "Start",
+    "end": "End",
+    "technician": "Technician",
+    "history": "History",
+    "notMerited": "This model has not started activity yet"
+  },
   "bulk_import": {
     "title": "Import collection",
     "subtitle": "Bulk-create model skeletons from an Excel file",

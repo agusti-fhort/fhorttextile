@@ -1,4 +1,20 @@
 {
+  "albara": {
+    "tab": "Registro de actividad",
+    "period": "Período",
+    "meritedAt": "Inicio actividad",
+    "totalTime": "Tiempo total",
+    "steps": "Pasos",
+    "rectifications": "Rectificaciones",
+    "taskType": "Tarea",
+    "status": "Estado",
+    "time": "Tiempo",
+    "start": "Inicio",
+    "end": "Fin",
+    "technician": "Técnico",
+    "history": "Historial",
+    "notMerited": "Este modelo aún no ha iniciado actividad"
+  },
   "bulk_import": {
     "title": "Importar colección",
     "subtitle": "Crea esqueletos de modelo en masa desde un Excel",
