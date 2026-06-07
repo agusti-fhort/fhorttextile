@@ -1,4 +1,21 @@
 {
+  "registre": {
+    "title": "Activity log",
+    "models": "models",
+    "kpi_models": "Models",
+    "kpi_total": "Total time",
+    "kpi_avg_model": "Avg/model",
+    "kpi_avg_step": "Avg/task",
+    "all_tecnics": "All technicians",
+    "reset": "Clear",
+    "col_code": "Code",
+    "col_name": "Name",
+    "col_period": "Period",
+    "col_merited": "Activity start",
+    "col_time": "Time",
+    "col_steps": "Steps",
+    "empty": "No merited models with these filters."
+  },
   "albara": {
     "tab": "Activity log",
     "period": "Period",
@@ -150,6 +167,7 @@
     "dashboard": "Dashboard",
     "models": "Models",
     "models_new": "New model",
+    "registre_activitat": "Activity log",
     "models_from_file": "New from file",
     "fitting": "Size & Fitting",
     "fittings": "Fittings",

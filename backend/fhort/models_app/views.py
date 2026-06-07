@@ -1203,3 +1203,85 @@ def consumption_delivery_view(request, model_id):
         'per_technician': list(per_tech.values()),
         'history': history,
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def registre_activitat_view(request):
+    """Sprint 4.5: llista global de ConsumptionRecord del tenant.
+    Filtres: ?period=YYYY-MM &tecnic_id=<int> &page=<int> &page_size=<int>
+    Retorna: { count, totals:{models,total_minutes,avg_per_model,avg_per_step}, results:[...] }"""
+    from fhort.models_app.models import ConsumptionRecord
+
+    period   = request.query_params.get('period')
+    tecnic_id = request.query_params.get('tecnic_id')
+    page     = int(request.query_params.get('page', 1))
+    page_size = min(int(request.query_params.get('page_size', 25)), 100)
+
+    qs = ConsumptionRecord.objects.select_related('model__customer').prefetch_related(
+        'model__model_tasks__timers',
+        'model__model_tasks',
+    ).order_by('-merited_at')
+
+    if period:
+        qs = qs.filter(period=period)
+    if tecnic_id:
+        qs = qs.filter(
+            model__model_tasks__timers__tecnic_id=tecnic_id,
+            model__model_tasks__timers__minuts__isnull=False,
+        ).distinct()
+    task_type_id = request.query_params.get('task_type_id')
+    if task_type_id:
+        qs = qs.filter(
+            model__model_tasks__task_type_id=task_type_id,
+            model__model_tasks__timers__minuts__isnull=False,
+        ).distinct()
+
+    # Totalitzadors sobre el queryset filtrat (en Python, sobre slice petit)
+    all_ids = list(qs.values_list('id', flat=True))
+    total_models = len(all_ids)
+    total_minutes = 0
+    total_steps = 0
+    for rec in qs.prefetch_related('model__model_tasks__timers'):
+        for mt in rec.model.model_tasks.all():
+            total_steps += 1
+            for tm in mt.timers.all():
+                if tm.minuts is not None:
+                    total_minutes += tm.minuts
+
+    avg_per_model = round(total_minutes / total_models, 1) if total_models else 0
+    avg_per_step  = round(total_minutes / total_steps,  1) if total_steps  else 0
+
+    # Paginació manual
+    start = (page - 1) * page_size
+    page_qs = qs[start:start + page_size]
+
+    results = []
+    for rec in page_qs:
+        model = rec.model
+        mins = sum(
+            tm.minuts for mt in model.model_tasks.all()
+            for tm in mt.timers.all() if tm.minuts is not None
+        )
+        steps = model.model_tasks.count()
+        results.append({
+            'id': model.id,
+            'code': rec.code_snapshot,
+            'name': rec.name_snapshot,
+            'period': rec.period,
+            'merited_at': rec.merited_at,
+            'total_minutes': mins,
+            'steps': steps,
+            'opaque_ref': str(rec.opaque_ref),
+        })
+
+    return Response({
+        'count': total_models,
+        'totals': {
+            'models': total_models,
+            'total_minutes': total_minutes,
+            'avg_per_model': avg_per_model,
+            'avg_per_step': avg_per_step,
+        },
+        'results': results,
+    })

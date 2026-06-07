@@ -1,4 +1,21 @@
 {
+  "registre": {
+    "title": "Registre d'activitat",
+    "models": "models",
+    "kpi_models": "Models",
+    "kpi_total": "Temps total",
+    "kpi_avg_model": "Mitjana/model",
+    "kpi_avg_step": "Mitjana/tasca",
+    "all_tecnics": "Tots els tècnics",
+    "reset": "Netejar",
+    "col_code": "Codi",
+    "col_name": "Nom",
+    "col_period": "Període",
+    "col_merited": "Inici activitat",
+    "col_time": "Temps",
+    "col_steps": "Passos",
+    "empty": "Cap model meritat amb aquests filtres."
+  },
   "albara": {
     "tab": "Registre d'activitat",
     "period": "Període",
@@ -150,6 +167,7 @@
     "dashboard": "Dashboard",
     "models": "Models",
     "models_new": "Nou model",
+    "registre_activitat": "Registre d'activitat",
     "models_from_file": "Nou des de fitxer",
     "fitting": "Size & Fitting",
     "fittings": "Fittings",

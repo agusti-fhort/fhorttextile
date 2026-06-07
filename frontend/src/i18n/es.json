@@ -1,4 +1,21 @@
 {
+  "registre": {
+    "title": "Registro de actividad",
+    "models": "modelos",
+    "kpi_models": "Modelos",
+    "kpi_total": "Tiempo total",
+    "kpi_avg_model": "Media/modelo",
+    "kpi_avg_step": "Media/tarea",
+    "all_tecnics": "Todos los técnicos",
+    "reset": "Limpiar",
+    "col_code": "Código",
+    "col_name": "Nombre",
+    "col_period": "Período",
+    "col_merited": "Inicio actividad",
+    "col_time": "Tiempo",
+    "col_steps": "Pasos",
+    "empty": "Ningún modelo con estos filtros."
+  },
   "albara": {
     "tab": "Registro de actividad",
     "period": "Período",
@@ -150,6 +167,7 @@
     "dashboard": "Dashboard",
     "models": "Modelos",
     "models_new": "Nuevo modelo",
+    "registre_activitat": "Registro de actividad",
     "models_from_file": "Nuevo desde archivo",
     "fitting": "Size & Fitting",
     "fittings": "Fittings",

@@ -11,6 +11,7 @@ from .views import (
     generate_grading_view,
     iso_shrinkage_view,
     next_model_ref,
+    registre_activitat_view,
     suggested_poms_view,
     materialize_poms_view,
     close_table_view,
@@ -160,6 +161,7 @@ urlpatterns = (
         path('models/iso-shrinkage/', iso_shrinkage_view),
         path('models/<int:model_id>/update-fabric/', update_fabric_view),
         path('models/<int:model_id>/albara/', consumption_delivery_view),
+        path('registre-activitat/', registre_activitat_view),
     ]
     + _sprint6_paths
     + _sprint7_model_paths

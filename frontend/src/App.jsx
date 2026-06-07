@@ -36,6 +36,7 @@ const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
 const CompanyCalendar = lazy(() => import('./pages/CompanyCalendar'))
 const Planning = lazy(() => import('./pages/Planning'))
 const PlanningCalendar = lazy(() => import('./pages/PlanningCalendar'))
+const RegistreActivitat = lazy(() => import('./pages/RegistreActivitat'))
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -98,6 +99,7 @@ export default function App() {
           <Route path="configuracio/usuaris" element={<UsersRoles />} />
           <Route path="configuracio/calendari" element={<CompanyCalendar />} />
           <Route path="avisos" element={<Alerts />} />
+          <Route path="registre-activitat" element={<RegistreActivitat />} />
           <Route path="perfil" element={<UserProfilePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

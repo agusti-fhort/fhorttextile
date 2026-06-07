@@ -6,7 +6,6 @@ import Feedback from '../components/ui/Feedback'
 import ActionsMenu from '../components/model/ActionsMenu'
 import ProductionTab from '../components/model/ProductionTab'
 import FittingTab from '../components/model/FittingTab'
-import TaskLog from '../components/model/TaskLog'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -162,17 +161,12 @@ export default function ModelSheet({ defaultTab = 'Resum' }) {
 
       <div style={{ padding: '1.5rem' }}>
         {activeTab === 'Resum' && (
-          <>
-            <TabSummary
-              model={model}
-              modelId={parseInt(id)}
-              sizesAmbDades={sizesAmbDades}
-              onUpdated={reloadModel}
-            />
-            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '0.5px solid var(--gray-l)' }}>
-              <TaskLog modelId={parseInt(id)} />
-            </div>
-          </>
+          <TabSummary
+            model={model}
+            modelId={parseInt(id)}
+            sizesAmbDades={sizesAmbDades}
+            onUpdated={reloadModel}
+          />
         )}
         {activeTab === 'Mesures' && (
           <div>
