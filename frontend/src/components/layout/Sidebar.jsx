@@ -284,6 +284,7 @@ export default function Sidebar() {
       position: 'fixed',
       left: 0,
       top: 0,
+      zIndex: 100,            // per sobre de capçaleres sticky de pàgina (Topbar/FittingDetail zIndex:10)
       borderRight: `1px solid ${C.border}`,
       overflowY: 'auto',
     }}>
