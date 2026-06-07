@@ -5,6 +5,10 @@ import DashboardPage from './pages/DashboardPage'
 import TenantsPage from './pages/TenantsPage'
 import TenantDetailPage from './pages/TenantDetailPage'
 import TenantFormPage from './pages/TenantFormPage'
+import ServeisPage from './pages/ServeisPage'
+import ContractesPage from './pages/ContractesPage'
+import ContractFormPage from './pages/ContractFormPage'
+import ContractDetailPage from './pages/ContractDetailPage'
 
 export default function App() {
   return (
@@ -20,6 +24,11 @@ export default function App() {
           <Route path="/tenants/new" element={<TenantFormPage />} />
           <Route path="/tenants/:codi" element={<TenantDetailPage />} />
           <Route path="/tenants/:codi/edit" element={<TenantFormPage />} />
+          <Route path="/serveis" element={<ServeisPage />} />
+          <Route path="/contractes" element={<ContractesPage />} />
+          {/* Estàtica abans que dinàmica: /new no s'ha de capturar com a :id */}
+          <Route path="/contractes/new" element={<ContractFormPage />} />
+          <Route path="/contractes/:id" element={<ContractDetailPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

@@ -29,6 +29,8 @@ const SECTIONS = [
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
       { to: '/tenants', label: 'Tenants', icon: 'ti-building-store' },
+      { to: '/serveis', label: 'Catàleg de serveis', icon: 'ti-category' },
+      { to: '/contractes', label: 'Contractes', icon: 'ti-file-invoice' },
     ],
   },
   {
