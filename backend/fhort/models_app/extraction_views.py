@@ -705,6 +705,77 @@ def _excel_to_text(file_bytes: bytes) -> str:
     return '\n'.join(lines)
 
 
+def _parse_excel_poms(file_bytes: bytes):
+    """Parse determinista d'una fitxa Excel de POMs (via ràpida del wizard).
+
+    Cerca la fila capçalera (cel·la A == 'POM') i en llegeix: A=codi, C=descripció,
+    D=DIM, i de la col E endavant les columnes de talla (excloent les que la capçalera
+    marca com a tolerància, 'tol'). Retorna (poms, talles):
+      poms  = [{'codi_fitxa', 'descripcio', 'dim', 'values': {talla: float}}]
+      talles = [etiquetes de talla, en ordre]
+    Si no troba cap capçalera 'POM', retorna ([], [])."""
+    import openpyxl
+
+    def _num(v):
+        """float si v és numèric (accepta coma decimal); None altrament."""
+        if v is None or isinstance(v, bool):
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        try:
+            return float(str(v).strip().replace(',', '.'))
+        except (ValueError, TypeError):
+            return None
+
+    wb = openpyxl.load_workbook(_io.BytesIO(file_bytes), data_only=True, read_only=True)
+    try:
+        for ws in wb.worksheets:
+            rows = list(ws.iter_rows(values_only=True))
+            header_idx = None
+            for idx, row in enumerate(rows):
+                a = row[0] if row else None
+                if a is not None and str(a).strip().upper() == 'POM':
+                    header_idx = idx
+                    break
+            if header_idx is None:
+                continue
+
+            header = rows[header_idx]
+            # Columnes de talla: col E (índex 4) endavant, excloent toleràncies.
+            size_cols = []  # [(col_index, label)]
+            for ci in range(4, len(header)):
+                label = header[ci]
+                if label is None or str(label).strip() == '':
+                    continue
+                if 'tol' in str(label).strip().lower():
+                    continue
+                size_cols.append((ci, str(label).strip()))
+            talles = [lbl for _, lbl in size_cols]
+
+            poms = []
+            for row in rows[header_idx + 1:]:
+                a = row[0] if row else None
+                if a is None or str(a).strip() == '':
+                    break  # fi del bloc de dades
+                values = {}
+                for ci, lbl in size_cols:
+                    if ci < len(row):
+                        nv = _num(row[ci])
+                        if nv is not None:
+                            values[lbl] = nv
+                desc = row[2] if len(row) > 2 and row[2] is not None else ''
+                poms.append({
+                    'codi_fitxa': str(a).strip(),
+                    'descripcio': str(desc).strip(),
+                    'dim': _num(row[3]) if len(row) > 3 else None,
+                    'values': values,
+                })
+            return poms, talles
+    finally:
+        wb.close()
+    return [], []
+
+
 def _cribratge_content_block(file_bytes: bytes, filename: str, content_type: str) -> dict:
     """Bloc de contingut per a la API segons el tipus de fitxa origen (PDF/imatge/Excel)."""
     name = (filename or '').lower()
@@ -1060,6 +1131,131 @@ def find_pom_master(code, description):
 EXTRACCIO_MODEL = 'claude-opus-4-7'
 EXTRACCIO_MAX_TOKENS = 16000
 
+EXCEL_REVISION_MODEL = 'claude-sonnet-4-6'
+EXCEL_REVISION_MAX_TOKENS = 2000
+
+
+def _revise_excel_poms_with_sonnet(poms_text: str, api_key: str) -> dict:
+    """Revisió lleugera (Sonnet) dels POMs extrets d'un Excel. No-fatal:
+    retorna SEMPRE un dict {'corrections': [...], 'warnings': [...]}."""
+    import anthropic
+    from fhort.models_app.extraction_utils import safe_json_parse
+
+    default = {'corrections': [], 'warnings': []}
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model=EXCEL_REVISION_MODEL,
+            max_tokens=EXCEL_REVISION_MAX_TOKENS,
+            system="""Ets un validador de fitxes tècniques tèxtils.
+Reps una llista de POMs (punts de mesura) extrets d'un Excel.
+Retorna NOMÉS un JSON amb aquest format exacte:
+{"corrections": [{"codi": "X", "camp": "descripcio|dim", "valor_suggerit": "..."}], "warnings": ["..."]}
+Si no cal cap correcció, retorna {"corrections": [], "warnings": []}
+No afegeixis cap text fora del JSON.""",
+            messages=[{'role': 'user', 'content': poms_text}],
+        )
+        raw = ''.join(
+            b.text for b in response.content if getattr(b, 'type', None) == 'text'
+        ).strip()
+        parsed = safe_json_parse(raw)
+        if not isinstance(parsed, dict):
+            return default
+        return {
+            'corrections': parsed.get('corrections') or [],
+            'warnings': parsed.get('warnings') or [],
+        }
+    except Exception:
+        _logging.getLogger(__name__).exception('Revisió Excel (Sonnet): error no-fatal')
+        return default
+
+
+def _extraccio_via_excel(session, api_key):
+    """Via ràpida d'extracció per a fitxes Excel: parse determinista + revisió Sonnet,
+    SENSE la crida Opus. Retorna la MATEIXA forma de resposta que la via PDF/imatge."""
+    # 1. Bytes del document desat al Pas 1.
+    try:
+        session.document.open('rb')
+        file_bytes = session.document.read()
+    finally:
+        session.document.close()
+
+    # 2. Parse determinista.
+    raw_poms, talles_detectades = _parse_excel_poms(file_bytes)
+
+    # 3. Sense POMs llegibles → error clar.
+    if not raw_poms:
+        return Response({'error': 'No s\'ha pogut llegir l\'Excel'}, status=400)
+
+    # 4. Text pla per a la revisió Sonnet.
+    linies = [
+        f"{p['codi_fitxa']} | {p['descripcio']} | DIM:{p.get('dim', '')} | {p['values']}"
+        for p in raw_poms
+    ]
+    poms_text = '\n'.join(linies)
+
+    # 5. Revisió lleugera (no-fatal).
+    revision = _revise_excel_poms_with_sonnet(poms_text, api_key)
+
+    # 6. Aplica correccions (només camp descripcio/dim, codis existents).
+    by_codi = {}
+    for p in raw_poms:
+        by_codi.setdefault(p['codi_fitxa'], p)
+    for corr in (revision.get('corrections') or []):
+        if not isinstance(corr, dict):
+            continue
+        target = by_codi.get(str(corr.get('codi') or '').strip())
+        camp = corr.get('camp')
+        if not target or camp not in ('descripcio', 'dim'):
+            continue
+        if camp == 'descripcio':
+            target['descripcio'] = str(corr.get('valor_suggerit') or '').strip()
+        else:  # dim
+            try:
+                target['dim'] = float(str(corr.get('valor_suggerit')).replace(',', '.'))
+            except (ValueError, TypeError):
+                pass
+
+    # 7-8. Matching POM + format IDÈNTIC al de la via Opus.
+    poms_extrets = []
+    for i, p in enumerate(raw_poms):
+        pm, match_type, confidence = find_pom_master(p['codi_fitxa'], p['descripcio'])
+        poms_extrets.append({
+            'codi_fitxa': p['codi_fitxa'],
+            'descripcio': p['descripcio'],
+            'pom_master_id': pm.id if pm else None,
+            'pom_codi': pm.codi_client if pm else None,
+            'pom_nom': (pm.nom_client if pm else None),
+            'match_type': match_type,
+            'confidence': confidence,
+            'values': p['values'],
+            'actiu': True,
+            'ordre': i,
+        })
+
+    # 9. Talles.
+    sizes = [str(t) for t in talles_detectades]
+
+    # 10. Persisteix. NOTA: `session.poms_extrets` és la font de veritat per als passos
+    # W2-confirmació (:1216) i W3-mesures (:1415); cal desar-la (paritat amb la via Opus).
+    session.resultat = {**(session.resultat or {}),
+                        'extraccio': {'via': 'excel', 'header': {}, 'sizes': sizes},
+                        'grading_status': 'ok'}
+    session.poms_extrets = poms_extrets
+    session.estat = 'POMS'
+    session.save(update_fields=['resultat', 'poms_extrets', 'estat', 'actualitzat_at'])
+
+    # 11. Resposta amb EXACTAMENT el mateix format que la via PDF/imatge (:1180-1188).
+    return Response({
+        'estat': 'POMS',
+        'poms_extrets': poms_extrets,
+        'header': {},
+        'base_size': sizes[0] if sizes else None,
+        'sizes': sizes,
+        'grading_status': {'status': 'ok', 'detail': ''},
+        'avisos': revision.get('warnings', []),
+    }, status=200)
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -1088,6 +1284,12 @@ def import_session_extraccio_view(request, token):
     api_key = getattr(settings, 'ANTHROPIC_API_KEY', '')
     if not api_key:
         return Response({'error': 'ANTHROPIC_API_KEY no configurada al backend'}, status=500)
+
+    # Via ràpida Excel: parse determinista + revisió Sonnet, saltant Opus.
+    # PDF/imatge segueixen el camí actual sense cap canvi.
+    doc_name = session.document.name or ''
+    if doc_name.lower().endswith(('.xlsx', '.xls')):
+        return _extraccio_via_excel(session, api_key)
 
     # Llegeix el document desat al Pas 1.
     try:
