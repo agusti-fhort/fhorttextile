@@ -6,6 +6,7 @@ from rest_framework.routers import DefaultRouter
 from .views import BackofficeMeView, BackofficeTokenObtainView, health_view
 from .views_tenants import ClientViewSet, PlanViewSet
 from .views_contracts import ServiceCatalogViewSet, TenantContractViewSet
+from .views_contracts import generate_invoice_view
 
 router = DefaultRouter()
 router.register('tenants', ClientViewSet, basename='tenant')
@@ -17,5 +18,6 @@ urlpatterns = [
     path('auth/login/', BackofficeTokenObtainView.as_view(), name='backoffice-login'),
     path('auth/me/', BackofficeMeView.as_view(), name='backoffice-me'),
     path('health/', health_view, name='backoffice-health'),
+    path('facturacio/generar/', generate_invoice_view),
     path('', include(router.urls)),
 ]

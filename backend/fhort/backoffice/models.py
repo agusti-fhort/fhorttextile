@@ -142,3 +142,65 @@ class ContractLine(models.Model):
 
     def __str__(self):
         return f'{self.contract} · {self.service.code} · {self.preu}'
+
+
+class Invoice(models.Model):
+    """Factura generada pel motor de facturació (Sprint 6 · Capa 4).
+    tipus=auto: generada pel motor mensual (tier_fee + model_count).
+    tipus=manual: creada per un humà (setup, formació, etc.).
+    Idempotència: unique_together (client, period, tipus) per a auto.
+    Sprint 7 mourà estat esborrany→emesa→pagada via Stripe."""
+    TIPUS = [('auto', 'Automàtica'), ('manual', 'Manual')]
+    ESTAT = [
+        ('esborrany', 'Esborrany'),
+        ('emesa',     'Emesa'),
+        ('pagada',    'Pagada'),
+        ('cancel·lada', 'Cancel·lada'),
+    ]
+    client     = models.ForeignKey(
+        'tenants.Client', on_delete=models.PROTECT, related_name='invoices'
+    )
+    period     = models.CharField(max_length=7)          # 'YYYY-MM'
+    tipus      = models.CharField(max_length=10, choices=TIPUS, default='auto')
+    estat      = models.CharField(max_length=15, choices=ESTAT, default='esborrany')
+    total      = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    moneda     = models.CharField(max_length=3, default='EUR')
+    created_at = models.DateTimeField(auto_now_add=True)
+    emesa_at   = models.DateTimeField(null=True, blank=True)
+    nota       = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-period', '-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['client', 'period', 'tipus'],
+                condition=models.Q(tipus='auto'),
+                name='unique_auto_invoice_per_client_period',
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.client.codi_tenant} · {self.period} · {self.tipus}'
+
+
+class InvoiceLine(models.Model):
+    """Línia d'una factura (Sprint 6 · Capa 4).
+    service pot ser null per a línies manuals lliures sense servei del catàleg."""
+    invoice    = models.ForeignKey(
+        Invoice, on_delete=models.CASCADE, related_name='lines'
+    )
+    service    = models.ForeignKey(
+        ServiceCatalog, on_delete=models.PROTECT,
+        null=True, blank=True, related_name='invoice_lines'
+    )
+    descripcio = models.CharField(max_length=200)
+    quantitat  = models.DecimalField(max_digits=10, decimal_places=4)
+    preu_unit  = models.DecimalField(max_digits=10, decimal_places=4)
+    total      = models.DecimalField(max_digits=10, decimal_places=2)
+    moneda     = models.CharField(max_length=3, default='EUR')
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f'{self.invoice} · {self.descripcio} · {self.total}'
