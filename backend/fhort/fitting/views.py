@@ -1,3 +1,5 @@
+import logging
+
 from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, mixins, status
@@ -31,6 +33,8 @@ from .serializers import (
 )
 from . import services
 from fhort.accounts.capabilities import HasCapability, SCHEDULE_FITTINGS
+
+logger = logging.getLogger(__name__)
 
 
 class _ScheduleFittingsPerm(HasCapability):
@@ -177,6 +181,37 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
                 start_time=d.get('start_time'), end_time=d.get('end_time'))
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        # Via adaptativa: si s'informa expected_at i no hi ha Delivered per a (model, fase),
+        # actualitza/crea la Production perquè el calendari reflecteixi la recepció esperada.
+        # Mai re-raise: el fitting ja existeix; un error aquí només es registra (warning).
+        model_id = d.get('model_id')
+        fase = d.get('fase')
+        expected_at = d.get('expected_at')
+        if model_id and expected_at:
+            from fhort.tasks.models import Production
+            try:
+                prod = (Production.objects
+                        .filter(model_id=model_id, phase=fase)
+                        .exclude(status='Delivered').first())
+                if prod:
+                    prod.expected_at = expected_at
+                    prod.save(update_fields=['expected_at'])
+                elif not Production.objects.filter(
+                        model_id=model_id, phase=fase, status='Delivered').exists():
+                    # DEUTE: Production.supplier és obligatori (PROTECT, no nullable).
+                    # Aquest create() fallarà si no es passa supplier → el try/except
+                    # ho captura com a warning i el fitting es crea igualment.
+                    # Cas cobert: actualitzar Productions existents (prod.expected_at).
+                    # Cas no cobert: crear Production nova sense supplier previ.
+                    # Solució futura: demanar supplier al modal o fer-lo nullable (migració).
+                    Production.objects.create(
+                        model_id=model_id, phase=fase, status='Requested',
+                        expected_at=expected_at,
+                        requested_by=getattr(request.user, 'profile', None))
+            except Exception:
+                logger.warning(
+                    "schedule: via adaptativa Production fallida (model_id=%s, fase=%s)",
+                    model_id, fase, exc_info=True)
         return Response(FittingSessionDetailSerializer(s, context={'request': request}).data,
                         status=status.HTTP_201_CREATED)
 

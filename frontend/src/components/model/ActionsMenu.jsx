@@ -35,6 +35,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
     productions.list({ model: single.id, page_size: 200 }).then(r => setProds(r.data?.results ?? r.data ?? [])).catch(() => setProds([]))
   }, [single?.id])
 
+  // Informatiu (✓ a la fase i decisió de mostrar el camp de recepció prevista). Ja NO bloqueja.
   const deliveredPhases = new Set(prods.filter(p => p.status === 'Delivered').map(p => p.phase))
   const someNext = list.some(m => nextPhase(m.fase_actual))
   const somePrev = list.some(m => prevPhase(m.fase_actual))
@@ -44,7 +45,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
     setOpen(false)
     if (kind === 'tasks') setForm({ ids: tts.map(t => t.id) })
     if (kind === 'production') setForm({ supplier_id: '', phase: defaultPhase, expected_at: '', notes: '' })
-    if (kind === 'fitting') setForm({ fase: single && deliveredPhases.has(single.fase_actual) ? single.fase_actual : (single ? [...deliveredPhases][0] || single.fase_actual : CURRENT), data: todayISO() })
+    if (kind === 'fitting') setForm({ fase: single ? single.fase_actual : CURRENT, data: todayISO(), expected_at: '' })
     setModal(kind)
   }
 
@@ -72,15 +73,19 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
       return r
     })
   }
-  const runFitting = () => runBulk(m => fittingSessions.schedule({ fase: (form.fase === CURRENT ? m.fase_actual : form.fase), data: form.data, model_id: m.id }))
+  const runFitting = () => runBulk(m => fittingSessions.schedule({
+    fase: (form.fase === CURRENT ? m.fase_actual : form.fase),
+    data: form.data,
+    model_id: m.id,
+    ...(form.expected_at ? { expected_at: form.expected_at } : {}),
+  }))
   const runAdvance = () => runBulk(m => { const nx = nextPhase(m.fase_actual); if (!nx) throw { response: { data: { error: t('model_sheet.phase_top') } } }; return modelsApi.gate(m.id, { to_phase: nx }) })
   const runBack = () => runBulk(m => { const pv = prevPhase(m.fase_actual); if (!pv) throw { response: { data: { error: t('model_sheet.phase_first') } } }; return modelsApi.regress(m.id, { to_phase: pv }) })
 
-  const fittingEnabled = single ? deliveredPhases.size > 0 : true
   const items = [
     { key: 'tasks', label: t('model_sheet.generate_tasks'), icon: 'ti-list-check', enabled: list.length > 0 },
     { key: 'production', label: t('model_sheet.send_to_production'), icon: 'ti-send', enabled: list.length > 0 },
-    { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: fittingEnabled, hint: fittingEnabled ? null : t('model_sheet.fitting_needs_delivered') },
+    { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: list.length > 0 },
     { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: someNext },
     { key: 'back', label: t('model_sheet.back_phase'), icon: 'ti-arrow-left', enabled: somePrev },
   ]
@@ -146,17 +151,32 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
       )}
 
       {modal === 'fitting' && (
-        <Modal title={t('model_sheet.schedule_fitting')} confirmLabel={busy ? t('model_sheet.working') : t('model_sheet.schedule_fitting')} cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy || (single && !deliveredPhases.has(form.fase))} onConfirm={runFitting} onCancel={() => !busy && setModal(null)}>
-          {single && !deliveredPhases.has(form.fase) && <div style={warnBox}>{t('model_sheet.fitting_needs_delivered')}</div>}
+        <Modal title={t('model_sheet.schedule_fitting')} confirmLabel={busy ? t('model_sheet.working') : t('model_sheet.schedule_fitting')} cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy} onConfirm={runFitting} onCancel={() => !busy && setModal(null)}>
           {!single && <div style={infoBox}>{t('model_sheet.fitting_bulk_note', { n: list.length })}</div>}
           <Row label={t('model_sheet.phase')}>
             <select style={fullSel} value={form.fase} onChange={e => setForm(f => ({ ...f, fase: e.target.value }))}>
               {single
-                ? PHASES.map(p => <option key={p} value={p} disabled={!deliveredPhases.has(p)}>{p}{deliveredPhases.has(p) ? ' ✓' : ''}</option>)
+                ? PHASES.map(p => <option key={p} value={p}>{p}{deliveredPhases.has(p) ? ' ✓' : ''}</option>)
                 : phaseSelectOptions(true)}
             </select>
           </Row>
           <Row label={t('model_sheet.date')}><input type="date" style={fullSel} value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} /></Row>
+          {!deliveredPhases.has(form.fase) && (
+            <div style={{ marginTop: 8 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {t('fitting_expected_at_label', 'Data prevista de recepció de la mostra')}
+              </label>
+              <input
+                type="date"
+                value={form.expected_at || ''}
+                onChange={e => setForm(f => ({ ...f, expected_at: e.target.value }))}
+                style={{ width: '100%', marginTop: 4, fontSize: 12, border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px' }}
+              />
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                {t('fitting_expected_at_hint', 'Si no has rebut la mostra, informa quan l\'esperes.')}
+              </div>
+            </div>
+          )}
         </Modal>
       )}
 

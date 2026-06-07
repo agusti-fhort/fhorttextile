@@ -57,13 +57,8 @@ def schedule_session(*, fase, data, responsable_id, model_id=None, garment_set_i
     No s'executa fins que s'obre (open_session)."""
     if bool(model_id) == bool(garment_set_id):
         raise ValueError("Cal exactament un de model_id o garment_set_id (XOR).")
-    # Pas 5B-fix: per a un MODEL, exigeix Production Delivered d'aquesta fase (recepció interna)
-    # abans de programar el fitting. Bloqueig dur.
-    if model_id:
-        from fhort.tasks.services_e import has_delivered_production
-        if not has_delivered_production(model_id, fase):
-            raise ValueError(
-                "Cal rebre la producció (Delivered) d'aquesta fase abans de programar el fitting.")
+    # Redisseny 5C: el fitting ja NO exigeix Production Delivered prèvia. La via adaptativa
+    # (gestió de la recepció esperada) viu a la view schedule(), no com a bloqueig dur aquí.
     from .models import FittingSession
     return FittingSession.objects.create(
         fase=fase, data=data, model_id=model_id, garment_set_id=garment_set_id,

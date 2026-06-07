@@ -1,4 +1,6 @@
 {
+  "fitting_expected_at_label": "Expected sample receipt date",
+  "fitting_expected_at_hint": "If you haven't received the sample yet, enter when you expect it.",
   "registre": {
     "title": "Activity log",
     "models": "models",

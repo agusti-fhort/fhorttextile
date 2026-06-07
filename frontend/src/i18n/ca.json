@@ -1,4 +1,6 @@
 {
+  "fitting_expected_at_label": "Data prevista de recepció de la mostra",
+  "fitting_expected_at_hint": "Si no has rebut la mostra, informa quan l'esperes.",
   "registre": {
     "title": "Registre d'activitat",
     "models": "models",

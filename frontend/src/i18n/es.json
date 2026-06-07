@@ -1,4 +1,6 @@
 {
+  "fitting_expected_at_label": "Fecha prevista de recepción de la muestra",
+  "fitting_expected_at_hint": "Si no has recibido la muestra, indica cuándo la esperas.",
   "registre": {
     "title": "Registro de actividad",
     "models": "modelos",
