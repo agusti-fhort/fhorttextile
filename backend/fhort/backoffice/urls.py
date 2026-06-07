@@ -5,10 +5,13 @@ from rest_framework.routers import DefaultRouter
 
 from .views import BackofficeMeView, BackofficeTokenObtainView, health_view
 from .views_tenants import ClientViewSet, PlanViewSet
+from .views_contracts import ServiceCatalogViewSet, TenantContractViewSet
 
 router = DefaultRouter()
 router.register('tenants', ClientViewSet, basename='tenant')
 router.register('plans', PlanViewSet, basename='plan')
+router.register('serveis', ServiceCatalogViewSet, basename='servei')
+router.register('contractes', TenantContractViewSet, basename='contracte')
 
 urlpatterns = [
     path('auth/login/', BackofficeTokenObtainView.as_view(), name='backoffice-login'),

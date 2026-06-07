@@ -75,3 +75,70 @@ class ModelConsumptionEvent(models.Model):
 
     def __str__(self):
         return f'{self.codi_client} · {self.period} · {self.opaque_ref}'
+
+
+class ServiceCatalog(models.Model):
+    """Catàleg global de conceptes facturables (Sprint 5 · Capa 4).
+    Sense preu — el preu viu al ContractLine de cada tenant.
+    Tipus: tier_fee=quota base mensual, model_count=per model iniciat, manual=puntual."""
+    TIPUS_CHOICES = [
+        ('tier_fee',    'Quota base tier'),
+        ('model_count', 'Per model iniciat'),
+        ('manual',      'Manual (setup/formació)'),
+    ]
+    code        = models.CharField(max_length=50, unique=True)
+    nom         = models.CharField(max_length=200)
+    descripcio  = models.TextField(blank=True, default='')
+    tipus       = models.CharField(max_length=20, choices=TIPUS_CHOICES)
+    actiu       = models.BooleanField(default=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['tipus', 'code']
+
+    def __str__(self):
+        return f'{self.code} · {self.nom}'
+
+
+class TenantContract(models.Model):
+    """Contracte SaaS entre FHORT i un tenant (Sprint 5 · Capa 4).
+    Múltiples contractes possibles per tenant (historial). El vigent és
+    actiu=True i data_fi=null o futura. El motor de facturació (Sprint 6)
+    llegirà les ContractLine, no el Plan.preu_model_extra."""
+    client      = models.ForeignKey(
+        'tenants.Client', on_delete=models.PROTECT, related_name='contracts'
+    )
+    data_inici  = models.DateField()
+    data_fi     = models.DateField(null=True, blank=True)
+    actiu       = models.BooleanField(default=True)
+    nota        = models.TextField(blank=True, default='')
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-data_inici']
+
+    def __str__(self):
+        return f'{self.client.codi_tenant} · {self.data_inici}'
+
+
+class ContractLine(models.Model):
+    """Línia de servei dins un TenantContract (Sprint 5 · Capa 4).
+    preu = el que realment es cobra a aquest tenant (pot diferir del Plan).
+    inclosos = franquícia gratuïta (rellevant per a model_count)."""
+    contract    = models.ForeignKey(
+        TenantContract, on_delete=models.CASCADE, related_name='lines'
+    )
+    service     = models.ForeignKey(
+        ServiceCatalog, on_delete=models.PROTECT, related_name='lines'
+    )
+    preu        = models.DecimalField(max_digits=10, decimal_places=4)
+    moneda      = models.CharField(max_length=3, default='EUR')
+    inclosos    = models.IntegerField(default=0)
+    actiu       = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['service__tipus', 'service__code']
+        unique_together = [('contract', 'service')]
+
+    def __str__(self):
+        return f'{self.contract} · {self.service.code} · {self.preu}'
