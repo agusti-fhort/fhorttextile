@@ -67,6 +67,9 @@ export default function ModelWizard() {
   const [sizeDefs, setSizeDefs] = useState([])
   const [selectedSizes, setSelectedSizes] = useState([])
   const [baseSize, setBaseSize] = useState(null)
+  // Peça 4 — sistema/run que ja tenia el model (edició), per detectar canvi de sistema de talles.
+  const [modelSizeSystemId, setModelSizeSystemId] = useState(null)
+  const [modelSizeRun, setModelSizeRun] = useState('')
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -82,6 +85,14 @@ export default function ModelWizard() {
   ), [selProfile, selectedSizes, baseSize])
 
   const resetSizing = () => { setSelProfile(null); setSelectedSizes([]); setBaseSize(null); setSizeDefs([]) }
+
+  // Peça 4 — en edició, si el model ja tenia run i el sistema de talles del perfil triat
+  // és DIFERENT del que té el model, la talla base no s'autoassigna i és obligatòria.
+  const systemChanged = !!(
+    isEditMode && modelSizeRun && selProfile &&
+    modelSizeSystemId != null && modelSizeSystemId !== selProfile.size_system?.id
+  )
+  const baseSizeInvalid = systemChanged && (!baseSize || !selectedSizes.includes(baseSize))
 
   // Preview de referència (només create). El prefix surt del customer triat (fallback self-customer).
   useEffect(() => {
@@ -107,6 +118,8 @@ export default function ModelWizard() {
       setNomPrenda(d.nom_prenda || ''); setDescripcio(d.descripcio || ''); setCollection(d.collection || '')
       setDataObjectiu(d.data_objectiu || '')
       setTarget(d.target || null); setConstruction(d.construction || null)
+      setModelSizeSystemId(d.size_system ?? null)
+      setModelSizeRun(d.size_run_model || '')
       if (d.garment_type) setFamily({ id: d.garment_type, nom_en: d.garment_type_nom })
       if (d.garment_type_item) setItem({ id: d.garment_type_item, name: d.garment_type_item_nom })
     }).catch(() => setError(t('model_wizard.conn_error')))
@@ -136,7 +149,9 @@ export default function ModelWizard() {
         setSizeDefs(defs)
         const labels = defs.map(s => s.etiqueta || s.size_label || s.label).filter(Boolean)
         setSelectedSizes(labels)
-        setBaseSize(labels[Math.floor(labels.length / 2)] || labels[0] || null)
+        // Peça 4 — si en edició el sistema canvia respecte al model, NO autoassignis la base.
+        const changed = isEditMode && modelSizeRun && modelSizeSystemId != null && modelSizeSystemId !== ssId
+        setBaseSize(changed ? null : (labels[Math.floor(labels.length / 2)] || labels[0] || null))
       })
       .catch(() => { if (alive) setSizeDefs([]) })
     return () => { alive = false }
@@ -319,6 +334,11 @@ export default function ModelWizard() {
                 {profiles.map(p => {
                   const active = selProfile?.id === p.id
                   const sub = [p.target?.nom_en || p.target?.codi, p.construction?.nom_en || p.construction?.codi, p.fit_type_nom].filter(Boolean).join(' · ')
+                  // Peça 3 — rang d'edat (mesos) derivat de les size_definitions del perfil.
+                  const ageMins = (p.size_definitions || []).map(d => d.age_months_min).filter(v => v != null)
+                  const ageMaxs = (p.size_definitions || []).map(d => d.age_months_max).filter(v => v != null)
+                  const ageMin = ageMins.length ? Math.min(...ageMins) : null
+                  const ageMax = ageMaxs.length ? Math.max(...ageMaxs) : null
                   return (
                     <div key={p.id} onClick={() => setSelProfile(p)} style={{
                       padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: MONO,
@@ -327,6 +347,11 @@ export default function ModelWizard() {
                     }}>
                       <div style={{ fontWeight: 500, fontSize: 14 }}>{p.size_system?.nom || `Profile #${p.id}`}</div>
                       <div style={{ fontSize: 12, color: 'var(--gray)' }}>{sub}</div>
+                      {ageMin != null && ageMax != null && ageMax > 0 && (
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {ageMin === 0 ? `0–${ageMax} mesos` : `${ageMin}–${ageMax} mesos`}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -346,6 +371,11 @@ export default function ModelWizard() {
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {selectedSizes.map(s => <Chip key={s} active={baseSize === s} onClick={() => setBaseSize(s)}>{s} {baseSize === s && '★'}</Chip>)}
                     </div>
+                    {baseSizeInvalid && (
+                      <div style={{ color: 'var(--warn)', fontSize: 11, marginTop: 6 }}>
+                        {t('wizard_base_size_required', 'El sistema de talles ha canviat. Selecciona la talla base.')}
+                      </div>
+                    )}
                   </Field>
                 )}
               </>
@@ -370,7 +400,7 @@ export default function ModelWizard() {
             onClick={() => { if (!(block === 1 && !block1Resolved)) setBlock(b => Math.min(3, b + 1)) }}
             style={primaryBtn(block === 1 && !block1Resolved)}>{t('model_wizard.next')} →</button>
         ) : (
-          <button type="button" disabled={saving} onClick={isEditMode ? handleSaveEdit : handleCreate} style={primaryBtn(saving)}>
+          <button type="button" disabled={saving || baseSizeInvalid} onClick={isEditMode ? handleSaveEdit : handleCreate} style={primaryBtn(saving || baseSizeInvalid)}>
             {saving ? (isEditMode ? t('model_wizard.saving') : t('model_wizard.creating'))
               : (isEditMode ? t('model_wizard.save') : t('model_wizard.create'))}
           </button>
