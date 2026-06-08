@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from 'react'
+import React, { useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import useAuthStore from './store/auth'
 import Login from './pages/Login'
@@ -43,6 +43,49 @@ function ProtectedRoute({ children }) {
   return isAuthenticated ? children : <Navigate to="/login" replace />
 }
 
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    console.error('AppErrorBoundary caught:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          height: '100vh', gap: 16, fontFamily: 'IBM Plex Mono, monospace'
+        }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+            S'ha produït un error inesperat.
+          </div>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              window.location.reload();
+            }}
+            style={{
+              background: 'var(--gold)', color: '#fff',
+              border: 'none', borderRadius: 4,
+              padding: '8px 20px', cursor: 'pointer',
+              fontFamily: 'IBM Plex Mono, monospace', fontSize: 12
+            }}
+          >
+            Recarregar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const initAuth = useAuthStore(s => s.initAuth)
 
@@ -51,6 +94,7 @@ export default function App() {
   }, [])
 
   return (
+    <AppErrorBoundary>
     <BrowserRouter>
       <Suspense fallback={<div className="p-8 text-gray-500">Carregant…</div>}>
       <Routes>
@@ -106,5 +150,6 @@ export default function App() {
       </Routes>
       </Suspense>
     </BrowserRouter>
+    </AppErrorBoundary>
   )
 }

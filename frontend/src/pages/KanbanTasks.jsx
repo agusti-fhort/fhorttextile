@@ -190,6 +190,18 @@ export default function KanbanTasks() {
     if (firstActive) setSelected({ type: 'model', id: firstActive.model_id, ...firstActive })
   }, [modelRows, selected])
 
+  // Polling: refresca dades cada 30s si la pestanya és visible (entorn multi-usuari).
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') {
+        loadPage(1, true)            // recarrega la 1a pàgina de models
+        if (selectedId) loadDetail(selectedId)
+      }
+    }
+    const id = setInterval(tick, 30000)
+    return () => clearInterval(id)
+  }, [selectedId, loadPage, loadDetail])
+
   // (a) Ordre de visualització: models ACTIUS (InProgress/Paused) a dalt, preservant la resta
   // de l'ordre del backend (sort estable). Sense canvi backend; dades ja al by-model.
   const displayRows = [...modelRows].sort(
@@ -211,6 +223,9 @@ export default function KanbanTasks() {
         const msg = err?.response?.data?.error
           || (err?.response?.status === 403 ? t('kanban.not_allowed') : t('kanban.transition_error'))
         showToast('err', msg)
+        // Re-sincronitza el detall amb l'estat real del backend (la tasca pot haver canviat
+        // per un altre usuari → la targeta local era obsoleta).
+        if (selectedId) loadDetail(selectedId)
       })
   }
 
