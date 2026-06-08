@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { fittingSessions, pieceFittings, pieceFittingLines, fittingPhotos, modelFitxers } from '../api/endpoints'
+import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 
@@ -245,6 +246,9 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone }) {
   const [error, setError] = useState(null)
   // "Enviar a": STUB VISUAL — no dispara res (PDF/mail ajornat).
   const [sendTo, setSendTo] = useState('')
+  // FIX 5/6 — observacions editables + pujada d'imatges.
+  const [notes, setNotes] = useState(session.notes || '')
+  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -295,6 +299,30 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone }) {
       }
       setBusy(false); onDone()
     })()
+  }
+
+  // FIX 5 — desa session.notes (autosave en perdre el focus).
+  const saveNotes = () => { fittingSessions.update(session.id, { notes }).catch(() => {}) }
+
+  // FIX 6 — puja imatges al fitting (POST multipart a /fitting-photos/) i recarrega.
+  const reloadPhotos = () => {
+    fittingPhotos.list({ session: session.id })
+      .then(r => setPhotos(r.data.results || r.data || []))
+      .catch(() => {})
+  }
+  const onUpload = (e) => {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    setUploading(true); setError(null)
+    Promise.all(files.map(f => {
+      const fd = new FormData()
+      fd.append('session', session.id)
+      fd.append('fitxer', f)
+      return client.post('/api/v1/fitting-photos/', fd)
+    }))
+      .then(reloadPhotos)
+      .catch(() => setError(t('fitting.save.image_error', 'Error pujant la imatge.')))
+      .finally(() => { setUploading(false); e.target.value = '' })
   }
 
   const sectionTitle = (icon, label) => (
@@ -372,15 +400,31 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone }) {
             })()}
           </Card>
 
-          {/* b) OBSERVACIONS — session.notes (lectura) */}
+          {/* b) OBSERVACIONS — session.notes (editable, autosave on blur) */}
           <Card title={t('fitting.save.observations')} style={{ marginBottom: '1.25rem' }}>
-            {session.notes ? (
-              <div style={{ fontSize: 13, color: 'var(--text-main)', whiteSpace: 'pre-wrap' }}>{session.notes}</div>
-            ) : <div style={muted}>{t('fitting.save.no_observations')}</div>}
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              onBlur={saveNotes}
+              placeholder={t('fitting.save.no_observations')}
+              style={{
+                width: '100%', minHeight: 80, padding: '8px 10px', fontSize: 13,
+                border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)',
+                color: 'var(--text-main)', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit',
+              }}
+            />
           </Card>
 
-          {/* c) IMATGES — miniatures (pujada ajornada a B2; aquí només llistar) */}
+          {/* c) IMATGES — pujada (multipart a /fitting-photos/) + miniatures */}
           <Card title={t('fitting.save.images')} style={{ marginBottom: '1.25rem' }}>
+            <label style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 10,
+              cursor: uploading ? 'default' : 'pointer', fontSize: 12, color: 'var(--gold)',
+            }}>
+              <input type="file" accept="image/*" multiple onChange={onUpload} disabled={uploading} style={{ display: 'none' }} />
+              <i className="ti ti-upload" style={{ fontSize: 14 }} />
+              {uploading ? t('fitting.save.uploading', 'Pujant…') : t('fitting.save.add_images', 'Afegir imatges')}
+            </label>
             {photos.length === 0 ? (
               <div style={muted}>{t('fitting.save.no_images')}</div>
             ) : (

@@ -222,7 +222,8 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 'id': line.id,
                 'pom_id': line.pom_id,
                 'codi': pom.pom_code if pom else '',
-                'nom': pom.name_cat if pom else '',
+                # FIX 3 — prioritza el nom que el client ha informat a la fitxa; fallback al global.
+                'nom': (pom.nom_client or pom.name_cat) if pom else '',
                 'is_key': pom.is_key_measure if pom else False,
                 'size_label': line.size_label,
                 'valor_teoric': line.valor_teoric,
@@ -230,4 +231,11 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 'nota': line.nota,
                 'evolucio': evolucio,
             })
+        # FIX 4B — ordena les files per l'ordre de la fitxa (BaseMeasurement.ordre del model);
+        # POMMaster no té 'ordre', així que es resol en Python via el mapa pom_id→ordre del model.
+        from fhort.models_app.models import BaseMeasurement
+        ordre_map = dict(
+            BaseMeasurement.objects.filter(model_id=obj.model_id).values_list('pom_id', 'ordre')
+        )
+        out.sort(key=lambda r: ordre_map.get(r['pom_id'], 10 ** 9))
         return out

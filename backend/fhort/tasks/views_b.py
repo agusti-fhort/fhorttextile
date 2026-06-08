@@ -141,8 +141,11 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
 
         responsable = qp.get('responsable')
         if responsable == 'me':
+            # FIX 2 — "jo" = models on sóc ASSIGNEE d'alguna tasca (no Model.responsable, sovint null).
+            # qs és un queryset de ModelTask → subquery per model_id (manté els comptadors complets).
             profile = getattr(request.user, 'profile', None)
-            qs = qs.filter(model__responsable=profile) if profile is not None else qs.none()
+            qs = (qs.filter(model_id__in=ModelTask.objects.filter(assignee=profile).values('model_id'))
+                  if profile is not None else qs.none())
         elif responsable and responsable.isdigit():
             qs = qs.filter(model__responsable_id=int(responsable))
 

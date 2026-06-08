@@ -383,7 +383,7 @@ def _load_base_measurements(model_id: int) -> dict:
             bm.pom_id: bm.base_value_cm
             for bm in BaseMeasurement.objects.filter(
                 model_id=model_id, is_active=True, base_value_cm__isnull=False
-            )
+            ).order_by('ordre')
         }
     except Exception as e:
         logger.warning(f"Could not load BaseMeasurements: {e}")

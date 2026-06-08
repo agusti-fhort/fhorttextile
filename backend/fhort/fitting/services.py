@@ -249,6 +249,12 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
             new_grading_version_id=new_version.pk,
         )
 
+    # FIX 1 — segellar la FittingSession en gravar (decisió de producte: gravar = terminal).
+    # PieceFitting no té estat 'closed'; segellem la sessió de la peça gravada.
+    # NOTA: això deixa la sessió fora del flux gates→advance_phase (que exigeix 'Oberta').
+    pf.session.estat = 'Tancada'
+    pf.session.save(update_fields=['estat'])
+
     result = {
         'changed': changed,
         'base_changed': base_changed,
