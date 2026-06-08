@@ -222,8 +222,7 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 'id': line.id,
                 'pom_id': line.pom_id,
                 'codi': pom.pom_code if pom else '',
-                # FIX 3 — prioritza el nom que el client ha informat a la fitxa; fallback al global.
-                'nom': (pom.nom_client or pom.name_cat) if pom else '',
+                'nom': pom.name_cat if pom else '',
                 'is_key': pom.is_key_measure if pom else False,
                 'size_label': line.size_label,
                 'valor_teoric': line.valor_teoric,
