@@ -17,25 +17,27 @@ import { PDFDocument } from 'pdf-lib'
 const API = import.meta.env.VITE_API_URL || ''
 
 // Geometria: A4 horitzontal 297×210mm. Visualització 1mm = 2.4px → 713×504px.
-const MM_TO_PX = 2.4
+// Constants i helpers compartits amb TechSheetTemplateEditor (TS-3): s'exporten perquè
+// el motor de canvas (render de blocs natius) no es dupliqui ni faci drift.
+export const MM_TO_PX = 2.4
 const A4_W_MM = 297
 const A4_H_MM = 210
-const CANVAS_W = Math.round(A4_W_MM * MM_TO_PX)   // 713
-const CANVAS_H = Math.round(A4_H_MM * MM_TO_PX)   // 504
+export const CANVAS_W = Math.round(A4_W_MM * MM_TO_PX)   // 713
+export const CANVAS_H = Math.round(A4_H_MM * MM_TO_PX)   // 504
 // A4 horitzontal en punts PostScript (pdf-lib).
-const PDF_W_PT = 841.89
-const PDF_H_PT = 595.28
+export const PDF_W_PT = 841.89
+export const PDF_H_PT = 595.28
 
-const FONT = 'IBM Plex Mono, monospace'
-const COL = {
+export const FONT = 'IBM Plex Mono, monospace'
+export const COL = {
   sidebar: '#f0dfc0', gold: '#c27a2a', goldPale: '#f5e6d0',
   border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', bg: '#f5f0e8',
 }
 
 const LAYER_ORDER = { template: 0, data: 1, free: 2 }
-const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(performance.now())}-${Math.floor(Math.random() * 1e9)}`)
-const toPx = (mm) => mm * MM_TO_PX
-const toMm = (px) => px / MM_TO_PX
+export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(performance.now())}-${Math.floor(Math.random() * 1e9)}`)
+export const toPx = (mm) => mm * MM_TO_PX
+export const toMm = (px) => px / MM_TO_PX
 
 // ─── (TS-2) El pipeline SVG→PNG de taules s'ha retirat: les taules ara són blocs
 // Konva natius (vegeu buildTablePrimitives / GradedTableNode). Es mantenen només els
@@ -124,19 +126,34 @@ function buildTablePrimitives(d) {
 }
 
 // Capçalera del model → {prims, totalW, totalH}. Dues bandes (20mm + 12mm), 277mm d'ample.
-function buildHeaderPrimitives(m, versio) {
+// placeholderMode=true (editor de plantilla): mostra `{model.codi}` etc. en lloc de valors
+// reals (no hi ha model), excepte customer_nom que SÍ és real (la plantilla és per client).
+export function buildHeaderPrimitives(m, versio, placeholderMode = false) {
   const W = 277 * MM_TO_PX
   const B1 = 20 * MM_TO_PX, B2 = 12 * MM_TO_PX
   const totalH = B1 + B2
   const PAD = 2 * MM_TO_PX
+  const PH = '#868685'   // color dels placeholders (--text-muted)
+  // En mode plantilla cada camp és un placeholder en cursiva i gris.
+  const f = {
+    codi: placeholderMode ? '{model.codi}' : (m?.codi_intern || ''),
+    nom: placeholderMode ? '{model.nom}' : (m?.nom_prenda || ''),
+    temporada: placeholderMode ? '{temporada}' : (m?.temporada || ''),
+    collection: placeholderMode ? '{col·lecció}' : (m?.collection || ''),
+    tipus: placeholderMode ? '{tipus de peça}' : (m?.garment_type_item_nom || ''),
+    sizesys: placeholderMode ? '{sistema talles}' : (m?.size_system_nom || ''),
+    resp: placeholderMode ? '{responsable}' : (m?.responsable_nom || ''),
+    versio: placeholderMode ? '{versió}' : `v${versio ?? 1}`,
+  }
+  const main = '#1d1d1b'
   const prims = []
   prims.push({ t: 'r', x: 0, y: 0, w: W, h: B1, fill: '#f5e6d0', stroke: '#c27a2a', sw: 1 })
-  prims.push({ t: 't', x: PAD, y: 0, w: W * 0.4 - PAD, h: B1, text: [m?.codi_intern, m?.nom_prenda].filter(Boolean).join(' · '), fill: '#1d1d1b', size: Math.round(9 * MM_TO_PX), bold: true, mid: true })
-  prims.push({ t: 't', x: W * 0.4, y: 0, w: W * 0.42, h: B1, text: [m?.customer_nom, m?.temporada, m?.collection].filter(Boolean).join(' · '), fill: '#1d1d1b', size: Math.round(7 * MM_TO_PX), align: 'center', mid: true })
+  prims.push({ t: 't', x: PAD, y: 0, w: W * 0.4 - PAD, h: B1, text: [f.codi, f.nom].filter(Boolean).join(' · '), fill: placeholderMode ? PH : main, size: Math.round(9 * MM_TO_PX), bold: !placeholderMode, italic: placeholderMode, mid: true })
+  prims.push({ t: 't', x: W * 0.4, y: 0, w: W * 0.42, h: B1, text: [m?.customer_nom, f.temporada, f.collection].filter(Boolean).join(' · '), fill: placeholderMode ? PH : '#1d1d1b', italic: placeholderMode, size: Math.round(7 * MM_TO_PX), align: 'center', mid: true })
   prims.push({ t: 't', x: W * 0.82, y: 0, w: W * 0.18 - PAD, h: B1, text: '(logo)', fill: '#868685', size: Math.round(7 * MM_TO_PX), align: 'right', mid: true })
   prims.push({ t: 'r', x: 0, y: B1, w: W, h: B2, fill: '#fafafa', stroke: '#e0d5c5', sw: 1 })
-  const line2 = [m?.garment_type_item_nom, m?.size_system_nom, m?.responsable_nom, `v${versio ?? 1}`].filter(Boolean).join(' · ')
-  prims.push({ t: 't', x: PAD, y: B1, w: W - 2 * PAD, h: B2, text: line2, fill: '#6b7280', size: Math.round(6.5 * MM_TO_PX), mid: true })
+  const line2 = [f.tipus, f.sizesys, f.resp, f.versio].filter(Boolean).join(' · ')
+  prims.push({ t: 't', x: PAD, y: B1, w: W - 2 * PAD, h: B2, text: line2, fill: placeholderMode ? PH : '#6b7280', italic: placeholderMode, size: Math.round(6.5 * MM_TO_PX), mid: true })
   return { prims, totalW: W, totalH }
 }
 
@@ -177,8 +194,8 @@ function GradedTableNode({ tableData, groupProps, isSelected }) {
 }
 
 // Capçalera del model — Konva natiu. Resol els camps del model en render (sempre fresc).
-function HeaderBlock({ modelData, versio, groupProps, isSelected }) {
-  const { prims, totalW, totalH } = useMemo(() => buildHeaderPrimitives(modelData, versio), [modelData, versio])
+function HeaderBlock({ modelData, versio, placeholderMode, groupProps, isSelected }) {
+  const { prims, totalW, totalH } = useMemo(() => buildHeaderPrimitives(modelData, versio, placeholderMode), [modelData, versio, placeholderMode])
   return (
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
@@ -190,7 +207,7 @@ function HeaderBlock({ modelData, versio, groupProps, isSelected }) {
 // ─── Render offscreen d'una pàgina a dataURL (export PDF + miniatures) ───
 // ctx = { tableData:{objId:json}, modelData, versio }. Dibuixa els blocs de dades
 // natius amb les mateixes primitives que el canvas viu (cap PNG congelat).
-async function renderPageToDataURL(page, pixelRatio, ctx) {
+export async function renderPageToDataURL(page, pixelRatio, ctx) {
   const container = document.createElement('div')
   const stage = new Konva.Stage({ container, width: CANVAS_W, height: CANVAS_H })
   const layer = new Konva.Layer()
@@ -219,7 +236,7 @@ async function renderPageToDataURL(page, pixelRatio, ctx) {
     } else if (o.type === 'data_block') {
       // Blocs vius natius: mateixes primitives que el canvas. Group posicionat en px.
       let built = null
-      if (o.kind === 'header') built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio)
+      if (o.kind === 'header') built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode)
       else if (o.kind === 'graded_table') {
         const data = ctx?.tableData?.[o.id]
         if (data) built = buildTablePrimitives(data)
@@ -249,7 +266,7 @@ async function renderPageToDataURL(page, pixelRatio, ctx) {
 
 // Serialitza pages per a desar: els data_block graded_table NO desen el dataURL
 // (es re-genera des de size_fitting_id en obrir); la resta es desa tal qual.
-function serializePages(pages) {
+export function serializePages(pages) {
   return pages.map(p => ({
     id: p.id,
     objects: (p.objects || []).map(o => {
@@ -271,7 +288,7 @@ function ImageObj({ obj, src, common }) {
     width={toPx(obj.width)} height={toPx(obj.height || obj.width)} />
 }
 
-function ObjectNode({ obj, src, tableData, modelData, versio, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y),
@@ -283,7 +300,7 @@ function ObjectNode({ obj, src, tableData, modelData, versio, selected, selectab
   }
   if (obj.type === 'data_block') {
     if (obj.kind === 'header') {
-      return <HeaderBlock modelData={modelData} versio={versio} groupProps={common} isSelected={selected} />
+      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} groupProps={common} isSelected={selected} />
     }
     const data = tableData?.[obj.id]
     if (!data) {
@@ -960,8 +977,8 @@ export default function TechSheetEditor() {
   )
 }
 
-function SectionTitle({ children }) {
+export function SectionTitle({ children }) {
   return <div style={{ fontSize: 10, fontWeight: 600, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
 }
-const propLabel = { display: 'block', fontSize: 10, color: COL.textMuted, marginBottom: 8 }
-const propInput = { width: '100%', fontFamily: FONT, fontSize: 12, padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: '#fff', color: COL.textMain, boxSizing: 'border-box' }
+export const propLabel = { display: 'block', fontSize: 10, color: COL.textMuted, marginBottom: 8 }
+export const propInput = { width: '100%', fontFamily: FONT, fontSize: 12, padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: '#fff', color: COL.textMain, boxSizing: 'border-box' }

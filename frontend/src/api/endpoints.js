@@ -121,6 +121,12 @@ export const customers = {
   remove: (id) => client.delete(`/api/v1/customers/${id}/`),
 }
 
+// Plantilla de fitxa tècnica per client (TS-3). get_or_create + PATCH; escriptura gated CONFIGURE.
+export const techSheetTemplate = {
+  detail: (customerId) => client.get(`/api/v1/customers/${customerId}/tech-sheet-template/`),
+  update: (customerId, data) => client.patch(`/api/v1/customers/${customerId}/tech-sheet-template/update/`, data),
+}
+
 // Import massiu de models per Excel. template/errorsReport són descàrregues binàries
 // (responseType blob); upload és multipart (Content-Type undefined → axios posa el boundary).
 export const bulkImport = {

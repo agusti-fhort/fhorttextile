@@ -28,6 +28,7 @@ const ModelMeasurements = lazy(() => import('./pages/ModelMeasurements'))
 const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
+const TechSheetTemplateEditor = lazy(() => import('./pages/TechSheetTemplateEditor'))
 const KanbanTasks = lazy(() => import('./pages/KanbanTasks'))
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
 const Alerts = lazy(() => import('./pages/Alerts'))
@@ -103,6 +104,12 @@ export default function App() {
         <Route path="/models/:id/fitxa" element={
           <ProtectedRoute>
             <TechSheetEditor />
+          </ProtectedRoute>
+        } />
+        {/* Plantilla de fitxa per client (TS-3): mateix editor full-screen, FORA del Shell. */}
+        <Route path="/clients/:id/plantilla" element={
+          <ProtectedRoute>
+            <TechSheetTemplateEditor />
           </ProtectedRoute>
         } />
         <Route path="/" element={
