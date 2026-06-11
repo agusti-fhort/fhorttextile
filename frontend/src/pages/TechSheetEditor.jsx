@@ -178,7 +178,7 @@ function buildTablePrimitives(d) {
 // Capçalera del model → {prims, totalW, totalH}. Dues bandes (20mm + 12mm), 277mm d'ample.
 // placeholderMode=true (editor de plantilla): mostra `{model.codi}` etc. en lloc de valors
 // reals (no hi ha model), excepte customer_nom que SÍ és real (la plantilla és per client).
-export function buildHeaderPrimitives(m, versio, placeholderMode = false) {
+export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLogo = false) {
   const W = 277 * MM_TO_PX
   const B1 = 20 * MM_TO_PX, B2 = 12 * MM_TO_PX
   const totalH = B1 + B2
@@ -200,7 +200,8 @@ export function buildHeaderPrimitives(m, versio, placeholderMode = false) {
   prims.push({ t: 'r', x: 0, y: 0, w: W, h: B1, fill: '#f5e6d0', stroke: '#c27a2a', sw: 1 })
   prims.push({ t: 't', x: PAD, y: 0, w: W * 0.4 - PAD, h: B1, text: [f.codi, f.nom].filter(Boolean).join(' · '), fill: placeholderMode ? PH : main, size: Math.round(9 * MM_TO_PX), bold: !placeholderMode, italic: placeholderMode, mid: true })
   prims.push({ t: 't', x: W * 0.4, y: 0, w: W * 0.42, h: B1, text: [m?.customer_nom, f.temporada, f.collection].filter(Boolean).join(' · '), fill: placeholderMode ? PH : '#1d1d1b', italic: placeholderMode, size: Math.round(7 * MM_TO_PX), align: 'center', mid: true })
-  prims.push({ t: 't', x: W * 0.82, y: 0, w: W * 0.18 - PAD, h: B1, text: '(logo)', fill: '#868685', size: Math.round(7 * MM_TO_PX), align: 'right', mid: true })
+  // Placeholder "(logo)" només si NO hi ha logo real (es pinta a sobre com a imatge).
+  if (!hasLogo) prims.push({ t: 't', x: W * 0.82, y: 0, w: W * 0.18 - PAD, h: B1, text: '(logo)', fill: '#868685', size: Math.round(7 * MM_TO_PX), align: 'right', mid: true })
   prims.push({ t: 'r', x: 0, y: B1, w: W, h: B2, fill: '#fafafa', stroke: '#e0d5c5', sw: 1 })
   const line2 = [f.tipus, f.sizesys, f.resp, f.versio].filter(Boolean).join(' · ')
   prims.push({ t: 't', x: PAD, y: B1, w: W - 2 * PAD, h: B2, text: line2, fill: placeholderMode ? PH : '#6b7280', italic: placeholderMode, size: Math.round(6.5 * MM_TO_PX), mid: true })
@@ -243,12 +244,18 @@ function GradedTableNode({ tableData, scale = 1, groupProps, isSelected }) {
   )
 }
 
-// Capçalera del model — Konva natiu. Resol els camps del model en render (sempre fresc).
-function HeaderBlock({ modelData, versio, placeholderMode, groupProps, isSelected }) {
-  const { prims, totalW, totalH } = useMemo(() => buildHeaderPrimitives(modelData, versio, placeholderMode), [modelData, versio, placeholderMode])
+// Capçalera del model — Konva natiu. Resol els camps en render. Si hi ha logoUrl,
+// es pinta el logo real (cantonada superior dreta) en lloc del placeholder "(logo)".
+function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, groupProps, isSelected }) {
+  const logoImg = useImage(logoUrl || '')
+  const hasLogo = !!logoImg
+  const { prims, totalW, totalH } = useMemo(
+    () => buildHeaderPrimitives(modelData, versio, placeholderMode, hasLogo),
+    [modelData, versio, placeholderMode, hasLogo])
   return (
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
+      {hasLogo && <KonvaImage image={logoImg} x={totalW - 45 * MM_TO_PX} y={2 * MM_TO_PX} width={40 * MM_TO_PX} height={16 * MM_TO_PX} listening={false} />}
       {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke="#c27a2a" strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
   )
@@ -305,14 +312,18 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
     } else if (o.type === 'data_block') {
       // Blocs vius natius: mateixes primitives que el canvas. Group posicionat en px.
       let built = null
-      if (o.kind === 'header') built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode)
-      else if (o.kind === 'graded_table') {
+      let logoEl = null
+      if (o.kind === 'header') {
+        if (ctx?.customerLogoUrl) { try { logoEl = await loadImageEl(ctx.customerLogoUrl) } catch { logoEl = null } }
+        built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl)
+      } else if (o.kind === 'graded_table') {
         const data = ctx?.tableData?.[o.id]
         if (data) built = buildTablePrimitives(data)
       }
       if (built) {
         const g = new Konva.Group({ x: toPx(o.x), y: toPx(o.y), scaleX: o.scale || 1, scaleY: o.scale || 1 })
         addPrimsToGroup(g, built.prims)
+        if (logoEl) g.add(new Konva.Image({ image: logoEl, x: built.totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, width: 40 * MM_TO_PX, height: 16 * MM_TO_PX }))
         layer.add(g)
       }
     } else if (o.type === 'image') {
@@ -357,7 +368,7 @@ function ImageObj({ obj, src, common }) {
     width={toPx(obj.width)} height={toPx(obj.height || obj.width)} />
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y),
@@ -369,7 +380,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   }
   if (obj.type === 'data_block') {
     if (obj.kind === 'header') {
-      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} groupProps={common} isSelected={selected} />
+      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} groupProps={common} isSelected={selected} />
     }
     const data = tableData?.[obj.id]
     if (!data) {
@@ -465,6 +476,7 @@ export default function TechSheetEditor() {
   const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
   const pageW = Math.round(fmt.w * MM_TO_PX)
   const pageH = Math.round(fmt.h * MM_TO_PX)
+  const customerLogoUrl = model?.customer_logo || null   // TS-4c
   const stageRef = useRef(null)
   const trRef = useRef(null)
   const wrapRef = useRef(null)
@@ -613,7 +625,7 @@ export default function TechSheetEditor() {
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
-        const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH }
+        const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl }
         const thumbs = []
         for (const p of pages) thumbs.push(await renderPageToDataURL(p, 0.18, ctx))
         setThumbnails(thumbs)
@@ -794,6 +806,12 @@ export default function TechSheetEditor() {
     const file = e.dataTransfer.files?.[0]
     if (file && file.type.startsWith('image/')) handleFile(file)
   }
+  // Insereix el logo del client com a imatge lliure (redimensionable). TS-4c.
+  const insertLogo = () => {
+    if (!locked) return
+    if (!customerLogoUrl) { flash('Aquest client no té logo. Puja\'l des de Clients.'); return }
+    addObject({ id: uid(), type: 'image', kind: 'logo', layer: 'free', x: 10, y: 8, width: 40, height: 20, src: customerLogoUrl })
+  }
   const addModelFitxer = async (f) => {
     if (!locked) return
     let url = f.url_extern
@@ -875,7 +893,7 @@ export default function TechSheetEditor() {
     setExporting(true)
     try {
       const pdf = await PDFDocument.create()
-      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH }
+      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl }
       const [pdfW, pdfH] = fmt.pdf
       for (const p of pages) {
         const dataUrl = await renderPageToDataURL(p, 3.5, ctx)
@@ -1039,7 +1057,7 @@ export default function TechSheetEditor() {
                 <Rect x={0} y={0} width={pageW} height={pageH} fill="#ffffff" listening={false} />
                 {ordered.map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
-                    tableData={tableData} modelData={model} versio={sheet?.versio}
+                    tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
                     selected={selectedId === o.id}
                     selectable={locked && o.layer !== 'template'}
                     draggable={locked && tool === 'select' && o.layer !== 'template'}
@@ -1079,6 +1097,11 @@ export default function TechSheetEditor() {
             <button onClick={insertHeader} disabled={!locked}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: '#fff', fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
               <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> Capçalera del model
+            </button>
+            <button onClick={insertLogo} disabled={!locked}
+              title={customerLogoUrl ? 'Insereix el logo del client' : 'Aquest client no té logo'}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
+              <i className="ti ti-photo" style={{ fontSize: 13 }} /> Logo client
             </button>
             <button onClick={onAddTableClick} disabled={!locked || addingTable || !sizeFittings.length}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: '#fff', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>

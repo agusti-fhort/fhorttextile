@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
@@ -29,6 +29,29 @@ export default function Customers() {
   const [feedback, setFeedback] = useState(null)
   const [saving, setSaving] = useState(false)
   const [modal, setModal] = useState(null)   // { mode:'create'|'edit', customer? }
+  // TS-4c: upload de logo. Un input global reutilitzat + id del client objectiu.
+  const logoRef = useRef(null)
+  const logoTargetRef = useRef(null)
+  const API = import.meta.env.VITE_API_URL || ''
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    const customerId = logoTargetRef.current
+    if (!file || !customerId) return
+    setSaving(true); setFeedback(null)
+    const fd = new FormData(); fd.append('logo', file)
+    fetch(`${API}/api/v1/customers/${customerId}/upload-logo/`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+      body: fd,
+    })
+      .then(r => { if (!r.ok) throw new Error('upload'); return r.json() })
+      .then(() => load())
+      .then(() => setFeedback({ type: 'ok', text: t('clients.logo_uploaded') }))
+      .catch(() => setFeedback({ type: 'err', text: t('clients.error') }))
+      .finally(() => setSaving(false))
+  }
 
   const fetchList = () => customers.list({ ordering: 'codi', page_size: 500 })
     .then(res => res.data?.results ?? (Array.isArray(res.data) ? res.data : []))
@@ -82,6 +105,10 @@ export default function Customers() {
     ) },
     ...(canEdit ? [{ key: '_a', label: '', align: 'right', render: r => (
       <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+        <button onClick={() => { logoTargetRef.current = r.id; logoRef.current?.click() }} disabled={saving}
+          title={r.logo ? t('clients.logo_replace') : t('clients.logo_upload')} style={r.logo ? { ...actBtn, color: 'var(--gold)', borderColor: 'var(--gold)' } : actBtn}>
+          <i className="ti ti-photo" aria-hidden="true" style={{ fontSize: 13 }} />
+        </button>
         <button onClick={() => navigate(`/clients/${r.id}/plantilla`)} disabled={saving} title={t('clients.template')} style={actBtn}>
           <i className="ti ti-layout" aria-hidden="true" style={{ fontSize: 13 }} />
         </button>
@@ -93,6 +120,7 @@ export default function Customers() {
 
   return (
     <div style={{ minWidth: 0, maxWidth: 900 }}>
+      <input ref={logoRef} type="file" accept="image/*" hidden onChange={handleLogoUpload} />
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('clients.title')}</h1>

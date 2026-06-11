@@ -113,7 +113,7 @@ export default function TechSheetTemplateEditor() {
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
-        const ctx = { tableData: {}, modelData: { customer_nom: customerData?.nom }, placeholderMode: true }
+        const ctx = { tableData: {}, modelData: { customer_nom: customerData?.nom }, placeholderMode: true, customerLogoUrl: customerData?.logo || null }
         const thumbs = []
         for (const p of pages) thumbs.push(await renderPageToDataURL(p, 0.18, ctx))
         setThumbnails(thumbs)
@@ -257,7 +257,7 @@ export default function TechSheetTemplateEditor() {
     setExporting(true)
     try {
       const pdf = await PDFDocument.create()
-      const ctx = { tableData: {}, modelData: { customer_nom: customerData?.nom }, placeholderMode: true }
+      const ctx = { tableData: {}, modelData: { customer_nom: customerData?.nom }, placeholderMode: true, customerLogoUrl: customerData?.logo || null }
       for (const p of pages) {
         const dataUrl = await renderPageToDataURL(p, 3.5, ctx)
         const png = await pdf.embedPng(dataUrl)
@@ -351,6 +351,7 @@ export default function TechSheetTemplateEditor() {
                 {ordered.map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={{}} modelData={{ customer_nom: customerData?.nom }} placeholderMode
+                    customerLogoUrl={customerData?.logo || null}
                     selected={selectedId === o.id}
                     selectable={canEdit && o.layer !== 'template'}
                     draggable={canEdit && tool === 'select' && o.layer !== 'template'}
