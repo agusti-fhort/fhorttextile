@@ -299,6 +299,18 @@ class SizeSystem(models.Model):
         help_text="Ex: ISO 8559-2, ASTM D5585")
     # Fi Sprint S1
 
+    # Sprint Size Map Setup — derivació per client
+    parent = models.ForeignKey(
+        'self', null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='derived_systems',
+        verbose_name='Sistema pare',
+    )
+    customer_codi = models.CharField(
+        max_length=3, blank=True, default='',
+        verbose_name='Codi client',
+    )
+
     class Meta:
         verbose_name = 'Sistema de talles'
         verbose_name_plural = 'Sistemes de talles'
