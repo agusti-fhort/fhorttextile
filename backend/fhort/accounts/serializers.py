@@ -67,14 +67,19 @@ class UserListSerializer(serializers.ModelSerializer):
     # id = User.id; profile_id = UserProfile.id. ModelTask.assignee és FK a UserProfile, així que
     # els selectors d'assignació han d'enviar profile_id (no l'id de User) — no depèn de cap coincidència.
     profile_id = serializers.SerializerMethodField()
+    color_avatar = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ('id', 'profile_id', 'username', 'full_name', 'email')
+        fields = ('id', 'profile_id', 'username', 'full_name', 'email', 'color_avatar')
 
     def get_profile_id(self, obj):
         p = getattr(obj, 'profile', None)
         return p.id if p else None
+
+    def get_color_avatar(self, obj):
+        p = getattr(obj, 'profile', None)
+        return (p.color_avatar if p else None) or '#888888'
 
     def get_full_name(self, obj):
         full = f'{obj.first_name} {obj.last_name}'.strip()

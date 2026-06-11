@@ -665,7 +665,7 @@
       "data_objectiu": "Fecha objetivo", "data_entrada": "Fecha entrada", "temporada": "Temporada"
     },
     "filter_temporada": "Temporada", "filter_estat": "Estado", "filter_responsable": "Responsable",
-    "resp_me": "Yo", "resp_all": "Todos", "resp_hint": "Modelos que dirijo (responsable, no asignación)",
+    "resp_me": "Yo", "resp_all": "Todos", "resp_hint": "Modelos donde el usuario tiene tareas asignadas", "resp_tech_placeholder": "Técnico…",
     "more_filters": "Más filtros", "clear_filters": "Borrar filtros",
     "filter_garment_type": "Tipo de prenda", "filter_any": "Año", "filter_prioritat": "Prioridad",
     "results_n": "{{n}} resultados",

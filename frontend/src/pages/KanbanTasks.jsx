@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
-import { modelTasks, gates, models, garmentTypes } from '../api/endpoints'
+import { modelTasks, gates, models, garmentTypes, users } from '../api/endpoints'
 import TimerWidget from '../components/ui/TimerWidget'
 
 // Tram 4 — Kanban mestre-detall en un sol grid de 5 columnes (sempre visibles):
@@ -87,6 +87,7 @@ export default function KanbanTasks() {
   const [garmentTypeOpts, setGarmentTypeOpts] = useState([])
   const [gateCards, setGateCards] = useState([])
   const [selected, setSelected] = useState(null)   // { type:'model'|'gate', id, ... }
+  const [allUsers, setAllUsers] = useState([])     // selector de tècnic (només amb view_team_tasks)
 
   // Detall — tasques del model seleccionat (alimenten les 4 columnes de treball).
   const [detailTasks, setDetailTasks] = useState([])
@@ -138,6 +139,25 @@ export default function KanbanTasks() {
   useEffect(() => {
     garmentTypes.list().then(res => setGarmentTypeOpts(res.data?.results ?? res.data ?? [])).catch(() => {})
   }, [])
+
+  // Usuaris actius per al selector de tècnic (només amb view_team_tasks; lectura IsAuthenticated).
+  useEffect(() => {
+    if (!canViewTeam) return
+    users.list({ page_size: 100 })
+      .then(res => setAllUsers(res.data?.results ?? res.data ?? []))
+      .catch(() => setAllUsers([]))
+  }, [canViewTeam])
+
+  // FIX orfes: si el model seleccionat ja no és a la llista filtrada (canvi de filtre/cerca),
+  // neteja la selecció perquè les columnes de detall no mostrin tasques d'un model fora de l'abast.
+  // Només per a seleccions de tipus 'model' (les gates viuen en una llista a part).
+  useEffect(() => {
+    if (selected?.type !== 'model' || modelRows.length === 0) return
+    if (!modelRows.some(r => r.model_id === selected.id)) {
+      setSelected(null)
+      setDetailTasks([])
+    }
+  }, [modelRows, selected])
 
   function clearFilters() {
     setSortField(''); setSortDir('asc')
@@ -282,23 +302,46 @@ export default function KanbanTasks() {
             <option value="">{t('kanban.filter_estat')}</option>
             {ESTATS.map(x => <option key={x} value={x}>{t(`kanban.estats.${x}`)}</option>)}
           </select>
-          {/* Responsable (models que DIRIGEIXO, no assignee): només amb view_team_tasks.
-              Sense view_team_tasks l'usuari ja veu només les seves tasques → toggle sense sentit. */}
-          {canViewTeam && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={t('kanban.resp_hint')}>
-              <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--gray)' }}>{t('kanban.filter_responsable')}</span>
-              <div style={{ display: 'flex', border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
-                {[['', 'resp_all'], ['me', 'resp_me']].map(([val, key]) => (
-                  <button key={key} onClick={() => setFResponsable(val)} style={{
-                    fontFamily: MONO, fontSize: 11, padding: '6px 10px', border: 'none', cursor: 'pointer',
-                    background: fResponsable === val ? CREMA : 'var(--white)',
-                    color: fResponsable === val ? AMBER_TEXT : 'var(--gray)',
-                    fontWeight: fResponsable === val ? 600 : 400,
-                  }}>{t(`kanban.${key}`)}</button>
-                ))}
+          {/* Responsable (models on l'usuari triat és ASSIGNEE, no director): només amb
+              view_team_tasks. Tots / Jo / [selector de tècnic]. Sense la capability l'usuari
+              ja veu només les seves tasques → toggle sense sentit. */}
+          {canViewTeam && (() => {
+            // El selector està actiu quan fResponsable és un profile_id (numèric).
+            const techSelected = !!fResponsable && fResponsable !== 'me'
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={t('kanban.resp_hint')}>
+                <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--gray)' }}>{t('kanban.filter_responsable')}</span>
+                <div style={{ display: 'flex', border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
+                  {[['', 'resp_all'], ['me', 'resp_me']].map(([val, key]) => (
+                    <button key={key} onClick={() => setFResponsable(val)} style={{
+                      fontFamily: MONO, fontSize: 11, padding: '6px 10px', border: 'none', cursor: 'pointer',
+                      background: fResponsable === val ? CREMA : 'var(--white)',
+                      color: fResponsable === val ? AMBER_TEXT : 'var(--gray)',
+                      fontWeight: fResponsable === val ? 600 : 400,
+                    }}>{t(`kanban.${key}`)}</button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {techSelected && (
+                    <ColorDot color={allUsers.find(u => String(u.profile_id) === fResponsable)?.color_avatar} />
+                  )}
+                  <select
+                    value={techSelected ? fResponsable : ''}
+                    onChange={e => setFResponsable(e.target.value)}
+                    style={{
+                      ...selS, minWidth: 120, padding: '6px 9px',
+                      background: techSelected ? CREMA : 'var(--white)',
+                      color: techSelected ? AMBER_TEXT : 'var(--gray)',
+                    }}>
+                    <option value="">{t('kanban.resp_tech_placeholder')}</option>
+                    {allUsers.filter(u => u.profile_id).map(u => (
+                      <option key={u.profile_id} value={String(u.profile_id)}>{u.full_name || u.username}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
           <button onClick={() => setShowMore(s => !s)} style={{
             ...selS, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
           }}>
@@ -445,6 +488,16 @@ const ph = { fontSize: 11, color: 'var(--gray)', textAlign: 'center', padding: '
 const selS = {
   fontFamily: MONO, fontSize: 12, padding: '6px 9px', border: '0.5px solid var(--gray-l)',
   borderRadius: 8, background: 'var(--white)', color: 'var(--text-main)',
+}
+
+// Punt de color (avatar de tècnic) per al selector de responsable.
+function ColorDot({ color }) {
+  return (
+    <span style={{
+      width: 12, height: 12, borderRadius: '50%', flexShrink: 0,
+      background: color || '#888888', display: 'inline-block',
+    }} />
+  )
 }
 
 function ColTitle({ icon, text, amber }) {

@@ -148,7 +148,10 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             qs = (qs.filter(model_id__in=ModelTask.objects.filter(assignee=profile).values('model_id'))
                   if profile is not None else qs.none())
         elif responsable and responsable.isdigit():
-            qs = qs.filter(model__responsable_id=int(responsable))
+            # Coherent amb 'me': filtra per models on aquest PERFIL és assignee d'alguna tasca
+            # (la seva càrrega real), no per model__responsable_id (director del model).
+            qs = qs.filter(model_id__in=ModelTask.objects.filter(
+                assignee_id=int(responsable)).values('model_id'))
 
         garment_type = qp.get('garment_type')
         if garment_type and garment_type.isdigit():

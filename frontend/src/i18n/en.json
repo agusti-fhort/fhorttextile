@@ -665,7 +665,7 @@
       "data_objectiu": "Target date", "data_entrada": "Entry date", "temporada": "Season"
     },
     "filter_temporada": "Season", "filter_estat": "Status", "filter_responsable": "Owner",
-    "resp_me": "Me", "resp_all": "All", "resp_hint": "Models I own (owner, not assignment)",
+    "resp_me": "Me", "resp_all": "All", "resp_hint": "Models where the user has assigned tasks", "resp_tech_placeholder": "Technician…",
     "more_filters": "More filters", "clear_filters": "Clear filters",
     "filter_garment_type": "Garment type", "filter_any": "Year", "filter_prioritat": "Priority",
     "results_n": "{{n}} results",
