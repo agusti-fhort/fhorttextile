@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import GarmentTypeSelector from '../components/GarmentTypeSelector/GarmentTypeSelector'
 import CustomerSelector from '../components/CustomerSelector'
 import useAuthStore from '../store/auth'
-import { models, sizingProfiles, sizeDefinitions } from '../api/endpoints'
+import { models, sizingProfiles, sizeDefinitions, customers } from '../api/endpoints'
 
 // Pas 5A — Wizard d'ESQUELET unificat. Un sol flux de creació (3 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles.
@@ -49,6 +49,7 @@ export default function ModelWizard() {
   // Customer (selector) i referència/SKU del client (camp de text) són DOS camps diferents:
   // el primer mana el prefix del codi; el segon (codi_client) és la referència pròpia del client.
   const [customerId, setCustomerId] = useState(null)
+  const [customerCodi, setCustomerCodi] = useState('')   // codi (3 chars) per ordenar sizing profiles
   const [refClient, setRefClient] = useState('')
   const [nomPrenda, setNomPrenda] = useState('')
   const [descripcio, setDescripcio] = useState('')
@@ -126,15 +127,32 @@ export default function ModelWizard() {
     return () => { alive = false }
   }, [id, isEditMode])
 
+  // Resol el codi (3 chars) del customer triat, per ordenar els sizing profiles.
+  useEffect(() => {
+    if (!customerId) { setCustomerCodi(''); return }
+    let alive = true
+    customers.get(customerId)
+      .then(r => { if (alive) setCustomerCodi(r.data?.codi || '') })
+      .catch(() => { if (alive) setCustomerCodi('') })
+    return () => { alive = false }
+  }, [customerId])
+
   // Bloc 3 — carrega perfils quan hi ha target+construction i estem al bloc 3.
+  // Ordenats al backend: primer els del customer, després canònics. Pre-seleccionem el primer.
   useEffect(() => {
     if (!target || !construction || block !== 3) return
     let alive = true
-    sizingProfiles.list({ target, construction, page_size: 50 })
-      .then(r => { if (alive) setProfiles(r.data?.results ?? r.data ?? []) })
+    sizingProfiles.list({ target, construction, customer_codi: customerCodi || undefined, page_size: 50 })
+      .then(r => {
+        if (!alive) return
+        const rows = r.data?.results ?? r.data ?? []
+        setProfiles(rows)
+        // Pre-selecció només en CREACIÓ (en edició no toquem la selecció ni el guard de talla base).
+        if (rows.length && !selProfile && !isEditMode) setSelProfile(rows[0])
+      })
       .catch(() => { if (alive) setProfiles([]) })
     return () => { alive = false }
-  }, [target, construction, block])
+  }, [target, construction, block, customerCodi])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Bloc 3 — carrega talles quan es tria un perfil.
   useEffect(() => {
@@ -345,7 +363,18 @@ export default function ModelWizard() {
                       border: `0.5px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
                       background: active ? 'var(--warn-bg)' : 'var(--white)',
                     }}>
-                      <div style={{ fontWeight: 500, fontSize: 14 }}>{p.size_system?.nom || `Profile #${p.id}`}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 500, fontSize: 14 }}>{p.size_system?.nom || `Profile #${p.id}`}</span>
+                        {p.size_system_customer_codi
+                          ? <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
+                                           background: 'var(--gold-pale)', color: 'var(--gold)' }}>
+                              {t('model_wizard.client_run', 'Run de client')}: {p.size_system_customer_codi}
+                            </span>
+                          : <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
+                                           background: 'var(--gray-l)', color: 'var(--gray)' }}>
+                              {t('model_wizard.canonical', 'Canònic')}
+                            </span>}
+                      </div>
                       <div style={{ fontSize: 12, color: 'var(--gray)' }}>{sub}</div>
                       {ageMin != null && ageMax != null && ageMax > 0 && (
                         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>

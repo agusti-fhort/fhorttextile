@@ -44,8 +44,11 @@ def construction_types_list_view(request):
 def sizing_profiles_view(request):
     """
     GET /api/v1/sizing-profiles/
-    Query params: target=WOMAN, construction=KNIT, fit_type=REGULAR, garment_type=1
-    Return the sizing profiles filtered, with size definitions and grading preview.
+    Query params: target=WOMAN, construction=KNIT, fit_type=REGULAR, garment_type=1,
+                  customer_codi=ABC
+    Retorna TOTS els perfils del target+construction (ja no filtra is_default), ordenats:
+    primer els del customer_codi, després els canònics (is_default), després la resta;
+    dins cada grup, per nom del sistema.
     """
     try:
         from fhort.pom.models import SizingProfile
@@ -53,13 +56,14 @@ def sizing_profiles_view(request):
 
         qs = SizingProfile.objects.select_related(
             'target', 'construction', 'fit_type',
-            'size_system', 'grading_rule_set'
-        ).filter(is_default=True)
+            'size_system', 'size_system__parent', 'grading_rule_set'
+        )
 
         target_codi = request.query_params.get('target')
         construction_codi = request.query_params.get('construction')
         fit_type_id = request.query_params.get('fit_type')
         garment_type_id = request.query_params.get('garment_type')
+        customer_codi = request.query_params.get('customer_codi')
 
         if target_codi:
             qs = qs.filter(target__codi=target_codi)
@@ -70,9 +74,21 @@ def sizing_profiles_view(request):
         if garment_type_id:
             qs = qs.filter(garment_type_id=garment_type_id)
 
+        def _grup(p):
+            cc = (p.size_system.customer_codi or '') if p.size_system_id else ''
+            if customer_codi and cc == customer_codi:
+                return 0  # run d'aquest client
+            if p.is_default:
+                return 1  # canònic
+            return 2      # altres runs de client
+        profiles = sorted(
+            qs,
+            key=lambda p: (_grup(p), p.size_system.nom if p.size_system_id else ''),
+        )
+
         return Response({
-            'count': qs.count(),
-            'results': SizingProfileSerializer(qs, many=True).data,
+            'count': len(profiles),
+            'results': SizingProfileSerializer(profiles, many=True).data,
         })
     except Exception as e:
         import logging

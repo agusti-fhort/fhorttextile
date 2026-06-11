@@ -90,11 +90,23 @@ class SizingProfileSerializer(serializers.Serializer):
     is_custom = serializers.SerializerMethodField()
     version = serializers.IntegerField()
 
+    # Size Map Setup — distingir runs de client vs sistemes canònics al ModelWizard.
+    size_system_customer_codi = serializers.SerializerMethodField()
+    size_system_parent_nom = serializers.SerializerMethodField()
+
     size_definitions = serializers.SerializerMethodField()
     grading_rules_preview = serializers.SerializerMethodField()
 
     def get_fit_type_nom(self, obj):
         return obj.fit_type.nom_en if obj.fit_type_id else ''
+
+    def get_size_system_customer_codi(self, obj):
+        return (obj.size_system.customer_codi or '') if obj.size_system_id else ''
+
+    def get_size_system_parent_nom(self, obj):
+        if obj.size_system_id and obj.size_system.parent_id:
+            return obj.size_system.parent.nom
+        return ''
 
     def get_is_custom(self, obj):
         return obj.parent_profile_id is not None
