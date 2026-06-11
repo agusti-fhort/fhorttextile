@@ -59,6 +59,46 @@ def _customer_label(customer_codi: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# LOOKUPS — selectors del wizard (no hi ha endpoint de fit-types enlloc)
+# ─────────────────────────────────────────────────────────────────────────────
+@api_view(['GET'])
+@permission_classes([_Configure])
+def size_map_lookups_view(request):
+    """GET size-map/lookups/ — targets, constructions, fit_types, garment_types actius."""
+    try:
+        from fhort.pom.models import Target, ConstructionType, FitType, GarmentType
+
+        def _nom(o):
+            return getattr(o, 'nom_cat', '') or getattr(o, 'nom_en', '') or o.codi
+
+        targets = [{'codi': t.codi, 'nom': _nom(t)} for t in Target.objects.all().order_by('display_order')]
+        constructions = [{'id': c.id, 'codi': c.codi, 'nom': _nom(c)}
+                         for c in ConstructionType.objects.all().order_by('display_order')]
+        fit_types = [{'id': f.id, 'codi': f.codi, 'nom': _nom(f)}
+                     for f in FitType.objects.all().order_by('display_order')]
+        garment_types = [{'id': g.id, 'codi': g.codi_client, 'nom': g.nom_client}
+                         for g in GarmentType.objects.filter(actiu=True).order_by('nom_client')]
+        return Response({
+            'targets': targets,
+            'constructions': constructions,
+            'fit_types': fit_types,
+            'garment_types': garment_types,
+            'base_units': [
+                {'codi': 'ALPHA', 'nom': 'Alpha (XS/S/M/L...)'},
+                {'codi': 'NUMERIC_EU', 'nom': 'Numeric EU (34/36/38...)'},
+                {'codi': 'NUMERIC_US', 'nom': 'Numeric US (0/2/4...)'},
+                {'codi': 'CM_HEIGHT', 'nom': 'CM Height (50/56/62...)'},
+                {'codi': 'MONTHS', 'nom': 'Months (0M/3M/6M...)'},
+                {'codi': 'AGE_YEARS', 'nom': 'Age Years (6Y/8Y...)'},
+            ],
+        })
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("size_map_lookups_view error")
+        return Response({'error': str(e)}, status=500)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 3A — MATCH
 # ─────────────────────────────────────────────────────────────────────────────
 @api_view(['POST'])

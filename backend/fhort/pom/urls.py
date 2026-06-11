@@ -46,6 +46,7 @@ except Exception:
 # Size Map Setup wizard — function views (no router).
 try:
     from .size_map_views import (
+        size_map_lookups_view,
         size_map_match_view,
         size_map_preview_view,
         size_map_grading_preview_view,
@@ -53,6 +54,7 @@ try:
         size_map_systems_view,
     )
     _size_map_paths = [
+        path('size-map/lookups/',         size_map_lookups_view),
         path('size-map/match/',           size_map_match_view),
         path('size-map/preview/',         size_map_preview_view),
         path('size-map/grading-preview/', size_map_grading_preview_view),

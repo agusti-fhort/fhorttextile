@@ -59,6 +59,7 @@ const navGroups = [
     { to: '/garment-types', labelKey: 'nav.garment_types', icon: 'ti-shirt' },
     { to: '/poms', labelKey: 'nav.poms_list', icon: 'ti-ruler-measure' },
     { to: '/poms/sizes', labelKey: 'nav.sizes', icon: 'ti-arrows-maximize' },
+    { to: '/configuracio/size-map', labelKey: 'nav.size_map', icon: 'ti-ruler-2', cap: 'configure' },
     { to: '/size-library', labelKey: 'nav.size_library', icon: 'ti-books' },
     { to: '/poms/grading', labelKey: 'nav.grading', icon: 'ti-chart-dots' },
     { to: '/task-types', labelKey: 'nav.tasques_catalog', icon: 'ti-list-details' },

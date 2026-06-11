@@ -60,6 +60,16 @@ export const sizingProfiles = {
   list: (params) => client.get('/api/v1/sizing-profiles/', { params }),   // ?target&construction
 }
 
+// Size Map Setup wizard (Sprint Size Map). Escriptura gated CONFIGURE al backend.
+export const sizeMap = {
+  lookups:        () => client.get('/api/v1/size-map/lookups/'),
+  match:          (data) => client.post('/api/v1/size-map/match/', data),
+  preview:        (data) => client.post('/api/v1/size-map/preview/', data),
+  gradingPreview: (data) => client.post('/api/v1/size-map/grading-preview/', data),
+  create:         (data) => client.post('/api/v1/size-map/create/', data),
+  systems:        (params) => client.get('/api/v1/size-map/systems/', { params }),
+}
+
 export const gradingRuleSets = {
   list: (params) => client.get('/api/v1/grading-rule-sets/', { params }),
 }
