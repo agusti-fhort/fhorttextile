@@ -52,18 +52,38 @@ def create_session(
 
 
 def schedule_session(*, fase, data, responsable_id, model_id=None, garment_set_id=None,
-                     lloc='', start_time=None, end_time=None):
+                     lloc='', start_time=None, end_time=None,
+                     duracio_minuts=None, attendee_ids=None):
     """Programa un fitting (estat Programada). El responsable fixa dia (i opcionalment hores).
-    No s'executa fins que s'obre (open_session)."""
+    No s'executa fins que s'obre (open_session).
+    `duracio_minuts`: default 10 min × N (N=peces del set, o 1 per single).
+    `attendee_ids`: assistents interns; si hi ha start_time → recompute de la seva cua."""
     if bool(model_id) == bool(garment_set_id):
         raise ValueError("Cal exactament un de model_id o garment_set_id (XOR).")
     # Redisseny 5C: el fitting ja NO exigeix Production Delivered prèvia. La via adaptativa
     # (gestió de la recepció esperada) viu a la view schedule(), no com a bloqueig dur aquí.
     from .models import FittingSession
-    return FittingSession.objects.create(
+    if duracio_minuts is None:
+        if garment_set_id:
+            from fhort.models_app.models import GarmentSet
+            n = GarmentSet.objects.get(pk=garment_set_id).num_pieces or 1
+        else:
+            n = 1
+        duracio_minuts = 10 * n
+    session = FittingSession.objects.create(
         fase=fase, data=data, model_id=model_id, garment_set_id=garment_set_id,
         responsable_id=responsable_id, lloc=lloc,
-        start_time=start_time, end_time=end_time, estat='Programada')
+        start_time=start_time, end_time=end_time,
+        duracio_minuts=duracio_minuts, estat='Programada')
+    if attendee_ids:
+        session.attendees.set(attendee_ids)
+        if start_time:   # guard: recompute només si hi ha franja real (start_time)
+            try:
+                from fhort.planning.plan_service import recompute_for_technicians
+                recompute_for_technicians(set(attendee_ids))
+            except Exception:
+                logger.exception('recompute post-schedule no-fatal')
+    return session
 
 
 def open_session(session_id):
@@ -383,6 +403,14 @@ def _seal_session(session):
         return  # peces pendents o NO_OK → encara no es tanca
     session.estat = 'Tancada'
     session.save(update_fields=['estat'])
+    # Allibera la franja de fitting de la cua dels assistents (no-fatal).
+    try:
+        attendee_ids = list(session.attendees.values_list('id', flat=True))
+        if attendee_ids:
+            from fhort.planning.plan_service import recompute_for_technicians
+            recompute_for_technicians(set(attendee_ids))
+    except Exception:
+        logger.exception('recompute post-seal no-fatal')
     _capture_duration(session)
 
 

@@ -172,13 +172,20 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
         Body: {"fase","data","responsable_id","model_id" XOR "garment_set_id","lloc",
                "start_time","end_time"}"""
         d = request.data
+        import datetime as _dt
+        start_time_raw = d.get('start_time')
+        start_time = _dt.time.fromisoformat(start_time_raw) if start_time_raw else None
+        duracio_minuts_raw = d.get('duracio_minuts')
+        duracio_minuts = int(duracio_minuts_raw) if duracio_minuts_raw else None
+        attendee_ids = d.get('attendee_ids', [])
         try:
             s = services.schedule_session(
                 fase=d.get('fase'), data=d.get('data'),
                 responsable_id=d.get('responsable_id'),
                 model_id=d.get('model_id'), garment_set_id=d.get('garment_set_id'),
                 lloc=d.get('lloc', ''),
-                start_time=d.get('start_time'), end_time=d.get('end_time'))
+                start_time=start_time, end_time=d.get('end_time'),
+                duracio_minuts=duracio_minuts, attendee_ids=attendee_ids)
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         # Via adaptativa: si s'informa expected_at i no hi ha Delivered per a (model, fase),

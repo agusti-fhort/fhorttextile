@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from fhort.models_app.models import Model
+from fhort.accounts.models import UserProfile
 
 from .models import (
     GradingVersion,
@@ -152,11 +153,17 @@ class FittingSessionCreateSerializer(serializers.Serializer):
 
 
 class FittingSessionUpdateSerializer(serializers.ModelSerializer):
-    """Autosave: only the event-context fields are writable."""
+    """Autosave: only the event-context fields are writable. attendees (M2M, interns) i
+    duracio_minuts editables; DRF gestiona el .set() de la M2M a update()."""
+    attendees = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=UserProfile.objects.all(), required=False)
+    duracio_minuts = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1)
 
     class Meta:
         model = FittingSession
-        fields = ['notes', 'model_persona', 'assistents', 'lloc', 'responsable']
+        fields = ['notes', 'model_persona', 'assistents', 'lloc', 'responsable',
+                  'attendees', 'duracio_minuts']
 
 
 class PieceFittingLineSerializer(serializers.ModelSerializer):
