@@ -1,6 +1,10 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 const API = import.meta.env.VITE_API_URL || ''
+
+// base64 unicode-safe (per passar el prefill al Size Map Setup via query param).
+const encodePrefill = (obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj))))
 
 const STEPS = [
   { n: 1, label: 'Talles' },
@@ -68,12 +72,14 @@ function TallaChip({ label, ok, onRemove }) {
 }
 
 export default function ImportWizard({ model, onCancel, onComplete }) {
+  const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
   const authHeaders = { Authorization: `Bearer ${token}` }
 
   const [step, setStep] = useState(1)
   const [sessionToken, setSessionToken] = useState(null)
   const [error, setError] = useState('')
+  const [sizeMapPrefill, setSizeMapPrefill] = useState(null)   // ve de la resposta talles/ (estat PENDENT)
 
   // Pas 1 — upload + cribratge + reconciliació de talles
   const [file, setFile] = useState(null)
@@ -153,7 +159,21 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) { setError(data.error || `Error ${res.status}`); return null }
+    setSizeMapPrefill(data.size_map_prefill || null)
     return data
+  }
+
+  // Obre el Size Map Setup pre-omplert. Usa el prefill del backend si el tenim;
+  // si no, el construeix a partir del que ja sabem (model + talles seleccionades).
+  const goConfigureRun = () => {
+    const prefill = sizeMapPrefill || {
+      target_codi: model?.target || null,
+      labels: tallesSel,
+      base_size: model?.base_size_label || null,
+      import_session_token: sessionToken,
+      model_id: model?.id ?? null,
+    }
+    navigate(`/configuracio/size-map?prefill=${encodeURIComponent(encodePrefill(prefill))}`)
   }
 
   const handleAlinear = async () => {
@@ -532,6 +552,11 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                 style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
                          border: `1px solid ${GOLD}`, background: 'transparent', color: GOLD }}>
                 {savingTalles ? '⏳...' : `⤵ Alinear: adoptar ${tallesSel.join('·')} com a run del model`}
+              </button>
+              <button type="button" onClick={goConfigureRun}
+                style={{ marginLeft: 8, padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
+                         border: '0.5px solid #c0c0c0', background: 'transparent', color: '#666' }}>
+                ⚙ Configurar run de client
               </button>
             </div>
           )}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { sizeMap } from '../api/endpoints'
@@ -38,6 +39,15 @@ function Field({ label, children, hint }) {
   )
 }
 
+// Llegeix ?prefill= de la URL (base64 unicode-safe d'un JSON) → objecte, o null.
+function readPrefill() {
+  try {
+    const p = new URLSearchParams(window.location.search).get('prefill')
+    if (!p) return null
+    return JSON.parse(decodeURIComponent(escape(atob(p))))
+  } catch { return null }
+}
+
 // Parse d'una taula enganxada des d'Excel (tab) o CSV: 1a fila = capçalera (POM | talles...).
 function parseTable(text) {
   const lines = (text || '').trim().split(/\r?\n/).filter(l => l.trim())
@@ -62,10 +72,13 @@ function parseTable(text) {
 
 export default function SizeMapSetup() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
   const canConfigure = !!me?.capabilities?.includes('configure')
 
-  const [wizardOpen, setWizardOpen] = useState(false)
+  // Si venim del W1 amb ?prefill=, obrim el wizard directament pre-omplert.
+  const [prefill] = useState(readPrefill)
+  const [wizardOpen, setWizardOpen] = useState(!!prefill)
   const [feedback, setFeedback] = useState(null)
 
   // ---- Mode llista ----
@@ -95,7 +108,7 @@ export default function SizeMapSetup() {
 
   if (wizardOpen) {
     return (
-      <Wizard t={t}
+      <Wizard t={t} prefill={prefill} navigate={navigate}
         onClose={() => setWizardOpen(false)}
         onCreated={(msg) => { setWizardOpen(false); loadSystems().then(() => setFeedback({ type: 'ok', text: msg })) }}
       />
@@ -176,7 +189,7 @@ function Stepper({ step, t }) {
   )
 }
 
-function Wizard({ t, onClose, onCreated }) {
+function Wizard({ t, onClose, onCreated, prefill, navigate }) {
   const [step, setStep] = useState(1)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
@@ -192,6 +205,16 @@ function Wizard({ t, onClose, onCreated }) {
     nom_custom: '',
   })
   const set = (patch) => setWiz(w => ({ ...w, ...patch }))
+
+  // Pre-omplir des del W1 (gating PENDENT): target, etiquetes i talla base.
+  useEffect(() => {
+    if (!prefill) return
+    set({
+      target_codi: prefill.target_codi || '',
+      labelsText: (prefill.labels || []).join('\n'),
+      base_size: prefill.base_size || '',
+    })
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     sizeMap.lookups().then(r => {
@@ -288,6 +311,11 @@ function Wizard({ t, onClose, onCreated }) {
     }
     sizeMap.create(payload)
       .then(r => {
+        // Si venim del W1, tornem a la fitxa en curs (pas mesures); si no, mode llista.
+        if (prefill?.import_session_token && prefill?.model_id && navigate) {
+          navigate(`/models/${prefill.model_id}/mesures?session=${prefill.import_session_token}`)
+          return
+        }
         const w = r.data?.warnings || []
         const base = t('size_map_created', 'Sistema creat') + `: ${r.data?.codi} — ${r.data?.nom}`
         onCreated(w.length ? `${base} (${w.length} ${t('size_map_warnings', 'avisos')})` : base)
@@ -304,6 +332,14 @@ function Wizard({ t, onClose, onCreated }) {
         <h1 style={{ fontSize: 20, fontWeight: 500, fontFamily: MONO }}>{t('size_map_new_run', 'Nou run de client')}</h1>
         <button onClick={onClose} style={ghostBtn}><i className="ti ti-x" style={{ fontSize: 13 }} />{t('size_map_cancel', 'Cancel·lar')}</button>
       </div>
+
+      {prefill && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--gold-pale)', color: 'var(--gold)',
+                      border: '0.5px solid var(--gold)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 12 }}>
+          <i className="ti ti-link" style={{ fontSize: 14 }} />
+          {t('size_map_from_w1', 'Configures un run per a una fitxa en curs. En acabar tornaràs a la importació.')}
+        </div>
+      )}
 
       <Stepper step={step} t={t} />
       {err && <Feedback feedback={{ type: 'err', text: err }} onDismiss={() => setErr(null)} />}

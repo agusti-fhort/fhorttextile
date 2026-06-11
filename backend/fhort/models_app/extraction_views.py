@@ -1007,12 +1007,28 @@ def import_session_talles_view(request, token):
         session.estat = 'TALLES'
     session.save(update_fields=['run_conciliat', 'estat', 'actualitzat_at'])
 
+    # Quan el gating bloqueja (PENDENT), oferim les dades per pre-omplir el Size Map Setup
+    # (wizard de runs de client) sense canviar cap model: el tècnic pot configurar un run nou.
+    size_map_prefill = None
+    if not ready:
+        target_codi = model.target or ''
+        if not target_codi and model.size_system_id and model.size_system.target_id:
+            target_codi = model.size_system.target.codi
+        size_map_prefill = {
+            'target_codi': target_codi or None,
+            'labels': talles_sel or sense_desti,
+            'base_size': model.base_size_label or None,
+            'import_session_token': str(session.token),
+            'model_id': model.id,
+        }
+
     return Response({
         'ready': ready,
         'estat': session.estat,
         'run_conciliat': rc,
         'size_run_model': model.size_run_model,
         'sense_desti': sense_desti,
+        'size_map_prefill': size_map_prefill,
     }, status=200)
 
 
