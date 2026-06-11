@@ -63,15 +63,35 @@ class GradedSpecTableView(APIView):
                     'categoria': (pg.categoria if pg else '') or '',
                     'unitat': (pg.unitat if pg else 'cm') or 'cm',
                     'valors': {},
+                    'deltas': {},   # TS-4a: increment_applied_cm per talla (delta vs base)
                 }
                 rows_order.append(pom.id)
 
             rows_by_pom[pom.id]['valors'][s.size_label] = s.graded_value_cm
+            rows_by_pom[pom.id]['deltas'][s.size_label] = float(s.increment_applied_cm or 0)
+
+        # TS-4a: enriquiment del payload — talla base, ordre de fitxa i nomenclatura del croquis.
+        # Imports locals (evita cicle fitting↔models_app a nivell de mòdul).
+        from fhort.models_app.models import Model as TechModel, BaseMeasurement
+        base_size = (TechModel.objects.filter(pk=sf.model_id)
+                     .values_list('base_size_label', flat=True).first())
+        # ordre i nom_fitxa per POMMaster del model (precedent: serializers.py FIX 4B).
+        bms = BaseMeasurement.objects.filter(model_id=sf.model_id).values('pom_id', 'ordre', 'nom_fitxa')
+        ordre_map = {bm['pom_id']: bm['ordre'] for bm in bms}
+        nom_fitxa_map = {bm['pom_id']: bm['nom_fitxa'] for bm in bms}
+
+        rows = [rows_by_pom[pid] for pid in rows_order]
+        # ref = nomenclatura del croquis (nom_fitxa) amb fallback a abbreviation del POMGlobal.
+        for row in rows:
+            row['ref'] = nom_fitxa_map.get(row['pom_id']) or row['abbreviation']
+        # Ordre de fitxa (POMs sense BaseMeasurement → al final).
+        rows.sort(key=lambda r: ordre_map.get(r['pom_id'], 10 ** 9))
 
         return Response({
             'size_fitting_id': sf.id,
             'grading_version_id': gv.id,
             'grading_version_nom': gv.nom,
+            'base_size': base_size,
             'size_labels': size_labels,
-            'rows': [rows_by_pom[pid] for pid in rows_order],
+            'rows': rows,
         })

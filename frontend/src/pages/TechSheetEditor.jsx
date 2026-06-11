@@ -74,51 +74,78 @@ function useImage(src) {
 // Geometria en px (escala MM_TO_PX). Una única font de veritat: tant els components
 // React (live) com el render offscreen (export/miniatures) consumeixen les mateixes
 // "primitives" {t:'r'|'t'|'l', ...}. Així no hi ha drift entre canvas i PDF.
-const T_ROW_H = 14 * MM_TO_PX
-const T_HDR_H = 16 * MM_TO_PX
-const T_FONT = Math.round(6.5 * MM_TO_PX)
-const T_REF_W = 28 * MM_TO_PX
-const T_NAME_W = 52 * MM_TO_PX
-const T_NOM_W = 52 * MM_TO_PX
-const T_VAL_W = 20 * MM_TO_PX
+const T_ROW_H = 10 * MM_TO_PX     // TS-4a: 14→10 (compacta, redueix desbordament)
+const T_HDR_H = 12 * MM_TO_PX     // 16→12
+const T_FONT = Math.round(5 * MM_TO_PX)   // 6.5→5
+const T_REF_W = 22 * MM_TO_PX     // nomenclatura del croquis (nom_fitxa)
+const T_NOM_W = 58 * MM_TO_PX     // Nom EN + CA en dues línies a la mateixa cel·la
+const T_VAL_W = 18 * MM_TO_PX     // valor per talla
+const T_DELTA_W = 14 * MM_TO_PX   // delta (Δ) per talla
 const T_PAD = 2 * MM_TO_PX
 const TBL = {
   HDR_BG: '#111827', HDR_TEXT: '#ffffff', ROW_EVEN: '#ffffff', ROW_ODD: '#f7f7f7',
   ROW_BORDER: '#e0d5c5', OUTER: '#c27a2a', REF: '#dc2626', NOM: '#6b7280', VAL: '#1d1d1b',
+  BASE_BG: '#fdf6ee', DELTA: '#185fa5',
 }
 
-// graded-table JSON → {prims, totalW, totalH}. Camps reals: size_labels / rows[{codi,
-// abbreviation,nom_en,nom_ca,valors}]. (NO sizes/base_size/is_base — no existeixen.)
+// Format del delta: 0/buit → '—'; positiu → '+1'; negatiu → '−0.5' (signe menys Unicode).
+function fmtDelta(v) {
+  if (!v) return '—'
+  return (v > 0 ? '+' : '−') + Math.abs(v)
+}
+
+// graded-table JSON (enriquit TS-4a) → {prims, totalW, totalH}. Camps: base_size,
+// size_labels, rows[{ref, nom_en, nom_ca, valors, deltas}].
+// Columnes: REF · Mesura(EN/CA) · [talles] · [Δ per talla]. Talla base destacada.
 function buildTablePrimitives(d) {
   const sizes = d?.size_labels || []
   const rows = d?.rows || []
-  const totalW = T_REF_W + T_NAME_W + T_NOM_W + sizes.length * T_VAL_W
+  const baseSize = d?.base_size || null
+  const sizesX0 = T_REF_W + T_NOM_W
+  const deltaX0 = sizesX0 + sizes.length * T_VAL_W
+  const totalW = deltaX0 + sizes.length * T_DELTA_W
   const totalH = T_HDR_H + rows.length * T_ROW_H
-  const valX0 = T_REF_W + T_NAME_W + T_NOM_W
+  const baseIdx = sizes.indexOf(baseSize)
   const prims = []
+
   // Capçalera
   prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: T_HDR_H, fill: TBL.HDR_BG })
   prims.push({ t: 't', x: 0, y: 0, w: T_REF_W, h: T_HDR_H, text: 'REF', fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
-  prims.push({ t: 't', x: T_REF_W + T_PAD, y: 0, w: T_NAME_W - T_PAD, h: T_HDR_H, text: 'Name (EN)', fill: TBL.HDR_TEXT, size: T_FONT, mid: true })
-  prims.push({ t: 't', x: T_REF_W + T_NAME_W + T_PAD, y: 0, w: T_NOM_W - T_PAD, h: T_HDR_H, text: 'Nom (CA)', fill: TBL.HDR_TEXT, size: T_FONT, mid: true })
-  sizes.forEach((sl, si) => prims.push({ t: 't', x: valX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: sl, fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true }))
-  // Files
+  prims.push({ t: 't', x: T_REF_W + T_PAD, y: 0, w: T_NOM_W - T_PAD, h: T_HDR_H, text: 'Mesura', fill: TBL.HDR_TEXT, size: T_FONT, mid: true })
+  sizes.forEach((sl, si) => prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: sl === baseSize ? `${sl}*` : sl, fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true }))
+  sizes.forEach((_, si) => prims.push({ t: 't', x: deltaX0 + si * T_DELTA_W, y: 0, w: T_DELTA_W, h: T_HDR_H, text: 'Δ', fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true }))
+
+  // Fons alternat de files
   rows.forEach((row, ri) => {
     const y = T_HDR_H + ri * T_ROW_H
     prims.push({ t: 'r', x: 0, y, w: totalW, h: T_ROW_H, fill: ri % 2 === 0 ? TBL.ROW_EVEN : TBL.ROW_ODD })
-    const ref = [row.abbreviation, row.codi].filter(Boolean).join(' ') || row.codi || ''
+  })
+  // Realçat de la columna talla base (sobre els fons, sota el text)
+  if (baseIdx >= 0) {
+    prims.push({ t: 'r', x: sizesX0 + baseIdx * T_VAL_W, y: T_HDR_H, w: T_VAL_W, h: rows.length * T_ROW_H, fill: TBL.BASE_BG })
+  }
+
+  // Contingut
+  rows.forEach((row, ri) => {
+    const y = T_HDR_H + ri * T_ROW_H
+    const ref = row.ref || row.abbreviation || row.codi || ''
     prims.push({ t: 't', x: 0, y, w: T_REF_W, h: T_ROW_H, text: ref, fill: TBL.REF, size: T_FONT, bold: true, align: 'center', mid: true })
-    prims.push({ t: 't', x: T_REF_W + T_PAD, y, w: T_NAME_W - T_PAD, h: T_ROW_H, text: row.nom_en || '', fill: TBL.VAL, size: T_FONT, mid: true })
-    prims.push({ t: 't', x: T_REF_W + T_NAME_W + T_PAD, y, w: T_NOM_W - T_PAD, h: T_ROW_H, text: row.nom_ca || '', fill: TBL.NOM, size: T_FONT, italic: true, mid: true })
+    // Nom: dues línies (EN a dalt, CA a baix més petit i cursiva) dins la mateixa cel·la.
+    prims.push({ t: 't', x: T_REF_W + T_PAD, y: y + 1, w: T_NOM_W - 2 * T_PAD, h: T_FONT + 2, text: row.nom_en || '', fill: TBL.VAL, size: T_FONT, mid: false })
+    if (row.nom_ca) prims.push({ t: 't', x: T_REF_W + T_PAD, y: y + T_FONT + 1, w: T_NOM_W - 2 * T_PAD, h: T_FONT, text: row.nom_ca, fill: TBL.NOM, size: Math.round(T_FONT * 0.78), italic: true, mid: false })
     sizes.forEach((sl, si) => {
       const v = row.valors?.[sl]
-      prims.push({ t: 't', x: valX0 + si * T_VAL_W, y, w: T_VAL_W, h: T_ROW_H, text: v != null ? String(v) : '–', fill: TBL.VAL, size: T_FONT, align: 'center', mid: true })
+      prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y, w: T_VAL_W, h: T_ROW_H, text: v != null ? String(v) : '–', fill: TBL.VAL, size: T_FONT, align: 'center', mid: true })
+    })
+    sizes.forEach((sl, si) => {
+      prims.push({ t: 't', x: deltaX0 + si * T_DELTA_W, y, w: T_DELTA_W, h: T_ROW_H, text: sl === baseSize ? '—' : fmtDelta(row.deltas?.[sl]), fill: TBL.DELTA, size: Math.round(T_FONT * 0.9), align: 'center', mid: true })
     })
     prims.push({ t: 'l', points: [0, y + T_ROW_H, totalW, y + T_ROW_H], stroke: TBL.ROW_BORDER, sw: 0.5 })
   })
+
   // Separadors verticals + vora exterior
   let cx = T_REF_W
-  ;[T_NAME_W, T_NOM_W, ...sizes.map(() => T_VAL_W)].forEach(w => {
+  ;[T_NOM_W, ...sizes.map(() => T_VAL_W), ...sizes.map(() => T_DELTA_W)].forEach(w => {
     prims.push({ t: 'l', points: [cx, 0, cx, totalH], stroke: TBL.ROW_BORDER, sw: 0.5 }); cx += w
   })
   prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: totalH, stroke: TBL.OUTER, sw: 1.5 })
@@ -183,10 +210,10 @@ function addPrimsToGroup(group, prims) {
 }
 
 // Bloc de taula graduada — Konva natiu (no imatge). NO fa fetch: rep tableData del pare.
-function GradedTableNode({ tableData, groupProps, isSelected }) {
+function GradedTableNode({ tableData, scale = 1, groupProps, isSelected }) {
   const { prims, totalW, totalH } = useMemo(() => buildTablePrimitives(tableData), [tableData])
   return (
-    <Group {...groupProps}>
+    <Group {...groupProps} scaleX={scale} scaleY={scale}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
       {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={TBL.OUTER} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
@@ -242,7 +269,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
         if (data) built = buildTablePrimitives(data)
       }
       if (built) {
-        const g = new Konva.Group({ x: toPx(o.x), y: toPx(o.y) })
+        const g = new Konva.Group({ x: toPx(o.x), y: toPx(o.y), scaleX: o.scale || 1, scaleY: o.scale || 1 })
         addPrimsToGroup(g, built.prims)
         layer.add(g)
       }
@@ -311,7 +338,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
         </Group>
       )
     }
-    return <GradedTableNode tableData={data} groupProps={common} isSelected={selected} />
+    return <GradedTableNode tableData={data} scale={obj.scale || 1} groupProps={common} isSelected={selected} />
   }
   if (obj.type === 'text') {
     return <Text {...common} text={obj.text || ''} width={obj.width ? toPx(obj.width) : undefined}
@@ -688,10 +715,16 @@ export default function TechSheetEditor() {
       const data = await r.json()
       if (!data.rows || !data.rows.length) { flash('Taula buida.'); return }
       const { totalW, totalH } = buildTablePrimitives(data)
+      // Auto-fit: si la taula desborda l'àrea útil A4 (alçada 190mm o amplada 277mm),
+      // s'escala uniformement perquè càpiga; el factor es persisteix com a obj.scale.
+      const wMm = totalW / MM_TO_PX, hMm = totalH / MM_TO_PX
+      const MAX_W_MM = 277, MAX_H_MM = 190
+      const scale = Math.min(1, MAX_W_MM / wMm, MAX_H_MM / hMm)
       const objId = uid()
       const obj = {
         id: objId, type: 'data_block', kind: 'graded_table', size_fitting_id: sfId,
-        layer: 'data', x: 50, y: 50, width: totalW / MM_TO_PX, height: totalH / MM_TO_PX,
+        layer: 'data', x: 10, y: 14, scale,
+        width: wMm * scale, height: hMm * scale,
       }
       setTableData(m => ({ ...m, [objId]: data }))
       addObject(obj)
