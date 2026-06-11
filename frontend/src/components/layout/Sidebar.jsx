@@ -202,6 +202,18 @@ export default function Sidebar() {
   const [expanded, setExpanded] = useState({['nav.models']: true})
   const [logoutHover, setLogoutHover] = useState(false)
   const [onboardingPct, setOnboardingPct] = useState(100)
+  // Plegat de grups (per sectionKey). Persistit a localStorage; clau absent = obert per defecte.
+  const [openGroups, setOpenGroups] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sidebarGroups') || '{}') } catch { return {} }
+  })
+  const isGroupOpen = (sectionKey) => openGroups[sectionKey] !== false
+  const toggleGroup = (sectionKey) => {
+    setOpenGroups(prev => {
+      const next = { ...prev, [sectionKey]: prev[sectionKey] === false }
+      localStorage.setItem('sidebarGroups', JSON.stringify(next))
+      return next
+    })
+  }
 
   useEffect(() => {
     pomAlerts.list({ estat: 'Pendent', page_size: 1 })
@@ -274,6 +286,21 @@ export default function Sidebar() {
     })
   }, [location.pathname, allItems])
 
+  // Auto-obrir el GRUP que conté la ruta activa (si l'usuari l'havia tancat).
+  useEffect(() => {
+    groups.forEach(g => {
+      const hasActive = g.items.some(item =>
+        item.to === activeRoute || item.children?.some(c => c.to === activeRoute))
+      if (hasActive && openGroups[g.sectionKey] === false) {
+        setOpenGroups(prev => {
+          const next = { ...prev, [g.sectionKey]: true }
+          localStorage.setItem('sidebarGroups', JSON.stringify(next))
+          return next
+        })
+      }
+    })
+  }, [activeRoute, groups])  // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <aside style={{
       width: 240,
@@ -300,25 +327,44 @@ export default function Sidebar() {
         <Logo />
       </div>
       <div style={{flex: 1, padding: '0.4rem 0'}}>
-        {groups.map(g => (
+        {groups.map(g => {
+          const open = isGroupOpen(g.sectionKey)
+          return (
           <div key={g.sectionKey} style={{ marginBottom: 6 }}>
+            <button
+              onClick={() => toggleGroup(g.sectionKey)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase',
+                color: C.textMuted, padding: '12px 1.5rem 6px', fontFamily: 'inherit',
+                opacity: open ? 1 : 0.7,
+              }}
+            >
+              <span>{t(g.sectionKey)}</span>
+              <i className={`ti ${open ? 'ti-chevron-down' : 'ti-chevron-right'}`}
+                 style={{ fontSize: 12, color: C.textMuted }} />
+            </button>
             <div style={{
-              fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase',
-              color: C.textMuted, padding: '12px 1.5rem 6px',
-            }}>{t(g.sectionKey)}</div>
-            {g.items.map(item => (
-              <NavItem
-                key={item.to || item.labelKey}
-                item={item}
-                badges={badges}
-                t={t}
-                expanded={!!expanded[item.labelKey]}
-                onToggle={() => toggle(item.labelKey)}
-                activeRoute={activeRoute}
-              />
-            ))}
+              overflow: 'hidden',
+              maxHeight: open ? '600px' : '0px',
+              transition: 'max-height 0.2s ease',
+            }}>
+              {g.items.map(item => (
+                <NavItem
+                  key={item.to || item.labelKey}
+                  item={item}
+                  badges={badges}
+                  t={t}
+                  expanded={!!expanded[item.labelKey]}
+                  onToggle={() => toggle(item.labelKey)}
+                  activeRoute={activeRoute}
+                />
+              ))}
+            </div>
           </div>
-        ))}
+          )
+        })}
       </div>
       <div style={{
         borderTop: `1px solid ${C.border}`,
