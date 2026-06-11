@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi } from '../../api/endpoints'
+import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan } from '../../api/endpoints'
 import Modal from '../ui/Modal'
 import { selS } from '../ui/buttons'
 import TaskAssignWizard from '../TaskAssignWizard'
@@ -8,6 +8,11 @@ import TaskAssignWizard from '../TaskAssignWizard'
 export const PHASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
 const CURRENT = '__current__'   // "fase actual de cada model" (bulk)
 const MONO = 'IBM Plex Mono, monospace'
+// Cercle de color d'assignació (color_avatar). Fallback --gold si null. (replica de TaskAssignWizard)
+const ColorDot = ({ color, size = 16 }) => (
+  <span style={{ display: 'inline-block', width: size, height: size, borderRadius: '50%',
+    background: color || 'var(--gold)', border: '0.5px solid var(--gray-l)', flexShrink: 0 }} />
+)
 const nextPhase = (f) => { const i = PHASES.indexOf(f); return i >= 0 && i < PHASES.length - 1 ? PHASES[i + 1] : null }
 const prevPhase = (f) => { const i = PHASES.indexOf(f); return i > 0 ? PHASES[i - 1] : null }
 const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -25,6 +30,8 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
   const [supps, setSupps] = useState([])
   const [prods, setProds] = useState([])   // només per al cas single (precondició fitting + defaults)
   const [form, setForm] = useState({})
+  const [elegibles, setElegibles] = useState([])   // assistents amb schedule_fittings (modal fitting)
+  const [loadingEleg, setLoadingEleg] = useState(false)
 
   useEffect(() => {
     suppliersApi.list({ active: 'true', ordering: 'name', page_size: 500 }).then(r => setSupps(r.data?.results ?? r.data ?? [])).catch(() => {})
@@ -43,7 +50,20 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
   const openModal = (kind) => {
     setOpen(false)
     if (kind === 'production') setForm({ supplier_id: '', phase: defaultPhase, expected_at: '', notes: '' })
-    if (kind === 'fitting') setForm({ fase: single ? single.fase_actual : CURRENT, data: todayISO(), expected_at: '' })
+    if (kind === 'fitting') {
+      setForm({ fase: single ? single.fase_actual : CURRENT, data: todayISO(), expected_at: '',
+                start_time: '', duracio_minuts: '', attendee_ids: [] })
+      setLoadingEleg(true)
+      plan.eligibleAttendees()
+        .then(r => {
+          const listE = r.data?.results ?? r.data ?? []
+          setElegibles(listE)
+          // Preseleccionar el primer elegible per defecte (si encara no n'hi ha cap).
+          if (listE.length > 0) setForm(f => (f.attendee_ids?.length ? f : { ...f, attendee_ids: [listE[0].profile_id] }))
+        })
+        .catch(() => setElegibles([]))
+        .finally(() => setLoadingEleg(false))
+    }
     setModal(kind)
   }
 
@@ -74,6 +94,9 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
     fase: (form.fase === CURRENT ? m.fase_actual : form.fase),
     data: form.data,
     model_id: m.id,
+    start_time: form.start_time || undefined,
+    duracio_minuts: form.duracio_minuts ? parseInt(form.duracio_minuts, 10) : undefined,
+    attendee_ids: form.attendee_ids || [],
     ...(form.expected_at ? { expected_at: form.expected_at } : {}),
   }))
   const runAdvance = () => runBulk(m => { const nx = nextPhase(m.fase_actual); if (!nx) throw { response: { data: { error: t('model_sheet.phase_top') } } }; return modelsApi.gate(m.id, { to_phase: nx }) })
@@ -148,6 +171,49 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
             </select>
           </Row>
           <Row label={t('model_sheet.date')}><input type="date" style={fullSel} value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} /></Row>
+          <Row label={t('model_sheet.fitting_start_time', "Hora d'inici")}>
+            <input type="time" style={fullSel} value={form.start_time || ''}
+              onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+          </Row>
+          <Row label={t('model_sheet.fitting_duration', 'Durada (min)')}>
+            <input type="number" min={5} step={5} style={fullSel} value={form.duracio_minuts || ''}
+              placeholder={t('model_sheet.fitting_duration_ph', 'Default: 10 min per model')}
+              onChange={e => setForm(f => ({ ...f, duracio_minuts: e.target.value }))} />
+          </Row>
+          <div style={{ marginBottom: 12, marginTop: -4 }}>
+            <small style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {form.start_time
+                ? t('model_sheet.fitting_franja_note', { dur: form.duracio_minuts || '10', hora: form.start_time,
+                    defaultValue: `El fitting ocuparà ${form.duracio_minuts || '10'} min a les ${form.start_time} a la cua dels assistents.` })
+                : t('model_sheet.fitting_nofranja_note', "Sense hora, no s'assignarà franja al calendari.")}
+            </small>
+          </div>
+          <Row label={t('model_sheet.fitting_attendees', 'Assistents')}>
+            {loadingEleg
+              ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('model_sheet.loading', 'Carregant…')}</span>
+              : elegibles.length === 0
+                ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('model_sheet.fitting_no_attendees', 'Cap assistent elegible.')}</span>
+                : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 120, overflowY: 'auto' }}>
+                    {elegibles.map(e => {
+                      const sel = (form.attendee_ids || []).includes(e.profile_id)
+                      return (
+                        <label key={e.profile_id} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                          padding: '4px 6px', borderRadius: 6, fontSize: 12, fontFamily: MONO,
+                          background: sel ? 'var(--gold-pale)' : 'transparent' }}>
+                          <input type="checkbox" checked={sel} style={{ accentColor: 'var(--gold)' }}
+                            onChange={() => setForm(f => ({ ...f,
+                              attendee_ids: sel
+                                ? f.attendee_ids.filter(id => id !== e.profile_id)
+                                : [...(f.attendee_ids || []), e.profile_id] }))} />
+                          <ColorDot color={e.color_avatar} size={14} />
+                          {e.full_name}
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+          </Row>
           {!deliveredPhases.has(form.fase) && (
             <div style={{ marginTop: 8 }}>
               <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>

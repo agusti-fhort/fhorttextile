@@ -15,7 +15,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from fhort.accounts.models import UserProfile
 from fhort.accounts.capabilities import (HasCapability, CONFIGURE, MANAGE_USERS,
-                                         VIEW_TEAM_TASKS, DEFINE_TASKS, get_capabilities)
+                                         VIEW_TEAM_TASKS, DEFINE_TASKS, SCHEDULE_FITTINGS,
+                                         get_capabilities)
 from .models import CompanyCalendar, Absencia, TechnicianQueueOrder
 from .serializers import (CompanyCalendarSerializer, JornadaSerializer,
                           AbsenciaSerializer)
@@ -30,6 +31,10 @@ class _Configure(HasCapability):
 
 class _DefineTasks(HasCapability):
     required_capability = DEFINE_TASKS
+
+
+class _ScheduleFittings(HasCapability):
+    required_capability = SCHEDULE_FITTINGS
 
 
 class _ConfigureOrManageUsers(BasePermission):
@@ -471,6 +476,21 @@ def plan_eligible_technicians_view(request):
                               if p.disponible_des_de else None),
         'models_en_cua': p.models_en_cua,
     } for p in qs]
+    return Response(out, status=http_status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([_ScheduleFittings])
+def plan_eligible_attendees_view(request):
+    """GET /api/v1/plan/eligible-attendees/ — assistents elegibles per a un fitting: usuaris
+    actius amb la capability `schedule_fittings` (via get_capabilities; bypass admin inclòs).
+    Gated `schedule_fittings`. Retorn: [{profile_id, full_name, color_avatar}]."""
+    base = UserProfile.objects.filter(user__is_active=True).select_related('user').order_by('id')
+    out = [{
+        'profile_id': p.id,
+        'full_name': p.user.get_full_name() or p.user.get_username(),
+        'color_avatar': getattr(p, 'color_avatar', None),
+    } for p in base if SCHEDULE_FITTINGS in get_capabilities(p.user)]
     return Response(out, status=http_status.HTTP_200_OK)
 
 

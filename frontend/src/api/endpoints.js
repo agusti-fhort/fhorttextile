@@ -174,6 +174,10 @@ export const plan = {
   // → {fets, creats, reassignats, omesos, warnings, resultats}.
   assignBatch: (body) =>
     client.post('/api/v1/plan/assign-batch/', body),
+  // Assistents elegibles per a un fitting (gated schedule_fittings).
+  // → [{profile_id, full_name, color_avatar}].
+  eligibleAttendees: () =>
+    client.get('/api/v1/plan/eligible-attendees/'),
 }
 
 // Calendari propi (agenda) — esdeveniments unificats per pintar. Accés IsAuthenticated; scope per
