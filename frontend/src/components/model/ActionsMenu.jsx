@@ -90,15 +90,49 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
       return r
     })
   }
-  const runFitting = () => runBulk(m => fittingSessions.schedule({
-    fase: (form.fase === CURRENT ? m.fase_actual : form.fase),
-    data: form.data,
-    model_id: m.id,
-    start_time: form.start_time || undefined,
-    duracio_minuts: form.duracio_minuts ? parseInt(form.duracio_minuts, 10) : undefined,
-    attendee_ids: form.attendee_ids || [],
-    ...(form.expected_at ? { expected_at: form.expected_at } : {}),
-  }))
+  const runFitting = () => {
+    // Single → schedule individual (retrocompat P5; gestiona expected_at via adaptativa).
+    if (list.length === 1) {
+      return runBulk(m => fittingSessions.schedule({
+        fase: (form.fase === CURRENT ? m.fase_actual : form.fase),
+        data: form.data,
+        model_id: m.id,
+        start_time: form.start_time || undefined,
+        duracio_minuts: form.duracio_minuts ? parseInt(form.duracio_minuts, 10) : undefined,
+        attendee_ids: form.attendee_ids || [],
+        ...(form.expected_at ? { expected_at: form.expected_at } : {}),
+      }))
+    }
+    // Bulk → sessions ENCADENADES via schedule-bulk (convocatòria UUID). schedule-bulk pren UNA
+    // fase; amb CURRENT els models poden tenir fase_actual diferents → 1 convocatòria per fase.
+    const groups = {}
+    for (const m of list) {
+      const fase = form.fase === CURRENT ? m.fase_actual : form.fase
+      ;(groups[fase] = groups[fase] || []).push(m)
+    }
+    setBusy(true)
+    Promise.all(Object.entries(groups).map(([fase, ms]) =>
+      fittingSessions.scheduleBulk({
+        model_ids: ms.map(m => m.id),
+        fase,
+        data: form.data,
+        start_time: form.start_time || undefined,
+        duracio_minuts: form.duracio_minuts ? parseInt(form.duracio_minuts, 10) : undefined,
+        attendee_ids: form.attendee_ids || [],
+        ...(form.expected_at ? { expected_at: form.expected_at } : {}),
+      })
+    ))
+      .then(results => {
+        const total = results.reduce((acc, r) => acc + (r.data?.n_sessions || 0), 0)
+        setBusy(false); setModal(null)
+        onFeedback({ type: 'ok', text: t('model_sheet.fitting_bulk_scheduled', { n: total, defaultValue: 'Fitting programat: {{n}} sessions' }) })
+        onChanged && onChanged()
+      })
+      .catch(e => {
+        setBusy(false)
+        onFeedback({ type: 'err', text: e.response?.data?.error || 'error' })
+      })
+  }
   const runAdvance = () => runBulk(m => { const nx = nextPhase(m.fase_actual); if (!nx) throw { response: { data: { error: t('model_sheet.phase_top') } } }; return modelsApi.gate(m.id, { to_phase: nx }) })
   const runBack = () => runBulk(m => { const pv = prevPhase(m.fase_actual); if (!pv) throw { response: { data: { error: t('model_sheet.phase_first') } } }; return modelsApi.regress(m.id, { to_phase: pv }) })
 

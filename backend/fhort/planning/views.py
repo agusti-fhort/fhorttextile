@@ -350,7 +350,15 @@ def calendar_events_view(request):
             prev = expected_by_key.get(key)
             if prev is None or p['expected_at'] > prev:
                 expected_by_key[key] = p['expected_at']
+    # ── Partició convocatòria (C4): sessions soltes (convocatoria=None) → bloc P5 intacte;
+    # sessions amb convocatoria → agregades en UN event per (convocatòria × assistent). ──
+    individuals = [s for s in fitting_list if s.convocatoria is None]
+    conv_groups = {}
     for s in fitting_list:
+        if s.convocatoria is not None:
+            conv_groups.setdefault(s.convocatoria, []).append(s)
+
+    for s in individuals:
         target = s.model.codi_intern if s.model_id else (s.garment_set.codi_base if s.garment_set_id else '?')
         titol = f'{target} · fitting {s.fase}'
         link = f'/fittings/{s.id}'
@@ -398,6 +406,70 @@ def calendar_events_view(request):
                 'link': link, 'en_risc': False, 'all_day': all_day,
                 'meta': meta_base,
             })
+
+    # ── Agregació per convocatòria (C4): UN event per (convocatòria × assistent); si la
+    # convocatòria no té cap assistent intern → UN event únic (tecnic_id=None, color fix). ──
+    for convocatoria, grup in conv_groups.items():
+        per_att = {}   # att_id -> {'att', 'sessions'}
+        for s in grup:
+            for att in s.attendees.all():
+                slot = per_att.setdefault(att.id, {'att': att, 'sessions': []})
+                slot['sessions'].append(s)
+        # grups a emetre: [(att|None, sessions)]. Sense attendees → un sol grup amb att=None.
+        emis = ([(slot['att'], slot['sessions']) for slot in per_att.values()]
+                if per_att else [(None, list(grup))])
+        for att, sessions in emis:
+            sessions_grup = sorted(sessions, key=lambda x: (x.data, x.start_time or _dt.time.min))
+            primera = sessions_grup[0]
+            ultima = sessions_grup[-1]
+            n = len(sessions_grup)
+            if primera.start_time and ultima.duracio_minuts:
+                start_base = timezone.make_aware(
+                    _dt.datetime.combine(primera.data, primera.start_time))
+                end_base = timezone.make_aware(
+                    _dt.datetime.combine(ultima.data, ultima.start_time) +
+                    _dt.timedelta(minutes=ultima.duracio_minuts))
+                start_dt = timezone.localtime(start_base).isoformat()
+                end_dt = timezone.localtime(end_base).isoformat()
+                all_day = False
+            else:
+                start_dt = primera.data.isoformat()
+                end_dt = ultima.data.isoformat()
+                all_day = True
+            avis = any(
+                bool(expected_by_key.get((s.model_id, s.fase)) and s.data and
+                     s.data < expected_by_key[(s.model_id, s.fase)])
+                for s in sessions_grup if s.model_id)
+            meta = {
+                'convocatoria': str(convocatoria),
+                'n_models': n,
+                'model_ids': [s.model_id for s in sessions_grup],
+                'fase': primera.fase,
+                'lloc': primera.lloc,
+                'avis_abans_confeccio': avis,
+            }
+            titol = f'Fitting · {n} models · {primera.fase}'
+            if att is not None:
+                events.append({
+                    'id': f'fitting-conv-{convocatoria}-{att.id}',
+                    'tipus': 'fitting',
+                    'start': start_dt, 'end': end_dt, 'titol': titol,
+                    'tecnic_id': att.id,
+                    'tecnic_nom': att.user.get_full_name() or att.user.username,
+                    'color': att.color_avatar or '#888888',
+                    'link': '/fittings', 'en_risc': False, 'all_day': all_day,
+                    'meta': meta,
+                })
+            else:
+                events.append({
+                    'id': f'fitting-conv-{convocatoria}',
+                    'tipus': 'fitting',
+                    'start': start_dt, 'end': end_dt, 'titol': titol,
+                    'tecnic_id': None, 'tecnic_nom': None,
+                    'color': COLOR_FITTING,
+                    'link': '/fittings', 'en_risc': False, 'all_day': all_day,
+                    'meta': meta,
+                })
 
     return Response({'events': events}, status=http_status.HTTP_200_OK)
 

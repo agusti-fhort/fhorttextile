@@ -245,6 +245,8 @@ export const fittingSessions = {
   createPiece: (id, modelId) => client.post(`/api/v1/fitting-sessions/${id}/create-piece/`, { model_id: modelId }),
   // Calendari: programar (neix Programada) i obrir (Programada → Oberta).
   schedule: (data) => client.post('/api/v1/fitting-sessions/schedule/', data),
+  // Bulk: N sessions encadenades amb convocatoria UUID compartit (sessió i+1 on acaba la i).
+  scheduleBulk: (data) => client.post('/api/v1/fitting-sessions/schedule-bulk/', data),
   open: (id) => client.post(`/api/v1/fitting-sessions/${id}/open/`),
 }
 
