@@ -160,6 +160,14 @@ export const plan = {
   // body: {assignee_id, model_ids:[...ordenats]} → desa l'ordre manual de la cua + recompute.
   // → {ok, assignee_id, result:{placements,warnings,models}}. Gated define_tasks.
   reorder: (body) => client.post('/api/v1/plan/reorder/', body),
+  // Wizard multi-assign (Peça 2/3, gated define_tasks).
+  // → [{profile_id, full_name, color_avatar, disponible_des_de, models_en_cua}] (ordenat per disponibilitat).
+  eligibleTechnicians: (code) =>
+    client.get(`/api/v1/plan/eligible-technicians/?task_type=${code}`),
+  // body: {model_ids:[int], assignacions:[{task_type_code, assignee_profile_id, planned_start?, planned_end?}]}
+  // → {fets, creats, reassignats, omesos, warnings, resultats}.
+  assignBatch: (body) =>
+    client.post('/api/v1/plan/assign-batch/', body),
 }
 
 // Calendari propi (agenda) — esdeveniments unificats per pintar. Accés IsAuthenticated; scope per
