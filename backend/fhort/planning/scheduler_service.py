@@ -153,6 +153,8 @@ def schedule(model_task_qs, now=None, save=True):
         movable = [t for t in tech_tasks if not t.planned_locked]
 
         # Franges ocupades pels locked (naïf). Es reporten tal qual; no es reescriuen.
+        # TODO fitting-sprint: extreure _collect_busy_intervals(profile) per injectar
+        # franges de FittingSession com a busy intervals.
         busy = []
         for t in locked:
             if not (t.planned_start and t.planned_end):

@@ -15,7 +15,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from fhort.tasks.models import ModelTask, PlanSnapshot
-from .calendar_service import add_working_minutes
+from .calendar_service import add_working_minutes, subtract_working_minutes
 from .scheduler_service import schedule, _now_naive, _to_naive, _to_aware
 
 
@@ -210,6 +210,150 @@ def assign_model(*, model_id, assignee_id, task_ids=None, now=None):
     results = recompute_for_technicians(affected, now=now)
     return {'assigned_count': len(tasks), 'technician_ids': sorted(affected),
             'results': results}
+
+
+@transaction.atomic
+def assign_batch(*, model_ids, assignacions, actor=None, now=None):
+    """Wizard multi-assignació: aplica `assignacions` (task_type × persona × data opcional)
+    a cada model de `model_ids`. La tasca es CREA si no existeix (via canònica de
+    define_model_tasks_view) i neix amb l'assignee. Recompute ÚNIC al final per a tots els
+    tècnics afectats (nous + desplaçats).
+
+    assignacions: [{task_type_code, assignee_profile_id, planned_start?, planned_end?}].
+      - Mai planned_start I planned_end alhora (ValueError → 400 lot sencer).
+      - Només start → planned_end = add_working_minutes; només end → planned_start =
+        subtract_working_minutes; en ambdós casos planned_locked=True. Sense data → cua.
+      - Sense estimated_minutes (o 0) amb data → warning, assigna sense dates (cua).
+    Retorna {fets, creats, reassignats, omesos, warnings, resultats}."""
+    from fhort.accounts.models import UserProfile
+    from fhort.accounts.capabilities import get_allowed_task_types
+    from fhort.tasks.models import TaskType
+    from fhort.tasks.services_g import lookup_estimated_minutes
+    from fhort.models_app.models import Model
+    now = now or _now_naive()
+
+    # Pas 0 — validació dura (abans de tocar BD).
+    for a in assignacions:
+        if a.get('planned_start') and a.get('planned_end'):
+            raise ValueError('Una assignació no pot portar planned_start i planned_end alhora.')
+
+    # Pas 1 — resolució d'entitats en bloc (sense N+1).
+    tt_by_code = {tt.code: tt for tt in
+                  TaskType.objects.filter(code__in={a['task_type_code'] for a in assignacions})}
+    prof_by_id = {p.id: p for p in
+                  UserProfile.objects.filter(pk__in={a['assignee_profile_id'] for a in assignacions})
+                  .select_related('user')}
+    models_by_id = {m.id: m for m in Model.objects.filter(pk__in=model_ids)}
+
+    fets = creats = 0
+    reassignats, omesos, warnings, touched = [], [], [], []
+    affected = set()
+
+    # Pas 2 — per cada (model × assignació).
+    for mid in model_ids:
+        model = models_by_id.get(mid)
+        if model is None:
+            omesos.append({'model_id': mid, 'task_type_code': None, 'motiu': 'model no trobat'})
+            continue
+        for a in assignacions:
+            code = a['task_type_code']
+            tt = tt_by_code.get(code)
+            profile = prof_by_id.get(a['assignee_profile_id'])
+            if tt is None:
+                omesos.append({'model_id': mid, 'task_type_code': code, 'motiu': 'task_type desconegut'})
+                continue
+            if profile is None:
+                omesos.append({'model_id': mid, 'task_type_code': code, 'motiu': 'perfil no trobat'})
+                continue
+            # a) allow-list (bypass admin per construcció a get_allowed_task_types).
+            if code not in get_allowed_task_types(profile.user):
+                omesos.append({'model_id': mid, 'task_type_code': code, 'motiu': 'permís negat'})
+                continue
+            # b) buscar / crear (via canònica).
+            mt = (ModelTask.objects.filter(model_id=mid, task_type=tt)
+                  .select_related('assignee__user').first())
+            if mt is not None and mt.status == 'Done':
+                omesos.append({'model_id': mid, 'task_type_code': code, 'motiu': 'Done immutable'})
+                continue
+            old_assignee = None
+            if mt is None:
+                order = ModelTask.objects.filter(model_id=mid).count()
+                est = lookup_estimated_minutes(model, tt)
+                mt = ModelTask.objects.create(model_id=mid, task_type=tt, order=order,
+                                              status='Pending', estimated_minutes=est)
+                creats += 1
+            elif mt.assignee_id and mt.assignee_id != profile.id:
+                old_assignee = mt.assignee   # tècnic anterior desplaçat
+            # c) assignar.
+            mt.assignee = profile
+            if old_assignee is not None:
+                reassignats.append({'model_id': mid, 'task_type_code': code,
+                                    'abans_nom': (old_assignee.user.get_full_name()
+                                                  or old_assignee.user.get_username())})
+                affected.add(old_assignee.id)
+            # d) dates.
+            ps_raw, pe_raw = a.get('planned_start'), a.get('planned_end')
+            est_min = mt.estimated_minutes
+            if (ps_raw or pe_raw) and not est_min:
+                warnings.append(f'{model.codi_intern}·{code}: sense estimació de temps; '
+                                f'assignat sense dates (va a cua).')
+                mt.planned_locked = False
+            elif ps_raw:
+                start_naive = _parse_naive(ps_raw)
+                end_naive = add_working_minutes(profile, start_naive, est_min)
+                mt.planned_start, mt.planned_end = _to_aware(start_naive), _to_aware(end_naive)
+                mt.planned_locked = True
+            elif pe_raw:
+                end_naive = _parse_naive(pe_raw)
+                start_naive = subtract_working_minutes(profile, end_naive, est_min)
+                mt.planned_start, mt.planned_end = _to_aware(start_naive), _to_aware(end_naive)
+                mt.planned_locked = True
+            else:
+                mt.planned_locked = False   # cua: recompute el col·loca com a movible
+            # e) col·lisió locked (warning, no bloqueja) — el scheduler NO ho valida.
+            if mt.planned_locked:
+                ns, ne = _to_naive(mt.planned_start), _to_naive(mt.planned_end)
+                others = (ModelTask.objects.filter(assignee=profile, planned_locked=True)
+                          .exclude(pk=mt.pk).exclude(status='Done')
+                          .select_related('task_type', 'model'))
+                for o in others:
+                    if not (o.planned_start and o.planned_end):
+                        continue
+                    os_, oe = _to_naive(o.planned_start), _to_naive(o.planned_end)
+                    if ns < oe and os_ < ne:   # [ns,ne) ∩ [os_,oe) ≠ ∅
+                        warnings.append(f'Solapament: {model.codi_intern}·{code} xoca amb '
+                                        f'{o.model.codi_intern}·{o.task_type.code}.')
+            # f) desar.
+            mt.save(update_fields=['assignee', 'planned_start', 'planned_end',
+                                   'planned_locked', 'updated_at'])
+            affected.add(profile.id)
+            touched.append((mid, code, profile.id, mt.id))
+            fets += 1
+
+    # Pas 3 — neteja d'ordre manual + recompute ÚNIC dels afectats.
+    cleanup_queue_order(affected, model_ids)
+    recompute_for_technicians(affected, now=now)
+
+    # Pas 4 — rellegir planned_* finals (post-recompute) i calcular en_risc.
+    fresh = {m.id: m for m in
+             ModelTask.objects.filter(pk__in=[t[3] for t in touched]).select_related('model')}
+    resultats = []
+    for (mid, code, pid, mt_id) in touched:
+        mt = fresh.get(mt_id)
+        if mt is None:
+            continue
+        data_obj = mt.model.data_objectiu
+        end_local = _to_naive(mt.planned_end).date() if mt.planned_end else None
+        en_risc = bool(end_local and data_obj and end_local > data_obj)
+        resultats.append({
+            'model_id': mid, 'task_type_code': code, 'assignee_profile_id': pid,
+            'planned_start': timezone.localtime(mt.planned_start).isoformat() if mt.planned_start else None,
+            'planned_end': timezone.localtime(mt.planned_end).isoformat() if mt.planned_end else None,
+            'en_risc': en_risc,
+        })
+
+    return {'fets': fets, 'creats': creats, 'reassignats': reassignats,
+            'omesos': omesos, 'warnings': warnings, 'resultats': resultats}
 
 
 @transaction.atomic

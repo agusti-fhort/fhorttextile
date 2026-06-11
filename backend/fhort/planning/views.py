@@ -395,3 +395,70 @@ def plan_reorder_view(request):
     results = plan_service.recompute_for_technicians([int(assignee_id)])
     return Response({'ok': True, 'assignee_id': int(assignee_id),
                      'result': results.get(int(assignee_id))}, status=http_status.HTTP_200_OK)
+
+
+# ── Sprint multi-assign — wizard d'assignació (task_type × persona × data opcional) ──────
+@api_view(['GET'])
+@permission_classes([_DefineTasks])
+def plan_eligible_technicians_view(request):
+    """GET /api/v1/plan/eligible-technicians/?task_type=<code> — tècnics elegibles per a un
+    task_type, ordenats pel més lliure primer. Gated `define_tasks`.
+
+    Elegibilitat via get_allowed_task_types (bypass admin per rol inclòs) — NO ?can_task=,
+    que és containment pur i exclouria els admins amb permisos.tasks buit.
+    Annotate sense N+1 sobre la relació inversa ModelTask.assignee (related_name='assigned_tasks'):
+      disponible_des_de = MAX(planned_end) de les tasques no-Done; NULL = lliure ara.
+      models_en_cua     = COUNT DISTINCT model de les tasques no-Done.
+    Ordre: disponible_des_de ASC NULLS FIRST."""
+    code = request.query_params.get('task_type')
+    if not code:
+        return Response({'error': 'task_type requerit.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    from fhort.accounts.capabilities import get_allowed_task_types
+    from django.db.models import Max, Count, Q, F
+
+    actives = ['Pending', 'InProgress', 'Paused']
+    base = UserProfile.objects.filter(user__is_active=True).select_related('user')
+    eligible_ids = [p.id for p in base if code in get_allowed_task_types(p.user)]
+
+    flt = Q(assigned_tasks__status__in=actives)
+    qs = (UserProfile.objects.filter(pk__in=eligible_ids).select_related('user')
+          .annotate(disponible_des_de=Max('assigned_tasks__planned_end', filter=flt),
+                    models_en_cua=Count('assigned_tasks__model', distinct=True, filter=flt))
+          .order_by(F('disponible_des_de').asc(nulls_first=True), 'id'))
+
+    out = [{
+        'profile_id': p.id,
+        'full_name': p.user.get_full_name() or p.user.get_username(),
+        'color_avatar': getattr(p, 'color_avatar', None),
+        'disponible_des_de': (timezone.localtime(p.disponible_des_de).isoformat()
+                              if p.disponible_des_de else None),
+        'models_en_cua': p.models_en_cua,
+    } for p in qs]
+    return Response(out, status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_DefineTasks])
+def plan_assign_batch_view(request):
+    """POST /api/v1/plan/assign-batch/ — wizard multi-assignació. Gated `define_tasks`.
+    Body: {model_ids:[int], assignacions:[{task_type_code, assignee_profile_id,
+           planned_start?, planned_end?}]}. 400 si planned_start i planned_end alhora."""
+    d = request.data
+    model_ids = d.get('model_ids')
+    assignacions = d.get('assignacions')
+    if not isinstance(model_ids, list) or not model_ids:
+        return Response({'error': 'model_ids (llista no buida) requerit.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    if not isinstance(assignacions, list) or not assignacions:
+        return Response({'error': 'assignacions (llista no buida) requerit.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    for a in assignacions:
+        if not isinstance(a, dict) or not a.get('task_type_code') or not a.get('assignee_profile_id'):
+            return Response({'error': 'cada assignació requereix task_type_code i assignee_profile_id.'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+    profile = getattr(request.user, 'profile', None)
+    try:
+        out = plan_service.assign_batch(model_ids=model_ids, assignacions=assignacions, actor=profile)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
+    return Response(out, status=http_status.HTTP_200_OK)
