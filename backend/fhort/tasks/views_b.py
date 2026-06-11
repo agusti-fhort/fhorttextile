@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework import status as http_status
 from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -517,6 +518,21 @@ class CustomerViewSet(viewsets.ModelViewSet):
             return Response(
                 {'detail': "No es pot esborrar: té models associats. Desactiva'l."},
                 status=status.HTTP_409_CONFLICT)
+
+    @action(detail=True, methods=['post'], url_path='upload-logo',
+            parser_classes=[MultiPartParser, FormParser])
+    def upload_logo(self, request, pk=None):
+        """Puja/substitueix el logo del client (TS-4c). Gated CONFIGURE via get_permissions
+        (l'acció no és list/retrieve). Patró d'upload com models_app.upload_file_view."""
+        customer = self.get_object()
+        logo_file = request.FILES.get('logo')
+        if not logo_file:
+            return Response({'detail': 'logo requerit.'}, status=status.HTTP_400_BAD_REQUEST)
+        if customer.logo:
+            customer.logo.delete(save=False)   # neteja el fitxer anterior
+        customer.logo = logo_file
+        customer.save(update_fields=['logo'])
+        return Response(self.get_serializer(customer, context={'request': request}).data)
 
 
 class ProductionViewSet(viewsets.ReadOnlyModelViewSet):

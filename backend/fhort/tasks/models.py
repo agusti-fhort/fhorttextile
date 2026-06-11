@@ -306,6 +306,8 @@ class Customer(models.Model):
     # Ganxo per al registre global de codis del backoffice futur (permeabilitat cross-tenant).
     # Placeholder sense lògica en aquest sprint.
     codi_global = models.CharField(max_length=3, null=True, blank=True)
+    # Logo del client (TS-4c): per a la capçalera de la fitxa tècnica.
+    logo = models.ImageField(upload_to='customer_logos/%Y/%m/', null=True, blank=True)
 
     class Meta:
         ordering = ['codi']

@@ -45,7 +45,10 @@ class SupplierSerializer(serializers.ModelSerializer):
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
-        fields = ['id', 'codi', 'nom', 'active', 'is_self']
+        # logo: ImageField → URL (absoluta si el ViewSet passa `request` al context, que és
+        # el cas per defecte de ModelViewSet). read_only: s'escriu via l'acció upload-logo.
+        fields = ['id', 'codi', 'nom', 'active', 'is_self', 'logo']
+        read_only_fields = ['logo']
 
 
 class ProductionSerializer(serializers.ModelSerializer):

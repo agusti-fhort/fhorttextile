@@ -94,6 +94,14 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     garment_type_item_code = serializers.CharField(source='garment_type_item.code', read_only=True)
     size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
     size_system_nom = serializers.CharField(source='size_system.nom', read_only=True)
+    customer_logo = serializers.SerializerMethodField()   # TS-4c: logo del client (URL)
+
+    def get_customer_logo(self, obj):
+        if obj.customer_id and obj.customer.logo:
+            request = self.context.get('request')
+            url = obj.customer.logo.url
+            return request.build_absolute_uri(url) if request else url
+        return None
 
     class Meta:
         model = Model
