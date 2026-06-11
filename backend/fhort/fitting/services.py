@@ -249,11 +249,10 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
             new_grading_version_id=new_version.pk,
         )
 
-    # FIX 1 — segellar la FittingSession en gravar (decisió de producte: gravar = terminal).
-    # PieceFitting no té estat 'closed'; segellem la sessió de la peça gravada.
-    # NOTA: això deixa la sessió fora del flux gates→advance_phase (que exigeix 'Oberta').
-    pf.session.estat = 'Tancada'
-    pf.session.save(update_fields=['estat'])
+    # Segellat correcte: single-model tanca en gravar; GarmentSet espera que totes les
+    # peces estiguin resoltes (session_can_advance). _seal_session és idempotent i captura
+    # la durada real al tancament.
+    _seal_session(pf.session)
 
     result = {
         'changed': changed,
@@ -353,6 +352,10 @@ def set_piece_gate(
             new_grading_version_id=None,
         )
 
+    # 3r trigger: en gatejar, si la sessió (GarmentSet) ja té totes les peces resoltes
+    # → es segella aquí (sense esperar advance_phase). Idempotent.
+    _seal_session(pf.session)
+
     logger.info(f"PieceFitting {pf.pk} gate set to {resultat}")
     return pf
 
@@ -368,6 +371,52 @@ def session_can_advance(session_id: int) -> bool:
     if not gates:
         return False
     return all(g in _GATE_ADVANCEABLE for g in gates)
+
+
+def _seal_session(session):
+    """Segella una FittingSession (→Tancada) i captura la durada real. Idempotent.
+    GarmentSet: només segella si totes les peces estan resoltes (session_can_advance,
+    gates ∈ {OK, EXCEPCIO}). Single-model: segella directament."""
+    if session.estat == 'Tancada':
+        return  # idempotent
+    if session.garment_set_id and not session_can_advance(session.id):
+        return  # peces pendents o NO_OK → encara no es tanca
+    session.estat = 'Tancada'
+    session.save(update_fields=['estat'])
+    _capture_duration(session)
+
+
+def _capture_duration(session):
+    """Captura la durada real de la sessió cap a FittingDurationStat (Welford, per model).
+    Sense start_time → no es mesura. Durada < 0 o > 240 min → descartada (soroll)."""
+    if not session.start_time:
+        return  # guard: sense hora d'inici no podem mesurar
+    import datetime as _dt
+    from django.utils import timezone
+    start_dt = timezone.make_aware(_dt.datetime.combine(session.data, session.start_time))
+    durada_real = (timezone.now() - start_dt).total_seconds() / 60
+    if durada_real < 0 or durada_real > 240:
+        return  # guard de soroll
+    n = (session.piece_fittings.count() or 1) if session.garment_set_id else 1
+    update_fitting_duration_stat(durada_real / n)
+
+
+def update_fitting_duration_stat(value_minutes):
+    """Welford incremental de durada real per model de sessió (singleton pk=1).
+    Mateix patró que pom.services.update_client_profile."""
+    from fhort.fitting.models import FittingDurationStat
+    stat, _ = FittingDurationStat.objects.get_or_create(pk=1)
+    n = stat.n_mostres + 1
+    delta = value_minutes - stat.mitjana
+    new_mean = stat.mitjana + delta / n
+    delta2 = value_minutes - new_mean
+    new_m2 = stat.m2_acum + delta * delta2
+    stat.n_mostres = n
+    stat.mitjana = round(new_mean, 2)
+    stat.m2_acum = new_m2
+    stat.desviacio = round((new_m2 / n) ** 0.5, 3) if n > 1 else 0.0
+    stat.save()
+    return stat
 
 
 @transaction.atomic
@@ -453,8 +502,7 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
         except Exception:
             pass  # no trencar el fitting si el log falla
 
-    session.estat = 'Tancada'
-    session.save(update_fields=['estat'])
+    _seal_session(session)
 
     result = {
         'nova_fase': nova_fase,
