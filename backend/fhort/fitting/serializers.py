@@ -93,6 +93,8 @@ class FittingSessionListSerializer(serializers.ModelSerializer):
     estat_display = serializers.CharField(source='get_estat_display', read_only=True)
     target = serializers.SerializerMethodField()
     n_peces = serializers.IntegerField(read_only=True)  # annotated in the viewset queryset
+    # Convocatòria: agrupació de sessions creades en bulk (encadenades). Null = individual.
+    attendees_info = serializers.SerializerMethodField()
 
     class Meta:
         model = FittingSession
@@ -100,10 +102,18 @@ class FittingSessionListSerializer(serializers.ModelSerializer):
             'id', 'data', 'fase', 'fase_display', 'estat', 'estat_display',
             'model', 'garment_set', 'target', 'responsable', 'responsable_nom',
             'n_peces', 'created_at',
+            'convocatoria', 'start_time', 'duracio_minuts', 'attendees_info',
         ]
+        read_only_fields = ['convocatoria', 'start_time', 'duracio_minuts']
 
     def get_target(self, obj):
         return _session_target(obj)
+
+    def get_attendees_info(self, obj):
+        return [{'id': a.id,
+                 'nom': a.user.get_full_name() or a.user.username,
+                 'color_avatar': a.color_avatar or '#888888'}
+                for a in obj.attendees.all()]
 
 
 class FittingSessionDetailSerializer(serializers.ModelSerializer):

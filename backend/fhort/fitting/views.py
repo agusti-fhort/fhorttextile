@@ -100,6 +100,7 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
         return (
             FittingSession.objects
             .select_related('model', 'garment_set', 'responsable', 'created_by')
+            .prefetch_related('attendees__user')   # attendees_info (list) — evita N+1
             .annotate(n_peces=Count('piece_fittings'))
         )
 
