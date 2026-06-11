@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { Stage, Layer, Rect, Text, Line, Image as KonvaImage, Transformer } from 'react-konva'
+import { Stage, Layer, Rect, Text, Line, Image as KonvaImage, Transformer, Group } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
 
@@ -37,114 +37,9 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(pe
 const toPx = (mm) => mm * MM_TO_PX
 const toMm = (px) => px / MM_TO_PX
 
-// ─── Generador de taula SVG (reutilitzat de l'editor anterior — sense canvis funcionals) ───
-const escXml = (s) =>
-  String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-const textPx = (s, fSize = 7) => String(s ?? '').length * fSize * 0.62 + 8
-
-function calcColWidths(data, tableType) {
-  const showCa = tableType !== 'finals'
-  const sizes = data.size_labels || []
-  let codiW = textPx('REF', 6.5)
-  let enW = textPx('Name (EN)', 6.5)
-  let caW = showCa ? textPx('Nom (CA)', 6.5) : 0
-  const sizeWs = sizes.map(s => textPx(s, 6.5))
-  data.rows.forEach(row => {
-    const ref = row.abbreviation || row.codi_client || row.codi || ''
-    codiW = Math.max(codiW, textPx(ref, 7))
-    enW = Math.max(enW, textPx(row.nom_en, 7))
-    if (showCa) caW = Math.max(caW, textPx(row.nom_ca, 7))
-    sizes.forEach((s, i) => {
-      const v = row.valors?.[s]
-      const t = v === undefined || v === null ? '–' : String(v)
-      sizeWs[i] = Math.max(sizeWs[i], textPx(t, 7))
-    })
-  })
-  return {
-    codiW: Math.ceil(codiW), enW: Math.ceil(enW), caW: Math.ceil(caW),
-    sizeWs: sizeWs.map(w => Math.ceil(w)),
-  }
-}
-
-function generateTableSVG(data, tableType) {
-  if (!data?.rows?.length) return null
-  const showCa = tableType !== 'finals'
-  const sizes = data.size_labels || []
-  const ROW_H = 14, HDR_H = 16
-  const { codiW, enW, caW, sizeWs } = calcColWidths(data, tableType)
-  const cols = [
-    { label: 'REF', w: codiW, kind: 'codi' },
-    { label: 'Name (EN)', w: enW, kind: 'en' },
-    ...(showCa ? [{ label: 'Nom (CA)', w: caW, kind: 'ca' }] : []),
-    ...sizes.map((s, i) => ({ label: s, w: sizeWs[i], kind: 'size', size: s })),
-  ]
-  const colX = []
-  cols.reduce((acc, c) => { colX.push(acc); return acc + c.w }, 0)
-  const totalW = cols.reduce((acc, c) => acc + c.w, 0)
-  const totalH = HDR_H + data.rows.length * ROW_H
-  let hdr = `<rect x="0" y="0" width="${totalW}" height="${HDR_H}" fill="#111827"/>`
-  cols.forEach((c, i) => {
-    const tx = c.kind === 'size' || c.kind === 'codi' ? colX[i] + c.w / 2 : colX[i] + 4
-    const anchor = c.kind === 'size' || c.kind === 'codi' ? 'middle' : 'start'
-    hdr += `<text x="${tx}" y="${HDR_H / 2 + 2.5}" font-family="monospace" font-size="6.5" fill="#ffffff" text-anchor="${anchor}" dominant-baseline="middle">${escXml(c.label)}</text>`
-  })
-  let body = ''
-  data.rows.forEach((row, ri) => {
-    const y = HDR_H + ri * ROW_H, ty = y + ROW_H / 2
-    const fill = ri % 2 === 0 ? '#ffffff' : '#f7f7f7'
-    body += `<rect x="0" y="${y}" width="${totalW}" height="${ROW_H}" fill="${fill}"/>`
-    body += `<line x1="0" y1="${y}" x2="${totalW}" y2="${y}" stroke="#e0d5c5" stroke-width="0.4"/>`
-    cols.forEach((c, i) => {
-      let txt, color, weight = 'normal', style = 'normal'
-      let anchor = 'start', tx = colX[i] + 4
-      if (c.kind === 'codi') {
-        txt = row.abbreviation || row.codi_client || row.codi || ''
-        color = '#dc2626'; weight = 'bold'; anchor = 'middle'; tx = colX[i] + c.w / 2
-      } else if (c.kind === 'en') {
-        txt = row.nom_en || ''; color = '#1d1d1b'
-      } else if (c.kind === 'ca') {
-        txt = row.nom_ca || ''; color = '#6b7280'; style = 'italic'
-      } else {
-        const v = row.valors?.[c.size]
-        txt = v === undefined || v === null ? '–' : String(v)
-        color = '#1d1d1b'; anchor = 'middle'; tx = colX[i] + c.w / 2
-      }
-      body += `<text x="${tx}" y="${ty}" font-family="monospace" font-size="7" font-weight="${weight}" font-style="${style}" fill="${color}" text-anchor="${anchor}" dominant-baseline="middle">${escXml(txt)}</text>`
-    })
-  })
-  let vlines = ''
-  cols.forEach((_, i) => {
-    if (i === 0) return
-    vlines += `<line x1="${colX[i]}" y1="0" x2="${colX[i]}" y2="${totalH}" stroke="#e0d5c5" stroke-width="0.4"/>`
-  })
-  const border = `<rect x="0" y="0" width="${totalW}" height="${totalH}" fill="none" stroke="#c27a2a" stroke-width="0.8"/>`
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${totalH}" width="${totalW}" height="${totalH}">${hdr}${body}${vlines}${border}</svg>`
-}
-
-function tableDimsFromSVG(svg) {
-  const m = svg?.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/)
-  return m ? { w: parseFloat(m[1]), h: parseFloat(m[2]) } : { w: 400, h: 200 }
-}
-
-function svgToPngDataURL(svgStr, outW, outH) {
-  return new Promise((resolve, reject) => {
-    const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)))
-    const img = new window.Image()
-    img.onload = () => {
-      const w = img.naturalWidth || 1, h = img.naturalHeight || 1
-      const cw = outW || w * 3, ch = outH || h * 3
-      const c = document.createElement('canvas')
-      c.width = cw; c.height = ch
-      const ctx = c.getContext('2d')
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cw, ch)
-      ctx.drawImage(img, 0, 0, cw, ch)
-      try { resolve(c.toDataURL('image/png')) } catch (e) { reject(e) }
-    }
-    img.onerror = () => reject(new Error('SVG → Image load failed'))
-    img.src = url
-  })
-}
+// ─── (TS-2) El pipeline SVG→PNG de taules s'ha retirat: les taules ara són blocs
+// Konva natius (vegeu buildTablePrimitives / GradedTableNode). Es mantenen només els
+// helpers d'imatge (loadImageEl/useImage) per a croquis i fitxers del model. ───
 
 // Carrega un HTMLImageElement (promesa) — per a l'export offscreen.
 function loadImageEl(src) {
@@ -173,8 +68,129 @@ function useImage(src) {
   return img
 }
 
+// ════════════════════ Blocs de dades vius (TS-2): geometria ═════════════════
+// Geometria en px (escala MM_TO_PX). Una única font de veritat: tant els components
+// React (live) com el render offscreen (export/miniatures) consumeixen les mateixes
+// "primitives" {t:'r'|'t'|'l', ...}. Així no hi ha drift entre canvas i PDF.
+const T_ROW_H = 14 * MM_TO_PX
+const T_HDR_H = 16 * MM_TO_PX
+const T_FONT = Math.round(6.5 * MM_TO_PX)
+const T_REF_W = 28 * MM_TO_PX
+const T_NAME_W = 52 * MM_TO_PX
+const T_NOM_W = 52 * MM_TO_PX
+const T_VAL_W = 20 * MM_TO_PX
+const T_PAD = 2 * MM_TO_PX
+const TBL = {
+  HDR_BG: '#111827', HDR_TEXT: '#ffffff', ROW_EVEN: '#ffffff', ROW_ODD: '#f7f7f7',
+  ROW_BORDER: '#e0d5c5', OUTER: '#c27a2a', REF: '#dc2626', NOM: '#6b7280', VAL: '#1d1d1b',
+}
+
+// graded-table JSON → {prims, totalW, totalH}. Camps reals: size_labels / rows[{codi,
+// abbreviation,nom_en,nom_ca,valors}]. (NO sizes/base_size/is_base — no existeixen.)
+function buildTablePrimitives(d) {
+  const sizes = d?.size_labels || []
+  const rows = d?.rows || []
+  const totalW = T_REF_W + T_NAME_W + T_NOM_W + sizes.length * T_VAL_W
+  const totalH = T_HDR_H + rows.length * T_ROW_H
+  const valX0 = T_REF_W + T_NAME_W + T_NOM_W
+  const prims = []
+  // Capçalera
+  prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: T_HDR_H, fill: TBL.HDR_BG })
+  prims.push({ t: 't', x: 0, y: 0, w: T_REF_W, h: T_HDR_H, text: 'REF', fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
+  prims.push({ t: 't', x: T_REF_W + T_PAD, y: 0, w: T_NAME_W - T_PAD, h: T_HDR_H, text: 'Name (EN)', fill: TBL.HDR_TEXT, size: T_FONT, mid: true })
+  prims.push({ t: 't', x: T_REF_W + T_NAME_W + T_PAD, y: 0, w: T_NOM_W - T_PAD, h: T_HDR_H, text: 'Nom (CA)', fill: TBL.HDR_TEXT, size: T_FONT, mid: true })
+  sizes.forEach((sl, si) => prims.push({ t: 't', x: valX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: sl, fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true }))
+  // Files
+  rows.forEach((row, ri) => {
+    const y = T_HDR_H + ri * T_ROW_H
+    prims.push({ t: 'r', x: 0, y, w: totalW, h: T_ROW_H, fill: ri % 2 === 0 ? TBL.ROW_EVEN : TBL.ROW_ODD })
+    const ref = [row.abbreviation, row.codi].filter(Boolean).join(' ') || row.codi || ''
+    prims.push({ t: 't', x: 0, y, w: T_REF_W, h: T_ROW_H, text: ref, fill: TBL.REF, size: T_FONT, bold: true, align: 'center', mid: true })
+    prims.push({ t: 't', x: T_REF_W + T_PAD, y, w: T_NAME_W - T_PAD, h: T_ROW_H, text: row.nom_en || '', fill: TBL.VAL, size: T_FONT, mid: true })
+    prims.push({ t: 't', x: T_REF_W + T_NAME_W + T_PAD, y, w: T_NOM_W - T_PAD, h: T_ROW_H, text: row.nom_ca || '', fill: TBL.NOM, size: T_FONT, italic: true, mid: true })
+    sizes.forEach((sl, si) => {
+      const v = row.valors?.[sl]
+      prims.push({ t: 't', x: valX0 + si * T_VAL_W, y, w: T_VAL_W, h: T_ROW_H, text: v != null ? String(v) : '–', fill: TBL.VAL, size: T_FONT, align: 'center', mid: true })
+    })
+    prims.push({ t: 'l', points: [0, y + T_ROW_H, totalW, y + T_ROW_H], stroke: TBL.ROW_BORDER, sw: 0.5 })
+  })
+  // Separadors verticals + vora exterior
+  let cx = T_REF_W
+  ;[T_NAME_W, T_NOM_W, ...sizes.map(() => T_VAL_W)].forEach(w => {
+    prims.push({ t: 'l', points: [cx, 0, cx, totalH], stroke: TBL.ROW_BORDER, sw: 0.5 }); cx += w
+  })
+  prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: totalH, stroke: TBL.OUTER, sw: 1.5 })
+  return { prims, totalW, totalH }
+}
+
+// Capçalera del model → {prims, totalW, totalH}. Dues bandes (20mm + 12mm), 277mm d'ample.
+function buildHeaderPrimitives(m, versio) {
+  const W = 277 * MM_TO_PX
+  const B1 = 20 * MM_TO_PX, B2 = 12 * MM_TO_PX
+  const totalH = B1 + B2
+  const PAD = 2 * MM_TO_PX
+  const prims = []
+  prims.push({ t: 'r', x: 0, y: 0, w: W, h: B1, fill: '#f5e6d0', stroke: '#c27a2a', sw: 1 })
+  prims.push({ t: 't', x: PAD, y: 0, w: W * 0.4 - PAD, h: B1, text: [m?.codi_intern, m?.nom_prenda].filter(Boolean).join(' · '), fill: '#1d1d1b', size: Math.round(9 * MM_TO_PX), bold: true, mid: true })
+  prims.push({ t: 't', x: W * 0.4, y: 0, w: W * 0.42, h: B1, text: [m?.customer_nom, m?.temporada, m?.collection].filter(Boolean).join(' · '), fill: '#1d1d1b', size: Math.round(7 * MM_TO_PX), align: 'center', mid: true })
+  prims.push({ t: 't', x: W * 0.82, y: 0, w: W * 0.18 - PAD, h: B1, text: '(logo)', fill: '#868685', size: Math.round(7 * MM_TO_PX), align: 'right', mid: true })
+  prims.push({ t: 'r', x: 0, y: B1, w: W, h: B2, fill: '#fafafa', stroke: '#e0d5c5', sw: 1 })
+  const line2 = [m?.garment_type_item_nom, m?.size_system_nom, m?.responsable_nom, `v${versio ?? 1}`].filter(Boolean).join(' · ')
+  prims.push({ t: 't', x: PAD, y: B1, w: W - 2 * PAD, h: B2, text: line2, fill: '#6b7280', size: Math.round(6.5 * MM_TO_PX), mid: true })
+  return { prims, totalW: W, totalH }
+}
+
+// Primitiva → node React Konva. Els rectangles amb fill capturen el clic (hit area del
+// Group); text/línies/vores no escolten (no bloquegen drag ni selecció).
+function PrimNode({ p }) {
+  if (p.t === 'r') {
+    return <Rect x={p.x} y={p.y} width={p.w} height={p.h} fill={p.fill}
+      stroke={p.stroke} strokeWidth={p.sw} listening={!!p.fill} />
+  }
+  if (p.t === 'l') {
+    return <Line points={p.points} stroke={p.stroke} strokeWidth={p.sw} listening={false} />
+  }
+  return <Text x={p.x} y={p.y} width={p.w} height={p.h} text={p.text} fill={p.fill}
+    fontSize={p.size} fontFamily={FONT} fontStyle={p.bold ? 'bold' : p.italic ? 'italic' : 'normal'}
+    align={p.align || 'left'} verticalAlign={p.mid ? 'middle' : 'top'}
+    ellipsis wrap="none" listening={false} />
+}
+
+// Primitiva → node Konva imperatiu (render offscreen per a export/miniatures).
+function addPrimsToGroup(group, prims) {
+  for (const p of prims) {
+    if (p.t === 'r') group.add(new Konva.Rect({ x: p.x, y: p.y, width: p.w, height: p.h, fill: p.fill, stroke: p.stroke, strokeWidth: p.sw }))
+    else if (p.t === 'l') group.add(new Konva.Line({ points: p.points, stroke: p.stroke, strokeWidth: p.sw }))
+    else group.add(new Konva.Text({ x: p.x, y: p.y, width: p.w, height: p.h, text: p.text, fill: p.fill, fontSize: p.size, fontFamily: FONT, fontStyle: p.bold ? 'bold' : p.italic ? 'italic' : 'normal', align: p.align || 'left', verticalAlign: p.mid ? 'middle' : 'top', ellipsis: true, wrap: 'none' }))
+  }
+}
+
+// Bloc de taula graduada — Konva natiu (no imatge). NO fa fetch: rep tableData del pare.
+function GradedTableNode({ tableData, groupProps, isSelected }) {
+  const { prims, totalW, totalH } = useMemo(() => buildTablePrimitives(tableData), [tableData])
+  return (
+    <Group {...groupProps}>
+      {prims.map((p, i) => <PrimNode key={i} p={p} />)}
+      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={TBL.OUTER} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
+    </Group>
+  )
+}
+
+// Capçalera del model — Konva natiu. Resol els camps del model en render (sempre fresc).
+function HeaderBlock({ modelData, versio, groupProps, isSelected }) {
+  const { prims, totalW, totalH } = useMemo(() => buildHeaderPrimitives(modelData, versio), [modelData, versio])
+  return (
+    <Group {...groupProps}>
+      {prims.map((p, i) => <PrimNode key={i} p={p} />)}
+      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke="#c27a2a" strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
+    </Group>
+  )
+}
+
 // ─── Render offscreen d'una pàgina a dataURL (export PDF + miniatures) ───
-async function renderPageToDataURL(page, pixelRatio, tableSrcMap) {
+// ctx = { tableData:{objId:json}, modelData, versio }. Dibuixa els blocs de dades
+// natius amb les mateixes primitives que el canvas viu (cap PNG congelat).
+async function renderPageToDataURL(page, pixelRatio, ctx) {
   const container = document.createElement('div')
   const stage = new Konva.Stage({ container, width: CANVAS_W, height: CANVAS_H })
   const layer = new Konva.Layer()
@@ -200,8 +216,21 @@ async function renderPageToDataURL(page, pixelRatio, tableSrcMap) {
         points: (o.points || []).map(toPx), stroke: o.stroke || COL.textMain,
         strokeWidth: o.strokeWidth || 1, lineCap: 'round', lineJoin: 'round',
       }))
-    } else if (o.type === 'image' || o.type === 'data_block') {
-      const src = o.type === 'data_block' ? tableSrcMap[o.id] : o.src
+    } else if (o.type === 'data_block') {
+      // Blocs vius natius: mateixes primitives que el canvas. Group posicionat en px.
+      let built = null
+      if (o.kind === 'header') built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio)
+      else if (o.kind === 'graded_table') {
+        const data = ctx?.tableData?.[o.id]
+        if (data) built = buildTablePrimitives(data)
+      }
+      if (built) {
+        const g = new Konva.Group({ x: toPx(o.x), y: toPx(o.y) })
+        addPrimsToGroup(g, built.prims)
+        layer.add(g)
+      }
+    } else if (o.type === 'image') {
+      const src = o.src
       if (!src) continue
       try {
         const el = await loadImageEl(src)
@@ -242,7 +271,7 @@ function ImageObj({ obj, src, common }) {
     width={toPx(obj.width)} height={toPx(obj.height || obj.width)} />
 }
 
-function ObjectNode({ obj, src, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
+function ObjectNode({ obj, src, tableData, modelData, versio, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y),
@@ -251,6 +280,21 @@ function ObjectNode({ obj, src, selectable, draggable, onSelect, onDragEnd, onTr
     onTap: selectable ? onSelect : undefined,
     onDragEnd,
     onTransformEnd,
+  }
+  if (obj.type === 'data_block') {
+    if (obj.kind === 'header') {
+      return <HeaderBlock modelData={modelData} versio={versio} groupProps={common} isSelected={selected} />
+    }
+    const data = tableData?.[obj.id]
+    if (!data) {
+      return (
+        <Group {...common}>
+          <Rect width={toPx(obj.width || 120)} height={toPx(obj.height || 40)} fill={COL.goldPale} stroke={COL.border} dash={[4, 4]} />
+          <Text x={6} y={6} text={data === null ? 'Sense grading actiu' : 'Carregant taula…'} fontSize={12} fontFamily={FONT} fill={COL.textMuted} listening={false} />
+        </Group>
+      )
+    }
+    return <GradedTableNode tableData={data} groupProps={common} isSelected={selected} />
   }
   if (obj.type === 'text') {
     return <Text {...common} text={obj.text || ''} width={obj.width ? toPx(obj.width) : undefined}
@@ -268,7 +312,7 @@ function ObjectNode({ obj, src, selectable, draggable, onSelect, onDragEnd, onTr
       stroke={obj.stroke || COL.textMain} strokeWidth={obj.strokeWidth || 1}
       lineCap="round" lineJoin="round" hitStrokeWidth={10} />
   }
-  if (obj.type === 'image' || obj.type === 'data_block') {
+  if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
   }
   return null
@@ -297,7 +341,8 @@ export default function TechSheetEditor() {
   const [saveState, setSaveState] = useState(null)  // null|'saving'|'saved'|'error'
   const [fitxers, setFitxers] = useState([])
   const [sizeFittings, setSizeFittings] = useState([])
-  const [tableSrc, setTableSrc] = useState({})      // {objId: dataURL} fora del JSON
+  const [tableData, setTableData] = useState({})    // {objId: jsonData|null} fora del JSON
+  const [notice, setNotice] = useState(null)        // toast efímer (p.ex. "ja hi ha capçalera")
   const [thumbnails, setThumbnails] = useState([])
   const [exporting, setExporting] = useState(false)
   const [addingTable, setAddingTable] = useState(false)
@@ -401,24 +446,20 @@ export default function TechSheetEditor() {
     setCurrentPage(0)
   }
 
-  // ── Re-fetch dels data_block (taula graduada) en carregar ──────────────────
+  // ── Re-fetch dels data_block (taula graduada) en carregar → cache JSON viu ──
   useEffect(() => {
     const pending = pages.flatMap(p => (p.objects || []))
-      .filter(o => o.type === 'data_block' && o.kind === 'graded_table' && o.size_fitting_id && !tableSrc[o.id])
+      .filter(o => o.type === 'data_block' && o.kind === 'graded_table' && o.size_fitting_id && !(o.id in tableData))
     if (!pending.length) return
     let cancelled = false
     ;(async () => {
       for (const o of pending) {
         try {
           const r = await fetch(`${API}/api/v1/fitting/${o.size_fitting_id}/graded-table/`, { headers: authHeaders })
-          if (!r.ok) continue
-          const data = await r.json()
-          const svg = generateTableSVG(data, 'graded')
-          if (!svg) continue
-          const dims = tableDimsFromSVG(svg)
-          const png = await svgToPngDataURL(svg, dims.w * 3, dims.h * 3)
-          if (!cancelled) setTableSrc(m => ({ ...m, [o.id]: png }))
-        } catch { /* silenci */ }
+          // 404 (sf sense GradingVersion activa) → null = placeholder "Sense grading actiu".
+          const data = r.ok ? await r.json() : null
+          if (!cancelled) setTableData(m => ({ ...m, [o.id]: data }))
+        } catch { if (!cancelled) setTableData(m => ({ ...m, [o.id]: null })) }
       }
     })()
     return () => { cancelled = true }
@@ -448,14 +489,15 @@ export default function TechSheetEditor() {
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
+        const ctx = { tableData, modelData: model, versio: sheet?.versio }
         const thumbs = []
-        for (const p of pages) thumbs.push(await renderPageToDataURL(p, 0.18, tableSrc))
+        for (const p of pages) thumbs.push(await renderPageToDataURL(p, 0.18, ctx))
         setThumbnails(thumbs)
       } catch { /* noop */ }
     }, 300)
     return () => clearTimeout(t)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pages, tableSrc])
+  }, [pages, tableData, model, sheet?.versio])
 
   // ── Transformer: lliga el node seleccionat ─────────────────────────────────
   useEffect(() => {
@@ -463,8 +505,9 @@ export default function TechSheetEditor() {
     const stage = stageRef.current
     if (!tr || !stage) return
     const obj = objectsOf(currentPage).find(o => o.id === selectedId)
-    // No transformem línies (resize de punts complex) ni objectes no-free.
-    if (selectedId && obj && obj.layer !== 'template' && obj.type !== 'line') {
+    // No transformem línies (resize de punts complex) ni blocs de dades (auto-dimensionats)
+    // ni objectes de plantilla. Aquests es mouen (drag) però no es redimensionen.
+    if (selectedId && obj && obj.layer !== 'template' && obj.type !== 'line' && obj.type !== 'data_block') {
       const node = stage.findOne('#' + selectedId)
       tr.nodes(node ? [node] : [])
     } else {
@@ -616,25 +659,24 @@ export default function TechSheetEditor() {
     } catch { /* silenci */ }
   }
 
-  // ── Bloc de dades: taula graduada ──────────────────────────────────────────
+  const flash = (text) => { setNotice(text); setTimeout(() => setNotice(null), 2500) }
+
+  // ── Bloc de dades: taula graduada (Konva natiu — sense PNG congelat) ────────
   const insertGradedTable = async (sfId) => {
     if (!locked) return
     setAddingTable(true)
     try {
       const r = await fetch(`${API}/api/v1/fitting/${sfId}/graded-table/`, { headers: authHeaders })
-      if (!r.ok) return
+      if (!r.ok) { flash('Aquest size fitting no té grading actiu.'); return }
       const data = await r.json()
-      if (!data.rows || !data.rows.length) return
-      const svg = generateTableSVG(data, 'graded')
-      if (!svg) return
-      const dims = tableDimsFromSVG(svg)
-      const png = await svgToPngDataURL(svg, dims.w * 3, dims.h * 3)
-      const PX_TO_MM = 0.34
-      let wmm = dims.w * PX_TO_MM, hmm = dims.h * PX_TO_MM
-      const MAXW = 257
-      if (wmm > MAXW) { const k = MAXW / wmm; wmm = MAXW; hmm *= k }
-      const obj = { id: uid(), type: 'data_block', kind: 'graded_table', size_fitting_id: sfId, layer: 'data', x: 50, y: 50, width: wmm, height: hmm }
-      setTableSrc(m => ({ ...m, [obj.id]: png }))
+      if (!data.rows || !data.rows.length) { flash('Taula buida.'); return }
+      const { totalW, totalH } = buildTablePrimitives(data)
+      const objId = uid()
+      const obj = {
+        id: objId, type: 'data_block', kind: 'graded_table', size_fitting_id: sfId,
+        layer: 'data', x: 50, y: 50, width: totalW / MM_TO_PX, height: totalH / MM_TO_PX,
+      }
+      setTableData(m => ({ ...m, [objId]: data }))
       addObject(obj)
     } catch { /* silenci */ }
     finally { setAddingTable(false) }
@@ -643,6 +685,19 @@ export default function TechSheetEditor() {
     if (!sizeFittings.length) return
     if (sizeFittings.length === 1) insertGradedTable(sizeFittings[0].id)
     else setPickFitting(true)
+  }
+
+  // ── Bloc de dades: capçalera del model (màxim 1 per pàgina) ─────────────────
+  const insertHeader = () => {
+    if (!locked) return
+    if (objectsOf(currentPage).some(o => o.type === 'data_block' && o.kind === 'header')) {
+      flash('Ja hi ha una capçalera en aquesta pàgina.'); return
+    }
+    const { totalW, totalH } = buildHeaderPrimitives(model, sheet?.versio)
+    addObject({
+      id: uid(), type: 'data_block', kind: 'header', layer: 'data',
+      x: 10, y: 8, width: totalW / MM_TO_PX, height: totalH / MM_TO_PX,
+    })
   }
 
   // ── Pàgines ────────────────────────────────────────────────────────────────
@@ -664,8 +719,9 @@ export default function TechSheetEditor() {
     setExporting(true)
     try {
       const pdf = await PDFDocument.create()
+      const ctx = { tableData, modelData: model, versio: sheet?.versio }
       for (const p of pages) {
-        const dataUrl = await renderPageToDataURL(p, 3.5, tableSrc)
+        const dataUrl = await renderPageToDataURL(p, 3.5, ctx)
         const png = await pdf.embedPng(dataUrl)
         const page = pdf.addPage([PDF_W_PT, PDF_H_PT])
         page.drawImage(png, { x: 0, y: 0, width: PDF_W_PT, height: PDF_H_PT })
@@ -725,6 +781,7 @@ export default function TechSheetEditor() {
         </span>
         <span style={{ fontSize: 11, color: COL.textMuted }}>Pàgina {currentPage + 1} de {pages.length}</span>
         {saveLabel && <span style={{ fontSize: 11, color: COL.textMuted }}>{saveLabel}</span>}
+        {notice && <span style={{ fontSize: 11, color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
 
         {/* Eines (només en edició) */}
         {locked && (
@@ -785,7 +842,9 @@ export default function TechSheetEditor() {
               <Layer>
                 <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill="#ffffff" listening={false} />
                 {ordered.map(o => (
-                  <ObjectNode key={o.id} obj={o} src={o.type === 'data_block' ? tableSrc[o.id] : o.src}
+                  <ObjectNode key={o.id} obj={o} src={o.src}
+                    tableData={tableData} modelData={model} versio={sheet?.versio}
+                    selected={selectedId === o.id}
                     selectable={locked && o.layer !== 'template'}
                     draggable={locked && tool === 'select' && o.layer !== 'template'}
                     onSelect={() => setSelectedId(o.id)}
@@ -818,7 +877,11 @@ export default function TechSheetEditor() {
         <aside style={{ width: 180, flexShrink: 0, borderLeft: `1px solid ${COL.border}`, background: COL.bg, display: 'flex', flexDirection: 'column', minHeight: 0, fontFamily: FONT }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
             {/* Inserir blocs de dades */}
-            <SectionTitle>Inserir</SectionTitle>
+            <SectionTitle>Inserir bloc de dades</SectionTitle>
+            <button onClick={insertHeader} disabled={!locked}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: '#fff', fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
+              <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> Capçalera del model
+            </button>
             <button onClick={onAddTableClick} disabled={!locked || addingTable || !sizeFittings.length}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: '#fff', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>
               <i className="ti ti-table" style={{ fontSize: 13 }} /> {addingTable ? 'Afegint…' : 'Taula graduada'}
@@ -865,7 +928,7 @@ export default function TechSheetEditor() {
                       style={{ ...propInput, padding: 0, height: 26 }} />
                   </label>
                 )}
-                {selObj.layer === 'free' && (
+                {(selObj.layer === 'free' || selObj.type === 'data_block') && (
                   <button onClick={() => deleteObject(selObj.id)}
                     style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 6, border: `1px solid #e74c3c`, borderRadius: 5, background: 'transparent', color: '#e74c3c', fontFamily: FONT, cursor: 'pointer' }}>
                     <i className="ti ti-trash" style={{ fontSize: 12, marginRight: 5 }} />Eliminar
