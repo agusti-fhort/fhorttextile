@@ -45,7 +45,10 @@ def _is_holiday(d, cal):
 
 
 def _absence_dates(profile):
-    """Conjunt-funció: retorna un predicat tancat sobre les absències del tècnic."""
+    """Conjunt-funció: retorna un predicat tancat sobre les absències del tècnic.
+    profile=None → cap absència (encadenament sobre calendari d'empresa pur)."""
+    if profile is None:
+        return lambda d: False
     ranges = [(a.data_inici, a.data_fi) for a in profile.absencies.all()]
     def _is_absent(d):
         return any(ini <= d <= fi for ini, fi in ranges)
@@ -53,7 +56,10 @@ def _absence_dates(profile):
 
 
 def _effective_horaris(profile, cal):
-    """Jornada vigent del tècnic: override propi si n'hi ha, si no la de l'empresa."""
+    """Jornada vigent del tècnic: override propi si n'hi ha, si no la de l'empresa.
+    profile=None → jornada d'empresa (encadenament sobre calendari d'empresa pur)."""
+    if profile is None:
+        return cal.horaris
     return profile.jornada_override if profile.jornada_override else cal.horaris
 
 

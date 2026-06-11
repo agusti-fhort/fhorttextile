@@ -255,6 +255,9 @@ class FittingSession(models.Model):
         'accounts.UserProfile', blank=True,
         related_name='fitting_sessions',
         help_text='Assistents interns: ocupen franja a la seva cua de planificació.')
+    convocatoria = models.UUIDField(
+        null=True, blank=True, db_index=True,
+        help_text='UUID compartit per sessions creades juntes (bulk). Null = individual.')
 
     class Meta:
         verbose_name = 'Sessió de fitting'
