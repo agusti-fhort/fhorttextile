@@ -14,7 +14,7 @@ class TechSheetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TechSheet
-        fields = ['id', 'model_id', 'estat', 'versio',
+        fields = ['id', 'model_id', 'estat', 'versio', 'template_json',
                   'locked_by_id', 'locked_by_username', 'updated_at',
                   'num_pages', 'has_content']
 
