@@ -52,3 +52,26 @@ class TechSheet(models.Model):
 
     def __str__(self):
         return f'TechSheet<{self.model_id}> [{self.estat}] v{self.versio}'
+
+
+class TechSheetTemplate(models.Model):
+    """Plantilla de fitxa tècnica per Customer (TS-3). Una per client; la del Customer
+    is_self=True actua com a default del tenant. S'aplica en crear la TechSheet d'un model
+    (copia template_json). Mateix format v2 (clau `pages`) que TechSheet — opac per al backend."""
+    customer = models.OneToOneField(
+        'tasks.Customer',
+        on_delete=models.CASCADE,
+        related_name='tech_sheet_template',
+    )
+    nom = models.CharField(max_length=120, blank=True, default='')
+    template_json = models.JSONField(default=dict, blank=True)
+    actiu = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Tech sheet template'
+        verbose_name_plural = 'Tech sheet templates'
+
+    def __str__(self):
+        return f'Template {self.customer.codi}'

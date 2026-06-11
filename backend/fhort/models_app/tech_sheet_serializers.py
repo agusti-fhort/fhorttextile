@@ -2,7 +2,7 @@
 de l'editor i el badge de lock."""
 from rest_framework import serializers
 
-from .tech_sheet_models import TechSheet
+from .tech_sheet_models import TechSheet, TechSheetTemplate
 
 
 class TechSheetSerializer(serializers.ModelSerializer):
@@ -30,3 +30,25 @@ class TechSheetSerializer(serializers.ModelSerializer):
         tj = obj.template_json or {}
         pages = tj.get('pages') or tj.get('schemas') or []
         return len(pages)
+
+
+class TechSheetTemplateSerializer(serializers.ModelSerializer):
+    customer_nom = serializers.CharField(source='customer.nom', read_only=True)
+    has_content = serializers.SerializerMethodField()
+    num_pages = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TechSheetTemplate
+        fields = ['id', 'customer', 'customer_nom', 'nom',
+                  'template_json', 'has_content', 'num_pages',
+                  'actiu', 'updated_at']
+
+    def get_has_content(self, obj):
+        tj = obj.template_json or {}
+        pages = tj.get('pages') or tj.get('schemas')
+        return bool(pages)
+
+    def get_num_pages(self, obj):
+        tj = obj.template_json or {}
+        pages = tj.get('pages') or tj.get('schemas')
+        return len(pages) if pages else 0

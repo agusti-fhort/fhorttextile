@@ -16,6 +16,7 @@ import datetime
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -23,18 +24,49 @@ from rest_framework.views import APIView
 from fhort.accounts.capabilities import CONFIGURE, get_capabilities
 
 from .models import Model
-from .tech_sheet_models import TechSheet
-from .tech_sheet_serializers import TechSheetSerializer
+from .tech_sheet_models import TechSheet, TechSheetTemplate
+from .tech_sheet_serializers import TechSheetSerializer, TechSheetTemplateSerializer
 
 # Caducitat del lock: passat aquest temps sense unlock, un altre usuari el pot forçar.
 LOCK_TTL = datetime.timedelta(minutes=30)
 
 
 def _get_sheet(model_id):
-    """Retorna (o crea) la fitxa del model. 404 si el model no existeix."""
+    """Retorna (o crea) la fitxa del model. 404 si el model no existeix.
+    En crear-la per primer cop (i si encara no té contingut), hi aplica automàticament
+    la plantilla del customer del model (o la del default del tenant)."""
     model = get_object_or_404(Model, pk=model_id)
-    sheet, _ = TechSheet.objects.get_or_create(model=model)
+    sheet, created = TechSheet.objects.get_or_create(model=model)
+    if created and not sheet.template_json:
+        template_json = _resolve_template_json(model.customer)
+        if template_json:
+            sheet.template_json = template_json
+            sheet.save(update_fields=['template_json'])
     return sheet
+
+
+def _resolve_template_json(customer):
+    """template_json de la plantilla del customer (actiu), o del Customer is_self
+    (default del tenant), o {} si cap no en té."""
+    if customer is not None:
+        try:
+            t = TechSheetTemplate.objects.get(customer=customer, actiu=True)
+            if t.template_json:
+                return t.template_json
+        except TechSheetTemplate.DoesNotExist:
+            pass
+    # Fallback: default del tenant (Customer is_self=True).
+    from fhort.tasks.models import Customer as CustomerModel
+    try:
+        self_customer = CustomerModel.objects.get(is_self=True)
+        if self_customer != customer:
+            t = TechSheetTemplate.objects.get(customer=self_customer, actiu=True)
+            if t.template_json:
+                return t.template_json
+    except (TechSheetTemplate.DoesNotExist, CustomerModel.DoesNotExist,
+            CustomerModel.MultipleObjectsReturned):
+        pass
+    return {}
 
 
 class TechSheetDetailView(APIView):
@@ -132,3 +164,40 @@ class TechSheetUpdateView(APIView):
         sheet.last_editor = request.user
         sheet.save(update_fields=['template_json', 'last_editor', 'updated_at'])
         return Response(TechSheetSerializer(sheet).data)
+
+
+# ── TechSheetTemplate views (plantilla per Customer) ─────────────────────────
+
+def _get_template(customer_id):
+    """Retorna (o crea) la plantilla del customer. 404 si el customer no existeix."""
+    from fhort.tasks.models import Customer
+    customer = get_object_or_404(Customer, pk=customer_id)
+    template, _ = TechSheetTemplate.objects.get_or_create(customer=customer)
+    return template
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_or_create_template(request, customer_id):
+    template = _get_template(customer_id)
+    return Response(TechSheetTemplateSerializer(template).data)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_template(request, customer_id):
+    # Escriptura de plantilla gated `configure` (mateix patró que la resta del subsistema).
+    if CONFIGURE not in get_capabilities(request.user):
+        return Response({'detail': "Cal la capacitat 'configure'."},
+                        status=status.HTTP_403_FORBIDDEN)
+    tj = request.data.get('template_json')
+    if tj is None:
+        return Response({'detail': 'Falta template_json.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    template = _get_template(customer_id)
+    template.template_json = tj
+    nom = request.data.get('nom')
+    if nom is not None:
+        template.nom = nom
+    template.save()
+    return Response(TechSheetTemplateSerializer(template).data)
