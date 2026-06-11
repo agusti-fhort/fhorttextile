@@ -1,150 +1,68 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { Stage, Layer, Rect, Text, Line, Image as KonvaImage, Transformer } from 'react-konva'
+import Konva from 'konva'
+import { PDFDocument } from 'pdf-lib'
+
+// ════════════════════════════════════════════════════════════════════════════
+// TechSheetEditor — TS-1 (motor Konva). Substitueix l'antic editor de maquetació.
+//   · Canvas multipàgina A4-horitzontal, format template_json v2 (clau `pages`).
+//   · Eines: seleccionar, text (edició inline), imatge (upload/drop/model),
+//     rectangle, línia, dibuix lliure, bloc de dades (taula graduada).
+//   · Autosave (debounce 2s, només amb lock), lock col·laboratiu, export PDF (pdf-lib).
+// El backend (model/serializer/views/urls) NO canvia: template_json és opac i el
+// serializer deriva has_content/num_pages de la clau `pages`.
+// ════════════════════════════════════════════════════════════════════════════
 
 const API = import.meta.env.VITE_API_URL || ''
 
-// Helper: schema pdfme complet = default del plugin + overrides (posició, mida, contingut...).
-const mk = (def, over) => ({ ...def, ...over })
+// Geometria: A4 horitzontal 297×210mm. Visualització 1mm = 2.4px → 713×504px.
+const MM_TO_PX = 2.4
+const A4_W_MM = 297
+const A4_H_MM = 210
+const CANVAS_W = Math.round(A4_W_MM * MM_TO_PX)   // 713
+const CANVAS_H = Math.round(A4_H_MM * MM_TO_PX)   // 504
+// A4 horitzontal en punts PostScript (pdf-lib).
+const PDF_W_PT = 841.89
+const PDF_H_PT = 595.28
 
-// ---- Template base de la fitxa (funció pura) --------------------------------
-// Geometria A4 horitzontal (297×210). padding [24,10,24,10]: top 24 (header 18mm + 6 marge),
-// bottom 24, laterals 10 de seguretat. staticSchema = capçalera/peu/caixa repetits a cada
-// pàgina i NO movibles pel tècnic (readOnly). schemas: [[]] = una pàgina buida per editar.
-// NOTA: pdfme no té prop "bold" al text (el negreta requereix registrar una font bold);
-// amb la font per defecte s'aproxima amb mida/color. Els tokens de número de pàgina al peu
-// dret necessiten el motor d'expressions de pdfme (no activat aquí) → text de crèdit fix.
-// Nom del rectangle-guia de la caixa útil (s'elimina del PDF a l'export — només guia d'editor).
-const USEFUL_BOX_NAME = 'useful_box_border'
-
-// Miniatures de pàgina (canvas 30%): fons blanc + bandes staticSchema + placeholders de blocs.
-// Pura (no Date/random); usa canvas. Retorna array de dataURL, un per pàgina.
-function generateThumbnails(template) {
-  const pages = template?.schemas || []
-  const bp = template?.basePdf
-  const W = (bp && bp.width) || 297
-  const H = (bp && bp.height) || 210
-  const staticS = (bp && Array.isArray(bp.staticSchema)) ? bp.staticSchema : []
-  const thumbW = 89
-  const scale = thumbW / W
-  const thumbH = Math.round(H * scale)
-  return pages.map(pageSchemas => {
-    const c = document.createElement('canvas')
-    c.width = thumbW; c.height = thumbH
-    const ctx = c.getContext('2d')
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, thumbW, thumbH)
-    // Bandes/caixa de la capçalera i peu (només rectangles, sense text).
-    staticS.forEach(s => {
-      if (s.type !== 'rectangle') return
-      const x = (s.position?.x || 0) * scale, y = (s.position?.y || 0) * scale
-      const w = (s.width || 0) * scale, h = (s.height || 0) * scale
-      if (s.color) { ctx.fillStyle = s.color; ctx.fillRect(x, y, w, h) }
-      if (s.borderColor) { ctx.strokeStyle = s.borderColor; ctx.lineWidth = 0.5; ctx.strokeRect(x, y, w, h) }
-    })
-    // Blocs de contingut → placeholders crema/gold.
-    ;(pageSchemas || []).forEach(b => {
-      const x = (b.position?.x || 0) * scale, y = (b.position?.y || 0) * scale
-      const w = (b.width || 0) * scale, h = (b.height || 0) * scale
-      ctx.fillStyle = '#f0dfc0'; ctx.fillRect(x, y, w, h)
-      ctx.strokeStyle = '#c27a2a'; ctx.lineWidth = 0.5; ctx.strokeRect(x, y, w, h)
-    })
-    return c.toDataURL('image/png')
-  })
+const FONT = 'IBM Plex Mono, monospace'
+const COL = {
+  sidebar: '#f0dfc0', gold: '#c27a2a', goldPale: '#f5e6d0',
+  border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', bg: '#f5f0e8',
 }
 
-// pdfme 6 no té API per navegar a una pàgina → fallback: troba el contenidor scrollable del Designer.
-function findScroller(root) {
-  const all = root.querySelectorAll('*')
-  for (const el of all) {
-    if (el.scrollHeight > el.clientHeight + 4) {
-      const oy = getComputedStyle(el).overflowY
-      if (oy === 'auto' || oy === 'scroll') return el
-    }
-  }
-  return null
-}
+const LAYER_ORDER = { template: 0, data: 1, free: 2 }
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(performance.now())}-${Math.floor(Math.random() * 1e9)}`)
+const toPx = (mm) => mm * MM_TO_PX
+const toMm = (px) => px / MM_TO_PX
 
-const joinDot = (...xs) => xs.map(x => (x == null ? '' : String(x)).trim()).filter(Boolean).join(' · ')
-const pad2 = (n) => String(n).padStart(2, '0')
-const formatDateDDMMYYYY = (d) => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`
-
-function buildBaseTemplate(meta, defs) {
-  const { textDef, rectDef } = defs
-  const fileName = `${meta.codiIntern}_fitxa_v${meta.versio}.pdf`
-  const today = formatDateDDMMYYYY(new Date()) // data de creació de la pàgina (es congela al template desat)
-  const staticSchema = [
-    // ── Capçalera · línia 1 (y10 h14) — client / model / temporada ──
-    mk(rectDef, { name: 'hdr_band1', position: { x: 10, y: 10 }, width: 277, height: 14, color: '#f0dfc0', borderColor: '#e3cfa3', borderWidth: 0.3, readOnly: true }),
-    mk(textDef, { name: 'hdr_client', position: { x: 13, y: 12 }, width: 84, height: 6, content: joinDot(meta.customerNom, meta.codiClient) || '—', fontSize: 8, fontColor: '#1d1d1b', readOnly: true }),
-    mk(textDef, { name: 'hdr_model', position: { x: 100, y: 12 }, width: 100, height: 6, content: joinDot(meta.codiIntern, meta.nomPrenda), fontSize: 9, alignment: 'center', fontColor: '#1d1d1b', readOnly: true }),
-    mk(textDef, { name: 'hdr_season', position: { x: 240, y: 12 }, width: 45, height: 6, content: joinDot(`${meta.temporada || ''}${meta.any || ''}`, meta.collection), fontSize: 8, alignment: 'right', fontColor: '#1d1d1b', readOnly: true }),
-    // ── Capçalera · línia 2 (y20 h10) — tipus / sistema talles / versió ──
-    mk(rectDef, { name: 'hdr_band2', position: { x: 10, y: 20 }, width: 277, height: 10, color: '#f5f0e8', borderColor: '#e3cfa3', borderWidth: 0.3, readOnly: true }),
-    mk(textDef, { name: 'hdr_type', position: { x: 13, y: 21 }, width: 120, height: 5, content: joinDot(meta.garmentTypeNom, meta.garmentTypeItemNom), fontSize: 7, fontColor: '#868685', readOnly: true }),
-    mk(textDef, { name: 'hdr_sizesys', position: { x: 140, y: 21 }, width: 80, height: 5, content: joinDot(meta.sizeSystemCodi, meta.sizeSystemNom), fontSize: 7, alignment: 'center', fontColor: '#868685', readOnly: true }),
-    mk(textDef, { name: 'hdr_ver', position: { x: 240, y: 21 }, width: 45, height: 5, content: joinDot(`v${meta.versio}`, meta.responsableNom), fontSize: 7, alignment: 'right', fontColor: '#868685', readOnly: true }),
-    // ── Peu (y192 h10) ──
-    mk(rectDef, { name: 'ftr_band', position: { x: 10, y: 192 }, width: 277, height: 10, color: '#f0dfc0', borderColor: '#e3cfa3', borderWidth: 0.3, readOnly: true }),
-    mk(textDef, { name: 'page_name', position: { x: 13, y: 194 }, width: 60, height: 5, content: '', fontSize: 7, fontColor: '#1d1d1b', readOnly: false }),
-    mk(textDef, { name: 'ftr_date', position: { x: 100, y: 194 }, width: 40, height: 5, content: today, fontSize: 7, alignment: 'center', fontColor: '#868685', readOnly: true }),
-    mk(textDef, { name: 'ftr_page', position: { x: 190, y: 194 }, width: 18, height: 5, content: '1 de 1', fontSize: 7, alignment: 'center', fontColor: '#1d1d1b', readOnly: true }),
-    mk(textDef, { name: 'ftr_file', position: { x: 210, y: 194 }, width: 28, height: 5, content: fileName, fontSize: 6.5, fontColor: '#868685', readOnly: true }),
-    mk(textDef, { name: 'ftr_gen', position: { x: 240, y: 194 }, width: 45, height: 5, content: 'Generated by FHORT Textile Tech', fontSize: 6, alignment: 'right', fontColor: '#c27a2a', readOnly: true }),
-    // ── Caixa útil — guia d'editor (border gris clar). S'elimina del PDF a l'export. ──
-    mk(rectDef, { name: USEFUL_BOX_NAME, position: { x: 10, y: 28 }, width: 277, height: 162, color: '', borderColor: '#cccccc', borderWidth: 0.3, readOnly: true }),
-  ]
-  // padding: top 28 (18mm header + 10mm marge), bottom 14 (10mm peu + 4mm marge), laterals 10.
-  return { basePdf: { width: 297, height: 210, padding: [28, 10, 14, 10], staticSchema }, schemas: [[]] }
-}
-
-const hasSavedTemplate = (tj) =>
-  tj && typeof tj === 'object' && Array.isArray(tj.schemas) && tj.schemas.length > 0
-
-// ---- Taules graduades (F3) — SVG → PNG → image schema -----------------------
-// ─── Generador de taula SVG ────────────────────────────────────────────────
-// Principis:
-// - Mai trunca: les amplades de columna s'adapten al contingut real (calcColWidths).
-//   L'SVG creix tant com calgui i el tècnic l'escala al Designer.
-// - Nomenclatura = abbreviation || codi_client (el que va al dibuix), en vermell.
-// - L'SVG té viewBox intrínsec → escala proporcional quan el tècnic redimensiona
-//   la caixa al Designer (tota la imatge creix/minva com una foto, no el contenidor).
-// - Capçalera negra, files alternes blanc/#f5f5f5 gris molt clar, vores #e0d5c5.
-
+// ─── Generador de taula SVG (reutilitzat de l'editor anterior — sense canvis funcionals) ───
 const escXml = (s) =>
-  String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
-                 .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-
-// Aproximació d'amplada de text en px (monospace 7px ≈ 5.5px per caràcter)
+  String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const textPx = (s, fSize = 7) => String(s ?? '').length * fSize * 0.62 + 8
 
-// Calcula amplades mínimes de cada columna segons el contingut real
 function calcColWidths(data, tableType) {
   const showCa = tableType !== 'finals'
-  const sizes  = data.size_labels || []
-
-  // Amplada mínima per capçalera + contingut de cada columna
+  const sizes = data.size_labels || []
   let codiW = textPx('REF', 6.5)
-  let enW   = textPx('Name (EN)', 6.5)
-  let caW   = showCa ? textPx('Nom (CA)', 6.5) : 0
+  let enW = textPx('Name (EN)', 6.5)
+  let caW = showCa ? textPx('Nom (CA)', 6.5) : 0
   const sizeWs = sizes.map(s => textPx(s, 6.5))
-
   data.rows.forEach(row => {
     const ref = row.abbreviation || row.codi_client || row.codi || ''
     codiW = Math.max(codiW, textPx(ref, 7))
-    enW   = Math.max(enW,   textPx(row.nom_en, 7))
-    if (showCa)
-      caW = Math.max(caW, textPx(row.nom_ca, 7))
+    enW = Math.max(enW, textPx(row.nom_en, 7))
+    if (showCa) caW = Math.max(caW, textPx(row.nom_ca, 7))
     sizes.forEach((s, i) => {
       const v = row.valors?.[s]
       const t = v === undefined || v === null ? '–' : String(v)
       sizeWs[i] = Math.max(sizeWs[i], textPx(t, 7))
     })
   })
-
-  // Arrodonir a enter + padding mínim
   return {
-    codiW:  Math.ceil(codiW),
-    enW:    Math.ceil(enW),
-    caW:    Math.ceil(caW),
+    codiW: Math.ceil(codiW), enW: Math.ceil(enW), caW: Math.ceil(caW),
     sizeWs: sizeWs.map(w => Math.ceil(w)),
   }
 }
@@ -153,131 +71,69 @@ function generateTableSVG(data, tableType) {
   if (!data?.rows?.length) return null
   const showCa = tableType !== 'finals'
   const sizes = data.size_labels || []
-
-  const ROW_H = 14
-  const HDR_H = 16
-
-  // Amplades dinàmiques segons contingut (mai trunca)
+  const ROW_H = 14, HDR_H = 16
   const { codiW, enW, caW, sizeWs } = calcColWidths(data, tableType)
-
-  // Columnes: definició amb amplada calculada
   const cols = [
-    { label: 'REF',        w: codiW, kind: 'codi' },
-    { label: 'Name (EN)',  w: enW,   kind: 'en'   },
+    { label: 'REF', w: codiW, kind: 'codi' },
+    { label: 'Name (EN)', w: enW, kind: 'en' },
     ...(showCa ? [{ label: 'Nom (CA)', w: caW, kind: 'ca' }] : []),
     ...sizes.map((s, i) => ({ label: s, w: sizeWs[i], kind: 'size', size: s })),
   ]
-
-  // Posicions X acumulades
   const colX = []
   cols.reduce((acc, c) => { colX.push(acc); return acc + c.w }, 0)
-
   const totalW = cols.reduce((acc, c) => acc + c.w, 0)
   const totalH = HDR_H + data.rows.length * ROW_H
-
-  // Capçalera
   let hdr = `<rect x="0" y="0" width="${totalW}" height="${HDR_H}" fill="#111827"/>`
   cols.forEach((c, i) => {
-    const tx = c.kind === 'size' || c.kind === 'codi'
-      ? colX[i] + c.w / 2
-      : colX[i] + 4
+    const tx = c.kind === 'size' || c.kind === 'codi' ? colX[i] + c.w / 2 : colX[i] + 4
     const anchor = c.kind === 'size' || c.kind === 'codi' ? 'middle' : 'start'
-    hdr += `<text x="${tx}" y="${HDR_H / 2 + 2.5}"
-      font-family="monospace" font-size="6.5" fill="#ffffff"
-      text-anchor="${anchor}" dominant-baseline="middle">
-      ${escXml(c.label)}</text>`
+    hdr += `<text x="${tx}" y="${HDR_H / 2 + 2.5}" font-family="monospace" font-size="6.5" fill="#ffffff" text-anchor="${anchor}" dominant-baseline="middle">${escXml(c.label)}</text>`
   })
-
-  // Files de dades
   let body = ''
   data.rows.forEach((row, ri) => {
-    const y    = HDR_H + ri * ROW_H
-    const ty   = y + ROW_H / 2
+    const y = HDR_H + ri * ROW_H, ty = y + ROW_H / 2
     const fill = ri % 2 === 0 ? '#ffffff' : '#f7f7f7'
-
     body += `<rect x="0" y="${y}" width="${totalW}" height="${ROW_H}" fill="${fill}"/>`
-
-    // Línia separadora horitzontal lleugera
-    body += `<line x1="0" y1="${y}" x2="${totalW}" y2="${y}"
-      stroke="#e0d5c5" stroke-width="0.4"/>`
-
+    body += `<line x1="0" y1="${y}" x2="${totalW}" y2="${y}" stroke="#e0d5c5" stroke-width="0.4"/>`
     cols.forEach((c, i) => {
       let txt, color, weight = 'normal', style = 'normal'
       let anchor = 'start', tx = colX[i] + 4
-
       if (c.kind === 'codi') {
-        // Nomenclatura = abbreviation o codi_client (el que va al dibuix)
-        txt    = row.abbreviation || row.codi_client || row.codi || ''
-        color  = '#dc2626'   // vermell
-        weight = 'bold'
-        anchor = 'middle'
-        tx     = colX[i] + c.w / 2
+        txt = row.abbreviation || row.codi_client || row.codi || ''
+        color = '#dc2626'; weight = 'bold'; anchor = 'middle'; tx = colX[i] + c.w / 2
       } else if (c.kind === 'en') {
-        txt   = row.nom_en || ''
-        color = '#1d1d1b'
+        txt = row.nom_en || ''; color = '#1d1d1b'
       } else if (c.kind === 'ca') {
-        txt   = row.nom_ca || ''
-        color = '#6b7280'
-        style = 'italic'
+        txt = row.nom_ca || ''; color = '#6b7280'; style = 'italic'
       } else {
-        // Valor de talla
         const v = row.valors?.[c.size]
-        txt    = v === undefined || v === null ? '–' : String(v)
-        color  = '#1d1d1b'
-        anchor = 'middle'
-        tx     = colX[i] + c.w / 2
+        txt = v === undefined || v === null ? '–' : String(v)
+        color = '#1d1d1b'; anchor = 'middle'; tx = colX[i] + c.w / 2
       }
-
-      body += `<text x="${tx}" y="${ty}"
-        font-family="monospace" font-size="7"
-        font-weight="${weight}" font-style="${style}"
-        fill="${color}" text-anchor="${anchor}"
-        dominant-baseline="middle">
-        ${escXml(txt)}</text>`
+      body += `<text x="${tx}" y="${ty}" font-family="monospace" font-size="7" font-weight="${weight}" font-style="${style}" fill="${color}" text-anchor="${anchor}" dominant-baseline="middle">${escXml(txt)}</text>`
     })
   })
-
-  // Línies verticals separadores de columna
   let vlines = ''
   cols.forEach((_, i) => {
     if (i === 0) return
-    vlines += `<line x1="${colX[i]}" y1="0" x2="${colX[i]}" y2="${totalH}"
-      stroke="#e0d5c5" stroke-width="0.4"/>`
+    vlines += `<line x1="${colX[i]}" y1="0" x2="${colX[i]}" y2="${totalH}" stroke="#e0d5c5" stroke-width="0.4"/>`
   })
-
-  // Vora exterior
-  const border = `<rect x="0" y="0" width="${totalW}" height="${totalH}"
-    fill="none" stroke="#c27a2a" stroke-width="0.8"/>`
-
-  // SVG amb viewBox intrínsec → escala proporcional com una foto
-  return `<svg xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 ${totalW} ${totalH}"
-    width="${totalW}" height="${totalH}">
-    ${hdr}${body}${vlines}${border}
-  </svg>`
+  const border = `<rect x="0" y="0" width="${totalW}" height="${totalH}" fill="none" stroke="#c27a2a" stroke-width="0.8"/>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${totalH}" width="${totalW}" height="${totalH}">${hdr}${body}${vlines}${border}</svg>`
 }
 
-// tableDims ja no és necessari per al SVG (viewBox és intrínsec),
-// però svgToPngDataURL el necessita per calcular el canvas.
-// Extreu les mides del SVG generat en lloc de recalcular:
 function tableDimsFromSVG(svg) {
   const m = svg?.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/)
   return m ? { w: parseFloat(m[1]), h: parseFloat(m[2]) } : { w: 400, h: 200 }
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
-// Rasteritza un SVG string a PNG dataURL (mateix patró que P4 del spike).
-// outW/outH opcionals: píxels de sortida explícits (ja escalats). Si s'ometen,
-// cau al comportament per defecte (mida natural del SVG × 3 per nitidesa).
 function svgToPngDataURL(svgStr, outW, outH) {
   return new Promise((resolve, reject) => {
     const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)))
-    const img = new Image()
+    const img = new window.Image()
     img.onload = () => {
-      const w = img.naturalWidth || 1
-      const h = img.naturalHeight || 1
-      const cw = outW || w * 3
-      const ch = outH || h * 3
+      const w = img.naturalWidth || 1, h = img.naturalHeight || 1
+      const cw = outW || w * 3, ch = outH || h * 3
       const c = document.createElement('canvas')
       c.width = cw; c.height = ch
       const ctx = c.getContext('2d')
@@ -290,160 +146,239 @@ function svgToPngDataURL(svgStr, outW, outH) {
   })
 }
 
-// Editor de fitxa tècnica — pantalla full-screen, FORA del layout principal (sense sidebar).
-// pdfme es carrega amb dynamic import() dins useEffect (lazy: el bundle pesat només entra
-// quan aquest component es munta, no afecta la resta de l'app).
+// Carrega un HTMLImageElement (promesa) — per a l'export offscreen.
+function loadImageEl(src) {
+  return new Promise((res, rej) => {
+    const i = new window.Image()
+    i.crossOrigin = 'anonymous'
+    i.onload = () => res(i)
+    i.onerror = () => rej(new Error('img load'))
+    i.src = src
+  })
+}
+
+// Hook mínim: dataURL/URL → HTMLImageElement (sense dependència use-image).
+function useImage(src) {
+  const [img, setImg] = useState(null)
+  useEffect(() => {
+    if (!src) { setImg(null); return }
+    let alive = true
+    const image = new window.Image()
+    image.crossOrigin = 'anonymous'
+    image.onload = () => { if (alive) setImg(image) }
+    image.onerror = () => { if (alive) setImg(null) }
+    image.src = src
+    return () => { alive = false }
+  }, [src])
+  return img
+}
+
+// ─── Render offscreen d'una pàgina a dataURL (export PDF + miniatures) ───
+async function renderPageToDataURL(page, pixelRatio, tableSrcMap) {
+  const container = document.createElement('div')
+  const stage = new Konva.Stage({ container, width: CANVAS_W, height: CANVAS_H })
+  const layer = new Konva.Layer()
+  stage.add(layer)
+  layer.add(new Konva.Rect({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H, fill: '#ffffff' }))
+  const ordered = [...(page.objects || [])].sort(
+    (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
+  for (const o of ordered) {
+    if (o.type === 'text') {
+      layer.add(new Konva.Text({
+        x: toPx(o.x), y: toPx(o.y), width: o.width ? toPx(o.width) : undefined,
+        text: o.text || '', fontSize: o.fontSize || 11, fontFamily: o.fontFamily || FONT,
+        fill: o.fill || COL.textMain,
+      }))
+    } else if (o.type === 'rect') {
+      layer.add(new Konva.Rect({
+        x: toPx(o.x), y: toPx(o.y), width: toPx(o.width), height: toPx(o.height),
+        fill: o.fill && o.fill !== 'transparent' ? o.fill : undefined,
+        stroke: o.stroke || COL.gold, strokeWidth: o.strokeWidth || 1,
+      }))
+    } else if (o.type === 'line') {
+      layer.add(new Konva.Line({
+        points: (o.points || []).map(toPx), stroke: o.stroke || COL.textMain,
+        strokeWidth: o.strokeWidth || 1, lineCap: 'round', lineJoin: 'round',
+      }))
+    } else if (o.type === 'image' || o.type === 'data_block') {
+      const src = o.type === 'data_block' ? tableSrcMap[o.id] : o.src
+      if (!src) continue
+      try {
+        const el = await loadImageEl(src)
+        layer.add(new Konva.Image({
+          x: toPx(o.x), y: toPx(o.y),
+          width: toPx(o.width), height: toPx(o.height || o.width), image: el,
+        }))
+      } catch { /* imatge no carregada → s'omet */ }
+    }
+  }
+  layer.draw()
+  const url = stage.toDataURL({ pixelRatio, mimeType: 'image/png' })
+  stage.destroy()
+  return url
+}
+
+// Serialitza pages per a desar: els data_block graded_table NO desen el dataURL
+// (es re-genera des de size_fitting_id en obrir); la resta es desa tal qual.
+function serializePages(pages) {
+  return pages.map(p => ({
+    id: p.id,
+    objects: (p.objects || []).map(o => {
+      if (o.type === 'data_block') { const { src, ...rest } = o; return rest }
+      return o
+    }),
+  }))
+}
+
+// ════════════════════════ Nodes Konva interactius (live) ════════════════════
+function ImageObj({ obj, src, common }) {
+  const img = useImage(src)
+  if (!img) {
+    // Placeholder mentre carrega / si falla.
+    return <Rect {...common} width={toPx(obj.width)} height={toPx(obj.height || obj.width)}
+      fill={COL.goldPale} stroke={COL.border} dash={[4, 4]} />
+  }
+  return <KonvaImage {...common} image={img}
+    width={toPx(obj.width)} height={toPx(obj.height || obj.width)} />
+}
+
+function ObjectNode({ obj, src, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
+  const common = {
+    id: obj.id,
+    x: toPx(obj.x), y: toPx(obj.y),
+    draggable,
+    onClick: selectable ? onSelect : undefined,
+    onTap: selectable ? onSelect : undefined,
+    onDragEnd,
+    onTransformEnd,
+  }
+  if (obj.type === 'text') {
+    return <Text {...common} text={obj.text || ''} width={obj.width ? toPx(obj.width) : undefined}
+      fontSize={obj.fontSize || 11} fontFamily={obj.fontFamily || FONT}
+      fill={obj.fill || COL.textMain}
+      onDblClick={onDblText} onDblTap={onDblText} />
+  }
+  if (obj.type === 'rect') {
+    return <Rect {...common} width={toPx(obj.width)} height={toPx(obj.height)}
+      fill={obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined}
+      stroke={obj.stroke || COL.gold} strokeWidth={obj.strokeWidth || 1} />
+  }
+  if (obj.type === 'line') {
+    return <Line {...common} x={0} y={0} points={(obj.points || []).map(toPx)}
+      stroke={obj.stroke || COL.textMain} strokeWidth={obj.strokeWidth || 1}
+      lineCap="round" lineJoin="round" hitStrokeWidth={10} />
+  }
+  if (obj.type === 'image' || obj.type === 'data_block') {
+    return <ImageObj obj={obj} src={src} common={common} />
+  }
+  return null
+}
+
+// ════════════════════════════════ Component ═════════════════════════════════
 export default function TechSheetEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const taskId = searchParams.get('task_id')  // null → mode consulta (sense tasca)
+  const taskId = searchParams.get('task_id')
   const isEditMode = !!taskId
   const token = localStorage.getItem('access_token')
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
   const uploadHeaders = { Authorization: `Bearer ${token}` }
 
-  const [sheet, setSheet] = useState(null)
   const [model, setModel] = useState(null)
-  // 'loading' | 'owned' | 'conflict' | 'error' | 'readonly' (consulta, sense lock)
+  const [sheet, setSheet] = useState(null)
+  const [pages, setPages] = useState([{ id: uid(), objects: [] }])
+  const [currentPage, setCurrentPage] = useState(0)
+  const [selectedId, setSelectedId] = useState(null)
+  const [tool, setTool] = useState('select')
+  // 'loading' | 'owned' | 'conflict' | 'error' | 'readonly'
   const [lockState, setLockState] = useState(isEditMode ? 'loading' : 'readonly')
   const [conflict, setConflict] = useState(null)
-
+  const [saveState, setSaveState] = useState(null)  // null|'saving'|'saved'|'error'
   const [fitxers, setFitxers] = useState([])
-  const [uploading, setUploading] = useState(false)
   const [sizeFittings, setSizeFittings] = useState([])
-  const [addingTable, setAddingTable] = useState(null) // `${sfId}-${tableType}` en curs
-
-  // pdfme Designer
-  const canvasRef = useRef(null)
-  const designerRef = useRef(null)
-  const pdfmeRef = useRef(null)      // { generate, getInputFromTemplate, plugins, defs }
-  const saveTimer = useRef(null)
-  const ownedRef = useRef(false)     // té el lock? (per evitar PATCH 403 en bucle)
-  const assetSeq = useRef(0)         // comptador per noms únics d'asset (sense Date.now/random)
-  const [designerState, setDesignerState] = useState('idle') // 'idle'|'loading'|'ready'|'error'
-  const [designerErr, setDesignerErr] = useState('')
-  const [saveState, setSaveState] = useState(null) // null|'saving'|'saved'|'error'|'readonly'
-  const [secsSinceAuto, setSecsSinceAuto] = useState(null) // segons des de l'últim autoguardat (null=mai)
-  const [manualSave, setManualSave] = useState(null) // null|'saving'|'saved' (botó Desar explícit)
+  const [tableSrc, setTableSrc] = useState({})      // {objId: dataURL} fora del JSON
+  const [thumbnails, setThumbnails] = useState([])
   const [exporting, setExporting] = useState(false)
-  const [addingId, setAddingId] = useState(null)
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const [fsHover, setFsHover] = useState(false)
-  const [currentPageIndex, setCurrentPageIndex] = useState(0)
-  const [pageThumbnails, setPageThumbnails] = useState([]) // array de dataURL, un per pàgina
-  const [hoveredPage, setHoveredPage] = useState(null)
+  const [addingTable, setAddingTable] = useState(false)
+  const [pickFitting, setPickFitting] = useState(false)
+  const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
 
-  useEffect(() => { ownedRef.current = lockState === 'owned' }, [lockState])
+  const locked = lockState === 'owned'
+  const stageRef = useRef(null)
+  const trRef = useRef(null)
+  const wrapRef = useRef(null)
+  const fileRef = useRef(null)
+  const saveTimer = useRef(null)
+  const skipSave = useRef(true)        // salta l'autosave del primer load
+  const drawing = useRef(null)         // {type, points, id} mentre es dibuixa
+  const [drawTemp, setDrawTemp] = useState(null)
 
-  // Rellotge d'autoguardat (sense Date: comptador incremental). Reset a 0 a cada autoguardat OK.
-  useEffect(() => {
-    const t = setInterval(() => setSecsSinceAuto(s => (s == null ? s : s + 10)), 10000)
-    return () => clearInterval(t)
+  // ── Helpers de mutació de pàgines ──────────────────────────────────────────
+  const objectsOf = (pi) => pages[pi]?.objects || []
+  const updatePageObjects = useCallback((pi, updater) => {
+    setPages(ps => ps.map((p, i) => (i === pi ? { ...p, objects: updater(p.objects || []) } : p)))
   }, [])
+  const addObject = useCallback((obj) => {
+    updatePageObjects(currentPage, objs => [...objs, obj])
+    setSelectedId(obj.id)
+  }, [currentPage, updatePageObjects])
+  const updateObject = useCallback((objId, patch) => {
+    updatePageObjects(currentPage, objs => objs.map(o => (o.id === objId ? { ...o, ...patch } : o)))
+  }, [currentPage, updatePageObjects])
+  const deleteObject = useCallback((objId) => {
+    updatePageObjects(currentPage, objs => objs.filter(o => o.id !== objId))
+    setSelectedId(null)
+  }, [currentPage, updatePageObjects])
 
-  // Fullscreen: sincronitza l'estat amb l'API del navegador.
-  useEffect(() => {
-    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement)
-    document.addEventListener('fullscreenchange', onFsChange)
-    return () => document.removeEventListener('fullscreenchange', onFsChange)
-  }, [])
-
-  const loadFitxers = useCallback(() => {
-    return fetch(`${API}/api/v1/model-fitxers/?model=${id}&ordering=-data_pujada`, { headers: authHeaders })
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d) setFitxers(d.results || d || []) })
-      .catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
-
-  // Autosave amb debounce real de 2s. Només desa si tenim el lock (sinó PATCH → 403).
-  const debouncedSave = useCallback((template) => {
-    if (!ownedRef.current) { setSaveState('readonly'); return }
-    setSaveState('saving')
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(async () => {
-      try {
-        const r = await fetch(`${API}/api/v1/models/${id}/tech-sheet/update/`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-          body: JSON.stringify({ template_json: template }),
-        })
-        if (r.ok) { setSaveState('saved'); setSecsSinceAuto(0) } else { setSaveState('error') }
-      } catch { setSaveState('error') }
-    }, 2000)
-  }, [id])
-
-  // Desar explícit (sense debounce): PATCH immediat. "Desant…" → "Desat ✓" (2s) → "Desar".
-  const onSave = async () => {
-    const designer = designerRef.current
-    if (!designer || !ownedRef.current || manualSave === 'saving') return
-    setManualSave('saving')
-    try {
-      const r = await fetch(`${API}/api/v1/models/${id}/tech-sheet/update/`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-        body: JSON.stringify({ template_json: designer.getTemplate() }),
-      })
-      if (r.ok) {
-        setManualSave('saved'); setSaveState('saved'); setSecsSinceAuto(0)
-        setTimeout(() => setManualSave(null), 2000)
-      } else { setManualSave(null) }
-    } catch { setManualSave(null) }
-  }
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.()
-    else document.exitFullscreen?.()
-  }
-
-  // Càrrega de dades (model, estat, lock, assets) — efecte original.
+  // ── Càrrega inicial: model, sheet, fitxers, size fittings, lock ────────────
   useEffect(() => {
     if (!id) return
     let cancelled = false
 
     fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
       .then(r => (r.ok ? r.json() : null))
-      .then(data => { if (!cancelled && data) setModel(data) })
-      .catch(() => {})
+      .then(d => { if (!cancelled && d) setModel(d) }).catch(() => {})
 
-    // Size fittings del model (per a la secció "Taules disponibles").
+    fetch(`${API}/api/v1/model-fitxers/?model=${id}&ordering=-data_pujada`, { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d) setFitxers(d.results || d || []) }).catch(() => {})
+
     fetch(`${API}/api/v1/size-fittings/?model=${id}`, { headers: authHeaders })
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (!cancelled && d) setSizeFittings(d.results || d || []) })
-      .catch(() => {})
+      .then(d => { if (!cancelled && d) setSizeFittings(d.results || d || []) }).catch(() => {})
 
     fetch(`${API}/api/v1/models/${id}/tech-sheet/`, { headers: authHeaders })
-      .then(r => r.json())
-      .then(data => { if (!cancelled) setSheet(data) })
-      .catch(() => {})
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled || !data) return
+        setSheet(data)
+        // En mode consulta hidratem aquí; en edició ho fa la resposta del lock.
+        // NOTA: el TechSheetSerializer actual NO exposa `template_json` als seus fields,
+        // així que `data.template_json` és undefined i hydrate cau a "pàgina buida".
+        // hydrate és forward-compatible: en quant el backend exposi template_json
+        // (clau v2 `pages`), la càrrega funcionarà sense tocar el frontend. (Vegeu informe.)
+        if (!isEditMode) hydrate(data)
+      }).catch(() => {})
 
-    // Mode edició (obert des del Kanban amb task_id): adquirim el lock.
-    // Mode consulta (sense task_id): NO bloquegem; lockState ja és 'readonly' (estat inicial).
     if (isEditMode) {
       fetch(`${API}/api/v1/models/${id}/tech-sheet/lock/`, { method: 'POST', headers: authHeaders })
         .then(async r => {
           if (cancelled) return
-          if (r.ok) { setSheet(await r.json()); setLockState('owned') }
+          if (r.ok) { const d = await r.json(); setSheet(d); hydrate(d); setLockState('owned') }
           else if (r.status === 409) { setConflict(await r.json()); setLockState('conflict') }
-          else { setLockState('error') }
+          else setLockState('error')
         })
         .catch(() => { if (!cancelled) setLockState('error') })
     }
 
-    loadFitxers()
-
     return () => {
       cancelled = true
-      // Només en mode edició: pausa la tasca i allibera el lock que vam adquirir.
-      // keepalive perquè s'enviï encara que el tècnic tanqui la pestanya.
       if (isEditMode) {
         if (taskId) {
           fetch(`${API}/api/v1/model-task-items/${taskId}/transition/`, {
-            method: 'POST',
-            headers: { ...authHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to_status: 'Paused' }),
-            keepalive: true,
+            method: 'POST', headers: authHeaders,
+            body: JSON.stringify({ to_status: 'Paused' }), keepalive: true,
           }).catch(() => {})
         }
         fetch(`${API}/api/v1/models/${id}/tech-sheet/unlock/`, {
@@ -454,550 +389,516 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // Inicialització del Designer: una sola vegada, quan model + sheet estan llestos.
-  const canInit = !!sheet && !!model
+  // Carrega el template_json v2 a l'estat. tj buit/absent → 1 pàgina buida.
+  function hydrate(sheetData) {
+    const tj = sheetData?.template_json
+    skipSave.current = true
+    if (tj && tj.version === 2 && Array.isArray(tj.pages) && tj.pages.length) {
+      setPages(tj.pages.map(p => ({ id: p.id || uid(), objects: (p.objects || []).map(o => ({ ...o, id: o.id || uid() })) })))
+    } else {
+      setPages([{ id: uid(), objects: [] }])
+    }
+    setCurrentPage(0)
+  }
+
+  // ── Re-fetch dels data_block (taula graduada) en carregar ──────────────────
   useEffect(() => {
-    if (!canInit || designerRef.current || !canvasRef.current) return
-    let disposed = false
-    setDesignerState('loading')
-
+    const pending = pages.flatMap(p => (p.objects || []))
+      .filter(o => o.type === 'data_block' && o.kind === 'graded_table' && o.size_fitting_id && !tableSrc[o.id])
+    if (!pending.length) return
+    let cancelled = false
     ;(async () => {
-      try {
-        const [uiMod, genMod, schemasMod, commonMod] = await Promise.all([
-          import('@pdfme/ui'),
-          import('@pdfme/generator'),
-          import('@pdfme/schemas'),
-          import('@pdfme/common'),
-        ])
-        if (disposed) return
-        const { Designer } = uiMod
-        const { generate } = genMod
-        const { getInputFromTemplate } = commonMod
-        const { text, image, rectangle } = schemasMod
-        // Tipografia per defecte (punt de partida de cada bloc nou): fontSize 9, Roboto built-in.
-        // pdfme 6 NO té options.defaultSchema → la via real és personalitzar el defaultSchema del
-        // plugin text. L'usuari pot canviar font/mida després des del panell dret (natiu).
-        const textPlugin = {
-          ...text,
-          propPanel: {
-            ...text.propPanel,
-            defaultSchema: { ...text.propPanel.defaultSchema, fontSize: 9, fontName: 'Roboto' },
-          },
-        }
-        const plugins = { Text: textPlugin, Image: image, Rectangle: rectangle }
-        const defs = {
-          textDef: text.propPanel.defaultSchema,
-          rectDef: rectangle.propPanel.defaultSchema,
-          imageDef: image.propPanel.defaultSchema,
-        }
-        pdfmeRef.current = { generate, getInputFromTemplate, plugins, defs }
-
-        const meta = {
-          customerNom: model?.customer_nom || '',
-          codiClient: model?.codi_client || '',
-          codiIntern: model?.codi_intern || `#${id}`,
-          nomPrenda: model?.nom_prenda || '',
-          temporada: model?.temporada || '',
-          any: model?.any || '',
-          collection: model?.collection || '',
-          garmentTypeNom: model?.garment_type_nom || '',
-          garmentTypeItemNom: model?.garment_type_item_nom || '',
-          sizeSystemCodi: model?.size_system_codi || '',
-          sizeSystemNom: model?.size_system_nom || '',
-          versio: sheet?.versio ?? 1,
-          responsableNom: model?.responsable_nom || model?.created_by_nom || '',
-        }
-        const tpl = hasSavedTemplate(sheet?.template_json)
-          ? sheet.template_json
-          : buildBaseTemplate(meta, defs)
-
-        const designer = new Designer({
-          domContainer: canvasRef.current,
-          template: tpl,
-          plugins,
-          // pdfme 6: el theme va sota options.theme (no top-level), sinó és un no-op.
-          options: {
-            theme: {
-              token: {
-                colorPrimary: '#c27a2a',
-                colorBgContainer: '#ffffff',
-                colorBgLayout: '#f5f0e8',
-                fontFamily: 'IBM Plex Mono, monospace',
-              },
-            },
-          },
-        })
-        designer.onChangeTemplate(t => { debouncedSave(t); setPageThumbnails(generateThumbnails(t)) })
-        // Sincronitza el highlight de miniatures quan l'usuari canvia de pàgina (scroll/UI pdfme).
-        designer.onPageChange?.(({ currentPage }) => setCurrentPageIndex((currentPage || 1) - 1))
-        designerRef.current = designer
-        setPageThumbnails(generateThumbnails(tpl)) // miniatures inicials
-        setDesignerState('ready')
-      } catch (e) {
-        if (!disposed) { setDesignerErr(String(e?.message || e)); setDesignerState('error') }
+      for (const o of pending) {
+        try {
+          const r = await fetch(`${API}/api/v1/fitting/${o.size_fitting_id}/graded-table/`, { headers: authHeaders })
+          if (!r.ok) continue
+          const data = await r.json()
+          const svg = generateTableSVG(data, 'graded')
+          if (!svg) continue
+          const dims = tableDimsFromSVG(svg)
+          const png = await svgToPngDataURL(svg, dims.w * 3, dims.h * 3)
+          if (!cancelled) setTableSrc(m => ({ ...m, [o.id]: png }))
+        } catch { /* silenci */ }
       }
     })()
-
-    return () => {
-      disposed = true
-      if (saveTimer.current) clearTimeout(saveTimer.current)
-      try { designerRef.current?.destroy?.() } catch { /* noop */ }
-      designerRef.current = null
-    }
+    return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canInit])
+  }, [pages])
 
-  // Pujada de fitxer (multipart). Refresca la llista en acabar.
-  const handleUpload = async (file) => {
-    if (!file) return
-    setUploading(true)
-    const fd = new FormData()
-    fd.append('fitxer', file)
-    fd.append('nom', file.name)
-    try {
-      const r = await fetch(`${API}/api/v1/models/${id}/upload-fitxer/`, {
-        method: 'POST', headers: uploadHeaders, body: fd,
-      })
-      if (r.ok) await loadFitxers()
-    } finally {
-      setUploading(false)
+  // ── Autosave (debounce 2s; només amb lock; salta el primer load) ───────────
+  useEffect(() => {
+    if (skipSave.current) { skipSave.current = false; return }
+    if (!locked) return
+    setSaveState('saving')
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`${API}/api/v1/models/${id}/tech-sheet/update/`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+          body: JSON.stringify({ template_json: { version: 2, pages: serializePages(pages) } }),
+        })
+        setSaveState(r.ok ? 'saved' : 'error')
+      } catch { setSaveState('error') }
+    }, 2000)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pages, locked])
+
+  // ── Miniatures: re-render offscreen de totes les pàgines (debounce) ────────
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      try {
+        const thumbs = []
+        for (const p of pages) thumbs.push(await renderPageToDataURL(p, 0.18, tableSrc))
+        setThumbnails(thumbs)
+      } catch { /* noop */ }
+    }, 300)
+    return () => clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pages, tableSrc])
+
+  // ── Transformer: lliga el node seleccionat ─────────────────────────────────
+  useEffect(() => {
+    const tr = trRef.current
+    const stage = stageRef.current
+    if (!tr || !stage) return
+    const obj = objectsOf(currentPage).find(o => o.id === selectedId)
+    // No transformem línies (resize de punts complex) ni objectes no-free.
+    if (selectedId && obj && obj.layer !== 'template' && obj.type !== 'line') {
+      const node = stage.findOne('#' + selectedId)
+      tr.nodes(node ? [node] : [])
+    } else {
+      tr.nodes([])
+    }
+    tr.getLayer()?.batchDraw()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, currentPage, pages])
+
+  // ── Teclat: Delete/Backspace esborra l'objecte free seleccionat ────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (editingText) return
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      if (!selectedId || !locked) return
+      const obj = objectsOf(currentPage).find(o => o.id === selectedId)
+      if (obj && obj.layer === 'free') { e.preventDefault(); deleteObject(selectedId) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, currentPage, pages, locked, editingText])
+
+  // ── Handlers de node (drag / transform) ────────────────────────────────────
+  const handleDragEnd = (obj) => (e) => {
+    const node = e.target
+    if (obj.type === 'line') {
+      const dx = toMm(node.x()), dy = toMm(node.y())
+      const pts = (obj.points || []).map((v, i) => (i % 2 === 0 ? v + dx : v + dy))
+      node.position({ x: 0, y: 0 })
+      updateObject(obj.id, { points: pts })
+    } else {
+      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()) })
     }
   }
-
-  // Aplica una template nova: actualitza el Designer, refresca miniatures i dispara autosave.
-  // (updateTemplate programàtic no dispara onChangeTemplate, així que ho fem aquí explícitament.)
-  const applyTemplate = (next) => {
-    const designer = designerRef.current
-    if (!designer) return
-    designer.updateTemplate(next)
-    setPageThumbnails(generateThumbnails(next))
-    debouncedSave(next)
+  const handleTransformEnd = (obj) => (e) => {
+    const node = e.target
+    const sx = node.scaleX(), sy = node.scaleY()
+    node.scaleX(1); node.scaleY(1)
+    const patch = {
+      x: toMm(node.x()), y: toMm(node.y()),
+      width: Math.max(2, toMm(node.width() * sx)),
+    }
+    if (obj.type !== 'text') patch.height = Math.max(2, toMm(node.height() * sy))
+    updateObject(obj.id, patch)
   }
 
-  // Afegeix una imatge (dataURL) com a image schema a la pàgina ACTUAL del Designer. Compartit
-  // entre croquis (fitxers) i taules graduades.
-  const addImageToCanvas = (dataURL, width, height) => {
-    const designer = designerRef.current
-    const P = pdfmeRef.current
-    if (!designer || !P) return
-    const tpl = designer.getTemplate()
-    // Nom únic: avança el comptador fins a un nom lliure (evita col·lisió amb assets desats).
-    const used = new Set(tpl.schemas.flat().map(s => s.name))
-    while (used.has(`asset_${assetSeq.current}`)) assetSeq.current += 1
-    const asset = mk(P.defs.imageDef, {
-      name: `asset_${assetSeq.current}`, type: 'image',
-      position: { x: 15, y: 35 }, width, height, content: dataURL,
-    })
-    assetSeq.current += 1
-    const pages = tpl.schemas.length ? tpl.schemas : [[]]
-    const target = Math.min(currentPageIndex, pages.length - 1)
-    const next = { ...tpl, schemas: pages.map((pg, i) => (i === target ? [...pg, asset] : pg)) }
-    applyTemplate(next)
+  // ── Stage: dibuix de rect/línia/draw + crear text + deselecció ─────────────
+  const stagePoint = () => {
+    const stage = stageRef.current
+    return stage ? stage.getPointerPosition() : null
   }
-
-  // Afegeix una pàgina buida al final i hi navega.
-  const addPage = () => {
-    const designer = designerRef.current
-    if (!designer || !ownedRef.current) return
-    const tpl = designer.getTemplate()
-    const next = { ...tpl, schemas: [...tpl.schemas, []] }
-    applyTemplate(next)
-    setCurrentPageIndex(next.schemas.length - 1)
-  }
-
-  // Esborra una pàgina (mai l'última). Confirmació.
-  const removePage = (index) => {
-    const designer = designerRef.current
-    if (!designer || !ownedRef.current) return
-    const tpl = designer.getTemplate()
-    if (tpl.schemas.length <= 1) return
-    if (!window.confirm('Esborrar aquesta pàgina?')) return
-    const next = { ...tpl, schemas: tpl.schemas.filter((_, i) => i !== index) }
-    applyTemplate(next)
-    setCurrentPageIndex(ci => Math.min(ci, next.schemas.length - 1))
-  }
-
-  // Navega a una pàgina. pdfme 6 no té API de navegació → scroll proporcional al contenidor.
-  const navigateToPage = (index) => {
-    setCurrentPageIndex(index)
-    const cont = canvasRef.current
-    const scroller = cont && findScroller(cont)
-    if (scroller) {
-      const total = designerRef.current?.getTotalPages?.() || pageThumbnails.length || 1
-      scroller.scrollTo({ top: (scroller.scrollHeight / total) * index, behavior: 'smooth' })
+  const onStageMouseDown = (e) => {
+    if (!locked) { if (e.target === e.target.getStage()) setSelectedId(null); return }
+    const pos = stagePoint()
+    if (!pos) return
+    if (tool === 'select') {
+      if (e.target === e.target.getStage()) setSelectedId(null)
+      return
+    }
+    if (tool === 'text') {
+      const obj = {
+        id: uid(), type: 'text', layer: 'free', x: toMm(pos.x), y: toMm(pos.y),
+        width: 120, height: 30, text: 'Doble clic per editar', fontSize: 11,
+        fontFamily: FONT, fill: COL.textMain,
+      }
+      addObject(obj); setTool('select'); return
+    }
+    if (tool === 'rect' || tool === 'line' || tool === 'draw') {
+      drawing.current = { type: tool, startX: pos.x, startY: pos.y, points: [pos.x, pos.y] }
+      setDrawTemp({ type: tool, x: pos.x, y: pos.y, w: 0, h: 0, points: [pos.x, pos.y] })
     }
   }
+  const onStageMouseMove = () => {
+    if (!drawing.current) return
+    const pos = stagePoint()
+    if (!pos) return
+    const d = drawing.current
+    if (d.type === 'rect') {
+      setDrawTemp({ type: 'rect', x: Math.min(d.startX, pos.x), y: Math.min(d.startY, pos.y), w: Math.abs(pos.x - d.startX), h: Math.abs(pos.y - d.startY) })
+    } else if (d.type === 'line') {
+      setDrawTemp({ type: 'line', points: [d.startX, d.startY, pos.x, pos.y] })
+    } else if (d.type === 'draw') {
+      d.points = [...d.points, pos.x, pos.y]
+      setDrawTemp({ type: 'draw', points: d.points })
+    }
+  }
+  const onStageMouseUp = () => {
+    const d = drawing.current
+    if (!d) return
+    drawing.current = null
+    const pos = stagePoint() || { x: d.startX, y: d.startY }
+    let obj = null
+    if (d.type === 'rect') {
+      const x = Math.min(d.startX, pos.x), y = Math.min(d.startY, pos.y)
+      const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
+      if (w > 3 && h > 3) obj = { id: uid(), type: 'rect', layer: 'free', x: toMm(x), y: toMm(y), width: toMm(w), height: toMm(h), fill: 'transparent', stroke: COL.gold, strokeWidth: 1 }
+    } else if (d.type === 'line') {
+      obj = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [toMm(d.startX), toMm(d.startY), toMm(pos.x), toMm(pos.y)], stroke: COL.textMain, strokeWidth: 1 }
+    } else if (d.type === 'draw') {
+      if (d.points.length >= 4) obj = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: d.points.map(toMm), stroke: COL.textMain, strokeWidth: 1 }
+    }
+    setDrawTemp(null)
+    if (obj) { addObject(obj); setTool('select') }
+  }
 
-  // Croquis: afegir un asset (fitxer) com a image schema al llenç.
-  const addAssetToCanvas = async (f) => {
-    if (!designerRef.current || !pdfmeRef.current) return
+  // ── Edició inline de text (textarea overlay) ───────────────────────────────
+  const startTextEdit = (obj) => {
+    if (!locked) return
+    setSelectedId(obj.id)
+    setEditingText({ id: obj.id, value: obj.text || '', x: toPx(obj.x), y: toPx(obj.y), w: toPx(obj.width || 120) })
+  }
+  const commitTextEdit = () => {
+    if (!editingText) return
+    updateObject(editingText.id, { text: editingText.value })
+    setEditingText(null)
+  }
+
+  // ── Imatge: fitxer local (botó/drop) i fitxers del model ───────────────────
+  const addImageFromDataURL = (dataURL) => {
+    const obj = { id: uid(), type: 'image', layer: 'free', x: 50, y: 50, width: 120, height: 80, src: dataURL }
+    addObject(obj)
+  }
+  const handleFile = (file) => {
+    if (!file || !locked) return
+    const fr = new FileReader()
+    fr.onload = () => addImageFromDataURL(fr.result)
+    fr.readAsDataURL(file)
+  }
+  const onDrop = (e) => {
+    e.preventDefault()
+    if (!locked) return
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith('image/')) handleFile(file)
+  }
+  const addModelFitxer = async (f) => {
+    if (!locked) return
     let url = f.url_extern
     if (!url && f.fitxer) url = f.fitxer.startsWith('http') ? f.fitxer : `${API}${f.fitxer}`
     if (!url) return
-    setAddingId(f.id)
     try {
-      const blob = await fetch(url).then(r => { if (!r.ok) throw new Error('fetch ' + r.status); return r.blob() })
+      const blob = await fetch(url).then(r => { if (!r.ok) throw new Error('fetch'); return r.blob() })
       const dataURL = await new Promise((res, rej) => {
         const fr = new FileReader()
-        fr.onload = () => res(fr.result)
-        fr.onerror = () => rej(new Error('FileReader error'))
+        fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('fr'))
         fr.readAsDataURL(blob)
       })
-      addImageToCanvas(dataURL, 80, 60)
-    } catch { /* silenci: el croquis no s'afegeix; no trenca l'editor */ }
-    finally { setAddingId(null) }
+      addImageFromDataURL(dataURL)
+    } catch { /* silenci */ }
   }
 
-  // Taula graduada / talles finals: GET graded-table → SVG → PNG → image schema al llenç.
-  const handleAddTable = async (sfId, tableType) => {
-    if (!designerRef.current || !pdfmeRef.current) return
-    const key = `${sfId}-${tableType}`
-    setAddingTable(key)
+  // ── Bloc de dades: taula graduada ──────────────────────────────────────────
+  const insertGradedTable = async (sfId) => {
+    if (!locked) return
+    setAddingTable(true)
     try {
       const r = await fetch(`${API}/api/v1/fitting/${sfId}/graded-table/`, { headers: authHeaders })
-      if (!r.ok) return // 404 si no hi ha GradingVersion activa → silenci
+      if (!r.ok) return
       const data = await r.json()
-      if (!data.rows || data.rows.length === 0) return
-      const svg = generateTableSVG(data, tableType)
+      if (!data.rows || !data.rows.length) return
+      const svg = generateTableSVG(data, 'graded')
       if (!svg) return
       const dims = tableDimsFromSVG(svg)
       const png = await svgToPngDataURL(svg, dims.w * 3, dims.h * 3)
-      // x3 per a resolució alta (300dpi equivalent)
-      // px de disseny → mm, mantenint proporció, acotat a l'amplada de la caixa útil.
-      const { w: pxW, h: pxH } = dims
       const PX_TO_MM = 0.34
-      let wmm = pxW * PX_TO_MM
-      let hmm = pxH * PX_TO_MM
+      let wmm = dims.w * PX_TO_MM, hmm = dims.h * PX_TO_MM
       const MAXW = 257
       if (wmm > MAXW) { const k = MAXW / wmm; wmm = MAXW; hmm *= k }
-      addImageToCanvas(png, wmm, hmm)
-    } catch { /* silenci: la taula no s'afegeix; no trenca l'editor */ }
-    finally { setAddingTable(null) }
+      const obj = { id: uid(), type: 'data_block', kind: 'graded_table', size_fitting_id: sfId, layer: 'data', x: 50, y: 50, width: wmm, height: hmm }
+      setTableSrc(m => ({ ...m, [obj.id]: png }))
+      addObject(obj)
+    } catch { /* silenci */ }
+    finally { setAddingTable(false) }
+  }
+  const onAddTableClick = () => {
+    if (!sizeFittings.length) return
+    if (sizeFittings.length === 1) insertGradedTable(sizeFittings[0].id)
+    else setPickFitting(true)
   }
 
-  // Exportar PDF (WYSIWYG: la mateixa template del Designer).
+  // ── Pàgines ────────────────────────────────────────────────────────────────
+  const addPage = () => {
+    if (!locked) return
+    setPages(ps => [...ps, { id: uid(), objects: [] }])
+    setCurrentPage(pages.length)
+  }
+  const removePage = (index) => {
+    if (!locked || pages.length <= 1) return
+    if (!window.confirm('Esborrar aquesta pàgina?')) return
+    setPages(ps => ps.filter((_, i) => i !== index))
+    setCurrentPage(ci => Math.min(ci, pages.length - 2))
+    setSelectedId(null)
+  }
+
+  // ── Export PDF (pdf-lib) ───────────────────────────────────────────────────
   const onExport = async () => {
-    const designer = designerRef.current
-    const P = pdfmeRef.current
-    if (!designer || !P) return
     setExporting(true)
     try {
-      const live = designer.getTemplate()
-      // La caixa útil és només guia d'editor → s'elimina del staticSchema abans de generar el PDF.
-      const bp = live.basePdf
-      const template = (bp && typeof bp === 'object' && Array.isArray(bp.staticSchema))
-        ? { ...live, basePdf: { ...bp, staticSchema: bp.staticSchema.filter(s => s.name !== USEFUL_BOX_NAME) } }
-        : live
-      const inputs = P.getInputFromTemplate(template)
-      const pdf = await P.generate({ template, inputs, plugins: P.plugins })
-      const blob = new Blob([pdf.buffer], { type: 'application/pdf' })
+      const pdf = await PDFDocument.create()
+      for (const p of pages) {
+        const dataUrl = await renderPageToDataURL(p, 3.5, tableSrc)
+        const png = await pdf.embedPng(dataUrl)
+        const page = pdf.addPage([PDF_W_PT, PDF_H_PT])
+        page.drawImage(png, { x: 0, y: 0, width: PDF_W_PT, height: PDF_H_PT })
+      }
+      const bytes = await pdf.save()
+      const blob = new Blob([bytes], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `${model?.codi_intern || id}_fitxa_v${sheet?.versio ?? 1}.pdf`
       a.click()
       URL.revokeObjectURL(url)
-    } catch (e) {
-      setDesignerErr('Export: ' + String(e?.message || e))
-    } finally {
-      setExporting(false)
-    }
+    } catch { /* silenci */ }
+    finally { setExporting(false) }
   }
 
-  const READONLY_BADGE = { bg: '#f5f0e8', fg: '#868685', border: '1px solid #e0d5c5' }
+  // ── UI ───────────────────────────────────────────────────────────────────
   const badge = (() => {
-    if (lockState === 'loading') return { text: 'Carregant…', ...READONLY_BADGE }
-    if (lockState === 'readonly') return { text: 'Consultant', ...READONLY_BADGE }
-    if (lockState === 'owned') return { text: 'Editant', bg: '#c27a2a', fg: '#ffffff', border: 'none' }
-    if (lockState === 'conflict') return {
-      text: `Bloquejada per ${conflict?.locked_by || 'un altre usuari'}`,
-      ...READONLY_BADGE,
-    }
-    return { text: 'Error de bloqueig', ...READONLY_BADGE }
+    if (lockState === 'loading') return { text: 'Carregant…', bg: COL.bg, fg: COL.textMuted }
+    if (lockState === 'readonly') return { text: 'Mode consulta', bg: COL.bg, fg: COL.textMuted }
+    if (lockState === 'owned') return { text: 'Editant', bg: COL.gold, fg: '#fff' }
+    if (lockState === 'conflict') return { text: `Bloquejada per ${conflict?.locked_by || 'un altre usuari'}`, bg: COL.bg, fg: COL.textMuted }
+    return { text: 'Error de bloqueig', bg: COL.bg, fg: COL.textMuted }
   })()
-
-  // Indicador d'autoguardat (diferenciat del Desar manual). "ara" si <60s, "fa X min" si més.
-  const saveLabel = (() => {
-    if (saveState === 'saving') return 'Desant…'
-    if (saveState === 'error') return 'Error desant'
-    if (saveState === 'readonly') return 'Només lectura'
-    if (saveState === 'saved') {
-      return (secsSinceAuto == null || secsSinceAuto < 60)
-        ? 'Autoguardat · ara'
-        : `Autoguardat · fa ${Math.floor(secsSinceAuto / 60)} min`
-    }
-    return null
-  })()
-
-  const manualSaveLabel = manualSave === 'saving' ? 'Desant…' : manualSave === 'saved' ? 'Desat ✓' : 'Desar'
+  const saveLabel = saveState === 'saving' ? 'Desant…' : saveState === 'saved' ? 'Desat ✓' : saveState === 'error' ? 'Error desant' : null
 
   const headerBtn = {
     display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '5px 10px',
-    borderRadius: 6, border: '1px solid #e0d5c5', background: 'transparent',
-    cursor: 'pointer', color: '#1d1d1b', fontFamily: 'IBM Plex Mono, monospace',
+    borderRadius: 6, border: `1px solid ${COL.border}`, background: 'transparent',
+    cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
+  const curObjs = objectsOf(currentPage)
+  const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
+  const selObj = curObjs.find(o => o.id === selectedId) || null
+
+  const TOOLS = [
+    { k: 'select', icon: 'ti-pointer', label: 'Seleccionar' },
+    { k: 'text', icon: 'ti-typography', label: 'Text' },
+    { k: 'rect', icon: 'ti-square', label: 'Rectangle' },
+    { k: 'line', icon: 'ti-line', label: 'Línia' },
+    { k: 'draw', icon: 'ti-pencil', label: 'Dibuix' },
+  ]
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg, #faf7f2)', fontFamily: 'IBM Plex Mono, monospace' }}>
-      <header style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '0.7rem 1.2rem', borderBottom: '1px solid #e3cfa3', background: '#f0dfc0',
-        fontFamily: 'IBM Plex Mono, monospace', color: '#1d1d1b',
-      }}>
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: '#faf7f2', fontFamily: FONT }}>
+      {/* ── Topbar ── */}
+      <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.7rem 1.2rem', borderBottom: `1px solid #e3cfa3`, background: COL.sidebar, color: COL.textMain }}>
         <button onClick={() => navigate(`/models/${id}`)} style={headerBtn}>
           <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> Tornar al model
         </button>
-        <button onClick={onSave} disabled={designerState !== 'ready' || lockState !== 'owned' || manualSave === 'saving'}
-          style={{
-            ...headerBtn, borderColor: '#c27a2a', color: '#c27a2a',
-            opacity: designerState !== 'ready' || lockState !== 'owned' ? 0.5 : 1,
-            display: isEditMode ? undefined : 'none',  // Desar ocult en mode consulta
-          }}>
-          <i className="ti ti-device-floppy" style={{ fontSize: 14 }} /> {manualSaveLabel}
-        </button>
-        <button onClick={onExport} disabled={designerState !== 'ready' || exporting}
-          style={{
-            ...headerBtn, background: '#c27a2a', border: 'none', color: '#ffffff',
-            opacity: designerState !== 'ready' || exporting ? 0.5 : 1,
-          }}>
+        <button onClick={onExport} disabled={exporting}
+          style={{ ...headerBtn, background: COL.gold, border: 'none', color: '#fff', opacity: exporting ? 0.5 : 1 }}>
           <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? 'Exportant…' : 'Exportar PDF'}
         </button>
-        <span style={{ fontSize: 14, fontWeight: 600, color: '#1d1d1b' }}>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>
           {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
         </span>
-        {pageThumbnails.length > 0 && (
-          <span style={{ fontSize: 11, color: '#868685', fontFamily: 'IBM Plex Mono, monospace' }}>
-            Pàgina {currentPageIndex + 1} de {pageThumbnails.length}
-          </span>
+        <span style={{ fontSize: 11, color: COL.textMuted }}>Pàgina {currentPage + 1} de {pages.length}</span>
+        {saveLabel && <span style={{ fontSize: 11, color: COL.textMuted }}>{saveLabel}</span>}
+
+        {/* Eines (només en edició) */}
+        {locked && (
+          <div style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
+            {TOOLS.map(tl => (
+              <button key={tl.k} onClick={() => setTool(tl.k)} title={tl.label}
+                style={{ ...headerBtn, padding: '5px 8px', borderColor: tool === tl.k ? COL.gold : COL.border, background: tool === tl.k ? COL.goldPale : 'transparent', color: tool === tl.k ? COL.gold : COL.textMain }}>
+                <i className={`ti ${tl.icon}`} style={{ fontSize: 15 }} />
+              </button>
+            ))}
+            <button onClick={() => fileRef.current?.click()} title="Imatge" style={{ ...headerBtn, padding: '5px 8px' }}>
+              <i className="ti ti-photo" style={{ fontSize: 15 }} />
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" hidden
+              onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFile(f) }} />
+          </div>
         )}
-        {sheet?.estat === 'tancat' && (
-          <span style={{ fontSize: 11, color: 'var(--text-muted, #999)' }}>
-            <i className="ti ti-lock" style={{ fontSize: 11, marginRight: 4 }} />Fitxa tancada
-          </span>
-        )}
-        {saveLabel && (
-          <span style={{ fontSize: 11, color: '#868685', fontFamily: 'IBM Plex Mono, monospace' }}>
-            {saveLabel}
-          </span>
-        )}
-        <button onClick={toggleFullscreen}
-          onMouseEnter={() => setFsHover(true)} onMouseLeave={() => setFsHover(false)}
-          title={isFullscreen ? 'Sortir de pantalla completa' : 'Pantalla completa'}
-          style={{
-            marginLeft: 'auto', background: 'transparent', border: 'none', padding: 0,
-            color: fsHover ? '#c27a2a' : '#868685', fontSize: 18, cursor: 'pointer',
-            display: 'flex', alignItems: 'center',
-          }}>
-          <i className={`ti ${isFullscreen ? 'ti-arrows-minimize' : 'ti-arrows-maximize'}`} />
-        </button>
-        <span style={{
-          fontSize: 10, fontWeight: 500, padding: '2px 7px',
-          borderRadius: 10, background: badge.bg, color: badge.fg, border: badge.border,
-          whiteSpace: 'nowrap', fontFamily: 'IBM Plex Mono, monospace',
-        }}>
-          {badge.text}
+
+        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>
+          v{sheet?.versio ?? 1} · {badge.text}
         </span>
       </header>
 
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {/* Panell de miniatures de pàgines — a l'esquerra del Designer. */}
-        <div style={{
-          width: 110, flexShrink: 0, background: '#f5f0e8', borderRight: '1px solid #e0d5c5',
-          overflowY: 'auto', padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
-          <div style={{
-            color: '#c27a2a', fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
-            letterSpacing: '0.05em', marginBottom: 4,
-          }}>
-            Pàgines
-          </div>
-          <button onClick={addPage}
-            disabled={designerState !== 'ready' || lockState !== 'owned'}
-            style={{
-              fontSize: 9, padding: '3px 6px', border: '1px solid #c27a2a', borderRadius: 4,
-              background: 'transparent', color: '#c27a2a', fontFamily: 'IBM Plex Mono, monospace',
-              marginBottom: 4, cursor: (designerState !== 'ready' || lockState !== 'owned') ? 'default' : 'pointer',
-              opacity: (designerState !== 'ready' || lockState !== 'owned') ? 0.45 : 1,
-            }}>
-            + Pàgina
-          </button>
-          {pageThumbnails.map((src, i) => (
-            <div key={i}
-              onClick={() => navigateToPage(i)}
-              onMouseEnter={() => setHoveredPage(i)} onMouseLeave={() => setHoveredPage(null)}
-              style={{ position: 'relative', cursor: 'pointer' }}>
-              <div style={{
-                width: 98, borderRadius: 3, overflow: 'hidden',
-                border: currentPageIndex === i ? '2px solid #c27a2a' : '1px solid #e0d5c5',
-              }}>
-                <img src={src} alt={`Pàgina ${i + 1}`} style={{ width: '100%', height: 'auto', display: 'block' }} />
+        {/* ── Esquerra: pàgines ── */}
+        <div style={{ width: 96, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', padding: '8px 5px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ color: COL.gold, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pàgines</div>
+          {locked && (
+            <button onClick={addPage} style={{ fontSize: 9, padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>+ Pàgina</button>
+          )}
+          {pages.map((p, i) => (
+            <div key={p.id} onClick={() => { setCurrentPage(i); setSelectedId(null) }} style={{ position: 'relative', cursor: 'pointer' }}>
+              <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: '#fff', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
+                {thumbnails[i] && <img src={thumbnails[i]} alt={`Pàg ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
               </div>
-              <div style={{ fontSize: 9, color: '#868685', textAlign: 'center', marginTop: 2 }}>
-                Pàg. {i + 1}
-              </div>
-              {pageThumbnails.length > 1 && hoveredPage === i && lockState === 'owned' && (
-                <button onClick={(e) => { e.stopPropagation(); removePage(i) }}
-                  title="Esborrar pàgina"
-                  style={{
-                    position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: '#ffffff',
-                    border: 'none', fontSize: 9, lineHeight: '14px', width: 14, height: 14, padding: 0,
-                    borderRadius: 2, cursor: 'pointer',
-                  }}>
-                  ×
-                </button>
+              <div style={{ fontSize: 9, color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>Pàg. {i + 1}</div>
+              {locked && pages.length > 1 && (
+                <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title="Eliminar pàgina"
+                  style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: '#fff', border: 'none', fontSize: 9, lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
               )}
             </div>
           ))}
         </div>
 
-        {/* Cos central — el Designer pdfme es munta a canvasRef. */}
-        <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-          <div ref={canvasRef} style={{ position: 'absolute', inset: 0, '--pdf-ui-non-printable-bg': '#f9f9f9' }} />
-          {designerState !== 'ready' && (
-            <div style={{
-              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'var(--bg, #faf7f2)', pointerEvents: designerState === 'error' ? 'auto' : 'none',
-            }}>
-              <div style={{ textAlign: 'center', color: 'var(--text-muted, #999)' }}>
-                <i className={`ti ${designerState === 'error' ? 'ti-alert-triangle' : 'ti-file-text'}`} style={{ fontSize: 40, opacity: 0.5 }} />
-                <p style={{ marginTop: 12, fontSize: 15 }}>
-                  {designerState === 'error' ? `Error carregant l'editor: ${designerErr}` : 'Carregant editor de fitxa…'}
-                </p>
-              </div>
+        {/* ── Centre: Stage Konva ── */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COL.bg, minWidth: 0, overflow: 'auto', position: 'relative' }}>
+          {lockState === 'readonly' && (
+            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: '#fff', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 11, color: COL.textMuted }}>
+              <i className="ti ti-eye" style={{ marginRight: 6 }} />Mode consulta — només lectura
             </div>
           )}
+          <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()}
+            style={{ position: 'relative', width: CANVAS_W, height: CANVAS_H, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: '#fff', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
+            <Stage ref={stageRef} width={CANVAS_W} height={CANVAS_H}
+              onMouseDown={onStageMouseDown} onMouseMove={onStageMouseMove} onMouseUp={onStageMouseUp}>
+              {/* Fons blanc + 3 capes en ordre z. Konva no agrupa per `layer`:
+                  ordenem els objectes i pintem en una sola Layer (z per ordre d'array). */}
+              <Layer>
+                <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill="#ffffff" listening={false} />
+                {ordered.map(o => (
+                  <ObjectNode key={o.id} obj={o} src={o.type === 'data_block' ? tableSrc[o.id] : o.src}
+                    selectable={locked && o.layer !== 'template'}
+                    draggable={locked && tool === 'select' && o.layer !== 'template'}
+                    onSelect={() => setSelectedId(o.id)}
+                    onDragEnd={handleDragEnd(o)}
+                    onTransformEnd={handleTransformEnd(o)}
+                    onDblText={() => startTextEdit(o)} />
+                ))}
+                {/* Forma temporal mentre es dibuixa */}
+                {drawTemp?.type === 'rect' && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={COL.gold} strokeWidth={1} dash={[4, 4]} listening={false} />}
+                {(drawTemp?.type === 'line' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
+                <Transformer ref={trRef} rotateEnabled={false} ignoreStroke
+                  boundBoxFunc={(oldB, newB) => (newB.width < 10 || newB.height < 10 ? oldB : newB)} />
+              </Layer>
+            </Stage>
+
+            {/* Textarea overlay per a l'edició inline de text */}
+            {editingText && (
+              <textarea
+                autoFocus value={editingText.value}
+                onChange={e => setEditingText(s => ({ ...s, value: e.target.value }))}
+                onBlur={commitTextEdit}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitTextEdit() } if (e.key === 'Escape') setEditingText(null) }}
+                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 11, color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: '#fff', zIndex: 10 }}
+              />
+            )}
+          </div>
         </div>
 
-        {/* Panell d'assets inline — fitxers del model + pujada + afegir al llenç (croquis). */}
-        <aside style={{
-          width: 320, flexShrink: 0, borderLeft: '1px solid #e0d5c5',
-          background: '#f5f0e8', display: 'flex', flexDirection: 'column', minHeight: 0,
-          fontFamily: 'IBM Plex Mono, monospace',
-        }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '0.7rem 1rem', borderBottom: '1px solid #e3cfa3',
-          }}>
-            <span style={{
-              fontSize: 11, fontWeight: 600, color: '#c27a2a',
-              textTransform: 'uppercase', letterSpacing: '0.05em',
-            }}>
-              <i className="ti ti-paperclip" style={{ fontSize: 13, marginRight: 6 }} />
-              Assets del model
-            </span>
-            <span style={{ fontSize: 11, color: '#868685' }}>{fitxers.length}</span>
-          </div>
+        {/* ── Dreta: capes / inserir / propietats ── */}
+        <aside style={{ width: 180, flexShrink: 0, borderLeft: `1px solid ${COL.border}`, background: COL.bg, display: 'flex', flexDirection: 'column', minHeight: 0, fontFamily: FONT }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
+            {/* Inserir blocs de dades */}
+            <SectionTitle>Inserir</SectionTitle>
+            <button onClick={onAddTableClick} disabled={!locked || addingTable || !sizeFittings.length}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: '#fff', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>
+              <i className="ti ti-table" style={{ fontSize: 13 }} /> {addingTable ? 'Afegint…' : 'Taula graduada'}
+            </button>
+            {!sizeFittings.length && <p style={{ fontSize: 10, color: COL.textMuted, margin: '0 0 8px' }}>Cap size fitting.</p>}
 
-          <label style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            margin: '0.8rem 1rem', padding: '8px', fontSize: 12, fontWeight: 500,
-            borderRadius: 6, border: '0.5px dashed var(--gold)', color: 'var(--gold)',
-            cursor: (uploading || !isEditMode) ? 'default' : 'pointer',
-            background: uploading ? 'var(--gray-l)' : 'transparent',
-            opacity: isEditMode ? 1 : 0.5,
-          }}>
-            <i className="ti ti-upload" style={{ fontSize: 13 }} />
-            {uploading ? 'Pujant…' : 'Pujar fitxer'}
-            <input type="file" hidden disabled={uploading || !isEditMode}
-              onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleUpload(f) }} />
-          </label>
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: '0 1rem 1rem' }}>
+            {/* Fitxers del model */}
+            <SectionTitle>Fitxers del model ({fitxers.length})</SectionTitle>
             {fitxers.length === 0 ? (
-              <p style={{ fontSize: 12, color: 'var(--text-muted, #999)', textAlign: 'center', marginTop: 8 }}>
-                Cap fitxer encara.
-              </p>
-            ) : (
-              fitxers.map(f => {
-                const hasUrl = !!(f.url_extern || f.fitxer)
-                return (
-                  <div key={f.id} style={{
-                    background: '#fafafa', border: '1px solid #e0d5c5', padding: '6px 8px',
-                    marginBottom: 4, fontSize: 11, fontFamily: 'IBM Plex Mono, monospace',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <i className="ti ti-file" style={{ fontSize: 14, color: '#868685', flexShrink: 0 }} />
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 11, color: '#1d1d1b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.nom_fitxer}>
-                          {f.nom_fitxer}
-                        </div>
-                        <div style={{ fontSize: 10, color: '#868685' }}>
-                          {f.tipus}{f.versio ? ` · v${f.versio}` : ''}
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => addAssetToCanvas(f)}
-                      disabled={!hasUrl || designerState !== 'ready' || addingId === f.id || !isEditMode}
-                      title={hasUrl ? 'Afegir al llenç' : 'Sense URL de fitxer'}
-                      style={{
-                        marginTop: 4, marginRight: 4, display: 'inline-flex', alignItems: 'center', gap: 4,
-                        fontSize: 10, padding: '3px 8px', border: 'none', borderRadius: 5,
-                        background: '#c27a2a', color: '#ffffff', fontFamily: 'IBM Plex Mono, monospace',
-                        cursor: (!hasUrl || designerState !== 'ready' || !isEditMode) ? 'default' : 'pointer',
-                        opacity: (!hasUrl || designerState !== 'ready' || !isEditMode) ? 0.45 : 1,
-                      }}>
-                      <i className="ti ti-photo-plus" style={{ fontSize: 12 }} />
-                      {addingId === f.id ? 'Afegint…' : 'Afegir al llenç'}
-                    </button>
-                  </div>
-                )
-              })
-            )}
+              <p style={{ fontSize: 10, color: COL.textMuted }}>Cap fitxer.</p>
+            ) : fitxers.map(f => {
+              const hasUrl = !!(f.url_extern || f.fitxer)
+              return (
+                <button key={f.id} onClick={() => addModelFitxer(f)} disabled={!hasUrl || !locked}
+                  title={f.nom_fitxer}
+                  style={{ width: '100%', textAlign: 'left', fontSize: 10, padding: '5px 6px', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 4, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: (!hasUrl || !locked) ? 'default' : 'pointer', opacity: (!hasUrl || !locked) ? 0.5 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <i className="ti ti-photo-plus" style={{ fontSize: 11, marginRight: 5 }} />{f.nom_fitxer}
+                </button>
+              )
+            })}
 
-            {/* Taules disponibles (F3) — size fittings del model → taula graduada / talles finals. */}
-            <section style={{ borderTop: '1px solid #e3cfa3', margin: '12px 0', paddingTop: 12 }}>
-              <div style={{
-                fontSize: 11, fontWeight: 600, color: '#c27a2a',
-                textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8,
-              }}>
-                <i className="ti ti-table" style={{ fontSize: 13, marginRight: 6 }} />
-                Taules disponibles
-              </div>
-              {sizeFittings.length === 0 ? (
-                <p style={{ fontSize: 11, color: '#868685' }}>Cap size fitting.</p>
-              ) : (
-                sizeFittings.map(sf => {
-                  const gradedKey = `${sf.id}-graded`
-                  const finalsKey = `${sf.id}-finals`
-                  const tableBtn = (busy) => ({
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                    fontSize: 10, padding: '3px 8px', borderRadius: 5, border: 'none',
-                    background: '#c27a2a', color: '#ffffff', fontFamily: 'IBM Plex Mono, monospace',
-                    marginTop: 4, marginRight: 4,
-                    cursor: (designerState !== 'ready' || !isEditMode) ? 'default' : 'pointer',
-                    opacity: (designerState !== 'ready' || busy || !isEditMode) ? 0.45 : 1,
-                  })
-                  return (
-                    <div key={sf.id} style={{
-                      background: '#fafafa', border: '1px solid #e0d5c5', padding: '6px 8px',
-                      marginBottom: 4, fontSize: 11, fontFamily: 'IBM Plex Mono, monospace',
-                    }}>
-                      <div style={{ fontSize: 11, color: '#1d1d1b' }}>
-                        {sf.codi}{sf.tipus ? ` · ${sf.tipus}` : ''}
-                      </div>
-                      <div style={{ display: 'flex', gap: 4, marginTop: 1 }}>
-                        <button onClick={() => handleAddTable(sf.id, 'graded')}
-                          disabled={designerState !== 'ready' || addingTable === gradedKey || !isEditMode}
-                          style={tableBtn(addingTable === gradedKey)}>
-                          <i className="ti ti-table" style={{ fontSize: 12 }} />
-                          {addingTable === gradedKey ? 'Afegint…' : 'Taula graduada'}
-                        </button>
-                        <button onClick={() => handleAddTable(sf.id, 'finals')}
-                          disabled={designerState !== 'ready' || addingTable === finalsKey || !isEditMode}
-                          style={tableBtn(addingTable === finalsKey)}>
-                          <i className="ti ti-ruler" style={{ fontSize: 12 }} />
-                          {addingTable === finalsKey ? 'Afegint…' : 'Talles finals'}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </section>
+            {/* Propietats de l'objecte seleccionat */}
+            {selObj && locked && (
+              <>
+                <SectionTitle>Element · {selObj.type}</SectionTitle>
+                {selObj.type === 'text' && (
+                  <label style={propLabel}>Mida font
+                    <input type="number" min={6} max={48} value={selObj.fontSize || 11}
+                      onChange={e => updateObject(selObj.id, { fontSize: Number(e.target.value) || 11 })}
+                      style={propInput} />
+                  </label>
+                )}
+                {(selObj.type === 'rect' || selObj.type === 'line') && (
+                  <label style={propLabel}>Color traç
+                    <input type="color" value={selObj.stroke || '#1d1d1b'}
+                      onChange={e => updateObject(selObj.id, { stroke: e.target.value })}
+                      style={{ ...propInput, padding: 0, height: 26 }} />
+                  </label>
+                )}
+                {selObj.type === 'rect' && (
+                  <label style={propLabel}>Emplenat
+                    <input type="color" value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : '#ffffff'}
+                      onChange={e => updateObject(selObj.id, { fill: e.target.value })}
+                      style={{ ...propInput, padding: 0, height: 26 }} />
+                  </label>
+                )}
+                {selObj.layer === 'free' && (
+                  <button onClick={() => deleteObject(selObj.id)}
+                    style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 6, border: `1px solid #e74c3c`, borderRadius: 5, background: 'transparent', color: '#e74c3c', fontFamily: FONT, cursor: 'pointer' }}>
+                    <i className="ti ti-trash" style={{ fontSize: 12, marginRight: 5 }} />Eliminar
+                  </button>
+                )}
+              </>
+            )}
           </div>
         </aside>
       </main>
+
+      {/* Selector de size fitting (>1) */}
+      {pickFitting && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setPickFitting(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT }}>
+            <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Tria un size fitting</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {sizeFittings.map(sf => (
+                <button key={sf.id} onClick={() => { setPickFitting(false); insertGradedTable(sf.id) }}
+                  style={{ textAlign: 'left', fontSize: 12, padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                  {sf.codi}{sf.tipus ? ` · ${sf.tipus}` : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
+function SectionTitle({ children }) {
+  return <div style={{ fontSize: 10, fontWeight: 600, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
+}
+const propLabel = { display: 'block', fontSize: 10, color: COL.textMuted, marginBottom: 8 }
+const propInput = { width: '100%', fontFamily: FONT, fontSize: 12, padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: '#fff', color: COL.textMain, boxSizing: 'border-box' }
