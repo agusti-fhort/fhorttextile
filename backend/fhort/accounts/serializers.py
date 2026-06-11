@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.validators import RegexValidator
 from django.db import transaction
 from rest_framework import serializers
 
@@ -103,9 +104,17 @@ class UserAdminSerializer(serializers.ModelSerializer):
 
     full_name = serializers.SerializerMethodField()
     profile_id = serializers.SerializerMethodField()   # UserProfile.id (≠ User.id en general)
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
     rol_nom = serializers.CharField(source='profile.rol_nom')
     actiu = serializers.BooleanField(source='profile.actiu')
     permisos = serializers.JSONField(source='profile.permisos')
+    color_avatar = serializers.CharField(
+        source='profile.color_avatar', required=False,
+        validators=[RegexValidator(
+            regex=r'^#[0-9A-Fa-f]{6}$',
+            message="color_avatar ha de ser un hex #RRGGBB.")],
+    )
     capabilities = serializers.SerializerMethodField()
     allowed_tasks = serializers.SerializerMethodField()
 
@@ -113,7 +122,8 @@ class UserAdminSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'profile_id', 'username', 'email', 'full_name',
-            'rol_nom', 'actiu', 'permisos',
+            'first_name', 'last_name',
+            'rol_nom', 'actiu', 'permisos', 'color_avatar',
             'capabilities', 'allowed_tasks',
         )
         read_only_fields = ('id', 'username', 'email')
@@ -147,10 +157,16 @@ class UserAdminSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
-        """Escriptura niada: escriu només els camps de profile presents (PATCH parcial)."""
+        """Escriptura niada: escriu només els camps presents (PATCH parcial).
+        first_name/last_name → User; rol_nom/actiu/permisos/color_avatar → UserProfile."""
         profile_data = validated_data.pop('profile', {})
+        user_fields = [a for a in ('first_name', 'last_name') if a in validated_data]
+        for attr in user_fields:
+            setattr(instance, attr, validated_data[attr])
+        if user_fields:
+            instance.save(update_fields=user_fields)
         profile = instance.profile
-        for attr in ('rol_nom', 'actiu', 'permisos'):
+        for attr in ('rol_nom', 'actiu', 'permisos', 'color_avatar'):
             if attr in profile_data:
                 setattr(profile, attr, profile_data[attr])
         profile.save()

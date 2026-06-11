@@ -27,15 +27,13 @@ const inputS = {
   color: 'var(--text-main)',
 }
 
-function ToggleCell({ on, readOnly, onClick, title }) {
+// Cel·la de la matriu: NOMÉS visual (read-only). ✓ = actiu, punt gris = inactiu.
+function ToggleCell({ on, title }) {
   return (
     <td
       title={title}
-      onClick={readOnly ? undefined : onClick}
       style={{
         textAlign: 'center', padding: '7px 8px', minWidth: 58,
-        cursor: readOnly ? 'default' : 'pointer',
-        opacity: readOnly ? 0.55 : 1,
         borderBottom: '0.5px solid var(--gray-l)',
       }}
     >
@@ -43,6 +41,17 @@ function ToggleCell({ on, readOnly, onClick, title }) {
         ? <i className="ti ti-check" style={{ fontSize: 14, color: 'var(--ok)' }} />
         : <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#e4e4e2' }} />}
     </td>
+  )
+}
+
+// Cercle de color d'assignació (color_avatar). Fallback --gold si null.
+function ColorDot({ color, size = 16 }) {
+  return (
+    <span style={{
+      display: 'inline-block', width: size, height: size, borderRadius: '50%',
+      background: color || 'var(--gold)', border: '0.5px solid var(--gray-l)',
+      boxSizing: 'border-box', verticalAlign: 'middle',
+    }} />
   )
 }
 
@@ -58,6 +67,7 @@ export default function UsersRoles() {
   const [confirmState, setConfirmState] = useState(null)   // { action, value, label }
   const [feedback, setFeedback] = useState(null)           // { type, text }
   const [newUserOpen, setNewUserOpen] = useState(false)    // modal "Nou usuari"
+  const [editUser, setEditUser] = useState(null)           // fila en edició (null = modal tancat)
 
   // Filtres
   const [search, setSearch] = useState('')
@@ -96,36 +106,13 @@ export default function UsersRoles() {
     return () => clearTimeout(id)
   }, [canManage, fetchUsers])
 
-  // --- Edició per cel·la: capacitats → grant/revoke, tasques → tasks ---
-  function patchUser(id, permisos) {
-    return usersApi.patch(id, { permisos })
-      .then(res => {
-        setRows(rs => rs.map(r => (r.id === id ? { ...r, ...res.data } : r)))
-        setFeedback(null)
-      })
-      .catch(() => setFeedback({ type: 'err', text: t('usersRoles.patch_error') }))
-  }
-
-  function toggleCap(u, cap) {
-    const p = { ...(u.permisos || {}) }
-    const grant = new Set(p.grant || [])
-    const revoke = new Set(p.revoke || [])
-    if ((u.capabilities || []).includes(cap)) {   // efectiu ON → forçar OFF
-      revoke.add(cap); grant.delete(cap)
-    } else {                                       // efectiu OFF → forçar ON
-      grant.add(cap); revoke.delete(cap)
-    }
-    p.grant = [...grant]; p.revoke = [...revoke]
-    patchUser(u.id, p)
-  }
-
-  function toggleTask(u, code) {
-    const p = { ...(u.permisos || {}) }
-    const tasks = new Set(p.tasks || [])
-    if ((u.allowed_tasks || []).includes(code)) tasks.delete(code)
-    else tasks.add(code)
-    p.tasks = [...tasks]
-    patchUser(u.id, p)
+  // --- PATCH genèric des del modal d'edició (camps modificats) ---
+  // Retorna la promesa; el modal gestiona el seu propi spinner/error inline.
+  function patchUser(id, data) {
+    return usersApi.patch(id, data).then(res => {
+      setRows(rs => rs.map(r => (r.id === id ? { ...r, ...res.data } : r)))
+      return res.data
+    })
   }
 
   // --- Selecció ---
@@ -231,6 +218,7 @@ export default function UsersRoles() {
                              borderRight: `1px solid ${AMBER_BORDER}`, textAlign: 'left' }}>
                   <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} title={t('usersRoles.select_all')} />
                 </th>
+                <th style={thBase} />
                 <th colSpan={CAPS.length} style={{ ...thBase, textAlign: 'center', color: 'var(--text-main)' }}>
                   {t('usersRoles.group_scope')}
                 </th>
@@ -238,12 +226,14 @@ export default function UsersRoles() {
                              color: AMBER_TEXT, borderLeft: `1px solid ${AMBER_BORDER}` }}>
                   {t('usersRoles.group_tasks')}
                 </th>
+                <th style={thBase} />
               </tr>
               <tr>
                 <th style={{ ...thBase, position: 'sticky', left: 0, zIndex: 2, background: CREMA,
                              borderRight: `1px solid ${AMBER_BORDER}`, textAlign: 'left', minWidth: 200 }}>
                   {t('usersRoles.col_user')}
                 </th>
+                <th style={{ ...thBase, textAlign: 'center' }}>{t('usersRoles.col_color')}</th>
                 {CAPS.map(cap => (
                   <th key={cap} style={{ ...thBase, textAlign: 'center' }} title={t(`usersRoles.caps.${cap}`)}>
                     {t(`usersRoles.caps.${cap}`)}
@@ -253,13 +243,13 @@ export default function UsersRoles() {
                   <th key={tt.id} style={{ ...thBase, textAlign: 'center', background: CREMA, color: AMBER_TEXT }}
                       title={`${tt.name} (${tt.code})`}>{tt.name}</th>
                 ))}
+                <th style={{ ...thBase, textAlign: 'center' }}>{t('usersRoles.col_action')}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map(u => {
                 const caps = u.capabilities || []
                 const allowed = u.allowed_tasks || []
-                const isSelf = u.id === me.id
                 return (
                   <tr key={u.id}>
                     <td style={{ position: 'sticky', left: 0, zIndex: 1, background: CREMA,
@@ -277,21 +267,28 @@ export default function UsersRoles() {
                         </div>
                       </div>
                     </td>
-                    {CAPS.map(cap => {
-                      // Salvaguarda: no et pots treure manage_users a tu mateix (auto-bloqueig).
-                      const lockSelf = isSelf && cap === 'manage_users'
-                      return (
-                        <ToggleCell
-                          key={cap} on={caps.includes(cap)} readOnly={lockSelf}
-                          title={lockSelf ? t('usersRoles.self_lock') : t(`usersRoles.caps.${cap}`)}
-                          onClick={() => toggleCap(u, cap)}
-                        />
-                      )
-                    })}
-                    {taskTypes.map(tt => (
-                      <ToggleCell key={tt.id} on={allowed.includes(tt.code)} title={tt.name}
-                                  onClick={() => toggleTask(u, tt.code)} />
+                    <td style={{ textAlign: 'center', padding: '7px 8px', borderBottom: '0.5px solid var(--gray-l)' }}>
+                      <ColorDot color={u.color_avatar} />
+                    </td>
+                    {CAPS.map(cap => (
+                      <ToggleCell key={cap} on={caps.includes(cap)} title={t(`usersRoles.caps.${cap}`)} />
                     ))}
+                    {taskTypes.map(tt => (
+                      <ToggleCell key={tt.id} on={allowed.includes(tt.code)} title={tt.name} />
+                    ))}
+                    <td style={{ textAlign: 'center', padding: '7px 10px', borderBottom: '0.5px solid var(--gray-l)' }}>
+                      {canManage && (
+                        <button onClick={() => setEditUser(u)} title={t('usersRoles.edit')} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          fontFamily: MONO, fontSize: 11, padding: '5px 10px', borderRadius: 6,
+                          border: '0.5px solid var(--gray-l)', background: 'var(--white)',
+                          color: 'var(--text-main)', cursor: 'pointer', whiteSpace: 'nowrap',
+                        }}>
+                          <i className="ti ti-pencil" style={{ fontSize: 13 }} />
+                          {t('usersRoles.edit')}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 )
               })}
@@ -335,6 +332,19 @@ export default function UsersRoles() {
             setNewUserOpen(false)
             setFeedback({ type: 'ok', text: t('usersRoles.nu_created', { name: u.full_name || u.username }) })
             fetchUsers()
+          }}
+        />
+      )}
+
+      {/* Modal d'edició per usuari (rol + tasques + nom complet + color) */}
+      {editUser && (
+        <UserEditModal
+          t={t} user={editUser} roles={ROLES} taskTypes={taskTypes}
+          onClose={() => setEditUser(null)}
+          onSave={(diff) => patchUser(editUser.id, diff)}
+          onSaved={() => {
+            setEditUser(null)
+            setFeedback({ type: 'ok', text: t('usersRoles.ue_updated') })
           }}
         />
       )}
@@ -466,6 +476,142 @@ function NewUserModal({ t, roles, onClose, onCreated }) {
             cursor: saving ? 'default' : 'pointer', border: 'none',
             background: 'var(--gold)', color: '#fff', fontWeight: 600, opacity: saving ? 0.6 : 1,
           }}>{t('usersRoles.nu_create')}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) {
+  // Estat inicial = còpia local dels camps editables (no mutem la fila/store directament).
+  const initial = {
+    first_name: user.first_name || '',
+    last_name: user.last_name || '',
+    rol_nom: user.rol_nom || 'technician',
+    color_avatar: user.color_avatar || '#888888',
+    tasks: user.permisos?.tasks || [],
+  }
+  const [form, setForm] = useState(initial)
+  const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // is_admin (viu): rol admin O bé manage_users dins les capacitats efectives de la fila.
+  // Si és admin, les tasques es gestionen via el rol → no editables (bypass total al backend).
+  const isAdmin = form.rol_nom === 'admin' || (user.capabilities || []).includes('manage_users')
+  const tasksSet = new Set(form.tasks)
+  function toggleTask(code) {
+    setForm(f => {
+      const s = new Set(f.tasks)
+      s.has(code) ? s.delete(code) : s.add(code)
+      return { ...f, tasks: [...s] }
+    })
+  }
+
+  const fieldS = {
+    fontFamily: MONO, fontSize: 13, padding: '8px 10px', width: '100%', boxSizing: 'border-box',
+    border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)',
+  }
+  const labelS = { fontSize: 11, color: AMBER_TEXT, fontFamily: MONO, marginBottom: 4, display: 'block' }
+
+  function submit() {
+    // PATCH parcial: només els camps modificats vs l'estat inicial.
+    const diff = {}
+    if (form.first_name !== initial.first_name) diff.first_name = form.first_name
+    if (form.last_name !== initial.last_name) diff.last_name = form.last_name
+    if (form.rol_nom !== initial.rol_nom) diff.rol_nom = form.rol_nom
+    if (form.color_avatar !== initial.color_avatar) diff.color_avatar = form.color_avatar
+    if (!isAdmin) {
+      const a = [...initial.tasks].sort().join(','), b = [...form.tasks].sort().join(',')
+      if (a !== b) diff.permisos = { ...(user.permisos || {}), tasks: form.tasks }
+    }
+    if (Object.keys(diff).length === 0) { onClose(); return }
+    setSaving(true); setError(null)
+    onSave(diff)
+      .then(() => onSaved())
+      .catch(err => { setSaving(false); setError(firstError(err?.response?.data, t('usersRoles.patch_error'))) })
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'var(--white)', borderRadius: 12, padding: '1.5rem',
+        maxWidth: 460, width: '92%', maxHeight: '88vh', overflowY: 'auto',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+      }}>
+        <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>
+          {t('usersRoles.ue_title')} — {user.full_name || user.username}
+        </h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelS}>{t('usersRoles.ue_first_name')}</label>
+              <input value={form.first_name} onChange={e => set('first_name', e.target.value)} style={fieldS} autoFocus />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelS}>{t('usersRoles.ue_last_name')}</label>
+              <input value={form.last_name} onChange={e => set('last_name', e.target.value)} style={fieldS} />
+            </div>
+          </div>
+          <div>
+            <label style={labelS}>{t('usersRoles.role')}</label>
+            <select value={form.rol_nom} onChange={e => set('rol_nom', e.target.value)} style={fieldS}>
+              {roles.map(r => <option key={r} value={r}>{t(`usersRoles.roles.${r}`)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelS}>{t('usersRoles.ue_color')}</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input type="color" value={form.color_avatar}
+                     onChange={e => set('color_avatar', e.target.value)}
+                     style={{ width: 48, height: 32, padding: 0, border: '0.5px solid var(--gray-l)',
+                              borderRadius: 6, background: 'var(--white)', cursor: 'pointer' }} />
+              <ColorDot color={form.color_avatar} size={24} />
+              <span style={{ fontFamily: MONO, fontSize: 12, color: 'var(--gray)' }}>{form.color_avatar}</span>
+            </div>
+          </div>
+          <div>
+            <label style={labelS}>{t('usersRoles.ue_tasks')}</label>
+            {isAdmin && (
+              <div style={{ fontSize: 11, color: AMBER_TEXT, marginBottom: 8 }}>
+                {t('usersRoles.ue_bypass_note')}
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>
+              {taskTypes.map(tt => {
+                const checked = isAdmin ? true : tasksSet.has(tt.code)
+                return (
+                  <label key={tt.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 7, fontFamily: MONO, fontSize: 12,
+                    color: 'var(--text-main)', cursor: isAdmin ? 'default' : 'pointer',
+                    opacity: isAdmin ? 0.6 : 1,
+                  }}>
+                    <input type="checkbox" checked={checked} disabled={isAdmin}
+                           onChange={() => toggleTask(tt.code)} />
+                    {tt.name}
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+        {error && (
+          <div style={{ marginTop: 12, fontSize: 12, padding: '8px 10px', borderRadius: 6,
+                        background: 'var(--err-bg)', color: 'var(--err)' }}>{error}</div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+          <button onClick={onClose} disabled={saving} style={{
+            fontFamily: MONO, fontSize: 13, padding: '8px 14px', borderRadius: 6,
+            cursor: 'pointer', border: '0.5px solid var(--gray-l)', background: 'var(--white)', color: 'var(--gray)',
+          }}>{t('usersRoles.cancel')}</button>
+          <button onClick={submit} disabled={saving} style={{
+            fontFamily: MONO, fontSize: 13, padding: '8px 16px', borderRadius: 6,
+            cursor: saving ? 'default' : 'pointer', border: 'none',
+            background: 'var(--gold)', color: '#fff', fontWeight: 600, opacity: saving ? 0.6 : 1,
+          }}>{saving ? t('usersRoles.ue_saving') : t('usersRoles.ue_save')}</button>
         </div>
       </div>
     </div>
