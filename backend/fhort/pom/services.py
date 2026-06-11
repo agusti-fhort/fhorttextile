@@ -82,6 +82,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
 
     # Generate specs
     created = 0
+    warnings: list[str] = []
     for pom_id, base_val in base_measurements.items():
         rule = rules.get(pom_id)
 
@@ -101,7 +102,14 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 graded_val = base_val  # no rule = FIXED
                 gt_applied = 'FIXED'
             else:
-                graded_val, gt_applied = _apply_rule(rule, base_val, steps, i, base_idx)
+                graded_val, gt_applied = _apply_rule(
+                    rule, base_val, steps, i, base_idx,
+                    size_run=size_run, warnings=warnings,
+                )
+
+            if graded_val is None:
+                # Hard STEP validation failed for this cell: leave it uncomputed.
+                continue
 
             graded_val = round(graded_val, 2)
             increment = round(graded_val - base_val, 2)
@@ -122,11 +130,16 @@ def generate_graded_specs(size_fitting_id: int) -> int:
         estat='TallesGenerades'
     )
 
+    if warnings:
+        logger.warning(
+            f"Grading SF {size_fitting_id}: {len(warnings)} avís(os) STEP — "
+            "cel·les no calculades: " + " | ".join(warnings)
+        )
     logger.info(f"Grading generated for SF {size_fitting_id}: {created} specs")
     return created
 
 
-def preview_graded_specs(model, base_values: dict) -> dict:
+def preview_graded_specs(model, base_values: dict, warnings: list | None = None) -> dict:
     """
     Càlcul de grading SENSE persistència (preview per al wizard d'importació, W3).
 
@@ -168,7 +181,13 @@ def preview_graded_specs(model, base_values: dict) -> dict:
             elif rule is None:
                 graded_val = base_val  # sense regla = FIXED
             else:
-                graded_val, _ = _apply_rule(rule, base_val, steps, i, base_idx)
+                graded_val, _ = _apply_rule(
+                    rule, base_val, steps, i, base_idx,
+                    size_run=size_run, warnings=warnings,
+                )
+            if graded_val is None:
+                # Validació dura STEP fallida: deixa la cel·la buida (sense fallback).
+                continue
             row[size_label] = round(graded_val, 2)
         out[pom_id] = row
     return out
@@ -424,12 +443,39 @@ def _get_or_create_grading_version(sf):
             raise RuntimeError(f"Could not get/create GradingVersion: {e}")
 
 
-def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int):
+def _norm_label(s) -> str:
+    """Normalize a size label for matching — same criterion as the run: upper + strip."""
+    return str(s).strip().upper()
+
+
+def _add_warning(warnings, msg: str) -> None:
+    """Record a (deduplicated) grading warning and log it once."""
+    if warnings is None:
+        logger.warning(msg)
+        return
+    if msg not in warnings:
+        warnings.append(msg)
+        logger.warning(msg)
+
+
+def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
+                size_run=None, warnings=None):
     """Apply the grading rule and return (graded_value, grading_type_applied).
 
-    Real Django fields: rule.logica (was grading_type), rule.increment (DecimalField,
-    was increment_cm). The increment_above_xl field does not exist on the model —
-    getattr falls back to the normal increment for STEP.
+    graded_value is None when the cell cannot be computed (hard STEP validation
+    failure); the caller MUST skip it instead of falling back silently.
+
+    Real Django fields: rule.logica (was grading_type), rule.increment (DecimalField),
+    rule.valors_step (JSONField).
+
+    Contracts:
+      - LINEAR: scalar `rule.increment`, applied uniformly per step.
+      - STEP: `rule.valors_step` = {dest_label: delta}. Each delta is the increment
+        between that label and its neighbour one step closer to the base; values
+        accumulate outward from the base (added going up, subtracted going down).
+        Every non-base label of the run MUST have an entry — a missing one yields a
+        warning and an uncomputed cell, never a silent fallback to `increment`.
+      - FIXED / ZERO / (default): unchanged.
     """
     grading_type = rule.logica
     increment = float(rule.increment) if rule.increment else 0.0
@@ -438,13 +484,35 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int)
         return base_val + (steps * increment), 'LINEAR'
 
     elif grading_type == 'STEP':
-        # For large sizes (>= base + 2 steps), a different increment may apply.
-        # increment_above_xl does not exist on the model — fall back to normal increment.
-        increment_above = getattr(rule, 'increment_above_xl', None)
-        increment_above = float(increment_above) if increment_above else increment
-        if steps > 2:
-            return base_val + (2 * increment) + ((steps - 2) * increment_above), 'STEP'
-        return base_val + (steps * increment), 'STEP'
+        pom_codi = getattr(getattr(rule, 'pom', None), 'codi_client', None) or rule.pom_id
+        vs = rule.valors_step
+        if not isinstance(vs, dict) or not vs:
+            _add_warning(warnings,
+                f"Regla STEP del POM {pom_codi}: valors_step buit o invàlid; cap cel·la calculada.")
+            return None, 'STEP'
+        if size_run is None:
+            _add_warning(warnings,
+                f"Regla STEP del POM {pom_codi}: falta el size run per calcular.")
+            return None, 'STEP'
+        # The base size itself is the origin: no delta needed.
+        if size_idx == base_idx:
+            return base_val, 'STEP'
+        deltas = {_norm_label(k): v for k, v in vs.items()}
+        # Indices crossed when moving from the base toward this size; the farther
+        # label of each step carries that step's delta.
+        if size_idx > base_idx:
+            path, sign = range(base_idx + 1, size_idx + 1), 1.0
+        else:
+            path, sign = range(size_idx, base_idx), -1.0
+        total = 0.0
+        for j in path:
+            delta = deltas.get(_norm_label(size_run[j]))
+            if delta is None:
+                _add_warning(warnings,
+                    f"Regla STEP del POM {pom_codi}: falta delta per a la talla {size_run[j]}.")
+                return None, 'STEP'
+            total += float(delta)
+        return base_val + sign * total, 'STEP'
 
     elif grading_type == 'FIXED':
         return base_val, 'FIXED'

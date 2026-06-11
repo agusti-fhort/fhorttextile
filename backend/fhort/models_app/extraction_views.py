@@ -1512,11 +1512,13 @@ def import_session_grading_preview_view(request, token):
         except (TypeError, ValueError):
             continue
 
-    grading = preview_graded_specs(model, base_values)
+    grading_avisos: list[str] = []
+    grading = preview_graded_specs(model, base_values, warnings=grading_avisos)
     # Claus a string per a JSON consistent al frontend.
     grading = {str(pid): row for pid, row in grading.items()}
     return Response({'grading': grading, 'base_size': model.base_size_label,
-                     'size_run': (model.size_run_model or '').split('·')}, status=200)
+                     'size_run': (model.size_run_model or '').split('·'),
+                     'avisos': grading_avisos}, status=200)
 
 
 @api_view(['PATCH'])
