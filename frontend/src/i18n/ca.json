@@ -136,8 +136,8 @@
   "login": {
     "welcome": "Benvingut/da",
     "welcome_sub": "Accedeix al teu espai de treball",
-    "user": "Usuari",
-    "user_placeholder": "el-teu-usuari",
+    "user": "Correu electrònic",
+    "user_placeholder": "nom@empresa.com",
     "password": "Contrasenya",
     "remember": "Recorda'm",
     "forgot": "Has oblidat la contrasenya?",

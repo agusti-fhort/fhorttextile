@@ -136,8 +136,8 @@
   "login": {
     "welcome": "Welcome",
     "welcome_sub": "Access your workspace",
-    "user": "Username",
-    "user_placeholder": "your-username",
+    "user": "Email",
+    "user_placeholder": "name@company.com",
     "password": "Password",
     "remember": "Remember me",
     "forgot": "Forgot your password?",

@@ -138,6 +138,12 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
+# Login per email O username (el camp del JWT segueix sent `username`). Fallback al ModelBackend.
+AUTHENTICATION_BACKENDS = [
+    'fhort.accounts.backends.EmailOrUsernameBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 
 LANGUAGE_CODE = 'ca'
 TIME_ZONE = 'Europe/Madrid'

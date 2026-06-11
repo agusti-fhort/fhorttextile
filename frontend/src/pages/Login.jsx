@@ -26,11 +26,6 @@ const Logo = () => (
   </svg>
 )
 
-const UserIcon = () => (
-  <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
-  </svg>
-)
 const LockIcon = () => (
   <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
@@ -126,11 +121,11 @@ export default function Login() {
               <div className="field">
                 <label htmlFor="login-user">{t('login.user')}</label>
                 <div className="input-shell">
-                  <UserIcon />
+                  <MailIcon />
                   <input
                     id="login-user"
-                    type="text"
-                    autoComplete="username"
+                    type="email"
+                    autoComplete="email"
                     placeholder={t('login.user_placeholder')}
                     value={username}
                     onChange={e => setUsername(e.target.value)}
