@@ -92,6 +92,28 @@ def _place(profile, cursor, minutes, busy):
     raise RuntimeError('scheduler: massa franges locked encavalcades en una sola tasca')
 
 
+def _collect_busy_intervals(profile, now):
+    """Franges de fitting de l'assistent (FittingSession.attendees): busy per al scheduler.
+    Només sessions vives (no Tancada/Anullada) amb start_time i duracio_minuts informats, i
+    a partir d'ahir (no carreguem historial infinit). Retorna [(start_naive, end_naive), ...]."""
+    from fhort.fitting.models import FittingSession   # import local: evita cicle planning↔fitting
+    import datetime as _dt
+    cutoff = (now - _dt.timedelta(days=1)).date()
+    sessions = FittingSession.objects.filter(
+        attendees=profile,
+        data__gte=cutoff,
+        start_time__isnull=False,
+        duracio_minuts__isnull=False,
+    ).exclude(estat__in=['Tancada', 'Anullada'])
+    intervals = []
+    for s in sessions:
+        start_naive = _to_naive(timezone.make_aware(
+            _dt.datetime.combine(s.data, s.start_time)))
+        end_naive = start_naive + _dt.timedelta(minutes=s.duracio_minuts)
+        intervals.append((start_naive, end_naive))
+    return intervals
+
+
 def schedule(model_task_qs, now=None, save=True):
     """Planifica les ModelTask donades sobre el calendari laboral.
 
@@ -153,9 +175,9 @@ def schedule(model_task_qs, now=None, save=True):
         movable = [t for t in tech_tasks if not t.planned_locked]
 
         # Franges ocupades pels locked (naïf). Es reporten tal qual; no es reescriuen.
-        # TODO fitting-sprint: extreure _collect_busy_intervals(profile) per injectar
-        # franges de FittingSession com a busy intervals.
         busy = []
+        # Franges de fitting dels assistents (busy externes al motor de tasques).
+        busy.extend(_collect_busy_intervals(profile, now))
         for t in locked:
             if not (t.planned_start and t.planned_end):
                 _warn(t, 'locked sense dates planificades')
