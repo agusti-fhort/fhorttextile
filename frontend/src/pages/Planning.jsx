@@ -11,8 +11,8 @@ import useAuthStore from '../store/auth'
 import { models as modelsApi, modelTasks as modelTaskItems, users as usersApi, plan as planApi } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
-import Modal from '../components/ui/Modal'
 import { selS, primaryBtn } from '../components/ui/buttons'
+import TaskAssignWizard from '../components/TaskAssignWizard'
 
 // Tram 2 — Pantalla "Planificació": dues carpetes Pendents/Assignades (gated define_tasks/configure).
 // Pendents = models amb tasques no-Done SENSE tècnic. Assignades = totes les no-Done amb tècnic.
@@ -220,14 +220,6 @@ export default function Planning() {
   const toggleSel = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   const toggleExp = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
 
-  const doAssign = (assigneeId, taskIdsByModel) => {
-    setSaving(true); setFeedback(null)
-    Promise.all(modal.modelIds.map(mid =>
-      modelsApi.assign(mid, { assignee_id: assigneeId, task_ids: taskIdsByModel?.[mid] })))
-      .then(() => { setFeedback({ type: 'ok', text: t('planning.saved_assign') }); setModal(null); load() })
-      .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.error || t('planning.error') }))
-      .finally(() => setSaving(false))
-  }
   const doUnassign = (modelId) => {
     setSaving(true); setFeedback(null)
     modelsApi.unassign(modelId)
@@ -328,9 +320,12 @@ export default function Planning() {
               )
           )}
 
-      {modal && (
-        <AssignModal t={t} modal={modal} techOptions={techOptions} saving={saving}
-                     onCancel={() => setModal(null)} onConfirm={doAssign} />
+      {modal?.modelIds && (
+        <TaskAssignWizard
+          modelIds={modal.modelIds}
+          onClose={() => setModal(null)}
+          onSuccess={() => { setModal(null); load() }}
+        />
       )}
     </div>
   )
@@ -444,46 +439,3 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
   )
 }
 
-function AssignModal({ t, modal, techOptions, saving, onCancel, onConfirm }) {
-  const [assignee, setAssignee] = useState('')
-  const single = modal.single
-  const [taskSel, setTaskSel] = useState(() => new Set((single?.nonDone || []).map(x => x.id)))
-  const toggleTask = (id) => setTaskSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
-
-  const confirm = () => {
-    if (!assignee) return
-    let taskIdsByModel
-    if (single) taskIdsByModel = { [single.id]: [...taskSel] }   // selecció opcional de tasques (1 model)
-    onConfirm(Number(assignee), taskIdsByModel)
-  }
-  return (
-    <Modal
-      title={t('planning.assign_title')}
-      subtitle={single ? single.codi : t('planning.n_models', { n: modal.modelIds.length })}
-      cancelLabel={t('planning.cancel')}
-      confirmLabel={t('planning.confirm')}
-      onCancel={onCancel}
-      onConfirm={confirm}
-      confirmDisabled={!assignee || saving || (single && taskSel.size === 0)}
-    >
-      <label style={{ fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('planning.choose_tech')}</label>
-      <select value={assignee} onChange={e => setAssignee(e.target.value)} style={{ ...selS, width: '100%', marginTop: 6 }}>
-        <option value="">—</option>
-        {techOptions.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-      </select>
-      {single && (
-        <div style={{ marginTop: 16 }}>
-          <label style={{ fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('planning.choose_tasks')}</label>
-          <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {single.nonDone.map(x => (
-              <label key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                <input type="checkbox" checked={taskSel.has(x.id)} onChange={() => toggleTask(x.id)} />
-                <span style={{ fontFamily: MONO }}>{x.task_type_code}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-    </Modal>
-  )
-}

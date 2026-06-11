@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { taskTypes, suppliers as suppliersApi, productions, fittingSessions, models as modelsApi } from '../../api/endpoints'
+import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi } from '../../api/endpoints'
 import Modal from '../ui/Modal'
 import { selS } from '../ui/buttons'
+import TaskAssignWizard from '../TaskAssignWizard'
 
 export const PHASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
 const CURRENT = '__current__'   // "fase actual de cada model" (bulk)
@@ -21,13 +22,11 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
   const [open, setOpen] = useState(false)
   const [modal, setModal] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [tts, setTts] = useState([])
   const [supps, setSupps] = useState([])
   const [prods, setProds] = useState([])   // només per al cas single (precondició fitting + defaults)
   const [form, setForm] = useState({})
 
   useEffect(() => {
-    taskTypes.list({ page_size: 200 }).then(r => setTts((r.data?.results ?? r.data ?? []).filter(x => x.active !== false))).catch(() => {})
     suppliersApi.list({ active: 'true', ordering: 'name', page_size: 500 }).then(r => setSupps(r.data?.results ?? r.data ?? [])).catch(() => {})
   }, [])
   useEffect(() => {
@@ -43,7 +42,6 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
 
   const openModal = (kind) => {
     setOpen(false)
-    if (kind === 'tasks') setForm({ ids: tts.map(t => t.id) })
     if (kind === 'production') setForm({ supplier_id: '', phase: defaultPhase, expected_at: '', notes: '' })
     if (kind === 'fitting') setForm({ fase: single ? single.fase_actual : CURRENT, data: todayISO(), expected_at: '' })
     setModal(kind)
@@ -64,7 +62,6 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
   }
 
   const phaseFor = (m) => (form.phase === CURRENT ? m.fase_actual : form.phase)
-  const runTasks = () => runBulk(m => modelsApi.defineTasks(m.id, { task_type_ids: form.ids }))
   const runProduction = () => {
     if (!form.supplier_id) { onFeedback({ type: 'err', text: t('model_sheet.select_supplier') }); return }
     if (!form.expected_at) { onFeedback({ type: 'err', text: t('model_sheet.expected_required') }); return }
@@ -83,7 +80,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
   const runBack = () => runBulk(m => { const pv = prevPhase(m.fase_actual); if (!pv) throw { response: { data: { error: t('model_sheet.phase_first') } } }; return modelsApi.regress(m.id, { to_phase: pv }) })
 
   const items = [
-    { key: 'tasks', label: t('model_sheet.generate_tasks'), icon: 'ti-list-check', enabled: list.length > 0 },
+    { key: 'assign', label: t('model_sheet.assign_tasks', 'Assignar tasques'), icon: 'ti-users-plus', enabled: list.length > 0 },
     { key: 'production', label: t('model_sheet.send_to_production'), icon: 'ti-send', enabled: list.length > 0 },
     { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: list.length > 0 },
     { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: someNext },
@@ -117,22 +114,12 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
         </>
       )}
 
-      {modal === 'tasks' && (
-        <Modal title={t('model_sheet.generate_tasks')} confirmLabel={busy ? t('model_sheet.working') : t('model_sheet.generate')} cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy || !(form.ids || []).length} onConfirm={runTasks} onCancel={() => !busy && setModal(null)}>
-          {single && !single.garment_type_item && <div style={warnBox}>{t('model_sheet.tasks_no_item_warn')}</div>}
-          {!single && <div style={infoBox}>{t('model_sheet.bulk_apply', { n: list.length })}</div>}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {tts.map(tt => {
-              const checked = (form.ids || []).includes(tt.id)
-              return (
-                <label key={tt.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 12, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={checked} onChange={() => setForm(f => ({ ...f, ids: checked ? f.ids.filter(x => x !== tt.id) : [...f.ids, tt.id] }))} />
-                  {tt.name} <span style={{ color: 'var(--gray)' }}>({tt.code})</span>
-                </label>
-              )
-            })}
-          </div>
-        </Modal>
+      {modal === 'assign' && (
+        <TaskAssignWizard
+          modelIds={list.map(m => m.id)}
+          onClose={() => setModal(null)}
+          onSuccess={() => { setModal(null); onChanged?.() }}
+        />
       )}
 
       {modal === 'production' && (
