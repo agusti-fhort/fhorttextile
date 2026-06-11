@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { taskTypes as taskTypesApi, plan as planApi } from '../api/endpoints'
+import { taskTypes as taskTypesApi, plan as planApi, modelTasks as modelTaskItems } from '../api/endpoints'
 import { selS, primaryBtn } from './ui/buttons'
 
 // Wizard modal d'assignació de tasques (task_type × persona × data opcional) sobre 1..N models.
@@ -44,6 +44,7 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
 
   const [taskTypes, setTaskTypes] = useState([])
   const [loadingTT, setLoadingTT] = useState(true)
+  const [blockedTypes, setBlockedTypes] = useState(new Set()) // task_type_code ja assignats en algun model
   const [selectedTT, setSelectedTT] = useState(null)        // {id,code,name}
   const [elegibles, setElegibles] = useState([])
   const [loadingEleg, setLoadingEleg] = useState(false)
@@ -56,7 +57,7 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
   const [submitResult, setSubmitResult] = useState(null)
   const [submitError, setSubmitError] = useState(null)
 
-  // ── Càrrega de TaskType actius (mount) ──────────────────────────────────────
+  // ── Càrrega de TaskType actius + tasques ja assignades dels models (mount) ───
   useEffect(() => {
     let cancelled = false
     setLoadingTT(true)
@@ -68,6 +69,22 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
       })
       .catch(() => { if (!cancelled) setTaskTypes([]) })
       .finally(() => { if (!cancelled) setLoadingTT(false) })
+
+    // task_type_code que JA tenen tècnic en QUALSEVOL dels models → bloquejats al select.
+    if (modelIds.length) {
+      Promise.all(modelIds.map(id => modelTaskItems.list({ model: id })))
+        .then(results => {
+          if (cancelled) return
+          const blocked = new Set(
+            results
+              .flatMap(r => r.data?.results ?? r.data ?? [])
+              .filter(mt => mt.assignee)
+              .map(mt => mt.task_type_code)
+          )
+          setBlockedTypes(blocked)
+        })
+        .catch(() => {})
+    }
     return () => { cancelled = true }
   }, [])
 
@@ -203,9 +220,15 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
                   style={{ ...selS, width: '100%', marginTop: 6, cursor: 'pointer' }}
                 >
                   <option value="">{loadingTT ? 'Carregant…' : 'Selecciona una tasca…'}</option>
-                  {taskTypes.map(tt => (
-                    <option key={tt.id} value={tt.id}>{tt.code} · {tt.name}</option>
-                  ))}
+                  {taskTypes.map(tt => {
+                    const isBlocked = blockedTypes.has(tt.code)
+                    return (
+                      <option key={tt.id} value={tt.id} disabled={isBlocked}
+                        style={isBlocked ? { color: 'var(--text-muted)' } : undefined}>
+                        {tt.code} · {tt.name}{isBlocked ? ' (ja assignada)' : ''}
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
 

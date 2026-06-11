@@ -15,7 +15,7 @@ import { selS, primaryBtn } from '../components/ui/buttons'
 import TaskAssignWizard from '../components/TaskAssignWizard'
 
 // Tram 2 — Pantalla "Planificació": dues carpetes Pendents/Assignades (gated define_tasks/configure).
-// Pendents = models amb tasques no-Done SENSE tècnic. Assignades = totes les no-Done amb tècnic.
+// Pendents = models SENSE cap tasca no-Done assignada. Assignades = models amb ALMENYS UNA no-Done amb tècnic.
 // Les tasques Done NO compten per a la classificació i són IMMUTABLES (autor + dates es conserven).
 // Assignar/desassignar/reassignar = compute automàtic al backend (cua sencera del tècnic).
 // DATES: planned_* venen en UTC del serializer → es converteixen a LOCAL (Europe/Madrid) per pintar;
@@ -127,7 +127,6 @@ export default function Planning() {
         const nonDone = ts.filter(x => x.status !== 'Done')
         if (nonDone.length === 0) return
         const done = ts.filter(x => x.status === 'Done')
-        const unassigned = nonDone.filter(x => !x.assignee)
         const techIds = [...new Set(nonDone.map(x => x.assignee).filter(Boolean))]
         const starts = nonDone.map(x => x.planned_start).filter(Boolean).sort()
         const ends = nonDone.map(x => x.planned_end).filter(Boolean).sort()
@@ -138,7 +137,7 @@ export default function Planning() {
         out.push({
           id: m.model_id, codi: m.model_codi, nom: m.model_nom, prioritat: m.prioritat,
           data_objectiu: m.data_objectiu, temporada: m.temporada,
-          folder: unassigned.length ? 'pending' : 'assigned',
+          folder: techIds.length ? 'assigned' : 'pending',
           nonDoneCount: nonDone.length, techIds,
           predStart: starts.length ? starts[0] : null, predEnd,
           temps, viab,
