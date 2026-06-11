@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { Stage, Layer, Rect, Text, Line, Image as KonvaImage, Transformer, Group } from 'react-konva'
+import { Stage, Layer, Rect, Text, Line, Arrow, Image as KonvaImage, Transformer, Group } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
 
@@ -24,9 +24,17 @@ const A4_W_MM = 297
 const A4_H_MM = 210
 export const CANVAS_W = Math.round(A4_W_MM * MM_TO_PX)   // 713
 export const CANVAS_H = Math.round(A4_H_MM * MM_TO_PX)   // 504
-// A4 horitzontal en punts PostScript (pdf-lib).
+// A4 horitzontal en punts PostScript (pdf-lib). (CANVAS_W/H i PDF_W/H_PT = default A4L.)
 export const PDF_W_PT = 841.89
 export const PDF_H_PT = 595.28
+
+// Formats de pàgina (TS-4b). Mides en mm + punts PostScript (A4=595.28×841.89, A3=841.89×1190.55).
+export const PAGE_FORMATS = {
+  A4L: { w: 297, h: 210, pdf: [841.89, 595.28], label: 'A4 ↔' },
+  A4P: { w: 210, h: 297, pdf: [595.28, 841.89], label: 'A4 ↕' },
+  A3L: { w: 420, h: 297, pdf: [1190.55, 841.89], label: 'A3 ↔' },
+  A3P: { w: 297, h: 420, pdf: [841.89, 1190.55], label: 'A3 ↕' },
+}
 
 export const FONT = 'IBM Plex Mono, monospace'
 export const COL = {
@@ -245,11 +253,13 @@ function HeaderBlock({ modelData, versio, placeholderMode, groupProps, isSelecte
 // ctx = { tableData:{objId:json}, modelData, versio }. Dibuixa els blocs de dades
 // natius amb les mateixes primitives que el canvas viu (cap PNG congelat).
 export async function renderPageToDataURL(page, pixelRatio, ctx) {
+  const pageW = ctx?.pageW || CANVAS_W   // TS-4b: dimensions segons format (fallback A4L)
+  const pageH = ctx?.pageH || CANVAS_H
   const container = document.createElement('div')
-  const stage = new Konva.Stage({ container, width: CANVAS_W, height: CANVAS_H })
+  const stage = new Konva.Stage({ container, width: pageW, height: pageH })
   const layer = new Konva.Layer()
   stage.add(layer)
-  layer.add(new Konva.Rect({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H, fill: '#ffffff' }))
+  layer.add(new Konva.Rect({ x: 0, y: 0, width: pageW, height: pageH, fill: '#ffffff' }))
   const ordered = [...(page.objects || [])].sort(
     (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   for (const o of ordered) {
@@ -257,7 +267,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
       layer.add(new Konva.Text({
         x: toPx(o.x), y: toPx(o.y), width: o.width ? toPx(o.width) : undefined,
         text: o.text || '', fontSize: o.fontSize || 11, fontFamily: o.fontFamily || FONT,
-        fill: o.fill || COL.textMain,
+        fontStyle: o.fontStyle || 'normal', fill: o.fill || COL.textMain,
       }))
     } else if (o.type === 'rect') {
       layer.add(new Konva.Rect({
@@ -269,6 +279,12 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
       layer.add(new Konva.Line({
         points: (o.points || []).map(toPx), stroke: o.stroke || COL.textMain,
         strokeWidth: o.strokeWidth || 1, lineCap: 'round', lineJoin: 'round',
+      }))
+    } else if (o.type === 'arrow') {
+      layer.add(new Konva.Arrow({
+        points: [toPx(o.x), toPx(o.y), toPx(o.x2), toPx(o.y2)],
+        stroke: o.stroke || COL.textMain, fill: o.fill || o.stroke || COL.textMain,
+        strokeWidth: o.strokeWidth || 1.5, pointerLength: 8, pointerWidth: 6,
       }))
     } else if (o.type === 'data_block') {
       // Blocs vius natius: mateixes primitives que el canvas. Group posicionat en px.
@@ -352,7 +368,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   }
   if (obj.type === 'text') {
     return <Text {...common} text={obj.text || ''} width={obj.width ? toPx(obj.width) : undefined}
-      fontSize={obj.fontSize || 11} fontFamily={obj.fontFamily || FONT}
+      fontSize={obj.fontSize || 11} fontFamily={obj.fontFamily || FONT} fontStyle={obj.fontStyle || 'normal'}
       fill={obj.fill || COL.textMain}
       onDblClick={onDblText} onDblTap={onDblText} />
   }
@@ -365,6 +381,12 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     return <Line {...common} x={0} y={0} points={(obj.points || []).map(toPx)}
       stroke={obj.stroke || COL.textMain} strokeWidth={obj.strokeWidth || 1}
       lineCap="round" lineJoin="round" hitStrokeWidth={10} />
+  }
+  if (obj.type === 'arrow') {
+    return <Arrow {...common} x={0} y={0}
+      points={[toPx(obj.x), toPx(obj.y), toPx(obj.x2), toPx(obj.y2)]}
+      stroke={obj.stroke || COL.textMain} fill={obj.fill || obj.stroke || COL.textMain}
+      strokeWidth={obj.strokeWidth || 1.5} pointerLength={8} pointerWidth={6} hitStrokeWidth={10} />
   }
   if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
@@ -402,8 +424,12 @@ export default function TechSheetEditor() {
   const [addingTable, setAddingTable] = useState(false)
   const [pickFitting, setPickFitting] = useState(false)
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
+  const [pageFormat, setPageFormat] = useState('A4L')   // TS-4b: format del document sencer
 
   const locked = lockState === 'owned'
+  const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
+  const pageW = Math.round(fmt.w * MM_TO_PX)
+  const pageH = Math.round(fmt.h * MM_TO_PX)
   const stageRef = useRef(null)
   const trRef = useRef(null)
   const wrapRef = useRef(null)
@@ -497,6 +523,7 @@ export default function TechSheetEditor() {
     } else {
       setPages([{ id: uid(), objects: [] }])
     }
+    setPageFormat((tj && tj.pageFormat) || 'A4L')
     setCurrentPage(0)
   }
 
@@ -531,19 +558,19 @@ export default function TechSheetEditor() {
         const r = await fetch(`${API}/api/v1/models/${id}/tech-sheet/update/`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-          body: JSON.stringify({ template_json: { version: 2, pages: serializePages(pages) } }),
+          body: JSON.stringify({ template_json: { version: 2, pages: serializePages(pages), pageFormat } }),
         })
         setSaveState(r.ok ? 'saved' : 'error')
       } catch { setSaveState('error') }
     }, 2000)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pages, locked])
+  }, [pages, locked, pageFormat])
 
   // ── Miniatures: re-render offscreen de totes les pàgines (debounce) ────────
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
-        const ctx = { tableData, modelData: model, versio: sheet?.versio }
+        const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH }
         const thumbs = []
         for (const p of pages) thumbs.push(await renderPageToDataURL(p, 0.18, ctx))
         setThumbnails(thumbs)
@@ -551,7 +578,7 @@ export default function TechSheetEditor() {
     }, 300)
     return () => clearTimeout(t)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pages, tableData, model, sheet?.versio])
+  }, [pages, tableData, model, sheet?.versio, pageFormat])
 
   // ── Transformer: lliga el node seleccionat ─────────────────────────────────
   useEffect(() => {
@@ -559,9 +586,9 @@ export default function TechSheetEditor() {
     const stage = stageRef.current
     if (!tr || !stage) return
     const obj = objectsOf(currentPage).find(o => o.id === selectedId)
-    // No transformem línies (resize de punts complex) ni blocs de dades (auto-dimensionats)
-    // ni objectes de plantilla. Aquests es mouen (drag) però no es redimensionen.
-    if (selectedId && obj && obj.layer !== 'template' && obj.type !== 'line' && obj.type !== 'data_block') {
+    // Transformable: text, rect, image i data_block (TS-4b, keepRatio). Línies i fletxes
+    // es mouen però no es redimensionen (resize de punts complex); plantilla bloquejada.
+    if (selectedId && obj && obj.layer !== 'template' && obj.type !== 'line' && obj.type !== 'arrow') {
       const node = stage.findOne('#' + selectedId)
       tr.nodes(node ? [node] : [])
     } else {
@@ -575,6 +602,9 @@ export default function TechSheetEditor() {
   useEffect(() => {
     const onKey = (e) => {
       if (editingText) return
+      // No esborrar mentre s'escriu en un camp del panell (X/Y, escala, format…).
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
       if (!selectedId || !locked) return
       const obj = objectsOf(currentPage).find(o => o.id === selectedId)
@@ -593,6 +623,10 @@ export default function TechSheetEditor() {
       const pts = (obj.points || []).map((v, i) => (i % 2 === 0 ? v + dx : v + dy))
       node.position({ x: 0, y: 0 })
       updateObject(obj.id, { points: pts })
+    } else if (obj.type === 'arrow') {
+      const dx = toMm(node.x()), dy = toMm(node.y())
+      node.position({ x: 0, y: 0 })
+      updateObject(obj.id, { x: obj.x + dx, y: obj.y + dy, x2: obj.x2 + dx, y2: obj.y2 + dy })
     } else {
       updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()) })
     }
@@ -601,6 +635,13 @@ export default function TechSheetEditor() {
     const node = e.target
     const sx = node.scaleX(), sy = node.scaleY()
     node.scaleX(1); node.scaleY(1)
+    // Blocs de dades: el resize baka l'escala a obj.scale (coherent amb l'auto-fit),
+    // no a width/height. node.scaleX() ja és l'escala absoluta nova (Konva multiplica
+    // sobre l'escala base del Group), per tant s'hi assigna directament.
+    if (obj.type === 'data_block') {
+      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), scale: Math.max(0.1, Math.max(sx, sy)) })
+      return
+    }
     const patch = {
       x: toMm(node.x()), y: toMm(node.y()),
       width: Math.max(2, toMm(node.width() * sx)),
@@ -630,7 +671,7 @@ export default function TechSheetEditor() {
       }
       addObject(obj); setTool('select'); return
     }
-    if (tool === 'rect' || tool === 'line' || tool === 'draw') {
+    if (tool === 'rect' || tool === 'line' || tool === 'draw' || tool === 'arrow') {
       drawing.current = { type: tool, startX: pos.x, startY: pos.y, points: [pos.x, pos.y] }
       setDrawTemp({ type: tool, x: pos.x, y: pos.y, w: 0, h: 0, points: [pos.x, pos.y] })
     }
@@ -642,8 +683,8 @@ export default function TechSheetEditor() {
     const d = drawing.current
     if (d.type === 'rect') {
       setDrawTemp({ type: 'rect', x: Math.min(d.startX, pos.x), y: Math.min(d.startY, pos.y), w: Math.abs(pos.x - d.startX), h: Math.abs(pos.y - d.startY) })
-    } else if (d.type === 'line') {
-      setDrawTemp({ type: 'line', points: [d.startX, d.startY, pos.x, pos.y] })
+    } else if (d.type === 'line' || d.type === 'arrow') {
+      setDrawTemp({ type: d.type, points: [d.startX, d.startY, pos.x, pos.y] })
     } else if (d.type === 'draw') {
       d.points = [...d.points, pos.x, pos.y]
       setDrawTemp({ type: 'draw', points: d.points })
@@ -661,6 +702,9 @@ export default function TechSheetEditor() {
       if (w > 3 && h > 3) obj = { id: uid(), type: 'rect', layer: 'free', x: toMm(x), y: toMm(y), width: toMm(w), height: toMm(h), fill: 'transparent', stroke: COL.gold, strokeWidth: 1 }
     } else if (d.type === 'line') {
       obj = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [toMm(d.startX), toMm(d.startY), toMm(pos.x), toMm(pos.y)], stroke: COL.textMain, strokeWidth: 1 }
+    } else if (d.type === 'arrow') {
+      const dist = Math.hypot(pos.x - d.startX, pos.y - d.startY)
+      if (dist > 5) obj = { id: uid(), type: 'arrow', layer: 'free', x: toMm(d.startX), y: toMm(d.startY), x2: toMm(pos.x), y2: toMm(pos.y), stroke: COL.textMain, fill: COL.textMain, strokeWidth: 1.5 }
     } else if (d.type === 'draw') {
       if (d.points.length >= 4) obj = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: d.points.map(toMm), stroke: COL.textMain, strokeWidth: 1 }
     }
@@ -725,11 +769,10 @@ export default function TechSheetEditor() {
       const data = await r.json()
       if (!data.rows || !data.rows.length) { flash('Taula buida.'); return }
       const { totalW, totalH } = buildTablePrimitives(data)
-      // Auto-fit: si la taula desborda l'àrea útil A4 (alçada 190mm o amplada 277mm),
-      // s'escala uniformement perquè càpiga; el factor es persisteix com a obj.scale.
+      // Auto-fit a l'àrea útil del format actual (marge 10mm per costat); el factor es
+      // persisteix com a obj.scale (i és reajustable manualment via el panell).
       const wMm = totalW / MM_TO_PX, hMm = totalH / MM_TO_PX
-      const MAX_W_MM = 277, MAX_H_MM = 190
-      const scale = Math.min(1, MAX_W_MM / wMm, MAX_H_MM / hMm)
+      const scale = Math.min(1, (fmt.w - 20) / wMm, (fmt.h - 20) / hMm)
       const objId = uid()
       const obj = {
         id: objId, type: 'data_block', kind: 'graded_table', size_fitting_id: sfId,
@@ -779,12 +822,13 @@ export default function TechSheetEditor() {
     setExporting(true)
     try {
       const pdf = await PDFDocument.create()
-      const ctx = { tableData, modelData: model, versio: sheet?.versio }
+      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH }
+      const [pdfW, pdfH] = fmt.pdf
       for (const p of pages) {
         const dataUrl = await renderPageToDataURL(p, 3.5, ctx)
         const png = await pdf.embedPng(dataUrl)
-        const page = pdf.addPage([PDF_W_PT, PDF_H_PT])
-        page.drawImage(png, { x: 0, y: 0, width: PDF_W_PT, height: PDF_H_PT })
+        const page = pdf.addPage([pdfW, pdfH])
+        page.drawImage(png, { x: 0, y: 0, width: pdfW, height: pdfH })
       }
       const bytes = await pdf.save()
       const blob = new Blob([bytes], { type: 'application/pdf' })
@@ -822,6 +866,7 @@ export default function TechSheetEditor() {
     { k: 'text', icon: 'ti-typography', label: 'Text' },
     { k: 'rect', icon: 'ti-square', label: 'Rectangle' },
     { k: 'line', icon: 'ti-line', label: 'Línia' },
+    { k: 'arrow', icon: 'ti-arrow-up-right', label: 'Fletxa' },
     { k: 'draw', icon: 'ti-pencil', label: 'Dibuix' },
   ]
 
@@ -860,6 +905,12 @@ export default function TechSheetEditor() {
           </div>
         )}
 
+        {/* Format de pàgina (tot el document) */}
+        <select value={pageFormat} onChange={e => setPageFormat(e.target.value)} disabled={!locked}
+          title="Format de pàgina" style={{ ...headerBtn, padding: '5px 8px', marginLeft: locked ? 0 : 16, cursor: locked ? 'pointer' : 'default' }}>
+          {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+
         <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>
           v{sheet?.versio ?? 1} · {badge.text}
         </span>
@@ -894,13 +945,13 @@ export default function TechSheetEditor() {
             </div>
           )}
           <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()}
-            style={{ position: 'relative', width: CANVAS_W, height: CANVAS_H, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: '#fff', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
-            <Stage ref={stageRef} width={CANVAS_W} height={CANVAS_H}
+            style={{ position: 'relative', width: pageW, height: pageH, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: '#fff', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
+            <Stage ref={stageRef} width={pageW} height={pageH}
               onMouseDown={onStageMouseDown} onMouseMove={onStageMouseMove} onMouseUp={onStageMouseUp}>
               {/* Fons blanc + 3 capes en ordre z. Konva no agrupa per `layer`:
                   ordenem els objectes i pintem en una sola Layer (z per ordre d'array). */}
               <Layer>
-                <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill="#ffffff" listening={false} />
+                <Rect x={0} y={0} width={pageW} height={pageH} fill="#ffffff" listening={false} />
                 {ordered.map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio}
@@ -915,7 +966,8 @@ export default function TechSheetEditor() {
                 {/* Forma temporal mentre es dibuixa */}
                 {drawTemp?.type === 'rect' && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={COL.gold} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {(drawTemp?.type === 'line' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
-                <Transformer ref={trRef} rotateEnabled={false} ignoreStroke
+                {drawTemp?.type === 'arrow' && <Arrow points={drawTemp.points} stroke={COL.textMain} fill={COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} listening={false} />}
+                <Transformer ref={trRef} rotateEnabled={false} ignoreStroke keepRatio={selObj?.type === 'data_block'}
                   boundBoxFunc={(oldB, newB) => (newB.width < 10 || newB.height < 10 ? oldB : newB)} />
               </Layer>
             </Stage>
@@ -963,30 +1015,63 @@ export default function TechSheetEditor() {
               )
             })}
 
-            {/* Propietats de l'objecte seleccionat */}
+            {/* Propietats de l'objecte seleccionat (TS-4b) */}
             {selObj && locked && (
               <>
                 <SectionTitle>Element · {selObj.type}</SectionTitle>
                 {selObj.type === 'text' && (
-                  <label style={propLabel}>Mida font
-                    <input type="number" min={6} max={48} value={selObj.fontSize || 11}
-                      onChange={e => updateObject(selObj.id, { fontSize: Number(e.target.value) || 11 })}
-                      style={propInput} />
-                  </label>
+                  <>
+                    <label style={propLabel}>Mida font
+                      <input type="number" min={6} max={48} value={selObj.fontSize || 11}
+                        onChange={e => updateObject(selObj.id, { fontSize: Number(e.target.value) || 11 })} style={propInput} />
+                    </label>
+                    <label style={{ ...propLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input type="checkbox" checked={selObj.fontStyle === 'bold'}
+                        onChange={e => updateObject(selObj.id, { fontStyle: e.target.checked ? 'bold' : 'normal' })} />
+                      Negreta
+                    </label>
+                    <label style={propLabel}>Color text
+                      <input type="color" value={selObj.fill || '#1d1d1b'}
+                        onChange={e => updateObject(selObj.id, { fill: e.target.value })} style={{ ...propInput, padding: 0, height: 26 }} />
+                    </label>
+                  </>
                 )}
-                {(selObj.type === 'rect' || selObj.type === 'line') && (
-                  <label style={propLabel}>Color traç
-                    <input type="color" value={selObj.stroke || '#1d1d1b'}
-                      onChange={e => updateObject(selObj.id, { stroke: e.target.value })}
-                      style={{ ...propInput, padding: 0, height: 26 }} />
-                  </label>
+                {(selObj.type === 'rect' || selObj.type === 'line' || selObj.type === 'arrow') && (
+                  <>
+                    <label style={propLabel}>Color traç
+                      <input type="color" value={selObj.stroke || '#1d1d1b'}
+                        onChange={e => updateObject(selObj.id, { stroke: e.target.value, ...(selObj.type === 'arrow' ? { fill: e.target.value } : {}) })} style={{ ...propInput, padding: 0, height: 26 }} />
+                    </label>
+                    <label style={propLabel}>Gruix traç
+                      <input type="number" min={0.5} max={5} step={0.5} value={selObj.strokeWidth || (selObj.type === 'arrow' ? 1.5 : 1)}
+                        onChange={e => updateObject(selObj.id, { strokeWidth: Number(e.target.value) || 1 })} style={propInput} />
+                    </label>
+                  </>
                 )}
                 {selObj.type === 'rect' && (
                   <label style={propLabel}>Emplenat
                     <input type="color" value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : '#ffffff'}
-                      onChange={e => updateObject(selObj.id, { fill: e.target.value })}
-                      style={{ ...propInput, padding: 0, height: 26 }} />
+                      onChange={e => updateObject(selObj.id, { fill: e.target.value })} style={{ ...propInput, padding: 0, height: 26 }} />
                   </label>
+                )}
+                {selObj.type === 'data_block' && (
+                  <label style={propLabel}>Escala (%)
+                    <input type="number" min={10} max={200} step={5} value={Math.round((selObj.scale || 1) * 100)}
+                      onChange={e => updateObject(selObj.id, { scale: Math.max(0.1, (Number(e.target.value) || 100) / 100) })} style={propInput} />
+                  </label>
+                )}
+                {/* Posició X/Y (mm) per a objectes posicionats (no línia/fletxa). */}
+                {selObj.type !== 'line' && selObj.type !== 'arrow' && (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <label style={{ ...propLabel, flex: 1 }}>X (mm)
+                      <input type="number" step={1} value={Math.round((selObj.x || 0) * 10) / 10}
+                        onChange={e => updateObject(selObj.id, { x: Number(e.target.value) || 0 })} style={propInput} />
+                    </label>
+                    <label style={{ ...propLabel, flex: 1 }}>Y (mm)
+                      <input type="number" step={1} value={Math.round((selObj.y || 0) * 10) / 10}
+                        onChange={e => updateObject(selObj.id, { y: Number(e.target.value) || 0 })} style={propInput} />
+                    </label>
+                  </div>
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
                   <button onClick={() => deleteObject(selObj.id)}
