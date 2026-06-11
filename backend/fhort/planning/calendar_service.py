@@ -108,3 +108,45 @@ def add_working_minutes(profile, start, minutes):
                 cur = e   # tram esgotat → continua al següent tram/dia
         cur = _dt.datetime.combine(cur.date() + _dt.timedelta(days=1), _dt.time(0, 0))
     raise RuntimeError('add_working_minutes: límit de seguretat superat')
+
+
+def prev_working_slot(profile, before):
+    """Mirall ENRERE de next_working_slot: darrer instant hàbil <= `before` (datetime naïf),
+    entès com el FINAL de feina disponible. Si `before` cau dins un tram (s < before <= e)
+    el retorna tal qual; si cau després d'un tram (e < before) retrocedeix fins a `e`; si no
+    hi ha cap tram abans avui, salta al final del dia anterior. Salta pauses, finals/inicis
+    de jornada, caps de setmana, festius i absències."""
+    cal = CompanyCalendar.load()
+    is_absent = _absence_dates(profile)
+    cur = before
+    for _ in range(_SAFETY_DAYS):
+        for s, e in reversed(_day_trams(profile, cal, cur.date(), is_absent)):
+            if cur > s:
+                return e if cur > e else cur
+        # cap tram avui abans de `cur` → salta al final del dia anterior
+        cur = _dt.datetime.combine(cur.date() - _dt.timedelta(days=1), _dt.time.max)
+    raise RuntimeError('prev_working_slot: cap franja hàbil dins del límit de seguretat')
+
+
+def subtract_working_minutes(profile, end, minutes):
+    """Mirall ENRERE d'add_working_minutes: datetime d'INICI tal que treballant des d'aquest
+    inici fins a `end` hi ha exactament `minutes` minuts laborables. Consumeix el temps cap
+    enrere respectant el calendari (pauses/jornada/caps de setmana/festius/absències),
+    reutilitzant els mateixos helpers que la primitiva endavant. Mateixa convenció naïf."""
+    if minutes <= 0:
+        return prev_working_slot(profile, end)
+    cal = CompanyCalendar.load()
+    is_absent = _absence_dates(profile)
+    cur = prev_working_slot(profile, end)
+    remaining = _dt.timedelta(minutes=minutes)
+    for _ in range(_SAFETY_DAYS):
+        for s, e in reversed(_day_trams(profile, cal, cur.date(), is_absent)):
+            if cur > s:
+                seg_end = e if cur > e else cur
+                avail = seg_end - s
+                if remaining <= avail:
+                    return seg_end - remaining
+                remaining -= avail
+                cur = s   # tram esgotat → continua al tram/dia anterior
+        cur = _dt.datetime.combine(cur.date() - _dt.timedelta(days=1), _dt.time.max)
+    raise RuntimeError('subtract_working_minutes: límit de seguretat superat')
