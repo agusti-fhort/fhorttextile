@@ -7,6 +7,7 @@ removed in Sprint 5B.5 together with the SFFitting/SFFittingLinia models.
 """
 from __future__ import annotations
 import logging
+import uuid as _uuid
 
 from django.db import transaction
 
@@ -53,11 +54,13 @@ def create_session(
 
 def schedule_session(*, fase, data, responsable_id, model_id=None, garment_set_id=None,
                      lloc='', start_time=None, end_time=None,
-                     duracio_minuts=None, attendee_ids=None):
+                     duracio_minuts=None, attendee_ids=None, _skip_recompute=False):
     """Programa un fitting (estat Programada). El responsable fixa dia (i opcionalment hores).
     No s'executa fins que s'obre (open_session).
     `duracio_minuts`: default 10 min × N (N=peces del set, o 1 per single).
-    `attendee_ids`: assistents interns; si hi ha start_time → recompute de la seva cua."""
+    `attendee_ids`: assistents interns; si hi ha start_time → recompute de la seva cua.
+    `_skip_recompute`: inhibeix el recompute per sessió (ús intern de schedule_bulk, que en
+    fa UN de sol al final sobre la unió d'attendees). Els attendees s'assignen igualment."""
     if bool(model_id) == bool(garment_set_id):
         raise ValueError("Cal exactament un de model_id o garment_set_id (XOR).")
     # Redisseny 5C: el fitting ja NO exigeix Production Delivered prèvia. La via adaptativa
@@ -77,13 +80,69 @@ def schedule_session(*, fase, data, responsable_id, model_id=None, garment_set_i
         duracio_minuts=duracio_minuts, estat='Programada')
     if attendee_ids:
         session.attendees.set(attendee_ids)
-        if start_time:   # guard: recompute només si hi ha franja real (start_time)
+        if start_time and not _skip_recompute:   # recompute només si hi ha franja real i no s'inhibeix
             try:
                 from fhort.planning.plan_service import recompute_for_technicians
                 recompute_for_technicians(set(attendee_ids))
             except Exception:
                 logger.exception('recompute post-schedule no-fatal')
     return session
+
+
+def schedule_bulk(*, fase, data, start_time, model_ids,
+                  duracio_minuts=None, attendee_ids=None,
+                  responsable_id=None, lloc=''):
+    """Crea N FittingSessions ENCADENADES amb un `convocatoria` UUID compartit.
+
+    Les sessions s'encadenen: la i+1 comença on acaba la i, via add_working_minutes(None, …)
+    sobre el CALENDARI D'EMPRESA PUR (salta pauses/jornada/caps de setmana/festius). Si no hi
+    ha `start_time`, NO s'encadena (totes queden sense hora, marcador de dia). El recompute es
+    fa UN sol cop al final sobre la unió d'attendees (cada sessió s'inhibeix amb _skip_recompute).
+
+    Retorna (sessions, convocatoria)."""
+    from fhort.planning.calendar_service import add_working_minutes
+    import datetime as _dt
+
+    convocatoria = _uuid.uuid4()
+    sessions = []
+    current_data = data          # pot avançar si l'encadenament creua fi de jornada
+    current_start = start_time   # time object o None
+
+    with transaction.atomic():
+        for model_id in model_ids:
+            dur = duracio_minuts if duracio_minuts is not None else 10
+
+            session = schedule_session(
+                fase=fase,
+                data=current_data,
+                start_time=current_start,
+                duracio_minuts=dur,
+                attendee_ids=attendee_ids or [],
+                responsable_id=responsable_id,
+                model_id=model_id,
+                lloc=lloc,
+                _skip_recompute=True,
+            )
+            session.convocatoria = convocatoria
+            session.save(update_fields=['convocatoria'])
+            sessions.append(session)
+
+            # Encadenar només si hi ha hora real (sense hora → marcador de dia, no s'encadena).
+            if current_start is not None:
+                start_dt = _dt.datetime.combine(current_data, current_start)
+                end_dt = add_working_minutes(None, start_dt, dur)  # naïf in → naïf out
+                current_data = end_dt.date()    # pot ser un altre dia (salta jornada/festius)
+                current_start = end_dt.time()
+
+        # Recompute ÚNIC al final (no N): unió d'attendees. No-fatal.
+        if attendee_ids and start_time:
+            try:
+                from fhort.planning.plan_service import recompute_for_technicians
+                recompute_for_technicians(set(attendee_ids))
+            except Exception:
+                logger.exception('recompute post-schedule-bulk no-fatal')
+
+    return sessions, convocatoria
 
 
 def open_session(session_id):

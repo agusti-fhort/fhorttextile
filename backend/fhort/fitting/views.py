@@ -222,6 +222,49 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
         return Response(FittingSessionDetailSerializer(s, context={'request': request}).data,
                         status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['post'], url_path='schedule-bulk',
+            permission_classes=[_ScheduleFittingsPerm])
+    def schedule_bulk_action(self, request):
+        """POST /api/v1/fitting-sessions/schedule-bulk/ — programa N fittings ENCADENATS
+        amb un `convocatoria` UUID compartit (sessió i+1 comença on acaba la i, calendari
+        d'empresa pur). Body: {fase, data, start_time?, model_ids:[...], duracio_minuts?,
+        attendee_ids?, responsable_id?, lloc?}."""
+        import datetime as _dt
+        d = request.data
+        model_ids = d.get('model_ids', [])
+        if not model_ids:
+            return Response({'error': 'model_ids requerit'}, status=status.HTTP_400_BAD_REQUEST)
+        fase = d.get('fase')
+        data_str = d.get('data')
+        if not fase or not data_str:
+            return Response({'error': 'fase i data requerits'}, status=status.HTTP_400_BAD_REQUEST)
+        data = _dt.date.fromisoformat(data_str)
+        start_time_str = d.get('start_time')
+        start_time = _dt.time.fromisoformat(start_time_str) if start_time_str else None
+        duracio_minuts = int(d['duracio_minuts']) if d.get('duracio_minuts') else None
+        attendee_ids = d.get('attendee_ids', [])
+        responsable_id = d.get('responsable_id')
+        lloc = d.get('lloc', '')
+        try:
+            sessions, convocatoria = services.schedule_bulk(
+                fase=fase, data=data, start_time=start_time,
+                model_ids=model_ids, duracio_minuts=duracio_minuts,
+                attendee_ids=attendee_ids, responsable_id=responsable_id,
+                lloc=lloc,
+            )
+        except Exception as e:
+            logger.exception('schedule_bulk error')
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'convocatoria': str(convocatoria),
+            'n_sessions': len(sessions),
+            'sessions': [{'id': s.id, 'model_id': s.model_id,
+                          'start_time': str(s.start_time),
+                          'data': str(s.data),
+                          'duracio_minuts': s.duracio_minuts}
+                         for s in sessions],
+        }, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['post'], url_path='open',
             permission_classes=[_ScheduleFittingsPerm])
     def open(self, request, pk=None):
