@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { Stage, Layer, Rect, Text, Line, Arrow, Image as KonvaImage, Transformer, Group } from 'react-konva'
+import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
 
@@ -43,6 +43,9 @@ export const COL = {
 }
 
 const LAYER_ORDER = { template: 0, data: 1, free: 2 }
+// TS-4c — eines per "família" de creació (mateixa mecànica de drag).
+const RECT_TOOLS = ['rect', 'rect_round', 'ellipse']   // drag = bounding box
+const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(performance.now())}-${Math.floor(Math.random() * 1e9)}`)
 export const toPx = (mm) => mm * MM_TO_PX
 export const toMm = (px) => px / MM_TO_PX
@@ -82,11 +85,13 @@ function useImage(src) {
 // Geometria en px (escala MM_TO_PX). Una única font de veritat: tant els components
 // React (live) com el render offscreen (export/miniatures) consumeixen les mateixes
 // "primitives" {t:'r'|'t'|'l', ...}. Així no hi ha drift entre canvas i PDF.
-const T_ROW_H = 10 * MM_TO_PX     // TS-4a: 14→10 (compacta, redueix desbordament)
-const T_HDR_H = 12 * MM_TO_PX     // 16→12
 // Cos de text coherent amb el document: 9pt (= 3.175mm a 72dpi) ≈ 8px.
 const T_FONT = Math.round(3.175 * MM_TO_PX)   // ~8px (9pt)
 const T_FONT_CA = Math.round(2.5 * MM_TO_PX)  // ~6px (7pt) — subtítol nom_ca
+// TS-4c: alçada de fila derivada del contingut (2 línies + padding), no fixa.
+const T_ROW_PAD = 3   // px de padding vertical per línia
+const T_ROW_H = T_FONT + T_FONT_CA + T_ROW_PAD * 3   // dalt nom_en + entre + baix nom_ca
+const T_HDR_H = T_FONT + T_ROW_PAD * 2               // capçalera d'una línia
 const T_REF_W = 22 * MM_TO_PX     // nomenclatura del croquis (nom_fitxa)
 const T_NOM_W = 58 * MM_TO_PX     // Nom EN + CA en dues línies a la mateixa cel·la
 const T_VAL_W = 18 * MM_TO_PX     // valor per talla
@@ -151,8 +156,8 @@ function buildTablePrimitives(d) {
     const ref = row.ref || row.abbreviation || row.codi || ''
     prims.push({ t: 't', x: 0, y, w: T_REF_W, h: T_ROW_H, text: ref, fill: TBL.REF, size: T_FONT, bold: true, align: 'center', mid: true })
     // Nom: dues línies (EN a dalt, CA a baix més petit i cursiva) dins la mateixa cel·la.
-    prims.push({ t: 't', x: T_REF_W + T_PAD, y: y + 1, w: T_NOM_W - 2 * T_PAD, h: T_FONT + 2, text: row.nom_en || '', fill: TBL.VAL, size: T_FONT, mid: false })
-    if (row.nom_ca) prims.push({ t: 't', x: T_REF_W + T_PAD, y: y + T_FONT + 2, w: T_NOM_W - 2 * T_PAD, h: T_FONT_CA + 2, text: row.nom_ca, fill: TBL.NOM, size: T_FONT_CA, italic: true, mid: false })
+    prims.push({ t: 't', x: T_REF_W + T_PAD, y: y + T_ROW_PAD, w: T_NOM_W - 2 * T_PAD, h: T_FONT + 2, text: row.nom_en || '', fill: TBL.VAL, size: T_FONT, mid: false })
+    if (row.nom_ca) prims.push({ t: 't', x: T_REF_W + T_PAD, y: y + T_ROW_PAD * 2 + T_FONT, w: T_NOM_W - 2 * T_PAD, h: T_FONT_CA + 2, text: row.nom_ca, fill: TBL.NOM, size: T_FONT_CA, italic: true, mid: false })
     sizes.forEach((sl, si) => {
       const v = row.valors?.[sl]
       prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y, w: T_VAL_W, h: T_ROW_H, text: v != null ? String(v) : '–', fill: TBL.VAL, size: T_FONT, align: 'center', mid: true })
@@ -264,6 +269,11 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
     (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   for (const o of ordered) {
     if (o.type === 'text') {
+      // text_box: rect de fons darrere el text.
+      if (o.bgFill) {
+        const pad = o.bgPadding || 4, fs = o.fontSize || 11, w = toPx(o.width || 120)
+        layer.add(new Konva.Rect({ x: toPx(o.x) - pad, y: toPx(o.y) - pad, width: w + pad * 2, height: fs * 1.6 + pad * 2, fill: o.bgFill, cornerRadius: 3 }))
+      }
       layer.add(new Konva.Text({
         x: toPx(o.x), y: toPx(o.y), width: o.width ? toPx(o.width) : undefined,
         text: o.text || '', fontSize: o.fontSize || 11, fontFamily: o.fontFamily || FONT,
@@ -273,18 +283,24 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
       layer.add(new Konva.Rect({
         x: toPx(o.x), y: toPx(o.y), width: toPx(o.width), height: toPx(o.height),
         fill: o.fill && o.fill !== 'transparent' ? o.fill : undefined,
-        stroke: o.stroke || COL.gold, strokeWidth: o.strokeWidth || 1,
+        stroke: o.stroke || COL.gold, strokeWidth: o.strokeWidth || 1, cornerRadius: o.cornerRadius || 0,
+      }))
+    } else if (o.type === 'ellipse') {
+      layer.add(new Konva.Ellipse({
+        x: toPx(o.x), y: toPx(o.y), radiusX: toPx(o.rx), radiusY: toPx(o.ry),
+        fill: o.fill && o.fill !== 'transparent' ? o.fill : undefined,
+        stroke: o.stroke || COL.textMain, strokeWidth: o.strokeWidth || 1.5,
       }))
     } else if (o.type === 'line') {
       layer.add(new Konva.Line({
         points: (o.points || []).map(toPx), stroke: o.stroke || COL.textMain,
-        strokeWidth: o.strokeWidth || 1, lineCap: 'round', lineJoin: 'round',
+        strokeWidth: o.strokeWidth || 1, dash: o.dash || undefined, lineCap: 'round', lineJoin: 'round',
       }))
     } else if (o.type === 'arrow') {
       layer.add(new Konva.Arrow({
         points: [toPx(o.x), toPx(o.y), toPx(o.x2), toPx(o.y2)],
         stroke: o.stroke || COL.textMain, fill: o.fill || o.stroke || COL.textMain,
-        strokeWidth: o.strokeWidth || 1.5, pointerLength: 8, pointerWidth: 6,
+        strokeWidth: o.strokeWidth || 1.5, pointerLength: 8, pointerWidth: 6, pointerAtBeginning: !!o.arrow2,
       }))
     } else if (o.type === 'data_block') {
       // Blocs vius natius: mateixes primitives que el canvas. Group posicionat en px.
@@ -367,6 +383,17 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     return <GradedTableNode tableData={data} scale={obj.scale || 1} groupProps={common} isSelected={selected} />
   }
   if (obj.type === 'text') {
+    // Text amb fons (text_box): Group amb un Rect darrere; no redimensionable per Transformer.
+    if (obj.bgFill) {
+      const w = toPx(obj.width || 120), fs = obj.fontSize || 11, pad = obj.bgPadding || 4
+      return (
+        <Group {...common} onDblClick={onDblText} onDblTap={onDblText}>
+          <Rect x={-pad} y={-pad} width={w + pad * 2} height={fs * 1.6 + pad * 2} fill={obj.bgFill} cornerRadius={3} />
+          <Text text={obj.text || ''} width={w} fontSize={fs} fontFamily={obj.fontFamily || FONT}
+            fontStyle={obj.fontStyle || 'normal'} fill={obj.fill || COL.textMain} listening={false} />
+        </Group>
+      )
+    }
     return <Text {...common} text={obj.text || ''} width={obj.width ? toPx(obj.width) : undefined}
       fontSize={obj.fontSize || 11} fontFamily={obj.fontFamily || FONT} fontStyle={obj.fontStyle || 'normal'}
       fill={obj.fill || COL.textMain}
@@ -375,18 +402,24 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   if (obj.type === 'rect') {
     return <Rect {...common} width={toPx(obj.width)} height={toPx(obj.height)}
       fill={obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined}
-      stroke={obj.stroke || COL.gold} strokeWidth={obj.strokeWidth || 1} />
+      stroke={obj.stroke || COL.gold} strokeWidth={obj.strokeWidth || 1} cornerRadius={obj.cornerRadius || 0} />
+  }
+  if (obj.type === 'ellipse') {
+    return <Ellipse {...common} radiusX={toPx(obj.rx)} radiusY={toPx(obj.ry)}
+      fill={obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined}
+      stroke={obj.stroke || COL.textMain} strokeWidth={obj.strokeWidth || 1.5} />
   }
   if (obj.type === 'line') {
     return <Line {...common} x={0} y={0} points={(obj.points || []).map(toPx)}
-      stroke={obj.stroke || COL.textMain} strokeWidth={obj.strokeWidth || 1}
+      stroke={obj.stroke || COL.textMain} strokeWidth={obj.strokeWidth || 1} dash={obj.dash || undefined}
       lineCap="round" lineJoin="round" hitStrokeWidth={10} />
   }
   if (obj.type === 'arrow') {
     return <Arrow {...common} x={0} y={0}
       points={[toPx(obj.x), toPx(obj.y), toPx(obj.x2), toPx(obj.y2)]}
       stroke={obj.stroke || COL.textMain} fill={obj.fill || obj.stroke || COL.textMain}
-      strokeWidth={obj.strokeWidth || 1.5} pointerLength={8} pointerWidth={6} hitStrokeWidth={10} />
+      strokeWidth={obj.strokeWidth || 1.5} pointerLength={8} pointerWidth={6}
+      pointerAtBeginning={!!obj.arrow2} hitStrokeWidth={10} />
   }
   if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
@@ -425,6 +458,8 @@ export default function TechSheetEditor() {
   const [pickFitting, setPickFitting] = useState(false)
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
   const [pageFormat, setPageFormat] = useState('A4L')   // TS-4b: format del document sencer
+  const [openGroup, setOpenGroup] = useState(null)      // TS-4c: grup d'eines desplegat
+  const toolbarRef = useRef(null)
 
   const locked = lockState === 'owned'
   const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
@@ -527,6 +562,14 @@ export default function TechSheetEditor() {
     setCurrentPage(0)
   }
 
+  // Tanca el desplegable d'eines en clicar fora de la toolbar.
+  useEffect(() => {
+    if (!openGroup) return
+    const onDocDown = (e) => { if (toolbarRef.current && !toolbarRef.current.contains(e.target)) setOpenGroup(null) }
+    document.addEventListener('mousedown', onDocDown)
+    return () => document.removeEventListener('mousedown', onDocDown)
+  }, [openGroup])
+
   // ── Re-fetch dels data_block (taula graduada) en carregar → cache JSON viu ──
   useEffect(() => {
     const pending = pages.flatMap(p => (p.objects || []))
@@ -586,9 +629,10 @@ export default function TechSheetEditor() {
     const stage = stageRef.current
     if (!tr || !stage) return
     const obj = objectsOf(currentPage).find(o => o.id === selectedId)
-    // Transformable: text, rect, image i data_block (TS-4b, keepRatio). Línies i fletxes
-    // es mouen però no es redimensionen (resize de punts complex); plantilla bloquejada.
-    if (selectedId && obj && obj.layer !== 'template' && obj.type !== 'line' && obj.type !== 'arrow') {
+    // Transformable: text, rect, ellipse, image, data_block (keepRatio). NO: línies, fletxes
+    // (resize de punts), text amb fons (Group), plantilla.
+    const noResize = obj && (obj.type === 'line' || obj.type === 'arrow' || (obj.type === 'text' && obj.bgFill))
+    if (selectedId && obj && obj.layer !== 'template' && !noResize) {
       const node = stage.findOne('#' + selectedId)
       tr.nodes(node ? [node] : [])
     } else {
@@ -642,6 +686,10 @@ export default function TechSheetEditor() {
       updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), scale: Math.max(0.1, Math.max(sx, sy)) })
       return
     }
+    if (obj.type === 'ellipse') {
+      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rx: Math.max(1, toMm(node.radiusX() * sx)), ry: Math.max(1, toMm(node.radiusY() * sy)) })
+      return
+    }
     const patch = {
       x: toMm(node.x()), y: toMm(node.y()),
       width: Math.max(2, toMm(node.width() * sx)),
@@ -663,15 +711,16 @@ export default function TechSheetEditor() {
       if (e.target === e.target.getStage()) setSelectedId(null)
       return
     }
-    if (tool === 'text') {
+    if (tool === 'text' || tool === 'text_box') {
       const obj = {
         id: uid(), type: 'text', layer: 'free', x: toMm(pos.x), y: toMm(pos.y),
         width: 120, height: 30, text: 'Doble clic per editar', fontSize: 11,
         fontFamily: FONT, fill: COL.textMain,
+        ...(tool === 'text_box' ? { bgFill: '#ffffff', bgPadding: 4 } : {}),
       }
       addObject(obj); setTool('select'); return
     }
-    if (tool === 'rect' || tool === 'line' || tool === 'draw' || tool === 'arrow') {
+    if (RECT_TOOLS.includes(tool) || LINE_TOOLS.includes(tool) || tool === 'draw') {
       drawing.current = { type: tool, startX: pos.x, startY: pos.y, points: [pos.x, pos.y] }
       setDrawTemp({ type: tool, x: pos.x, y: pos.y, w: 0, h: 0, points: [pos.x, pos.y] })
     }
@@ -681,9 +730,9 @@ export default function TechSheetEditor() {
     const pos = stagePoint()
     if (!pos) return
     const d = drawing.current
-    if (d.type === 'rect') {
-      setDrawTemp({ type: 'rect', x: Math.min(d.startX, pos.x), y: Math.min(d.startY, pos.y), w: Math.abs(pos.x - d.startX), h: Math.abs(pos.y - d.startY) })
-    } else if (d.type === 'line' || d.type === 'arrow') {
+    if (RECT_TOOLS.includes(d.type)) {
+      setDrawTemp({ type: d.type, x: Math.min(d.startX, pos.x), y: Math.min(d.startY, pos.y), w: Math.abs(pos.x - d.startX), h: Math.abs(pos.y - d.startY) })
+    } else if (LINE_TOOLS.includes(d.type)) {
       setDrawTemp({ type: d.type, points: [d.startX, d.startY, pos.x, pos.y] })
     } else if (d.type === 'draw') {
       d.points = [...d.points, pos.x, pos.y]
@@ -695,18 +744,22 @@ export default function TechSheetEditor() {
     if (!d) return
     drawing.current = null
     const pos = stagePoint() || { x: d.startX, y: d.startY }
+    const base = { id: uid(), layer: 'free' }
     let obj = null
-    if (d.type === 'rect') {
+    if (d.type === 'rect' || d.type === 'rect_round') {
       const x = Math.min(d.startX, pos.x), y = Math.min(d.startY, pos.y)
       const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
-      if (w > 3 && h > 3) obj = { id: uid(), type: 'rect', layer: 'free', x: toMm(x), y: toMm(y), width: toMm(w), height: toMm(h), fill: 'transparent', stroke: COL.gold, strokeWidth: 1 }
-    } else if (d.type === 'line') {
-      obj = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [toMm(d.startX), toMm(d.startY), toMm(pos.x), toMm(pos.y)], stroke: COL.textMain, strokeWidth: 1 }
-    } else if (d.type === 'arrow') {
+      if (w > 3 && h > 3) obj = { ...base, type: 'rect', x: toMm(x), y: toMm(y), width: toMm(w), height: toMm(h), fill: 'transparent', stroke: COL.gold, strokeWidth: 1, ...(d.type === 'rect_round' ? { cornerRadius: 8 } : {}) }
+    } else if (d.type === 'ellipse') {
+      const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
+      if (w > 3 && h > 3) obj = { ...base, type: 'ellipse', x: toMm((d.startX + pos.x) / 2), y: toMm((d.startY + pos.y) / 2), rx: toMm(w / 2), ry: toMm(h / 2), stroke: COL.textMain, strokeWidth: 1.5, fill: 'transparent' }
+    } else if (d.type === 'line' || d.type === 'line_dot') {
+      obj = { ...base, type: 'line', x: 0, y: 0, points: [toMm(d.startX), toMm(d.startY), toMm(pos.x), toMm(pos.y)], stroke: COL.textMain, strokeWidth: 1, ...(d.type === 'line_dot' ? { dash: [4, 4] } : {}) }
+    } else if (d.type === 'arrow' || d.type === 'arrow2') {
       const dist = Math.hypot(pos.x - d.startX, pos.y - d.startY)
-      if (dist > 5) obj = { id: uid(), type: 'arrow', layer: 'free', x: toMm(d.startX), y: toMm(d.startY), x2: toMm(pos.x), y2: toMm(pos.y), stroke: COL.textMain, fill: COL.textMain, strokeWidth: 1.5 }
+      if (dist > 5) obj = { ...base, type: 'arrow', x: toMm(d.startX), y: toMm(d.startY), x2: toMm(pos.x), y2: toMm(pos.y), stroke: COL.textMain, fill: COL.textMain, strokeWidth: 1.5, ...(d.type === 'arrow2' ? { arrow2: true } : {}) }
     } else if (d.type === 'draw') {
-      if (d.points.length >= 4) obj = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: d.points.map(toMm), stroke: COL.textMain, strokeWidth: 1 }
+      if (d.points.length >= 4) obj = { ...base, type: 'line', x: 0, y: 0, points: d.points.map(toMm), stroke: COL.textMain, strokeWidth: 1 }
     }
     setDrawTemp(null)
     if (obj) { addObject(obj); setTool('select') }
@@ -861,14 +914,26 @@ export default function TechSheetEditor() {
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   const selObj = curObjs.find(o => o.id === selectedId) || null
 
-  const TOOLS = [
-    { k: 'select', icon: 'ti-pointer', label: 'Seleccionar' },
-    { k: 'text', icon: 'ti-typography', label: 'Text' },
-    { k: 'rect', icon: 'ti-square', label: 'Rectangle' },
-    { k: 'line', icon: 'ti-line', label: 'Línia' },
-    { k: 'arrow', icon: 'ti-arrow-up-right', label: 'Fletxa' },
-    { k: 'draw', icon: 'ti-pencil', label: 'Dibuix' },
+  // Eines agrupades en desplegables (TS-4c). 'select' és standalone.
+  const TOOL_GROUPS = [
+    { g: 'shapes', icon: 'ti-shape', label: 'Formes', tools: [
+      { k: 'rect', icon: 'ti-square', label: 'Rectangle' },
+      { k: 'rect_round', icon: 'ti-square-rounded', label: 'Rectangle arrodonit' },
+      { k: 'ellipse', icon: 'ti-circle', label: 'El·lipse' },
+    ] },
+    { g: 'draw', icon: 'ti-pencil', label: 'Dibuix', tools: [
+      { k: 'line', icon: 'ti-minus', label: 'Línia' },
+      { k: 'line_dot', icon: 'ti-line-dashed', label: 'Línia de punts' },
+      { k: 'arrow', icon: 'ti-arrow-right', label: 'Fletxa →' },
+      { k: 'arrow2', icon: 'ti-arrows-horizontal', label: 'Fletxa ↔' },
+      { k: 'draw', icon: 'ti-scribble', label: 'Lliure' },
+    ] },
+    { g: 'text', icon: 'ti-typography', label: 'Text', tools: [
+      { k: 'text', icon: 'ti-cursor-text', label: 'Text' },
+      { k: 'text_box', icon: 'ti-text-caption', label: 'Text amb fons' },
+    ] },
   ]
+  const activeTool = (grp) => grp.tools.some(t => t.k === tool)
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: '#faf7f2', fontFamily: FONT }}>
@@ -888,15 +953,35 @@ export default function TechSheetEditor() {
         {saveLabel && <span style={{ fontSize: 11, color: COL.textMuted }}>{saveLabel}</span>}
         {notice && <span style={{ fontSize: 11, color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
 
-        {/* Eines (només en edició) */}
+        {/* Eines (només en edició): select + grups desplegables + imatge */}
         {locked && (
-          <div style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
-            {TOOLS.map(tl => (
-              <button key={tl.k} onClick={() => setTool(tl.k)} title={tl.label}
-                style={{ ...headerBtn, padding: '5px 8px', borderColor: tool === tl.k ? COL.gold : COL.border, background: tool === tl.k ? COL.goldPale : 'transparent', color: tool === tl.k ? COL.gold : COL.textMain }}>
-                <i className={`ti ${tl.icon}`} style={{ fontSize: 15 }} />
-              </button>
-            ))}
+          <div ref={toolbarRef} style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
+            <button onClick={() => { setTool('select'); setOpenGroup(null) }} title="Seleccionar"
+              style={{ ...headerBtn, padding: '5px 8px', borderColor: tool === 'select' ? COL.gold : COL.border, background: tool === 'select' ? COL.goldPale : 'transparent', color: tool === 'select' ? COL.gold : COL.textMain }}>
+              <i className="ti ti-pointer" style={{ fontSize: 15 }} />
+            </button>
+            {TOOL_GROUPS.map(grp => {
+              const on = activeTool(grp)
+              return (
+                <div key={grp.g} style={{ position: 'relative', display: 'inline-block' }}>
+                  <button onClick={() => setOpenGroup(openGroup === grp.g ? null : grp.g)} title={grp.label}
+                    style={{ ...headerBtn, padding: '5px 7px', borderColor: on ? COL.gold : COL.border, background: on ? COL.goldPale : 'transparent', color: on ? COL.gold : COL.textMain }}>
+                    <i className={`ti ${grp.icon}`} style={{ fontSize: 15 }} />
+                    <i className="ti ti-chevron-down" style={{ fontSize: 10 }} />
+                  </button>
+                  {openGroup === grp.g && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff', border: `1px solid ${COL.border}`, borderRadius: 6, zIndex: 50, minWidth: 160, boxShadow: '0 2px 8px rgba(0,0,0,.08)', overflow: 'hidden' }}>
+                      {grp.tools.map(t => (
+                        <button key={t.k} onClick={() => { setTool(t.k); setOpenGroup(null) }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: tool === t.k ? COL.goldPale : 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: FONT, color: COL.textMain }}>
+                          <i className={`ti ${t.icon}`} style={{ fontSize: 14 }} />{t.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
             <button onClick={() => fileRef.current?.click()} title="Imatge" style={{ ...headerBtn, padding: '5px 8px' }}>
               <i className="ti ti-photo" style={{ fontSize: 15 }} />
             </button>
@@ -964,9 +1049,10 @@ export default function TechSheetEditor() {
                     onDblText={() => startTextEdit(o)} />
                 ))}
                 {/* Forma temporal mentre es dibuixa */}
-                {drawTemp?.type === 'rect' && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={COL.gold} strokeWidth={1} dash={[4, 4]} listening={false} />}
-                {(drawTemp?.type === 'line' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
-                {drawTemp?.type === 'arrow' && <Arrow points={drawTemp.points} stroke={COL.textMain} fill={COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} listening={false} />}
+                {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}
+                {drawTemp?.type === 'ellipse' && <Ellipse x={drawTemp.x + drawTemp.w / 2} y={drawTemp.y + drawTemp.h / 2} radiusX={drawTemp.w / 2} radiusY={drawTemp.h / 2} stroke={COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
+                {(drawTemp?.type === 'line' || drawTemp?.type === 'line_dot' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
+                {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={COL.textMain} fill={COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
                 <Transformer ref={trRef} rotateEnabled={false} ignoreStroke keepRatio={selObj?.type === 'data_block'}
                   boundBoxFunc={(oldB, newB) => (newB.width < 10 || newB.height < 10 ? oldB : newB)} />
               </Layer>
@@ -1030,29 +1116,26 @@ export default function TechSheetEditor() {
                         onChange={e => updateObject(selObj.id, { fontStyle: e.target.checked ? 'bold' : 'normal' })} />
                       Negreta
                     </label>
-                    <label style={propLabel}>Color text
-                      <input type="color" value={selObj.fill || '#1d1d1b'}
-                        onChange={e => updateObject(selObj.id, { fill: e.target.value })} style={{ ...propInput, padding: 0, height: 26 }} />
-                    </label>
+                    <div style={propLabel}>Color text
+                      <ColorPicker value={selObj.fill || '#1d1d1b'} onChange={c => updateObject(selObj.id, { fill: c })} />
+                    </div>
                   </>
                 )}
-                {(selObj.type === 'rect' || selObj.type === 'line' || selObj.type === 'arrow') && (
+                {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'line' || selObj.type === 'arrow') && (
                   <>
-                    <label style={propLabel}>Color traç
-                      <input type="color" value={selObj.stroke || '#1d1d1b'}
-                        onChange={e => updateObject(selObj.id, { stroke: e.target.value, ...(selObj.type === 'arrow' ? { fill: e.target.value } : {}) })} style={{ ...propInput, padding: 0, height: 26 }} />
-                    </label>
+                    <div style={propLabel}>Color traç
+                      <ColorPicker value={selObj.stroke || '#1d1d1b'} onChange={c => updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
+                    </div>
                     <label style={propLabel}>Gruix traç
                       <input type="number" min={0.5} max={5} step={0.5} value={selObj.strokeWidth || (selObj.type === 'arrow' ? 1.5 : 1)}
                         onChange={e => updateObject(selObj.id, { strokeWidth: Number(e.target.value) || 1 })} style={propInput} />
                     </label>
                   </>
                 )}
-                {selObj.type === 'rect' && (
-                  <label style={propLabel}>Emplenat
-                    <input type="color" value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : '#ffffff'}
-                      onChange={e => updateObject(selObj.id, { fill: e.target.value })} style={{ ...propInput, padding: 0, height: 26 }} />
-                  </label>
+                {(selObj.type === 'rect' || selObj.type === 'ellipse') && (
+                  <div style={propLabel}>Emplenat
+                    <ColorPicker value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : '#ffffff'} onChange={c => updateObject(selObj.id, { fill: c })} />
+                  </div>
                 )}
                 {selObj.type === 'data_block' && (
                   <label style={propLabel}>Escala (%)
@@ -1101,6 +1184,21 @@ export default function TechSheetEditor() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Selector de color ràpid (TS-4c): swatches de marca + color natiu ("Més colors").
+const QUICK_COLORS = ['#1d1d1b', '#185fa5', '#1d9e75', '#dc2626', '#c27a2a', '#ca8a04']
+export function ColorPicker({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginTop: 3 }}>
+      {QUICK_COLORS.map(c => (
+        <button key={c} type="button" onClick={() => onChange(c)} title={c}
+          style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: value === c ? '2px solid #1d1d1b' : '1px solid #e0d5c5', cursor: 'pointer', padding: 0 }} />
+      ))}
+      <input type="color" value={value || '#1d1d1b'} onChange={e => onChange(e.target.value)} title="Més colors"
+        style={{ width: 22, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} />
     </div>
   )
 }
