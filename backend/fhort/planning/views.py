@@ -318,13 +318,25 @@ def calendar_events_view(request):
             },
         })
 
-    # ── Font 'fitting' (FittingSession) — marcador d'un dia, all-day, SENSE tècnic ──
-    fittings = list(FittingSession.objects.select_related('model', 'garment_set')
-                    .filter(**({'data__gte': start_d} if start_d else {}))
-                    .filter(**({'data__lte': end_d} if end_d else {})))
+    # ── Font 'fitting' (FittingSession) — UN bloc horari per ASSISTENT (com les tasques);
+    # sense hora → marcador de dia (retrocompat). Sessions Tancada/Anullada NO es pinten. ──
+    import datetime as _dt
+    fitting_qs = (FittingSession.objects
+                  .select_related('model', 'garment_set')
+                  .prefetch_related('attendees__user')
+                  .exclude(estat__in=['Tancada', 'Anullada']))
+    if start_d:
+        fitting_qs = fitting_qs.filter(data__gte=start_d)
+    if end_d:
+        fitting_qs = fitting_qs.filter(data__lte=end_d)
+    # Scope (mateix criteri que les tasques): sense view_team_tasks → només on sóc assistent.
+    if VIEW_TEAM_TASKS not in get_capabilities(request.user):
+        profile = getattr(request.user, 'profile', None)
+        fitting_qs = fitting_qs.filter(attendees=profile) if profile is not None else fitting_qs.none()
+    fitting_list = list(fitting_qs)
     # Dependència TOVA: expected_at de la confecció del mateix (model, fase). Es consulta a banda
     # (la Production pot caure FORA del rang visible). Si n'hi ha més d'una, en guardem la més tardana.
-    model_ids = {f.model_id for f in fittings if f.model_id}
+    model_ids = {f.model_id for f in fitting_list if f.model_id}
     expected_by_key = {}
     if model_ids:
         for p in (Production.objects.filter(model_id__in=model_ids, expected_at__isnull=False)
@@ -333,29 +345,54 @@ def calendar_events_view(request):
             prev = expected_by_key.get(key)
             if prev is None or p['expected_at'] > prev:
                 expected_by_key[key] = p['expected_at']
-    for f in fittings:
-        target = f.model.codi_intern if f.model_id else (f.garment_set.codi_base if f.garment_set_id else '?')
-        exp = expected_by_key.get((f.model_id, f.fase)) if f.model_id else None
-        avis = bool(exp and f.data < exp)   # avís TOVA (no en_risc): fitting abans de tenir la confecció
-        events.append({
-            'id': f'fitting-{f.id}',
-            'tipus': 'fitting',
-            'start': f.data.isoformat(),
-            'end': f.data.isoformat(),
-            'titol': f'{target} · fitting {f.fase}',
-            'tecnic_id': None,
-            'tecnic_nom': None,
-            'color': COLOR_FITTING,
-            'link': f'/fittings/{f.id}',
-            'en_risc': False,
-            'all_day': True,
-            'meta': {
-                'model_id': f.model_id,
-                'fase': f.fase,
-                'estat': f.estat,
-                'avis_abans_confeccio': avis,
-            },
-        })
+    for s in fitting_list:
+        target = s.model.codi_intern if s.model_id else (s.garment_set.codi_base if s.garment_set_id else '?')
+        titol = f'{target} · fitting {s.fase}'
+        link = f'/fittings/{s.id}'
+        exp = expected_by_key.get((s.model_id, s.fase)) if s.model_id else None
+        avis_abans = bool(exp and s.data and s.data < exp)   # avís TOVA (no en_risc)
+        if s.start_time and s.duracio_minuts:
+            base = timezone.make_aware(_dt.datetime.combine(s.data, s.start_time))
+            start_dt = timezone.localtime(base).isoformat()
+            end_dt = timezone.localtime(base + _dt.timedelta(minutes=s.duracio_minuts)).isoformat()
+            all_day = False
+        else:
+            start_dt = s.data.isoformat()
+            end_dt = s.data.isoformat()
+            all_day = True
+        meta_base = {
+            'model_id': s.model_id,
+            'garment_set_id': s.garment_set_id,
+            'fase': s.fase,
+            'estat': s.estat,
+            'duracio_minuts': s.duracio_minuts,
+            'lloc': s.lloc,
+            'avis_abans_confeccio': avis_abans,
+        }
+        attendees_list = list(s.attendees.all())
+        if attendees_list:
+            for att in attendees_list:
+                events.append({
+                    'id': f'fitting-{s.id}-{att.id}',
+                    'tipus': 'fitting',
+                    'start': start_dt, 'end': end_dt, 'titol': titol,
+                    'tecnic_id': att.id,
+                    'tecnic_nom': att.user.get_full_name() or att.user.username,
+                    'color': att.color_avatar or '#888888',
+                    'link': link, 'en_risc': False, 'all_day': all_day,
+                    'meta': meta_base,
+                })
+        else:
+            # Sessió sense attendees interns: event únic (retrocompat, color fix de tipus).
+            events.append({
+                'id': f'fitting-{s.id}',
+                'tipus': 'fitting',
+                'start': start_dt, 'end': end_dt, 'titol': titol,
+                'tecnic_id': None, 'tecnic_nom': None,
+                'color': COLOR_FITTING,
+                'link': link, 'en_risc': False, 'all_day': all_day,
+                'meta': meta_base,
+            })
 
     return Response({'events': events}, status=http_status.HTTP_200_OK)
 
