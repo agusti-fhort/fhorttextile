@@ -76,11 +76,13 @@ function useImage(src) {
 // "primitives" {t:'r'|'t'|'l', ...}. Així no hi ha drift entre canvas i PDF.
 const T_ROW_H = 10 * MM_TO_PX     // TS-4a: 14→10 (compacta, redueix desbordament)
 const T_HDR_H = 12 * MM_TO_PX     // 16→12
-const T_FONT = Math.round(5 * MM_TO_PX)   // 6.5→5
+// Cos de text coherent amb el document: 9pt (= 3.175mm a 72dpi) ≈ 8px.
+const T_FONT = Math.round(3.175 * MM_TO_PX)   // ~8px (9pt)
+const T_FONT_CA = Math.round(2.5 * MM_TO_PX)  // ~6px (7pt) — subtítol nom_ca
 const T_REF_W = 22 * MM_TO_PX     // nomenclatura del croquis (nom_fitxa)
 const T_NOM_W = 58 * MM_TO_PX     // Nom EN + CA en dues línies a la mateixa cel·la
 const T_VAL_W = 18 * MM_TO_PX     // valor per talla
-const T_DELTA_W = 14 * MM_TO_PX   // delta (Δ) per talla
+const T_DELTA_W = 16 * MM_TO_PX   // delta (Δ) — UNA sola columna (valor de GradingRule)
 const T_PAD = 2 * MM_TO_PX
 const TBL = {
   HDR_BG: '#111827', HDR_TEXT: '#ffffff', ROW_EVEN: '#ffffff', ROW_ODD: '#f7f7f7',
@@ -88,22 +90,27 @@ const TBL = {
   BASE_BG: '#fdf6ee', DELTA: '#185fa5',
 }
 
-// Format del delta: 0/buit → '—'; positiu → '+1'; negatiu → '−0.5' (signe menys Unicode).
-function fmtDelta(v) {
-  if (!v) return '—'
-  return (v > 0 ? '+' : '−') + Math.abs(v)
+// Delta de fila = increment de la GradingRule: primer increment no-zero de talla no-base.
+// Tots 0 (grading FIXED) → '—'. Signe explícit (+1 / −0.5).
+function rowDelta(row, baseSize, sizes) {
+  for (const sl of sizes) {
+    if (sl === baseSize) continue
+    const d = row.deltas?.[sl]
+    if (d && d !== 0) return d > 0 ? `+${d}` : `${String(d).replace('-', '−')}`
+  }
+  return '—'
 }
 
 // graded-table JSON (enriquit TS-4a) → {prims, totalW, totalH}. Camps: base_size,
 // size_labels, rows[{ref, nom_en, nom_ca, valors, deltas}].
-// Columnes: REF · Mesura(EN/CA) · [talles] · [Δ per talla]. Talla base destacada.
+// Columnes: REF · Mesura(EN/CA) · [talles] · Δ (única). Talla base destacada.
 function buildTablePrimitives(d) {
   const sizes = d?.size_labels || []
   const rows = d?.rows || []
   const baseSize = d?.base_size || null
   const sizesX0 = T_REF_W + T_NOM_W
-  const deltaX0 = sizesX0 + sizes.length * T_VAL_W
-  const totalW = deltaX0 + sizes.length * T_DELTA_W
+  const deltaX0 = sizesX0 + sizes.length * T_VAL_W   // columna Δ única al final
+  const totalW = deltaX0 + T_DELTA_W
   const totalH = T_HDR_H + rows.length * T_ROW_H
   const baseIdx = sizes.indexOf(baseSize)
   const prims = []
@@ -112,15 +119,20 @@ function buildTablePrimitives(d) {
   prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: T_HDR_H, fill: TBL.HDR_BG })
   prims.push({ t: 't', x: 0, y: 0, w: T_REF_W, h: T_HDR_H, text: 'REF', fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
   prims.push({ t: 't', x: T_REF_W + T_PAD, y: 0, w: T_NOM_W - T_PAD, h: T_HDR_H, text: 'Mesura', fill: TBL.HDR_TEXT, size: T_FONT, mid: true })
-  sizes.forEach((sl, si) => prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: sl === baseSize ? `${sl}*` : sl, fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true }))
-  sizes.forEach((_, si) => prims.push({ t: 't', x: deltaX0 + si * T_DELTA_W, y: 0, w: T_DELTA_W, h: T_HDR_H, text: 'Δ', fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true }))
+  sizes.forEach((sl, si) => {
+    const isBase = sl === baseSize
+    // Cel·la de capçalera de la talla base: fons gold + text blanc.
+    if (isBase) prims.push({ t: 'r', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, fill: TBL.OUTER })
+    prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: isBase ? `${sl}*` : sl, fill: isBase ? '#ffffff' : TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
+  })
+  prims.push({ t: 't', x: deltaX0, y: 0, w: T_DELTA_W, h: T_HDR_H, text: 'Δ', fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
 
   // Fons alternat de files
   rows.forEach((row, ri) => {
     const y = T_HDR_H + ri * T_ROW_H
     prims.push({ t: 'r', x: 0, y, w: totalW, h: T_ROW_H, fill: ri % 2 === 0 ? TBL.ROW_EVEN : TBL.ROW_ODD })
   })
-  // Realçat de la columna talla base (sobre els fons, sota el text)
+  // Realçat de la columna talla base a les dades (sobre els fons, sota el text)
   if (baseIdx >= 0) {
     prims.push({ t: 'r', x: sizesX0 + baseIdx * T_VAL_W, y: T_HDR_H, w: T_VAL_W, h: rows.length * T_ROW_H, fill: TBL.BASE_BG })
   }
@@ -132,20 +144,18 @@ function buildTablePrimitives(d) {
     prims.push({ t: 't', x: 0, y, w: T_REF_W, h: T_ROW_H, text: ref, fill: TBL.REF, size: T_FONT, bold: true, align: 'center', mid: true })
     // Nom: dues línies (EN a dalt, CA a baix més petit i cursiva) dins la mateixa cel·la.
     prims.push({ t: 't', x: T_REF_W + T_PAD, y: y + 1, w: T_NOM_W - 2 * T_PAD, h: T_FONT + 2, text: row.nom_en || '', fill: TBL.VAL, size: T_FONT, mid: false })
-    if (row.nom_ca) prims.push({ t: 't', x: T_REF_W + T_PAD, y: y + T_FONT + 1, w: T_NOM_W - 2 * T_PAD, h: T_FONT, text: row.nom_ca, fill: TBL.NOM, size: Math.round(T_FONT * 0.78), italic: true, mid: false })
+    if (row.nom_ca) prims.push({ t: 't', x: T_REF_W + T_PAD, y: y + T_FONT + 2, w: T_NOM_W - 2 * T_PAD, h: T_FONT_CA + 2, text: row.nom_ca, fill: TBL.NOM, size: T_FONT_CA, italic: true, mid: false })
     sizes.forEach((sl, si) => {
       const v = row.valors?.[sl]
       prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y, w: T_VAL_W, h: T_ROW_H, text: v != null ? String(v) : '–', fill: TBL.VAL, size: T_FONT, align: 'center', mid: true })
     })
-    sizes.forEach((sl, si) => {
-      prims.push({ t: 't', x: deltaX0 + si * T_DELTA_W, y, w: T_DELTA_W, h: T_ROW_H, text: sl === baseSize ? '—' : fmtDelta(row.deltas?.[sl]), fill: TBL.DELTA, size: Math.round(T_FONT * 0.9), align: 'center', mid: true })
-    })
+    prims.push({ t: 't', x: deltaX0, y, w: T_DELTA_W, h: T_ROW_H, text: rowDelta(row, baseSize, sizes), fill: TBL.DELTA, size: T_FONT, align: 'center', mid: true })
     prims.push({ t: 'l', points: [0, y + T_ROW_H, totalW, y + T_ROW_H], stroke: TBL.ROW_BORDER, sw: 0.5 })
   })
 
   // Separadors verticals + vora exterior
   let cx = T_REF_W
-  ;[T_NOM_W, ...sizes.map(() => T_VAL_W), ...sizes.map(() => T_DELTA_W)].forEach(w => {
+  ;[T_NOM_W, ...sizes.map(() => T_VAL_W), T_DELTA_W].forEach(w => {
     prims.push({ t: 'l', points: [cx, 0, cx, totalH], stroke: TBL.ROW_BORDER, sw: 0.5 }); cx += w
   })
   prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: totalH, stroke: TBL.OUTER, sw: 1.5 })
