@@ -248,6 +248,13 @@ class FittingSession(models.Model):
         null=True, blank=True,
         related_name='fitting_sessions_creades',
     )
+    duracio_minuts = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text='Durada de la franja. Default en programar: 10 min × models.')
+    attendees = models.ManyToManyField(
+        'accounts.UserProfile', blank=True,
+        related_name='fitting_sessions',
+        help_text='Assistents interns: ocupen franja a la seva cua de planificació.')
 
     class Meta:
         verbose_name = 'Sessió de fitting'
@@ -362,3 +369,21 @@ class FittingPhoto(models.Model):
 
     def __str__(self):
         return f'{self.session_id} · {self.caption or self.fitxer.name}'
+
+
+class FittingDurationStat(models.Model):
+    """Welford incremental de durada real per model de sessió (minuts). Agregat GLOBAL del
+    tenant: singleton (el servei farà get_or_create(pk=1)). Mateix patró que
+    pom.ClientMesuraPerfil (n_mostres / mitjana / m2_acum / desviacio)."""
+    n_mostres = models.PositiveIntegerField(default=0)
+    mitjana = models.FloatField(default=0.0)
+    m2_acum = models.FloatField(default=0.0)   # Welford running M2
+    desviacio = models.FloatField(default=0.0)
+    darrera_actualitzacio = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Estadística de durada de fitting'
+        verbose_name_plural = 'Estadístiques de durada de fitting'
+
+    def __str__(self):
+        return f'FittingDurationStat n={self.n_mostres} mitjana={self.mitjana:.1f}min'
