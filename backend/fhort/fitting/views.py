@@ -179,6 +179,7 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
         duracio_minuts_raw = d.get('duracio_minuts')
         duracio_minuts = int(duracio_minuts_raw) if duracio_minuts_raw else None
         attendee_ids = d.get('attendee_ids', [])
+        force = bool(d.get('force'))
         try:
             s = services.schedule_session(
                 fase=d.get('fase'), data=d.get('data'),
@@ -186,7 +187,16 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
                 model_id=d.get('model_id'), garment_set_id=d.get('garment_set_id'),
                 lloc=d.get('lloc', ''),
                 start_time=start_time, end_time=d.get('end_time'),
-                duracio_minuts=duracio_minuts, attendee_ids=attendee_ids)
+                duracio_minuts=duracio_minuts, attendee_ids=attendee_ids,
+                created_by_id=_profile_id(request), force=force)
+        except services.SessionOverlapError as e:
+            # Conflicte DUR: franja encavalcada amb sessió viva → 409, no es crea.
+            return Response({'error': str(e), 'conflicts': e.conflicts},
+                            status=status.HTTP_409_CONFLICT)
+        except services.SessionSoftConflict as e:
+            # Conflicte SUAU: mateixa fase, franja diferent → 200, requereix confirmació.
+            return Response({'warning': str(e), 'requires_confirmation': True,
+                             'sessions': e.sessions}, status=status.HTTP_200_OK)
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         # Via adaptativa: si s'informa expected_at i no hi ha Delivered per a (model, fase),
@@ -247,23 +257,25 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
         responsable_id = d.get('responsable_id')
         lloc = d.get('lloc', '')
         try:
-            sessions, convocatoria = services.schedule_bulk(
+            sessions, convocatoria, skipped, warnings = services.schedule_bulk(
                 fase=fase, data=data, start_time=start_time,
                 model_ids=model_ids, duracio_minuts=duracio_minuts,
                 attendee_ids=attendee_ids, responsable_id=responsable_id,
-                lloc=lloc,
+                lloc=lloc, created_by_id=_profile_id(request),
             )
         except Exception as e:
             logger.exception('schedule_bulk error')
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({
-            'convocatoria': str(convocatoria),
+            'convocatoria': str(convocatoria) if convocatoria else None,
             'n_sessions': len(sessions),
-            'sessions': [{'id': s.id, 'model_id': s.model_id,
-                          'start_time': str(s.start_time),
-                          'data': str(s.data),
-                          'duracio_minuts': s.duracio_minuts}
-                         for s in sessions],
+            'created': [{'id': s.id, 'model_id': s.model_id,
+                         'start_time': str(s.start_time),
+                         'data': str(s.data),
+                         'duracio_minuts': s.duracio_minuts}
+                        for s in sessions],
+            'skipped': skipped,
+            'warnings': warnings,
         }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='open',

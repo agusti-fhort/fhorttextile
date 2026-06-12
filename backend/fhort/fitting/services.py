@@ -10,8 +10,68 @@ import logging
 import uuid as _uuid
 
 from django.db import transaction
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+# ── Peça 1 — guard de solapament ─────────────────────────────────────────────
+class SessionOverlapError(Exception):
+    """Conflicte DUR: ja hi ha una sessió viva del mateix model que solapa la franja
+    (mateixa data i franja encavalcada, o alguna sense hora a la mateixa data).
+    El `conflicts` és la llista d'ids de sessió en conflicte (per a la resposta 409)."""
+    def __init__(self, message, conflicts):
+        super().__init__(message)
+        self.conflicts = conflicts
+
+
+class SessionSoftConflict(Exception):
+    """Conflicte SUAU: ja hi ha sessió viva del mateix model i mateixa fase en una
+    franja DIFERENT. Requereix confirmació (force=True) per crear igualment."""
+    def __init__(self, message, sessions):
+        super().__init__(message)
+        self.sessions = sessions
+
+
+def _slot_overlap(s_start, s_dur, n_start, n_dur):
+    """True si [s_start, s_start+s_dur) ∩ [n_start, n_start+n_dur) ≠ ∅ (mateix dia)."""
+    import datetime as _dt
+    base = _dt.date(2000, 1, 1)
+    a0 = _dt.datetime.combine(base, s_start)
+    a1 = a0 + _dt.timedelta(minutes=s_dur or 0)
+    b0 = _dt.datetime.combine(base, n_start)
+    b1 = b0 + _dt.timedelta(minutes=n_dur or 0)
+    return a0 < b1 and b0 < a1
+
+
+def check_session_overlap(*, model_id, data, fase, start_time, duracio_minuts,
+                          exclude_session_id=None):
+    """Sessions vives (≠ Tancada/Anullada) del MATEIX model que xoquen amb la nova franja.
+
+    Retorna (hard, soft) — dues llistes de FittingSession:
+      hard → mateixa data i solapament de franja; o mateixa data amb alguna sense hora.
+      soft → mateixa fase en una franja diferent (no dur).
+    Només aplica a sessions de model (garment_set → ([], []), sense guard)."""
+    from .models import FittingSession
+    if not model_id:
+        return [], []
+    qs = (FittingSession.objects
+          .filter(model_id=model_id)
+          .exclude(estat__in=['Tancada', 'Anullada']))
+    if exclude_session_id:
+        qs = qs.exclude(pk=exclude_session_id)
+    hard, soft = [], []
+    for s in qs:
+        if s.data == data:
+            if s.start_time is None or start_time is None:
+                hard.append(s)            # mateixa data, alguna sense hora → no desambiguable
+            elif _slot_overlap(s.start_time, s.duracio_minuts, start_time, duracio_minuts):
+                hard.append(s)            # franges encavalcades
+            elif s.fase == fase:
+                soft.append(s)            # mateix dia, franja diferent, mateixa fase
+        elif s.fase == fase:
+            soft.append(s)                # dia diferent, mateixa fase
+    return hard, soft
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -54,13 +114,18 @@ def create_session(
 
 def schedule_session(*, fase, data, responsable_id, model_id=None, garment_set_id=None,
                      lloc='', start_time=None, end_time=None,
-                     duracio_minuts=None, attendee_ids=None, _skip_recompute=False):
+                     duracio_minuts=None, attendee_ids=None, created_by_id=None,
+                     force=False, _skip_recompute=False, _skip_guard=False):
     """Programa un fitting (estat Programada). El responsable fixa dia (i opcionalment hores).
     No s'executa fins que s'obre (open_session).
     `duracio_minuts`: default 10 min × N (N=peces del set, o 1 per single).
     `attendee_ids`: assistents interns; si hi ha start_time → recompute de la seva cua.
+    `created_by_id`: UserProfile.id de qui crea (traçabilitat).
+    `force`: salta el bloqueig per conflicte SUAU (no el dur, que sempre bloqueja).
     `_skip_recompute`: inhibeix el recompute per sessió (ús intern de schedule_bulk, que en
-    fa UN de sol al final sobre la unió d'attendees). Els attendees s'assignen igualment."""
+    fa UN de sol al final sobre la unió d'attendees). Els attendees s'assignen igualment.
+    `_skip_guard`: omet el guard de solapament (ús intern de schedule_bulk, que el fa per
+    model abans i decideix ometre/avisar a banda)."""
     if bool(model_id) == bool(garment_set_id):
         raise ValueError("Cal exactament un de model_id o garment_set_id (XOR).")
     # Redisseny 5C: el fitting ja NO exigeix Production Delivered prèvia. La via adaptativa
@@ -73,11 +138,26 @@ def schedule_session(*, fase, data, responsable_id, model_id=None, garment_set_i
         else:
             n = 1
         duracio_minuts = 10 * n
+    # Guard de solapament (Peça 1): dur → 409; suau sense force → requereix confirmació.
+    if not _skip_guard and model_id:
+        hard, soft = check_session_overlap(
+            model_id=model_id, data=data, fase=fase,
+            start_time=start_time, duracio_minuts=duracio_minuts)
+        if hard:
+            raise SessionOverlapError(
+                f"Ja hi ha una sessió viva d'aquest model que solapa la franja del {data}.",
+                [s.id for s in hard])
+        if soft and not force:
+            raise SessionSoftConflict(
+                f"Ja hi ha {len(soft)} sessió(ns) viva(es) de fase {fase} d'aquest model "
+                "en una altra franja. Confirma per crear-ne una de nova.",
+                [s.id for s in soft])
     session = FittingSession.objects.create(
         fase=fase, data=data, model_id=model_id, garment_set_id=garment_set_id,
         responsable_id=responsable_id, lloc=lloc,
         start_time=start_time, end_time=end_time,
-        duracio_minuts=duracio_minuts, estat='Programada')
+        duracio_minuts=duracio_minuts, estat='Programada',
+        created_by_id=created_by_id)
     if attendee_ids:
         session.attendees.set(attendee_ids)
         if start_time and not _skip_recompute:   # recompute només si hi ha franja real i no s'inhibeix
@@ -91,7 +171,7 @@ def schedule_session(*, fase, data, responsable_id, model_id=None, garment_set_i
 
 def schedule_bulk(*, fase, data, start_time, model_ids,
                   duracio_minuts=None, attendee_ids=None,
-                  responsable_id=None, lloc=''):
+                  responsable_id=None, lloc='', created_by_id=None):
     """Crea N FittingSessions ENCADENADES amb un `convocatoria` UUID compartit.
 
     Les sessions s'encadenen: la i+1 comença on acaba la i, via add_working_minutes(None, …)
@@ -99,18 +179,45 @@ def schedule_bulk(*, fase, data, start_time, model_ids,
     ha `start_time`, NO s'encadena (totes queden sense hora, marcador de dia). El recompute es
     fa UN sol cop al final sobre la unió d'attendees (cada sessió s'inhibeix amb _skip_recompute).
 
-    Retorna (sessions, convocatoria)."""
+    Peça 1: `model_ids` es DEDUPLICA preservant ordre. El guard de solapament s'aplica per
+    model: els conflictes DURS s'OMETEN (no es crea) i es reporten a `skipped`; els SUAUS NO
+    bloquegen (el bulk és una acció deliberada), només s'avisa a `warnings`.
+
+    Retorna (sessions, convocatoria, skipped, warnings):
+      sessions → FittingSession creades; convocatoria → UUID (None si no se'n crea cap);
+      skipped  → [{'model_id', 'reason'}] (durs omesos);
+      warnings → [{'model_id', 'reason'}] (suaus creats igualment)."""
     from fhort.planning.calendar_service import add_working_minutes
     import datetime as _dt
 
+    model_ids = list(dict.fromkeys(model_ids))   # dedup preservant ordre
     convocatoria = _uuid.uuid4()
     sessions = []
+    skipped = []
+    warnings = []
     current_data = data          # pot avançar si l'encadenament creua fi de jornada
     current_start = start_time   # time object o None
 
     with transaction.atomic():
         for model_id in model_ids:
             dur = duracio_minuts if duracio_minuts is not None else 10
+
+            hard, soft = check_session_overlap(
+                model_id=model_id, data=current_data, fase=fase,
+                start_time=current_start, duracio_minuts=dur)
+            if hard:
+                # Conflicte dur → ometre i reportar; NO consumeix la franja (no s'encadena).
+                skipped.append({
+                    'model_id': model_id,
+                    'reason': f"Solapament amb sessió viva existent (ids {[s.id for s in hard]}).",
+                })
+                continue
+            if soft:
+                warnings.append({
+                    'model_id': model_id,
+                    'reason': f"Ja existeix sessió de fase {fase} en una altra franja "
+                              f"(ids {[s.id for s in soft]}); creada igualment.",
+                })
 
             session = schedule_session(
                 fase=fase,
@@ -121,7 +228,9 @@ def schedule_bulk(*, fase, data, start_time, model_ids,
                 responsable_id=responsable_id,
                 model_id=model_id,
                 lloc=lloc,
+                created_by_id=created_by_id,
                 _skip_recompute=True,
+                _skip_guard=True,   # el guard ja s'ha fet aquí per model
             )
             session.convocatoria = convocatoria
             session.save(update_fields=['convocatoria'])
@@ -135,14 +244,16 @@ def schedule_bulk(*, fase, data, start_time, model_ids,
                 current_start = end_dt.time()
 
         # Recompute ÚNIC al final (no N): unió d'attendees. No-fatal.
-        if attendee_ids and start_time:
+        if attendee_ids and start_time and sessions:
             try:
                 from fhort.planning.plan_service import recompute_for_technicians
                 recompute_for_technicians(set(attendee_ids))
             except Exception:
                 logger.exception('recompute post-schedule-bulk no-fatal')
 
-    return sessions, convocatoria
+    if not sessions:
+        convocatoria = None   # no s'ha creat res → no hi ha convocatòria
+    return sessions, convocatoria, skipped, warnings
 
 
 def open_session(session_id):
@@ -152,7 +263,11 @@ def open_session(session_id):
     if s.estat != 'Programada':
         raise ValueError(f"Només es pot obrir una sessió Programada (estat actual: {s.estat}).")
     s.estat = 'Oberta'
-    s.save(update_fields=['estat'])
+    fields = ['estat']
+    if s.started_at is None:        # Peça 1 — marca real d'obertura
+        s.started_at = timezone.now()
+        fields.append('started_at')
+    s.save(update_fields=fields)
     return s
 
 
@@ -461,7 +576,11 @@ def _seal_session(session):
     if session.garment_set_id and not session_can_advance(session.id):
         return  # peces pendents o NO_OK → encara no es tanca
     session.estat = 'Tancada'
-    session.save(update_fields=['estat'])
+    fields = ['estat']
+    if session.finished_at is None:     # Peça 1 — marca real de tancament
+        session.finished_at = timezone.now()
+        fields.append('finished_at')
+    session.save(update_fields=fields)
     # Allibera la franja de fitting de la cua dels assistents (no-fatal).
     try:
         attendee_ids = list(session.attendees.values_list('id', flat=True))
