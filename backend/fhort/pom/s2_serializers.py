@@ -36,7 +36,7 @@ class SizeSystemLightSerializer(serializers.Serializer):
     norma_ref = serializers.CharField()
 
 
-class SizeDefinitionSerializer(serializers.Serializer):
+class SizeDefinitionLightSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     size_label = serializers.CharField(source='etiqueta')
     display_order = serializers.IntegerField(source='ordre')
@@ -119,7 +119,7 @@ class SizingProfileSerializer(serializers.Serializer):
             defs = SizeDefinition.objects.filter(
                 size_system=obj.size_system
             ).order_by('ordre')
-            return SizeDefinitionSerializer(defs, many=True).data
+            return SizeDefinitionLightSerializer(defs, many=True).data
         except Exception:
             return []
 
