@@ -394,6 +394,23 @@ def group_attendees(request, conv_uuid):
     return Response({'updated': updated})
 
 
+@api_view(['DELETE'])
+@permission_classes([_ScheduleFittingsPerm])
+def group_remove(request, conv_uuid):
+    """(Ajust 1) DELETE /fitting-sessions/group/<uuid>/ — elimina la convocatòria en bloc.
+    409 (atòmic, no esborra res) si hi ha sessions Obertes o amb peces."""
+    try:
+        res = services.delete_group(conv_uuid)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    if not res['ok']:
+        return Response({
+            'detail': "No es pot eliminar: hi ha sessions ja obertes o amb peces.",
+            'conflicts': res['conflicts'],
+        }, status=status.HTTP_409_CONFLICT)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class PieceFittingViewSet(mixins.RetrieveModelMixin,
                           mixins.ListModelMixin,
                           viewsets.GenericViewSet):

@@ -14,6 +14,7 @@ from .views import (
     group_add_model,
     group_remove_model,
     group_attendees,
+    group_remove,
 )
 
 router = DefaultRouter()
@@ -37,6 +38,9 @@ group_urls = [
          name='fitting-group-remove-model'),
     path('fitting-sessions/group/<uuid:conv_uuid>/attendees/', group_attendees,
          name='fitting-group-attendees'),
+    # Ajust 1 — eliminar la convocatòria en bloc (path sense sufix → cal després dels específics).
+    path('fitting-sessions/group/<uuid:conv_uuid>/', group_remove,
+         name='fitting-group-remove'),
 ]
 
 urlpatterns = group_urls + router.urls + [

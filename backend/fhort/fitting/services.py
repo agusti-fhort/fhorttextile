@@ -911,3 +911,30 @@ def seal_session(session_id):
     _seal_session(s)
     s.refresh_from_db()
     return s
+
+
+def delete_group(conv_uuid):
+    """(Ajust 1) Elimina en BLOC totes les sessions d'una convocatòria — ATÒMIC.
+
+    Conflicte = sessió Oberta o amb PieceFitting. Si n'hi ha cap → NO esborra res i
+    retorna {'ok': False, 'conflicts': [{id, model_codi, model_nom}]}. Si no n'hi ha
+    cap → esborra TOTES i retorna {'ok': True, 'removed': [ids]}."""
+    from .models import FittingSession
+    sessions = list(FittingSession.objects.filter(convocatoria=conv_uuid).select_related('model'))
+    if not sessions:
+        raise ValueError("Convocatòria no trobada.")
+    conflicts = [s for s in sessions if s.estat == 'Oberta' or s.piece_fittings.exists()]
+    if conflicts:
+        return {'ok': False, 'conflicts': [
+            {'id': s.id,
+             'model_codi': (s.model.codi_intern if s.model_id else None),
+             'model_nom': (s.model.nom_prenda if s.model_id else None)}
+            for s in conflicts]}
+    profiles = set()
+    for s in sessions:
+        profiles.update(s.attendees.values_list('id', flat=True))
+    ids = [s.id for s in sessions]
+    with transaction.atomic():
+        FittingSession.objects.filter(id__in=ids).delete()
+    _recompute_attendees(profiles)
+    return {'ok': True, 'removed': ids}

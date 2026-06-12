@@ -274,6 +274,7 @@ export const fittingSessions = {
   groupAddModel: (uuid, payload) => client.post(`/api/v1/fitting-sessions/group/${uuid}/add-model/`, payload),
   groupRemoveModel: (uuid, modelId) => client.delete(`/api/v1/fitting-sessions/group/${uuid}/remove-model/${modelId}/`),
   groupAttendees: (uuid, payload) => client.patch(`/api/v1/fitting-sessions/group/${uuid}/attendees/`, payload),
+  groupRemove: (uuid) => client.delete(`/api/v1/fitting-sessions/group/${uuid}/`),
 }
 
 // Sprint 5B.6-A2 — Piece fittings: graella de treball + gate.
