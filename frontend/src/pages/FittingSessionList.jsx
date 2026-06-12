@@ -202,6 +202,24 @@ export default function FittingSessionList() {
       .finally(() => setActBusy(false))
   }
 
+  // Ajust 1 — eliminar la convocatòria en bloc (atòmic; 409 amb models conflictius).
+  const doRemoveGroup = () => {
+    setActBusy(true)
+    fittingSessions.groupRemove(modalGrup.uuid)
+      .then(() => { setModalGrup(null); load() })
+      .catch(e => {
+        if (e.response?.status === 409) {
+          const models = (e.response.data?.conflicts || [])
+            .map(c => c.model_codi || `#${c.id}`).join(', ')
+          setModalGrup(m => ({ ...m, err: t('fitting.group.remove_conflict',
+            { models, defaultValue: `No es pot eliminar: hi ha sessions ja obertes ({{models}}). Descarta-les primer.` }) }))
+        } else {
+          setModalGrup(m => ({ ...m, err: e.response?.data?.error || 'error' }))
+        }
+      })
+      .finally(() => setActBusy(false))
+  }
+
   // ── Accions de sessió (C3/C4) ─────────────────────────────────────────────
   const doRemove = (id) => {
     setActBusy(true)
@@ -234,7 +252,7 @@ export default function FittingSessionList() {
       )}
       {s.estat === 'Programada' && (
         <button style={{ ...iconBtn, color: 'var(--err)' }} title={t('fitting.row.delete', 'Eliminar')}
-          onClick={() => setRowAction({ id: s.id, tipus: 'delete', err: null })}>
+          disabled={actBusy} onClick={() => doRemove(s.id)}>
           <i className="ti ti-trash" />
         </button>
       )}
@@ -248,11 +266,10 @@ export default function FittingSessionList() {
       <tr style={{ background: 'var(--warn-bg)' }}>
         <td colSpan={colSpan} style={{ padding: '10px 16px' }}>
           {rowAction.tipus === 'delete' ? (
+            // Ajust 2 — sense confirmació: el borrat és directe; aquí només es mostra l'error (p.ex. 409).
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
-              {t('fitting.row.delete_confirm', 'Eliminar sessió?')}
-              <button style={miniBtn(true)} disabled={actBusy} onClick={() => doRemove(id)}>{t('common.yes', 'Sí')}</button>
-              <button style={miniBtn(false)} disabled={actBusy} onClick={() => setRowAction(null)}>{t('common.no', 'No')}</button>
               {rowAction.err && <span style={{ color: 'var(--err)' }}>{rowAction.err}</span>}
+              <button style={miniBtn(false)} onClick={() => setRowAction(null)}>{t('common.dismiss', 'D\'acord')}</button>
             </span>
           ) : (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 12, flexWrap: 'wrap' }}>
@@ -385,12 +402,14 @@ export default function FittingSessionList() {
                                 { k: 'reschedule', icon: 'ti-calendar-event', label: t('fitting.group.reschedule', 'Reagendar') },
                                 { k: 'addModel', icon: 'ti-plus', label: t('fitting.group.add_model', 'Afegir model') },
                                 { k: 'attendees', icon: 'ti-users', label: t('fitting.group.attendees', 'Canviar assistents') },
+                                { k: 'removeGroup', icon: 'ti-trash', label: t('fitting.group.remove', 'Eliminar convocatòria'), danger: true },
                               ].map(it => (
                                 <button key={it.k} onClick={() => openGrupModal(uuid, it.k, sessions)}
                                   style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none',
-                                    border: 'none', cursor: 'pointer', padding: '7px 10px', fontSize: 12, color: 'var(--text-main)',
+                                    border: 'none', cursor: 'pointer', padding: '7px 10px', fontSize: 12,
+                                    color: it.danger ? 'var(--err)' : 'var(--text-main)',
                                     borderRadius: 6, fontFamily: 'var(--font)' }}>
-                                  <i className={`ti ${it.icon}`} style={{ fontSize: 14, color: 'var(--gray)' }} /> {it.label}
+                                  <i className={`ti ${it.icon}`} style={{ fontSize: 14, color: it.danger ? 'var(--err)' : 'var(--gray)' }} /> {it.label}
                                 </button>
                               ))}
                             </div>
@@ -515,6 +534,18 @@ export default function FittingSessionList() {
                 })}
               </div>
             )}
+          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 10 }}>{modalGrup.err}</div>}
+        </Modal>
+      )}
+
+      {modalGrup?.tipus === 'removeGroup' && (
+        <Modal title={t('fitting.group.remove', 'Eliminar convocatòria')}
+          confirmLabel={actBusy ? t('common.saving', 'Desant…') : t('fitting.row.delete', 'Eliminar')}
+          cancelLabel={t('common.cancel', 'Cancel·lar')} confirmDisabled={actBusy}
+          onConfirm={doRemoveGroup} onCancel={() => !actBusy && setModalGrup(null)}>
+          <p style={{ fontSize: 13, lineHeight: 1.5 }}>
+            {t('fitting.group.remove_warn', "S'eliminaran totes les sessions de la convocatòria. Aquesta acció no es pot desfer.")}
+          </p>
           {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 10 }}>{modalGrup.err}</div>}
         </Modal>
       )}
