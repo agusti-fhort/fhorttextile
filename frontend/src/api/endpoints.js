@@ -60,6 +60,14 @@ export const sizingProfiles = {
   list: (params) => client.get('/api/v1/sizing-profiles/', { params }),   // ?target&construction
 }
 
+export const targets = {
+  list: (params) => client.get('/api/v1/targets/', { params }),
+}
+
+export const constructionTypes = {
+  list: (params) => client.get('/api/v1/construction-types/', { params }),
+}
+
 // Size Map Setup wizard (Sprint Size Map). Escriptura gated CONFIGURE al backend.
 export const sizeMap = {
   lookups:        () => client.get('/api/v1/size-map/lookups/'),
