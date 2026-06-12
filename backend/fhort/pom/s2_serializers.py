@@ -28,6 +28,12 @@ class ConstructionTypeSerializer(serializers.Serializer):
     display_order = serializers.IntegerField()
 
 
+class FitTypeSerializer(serializers.Serializer):
+    codi = serializers.CharField()
+    nom_en = serializers.CharField()
+    display_order = serializers.IntegerField()
+
+
 class SizeSystemLightSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     codi = serializers.CharField()

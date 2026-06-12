@@ -67,6 +67,10 @@ export const targets = {
   list: (params) => client.get('/api/v1/targets/', { params }),
 }
 
+export const fitTypes = {
+  list: (params) => client.get('/api/v1/fit-types/', { params }),
+}
+
 export const constructionTypes = {
   list: (params) => client.get('/api/v1/construction-types/', { params }),
 }
