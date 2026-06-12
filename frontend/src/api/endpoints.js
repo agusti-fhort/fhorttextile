@@ -60,6 +60,7 @@ export const sizingProfiles = {
   list: (params) => client.get('/api/v1/sizing-profiles/', { params }),   // ?target&construction
   get: (id) => client.get(`/api/v1/sizing-profiles/${id}/`),
   restore: (id) => client.post(`/api/v1/sizing-profiles/${id}/restaurar/`),
+  clone: (id, payload) => client.post(`/api/v1/sizing-profiles/${id}/clonar/`, payload),
 }
 
 export const targets = {
