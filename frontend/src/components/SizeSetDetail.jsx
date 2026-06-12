@@ -1,15 +1,12 @@
 
 import { useState, useEffect } from "react"
-import useAuthStore from "../store/auth"
 import { VersionBadge } from "./VersionBadge"
 import { GradingHistoryPanel } from "./GradingHistoryPanel"
 import { useUnit } from "./UnitToggle"
 import { ExportSizeSetCSV, ExportGradingCSV } from "./ExportButton"
-
-const API = import.meta.env.VITE_API_URL || ""
+import { sizingProfiles, gradingRuleSets } from "../api/endpoints"
 
 export function SizeSetDetail({ profileId, onClose, onRefresh }) {
-  const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
   const { unit, format } = useUnit()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -21,24 +18,18 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
 
   const reloadProfile = () => {
     if (!profileId) return
-    fetch(`${API}/api/v1/sizing-profiles/${profileId}/`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(r => r.json())
-      .then(d => setProfile(d))
+    sizingProfiles.get(profileId)
+      .then(({ data: d }) => setProfile(d))
       .catch(() => {})
   }
 
   useEffect(() => {
     if (!profileId) return
     setLoading(true)
-    fetch(`${API}/api/v1/sizing-profiles/${profileId}/`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(r => r.json())
-      .then(d => { setProfile(d); setLoading(false) })
+    sizingProfiles.get(profileId)
+      .then(({ data: d }) => { setProfile(d); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [profileId, token])
+  }, [profileId])
 
   const handleEdit = (pomCodi, currentVal) => {
     setEditing(prev => ({ ...prev, [pomCodi]: currentVal }))
@@ -52,24 +43,16 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
     if (profile.is_custom) {
       // Editar via endpoint versionat (S4)
       try {
-        const r = await fetch(
-          `${API}/api/v1/grading-rule-sets/${profile.grading_rule_set.id}/regles/${pomCodi}/editar/`,
-          {
-            method: 'PATCH',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ increment: parseFloat(newVal) }),
-          }
-        )
-        const d = await r.json()
-        if (r.ok) {
-          setMsg({ type: 'ok', text: `${pomCodi} actualitzat a +${newVal}${unit === 'INCH' ? '"' : 'cm'}` })
-          setEditing(prev => { const n = {...prev}; delete n[pomCodi]; return n })
-          reloadProfile()
-        } else {
-          setMsg({ type: 'error', text: d.error || 'Error guardant l\'edició' })
-        }
+        await gradingRuleSets.editRule(profile.grading_rule_set.id, pomCodi, { increment: parseFloat(newVal) })
+        setMsg({ type: 'ok', text: `${pomCodi} actualitzat a +${newVal}${unit === 'INCH' ? '"' : 'cm'}` })
+        setEditing(prev => { const n = {...prev}; delete n[pomCodi]; return n })
+        reloadProfile()
       } catch (e) {
-        setMsg({ type: 'error', text: String(e) })
+        if (e.response) {
+          setMsg({ type: 'error', text: e.response.data?.error || 'Error guardant l\'edició' })
+        } else {
+          setMsg({ type: 'error', text: String(e) })
+        }
       }
     } else {
       setMsg({
@@ -86,20 +69,16 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
     if (!confirm('Restaurar a estàndard?\n\nEs perdran totes les personalitzacions d\'aquest perfil.')) return
     setRestoring(true)
     try {
-      const r = await fetch(`${API}/api/v1/sizing-profiles/${profile.id}/restaurar/`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      })
-      const d = await r.json().catch(() => ({}))
-      if (r.ok) {
-        setMsg({ type: 'ok', text: d.missatge || 'Perfil restaurat a l\'estàndard ISO' })
-        reloadProfile()
-        onRefresh && onRefresh()
-      } else {
-        setMsg({ type: 'error', text: d.error || 'Error restaurant el perfil' })
-      }
+      const { data: d } = await sizingProfiles.restore(profile.id)
+      setMsg({ type: 'ok', text: d?.missatge || 'Perfil restaurat a l\'estàndard ISO' })
+      reloadProfile()
+      onRefresh && onRefresh()
     } catch (e) {
-      setMsg({ type: 'error', text: String(e) })
+      if (e.response) {
+        setMsg({ type: 'error', text: e.response.data?.error || 'Error restaurant el perfil' })
+      } else {
+        setMsg({ type: 'error', text: String(e) })
+      }
     }
     setRestoring(false)
   }

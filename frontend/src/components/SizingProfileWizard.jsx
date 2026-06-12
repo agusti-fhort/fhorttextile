@@ -1,8 +1,6 @@
 
 import { useState, useEffect } from "react"
-import useAuthStore from "../store/auth"
-
-const API = import.meta.env.VITE_API_URL || ""
+import { targets as targetsApi, constructionTypes, sizingProfiles } from "../api/endpoints"
 
 const TARGET_ORDER = [
   "WOMAN","MAN","UNISEX_ADULT",
@@ -51,7 +49,6 @@ function StepBar({ step }) {
 }
 
 export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }) {
-  const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
   // Si initialValues.target ja ve seleccionat (p.ex. des d'ImportWizard o
   // from an import via NouModel), we skip the Target sub-step and start at
   // Construction. The Target card is pre-selected via selTarget.
@@ -70,13 +67,10 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
   const [selSizes, setSelSizes] = useState([])
   const [selBase, setSelBase] = useState(null)
 
-  const headers = { Authorization: `Bearer ${token}` }
-
   // Carregar targets
   useEffect(() => {
-    fetch(`${API}/api/v1/targets/`, { headers })
-      .then(r => r.json())
-      .then(d => {
+    targetsApi.list()
+      .then(({ data: d }) => {
         const all = Array.isArray(d) ? d : (d.results || [])
         const sorted = TARGET_ORDER.map(c => all.find(t => t.codi === c)).filter(Boolean)
         setTargets(sorted)
@@ -93,9 +87,8 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
         ])
       })
 
-    fetch(`${API}/api/v1/construction-types/`, { headers })
-      .then(r => r.json())
-      .then(d => setConstructions(Array.isArray(d) ? d : (d.results || [])))
+    constructionTypes.list()
+      .then(({ data: d }) => setConstructions(Array.isArray(d) ? d : (d.results || [])))
       .catch(() => {
         setConstructions([
           {id:1,codi:"WOVEN",nom_en:"Woven",nom_cat:"Teixit pla"},
@@ -104,15 +97,14 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
           {id:4,codi:"TECHNICAL",nom_en:"Technical",nom_cat:"Tècnic"},
         ])
       })
-  }, [token])
+  }, [])
 
   // Load profiles when target+construction are selected
   useEffect(() => {
     if (!selTarget || !selConstruction) return
     setLoading(true)
-    fetch(`${API}/api/v1/sizing-profiles/?target=${selTarget}&construction=${selConstruction}`, { headers })
-      .then(r => r.json())
-      .then(d => {
+    sizingProfiles.list({ target: selTarget, construction: selConstruction })
+      .then(({ data: d }) => {
         setProfiles(Array.isArray(d) ? d : (d.results || []))
         setLoading(false)
       })
