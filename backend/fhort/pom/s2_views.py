@@ -62,6 +62,7 @@ def sizing_profiles_view(request):
         target_codi = request.query_params.get('target')
         construction_codi = request.query_params.get('construction')
         fit_type_id = request.query_params.get('fit_type')
+        fit_codi = request.query_params.get('fit')
         garment_type_id = request.query_params.get('garment_type')
         customer_codi = request.query_params.get('customer_codi')
 
@@ -71,6 +72,8 @@ def sizing_profiles_view(request):
             qs = qs.filter(construction__codi=construction_codi)
         if fit_type_id:
             qs = qs.filter(fit_type_id=fit_type_id)
+        if fit_codi:
+            qs = qs.filter(fit_type__codi=fit_codi)
         if garment_type_id:
             qs = qs.filter(garment_type_id=garment_type_id)
 

@@ -84,6 +84,7 @@ class SizingProfileSerializer(serializers.Serializer):
     target = TargetSerializer()
     construction = ConstructionTypeSerializer()
     fit_type_nom = serializers.SerializerMethodField()
+    fit_type_codi = serializers.SerializerMethodField()
     size_system = SizeSystemLightSerializer()
     grading_rule_set = GradingRuleSetLightSerializer()
     is_default = serializers.BooleanField()
@@ -99,6 +100,9 @@ class SizingProfileSerializer(serializers.Serializer):
 
     def get_fit_type_nom(self, obj):
         return obj.fit_type.nom_en if obj.fit_type_id else ''
+
+    def get_fit_type_codi(self, obj):
+        return obj.fit_type.codi if obj.fit_type_id else None
 
     def get_size_system_customer_codi(self, obj):
         return (obj.size_system.customer_codi or '') if obj.size_system_id else ''
