@@ -258,6 +258,14 @@ export const fittingSessions = {
   // Bulk: N sessions encadenades amb convocatoria UUID compartit (sessió i+1 on acaba la i).
   scheduleBulk: (data) => client.post('/api/v1/fitting-sessions/schedule-bulk/', data),
   open: (id) => client.post(`/api/v1/fitting-sessions/${id}/open/`),
+  // Peça 2/3 — cicle de vida de sessió i gestió de convocatòria (grup).
+  remove: (id) => client.delete(`/api/v1/fitting-sessions/${id}/`),
+  discardSession: (id, motiu = '') => client.post(`/api/v1/fitting-sessions/${id}/discard/`, { motiu }),
+  seal: (id) => client.post(`/api/v1/fitting-sessions/${id}/seal/`),
+  groupReschedule: (uuid, payload) => client.patch(`/api/v1/fitting-sessions/group/${uuid}/reschedule/`, payload),
+  groupAddModel: (uuid, payload) => client.post(`/api/v1/fitting-sessions/group/${uuid}/add-model/`, payload),
+  groupRemoveModel: (uuid, modelId) => client.delete(`/api/v1/fitting-sessions/group/${uuid}/remove-model/${modelId}/`),
+  groupAttendees: (uuid, payload) => client.patch(`/api/v1/fitting-sessions/group/${uuid}/attendees/`, payload),
 }
 
 // Sprint 5B.6-A2 — Piece fittings: graella de treball + gate.

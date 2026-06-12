@@ -237,18 +237,21 @@ function hasSaveChanges(grid) {
   )
 }
 
-function ReviewScreen({ session, pieces, onBack, onSaved, onDone }) {
+function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, onCreatePiece, creatingPiece, readOnly }) {
   const { t } = useTranslation()
   const [grids, setGrids] = useState(null)
   const [photos, setPhotos] = useState([])
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(null)
   const [error, setError] = useState(null)
-  // "Enviar a": STUB VISUAL — no dispara res (PDF/mail ajornat).
-  const [sendTo, setSendTo] = useState('')
   // FIX 5/6 — observacions editables + pujada d'imatges.
   const [notes, setNotes] = useState(session.notes || '')
   const [uploading, setUploading] = useState(false)
+  // Peça 3 — D5 descartar sessió (motiu inline) + D3 registrar mesures.
+  const [discardOpen, setDiscardOpen] = useState(false)
+  const [discardMotiu, setDiscardMotiu] = useState('')
+  const [pieceErr, setPieceErr] = useState(null)
+  const hasPieces = pieces.length > 0
 
   useEffect(() => {
     let cancelled = false
@@ -263,28 +266,37 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone }) {
     return () => { cancelled = true }
   }, [pieces, session.id])
 
+  // D4 — "Gravar i tornar": tanca les peces amb canvis, després SEGELLA la sessió
+  // (→ Tancada + finished_at) i torna enrere. Sense peces → seal directe.
   const doSave = () => {
-    if (!grids) return
-    const toClose = grids.filter(hasSaveChanges)
-    if (!toClose.length) { onSaved(); return }
-    setBusy(true); setError(null); setProgress({ done: 0, total: toClose.length })
+    if (grids === null) return
+    setBusy(true); setError(null)
+    const toClose = (grids || []).filter(hasSaveChanges)
     ;(async () => {
-      let done = 0
-      for (const g of toClose) {
-        try {
-          await pieceFittings.close(g.id)
-          done += 1; setProgress({ done, total: toClose.length })
-        } catch (e) {
-          setError(t('fitting.save.save_error', { piece: g.model?.codi || g.id }))
-          setBusy(false); return
+      if (toClose.length) {
+        setProgress({ done: 0, total: toClose.length })
+        let done = 0
+        for (const g of toClose) {
+          try {
+            await pieceFittings.close(g.id)
+            done += 1; setProgress({ done, total: toClose.length })
+          } catch (e) {
+            setError(t('fitting.save.save_error', { piece: g.model?.codi || g.id }))
+            setBusy(false); return
+          }
         }
       }
-      // Gravat reeixit: NO toquem l'estat de la sessió (segueix Oberta; l'acceptació/fase
-      // es gestiona a part). Sortim a la llista de sessions.
+      try {
+        await fittingSessions.seal(session.id)   // D4: segellat independent (no toca fase)
+      } catch (e) {
+        setError(t('fitting.save.seal_error', 'Error segellant la sessió.'))
+        setBusy(false); return
+      }
       setBusy(false); onSaved()
     })()
   }
 
+  // "Descartar canvis" (revert de mesures de les peces) — operació EXISTENT, no toca la sessió.
   const doDiscard = () => {
     if (!window.confirm(t('fitting.save.discard_confirm'))) return
     setBusy(true); setError(null)
@@ -299,6 +311,27 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone }) {
       }
       setBusy(false); onDone()
     })()
+  }
+
+  // D5 — "Descartar sessió" (anul·la la sessió amb motiu) — DIFERENT del revert de mesures.
+  const doDiscardSession = () => {
+    setBusy(true); setError(null)
+    fittingSessions.discardSession(session.id, discardMotiu)
+      .then(() => { setBusy(false); onSaved() })
+      .catch(() => { setBusy(false); setError(t('fitting.save.discard_session_error', 'Error descartant la sessió.')) })
+  }
+
+  // D3 — registrar mesures (crea la peça i mostra la graella). Si no hi ha taula de talles → avís.
+  const registrarMesures = () => {
+    setPieceErr(null)
+    Promise.resolve(onCreatePiece())
+      .then(() => onShowGrid())
+      .catch(e => {
+        const msg = e?.response?.data?.error || ''
+        setPieceErr(/SizeFitting|talles|GradingVersion/i.test(msg)
+          ? t('fitting.save.no_sizes', 'Aquest model no té taula de talles generada. Pots gravar la revisió sense mesures.')
+          : (msg || t('fitting.save.piece_error', 'Error registrant mesures.')))
+      })
   }
 
   // FIX 5 — desa session.notes (autosave en perdre el focus).
@@ -345,6 +378,29 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone }) {
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('app.loading')}</div>
       ) : (
         <>
+          {/* D3 — TAULA DE MESURES (opcional): registrar/veure mesures. No bloqueja la revisió. */}
+          {!readOnly && (
+            <Card title={t('fitting.save.measures', 'Taula de mesures')} style={{ marginBottom: '1.25rem' }}>
+              {hasPieces ? (
+                <button onClick={onShowGrid} style={{
+                  background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
+                  borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer',
+                }}>{t('fitting.save.view_measures', 'Veure / editar taula')}</button>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                    {t('fitting.save.no_measures', 'Encara no hi ha mesures registrades (opcional).')}
+                  </div>
+                  <button onClick={registrarMesures} disabled={creatingPiece} style={{
+                    background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
+                    borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: creatingPiece ? 'default' : 'pointer',
+                  }}>{creatingPiece ? t('fitting.piece.creating') : t('fitting.save.register_measures', 'Registrar mesures')}</button>
+                  {pieceErr && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 8 }}>{pieceErr}</div>}
+                </>
+              )}
+            </Card>
+          )}
+
           {/* a) CANVIS — per peça, files POM amb talles modificades vs Base (vermell) */}
           <Card title={t('fitting.save.changes')} style={{ marginBottom: '1.25rem' }}>
             {(() => {
@@ -439,18 +495,10 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone }) {
             )}
           </Card>
 
-          {/* d) ENVIAR A — STUB VISUAL: cablejat però NO dispara res (PDF/mail ajornat) */}
-          <Card title={t('fitting.save.send_to')} style={{ marginBottom: '1.25rem' }}>
-            <input
-              type="text" value={sendTo} onChange={e => setSendTo(e.target.value)}
-              placeholder={t('fitting.save.send_to_ph')}
-              style={{
-                width: '100%', maxWidth: 420, padding: '6px 10px', fontSize: 13,
-                border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)',
-                color: 'var(--text-main)', boxSizing: 'border-box',
-              }}
-            />
-          </Card>
+          {/* d) ENVIAR A (stub de mail) — AMAGAT (Peça 3 · D1): PDF/mail ajornat. */}
+          {false && (
+            <Card title={t('fitting.save.send_to')} style={{ marginBottom: '1.25rem' }} />
+          )}
 
           {error && (
             <div style={{ color: 'var(--err)', fontSize: 12, marginBottom: 12 }}>{error}</div>
@@ -462,20 +510,45 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone }) {
           )}
 
           {/* ACCIONS */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4 }}>
-            <button onClick={doSave} disabled={busy} style={{
-              background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 8,
-              padding: '8px 18px', fontSize: 13, fontWeight: 500, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
-            }}>{t('fitting.save.save')}</button>
-            <button onClick={onBack} disabled={busy} style={{
-              background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
-              padding: '8px 18px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
-            }}>{t('fitting.save.back')}</button>
-            <button onClick={doDiscard} disabled={busy} style={{
-              marginLeft: 'auto', background: 'var(--white)', color: 'var(--err)', border: '0.5px solid var(--err)', borderRadius: 8,
-              padding: '8px 18px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
-            }}>{t('fitting.save.discard')}</button>
-          </div>
+          {readOnly ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', paddingTop: 4 }}>
+              {t('fitting.save.read_only', 'Sessió tancada o anul·lada (només lectura).')}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, flexWrap: 'wrap' }}>
+              <button onClick={doSave} disabled={busy} style={{
+                background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 8,
+                padding: '8px 18px', fontSize: 13, fontWeight: 500, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
+              }}>{t('fitting.save.save_and_back', 'Gravar i tornar')}</button>
+              {hasPieces && (
+                <button onClick={doDiscard} disabled={busy} style={{
+                  background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
+                  padding: '8px 18px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
+                }}>{t('fitting.save.discard_changes', 'Descartar canvis')}</button>
+              )}
+              {/* D5 — Descartar sessió (anul·lar) amb motiu inline */}
+              {!discardOpen ? (
+                <button onClick={() => setDiscardOpen(true)} disabled={busy} style={{
+                  marginLeft: 'auto', background: 'var(--white)', color: 'var(--err)', border: '0.5px solid var(--err)', borderRadius: 8,
+                  padding: '8px 18px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
+                }}>{t('fitting.save.discard_session', 'Descartar sessió')}</button>
+              ) : (
+                <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <input type="text" value={discardMotiu} onChange={e => setDiscardMotiu(e.target.value)}
+                    placeholder={t('fitting.save.discard_motiu_ph', 'Motiu (opcional)')}
+                    style={{ fontSize: 12, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, minWidth: 200 }} />
+                  <button onClick={doDiscardSession} disabled={busy} style={{
+                    background: 'var(--err)', color: 'var(--white)', border: 'none', borderRadius: 8,
+                    padding: '8px 14px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
+                  }}>{t('common.confirm', 'Confirmar')}</button>
+                  <button onClick={() => { setDiscardOpen(false); setDiscardMotiu('') }} disabled={busy} style={{
+                    background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
+                    padding: '8px 14px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
+                  }}>{t('common.cancel', 'Cancel·lar')}</button>
+                </span>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -493,7 +566,8 @@ export default function FittingDetail() {
   const [gridLoading, setGridLoading] = useState(false)
   const [creatingPiece, setCreatingPiece] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
-  const [reviewMode, setReviewMode] = useState(false)
+  // D2 — la revisió és la pantalla principal; la graella (taula de mesures) és opt-in.
+  const [reviewMode, setReviewMode] = useState(true)
   // Valors editables lligats al parent → modificat reactiu i remuntatge net per peça.
   const [reals, setReals] = useState({})
 
@@ -508,7 +582,14 @@ export default function FittingDetail() {
 
   useEffect(() => {
     setLoading(true)
-    loadSession(true).finally(() => setLoading(false))
+    loadSession(true)
+      .then(s => {
+        // D2 — en entrar a una sessió Programada, obrir-la automàticament (→ Oberta + started_at).
+        if (s && s.estat === 'Programada') {
+          return fittingSessions.open(s.id).then(r => setSession(r.data)).catch(() => {})
+        }
+      })
+      .finally(() => setLoading(false))
   }, [loadSession])
 
   const reloadGrid = useCallback(() => {
@@ -527,9 +608,9 @@ export default function FittingDetail() {
   useEffect(() => { reloadGrid() }, [reloadGrid])
 
   const createPiece = () => {
-    if (!session?.model) return
+    if (!session?.model) return Promise.resolve()
     setCreatingPiece(true)
-    fittingSessions.createPiece(session.id, session.model)
+    return fittingSessions.createPiece(session.id, session.model)
       .then(res => loadSession().then(() => setActivePieceId(res.data.id)))
       .finally(() => setCreatingPiece(false))
   }
@@ -635,8 +716,12 @@ export default function FittingDetail() {
           session={session}
           pieces={pieces}
           onBack={() => setReviewMode(false)}
-          onSaved={() => navigate('/fittings')}
-          onDone={() => { setReviewMode(false); loadSession().then(reloadGrid) }}
+          onSaved={() => navigate(-1)}
+          onDone={() => { loadSession().then(reloadGrid) }}
+          onShowGrid={() => setReviewMode(false)}
+          onCreatePiece={createPiece}
+          creatingPiece={creatingPiece}
+          readOnly={session.estat === 'Tancada' || session.estat === 'Anullada'}
         />
       )}
 
@@ -664,12 +749,10 @@ export default function FittingDetail() {
             borderRadius: 8, padding: '5px 12px', fontSize: 11, cursor: creatingPiece ? 'default' : 'pointer',
           }}>+ {creatingPiece ? t('fitting.piece.creating') : t('fitting.piece.create')}</button>
         )}
-        {pieces.length > 0 && (
-          <button onClick={() => setReviewMode(true)} style={{
-            marginLeft: 'auto', background: 'var(--gold)', color: 'var(--white)', border: 'none',
-            borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-          }}>{t('fitting.save.open')}</button>
-        )}
+        <button onClick={() => setReviewMode(true)} style={{
+          marginLeft: 'auto', background: 'var(--gold)', color: 'var(--white)', border: 'none',
+          borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+        }}>← {t('fitting.save.back_to_review', 'Tornar a revisió')}</button>
       </div>
 
       {pieces.length === 0 && (

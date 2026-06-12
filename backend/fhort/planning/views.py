@@ -287,7 +287,8 @@ def calendar_events_view(request):
     # ── Font 'confeccio' (Production) — estadi de durada en DIES, all-day, SENSE tècnic ──
     # Colors FIXOS per tipus (no per tècnic): confecció = to taller neutre, fitting = blau distint.
     COLOR_CONFECCIO = '#7c6f64'   # taupe (taller/proveïdor extern)
-    COLOR_FITTING = '#3a7ca5'     # blau (sessió de fitting)
+    COLOR_FITTING = '#3a7ca5'     # blau (sessió de fitting viva)
+    COLOR_FITTING_CLOSED = '#6b9e6b'   # verd apagat (sessió de fitting Tancada) — Peça 3 E1
     # Scope: confecció/fitting NO tenen tècnic → SEMPRE visibles a tot autenticat (cap filtre de perfil).
     prods = Production.objects.select_related('model', 'supplier')
     # Filtre per SOLAPAMENT amb el rang demanat (no "inici dins rang"): el tram
@@ -324,12 +325,22 @@ def calendar_events_view(request):
         })
 
     # ── Font 'fitting' (FittingSession) — UN bloc horari per ASSISTENT (com les tasques);
-    # sense hora → marcador de dia (retrocompat). Sessions Tancada/Anullada NO es pinten. ──
+    # sense hora → marcador de dia (retrocompat). Peça 3 E1/E3: les Tancades es pinten (verd);
+    # les Anul·lades segueixen excloses. ──
     import datetime as _dt
+
+    def _eff_minutes(s):
+        """E2 — durada REAL (finished_at − started_at) si disponible; si no, la prevista."""
+        if s.started_at and s.finished_at:
+            m = (s.finished_at - s.started_at).total_seconds() / 60
+            if m > 0:
+                return int(round(m))
+        return s.duracio_minuts or 0
+
     fitting_qs = (FittingSession.objects
                   .select_related('model', 'garment_set')
                   .prefetch_related('attendees__user')
-                  .exclude(estat__in=['Tancada', 'Anullada']))
+                  .exclude(estat='Anullada'))
     if start_d:
         fitting_qs = fitting_qs.filter(data__gte=start_d)
     if end_d:
@@ -364,10 +375,12 @@ def calendar_events_view(request):
         link = f'/fittings/{s.id}'
         exp = expected_by_key.get((s.model_id, s.fase)) if s.model_id else None
         avis_abans = bool(exp and s.data and s.data < exp)   # avís TOVA (no en_risc)
-        if s.start_time and s.duracio_minuts:
+        tancada = s.estat == 'Tancada'
+        eff = _eff_minutes(s)
+        if s.start_time and eff:
             base = timezone.make_aware(_dt.datetime.combine(s.data, s.start_time))
             start_dt = timezone.localtime(base).isoformat()
-            end_dt = timezone.localtime(base + _dt.timedelta(minutes=s.duracio_minuts)).isoformat()
+            end_dt = timezone.localtime(base + _dt.timedelta(minutes=eff)).isoformat()
             all_day = False
         else:
             start_dt = s.data.isoformat()
@@ -379,19 +392,21 @@ def calendar_events_view(request):
             'fase': s.fase,
             'estat': s.estat,
             'duracio_minuts': s.duracio_minuts,
+            'durada_real': eff if (s.started_at and s.finished_at) else None,
             'lloc': s.lloc,
             'avis_abans_confeccio': avis_abans,
+            'tancada': tancada,
         }
         attendees_list = list(s.attendees.all())
         if attendees_list:
             for att in attendees_list:
                 events.append({
                     'id': f'fitting-{s.id}-{att.id}',
-                    'tipus': 'fitting',
+                    'tipus': 'fitting', 'tancada': tancada,
                     'start': start_dt, 'end': end_dt, 'titol': titol,
                     'tecnic_id': att.id,
                     'tecnic_nom': att.user.get_full_name() or att.user.username,
-                    'color': att.color_avatar or '#888888',
+                    'color': COLOR_FITTING_CLOSED if tancada else (att.color_avatar or '#888888'),
                     'link': link, 'en_risc': False, 'all_day': all_day,
                     'meta': meta_base,
                 })
@@ -399,10 +414,10 @@ def calendar_events_view(request):
             # Sessió sense attendees interns: event únic (retrocompat, color fix de tipus).
             events.append({
                 'id': f'fitting-{s.id}',
-                'tipus': 'fitting',
+                'tipus': 'fitting', 'tancada': tancada,
                 'start': start_dt, 'end': end_dt, 'titol': titol,
                 'tecnic_id': None, 'tecnic_nom': None,
-                'color': COLOR_FITTING,
+                'color': COLOR_FITTING_CLOSED if tancada else COLOR_FITTING,
                 'link': link, 'en_risc': False, 'all_day': all_day,
                 'meta': meta_base,
             })
@@ -421,20 +436,21 @@ def calendar_events_view(request):
         for att, sessions in emis:
             sessions_grup = sorted(sessions, key=lambda x: (x.data, x.start_time or _dt.time.min))
             primera = sessions_grup[0]
-            ultima = sessions_grup[-1]
+            # E4: n = sessions NO anul·lades (les Anul·lades ja s'han exclòs del queryset).
             n = len(sessions_grup)
-            if primera.start_time and ultima.duracio_minuts:
+            grp_tancada = all(s.estat == 'Tancada' for s in sessions_grup)
+            # E2: durada del bloc = suma d'efectives (real per Tancades, prevista per vives).
+            total_eff = sum(_eff_minutes(s) for s in sessions_grup)
+            if primera.start_time and total_eff:
                 start_base = timezone.make_aware(
                     _dt.datetime.combine(primera.data, primera.start_time))
-                end_base = timezone.make_aware(
-                    _dt.datetime.combine(ultima.data, ultima.start_time) +
-                    _dt.timedelta(minutes=ultima.duracio_minuts))
+                end_base = start_base + _dt.timedelta(minutes=total_eff)
                 start_dt = timezone.localtime(start_base).isoformat()
                 end_dt = timezone.localtime(end_base).isoformat()
                 all_day = False
             else:
                 start_dt = primera.data.isoformat()
-                end_dt = ultima.data.isoformat()
+                end_dt = sessions_grup[-1].data.isoformat()
                 all_day = True
             avis = any(
                 bool(expected_by_key.get((s.model_id, s.fase)) and s.data and
@@ -447,26 +463,28 @@ def calendar_events_view(request):
                 'fase': primera.fase,
                 'lloc': primera.lloc,
                 'avis_abans_confeccio': avis,
+                'tancada': grp_tancada,
+                'durada_real_min': total_eff,
             }
             titol = f'Fitting · {n} models · {primera.fase}'
             if att is not None:
                 events.append({
                     'id': f'fitting-conv-{convocatoria}-{att.id}',
-                    'tipus': 'fitting',
+                    'tipus': 'fitting', 'tancada': grp_tancada,
                     'start': start_dt, 'end': end_dt, 'titol': titol,
                     'tecnic_id': att.id,
                     'tecnic_nom': att.user.get_full_name() or att.user.username,
-                    'color': att.color_avatar or '#888888',
+                    'color': COLOR_FITTING_CLOSED if grp_tancada else (att.color_avatar or '#888888'),
                     'link': '/fittings', 'en_risc': False, 'all_day': all_day,
                     'meta': meta,
                 })
             else:
                 events.append({
                     'id': f'fitting-conv-{convocatoria}',
-                    'tipus': 'fitting',
+                    'tipus': 'fitting', 'tancada': grp_tancada,
                     'start': start_dt, 'end': end_dt, 'titol': titol,
                     'tecnic_id': None, 'tecnic_nom': None,
-                    'color': COLOR_FITTING,
+                    'color': COLOR_FITTING_CLOSED if grp_tancada else COLOR_FITTING,
                     'link': '/fittings', 'en_risc': False, 'all_day': all_day,
                     'meta': meta,
                 })
