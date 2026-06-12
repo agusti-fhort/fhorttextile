@@ -141,6 +141,7 @@ try:
     from fhort.pom.s2_views import (
         targets_list_view,
         construction_types_list_view,
+        fit_types_list_view,
         sizing_profiles_view,
         sizing_profile_detail_view,
         clone_sizing_profile_view,
@@ -153,6 +154,7 @@ try:
     _s2_paths = [
         _p_s2('targets/', targets_list_view),
         _p_s2('construction-types/', construction_types_list_view),
+        _p_s2('fit-types/', fit_types_list_view),
         _p_s2('sizing-profiles/', sizing_profiles_view),
         _p_s2('sizing-profiles/<int:pk>/', sizing_profile_detail_view),
         _p_s2('sizing-profiles/<int:pk>/clonar/', clone_sizing_profile_view),

@@ -41,6 +41,22 @@ def construction_types_list_view(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def fit_types_list_view(request):
+    """GET /api/v1/fit-types/ — List all fit types (FitType has no `actiu` field)."""
+    try:
+        from fhort.pom.models import FitType
+        from fhort.pom.s2_serializers import FitTypeSerializer
+        items = FitType.objects.all().order_by('display_order')
+        return Response({
+            'count': items.count(),
+            'results': FitTypeSerializer(items, many=True).data
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def sizing_profiles_view(request):
     """
     GET /api/v1/sizing-profiles/
