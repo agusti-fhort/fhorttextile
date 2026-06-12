@@ -48,6 +48,26 @@ function StepBar({ step }) {
   )
 }
 
+function LoadError({ onRetry, label = "No s'han pogut carregar les dades" }) {
+  return (
+    <div style={{
+      padding: "16px", border: "1px dashed #f0a0a0", borderRadius: 8,
+      textAlign: "center", color: "#a32d2d", fontSize: 12, background: "#fff8f8",
+    }}>
+      {label}
+      <div style={{ marginTop: 10 }}>
+        <button onClick={onRetry} style={{
+          padding: "6px 14px", borderRadius: 4, cursor: "pointer",
+          background: "#fff", color: "#c27a2a", border: "1px solid #c27a2a",
+          fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+        }}>
+          ↺ Reintentar
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }) {
   // Si initialValues.target ja ve seleccionat (p.ex. des d'ImportWizard o
   // from an import via NouModel), we skip the Target sub-step and start at
@@ -59,6 +79,8 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
   const [constructions, setConstructions] = useState([])
   const [profiles, setProfiles] = useState([])
   const [loading, setLoading] = useState(false)
+  const [lookupsError, setLookupsError] = useState(false)
+  const [profilesError, setProfilesError] = useState(false)
 
   // Seleccions
   const [selTarget, setSelTarget] = useState(initialValues.target || null)
@@ -67,66 +89,42 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
   const [selSizes, setSelSizes] = useState([])
   const [selBase, setSelBase] = useState(null)
 
-  // Carregar targets
-  useEffect(() => {
+  // Carregar targets i construccions
+  const loadLookups = () => {
+    setLookupsError(false)
     targetsApi.list()
       .then(({ data: d }) => {
         const all = Array.isArray(d) ? d : (d.results || [])
         const sorted = TARGET_ORDER.map(c => all.find(t => t.codi === c)).filter(Boolean)
         setTargets(sorted)
       })
-      .catch(() => {
-        // Mock
-        setTargets([
-          {id:1,codi:"WOMAN",nom_en:"Woman",nom_cat:"Dona"},
-          {id:2,codi:"MAN",nom_en:"Man",nom_cat:"Home"},
-          {id:4,codi:"BABY_GIRL",nom_en:"Baby Girl",nom_cat:"Nadó nena"},
-          {id:5,codi:"BABY_BOY",nom_en:"Baby Boy",nom_cat:"Nadó nen"},
-          {id:9,codi:"GIRL",nom_en:"Girl",nom_cat:"Nena"},
-          {id:10,codi:"BOY",nom_en:"Boy",nom_cat:"Nen"},
-        ])
-      })
+      .catch(() => setLookupsError(true))
 
     constructionTypes.list()
       .then(({ data: d }) => setConstructions(Array.isArray(d) ? d : (d.results || [])))
-      .catch(() => {
-        setConstructions([
-          {id:1,codi:"WOVEN",nom_en:"Woven",nom_cat:"Teixit pla"},
-          {id:2,codi:"KNIT",nom_en:"Knit",nom_cat:"Punt jersey"},
-          {id:3,codi:"STRETCH_KNIT",nom_en:"Stretch Knit",nom_cat:"Punt elàstic"},
-          {id:4,codi:"TECHNICAL",nom_en:"Technical",nom_cat:"Tècnic"},
-        ])
-      })
-  }, [])
+      .catch(() => setLookupsError(true))
+  }
+
+  useEffect(() => { loadLookups() }, [])
 
   // Load profiles when target+construction are selected
-  useEffect(() => {
+  const loadProfiles = () => {
     if (!selTarget || !selConstruction) return
     setLoading(true)
+    setProfilesError(false)
     sizingProfiles.list({ target: selTarget, construction: selConstruction })
       .then(({ data: d }) => {
         setProfiles(Array.isArray(d) ? d : (d.results || []))
         setLoading(false)
       })
       .catch(() => {
-        setProfiles([{
-          id:1,
-          size_system: { id:1, codi:"ALPHA_EU_W", nom:"Alpha EU — Women" },
-          grading_rule_set: { id:1, nom:"EU Knit Woman Regular", is_system_default:true },
-          fit_type_nom:"Regular",
-          is_default:true, is_custom:false, version:1,
-          size_definitions: [
-            {size_label:"XXS"},{size_label:"XS"},{size_label:"S"},
-            {size_label:"M"},{size_label:"L"},{size_label:"XL"},{size_label:"XXL"},
-          ],
-          grading_rules_preview: [
-            {pom_codi:"POM-001",pom_nom_en:"Chest width",increment:2.0},
-            {pom_codi:"POM-003",pom_nom_en:"Waist width",increment:1.5},
-          ]
-        }])
+        setProfiles([])
+        setProfilesError(true)
         setLoading(false)
       })
-  }, [selTarget, selConstruction])
+  }
+
+  useEffect(() => { loadProfiles() }, [selTarget, selConstruction])
 
   // When a profile is selected, pre-select all sizes
   useEffect(() => {
@@ -176,6 +174,9 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
           <div style={{ fontSize:11, color:"#868685", marginBottom:12 }}>
             Per a qui és la peça?
           </div>
+          {lookupsError ? (
+            <LoadError onRetry={loadLookups} />
+          ) : (
           <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
             {targets.map(t => (
               <button key={t.codi} onClick={() => setSelTarget(t.codi)} style={{
@@ -194,6 +195,7 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
               </button>
             ))}
           </div>
+          )}
         </div>
       )}
 
@@ -203,6 +205,9 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
           <div style={{ fontSize:11, color:"#868685", marginBottom:12 }}>
             Com és el teixit de la peça?
           </div>
+          {lookupsError ? (
+            <LoadError onRetry={loadLookups} />
+          ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {constructions.map(c => (
               <button key={c.codi} onClick={() => setSelConstruction(c.codi)} style={{
@@ -228,6 +233,7 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
               </button>
             ))}
           </div>
+          )}
         </div>
       )}
 
@@ -249,6 +255,8 @@ export function SizingProfileWizard({ onComplete, onCancel, initialValues = {} }
           <div style={{ fontSize:11, color:"#868685", marginBottom:12 }}>
             {loading ? "Carregant size sets..." : `${uniqueProfiles.length} sistemes disponibles. Selecciona i ajusta el run de talles.`}
           </div>
+
+          {profilesError && <LoadError onRetry={loadProfiles} label="No s'han pogut carregar els size sets" />}
 
           {uniqueProfiles.map(p => {
             const isSelected = selProfile?.id === p.id
