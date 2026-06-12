@@ -33,6 +33,12 @@ class SessionSoftConflict(Exception):
         self.sessions = sessions
 
 
+class SessionActionConflict(Exception):
+    """409 — l'estat de la sessió (Oberta o amb peces) no permet l'acció directa
+    (eliminació); cal anul·lar-la amb motiu via /discard/."""
+    pass
+
+
 def _slot_overlap(s_start, s_dur, n_start, n_dur):
     """True si [s_start, s_start+s_dur) ∩ [n_start, n_start+n_dur) ≠ ∅ (mateix dia)."""
     import datetime as _dt
@@ -718,3 +724,190 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
     }
     logger.info(f"Session {session_id} advanced: {result}")
     return result
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Peça 2 — Gestió de convocatòria + segellat independent.
+# Operacions de grup (per `convocatoria` UUID) i de cicle de vida de sessió.
+# "Viu" = estat NOT IN (Tancada, Anullada).
+# ═════════════════════════════════════════════════════════════════════════════
+_DEAD_ESTATS = ['Tancada', 'Anullada']
+
+
+def _group_live_qs(conv_uuid):
+    """Sessions vives d'un grup (convocatoria), ordenades cronològicament."""
+    from .models import FittingSession
+    return (FittingSession.objects
+            .filter(convocatoria=conv_uuid)
+            .exclude(estat__in=_DEAD_ESTATS)
+            .order_by('data', 'start_time', 'id'))
+
+
+def _recompute_attendees(profile_ids):
+    """Recompute no-fatal de la cua de planificació d'uns assistents."""
+    if not profile_ids:
+        return
+    try:
+        from fhort.planning.plan_service import recompute_for_technicians
+        recompute_for_technicians(set(profile_ids))
+    except Exception:
+        logger.exception('recompute no-fatal')
+
+
+def reschedule_group(conv_uuid, data, start_time=None):
+    """(Op 1) Re-programa les sessions VIVES del grup. Manté l'interval relatiu
+    original entre start_times (offset respecte la primera sessió amb hora). Si
+    `start_time` és None, només canvia la data. Retorna [ids actualitzats]."""
+    import datetime as _dt
+    lives = list(_group_live_qs(conv_uuid))
+    if not lives:
+        return []
+    aff_profiles = set()
+    updated = []
+
+    if start_time is None:
+        for s in lives:
+            s.data = data
+            s.save(update_fields=['data'])
+            updated.append(s.id)
+            aff_profiles.update(s.attendees.values_list('id', flat=True))
+        _recompute_attendees(aff_profiles)
+        return updated
+
+    # Re-encadenar mantenint l'offset relatiu respecte la primera start_time del grup.
+    D0 = _dt.date(2000, 1, 1)
+    bases = [s.start_time for s in lives if s.start_time is not None]
+    base_dt = _dt.datetime.combine(D0, min(bases)) if bases else None
+    new_base_dt = _dt.datetime.combine(D0, start_time)
+    for s in lives:
+        s.data = data
+        if s.start_time is not None and base_dt is not None:
+            offset = _dt.datetime.combine(D0, s.start_time) - base_dt
+            s.start_time = (new_base_dt + offset).time()
+            s.save(update_fields=['data', 'start_time'])
+        else:
+            s.save(update_fields=['data'])
+        updated.append(s.id)
+        aff_profiles.update(s.attendees.values_list('id', flat=True))
+    _recompute_attendees(aff_profiles)
+    return updated
+
+
+def _delete_session_if_allowed(session, conflict_msg=None):
+    """DELETE físic si Programada i sense PieceFitting. Si no:
+       Oberta o amb peces → SessionActionConflict (409);
+       Tancada/Anullada → ValueError (400). Retorna l'id esborrat."""
+    if conflict_msg is None:
+        conflict_msg = ("La sessió ja ha estat oberta; usa /discard/ per "
+                        "anul·lar-la amb motiu.")
+    if session.estat in _DEAD_ESTATS:
+        raise ValueError("Estat no permet eliminació.")
+    if session.estat == 'Oberta' or session.piece_fittings.exists():
+        raise SessionActionConflict(conflict_msg)
+    sid = session.id
+    profiles = list(session.attendees.values_list('id', flat=True))
+    session.delete()
+    _recompute_attendees(profiles)
+    return sid
+
+
+def discard_session(session_id, motiu=''):
+    """(Op 3) Anul·la una sessió des de Programada o Oberta → Anullada + motiu +
+    finished_at. Des de Tancada/Anullada → ValueError (400)."""
+    from .models import FittingSession
+    s = FittingSession.objects.get(pk=session_id)
+    if s.estat not in ('Programada', 'Oberta'):
+        raise ValueError(
+            f"La sessió està {s.estat}; només es pot anul·lar des de Programada o Oberta.")
+    s.estat = 'Anullada'
+    s.motiu_anullacio = motiu or ''
+    s.finished_at = timezone.now()
+    s.save(update_fields=['estat', 'motiu_anullacio', 'finished_at'])
+    _recompute_attendees(list(s.attendees.values_list('id', flat=True)))
+    return s
+
+
+def add_model_to_group(conv_uuid, model_id, *, fase=None, created_by_id=None, force=False):
+    """(Op 4) Afegeix un model nou al grup. 409 si el model ja hi té sessió viva.
+    Encadena start_time al final de l'última sessió viva (start_time + duracio_minuts,
+    calendari d'empresa). Aplica el guard de solapament existent (_skip_guard=False)."""
+    import datetime as _dt
+    from .models import FittingSession
+
+    if not FittingSession.objects.filter(convocatoria=conv_uuid).exists():
+        raise ValueError("Convocatòria no trobada.")
+    if FittingSession.objects.filter(
+            convocatoria=conv_uuid, model_id=model_id
+            ).exclude(estat__in=_DEAD_ESTATS).exists():
+        raise SessionActionConflict("Model ja és al grup.")
+
+    last = _group_live_qs(conv_uuid).last()
+    if fase is None:
+        any_session = (FittingSession.objects.filter(convocatoria=conv_uuid)
+                       .order_by('data', 'start_time', 'id').first())
+        fase = (last or any_session).fase
+
+    data = last.data if last else timezone.now().date()
+    duracio = (last.duracio_minuts if last and last.duracio_minuts else 10)
+    start_time = None
+    if last and last.start_time is not None:
+        from fhort.planning.calendar_service import add_working_minutes
+        start_dt = _dt.datetime.combine(last.data, last.start_time)
+        end_dt = add_working_minutes(None, start_dt, last.duracio_minuts or 10)
+        data = end_dt.date()
+        start_time = end_dt.time()
+
+    responsable_id = last.responsable_id if last else None
+    attendee_ids = list(last.attendees.values_list('id', flat=True)) if last else []
+
+    session = schedule_session(
+        fase=fase, data=data, responsable_id=responsable_id,
+        model_id=model_id, start_time=start_time,
+        duracio_minuts=duracio, attendee_ids=attendee_ids,
+        created_by_id=created_by_id, force=force,
+        _skip_guard=False,   # Op 4: guard de solapament ACTIU
+    )
+    session.convocatoria = conv_uuid
+    session.save(update_fields=['convocatoria'])
+    return session
+
+
+def remove_model_from_group(conv_uuid, model_id):
+    """(Op 5) Treu un model del grup. Programada sense peces → DELETE físic;
+    Oberta o amb peces → 409 'Usa /discard/'; Tancada/Anullada → 400.
+    Retorna l'id esborrat."""
+    from .models import FittingSession
+    qs = (FittingSession.objects
+          .filter(convocatoria=conv_uuid, model_id=model_id)
+          .order_by('id'))
+    if not qs.exists():
+        raise ValueError("El model no és al grup.")
+    live = qs.exclude(estat__in=_DEAD_ESTATS).first()
+    target = live or qs.first()
+    return _delete_session_if_allowed(target, conflict_msg="Usa /discard/ per anul·lar-la amb motiu.")
+
+
+def set_group_attendees(conv_uuid, attendee_ids):
+    """(Op 6) Substitueix (set) el M2M attendees de TOTES les sessions vives del grup.
+    Retorna [ids actualitzats]."""
+    lives = list(_group_live_qs(conv_uuid))
+    aff_profiles = set(int(a) for a in (attendee_ids or []))
+    updated = []
+    for s in lives:
+        aff_profiles.update(s.attendees.values_list('id', flat=True))  # també els trets
+        s.attendees.set(attendee_ids or [])
+        updated.append(s.id)
+    _recompute_attendees(aff_profiles)
+    return updated
+
+
+def seal_session(session_id):
+    """(Op 7) Segellat INDEPENDENT: crida _seal_session (idempotent, marca finished_at,
+    allibera franja). NO toca fase del model ni crida advance_phase. Anullada → 400."""
+    from .models import FittingSession
+    s = FittingSession.objects.get(pk=session_id)
+    if s.estat == 'Anullada':
+        raise ValueError("Una sessió anul·lada no es pot segellar.")
+    _seal_session(s)
+    s.refresh_from_db()
+    return s

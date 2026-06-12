@@ -10,6 +10,10 @@ from .views import (
     PieceFittingViewSet,
     PieceFittingLineViewSet,
     FittingPhotoViewSet,
+    group_reschedule,
+    group_add_model,
+    group_remove_model,
+    group_attendees,
 )
 
 router = DefaultRouter()
@@ -22,7 +26,20 @@ router.register('piece-fittings', PieceFittingViewSet, basename='piece-fitting')
 router.register('piece-fitting-lines', PieceFittingLineViewSet, basename='piece-fitting-line')
 router.register('fitting-photos', FittingPhotoViewSet, basename='fitting-photo')
 
-urlpatterns = router.urls + [
+# Peça 2 — gestió de convocatòria (per UUID). Abans del router perquè els paths
+# de grup són específics (no col·lisionen amb les rutes <pk> del ViewSet).
+group_urls = [
+    path('fitting-sessions/group/<uuid:conv_uuid>/reschedule/', group_reschedule,
+         name='fitting-group-reschedule'),
+    path('fitting-sessions/group/<uuid:conv_uuid>/add-model/', group_add_model,
+         name='fitting-group-add-model'),
+    path('fitting-sessions/group/<uuid:conv_uuid>/remove-model/<int:model_id>/', group_remove_model,
+         name='fitting-group-remove-model'),
+    path('fitting-sessions/group/<uuid:conv_uuid>/attendees/', group_attendees,
+         name='fitting-group-attendees'),
+]
+
+urlpatterns = group_urls + router.urls + [
     # F3 — taula de specs graduades (GradingVersion activa) per a la fitxa tècnica.
     path('fitting/<int:sf_id>/graded-table/', GradedSpecTableView.as_view(), name='graded-spec-table'),
 ]

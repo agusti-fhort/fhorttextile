@@ -3,7 +3,7 @@ import logging
 from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, mixins, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.filters import OrderingFilter
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
@@ -288,6 +288,110 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(FittingSessionDetailSerializer(s, context={'request': request}).data,
                         status=status.HTTP_200_OK)
+
+    def get_permissions(self):
+        # Mutacions de cicle de vida → requereixen capability schedule_fittings.
+        if self.action in ('destroy', 'discard', 'seal'):
+            return [_ScheduleFittingsPerm()]
+        return super().get_permissions()
+
+    def destroy(self, request, *args, **kwargs):
+        """(Peça 2 · Op 2) DELETE /fitting-sessions/<id>/ — esborra físicament si
+        Programada i sense peces; 409 si Oberta/amb peces (cal /discard/); 400 si
+        Tancada/Anullada."""
+        session = self.get_object()
+        try:
+            services._delete_session_if_allowed(session)
+        except services.SessionActionConflict as e:
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'], url_path='discard')
+    def discard(self, request, pk=None):
+        """(Peça 2 · Op 3) Anul·la la sessió (Programada/Oberta → Anullada + motiu)."""
+        try:
+            s = services.discard_session(int(pk), motiu=request.data.get('motiu', ''))
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'id': s.id, 'estat': s.estat,
+                         'motiu_anullacio': s.motiu_anullacio,
+                         'finished_at': s.finished_at})
+
+    @action(detail=True, methods=['post'], url_path='seal')
+    def seal(self, request, pk=None):
+        """(Peça 2 · Op 7) Segellat independent → Tancada + finished_at. No toca fase."""
+        try:
+            s = services.seal_session(int(pk))
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'id': s.id, 'estat': s.estat, 'finished_at': s.finished_at})
+
+
+# ── Peça 2 — endpoints de GRUP (per convocatoria UUID) ───────────────────────
+@api_view(['PATCH'])
+@permission_classes([_ScheduleFittingsPerm])
+def group_reschedule(request, conv_uuid):
+    """(Op 1) PATCH /fitting-sessions/group/<uuid>/reschedule/ — Body {data, start_time?}."""
+    import datetime as _dt
+    data_str = request.data.get('data')
+    if not data_str:
+        return Response({'error': 'data requerit'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        data = _dt.date.fromisoformat(data_str)
+        st_raw = request.data.get('start_time')
+        start_time = _dt.time.fromisoformat(st_raw) if st_raw else None
+    except ValueError as e:
+        return Response({'error': f'format invàlid: {e}'}, status=status.HTTP_400_BAD_REQUEST)
+    updated = services.reschedule_group(conv_uuid, data, start_time)
+    return Response({'updated': updated})
+
+
+@api_view(['POST'])
+@permission_classes([_ScheduleFittingsPerm])
+def group_add_model(request, conv_uuid):
+    """(Op 4) POST /fitting-sessions/group/<uuid>/add-model/ — Body {model_id, fase?, force?}."""
+    model_id = request.data.get('model_id')
+    if not model_id:
+        return Response({'error': 'model_id requerit'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        s = services.add_model_to_group(
+            conv_uuid, int(model_id), fase=request.data.get('fase'),
+            created_by_id=_profile_id(request), force=bool(request.data.get('force')))
+    except services.SessionActionConflict as e:
+        return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+    except services.SessionOverlapError as e:
+        return Response({'error': str(e), 'conflicts': e.conflicts},
+                        status=status.HTTP_409_CONFLICT)
+    except services.SessionSoftConflict as e:
+        return Response({'warning': str(e), 'requires_confirmation': True,
+                         'sessions': e.sessions}, status=status.HTTP_200_OK)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(FittingSessionDetailSerializer(s, context={'request': request}).data,
+                    status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+@permission_classes([_ScheduleFittingsPerm])
+def group_remove_model(request, conv_uuid, model_id):
+    """(Op 5) DELETE /fitting-sessions/group/<uuid>/remove-model/<int:model_id>/."""
+    try:
+        removed = services.remove_model_from_group(conv_uuid, int(model_id))
+    except services.SessionActionConflict as e:
+        return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({'removed': removed})
+
+
+@api_view(['PATCH'])
+@permission_classes([_ScheduleFittingsPerm])
+def group_attendees(request, conv_uuid):
+    """(Op 6) PATCH /fitting-sessions/group/<uuid>/attendees/ — Body {attendee_ids:[...]}."""
+    updated = services.set_group_attendees(conv_uuid, request.data.get('attendee_ids', []))
+    return Response({'updated': updated})
 
 
 class PieceFittingViewSet(mixins.RetrieveModelMixin,
