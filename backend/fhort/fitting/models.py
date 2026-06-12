@@ -258,6 +258,16 @@ class FittingSession(models.Model):
     convocatoria = models.UUIDField(
         null=True, blank=True, db_index=True,
         help_text='UUID compartit per sessions creades juntes (bulk). Null = individual.')
+    # Peça 1 — temps real del cicle (no és la franja prevista, que viu a data/start_time).
+    started_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Marca real d'obertura (Programada→Oberta).")
+    finished_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text='Marca real de tancament (→Tancada).')
+    motiu_anullacio = models.TextField(
+        blank=True, default='',
+        help_text="Motiu d'anul·lació (estat Anullada).")
 
     class Meta:
         verbose_name = 'Sessió de fitting'
