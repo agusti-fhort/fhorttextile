@@ -58,6 +58,8 @@ export const sizeDefinitions = {
 
 export const sizingProfiles = {
   list: (params) => client.get('/api/v1/sizing-profiles/', { params }),   // ?target&construction
+  get: (id) => client.get(`/api/v1/sizing-profiles/${id}/`),
+  restore: (id) => client.post(`/api/v1/sizing-profiles/${id}/restaurar/`),
 }
 
 export const targets = {
@@ -80,6 +82,8 @@ export const sizeMap = {
 
 export const gradingRuleSets = {
   list: (params) => client.get('/api/v1/grading-rule-sets/', { params }),
+  editRule: (setId, pom, payload) =>
+    client.patch(`/api/v1/grading-rule-sets/${setId}/regles/${pom}/editar/`, payload),
 }
 
 export const gradingRules = {
