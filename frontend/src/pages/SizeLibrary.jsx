@@ -1,11 +1,9 @@
 
 import { useState, useEffect } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
-import useAuthStore from "../store/auth"
 import { SizeSetCard } from "../components/SizeSetCard"
 import { SizeSetDetail } from "../components/SizeSetDetail"
-
-const API = import.meta.env.VITE_API_URL || ""
+import { targets as targetsApi, constructionTypes, sizingProfiles } from "../api/endpoints"
 
 const TARGET_ORDER = [
   "WOMAN","MAN","UNISEX_ADULT",
@@ -14,9 +12,31 @@ const TARGET_ORDER = [
   "GIRL","BOY","TEEN_GIRL","TEEN_BOY","MATERNITY"
 ]
 
+function LoadError({ onRetry, label = "No s'han pogut carregar les dades" }) {
+  return (
+    <div style={{
+      padding: "20px", border: "1px dashed #f0a0a0", borderRadius: 8,
+      textAlign: "center", color: "#a32d2d", fontSize: 12, background: "#fff8f8",
+    }}>
+      {label}
+      <div style={{ marginTop: 10 }}>
+        <button
+          onClick={onRetry}
+          style={{
+            padding: "6px 14px", borderRadius: 4, cursor: "pointer",
+            background: "#fff", color: "#c27a2a", border: "1px solid #c27a2a",
+            fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+          }}
+        >
+          ↺ Reintentar
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function SizeLibrary() {
   const navigate = useNavigate()
-  const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [targets, setTargets] = useState([])
@@ -29,103 +49,63 @@ export default function SizeLibrary() {
   const [detailProfileId, setDetailProfileId] = useState(null)
   const [msg, setMsg] = useState(null)
 
-  // Carregar targets i construccions
-  useEffect(() => {
-    const headers = { Authorization: `Bearer ${token}` }
+  // Errors de càrrega — si la API falla es mostra l'error real + Reintentar, mai dades falses.
+  const [lookupsError, setLookupsError] = useState(false)
+  const [profilesError, setProfilesError] = useState(false)
 
-    fetch(`${API}/api/v1/targets/`, { headers })
-      .then(r => r.json())
-      .then(d => {
+  // Carregar targets i construccions
+  const loadLookups = () => {
+    setLookupsError(false)
+    targetsApi.list()
+      .then(({ data: d }) => {
         const all = Array.isArray(d) ? d : (d.results || [])
         const sorted = TARGET_ORDER
           .map(codi => all.find(t => t.codi === codi))
           .filter(Boolean)
         setTargets(sorted)
       })
-      .catch(() => {
-        // Mock si API no disponible
-        setTargets([
-          { id: 1, codi: "WOMAN", nom_en: "Woman", nom_cat: "Dona", display_order: 1 },
-          { id: 2, codi: "MAN", nom_en: "Man", nom_cat: "Home", display_order: 2 },
-          { id: 4, codi: "BABY_GIRL", nom_en: "Baby Girl", nom_cat: "Nadó nena", display_order: 4 },
-          { id: 5, codi: "BABY_BOY", nom_en: "Baby Boy", nom_cat: "Nadó nen", display_order: 5 },
-          { id: 9, codi: "GIRL", nom_en: "Girl", nom_cat: "Nena", display_order: 9 },
-          { id: 10, codi: "BOY", nom_en: "Boy", nom_cat: "Nen", display_order: 10 },
-          { id: 11, codi: "TEEN_GIRL", nom_en: "Teen Girl", nom_cat: "Teen nena", display_order: 11 },
-        ])
-      })
+      .catch(() => setLookupsError(true))
 
-    fetch(`${API}/api/v1/construction-types/`, { headers })
-      .then(r => r.json())
-      .then(d => setConstructions(Array.isArray(d) ? d : (d.results || [])))
-      .catch(() => {
-        setConstructions([
-          { id: 1, codi: "WOVEN", nom_en: "Woven", nom_cat: "Teixit pla" },
-          { id: 2, codi: "KNIT", nom_en: "Knit", nom_cat: "Punt jersey" },
-          { id: 3, codi: "STRETCH_KNIT", nom_en: "Stretch Knit", nom_cat: "Punt elàstic" },
-          { id: 4, codi: "TECHNICAL", nom_en: "Technical", nom_cat: "Tècnic" },
-        ])
-      })
-  }, [token])
+    constructionTypes.list()
+      .then(({ data: d }) => setConstructions(Array.isArray(d) ? d : (d.results || [])))
+      .catch(() => setLookupsError(true))
+  }
+
+  useEffect(() => { loadLookups() }, [])
 
   // Load profiles when the selection changes
-  useEffect(() => {
+  const loadProfiles = () => {
     if (!selectedTarget) { setProfiles([]); return }
     setLoadingProfiles(true)
-    const params = new URLSearchParams({ target: selectedTarget })
-    if (selectedConstruction) params.set('construction', selectedConstruction)
+    setProfilesError(false)
+    const params = { target: selectedTarget }
+    if (selectedConstruction) params.construction = selectedConstruction
 
-    fetch(`${API}/api/v1/sizing-profiles/?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(r => r.json())
-      .then(d => {
+    sizingProfiles.list(params)
+      .then(({ data: d }) => {
         setProfiles(Array.isArray(d) ? d : (d.results || []))
         setLoadingProfiles(false)
       })
       .catch(() => {
-        // Mock data
-        setProfiles([
-          {
-            id: 1,
-            size_system: { id: 1, codi: "ALPHA_EU_W", nom: "Alpha EU — Women", base_unit: "ALPHA", norma_ref: "ISO 8559-2" },
-            target: { id: 1, codi: selectedTarget, nom_en: targets.find(t => t.codi === selectedTarget)?.nom_en || selectedTarget },
-            construction: { id: 1, codi: selectedConstruction || "KNIT", nom_en: "Knit" },
-            fit_type_nom: "Regular",
-            grading_rule_set: { id: 1, nom: "EU Knit Woman Regular", codi_sistema: "EU_KNIT_WOMAN_REGULAR", is_system_default: true, version_number: 1 },
-            is_default: true, is_custom: false, version: 1,
-            size_definitions: [
-              { size_label: "XXS" },{ size_label: "XS" },{ size_label: "S" },
-              { size_label: "M" },{ size_label: "L" },{ size_label: "XL" },{ size_label: "XXL" }
-            ],
-            grading_rules_preview: [
-              { pom_codi: "POM-001", pom_nom_en: "Chest width", logica: "LINEAR", increment: 2.0 },
-              { pom_codi: "POM-003", pom_nom_en: "Waist width", logica: "LINEAR", increment: 1.5 },
-              { pom_codi: "POM-004", pom_nom_en: "Hip width", logica: "LINEAR", increment: 2.0 },
-            ]
-          }
-        ])
+        setProfiles([])
+        setProfilesError(true)
         setLoadingProfiles(false)
       })
-  }, [selectedTarget, selectedConstruction, token])
+  }
+
+  useEffect(() => { loadProfiles() }, [selectedTarget, selectedConstruction])
 
   const handleClone = async (profile) => {
     try {
-      const r = await fetch(`${API}/api/v1/sizing-profiles/${profile.id}/clonar/`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nom_client: `Custom ${profile.size_system?.nom}` }),
-      })
-      const d = await r.json()
-      if (r.ok) {
-        setMsg({ type: 'ok', text: d.missatge })
-        // Recarregar perfils
-        setSelectedConstruction(c => c)
-      } else {
-        setMsg({ type: 'error', text: d.error })
-      }
+      const { data: d } = await sizingProfiles.clone(profile.id, { nom_client: `Custom ${profile.size_system?.nom}` })
+      setMsg({ type: 'ok', text: d?.missatge })
+      loadProfiles()   // recarregar perfils
     } catch (e) {
-      setMsg({ type: 'error', text: String(e) })
+      if (e.response) {
+        setMsg({ type: 'error', text: e.response.data?.error || 'Error clonant el perfil' })
+      } else {
+        setMsg({ type: 'error', text: String(e) })
+      }
     }
   }
 
@@ -162,6 +142,9 @@ export default function SizeLibrary() {
             <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 10 }}>
               1 · Target — per a qui és la peça?
             </div>
+            {lookupsError ? (
+              <LoadError onRetry={loadLookups} />
+            ) : (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {targets.map(t => (
                 <button
@@ -186,6 +169,7 @@ export default function SizeLibrary() {
                 </button>
               ))}
             </div>
+            )}
           </div>
 
           {/* NIVELL 2 — Construction */}
@@ -241,7 +225,9 @@ export default function SizeLibrary() {
                 </span>
               </div>
 
-              {loadingProfiles ? (
+              {profilesError ? (
+                <LoadError onRetry={loadProfiles} label="No s'han pogut carregar els size sets" />
+              ) : loadingProfiles ? (
                 <div style={{ color: "#868685", fontSize: 12, padding: "20px 0" }}>
                   Carregant size sets...
                 </div>
