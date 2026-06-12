@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions } from '../api/endpoints'
+import { fittingSessions, models as modelsApi, plan } from '../api/endpoints'
 import StatCard from '../components/ui/StatCard'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
+import Modal from '../components/ui/Modal'
 
 // Backend enums (línia divisòria sagrada — valors en català, no es toquen).
 const FASES = ['', 'Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
@@ -52,6 +53,12 @@ const thStyle = (align) => ({
 const tdStyle = (align, extra) => ({
   padding: '0.75rem 1rem', fontSize: 12, textAlign: align || 'left', ...extra,
 })
+const miniBtn = (primary) => ({
+  fontSize: 11, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+  border: primary ? 'none' : '0.5px solid var(--gray-l)',
+  background: primary ? 'var(--charcoal)' : 'var(--white)',
+  color: primary ? 'var(--white)' : 'var(--gray)',
+})
 
 export default function FittingSessionList() {
   const navigate = useNavigate()
@@ -62,16 +69,25 @@ export default function FittingSessionList() {
   const [estat, setEstat] = useState('')
   const [stats, setStats] = useState({ total: 0, Oberta: 0, Tancada: 0, Anullada: 0 })
   const [openGroups, setOpenGroups] = useState(() => new Set())   // UUIDs desplegats (default: tot plegat)
+  // Peça 3 — accions de grup i de sessió.
+  const [menuGrup, setMenuGrup] = useState(null)     // uuid amb el menú 3-punts obert
+  const [modalGrup, setModalGrup] = useState(null)   // {uuid, tipus, data, start_time, model_id, fase, attendee_ids}
+  const [rowAction, setRowAction] = useState(null)   // {id, tipus:'delete'|'discard', motiu, err}
+  const [actBusy, setActBusy] = useState(false)
+  const [modelOpts, setModelOpts] = useState([])     // models per al selector add-model
+  const [eligibles, setEligibles] = useState([])     // assistents elegibles per attendees
 
-  useEffect(() => {
+  const load = useCallback(() => {
     setLoading(true)
     const params = { page_size: 100 }
     if (fase) params.fase = fase
     if (estat) params.estat = estat
-    fittingSessions.list(params)
+    return fittingSessions.list(params)
       .then(res => setData(res.data.results || []))
       .finally(() => setLoading(false))
   }, [fase, estat])
+
+  useEffect(() => { load() }, [load])
 
   useEffect(() => {
     Promise.all([
@@ -134,6 +150,125 @@ export default function FittingSessionList() {
 
   const sum = (sessions, f) => sessions.reduce((acc, s) => acc + (s[f] || 0), 0)
   const hasRows = grups.length > 0 || individuals.length > 0
+
+  // ── Accions de grup (C2) ──────────────────────────────────────────────────
+  const openGrupModal = (uuid, tipus, sessions) => {
+    setMenuGrup(null)
+    if (tipus === 'addModel' && !modelOpts.length) {
+      modelsApi.list({ page_size: 500, ordering: 'codi_intern' })
+        .then(r => setModelOpts(r.data.results || r.data || [])).catch(() => {})
+    }
+    if (tipus === 'attendees' && !eligibles.length) {
+      plan.eligibleAttendees().then(r => setEligibles(r.data?.results ?? r.data ?? [])).catch(() => {})
+    }
+    const primera = sessions[0]
+    setModalGrup({
+      uuid, tipus, err: null,
+      data: primera?.data || '', start_time: '',
+      model_id: '', fase: primera?.fase || '',
+      attendee_ids: tipus === 'attendees' ? attendeesUnio(sessions).map(a => a.id) : [],
+    })
+  }
+
+  const doReschedule = () => {
+    setActBusy(true)
+    const payload = { data: modalGrup.data }
+    if (modalGrup.start_time) payload.start_time = modalGrup.start_time
+    fittingSessions.groupReschedule(modalGrup.uuid, payload)
+      .then(() => { setModalGrup(null); load() })
+      .catch(e => setModalGrup(m => ({ ...m, err: e.response?.data?.error || 'error' })))
+      .finally(() => setActBusy(false))
+  }
+
+  const doAddModel = () => {
+    if (!modalGrup.model_id) { setModalGrup(m => ({ ...m, err: t('fitting.group.select_model', 'Selecciona un model') })); return }
+    setActBusy(true)
+    const payload = { model_id: Number(modalGrup.model_id) }
+    if (modalGrup.fase) payload.fase = modalGrup.fase
+    fittingSessions.groupAddModel(modalGrup.uuid, payload)
+      .then(() => { setModalGrup(null); load() })
+      .catch(e => setModalGrup(m => ({ ...m,
+        err: e.response?.status === 409
+          ? (e.response?.data?.error || t('fitting.group.model_in_group', 'Model ja és al grup'))
+          : (e.response?.data?.error || 'error') })))
+      .finally(() => setActBusy(false))
+  }
+
+  const doAttendees = () => {
+    setActBusy(true)
+    fittingSessions.groupAttendees(modalGrup.uuid, { attendee_ids: modalGrup.attendee_ids })
+      .then(() => { setModalGrup(null); load() })
+      .catch(e => setModalGrup(m => ({ ...m, err: e.response?.data?.error || 'error' })))
+      .finally(() => setActBusy(false))
+  }
+
+  // ── Accions de sessió (C3/C4) ─────────────────────────────────────────────
+  const doRemove = (id) => {
+    setActBusy(true)
+    fittingSessions.remove(id)
+      .then(() => { setRowAction(null); load() })
+      .catch(e => setRowAction({ id, tipus: 'delete',
+        err: e.response?.status === 409
+          ? t('fitting.row.use_discard', 'Usa Descartar per a sessions ja obertes.')
+          : (e.response?.data?.error || 'error') }))
+      .finally(() => setActBusy(false))
+  }
+
+  const doDiscard = (id, motiu) => {
+    setActBusy(true)
+    fittingSessions.discardSession(id, motiu || '')
+      .then(() => { setRowAction(null); load() })
+      .catch(e => setRowAction(r => ({ ...r, err: e.response?.data?.error || 'error' })))
+      .finally(() => setActBusy(false))
+  }
+
+  // Cel·la d'accions d'una sessió (eliminar si Programada; descartar si Programada/Oberta).
+  const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray)', fontSize: 14, padding: '2px 4px' }
+  const SessionActionsCell = ({ s }) => (
+    <span style={{ display: 'inline-flex', gap: 4, justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
+      {(s.estat === 'Programada' || s.estat === 'Oberta') && (
+        <button style={iconBtn} title={t('fitting.row.discard', 'Descartar sessió')}
+          onClick={() => setRowAction({ id: s.id, tipus: 'discard', motiu: '', err: null })}>
+          <i className="ti ti-circle-x" />
+        </button>
+      )}
+      {s.estat === 'Programada' && (
+        <button style={{ ...iconBtn, color: 'var(--err)' }} title={t('fitting.row.delete', 'Eliminar')}
+          onClick={() => setRowAction({ id: s.id, tipus: 'delete', err: null })}>
+          <i className="ti ti-trash" />
+        </button>
+      )}
+    </span>
+  )
+
+  // Sub-fila inline de confirmació/motiu (delete o discard) per a una sessió.
+  const RowActionPanel = ({ id, colSpan }) => {
+    if (!rowAction || rowAction.id !== id) return null
+    return (
+      <tr style={{ background: 'var(--warn-bg)' }}>
+        <td colSpan={colSpan} style={{ padding: '10px 16px' }}>
+          {rowAction.tipus === 'delete' ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+              {t('fitting.row.delete_confirm', 'Eliminar sessió?')}
+              <button style={miniBtn(true)} disabled={actBusy} onClick={() => doRemove(id)}>{t('common.yes', 'Sí')}</button>
+              <button style={miniBtn(false)} disabled={actBusy} onClick={() => setRowAction(null)}>{t('common.no', 'No')}</button>
+              {rowAction.err && <span style={{ color: 'var(--err)' }}>{rowAction.err}</span>}
+            </span>
+          ) : (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 12, flexWrap: 'wrap' }}>
+              {t('fitting.row.discard_label', 'Motiu (opcional):')}
+              <input type="text" value={rowAction.motiu || ''} autoFocus
+                onChange={e => setRowAction(r => ({ ...r, motiu: e.target.value }))}
+                style={{ fontSize: 12, padding: '3px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, minWidth: 220 }} />
+              <button style={miniBtn(true)} disabled={actBusy} onClick={() => doDiscard(id, rowAction.motiu)}>{t('common.confirm', 'Confirmar')}</button>
+              <button style={miniBtn(false)} disabled={actBusy} onClick={() => setRowAction(null)}>{t('common.cancel', 'Cancel·lar')}</button>
+              {rowAction.err && <span style={{ color: 'var(--err)' }}>{rowAction.err}</span>}
+            </span>
+          )}
+        </td>
+      </tr>
+    )
+  }
 
   return (
     <div>
@@ -203,6 +338,7 @@ export default function FittingSessionList() {
                 <th style={thStyle()}>{t('fitting.session.attendees', 'Assistents')}</th>
                 <th style={thStyle('right')}>{t('fitting.session.min', 'Min')}</th>
                 <th style={thStyle('right')}>{t('fitting.session.n_peces')}</th>
+                <th style={thStyle('right')}></th>
               </tr>
             </thead>
             <tbody>
@@ -234,9 +370,37 @@ export default function FittingSessionList() {
                       <td style={tdStyle()}><AttendeeDots attendees={attendeesUnio(sessions)} /></td>
                       <td style={tdStyle('right', { fontVariantNumeric: 'tabular-nums' })}>{sum(sessions, 'duracio_minuts')}</td>
                       <td style={tdStyle('right', { fontVariantNumeric: 'tabular-nums' })}>{sum(sessions, 'n_peces')}</td>
+                      <td style={tdStyle('right', { position: 'relative', overflow: 'visible' })} onClick={e => e.stopPropagation()}>
+                        <button style={iconBtn} title={t('fitting.group.actions', 'Accions de grup')}
+                          onClick={() => setMenuGrup(menuGrup === uuid ? null : uuid)}>
+                          <i className="ti ti-dots-vertical" />
+                        </button>
+                        {menuGrup === uuid && (
+                          <>
+                            <div onClick={() => setMenuGrup(null)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                            <div style={{ position: 'absolute', right: 12, top: '100%', zIndex: 41, background: 'var(--white)',
+                              border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                              minWidth: 170, textAlign: 'left', padding: 4 }}>
+                              {[
+                                { k: 'reschedule', icon: 'ti-calendar-event', label: t('fitting.group.reschedule', 'Reagendar') },
+                                { k: 'addModel', icon: 'ti-plus', label: t('fitting.group.add_model', 'Afegir model') },
+                                { k: 'attendees', icon: 'ti-users', label: t('fitting.group.attendees', 'Canviar assistents') },
+                              ].map(it => (
+                                <button key={it.k} onClick={() => openGrupModal(uuid, it.k, sessions)}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none',
+                                    border: 'none', cursor: 'pointer', padding: '7px 10px', fontSize: 12, color: 'var(--text-main)',
+                                    borderRadius: 6, fontFamily: 'var(--font)' }}>
+                                  <i className={`ti ${it.icon}`} style={{ fontSize: 14, color: 'var(--gray)' }} /> {it.label}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </td>
                     </tr>
                     {isOpen && sessions.map((s, j) => (
-                      <tr key={`${uuid}-${s.id}`} onClick={() => navigate(`/fittings/${s.id}`)}
+                      <Fragment key={`${uuid}-${s.id}`}>
+                      <tr onClick={() => navigate(`/fittings/${s.id}`)}
                         style={{ background: 'var(--bg-card)', cursor: 'pointer', fontSize: 13,
                                  borderBottom: j < sessions.length - 1 ? '0.5px solid var(--gray-l)' : '0.5px solid var(--gray-l)' }}>
                         <td style={tdStyle(null, { paddingLeft: 24, borderLeft: '2px solid var(--gold-pale)', color: 'var(--gray)' })}>
@@ -251,7 +415,10 @@ export default function FittingSessionList() {
                         <td style={tdStyle(null, { color: 'var(--gray)' })}>—</td>
                         <td style={tdStyle('right', { fontVariantNumeric: 'tabular-nums' })}>{s.duracio_minuts || '—'}</td>
                         <td style={tdStyle('right', { fontVariantNumeric: 'tabular-nums' })}>{s.n_peces ?? 0}</td>
+                        <td style={tdStyle('right')}><SessionActionsCell s={s} /></td>
                       </tr>
+                      <RowActionPanel id={s.id} colSpan={8} />
+                      </Fragment>
                     ))}
                   </Fragment>
                 )
@@ -259,7 +426,8 @@ export default function FittingSessionList() {
 
               {/* ── INDIVIDUALS (convocatoria=None) — format pla ── */}
               {individuals.map((r, i) => (
-                <tr key={r.id} onClick={() => navigate(`/fittings/${r.id}`)}
+                <Fragment key={r.id}>
+                <tr onClick={() => navigate(`/fittings/${r.id}`)}
                   style={{ cursor: 'pointer',
                            borderBottom: i < individuals.length - 1 ? '0.5px solid var(--gray-l)' : 'none' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--gray-l)'}
@@ -273,12 +441,83 @@ export default function FittingSessionList() {
                   <td style={tdStyle()}><AttendeeDots attendees={r.attendees_info} /></td>
                   <td style={tdStyle('right', { fontVariantNumeric: 'tabular-nums' })}>{r.duracio_minuts || '—'}</td>
                   <td style={tdStyle('right', { fontVariantNumeric: 'tabular-nums' })}>{r.n_peces ?? 0}</td>
+                  <td style={tdStyle('right')}><SessionActionsCell s={r} /></td>
                 </tr>
+                <RowActionPanel id={r.id} colSpan={8} />
+                </Fragment>
               ))}
             </tbody>
           </table>
         )}
       </Card>
+
+      {/* ── Modals de grup (C2) ── */}
+      {modalGrup?.tipus === 'reschedule' && (
+        <Modal title={t('fitting.group.reschedule', 'Reagendar')}
+          confirmLabel={actBusy ? t('common.saving', 'Desant…') : t('common.confirm', 'Confirmar')}
+          cancelLabel={t('common.cancel', 'Cancel·lar')} confirmDisabled={actBusy}
+          onConfirm={doReschedule} onCancel={() => !actBusy && setModalGrup(null)}>
+          <label style={{ fontSize: 11, color: 'var(--gray)' }}>{t('fitting.session.date', 'Data')}</label>
+          <input type="date" value={modalGrup.data} onChange={e => setModalGrup(m => ({ ...m, data: e.target.value }))}
+            style={{ width: '100%', marginBottom: 12, padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 13 }} />
+          <label style={{ fontSize: 11, color: 'var(--gray)' }}>{t('fitting.group.start_time_opt', "Hora d'inici (opcional)")}</label>
+          <input type="time" value={modalGrup.start_time} onChange={e => setModalGrup(m => ({ ...m, start_time: e.target.value }))}
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 13 }} />
+          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 10 }}>{modalGrup.err}</div>}
+        </Modal>
+      )}
+
+      {modalGrup?.tipus === 'addModel' && (
+        <Modal title={t('fitting.group.add_model', 'Afegir model')}
+          confirmLabel={actBusy ? t('common.saving', 'Desant…') : t('common.confirm', 'Confirmar')}
+          cancelLabel={t('common.cancel', 'Cancel·lar')} confirmDisabled={actBusy}
+          onConfirm={doAddModel} onCancel={() => !actBusy && setModalGrup(null)}>
+          <label style={{ fontSize: 11, color: 'var(--gray)' }}>{t('fitting.session.target', 'Model')}</label>
+          <select value={modalGrup.model_id} onChange={e => setModalGrup(m => ({ ...m, model_id: e.target.value }))}
+            style={{ width: '100%', marginBottom: 12, padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 13 }}>
+            <option value="">— {t('fitting.group.select_model', 'Selecciona un model')} —</option>
+            {modelOpts.map(m => (
+              <option key={m.id} value={m.id}>{m.codi_intern}{m.nom_prenda ? ` · ${m.nom_prenda}` : ''}</option>
+            ))}
+          </select>
+          <label style={{ fontSize: 11, color: 'var(--gray)' }}>{t('fitting.session.fase', 'Fase')}</label>
+          <select value={modalGrup.fase} onChange={e => setModalGrup(m => ({ ...m, fase: e.target.value }))}
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 13 }}>
+            {FASES.filter(Boolean).map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 10 }}>{modalGrup.err}</div>}
+        </Modal>
+      )}
+
+      {modalGrup?.tipus === 'attendees' && (
+        <Modal title={t('fitting.group.attendees', 'Canviar assistents')}
+          confirmLabel={actBusy ? t('common.saving', 'Desant…') : t('common.confirm', 'Confirmar')}
+          cancelLabel={t('common.cancel', 'Cancel·lar')} confirmDisabled={actBusy}
+          onConfirm={doAttendees} onCancel={() => !actBusy && setModalGrup(null)}>
+          {eligibles.length === 0
+            ? <div style={{ fontSize: 12, color: 'var(--gray)' }}>{t('model_sheet.fitting_no_attendees', 'Cap assistent elegible.')}</div>
+            : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflowY: 'auto' }}>
+                {eligibles.map(e => {
+                  const sel = (modalGrup.attendee_ids || []).includes(e.profile_id)
+                  return (
+                    <label key={e.profile_id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                      padding: '5px 6px', borderRadius: 6, fontSize: 12, background: sel ? 'var(--gold-pale)' : 'transparent' }}>
+                      <input type="checkbox" checked={sel} style={{ accentColor: 'var(--gold)' }}
+                        onChange={() => setModalGrup(m => ({ ...m,
+                          attendee_ids: sel
+                            ? m.attendee_ids.filter(id => id !== e.profile_id)
+                            : [...(m.attendee_ids || []), e.profile_id] }))} />
+                      <ColorDot color={e.color_avatar} />
+                      {e.full_name}
+                    </label>
+                  )
+                })}
+              </div>
+            )}
+          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 10 }}>{modalGrup.err}</div>}
+        </Modal>
+      )}
     </div>
   )
 }

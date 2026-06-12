@@ -27,6 +27,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
   const [open, setOpen] = useState(false)
   const [modal, setModal] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [confirmPending, setConfirmPending] = useState(null)   // {payload, text} — conflicte suau a confirmar
   const [supps, setSupps] = useState([])
   const [prods, setProds] = useState([])   // només per al cas single (precondició fitting + defaults)
   const [form, setForm] = useState({})
@@ -90,10 +91,36 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
       return r
     })
   }
+  // Schedule single amb gestió de conflictes (P1): 409 dur (sense força) i
+  // 200 requires_confirmation (suau → confirmació i recrida amb force=true).
+  const submitSchedule = async (payload, force = false) => {
+    setBusy(true)
+    try {
+      const r = await fittingSessions.schedule(force ? { ...payload, force: true } : payload)
+      if (r.data?.requires_confirmation) {   // conflicte suau → demanar confirmació
+        setBusy(false)
+        setConfirmPending({ payload, text: r.data.warning })
+        return
+      }
+      setBusy(false); setModal(null); setConfirmPending(null)
+      onFeedback({ type: 'ok', text: t('model_sheet.fitting_scheduled', 'Fitting programat') })
+      onChanged && onChanged()
+    } catch (e) {
+      setBusy(false)
+      if (e.response?.status === 409) {   // conflicte DUR: no es pot forçar
+        onFeedback({ type: 'err', text: t('model_sheet.fitting_overlap',
+          'Ja existeix una sessió en aquesta franja per aquest model.') })
+      } else {
+        onFeedback({ type: 'err', text: e.response?.data?.error || 'error' })
+      }
+    }
+  }
+
   const runFitting = () => {
     // Single → schedule individual (retrocompat P5; gestiona expected_at via adaptativa).
     if (list.length === 1) {
-      return runBulk(m => fittingSessions.schedule({
+      const m = list[0]
+      return submitSchedule({
         fase: (form.fase === CURRENT ? m.fase_actual : form.fase),
         data: form.data,
         model_id: m.id,
@@ -101,7 +128,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
         duracio_minuts: form.duracio_minuts ? parseInt(form.duracio_minuts, 10) : undefined,
         attendee_ids: form.attendee_ids || [],
         ...(form.expected_at ? { expected_at: form.expected_at } : {}),
-      }))
+      })
     }
     // Bulk → sessions ENCADENADES via schedule-bulk (convocatòria UUID). schedule-bulk pren UNA
     // fase; amb CURRENT els models poden tenir fase_actual diferents → 1 convocatòria per fase.
@@ -123,9 +150,15 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
       })
     ))
       .then(results => {
-        const total = results.reduce((acc, r) => acc + (r.data?.n_sessions || 0), 0)
         setBusy(false); setModal(null)
-        onFeedback({ type: 'ok', text: t('model_sheet.fitting_bulk_scheduled', { n: total, defaultValue: 'Fitting programat: {{n}} sessions' }) })
+        // P1: schedule-bulk retorna {created, skipped, warnings} (ja no n_sessions).
+        const created = results.reduce((a, r) => a + (r.data?.created?.length ?? 0), 0)
+        const skipped = results.reduce((a, r) => a + (r.data?.skipped?.length ?? 0), 0)
+        const warnings = results.flatMap(r => r.data?.warnings ?? [])
+        let txt = t('model_sheet.fitting_bulk_scheduled', { n: created, defaultValue: '{{n}} sessions creades' })
+        if (skipped > 0) txt += ' · ' + t('model_sheet.fitting_bulk_skipped', { n: skipped, defaultValue: '{{n}} omeses' })
+        if (warnings.length > 0) txt += ' · ' + t('model_sheet.fitting_bulk_warnings', { n: warnings.length, defaultValue: '{{n}} amb avís' })
+        onFeedback({ type: (skipped > 0 || warnings.length > 0) ? 'err' : 'ok', text: txt })
         onChanged && onChanged()
       })
       .catch(e => {
@@ -264,6 +297,20 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
               </div>
             </div>
           )}
+        </Modal>
+      )}
+
+      {/* Conflicte SUAU (P1): el model ja té fitting d'aquesta fase en una altra franja. */}
+      {confirmPending && (
+        <Modal title={t('model_sheet.fitting_dup_title', 'Fitting duplicat?')}
+          confirmLabel={busy ? t('model_sheet.working') : t('model_sheet.fitting_create_anyway', 'Crear igualment')}
+          cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy}
+          onConfirm={() => submitSchedule(confirmPending.payload, true)}
+          onCancel={() => !busy && setConfirmPending(null)}>
+          <p style={{ fontSize: 13, lineHeight: 1.5 }}>
+            {confirmPending.text || t('model_sheet.fitting_dup_warn',
+              'Aquest model ja té un fitting programat en aquesta fase. Vols crear-ne un altre igualment?')}
+          </p>
         </Modal>
       )}
 
