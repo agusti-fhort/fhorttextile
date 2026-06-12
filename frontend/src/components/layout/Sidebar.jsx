@@ -306,12 +306,12 @@ export default function Sidebar() {
     <aside style={{
       width: 240,
       background: C.bg,
-      height: '100vh',
+      height: import.meta.env.VITE_STAGING === 'true' ? 'calc(100vh - 28px)' : '100vh',
       display: 'flex',
       flexDirection: 'column',
       position: 'fixed',
       left: 0,
-      top: 0,
+      top: import.meta.env.VITE_STAGING === 'true' ? '28px' : '0',
       zIndex: 100,            // per sobre de capçaleres sticky de pàgina (Topbar/FittingDetail zIndex:10)
       borderRight: `1px solid ${C.border}`,
       overflowY: 'auto',
