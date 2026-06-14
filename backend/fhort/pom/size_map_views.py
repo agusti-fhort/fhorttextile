@@ -10,6 +10,7 @@ Tots els endpoints requereixen la capacitat CONFIGURE.
 import re
 
 from django.db import transaction
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
@@ -337,10 +338,45 @@ def size_map_create_view(request):
         perfils = data.get('perfils') or []
         base_size = (data.get('base_size') or '').strip()
         src_ssid = data.get('size_system_id')
+        # 1C-4b-be — resolució de conflictes de graduació (N graduacions per combinació,
+        # distingides pel nom). on_conflict: None | 'new' | 'update'.
+        on_conflict = data.get('on_conflict')
+        nom_variant = (data.get('nom_variant') or '').strip() or None
 
         warnings = []
 
         target = Target.objects.filter(codi=target_codi).first() if target_codi else None
+
+        # ── Pre-check d'avís-i-confirma (NOMÉS REUTILITZAR: el sistema ja existeix i la
+        # combinació és coneguda d'entrada). CREAR/CLONAR creen sistema nou → combinació
+        # nova → mai conflicte. Es fa ABANS d'escriure res; MAI sobreescriure en silenci.
+        if accio == 'REUTILITZAR' and on_conflict is None:
+            ss_check = SizeSystem.objects.filter(pk=src_ssid).first()
+            if ss_check is not None:
+                existing = []
+                for p in perfils:
+                    p_target = Target.objects.filter(codi=p.get('target_codi')).first()
+                    construction = ConstructionType.objects.filter(pk=p.get('construction_id')).first()
+                    fit_type = FitType.objects.filter(pk=p.get('fit_type_id')).first()
+                    if not (p_target and construction and fit_type):
+                        continue
+                    qs = SizingProfile.objects.filter(
+                        size_system=ss_check, target=p_target,
+                        construction=construction, fit_type=fit_type,
+                    ).select_related('grading_rule_set', 'target', 'construction', 'fit_type')
+                    for prof in qs:
+                        existing.append({
+                            'nom': prof.grading_rule_set.nom if prof.grading_rule_set_id else '',
+                            'id': prof.id,
+                            'combinacio': f"{p_target.codi}/{construction.codi}/{fit_type.codi}",
+                        })
+                if existing:
+                    return Response({
+                        'conflict': True,
+                        'existing': existing,
+                        'message': ('Ja existeix/en graduació/ns per a aquesta/es combinació/ns. '
+                                    'Tria actualitzar-ne una o crear-ne una de nova amb un nom.'),
+                    }, status=status.HTTP_409_CONFLICT)
 
         with transaction.atomic():
             # ---- 1. Resoldre / crear el SizeSystem ----
@@ -398,12 +434,29 @@ def size_map_create_view(request):
             if base_def is None:
                 base_def = SizeDefinition.objects.filter(size_system=ss).order_by('ordre').first()
 
-            # ---- 4. GradingRuleSet ----
-            rs_nom = f"{ss.nom} — Grading"
-            rule_set, _ = GradingRuleSet.objects.update_or_create(
-                nom=rs_nom, size_system=ss,
-                defaults={'actiu': True, 'target': target},
-            )
+            # ---- 4. GradingRuleSet (graduació; el nom és el discriminador de variant) ----
+            # nom explícit del payload, o fallback derivat. filter().first() en lloc de
+            # get_or_create: GradingRuleSet no té unique (size_system, nom) → evita
+            # MultipleObjectsReturned davant dades brutes.
+            rs_nom = nom_variant or f"{ss.nom} — Grading"
+            if on_conflict == 'update':
+                rule_set = GradingRuleSet.objects.filter(size_system=ss, nom=rs_nom).first()
+                if rule_set is None:
+                    return Response(
+                        {'error': f"Graduació a actualitzar no trobada (nom='{rs_nom}')."},
+                        status=status.HTTP_400_BAD_REQUEST)
+                rule_set.actiu = True
+                if target:
+                    rule_set.target = target
+                rule_set.save(update_fields=['actiu', 'target'])
+            else:
+                # on_conflict=='new' o cas sense conflicte: reusa la graduació d'aquest
+                # nom si ja existeix, si no en crea una de nova.
+                rule_set = GradingRuleSet.objects.filter(size_system=ss, nom=rs_nom).first()
+                if rule_set is None:
+                    rule_set = GradingRuleSet.objects.create(
+                        nom=rs_nom, size_system=ss, actiu=True, target=target,
+                    )
             if target:
                 rule_set.targets.add(target)
 
@@ -441,15 +494,23 @@ def size_map_create_view(request):
                         f"construction={p.get('construction_id')}, fit={p.get('fit_type_id')}, "
                         f"garment={p.get('garment_type_id')}); omès.")
                     continue
-                profile, _ = SizingProfile.objects.update_or_create(
-                    target=p_target, construction=construction, size_system=ss,
-                    defaults={
-                        'fit_type': fit_type,
-                        'garment_type': garment_type,
-                        'grading_rule_set': rule_set,
-                        'is_default': True,
-                    },
-                )
+                # fit_type i grading_rule_set formen part de la IDENTITAT (filter, no
+                # defaults) → s'acaba la reassignació silenciosa de fit i la col·lisió
+                # intra-crida. La regla N-perfils permet coexistir variants pel rule_set.
+                profile = SizingProfile.objects.filter(
+                    size_system=ss, target=p_target, construction=construction,
+                    fit_type=fit_type, grading_rule_set=rule_set,
+                ).first()
+                if profile is not None:
+                    profile.garment_type = garment_type
+                    profile.is_default = True
+                    profile.save(update_fields=['garment_type', 'is_default'])
+                else:
+                    profile = SizingProfile.objects.create(
+                        target=p_target, construction=construction, size_system=ss,
+                        fit_type=fit_type, garment_type=garment_type,
+                        grading_rule_set=rule_set, is_default=True,
+                    )
                 sizing_profile_ids.append(profile.id)
 
         return Response({
