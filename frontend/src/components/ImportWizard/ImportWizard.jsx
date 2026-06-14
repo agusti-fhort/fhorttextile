@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import Modal from '../ui/Modal'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -79,6 +80,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const [step, setStep] = useState(1)
   const [sessionToken, setSessionToken] = useState(null)
   const [error, setError] = useState('')
+  const [confirmSizeMap, setConfirmSizeMap] = useState(false)   // 1C-3b: avís abans de saltar a la Library
   const [sizeMapPrefill, setSizeMapPrefill] = useState(null)   // ve de la resposta talles/ (estat PENDENT)
 
   // Pas 1 — upload + cribratge + reconciliació de talles
@@ -173,7 +175,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       import_session_token: sessionToken,
       model_id: model?.id ?? null,
     }
-    navigate(`/configuracio/size-map?prefill=${encodeURIComponent(encodePrefill(prefill))}`)
+    // 1C-3b: salta a la Size Library (drawer auto-obert per ?prefill). Decisió (ii):
+    // sense represa automàtica — l'usuari es queda a la Library i torna al model manualment.
+    // token/model_id es deixen al prefill (inerts al camí Library).
+    navigate(`/size-library?prefill=${encodeURIComponent(encodePrefill(prefill))}`)
   }
 
   const handleAlinear = async () => {
@@ -553,7 +558,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                          border: `1px solid ${GOLD}`, background: 'transparent', color: GOLD }}>
                 {savingTalles ? '⏳...' : `⤵ Alinear: adoptar ${tallesSel.join('·')} com a run del model`}
               </button>
-              <button type="button" onClick={goConfigureRun}
+              <button type="button" onClick={() => setConfirmSizeMap(true)}
                 style={{ marginLeft: 8, padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
                          border: '0.5px solid #c0c0c0', background: 'transparent', color: '#666' }}>
                 ⚙ Configurar run de client
@@ -917,6 +922,21 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             </button>
           </div>
         </div>
+      )}
+
+      {confirmSizeMap && (
+        <Modal
+          title="Configurar el run a la Size Library"
+          confirmLabel="Anar a la Library"
+          cancelLabel="Cancel·lar"
+          onCancel={() => setConfirmSizeMap(false)}
+          onConfirm={() => { setConfirmSizeMap(false); goConfigureRun() }}
+        >
+          <p style={{ fontSize: 13, color: '#444', lineHeight: 1.5 }}>
+            Sortiràs cap a la Size Library per generar aquesta graduació. Quan l'hagis
+            creada, hauràs de tornar a aquest model manualment per continuar la importació.
+          </p>
+        </Modal>
       )}
     </div>
   )

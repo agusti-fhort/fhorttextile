@@ -109,6 +109,7 @@ export default function SizeMapSetup() {
   if (wizardOpen) {
     return (
       <Wizard t={t} prefill={prefill}
+        showReturnBanner={!!prefill?.import_session_token}
         onClose={() => setWizardOpen(false)}
         onComplete={(data) => {
           // Branch de tornada preservat IDÈNTIC (ruta vella): si venim del W1, tornem a
@@ -200,7 +201,7 @@ function Stepper({ step, t }) {
   )
 }
 
-export function Wizard({ t, prefill = null, onComplete, onClose }) {
+export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanner = false }) {
   const [step, setStep] = useState(1)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
@@ -349,7 +350,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose }) {
         <button onClick={onClose} style={ghostBtn}><i className="ti ti-x" style={{ fontSize: 13 }} />{t('size_map_cancel', 'Cancel·lar')}</button>
       </div>
 
-      {prefill && (
+      {showReturnBanner && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--gold-pale)', color: 'var(--gold)',
                       border: '0.5px solid var(--gold)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 12 }}>
           <i className="ti ti-link" style={{ fontSize: 14 }} />

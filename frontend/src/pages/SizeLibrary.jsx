@@ -6,14 +6,30 @@ import SizeAuthoringDrawer from "../components/SizeAuthoringDrawer"
 import useAuthStore from "../store/auth"
 import { sizingProfiles } from "../api/endpoints"
 
+// 1C-3b — ?prefill= (base64 unicode-safe d'un JSON), mateix patró que SizeMapSetup.readPrefill.
+function readPrefill(p) {
+  if (!p) return null
+  try { return JSON.parse(decodeURIComponent(escape(atob(p)))) } catch { return null }
+}
+
 export default function SizeLibrary() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const canConfigure = !!useAuthStore(s => s.user)?.capabilities?.includes('configure')
 
   const [detailProfileId, setDetailProfileId] = useState(null)
   const [msg, setMsg] = useState(null)
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  // Si venim de l'ImportWizard amb ?prefill=, obrim el drawer auto-omplert (decisió ii: sense represa).
+  const [drawerPrefill, setDrawerPrefill] = useState(() => readPrefill(searchParams.get('prefill')))
+  const [drawerOpen, setDrawerOpen] = useState(() => !!readPrefill(searchParams.get('prefill')))
   const [selectorKey, setSelectorKey] = useState(0)
+
+  // Treu ?prefill de la URL (mantenint ?target) perquè el drawer no es re-obri en re-render.
+  const clearPrefillParam = () => {
+    if (!searchParams.get('prefill')) return
+    const next = new URLSearchParams(searchParams)
+    next.delete('prefill')
+    setSearchParams(next, { replace: true })
+  }
 
   const handleClone = async (profile) => {
     try {
@@ -42,7 +58,7 @@ export default function SizeLibrary() {
         </div>
         {canConfigure && (
           <button
-            onClick={() => setDrawerOpen(true)}
+            onClick={() => { setDrawerPrefill(null); setDrawerOpen(true) }}
             style={{
               padding: "8px 14px", borderRadius: 4, fontSize: 12, cursor: "pointer",
               background: "#f5e6d0", color: "#c27a2a", border: "1px solid #c27a2a",
@@ -94,13 +110,16 @@ export default function SizeLibrary() {
         )}
       </div>
 
-      {/* Drawer d'autoria de talles (1C-3) — autoria directa, prefill nul. */}
+      {/* Drawer d'autoria de talles (1C-3) — prefill nul en autoria directa, o el de
+          ?prefill quan venim de l'ImportWizard (1C-3b). */}
       <SizeAuthoringDrawer
         open={drawerOpen}
-        prefill={null}
-        onClose={() => setDrawerOpen(false)}
+        prefill={drawerPrefill}
+        onClose={() => { setDrawerOpen(false); setDrawerPrefill(null); clearPrefillParam() }}
         onComplete={() => {
           setDrawerOpen(false)
+          setDrawerPrefill(null)
+          clearPrefillParam()
           setSelectorKey(k => k + 1)
           setMsg({ type: 'ok', text: 'Sistema de talles creat' })
         }}
