@@ -204,6 +204,8 @@ export function Wizard({ t, prefill = null, onComplete, onClose }) {
   const [step, setStep] = useState(1)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
+  // 1C-4b-fe1 — panell d'avís-i-confirma quan el backend retorna 409 {existing, message}.
+  const [conflict, setConflict] = useState(null)
   const [lookups, setLookups] = useState({ targets: [], constructions: [], fit_types: [], garment_types: [], base_units: [] })
 
   // Estat global del wizard en un sol objecte.
@@ -213,7 +215,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose }) {
     talles: [],
     gradingText: '', gradingResults: [], gradingRun: [],
     perfilTargets: [], construction_id: '', fit_type_id: '', garment_type_id: '',
-    nom_custom: '',
+    nom_custom: '', nom_variant: '',
   })
   const set = (patch) => setWiz(w => ({ ...w, ...patch }))
 
@@ -287,9 +289,9 @@ export function Wizard({ t, prefill = null, onComplete, onClose }) {
       .finally(() => setBusy(false))
   }
 
-  // P5 → create
-  const doCreate = () => {
-    setErr(null); setBusy(true)
+  // P5 → create. buildPayload accepta overrides {on_conflict, nom_variant} per re-cridar
+  // des del panell de conflicte (avís-i-confirma).
+  const buildPayload = (extra = {}) => {
     const grading = wiz.gradingResults
       .filter(g => g.pom_id)
       .map(g => {
@@ -307,8 +309,9 @@ export function Wizard({ t, prefill = null, onComplete, onClose }) {
       fit_type_id: wiz.fit_type_id || null,
       garment_type_id: wiz.garment_type_id || null,
     }))
-    const payload = {
+    return {
       customer_codi: wiz.customer_codi, nom_custom: wiz.nom_custom || undefined,
+      nom_variant: wiz.nom_variant || undefined,
       accio: wiz.decision, size_system_id: wiz.size_system_id,
       target_codi: wiz.target_codi, base_unit: wiz.base_unit, base_size: wiz.base_size,
       talles: wiz.talles.map((x, i) => ({
@@ -319,12 +322,23 @@ export function Wizard({ t, prefill = null, onComplete, onClose }) {
         body_height_cm: x.body_height_cm === '' ? null : Number(x.body_height_cm),
       })),
       grading, perfils,
+      ...extra,   // on_conflict / nom_variant des del panell sobreescriuen
     }
-    sizeMap.create(payload)
+  }
+
+  const submitCreate = (extra = {}) => {
+    setErr(null); setConflict(null); setBusy(true)
+    sizeMap.create(buildPayload(extra))
       .then(r => { onComplete(r.data) })
-      .catch(e => setErr(e?.response?.data?.error || t('size_map_create_err', 'Error en crear el sistema.')))
+      .catch(e => {
+        // 409 = avís-i-confirma (no és error): obre el panell amb les graduacions existents.
+        if (e?.response?.status === 409) { setConflict(e.response.data); return }
+        setErr(e?.response?.data?.error || t('size_map_create_err', 'Error en crear el sistema.'))
+      })
       .finally(() => setBusy(false))
   }
+
+  const doCreate = () => submitCreate()
 
   const nomById = (arr, id) => arr.find(x => String(x.id) === String(id))?.nom || ''
 
@@ -568,6 +582,13 @@ export function Wizard({ t, prefill = null, onComplete, onClose }) {
               <input value={wiz.nom_custom} onChange={e => set({ nom_custom: e.target.value })} style={{ ...selS, width: '100%' }} />
             </Field>
           )}
+          {wiz.decision === 'CREAR' && (
+            <Field label={t('size_map_p_nom_variant', 'Nom de la graduació')}
+              hint={t('size_map_p_nom_variant_hint', 'Ex: EU Knit Woman Slim — el nom que distingirà aquesta graduació')}>
+              <input value={wiz.nom_variant} onChange={e => set({ nom_variant: e.target.value })}
+                placeholder="EU Knit Woman Slim" style={{ ...selS, width: '100%' }} />
+            </Field>
+          )}
 
           {/* Resum */}
           <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12, fontFamily: MONO }}>
@@ -577,8 +598,46 @@ export function Wizard({ t, prefill = null, onComplete, onClose }) {
             {wiz.construction_id && <div>{t('size_map_sum_constr', 'Construcció')}: {nomById(lookups.constructions, wiz.construction_id)}</div>}
           </div>
 
+          {/* Panell d'avís-i-confirma (409): graduacions ja existents per a la combinació. */}
+          {conflict && (
+            <div style={{ border: '1px solid var(--gold)', background: 'var(--gold-pale)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12 }}>
+              <div style={{ fontWeight: 600, color: 'var(--gold)', marginBottom: 8 }}>
+                <i className="ti ti-alert-triangle" style={{ marginRight: 6 }} />
+                {conflict.message || t('size_map_conflict_title', 'Ja existeix una graduació per a aquesta combinació.')}
+              </div>
+              <ul style={{ margin: '0 0 10px', paddingLeft: 18 }}>
+                {(conflict.existing || []).map((ex, i) => (
+                  <li key={i}>«{ex.nom}» — {ex.combinacio}</li>
+                ))}
+              </ul>
+              {/* (a) Actualitzar: un botó per cada nom distint existent */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                {[...new Set((conflict.existing || []).map(ex => ex.nom))].map(nom => (
+                  <button key={nom} onClick={() => submitCreate({ on_conflict: 'update', nom_variant: nom })}
+                    disabled={busy} style={ghostBtn}>
+                    {t('size_map_conflict_update', 'Actualitzar')} «{nom}»
+                  </button>
+                ))}
+              </div>
+              {/* (b) Crear-ne una de nova: exigeix nom_variant */}
+              <Field label={t('size_map_conflict_new_name', 'Nom de la nova graduació')}>
+                <input value={wiz.nom_variant} onChange={e => set({ nom_variant: e.target.value })}
+                  placeholder="EU Knit Woman Slim" style={{ ...selS, width: '100%' }} />
+              </Field>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => {
+                    if (!wiz.nom_variant.trim()) { setErr(t('size_map_conflict_need_name', 'Posa un nom per a la nova graduació')); return }
+                    submitCreate({ on_conflict: 'new', nom_variant: wiz.nom_variant.trim() })
+                  }} disabled={busy} style={primaryBtn}>
+                  <i className="ti ti-plus" />{t('size_map_conflict_new', 'Crear-ne una de nova')}
+                </button>
+                <button onClick={() => setConflict(null)} style={ghostBtn}>{t('size_map_cancel', 'Cancel·lar')}</button>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setStep(4)} style={ghostBtn}>{t('size_map_back', 'Enrere')}</button>
+            <button onClick={() => { setConflict(null); setStep(4) }} style={ghostBtn}>{t('size_map_back', 'Enrere')}</button>
             <button onClick={doCreate} disabled={busy} style={primaryBtn}>
               <i className="ti ti-check" />{t('size_map_create_btn', 'Crear')}
             </button>
