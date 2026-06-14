@@ -105,6 +105,7 @@ export default function SizeLibrary() {
             <SizeSetDetail
               profileId={detailProfileId}
               onClose={() => setDetailProfileId(null)}
+              onRefresh={() => { setDetailProfileId(null); setSelectorKey(k => k + 1) }}
             />
           </div>
         )}
