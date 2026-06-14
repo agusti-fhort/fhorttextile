@@ -18,7 +18,6 @@ const PATH_TO_KEY = {
   '/fitxers':                   'nav.fitxers',
   '/poms':                      'nav.poms',
   '/poms/grading':              'nav.grading',
-  '/poms/sizes':                'nav.sizes',
   '/avisos':                    'nav.avisos',
   '/ia':                        'nav.ia',
   '/perfil':                    'nav.perfil',
