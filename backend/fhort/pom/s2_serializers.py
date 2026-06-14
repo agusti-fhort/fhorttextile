@@ -141,7 +141,7 @@ class SizingProfileSerializer(serializers.Serializer):
             rules = GradingRule.objects.filter(
                 rule_set=obj.grading_rule_set,
                 actiu=True,
-            ).select_related('pom', 'pom__pom_global')[:5]
+            ).select_related('pom', 'pom__pom_global').order_by('pom__codi_client')[:5]
             return GradingRuleLightSerializer(rules, many=True).data
         except Exception:
             return []
