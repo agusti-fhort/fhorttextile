@@ -36,9 +36,10 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#1d1d1b" }}>{sysName}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#1d1d1b" }}>{name}</div>
           {!compact && (
             <div style={{ fontSize: 11, color: "#868685", marginTop: 2 }}>
+              {name !== sysName && <>{sysName} · </>}
               {profile?.target?.nom_en} · {profile?.construction?.nom_en} · {profile?.fit_type_nom}
             </div>
           )}
