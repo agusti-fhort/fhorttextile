@@ -740,7 +740,6 @@ class BodyMeasurementISO(models.Model):
 class SizingProfile(models.Model):
     """
     Sizing profile: combination target+garment+construction+fit -> size_system+grading.
-    It is the heart of the SizingProfileWizard.
     Public (global) schema — tenants can create their own versions via parent_profile.
     """
     target           = models.ForeignKey('Target', on_delete=models.PROTECT,
