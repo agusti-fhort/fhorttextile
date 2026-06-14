@@ -108,9 +108,20 @@ export default function SizeMapSetup() {
 
   if (wizardOpen) {
     return (
-      <Wizard t={t} prefill={prefill} navigate={navigate}
+      <Wizard t={t} prefill={prefill}
         onClose={() => setWizardOpen(false)}
-        onCreated={(msg) => { setWizardOpen(false); loadSystems().then(() => setFeedback({ type: 'ok', text: msg })) }}
+        onComplete={(data) => {
+          // Branch de tornada preservat IDÈNTIC (ruta vella): si venim del W1, tornem a
+          // la fitxa en curs (pas mesures); si no, mode llista + feedback amb warnings.
+          if (prefill?.import_session_token && prefill?.model_id) {
+            navigate(`/models/${prefill.model_id}/mesures?session=${prefill.import_session_token}`)
+            return
+          }
+          setWizardOpen(false)
+          const w = data?.warnings || []
+          const base = t('size_map_created', 'Sistema creat') + `: ${data?.codi} — ${data?.nom}`
+          loadSystems().then(() => setFeedback({ type: 'ok', text: w.length ? `${base} (${w.length} ${t('size_map_warnings', 'avisos')})` : base }))
+        }}
       />
     )
   }
@@ -189,7 +200,7 @@ function Stepper({ step, t }) {
   )
 }
 
-function Wizard({ t, onClose, onCreated, prefill, navigate }) {
+export function Wizard({ t, prefill = null, onComplete, onClose }) {
   const [step, setStep] = useState(1)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
@@ -310,16 +321,7 @@ function Wizard({ t, onClose, onCreated, prefill, navigate }) {
       grading, perfils,
     }
     sizeMap.create(payload)
-      .then(r => {
-        // Si venim del W1, tornem a la fitxa en curs (pas mesures); si no, mode llista.
-        if (prefill?.import_session_token && prefill?.model_id && navigate) {
-          navigate(`/models/${prefill.model_id}/mesures?session=${prefill.import_session_token}`)
-          return
-        }
-        const w = r.data?.warnings || []
-        const base = t('size_map_created', 'Sistema creat') + `: ${r.data?.codi} — ${r.data?.nom}`
-        onCreated(w.length ? `${base} (${w.length} ${t('size_map_warnings', 'avisos')})` : base)
-      })
+      .then(r => { onComplete(r.data) })
       .catch(e => setErr(e?.response?.data?.error || t('size_map_create_err', 'Error en crear el sistema.')))
       .finally(() => setBusy(false))
   }
