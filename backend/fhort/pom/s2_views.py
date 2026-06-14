@@ -155,52 +155,58 @@ def clone_sizing_profile_view(request, pk):
     try:
         from fhort.pom.models import SizingProfile, GradingRuleSet, GradingRule
         from django.utils import timezone
+        from django.db import transaction
 
         original = SizingProfile.objects.get(pk=pk)
         nom_client = request.data.get('nom_client', f"Custom v{original.version + 1}")
 
-        # Clone the GradingRuleSet
-        original_rs = original.grading_rule_set
-        nou_rs = GradingRuleSet.objects.create(
-            nom=nom_client,
-            nom_cat=nom_client,
-            codi_sistema=f"{original_rs.codi_sistema}_CUSTOM",
-            target=original_rs.target,
-            construction=original_rs.construction,
-            fit_type=original_rs.fit_type,
-            is_system_default=False,
-            parent_version=original_rs,
-            version_number=original_rs.version_number + 1,
-        )
-
-        # Copy all the rules
-        rules_creades = 0
-        for rule in GradingRule.objects.filter(rule_set=original_rs):
-            GradingRule.objects.create(
-                rule_set=nou_rs,
-                pom=rule.pom,
-                logica=rule.logica,
-                increment=rule.increment,
-                actiu=rule.actiu,
-                notes=rule.notes,
+        # Atòmic: GradingRuleSet + regles + SizingProfile són un tot; una fallada
+        # parcial no ha de deixar rule_set/regles òrfens.
+        with transaction.atomic():
+            # Clone the GradingRuleSet (el nom de la variant viu a GradingRuleSet.nom)
+            original_rs = original.grading_rule_set
+            nou_rs = GradingRuleSet.objects.create(
+                nom=nom_client,
+                codi_sistema=f"{original_rs.codi_sistema}_CUSTOM",
+                target=original_rs.target,
+                construction=original_rs.construction,
+                fit_type=original_rs.fit_type,
+                is_system_default=False,
+                parent_version=original_rs,
+                version_number=original_rs.version_number + 1,
             )
-            rules_creades += 1
 
-        # Clone the SizingProfile
-        nou_profile = SizingProfile.objects.create(
-            target=original.target,
-            garment_type=original.garment_type,
-            construction=original.construction,
-            fit_type=original.fit_type,
-            size_system=original.size_system,
-            grading_rule_set=nou_rs,
-            is_default=False,
-            parent_profile=original,
-            version=original.version + 1,
-            modified_by_id=request.user.id,
-            modified_at=timezone.now(),
-            notes=f"Clonat de {original} per {request.user}",
-        )
+            # Copy all the rules — tots els camps reals de GradingRule des de l'original
+            # (talla_base és NOT NULL; valor_base/valors_step preserven la fidelitat del grading).
+            rules_creades = 0
+            for rule in GradingRule.objects.filter(rule_set=original_rs):
+                GradingRule.objects.create(
+                    rule_set=nou_rs,
+                    pom=rule.pom,
+                    talla_base=rule.talla_base,
+                    logica=rule.logica,
+                    valor_base=rule.valor_base,
+                    increment=rule.increment,
+                    valors_step=rule.valors_step,
+                    actiu=rule.actiu,
+                )
+                rules_creades += 1
+
+            # Clone the SizingProfile
+            nou_profile = SizingProfile.objects.create(
+                target=original.target,
+                garment_type=original.garment_type,
+                construction=original.construction,
+                fit_type=original.fit_type,
+                size_system=original.size_system,
+                grading_rule_set=nou_rs,
+                is_default=False,
+                parent_profile=original,
+                version=original.version + 1,
+                modified_by_id=request.user.id,
+                modified_at=timezone.now(),
+                notes=f"Clonat de {original} per {request.user}",
+            )
 
         return Response({
             'id': nou_profile.id,
