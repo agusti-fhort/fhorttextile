@@ -30,6 +30,12 @@ from .serializers import (
 )
 
 
+class _ConfigureWrite(HasCapability):
+    """Escriptura del domini de talles gated CONFIGURE (lectura intacta).
+    Reutilitza HasCapability d'accounts.capabilities."""
+    required_capability = CONFIGURE
+
+
 class POMMasterViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = POMMasterSerializer
@@ -51,6 +57,11 @@ class SizeSystemViewSet(viewsets.ModelViewSet):
     search_fields = ['codi', 'nom']
     ordering = ['codi']
 
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [_ConfigureWrite()]
+        return [IsAuthenticated()]
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         if instance.talles.exists():
@@ -68,6 +79,11 @@ class SizeDefinitionViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['size_system']
     ordering = ['size_system', 'ordre']
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [_ConfigureWrite()]
+        return [IsAuthenticated()]
 
 
 class GarmentTypeViewSet(viewsets.ModelViewSet):
@@ -129,6 +145,11 @@ class GradingRuleSetViewSet(viewsets.ModelViewSet):
     search_fields = ['nom']
     ordering = ['nom']
 
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [_ConfigureWrite()]
+        return [IsAuthenticated()]
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         if instance.is_system_default:
@@ -149,6 +170,11 @@ class GradingRuleViewSet(viewsets.ModelViewSet):
     filterset_fields = ['rule_set', 'actiu', 'logica']
     search_fields = ['pom__codi_client', 'pom__nom_client']
     ordering = ['rule_set', 'pom__codi_client']
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [_ConfigureWrite()]
+        return [IsAuthenticated()]
 
     def destroy(self, request, *args, **kwargs):
         """We do not delete physically — we mark as inactive."""

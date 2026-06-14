@@ -767,6 +767,7 @@ class SizingProfile(models.Model):
 
     class Meta:
         ordering = ['target__display_order', 'garment_type__nom_client']
+        unique_together = [('size_system', 'target', 'construction', 'fit_type')]
 
     def __str__(self):
         return (f"{self.target.nom_en} | {self.garment_type.nom_en} | "
