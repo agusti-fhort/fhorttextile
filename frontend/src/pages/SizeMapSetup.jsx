@@ -223,11 +223,30 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   // Pre-omplir des del W1 (gating PENDENT): target, etiquetes i talla base.
   useEffect(() => {
     if (!prefill) return
-    set({
+    const patch = {
       target_codi: prefill.target_codi || '',
       labelsText: (prefill.labels || []).join('\n'),
       base_size: prefill.base_size || '',
-    })
+    }
+    // 1C-3: si el prefill porta POMs+valors (ve de l'ImportWizard), pre-omple la graella de
+    // grading com a TSV perquè el grading-preview (detect_grading) derivi i la Montse REVISI.
+    if (Array.isArray(prefill.poms) && prefill.poms.length) {
+      const labels = prefill.labels || []
+      const header = ['POM', ...labels].join('\t')
+      const rows = prefill.poms.map(p =>
+        [p.pom_codi, ...labels.map(l => {
+          const v = (p.valors || {})[l]
+          return (v === undefined || v === null) ? '' : v
+        })].join('\t'))
+      patch.gradingText = [header, ...rows].join('\n')
+    }
+    // 1C-3 Bug B: pre-omple el pas Perfils amb la classificació del model (per crear el
+    // SizingProfile). perfilTargets parteix del target; construction/fit/garment_type per id.
+    if (prefill.target_codi) patch.perfilTargets = [prefill.target_codi]
+    if (prefill.construction_id != null) patch.construction_id = String(prefill.construction_id)
+    if (prefill.fit_type_id != null) patch.fit_type_id = String(prefill.fit_type_id)
+    if (prefill.garment_type_id != null) patch.garment_type_id = String(prefill.garment_type_id)
+    set(patch)
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

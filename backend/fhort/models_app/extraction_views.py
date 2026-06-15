@@ -1075,7 +1075,16 @@ def find_pom_master(code, description):
     """
     from fhort.pom.models import POMMaster
 
-    # Strategy 0 — positional letter+digit codes (D1, G2s...).
+    # Strategy 1 — exact match by codi_client. Va PRIMER: un codi_client EXACTE sempre ha de
+    # guanyar un match per prefix (p.ex. 'SH DR' → 'SH DR', no 'SH'). Abans anava DESPRÉS del
+    # root-prefix i 'SH DR' es resolia erròniament a 'SH' (col·lisió que perdia 'SH DR').
+    if code:
+        pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).first()
+        if pm:
+            return pm, 'exact_code', 'HIGH'
+
+    # Strategy 0 — codis posicionals lletra+dígit (D1, G2s...): sense exacte, prova el root de
+    # lletres inicials. DESPRÉS de l'exacte perquè no segresti codis amb sufix com 'SH DR'.
     if code:
         m = _re.match(r'^([A-Za-z]+)', code)
         if m and m.group(1) != code:
@@ -1083,11 +1092,6 @@ def find_pom_master(code, description):
             pm = POMMaster.objects.filter(codi_client__iexact=root, actiu=True).first()
             if pm:
                 return pm, 'root_code_match', 'MEDIUM'
-
-    # Strategy 1 — exact match by codi_client.
-    pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).first()
-    if pm:
-        return pm, 'exact_code', 'HIGH'
 
     if not description:
         return None, 'no_match', 'NO_MATCH'
@@ -1397,6 +1401,21 @@ def import_session_extraccio_view(request, token):
     session.estat = 'POMS'
     session.save(update_fields=['resultat', 'poms_extrets', 'avisos', 'estat', 'actualitzat_at'])
 
+    # 1C-2b: suggeriment del mode dels valors (default del toggle al front). Es calcula sobre
+    # els POMs amb match (identitat canònica) i sobre el run/base del DOCUMENT (extracted) —
+    # mateix origen que les claus de `values`. Cosmètic → mai pot petar W2; default 'absoluts'.
+    try:
+        from fhort.pom.grading_utils import suggest_valors_mode
+        vals_per_pom = {
+            p['pom_master_id']: p['values']
+            for p in poms_extrets
+            if p.get('pom_master_id') and p.get('values')
+        }
+        suggested_valors_mode = suggest_valors_mode(
+            vals_per_pom, extracted.get('base_size'), extracted.get('sizes') or [])
+    except Exception:
+        suggested_valors_mode = 'absoluts'
+
     return Response({
         'estat': session.estat,
         'poms_extrets': poms_extrets,
@@ -1405,6 +1424,7 @@ def import_session_extraccio_view(request, token):
         'sizes': extracted.get('sizes') or [],
         'grading_status': grading_status,
         'avisos': avisos,
+        'suggested_valors_mode': suggested_valors_mode,
     }, status=200)
 
 
@@ -1574,6 +1594,86 @@ def import_session_mesures_view(request, token):
     session.save(update_fields=['resultat', 'estat', 'actualitzat_at'])
 
     return Response({'ok': True, 'estat': session.estat, 'n_valors': len(net)}, status=200)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def import_session_library_prefill_view(request, token):
+    """
+    POST /api/v1/import-sessions/<token>/library-prefill/  (1C-3 — pont fitxa → Size Library)
+
+    Construeix el prefill ENRIQUIT per a la Size Library des de l'extracció ja feta: run + base
+    + target + POMs amb els seus valors per talla, en ABSOLUTS. Si la fitxa era en mode 'deltes',
+    converteix amb deltes_a_absoluts (1C-2a) abans d'enviar (el camí Library deriva amb
+    detect_grading, que espera absoluts). NO crea res: només llegeix la sessió. Robust: degrada.
+    """
+    from fhort.models_app.models import ImportSession
+
+    session = ImportSession.objects.filter(token=token).select_related('model').first()
+    if not session:
+        return Response({'error': 'Sessió no trobada'}, status=404)
+    model = session.model
+
+    # valors {pid:{talla:valor}} des de les mesures desades (els valors EDITATS al W3).
+    valors = {}
+    for m in (session.resultat or {}).get('mesures', []):
+        try:
+            pid = int(m['pom_master_id'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if m.get('talla_label') in (None, ''):
+            continue
+        valors.setdefault(pid, {})[m['talla_label']] = m.get('valor')
+
+    base_size = ((model.base_size_label if model else '') or '').strip()
+    run = [s.strip() for s in ((model.size_run_model if model else '') or '')
+           .replace(';', '·').split('·') if s.strip()]
+
+    # Mode deltes → absoluts ABANS d'enviar (reusa 1C-2a; una sola font de conversió).
+    if ((session.resultat or {}).get('valors_mode') or 'absoluts') == 'deltes' and run and base_size:
+        from fhort.pom.grading_utils import deltes_a_absoluts
+        valors = deltes_a_absoluts(valors, base_size, run)
+
+    # codi_client per pom des del CATÀLEG (font autoritativa per pid), no de la còpia
+    # serialitzada a poms_extrets. find_pom_master al camí Library matcheja codi_client__iexact
+    # (Strategy 1, exact_code HIGH) → round-trip garantit al MATEIX POMMaster.
+    from fhort.pom.models import POMMaster
+    codi_by_pid = {
+        pm.id: (pm.codi_client or '')
+        for pm in POMMaster.objects.filter(id__in=list(valors.keys()))
+    }
+
+    poms = []
+    for pid, vals in valors.items():
+        net = {k: v for k, v in (vals or {}).items() if v not in (None, '')}
+        if net:
+            poms.append({'pom_codi': codi_by_pid.get(pid) or '', 'valors': net})
+
+    target_codi = (model.target if model else '') or ''
+    if not target_codi and model and model.size_system_id:
+        _t = model.size_system.targets.first()
+        if _t:
+            target_codi = _t.codi
+
+    # Classificació del model resolta a IDs (com 1B, codi__iexact) perquè el drawer pugui crear
+    # el SizingProfile (target+construction+fit+garment_type). garment_type ja és FK al model.
+    from fhort.pom.models import ConstructionType, FitType
+    rs_constr = (ConstructionType.objects.filter(codi__iexact=model.construction).first()
+                 if (model and model.construction) else None)
+    rs_fit = (FitType.objects.filter(codi__iexact=model.fit_type).first()
+              if (model and model.fit_type) else None)
+
+    return Response({
+        'target_codi': target_codi or None,
+        'labels': run,
+        'base_size': base_size or None,
+        'poms': poms,
+        'construction_id': rs_constr.id if rs_constr else None,
+        'fit_type_id': rs_fit.id if rs_fit else None,
+        'garment_type_id': (model.garment_type_id if model else None),
+        'import_session_token': str(session.token),
+        'model_id': model.id if model else None,
+    }, status=200)
 
 
 # ═══════════════════════════ W4 — Teixit ═══════════════════════════

@@ -101,6 +101,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
 
   // Pas 3 — taula de mesures
   const [taula, setTaula] = useState({})              // {pom_master_id: {talla: valor}}
+  const [valorsMode, setValorsMode] = useState('absoluts')   // 1C-2b: mode dels valors de la fitxa
   const [gradingLoading, setGradingLoading] = useState(false)
   const [savingMesures, setSavingMesures] = useState(false)
 
@@ -211,6 +212,8 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       setPomsExtrets(data.poms_extrets || [])
       setExtraccioMeta({ header: data.header, base_size: data.base_size, sizes: data.sizes,
                          grading_status: data.grading_status, avisos: data.avisos || [] })
+      if (data.suggested_valors_mode === 'absoluts' || data.suggested_valors_mode === 'deltes')
+        setValorsMode(data.suggested_valors_mode)
     } catch (e) {
       setError(`Error de connexió: ${String(e)}`)
     }
@@ -342,12 +345,40 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/mesures/`, {
         method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mesures }),
+        body: JSON.stringify({ mesures, valors_mode: valorsMode }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setError(data.error || `Error ${res.status}`); setSavingMesures(false); return }
       loadIso()
       setStep(4)
+    } catch (e) { setError(`Error de connexió: ${String(e)}`) }
+    setSavingMesures(false)
+  }
+
+  // 1C-3 — destí Size Library: desa mesures (+valors_mode) i salta al drawer de la Library amb
+  // el prefill ENRIQUIT (run+base+target+POMs en absoluts). Reutilitza el camí provat
+  // size_map_create_view; aquí només preparem el prefill i naveguem.
+  const goCrearLibrary = async () => {
+    setSavingMesures(true); setError('')
+    const mesures = []
+    for (const p of pomsTaula) {
+      for (const talla of tallesSel) {
+        const v = taula[p.pom_master_id]?.[talla]
+        if (v !== undefined && v !== '')
+          mesures.push({ pom_master_id: p.pom_master_id, talla_label: talla, valor: parseFloat(v) })
+      }
+    }
+    try {
+      await fetch(`${API}/api/v1/import-sessions/${sessionToken}/mesures/`, {
+        method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mesures, valors_mode: valorsMode }),
+      })
+      const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/library-prefill/`, {
+        method: 'POST', headers: authHeaders,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(data.error || `Error ${res.status}`); setSavingMesures(false); return }
+      navigate(`/size-library?prefill=${encodeURIComponent(encodePrefill(data))}`)
     } catch (e) { setError(`Error de connexió: ${String(e)}`) }
     setSavingMesures(false)
   }
@@ -721,6 +752,25 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             omplir amb el grading automàtic.
           </div>
 
+          {/* 1C-2b — com estan expressats els valors de la fitxa (default suggerit per l'heurística) */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button type="button" onClick={() => setValorsMode('absoluts')}
+                style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: 'none',
+                         background: valorsMode === 'absoluts' ? GOLD : '#f5f0ea',
+                         color: valorsMode === 'absoluts' ? '#fff' : '#868685' }}>Mesures absolutes</button>
+              <button type="button" onClick={() => setValorsMode('deltes')}
+                style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: 'none',
+                         background: valorsMode === 'deltes' ? GOLD : '#f5f0ea',
+                         color: valorsMode === 'deltes' ? '#fff' : '#868685' }}>Increments</button>
+            </div>
+            <div style={{ fontSize: 11, color: '#868685', marginTop: 5 }}>
+              Com estan expressats els valors de la fitxa: mesures finals per talla, o increments
+              respecte a la talla base.{valorsMode === 'deltes'
+                ? ' Es convertiran a mesures absolutes en desar.' : ''}
+            </div>
+          </div>
+
           {emptyCols.length > 0 && (
             <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: '#c27a2a',
                           borderRadius: 8, padding: '8px 12px', fontSize: 12, marginBottom: 10,
@@ -781,14 +831,24 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                        background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
               ← Enrere
             </button>
-            <button type="button" onClick={handleContinueMesures} disabled={!baseTeValors || savingMesures}
-              title={baseTeValors ? '' : 'La talla base necessita almenys un valor'}
-              style={{ padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 14,
-                       fontWeight: 500, color: '#fff',
-                       background: baseTeValors && !savingMesures ? GOLD : '#ccc',
-                       cursor: baseTeValors && !savingMesures ? 'pointer' : 'not-allowed' }}>
-              Continuar → Teixit
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" onClick={goCrearLibrary} disabled={!baseTeValors || savingMesures}
+                title={baseTeValors ? 'Crear un run a la Size Library des d\'aquesta fitxa'
+                                    : 'La talla base necessita almenys un valor'}
+                style={{ padding: '8px 16px', borderRadius: 6, border: `1px solid ${GOLD}`,
+                         background: 'transparent', color: GOLD, fontSize: 13,
+                         cursor: baseTeValors && !savingMesures ? 'pointer' : 'not-allowed' }}>
+                Crear a la Size Library
+              </button>
+              <button type="button" onClick={handleContinueMesures} disabled={!baseTeValors || savingMesures}
+                title={baseTeValors ? '' : 'La talla base necessita almenys un valor'}
+                style={{ padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 14,
+                         fontWeight: 500, color: '#fff',
+                         background: baseTeValors && !savingMesures ? GOLD : '#ccc',
+                         cursor: baseTeValors && !savingMesures ? 'pointer' : 'not-allowed' }}>
+                Continuar → Teixit
+              </button>
+            </div>
           </div>
         </div>
       )}
