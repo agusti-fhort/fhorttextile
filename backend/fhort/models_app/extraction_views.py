@@ -1757,7 +1757,7 @@ def import_session_confirmar_view(request, token):
         # GradedSpec NO es toquen (els valors ja són correctes). Degradació amb gràcia per
         # POM: un POM problemàtic registra avís i no atura el desament. Patró de ruleset+
         # regla calcat de pom/size_map_views.py.
-        from fhort.pom.grading_utils import detect_grading
+        from fhort.pom.grading_utils import detect_grading, _norm
         from fhort.pom.models import (
             GradingRuleSet, GradingRule, SizeDefinition,
             Target, ConstructionType, FitType,
@@ -1824,32 +1824,107 @@ def import_session_confirmar_view(request, token):
                         rs_target = Target.objects.filter(codi__iexact=model.target).first() if model.target else None
                         rs_constr = ConstructionType.objects.filter(codi__iexact=model.construction).first() if model.construction else None
                         rs_fit = FitType.objects.filter(codi__iexact=model.fit_type).first() if model.fit_type else None
-                        new_rule_set = GradingRuleSet.objects.create(
-                            nom=f"Importació fitxa · {model.codi_intern} (v{grading_version.version_number})",
+
+                        # 1D — evitar proliferació de rulesets: si ja existeix un ruleset
+                        # equivalent per la MATEIXA combinació amb graduació IDÈNTICA, es
+                        # reutilitza (re-apunta el model, no crea regles). Si difereix o no
+                        # n'hi ha cap, es crea nou amb nom desambiguat pel codi_intern.
+                        def _step_equal(a, b):
+                            # valors_step (dict {etiqueta: delta}) o None. Igualtat numèrica
+                            # amb tolerància sobre claus normalitzades (mateix criteri que el
+                            # motor: _norm = str(x).strip().upper()).
+                            if not a and not b:
+                                return True
+                            if bool(a) != bool(b):
+                                return False
+                            na = {_norm(k): float(v) for k, v in a.items()}
+                            nb = {_norm(k): float(v) for k, v in b.items()}
+                            if set(na) != set(nb):
+                                return False
+                            return all(abs(na[k] - nb[k]) < 0.001 for k in na)
+
+                        spec_by_pom = {pm.id: res for pm, res, _vb in pom_specs}
+                        candidat = None
+                        candidats = GradingRuleSet.objects.filter(
+                            is_system_default=False,
                             size_system=model.size_system,
                             garment_group=model.garment_group,
                             target=rs_target,
                             construction=rs_constr,
                             fit_type=rs_fit,
-                            is_system_default=False,
-                            actiu=True,
                         )
-                        if rs_target:
-                            new_rule_set.targets.add(rs_target)
-                        for pm, res, valor_base in pom_specs:
-                            GradingRule.objects.create(
-                                rule_set=new_rule_set,
-                                pom=pm,
-                                talla_base=base_def,
-                                logica=res['logica'],
-                                increment=res.get('increment') or 0,
-                                valors_step=res.get('valors_step'),
-                                valor_base=valor_base,
+                        for c in candidats:
+                            regles_c = list(c.regles.all())  # files reals del candidat
+                            # (1) MATEIX conjunt de pom_id (igualtat estricta, no subconjunt).
+                            if {r.pom_id for r in regles_c} != set(spec_by_pom):
+                                continue
+                            # (2)+(3) per cada pom: mateixa talla_base, logica, increment i
+                            # valors_step. Tot ha de coincidir perquè sigui "la mateixa graduació".
+                            igual = True
+                            for r in regles_c:
+                                res_s = spec_by_pom[r.pom_id]
+                                if r.talla_base_id != base_def.id:
+                                    igual = False
+                                    break
+                                if (r.logica or '') != (res_s.get('logica') or ''):
+                                    igual = False
+                                    break
+                                if abs(float(r.increment or 0) - float(res_s.get('increment') or 0)) >= 0.001:
+                                    igual = False
+                                    break
+                                if not _step_equal(r.valors_step, res_s.get('valors_step')):
+                                    igual = False
+                                    break
+                            if igual:
+                                candidat = c
+                                break
+
+                        if candidat is not None:
+                            # REUTILITZAR: re-apunta el model (escriptura coberta pel savepoint).
+                            new_rule_set = candidat
+                            n_rules = candidat.regles.count()
+                            model.grading_rule_set = candidat
+                            model.save(update_fields=['grading_rule_set'])
+                            grading_avisos.append(
+                                f"Grading reutilitzat: ruleset existent #{candidat.id} '{candidat.nom}' "
+                                f"(graduació idèntica per la combinació; no s'ha creat cap ruleset nou).")
+                        else:
+                            # CREAR NOU. Nom desambiguat pel codi_intern (únic per model; acaba el
+                            # (v1) repetit). Si ja existís EXACTAMENT aquest nom (reimport del
+                            # mateix model amb graduació diferent), hi afegim el codi del SizeFitting
+                            # (IMP-<id>-<n>, únic i determinista) per no col·lisionar.
+                            nom = f"Importació fitxa · {model.codi_intern}"
+                            if GradingRuleSet.objects.filter(nom=nom).exists():
+                                nom = f"{nom} · {size_fitting.codi}"
+                            new_rule_set = GradingRuleSet.objects.create(
+                                nom=nom,
+                                size_system=model.size_system,
+                                garment_group=model.garment_group,
+                                target=rs_target,
+                                construction=rs_constr,
+                                fit_type=rs_fit,
+                                is_system_default=False,
                                 actiu=True,
                             )
-                            n_rules += 1
-                        model.grading_rule_set = new_rule_set
-                        model.save(update_fields=['grading_rule_set'])
+                            if rs_target:
+                                new_rule_set.targets.add(rs_target)
+                            for pm, res, valor_base in pom_specs:
+                                GradingRule.objects.create(
+                                    rule_set=new_rule_set,
+                                    pom=pm,
+                                    talla_base=base_def,
+                                    logica=res['logica'],
+                                    increment=res.get('increment') or 0,
+                                    valors_step=res.get('valors_step'),
+                                    valor_base=valor_base,
+                                    actiu=True,
+                                )
+                                n_rules += 1
+                            model.grading_rule_set = new_rule_set
+                            model.save(update_fields=['grading_rule_set'])
+                            grading_avisos.append(
+                                f"Grading nou: creat ruleset #{new_rule_set.id} (graduació específica "
+                                f"d'aquest model; cap candidat existent coincidia).")
                 except Exception as e:
                     # Rollback del savepoint: la fila del ruleset ja no existeix. Restaurem
                     # la FK en memòria perquè cap save() posterior (p.ex. teixit) escrigui
