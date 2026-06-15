@@ -517,7 +517,8 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
   const editable = !rs.is_system_default
   const reglesCount = visibleRules.length
   const totalRulesCount = localRules.length
-  const aboveXlCount = visibleRules.filter(r => r.valors_step?.above_xl != null).length
+  const breakCount = visibleRules.filter(
+    r => r.talla_break_label != null || r.valors_step?.above_xl != null).length
 
   const updateLocalRule = (id, patch) => {
     setLocalRules(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
@@ -572,7 +573,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
     ...(showTrad ? [{ label: 'Traducció', align: 'left' }] : []),
     { label: 'Lògica',     align: 'left'  },
     { label: 'Δ/talla',    align: 'right' },
-    { label: 'Δ>XL',       align: 'right' },
+    { label: 'Δ break',    align: 'right' },
     { label: 'Talla base', align: 'right' },
     { label: 'Valor base', align: 'right' },
     ...(editable ? [{ label: '', align: 'center' }] : []),
@@ -638,7 +639,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
               ? `${reglesCount}/${totalRulesCount} regles`
               : `${reglesCount} regles`}
           </Pill>
-          {aboveXlCount > 0 && <Pill bg="#fdf6ee" color="#c27a2a">{aboveXlCount} Δ&gt;XL</Pill>}
+          {breakCount > 0 && <Pill bg="#fdf6ee" color="#c27a2a">{breakCount} amb break</Pill>}
           <Pill
             bg={rs.is_system_default ? '#f5f0ea' : '#f0f9f0'}
             color={rs.is_system_default ? '#868685' : '#3b6d11'}
@@ -724,33 +725,47 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                         fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
                       }}>{r.logica}</span>
                     </td>
+                    {/* Δ/talla — Peça A: forma canònica (increment_base) com a TEXT read-only;
+                        regles no backfillades (increment_base null) → escalar editable (compat). */}
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
                       fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
-                      color: Number(r.increment) > 0 ? '#2a5a8a' : '#868685',
+                      color: Number(r.increment_base ?? r.increment) > 0 ? '#2a5a8a' : '#868685',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
-                      <EditableIncrement
-                        value={Number(r.increment) || 0}
-                        ruleId={r.id}
-                        field="increment"
-                        readOnly={!editable}
-                        onSave={handleSaveRule}
-                      />
+                      {r.increment_base != null
+                        ? (Number(r.increment_base) > 0 ? `+${Number(r.increment_base)} cm` : '—')
+                        : (
+                          <EditableIncrement
+                            value={Number(r.increment) || 0}
+                            ruleId={r.id}
+                            field="increment"
+                            readOnly={!editable}
+                            onSave={handleSaveRule}
+                          />
+                        )}
                     </td>
+                    {/* Δ break — Peça A: increment_break + "des de {talla_break_label}" (text);
+                        regles no backfillades → fallback above_xl editable (compat). */}
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      fontFamily: 'IBM Plex Mono, monospace',
-                      color: aboveXl ? '#c27a2a' : '#c0c0c0',
+                      fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
+                      color: (r.increment_base != null ? r.talla_break_label : aboveXl) ? '#c27a2a' : '#c0c0c0',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
-                      <EditableIncrement
-                        value={aboveXl != null ? Number(aboveXl) : 0}
-                        ruleId={r.id}
-                        field="above_xl"
-                        readOnly={!editable}
-                        onSave={handleSaveRule}
-                      />
+                      {r.increment_base != null
+                        ? (r.talla_break_label
+                            ? `+${Number(r.increment_break)} des de ${r.talla_break_label}`
+                            : '—')
+                        : (
+                          <EditableIncrement
+                            value={aboveXl != null ? Number(aboveXl) : 0}
+                            ruleId={r.id}
+                            field="above_xl"
+                            readOnly={!editable}
+                            onSave={handleSaveRule}
+                          />
+                        )}
                     </td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',

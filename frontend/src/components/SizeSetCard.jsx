@@ -13,6 +13,9 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
   const baseSize = sizes.find((_, i) => i === Math.floor(sizes.length / 2))?.size_label
   const rules = profile?.grading_rules_preview || []
   const isCustom = profile?.is_custom
+  // FIX 2 — el badge "Estàndard ISO" només per a rulesets canònics de debò (is_system_default).
+  // is_custom (= parent_profile) no captura els derivats de client (p.ex. run LOSAN).
+  const isCanonicalISO = profile?.grading_rule_set?.is_system_default === true
   const isDefault = profile?.is_default
   const name = profile?.grading_rule_set?.nom || sysName
 
@@ -45,7 +48,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
           )}
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-          {isCustom ? (
+          {!isCanonicalISO ? (
             <span style={{
               padding: "2px 8px", borderRadius: 3, fontSize: 10,
               background: "#f5e6d0", color: "#c27a2a", border: "1px solid #e0c8a0",
