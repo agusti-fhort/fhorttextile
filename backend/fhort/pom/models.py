@@ -277,10 +277,9 @@ class SizeSystem(models.Model):
 
 
 
-    # Sprint S1
-    target = models.ForeignKey(
-        'Target', null=True, blank=True,
-        on_delete=models.SET_NULL,
+    # Sprint S1 → 0a: target FK migrat a M2M (harmonitza amb GradingRuleSet.targets).
+    targets = models.ManyToManyField(
+        'Target', blank=True,
         related_name='size_systems',
     )
     base_unit = models.CharField(

@@ -1012,8 +1012,10 @@ def import_session_talles_view(request, token):
     size_map_prefill = None
     if not ready:
         target_codi = model.target or ''
-        if not target_codi and model.size_system_id and model.size_system.target_id:
-            target_codi = model.size_system.target.codi
+        if not target_codi and model.size_system_id:
+            _ss_target = model.size_system.targets.first()
+            if _ss_target:
+                target_codi = _ss_target.codi
         size_map_prefill = {
             'target_codi': target_codi or None,
             'labels': talles_sel or sense_desti,

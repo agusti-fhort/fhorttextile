@@ -15,15 +15,11 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from fhort.accounts.capabilities import HasCapability, CONFIGURE
+from fhort.pom.grading_utils import _norm, detect_grading
 
 
 class _Configure(HasCapability):
     required_capability = CONFIGURE
-
-
-def _norm(label) -> str:
-    """Normalitza una etiqueta per comparar (upper + strip), com fa el run."""
-    return str(label or '').strip().upper()
 
 
 def _unique_size_system_code(base: str):
@@ -223,7 +219,6 @@ def size_map_grading_preview_view(request):
         data = request.data or {}
         ssid = data.get('size_system_id')
         base_size = data.get('base_size') or ''
-        base_norm = _norm(base_size)
         taula = data.get('taula') or []
 
         # Run ordenat: unió d'etiquetes presents, ordenades pel size_system si es dóna.
@@ -241,63 +236,28 @@ def size_map_grading_preview_view(request):
             run = sorted(all_labels, key=lambda l: order_map.get(_norm(l), 9999))
         else:
             run = list(all_labels)
-        run_norm = [_norm(x) for x in run]
-        base_idx = run_norm.index(base_norm) if base_norm in run_norm else None
 
         results = []
         for row in taula:
             codi = row.get('pom_codi_client')
             valors_raw = row.get('valors') or {}
-            valors = {_norm(k): v for k, v in valors_raw.items()}
 
             pom, _mtype, _conf = find_pom_master(codi, '')
             warning = ''
             if pom is None:
                 warning = f"POM '{codi}' no resolt al catàleg."
 
-            logica = None
-            increment = None
-            valors_step = None
-
-            if base_idx is None:
-                warning = (warning + ' ' if warning else '') + \
-                    f"Talla base '{base_size}' no és al run de talles."
-            else:
-                deltas = {}
-                for j, lab in enumerate(run_norm):
-                    if j == base_idx:
-                        continue
-                    if j > base_idx:
-                        inner = run_norm[j - 1]
-                        v_out, v_in = valors.get(lab), valors.get(inner)
-                        sign = 1.0
-                    else:
-                        inner = run_norm[j + 1]
-                        v_out, v_in = valors.get(lab), valors.get(inner)
-                        sign = -1.0
-                    if v_out is None or v_in is None:
-                        warning = (warning + ' ' if warning else '') + \
-                            f"Falta valor per calcular el delta de la talla {run[j]}."
-                        continue
-                    # format C: delta positiu en sentit de creixement cap enfora.
-                    deltas[run[j]] = round(sign * (float(v_out) - float(v_in)), 2)
-
-                if deltas:
-                    vals = list(deltas.values())
-                    if all(d == 0 for d in vals):
-                        logica, increment = 'FIXED', 0.0
-                    elif all(d == vals[0] for d in vals):
-                        logica, increment = 'LINEAR', vals[0]
-                    else:
-                        logica, valors_step = 'STEP', deltas
+            det = detect_grading(valors_raw, run, base_size)
+            if det['warning']:
+                warning = (warning + ' ' if warning else '') + det['warning']
 
             results.append({
                 'pom_codi_client': codi,
                 'pom_id': pom.id if pom else None,
                 'pom_nom': pom.nom_client if pom else None,
-                'logica_detectada': logica,
-                'increment': increment,
-                'valors_step': valors_step,
+                'logica_detectada': det['logica'],
+                'increment': det['increment'],
+                'valors_step': det['valors_step'],
                 'valors_calculats': {k: valors_raw.get(k) for k in valors_raw},
                 'warning': warning,
             })
@@ -389,9 +349,12 @@ def size_map_create_view(request):
                 nom = f"{parent.nom} — {cust} Run {nn:02d}"
                 ss = SizeSystem.objects.create(
                     codi=codi, nom=nom, base_unit=base_unit or parent.base_unit,
-                    target=target or parent.target, actiu=True,
-                    parent=parent, customer_codi=customer_codi,
+                    actiu=True, parent=parent, customer_codi=customer_codi,
                 )
+                if target:
+                    ss.targets.add(target)
+                else:
+                    ss.targets.set(parent.targets.all())
                 # Copiar les talles del pare, després merge amb les de l'input.
                 for d in SizeDefinition.objects.filter(size_system=parent).order_by('ordre'):
                     SizeDefinition.objects.create(
@@ -406,8 +369,10 @@ def size_map_create_view(request):
                 nom = nom_custom or f"{(_target_nom(target) if target else target_codi) or 'Sistema'} {base_unit} — {cust} Run {nn:02d}".strip()
                 ss = SizeSystem.objects.create(
                     codi=codi, nom=nom, base_unit=base_unit,
-                    target=target, actiu=True, customer_codi=customer_codi,
+                    actiu=True, customer_codi=customer_codi,
                 )
+                if target:
+                    ss.targets.add(target)
 
             # ---- 2. Talles de l'input (merge per (size_system, etiqueta)) ----
             if accio in ('CLONAR', 'CREAR'):

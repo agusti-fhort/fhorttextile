@@ -68,9 +68,10 @@ def match_size_system(target_codi, labels_input, base_size):
 
     candidates = list(
         SizeSystem.objects
-        .filter(target__codi=target_codi, actiu=True)
+        .filter(targets__codi=target_codi, actiu=True)
         .annotate(n_talles=Count('talles'))
         .filter(n_talles__gt=0)
+        .distinct()
     )
     if not candidates:
         return MatchResult(
