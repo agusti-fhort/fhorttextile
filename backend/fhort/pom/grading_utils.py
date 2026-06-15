@@ -237,6 +237,21 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
         if rs_target:
             new_rule_set.targets.add(rs_target)
         for pm, res, valor_base in pom_specs:
+            # Peça A — omplir la forma canònica a més de valors_step (origen). STEP → derivar
+            # increment_base/talla_break_label/increment_break del run; LINEAR → increment uniforme.
+            ib = ibrk = tlabel = tpos = None
+            if res['logica'] == 'STEP' and isinstance(res.get('valors_step'), dict):
+                seq = [(l, res['valors_step'][l]) for l in run_ordenat
+                       if l in res['valors_step'] and res['valors_step'][l] is not None]
+                if seq:
+                    ib = float(seq[0][1])
+                    for l, d in seq:
+                        if abs(float(d) - ib) > 0.001:
+                            tlabel, ibrk = l, float(d)
+                            break
+                    tpos = run_ordenat.index(tlabel) if (tlabel and tlabel in run_ordenat) else None
+            elif res['logica'] == 'LINEAR':
+                ib = float(res.get('increment') or 0)
             GradingRule.objects.create(
                 rule_set=new_rule_set,
                 pom=pm,
@@ -245,6 +260,10 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
                 increment=res.get('increment') or 0,
                 valors_step=res.get('valors_step'),
                 valor_base=valor_base,
+                increment_base=ib,
+                increment_break=ibrk,
+                talla_break_label=tlabel,
+                talla_break_pos=tpos,
                 actiu=True,
             )
         avisos.append(

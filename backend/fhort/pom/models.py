@@ -528,6 +528,12 @@ class GradingRule(models.Model):
     valor_base = models.DecimalField(max_digits=7, decimal_places=2, default=0)
     increment = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     valors_step = models.JSONField(null=True, blank=True)
+    # Peça A — forma canònica d'aplicació (break ancorat per ETIQUETA, resolt al run de
+    # graduació). valors_step roman com a origen/auditoria. NULL = no backfillat → fallback.
+    increment_base = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    increment_break = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    talla_break_label = models.CharField(max_length=30, null=True, blank=True)
+    talla_break_pos = models.IntegerField(null=True, blank=True)  # cache opcional (run del ruleset)
     actiu = models.BooleanField(default=True)
 
     class Meta:

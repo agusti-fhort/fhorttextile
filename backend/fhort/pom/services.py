@@ -480,6 +480,30 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
     grading_type = rule.logica
     increment = float(rule.increment) if rule.increment else 0.0
 
+    # Peça A — forma CANÒNICA: si increment_base està poblat, el motor gradua des d'aquí
+    # (unifica import STEP, import LINEAR-amb-break i ISO above_xl). El llindar es resol per
+    # ETIQUETA contra el RUN DE GRADUACIÓ (size_run del model), no contra el run del ruleset →
+    # portable i cobreix rulesets sense size_system. Label absent al run → cap break (uniforme).
+    if getattr(rule, 'increment_base', None) is not None:
+        ib = float(rule.increment_base)
+        brk = float(rule.increment_break) if rule.increment_break is not None else ib
+        if size_idx == base_idx:
+            return base_val, grading_type
+        break_idx = None
+        if rule.talla_break_label and size_run:
+            norm = [_norm_label(x) for x in size_run]
+            tl = _norm_label(rule.talla_break_label)
+            if tl in norm:
+                break_idx = norm.index(tl)
+        if size_idx > base_idx:
+            path, sign = range(base_idx + 1, size_idx + 1), 1.0
+        else:
+            path, sign = range(size_idx, base_idx), -1.0
+        total = 0.0
+        for j in path:
+            total += brk if (break_idx is not None and j >= break_idx) else ib
+        return base_val + sign * total, grading_type
+
     if grading_type == 'LINEAR':
         return base_val + (steps * increment), 'LINEAR'
 
