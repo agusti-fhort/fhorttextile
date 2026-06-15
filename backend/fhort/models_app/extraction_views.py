@@ -1750,6 +1750,119 @@ def import_session_confirmar_view(request, token):
                 )
                 n_specs += 1
 
+        # ── 3b. Derivar la regla de grading des dels valors i re-apuntar-hi el model.
+        # Avui el chain de GradedSpec es congela (LINEAR/0) i el model queda lligat al
+        # ruleset genèric heretat (is_system_default). Aquí derivem la lògica REAL per POM
+        # (detect_grading, 1A) i creem un GradingRuleSet propi re-apuntat al model. Els
+        # GradedSpec NO es toquen (els valors ja són correctes). Degradació amb gràcia per
+        # POM: un POM problemàtic registra avís i no atura el desament. Patró de ruleset+
+        # regla calcat de pom/size_map_views.py.
+        from fhort.pom.grading_utils import detect_grading
+        from fhort.pom.models import (
+            GradingRuleSet, GradingRule, SizeDefinition,
+            Target, ConstructionType, FitType,
+        )
+
+        new_rule_set = None
+        n_rules = 0
+        grading_avisos = []
+        prev_grs_id = model.grading_rule_set_id  # per restaurar si 3b cau (evita FK morta)
+        # detect_grading vol run_ordenat = LLISTA d'etiquetes (itera/indexa posicions), no
+        # un string. Usem EXACTAMENT la mateixa llista que el motor (services.py:156) →
+        # els deltes detectats es re-apliquen simètricament (round-trip del chest a V2c).
+        run_ordenat = [
+            s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·')
+            if s.strip()
+        ]
+        base_def = SizeDefinition.objects.filter(
+            size_system=model.size_system, etiqueta__iexact=base_size,
+        ).first() if (model.size_system_id and base_size) else None
+
+        if not run_ordenat or not base_size:
+            grading_avisos.append(
+                "Grading no derivat: manca run o talla base al model; es manté el ruleset previ.")
+        elif base_def is None:
+            grading_avisos.append(
+                f"Grading no derivat: talla base '{base_size}' no trobada al sistema de "
+                f"talles del model; es manté el ruleset previ.")
+        else:
+            # Unicitat per la FK `pom` (no per pid d'extracció): dos valors poden resoldre
+            # al mateix POMMaster (p.ex. TOTAL LENGTH duplicat). dict.fromkeys conserva el
+            # primer-vist de forma determinista → una sola regla per pom. Els valors d'aquell
+            # pom ja venen fusionats a `valors` (un dict per pid). detect_grading aïllat per POM.
+            pom_specs = []
+            for pid in dict.fromkeys(confirmed_pom_ids):
+                pm = POMMaster.objects.filter(id=pid).first()
+                if not pm:
+                    continue
+                try:
+                    res = detect_grading(valors.get(pid) or {}, run_ordenat, base_size)
+                except Exception as e:
+                    grading_avisos.append(f"POM {pm.codi_client}: detecció de grading fallida ({e}).")
+                    continue
+                if res.get('warning'):
+                    grading_avisos.append(f"POM {pm.codi_client}: {res['warning']}")
+                if not res.get('logica'):
+                    grading_avisos.append(f"POM {pm.codi_client}: grading no detectat; regla omesa.")
+                    continue
+                bv = valors.get(pid, {}).get(base_size)
+                try:
+                    valor_base = float(bv) if bv not in (None, '') else 0
+                except (TypeError, ValueError):
+                    valor_base = 0
+                pom_specs.append((pm, res, valor_base))
+
+            if not pom_specs:
+                grading_avisos.append(
+                    "Cap regla de grading derivada dels valors; es manté el ruleset previ del model.")
+            else:
+                # Fase d'ESCRIPTURA aïllada en savepoint niat: si peta, reverteix NOMÉS 3b
+                # (cap ruleset orfe) i deixa el model al ruleset previ; la resta de l'import
+                # (BaseMeasurement, GradedSpec, PDF...) es desa igualment.
+                try:
+                    with transaction.atomic():
+                        rs_target = Target.objects.filter(codi__iexact=model.target).first() if model.target else None
+                        rs_constr = ConstructionType.objects.filter(codi__iexact=model.construction).first() if model.construction else None
+                        rs_fit = FitType.objects.filter(codi__iexact=model.fit_type).first() if model.fit_type else None
+                        new_rule_set = GradingRuleSet.objects.create(
+                            nom=f"Importació fitxa · {model.codi_intern} (v{grading_version.version_number})",
+                            size_system=model.size_system,
+                            garment_group=model.garment_group,
+                            target=rs_target,
+                            construction=rs_constr,
+                            fit_type=rs_fit,
+                            is_system_default=False,
+                            actiu=True,
+                        )
+                        if rs_target:
+                            new_rule_set.targets.add(rs_target)
+                        for pm, res, valor_base in pom_specs:
+                            GradingRule.objects.create(
+                                rule_set=new_rule_set,
+                                pom=pm,
+                                talla_base=base_def,
+                                logica=res['logica'],
+                                increment=res.get('increment') or 0,
+                                valors_step=res.get('valors_step'),
+                                valor_base=valor_base,
+                                actiu=True,
+                            )
+                            n_rules += 1
+                        model.grading_rule_set = new_rule_set
+                        model.save(update_fields=['grading_rule_set'])
+                except Exception as e:
+                    # Rollback del savepoint: la fila del ruleset ja no existeix. Restaurem
+                    # la FK en memòria perquè cap save() posterior (p.ex. teixit) escrigui
+                    # un grading_rule_set_id mort i tombi tot l'import.
+                    model.grading_rule_set_id = prev_grs_id
+                    new_rule_set = None
+                    n_rules = 0
+                    grading_avisos.append(
+                        f"Grading no derivat (error en desar regles: {e}); es manté el ruleset previ.")
+
+        if grading_avisos:
+            session.avisos = (session.avisos or []) + grading_avisos
+
         # ── 4. PDF/document → ModelFitxer(categoria='Document') amb versionat (re-import = v2).
         doc_fitxer = None
         if session.document:
@@ -1801,5 +1914,8 @@ def import_session_confirmar_view(request, token):
         'size_fitting': size_fitting.codi,
         'document_fitxer': (doc_fitxer.nom_fitxer if doc_fitxer else None),
         'teixit_aplicat': teixit_aplicat,
+        'grading_rule_set': (new_rule_set.nom if new_rule_set else None),
+        'grading_rules': n_rules,
+        'grading_avisos': grading_avisos,
         'message': f'Importació confirmada: {n_bm} POMs, {n_specs} valors de grading (tancat).',
     }, status=201)
