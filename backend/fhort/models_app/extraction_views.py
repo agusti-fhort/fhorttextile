@@ -1751,189 +1751,45 @@ def import_session_confirmar_view(request, token):
                 n_specs += 1
 
         # ── 3b. Derivar la regla de grading des dels valors i re-apuntar-hi el model.
-        # Avui el chain de GradedSpec es congela (LINEAR/0) i el model queda lligat al
-        # ruleset genèric heretat (is_system_default). Aquí derivem la lògica REAL per POM
-        # (detect_grading, 1A) i creem un GradingRuleSet propi re-apuntat al model. Els
-        # GradedSpec NO es toquen (els valors ja són correctes). Degradació amb gràcia per
-        # POM: un POM problemàtic registra avís i no atura el desament. Patró de ruleset+
-        # regla calcat de pom/size_map_views.py.
-        from fhort.pom.grading_utils import detect_grading, _norm
-        from fhort.pom.models import (
-            GradingRuleSet, GradingRule, SizeDefinition,
-            Target, ConstructionType, FitType,
-        )
+        # La derivació (detect_grading per POM + dedup + anti-proliferació 1D + crear/
+        # reutilitzar el ruleset) viu a pom.grading_utils.derive_grading_rule_set (pura de
+        # model: 1C-1) perquè la Size Library la pugui cridar amb dades del fitxer. Aquí el
+        # W5 la crida amb dades del model i fa el re-apuntat A FORA. Chain de GradedSpec no
+        # tocat. Degradació amb gràcia: un error de desament no atura l'import.
+        from fhort.pom.grading_utils import derive_grading_rule_set
 
         new_rule_set = None
         n_rules = 0
         grading_avisos = []
-        prev_grs_id = model.grading_rule_set_id  # per restaurar si 3b cau (evita FK morta)
-        # detect_grading vol run_ordenat = LLISTA d'etiquetes (itera/indexa posicions), no
-        # un string. Usem EXACTAMENT la mateixa llista que el motor (services.py:156) →
-        # els deltes detectats es re-apliquen simètricament (round-trip del chest a V2c).
-        run_ordenat = [
-            s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·')
-            if s.strip()
-        ]
-        base_def = SizeDefinition.objects.filter(
-            size_system=model.size_system, etiqueta__iexact=base_size,
-        ).first() if (model.size_system_id and base_size) else None
-
-        if not run_ordenat or not base_size:
+        prev_grs_id = model.grading_rule_set_id  # per restaurar la FK si el desament peta
+        try:
+            with transaction.atomic():
+                new_rule_set = derive_grading_rule_set(
+                    size_run_model=model.size_run_model,
+                    base_size=base_size,
+                    valors=valors,
+                    confirmed_pom_ids=confirmed_pom_ids,
+                    size_system=model.size_system,
+                    garment_group=model.garment_group,
+                    target_codi=model.target,
+                    construction_codi=model.construction,
+                    fit_type_codi=model.fit_type,
+                    nom=f"Importació fitxa · {model.codi_intern}",
+                    nom_sufix_unic=size_fitting.codi,
+                    avisos=grading_avisos,
+                )
+                if new_rule_set is not None:
+                    model.grading_rule_set = new_rule_set
+                    model.save(update_fields=['grading_rule_set'])
+        except Exception as e:
+            # Rollback del savepoint (creació + re-apuntat junts): la fila del ruleset ja no
+            # existeix. Restaurem la FK en memòria AQUÍ, abans de qualsevol model.save()
+            # posterior de l'import (p.ex. teixit), perquè no escrigui un id mort.
+            model.grading_rule_set_id = prev_grs_id
+            new_rule_set = None
             grading_avisos.append(
-                "Grading no derivat: manca run o talla base al model; es manté el ruleset previ.")
-        elif base_def is None:
-            grading_avisos.append(
-                f"Grading no derivat: talla base '{base_size}' no trobada al sistema de "
-                f"talles del model; es manté el ruleset previ.")
-        else:
-            # Unicitat per la FK `pom` (no per pid d'extracció): dos valors poden resoldre
-            # al mateix POMMaster (p.ex. TOTAL LENGTH duplicat). dict.fromkeys conserva el
-            # primer-vist de forma determinista → una sola regla per pom. Els valors d'aquell
-            # pom ja venen fusionats a `valors` (un dict per pid). detect_grading aïllat per POM.
-            pom_specs = []
-            for pid in dict.fromkeys(confirmed_pom_ids):
-                pm = POMMaster.objects.filter(id=pid).first()
-                if not pm:
-                    continue
-                try:
-                    res = detect_grading(valors.get(pid) or {}, run_ordenat, base_size)
-                except Exception as e:
-                    grading_avisos.append(f"POM {pm.codi_client}: detecció de grading fallida ({e}).")
-                    continue
-                if res.get('warning'):
-                    grading_avisos.append(f"POM {pm.codi_client}: {res['warning']}")
-                if not res.get('logica'):
-                    grading_avisos.append(f"POM {pm.codi_client}: grading no detectat; regla omesa.")
-                    continue
-                bv = valors.get(pid, {}).get(base_size)
-                try:
-                    valor_base = float(bv) if bv not in (None, '') else 0
-                except (TypeError, ValueError):
-                    valor_base = 0
-                pom_specs.append((pm, res, valor_base))
-
-            if not pom_specs:
-                grading_avisos.append(
-                    "Cap regla de grading derivada dels valors; es manté el ruleset previ del model.")
-            else:
-                # Fase d'ESCRIPTURA aïllada en savepoint niat: si peta, reverteix NOMÉS 3b
-                # (cap ruleset orfe) i deixa el model al ruleset previ; la resta de l'import
-                # (BaseMeasurement, GradedSpec, PDF...) es desa igualment.
-                try:
-                    with transaction.atomic():
-                        rs_target = Target.objects.filter(codi__iexact=model.target).first() if model.target else None
-                        rs_constr = ConstructionType.objects.filter(codi__iexact=model.construction).first() if model.construction else None
-                        rs_fit = FitType.objects.filter(codi__iexact=model.fit_type).first() if model.fit_type else None
-
-                        # 1D — evitar proliferació de rulesets: si ja existeix un ruleset
-                        # equivalent per la MATEIXA combinació amb graduació IDÈNTICA, es
-                        # reutilitza (re-apunta el model, no crea regles). Si difereix o no
-                        # n'hi ha cap, es crea nou amb nom desambiguat pel codi_intern.
-                        def _step_equal(a, b):
-                            # valors_step (dict {etiqueta: delta}) o None. Igualtat numèrica
-                            # amb tolerància sobre claus normalitzades (mateix criteri que el
-                            # motor: _norm = str(x).strip().upper()).
-                            if not a and not b:
-                                return True
-                            if bool(a) != bool(b):
-                                return False
-                            na = {_norm(k): float(v) for k, v in a.items()}
-                            nb = {_norm(k): float(v) for k, v in b.items()}
-                            if set(na) != set(nb):
-                                return False
-                            return all(abs(na[k] - nb[k]) < 0.001 for k in na)
-
-                        spec_by_pom = {pm.id: res for pm, res, _vb in pom_specs}
-                        candidat = None
-                        candidats = GradingRuleSet.objects.filter(
-                            is_system_default=False,
-                            size_system=model.size_system,
-                            garment_group=model.garment_group,
-                            target=rs_target,
-                            construction=rs_constr,
-                            fit_type=rs_fit,
-                        )
-                        for c in candidats:
-                            regles_c = list(c.regles.all())  # files reals del candidat
-                            # (1) MATEIX conjunt de pom_id (igualtat estricta, no subconjunt).
-                            if {r.pom_id for r in regles_c} != set(spec_by_pom):
-                                continue
-                            # (2)+(3) per cada pom: mateixa talla_base, logica, increment i
-                            # valors_step. Tot ha de coincidir perquè sigui "la mateixa graduació".
-                            igual = True
-                            for r in regles_c:
-                                res_s = spec_by_pom[r.pom_id]
-                                if r.talla_base_id != base_def.id:
-                                    igual = False
-                                    break
-                                if (r.logica or '') != (res_s.get('logica') or ''):
-                                    igual = False
-                                    break
-                                if abs(float(r.increment or 0) - float(res_s.get('increment') or 0)) >= 0.001:
-                                    igual = False
-                                    break
-                                if not _step_equal(r.valors_step, res_s.get('valors_step')):
-                                    igual = False
-                                    break
-                            if igual:
-                                candidat = c
-                                break
-
-                        if candidat is not None:
-                            # REUTILITZAR: re-apunta el model (escriptura coberta pel savepoint).
-                            new_rule_set = candidat
-                            n_rules = candidat.regles.count()
-                            model.grading_rule_set = candidat
-                            model.save(update_fields=['grading_rule_set'])
-                            grading_avisos.append(
-                                f"Grading reutilitzat: ruleset existent #{candidat.id} '{candidat.nom}' "
-                                f"(graduació idèntica per la combinació; no s'ha creat cap ruleset nou).")
-                        else:
-                            # CREAR NOU. Nom desambiguat pel codi_intern (únic per model; acaba el
-                            # (v1) repetit). Si ja existís EXACTAMENT aquest nom (reimport del
-                            # mateix model amb graduació diferent), hi afegim el codi del SizeFitting
-                            # (IMP-<id>-<n>, únic i determinista) per no col·lisionar.
-                            nom = f"Importació fitxa · {model.codi_intern}"
-                            if GradingRuleSet.objects.filter(nom=nom).exists():
-                                nom = f"{nom} · {size_fitting.codi}"
-                            new_rule_set = GradingRuleSet.objects.create(
-                                nom=nom,
-                                size_system=model.size_system,
-                                garment_group=model.garment_group,
-                                target=rs_target,
-                                construction=rs_constr,
-                                fit_type=rs_fit,
-                                is_system_default=False,
-                                actiu=True,
-                            )
-                            if rs_target:
-                                new_rule_set.targets.add(rs_target)
-                            for pm, res, valor_base in pom_specs:
-                                GradingRule.objects.create(
-                                    rule_set=new_rule_set,
-                                    pom=pm,
-                                    talla_base=base_def,
-                                    logica=res['logica'],
-                                    increment=res.get('increment') or 0,
-                                    valors_step=res.get('valors_step'),
-                                    valor_base=valor_base,
-                                    actiu=True,
-                                )
-                                n_rules += 1
-                            model.grading_rule_set = new_rule_set
-                            model.save(update_fields=['grading_rule_set'])
-                            grading_avisos.append(
-                                f"Grading nou: creat ruleset #{new_rule_set.id} (graduació específica "
-                                f"d'aquest model; cap candidat existent coincidia).")
-                except Exception as e:
-                    # Rollback del savepoint: la fila del ruleset ja no existeix. Restaurem
-                    # la FK en memòria perquè cap save() posterior (p.ex. teixit) escrigui
-                    # un grading_rule_set_id mort i tombi tot l'import.
-                    model.grading_rule_set_id = prev_grs_id
-                    new_rule_set = None
-                    n_rules = 0
-                    grading_avisos.append(
-                        f"Grading no derivat (error en desar regles: {e}); es manté el ruleset previ.")
+                f"Grading no derivat (error en desar regles: {e}); es manté el ruleset previ.")
+        n_rules = new_rule_set.regles.count() if new_rule_set else 0
 
         if grading_avisos:
             session.avisos = (session.avisos or []) + grading_avisos
