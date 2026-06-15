@@ -251,3 +251,160 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
             f"Grading nou: creat ruleset #{new_rule_set.id} (graduació específica "
             f"d'aquest model; cap candidat existent coincidia).")
         return new_rule_set
+
+
+def suggest_valors_mode(valors, base_label, run_ordenat):
+    """Suggereix si els valors de la taula són 'absoluts' o 'deltes' (increments).
+
+    SUGGERIMENT PROVISIONAL, afinable amb fitxes reals de la Montse: només pre-selecciona el
+    toggle (1C-2b), MAI decideix res. Pura, sense efectes. Davant dubte → 'absoluts' (= avui).
+
+    Principi: la distinció real és la FORMA, no la magnitud absoluta. Senyal PRIMARI = MONOTONIA:
+    els valors absoluts creixen talla a talla (chest, amplades, llargades… pugen amb la talla);
+    els deltes són nivells plans/quasi plans (no acumulats). Senyal SECUNDARI de desempat =
+    magnitud RELATIVA al base del mateix POM (delta ≪ base), MAI un llindar fix en cm. Decideix
+    sobre l'AGREGAT de POMs; els POMs constants (p.ex. E.8 = 2,2,2…) són NEUTRES (ni creixent ni
+    delta) i s'exclouen de l'agregat. Els llindars (0.5 creixents, 0.15 ratio) són PROVISIONALS.
+
+    CONTRACTE: el mode deltes assumeix base ABSOLUTA + increments a la resta de talles (la cel·la
+    base porta el valor absolut, p.ex. '6':42.4, no un delta). Deltes PURS sense base absoluta NO
+    es contemplen: l'heurística cau a 'absoluts' i la conversió degrada amb gràcia (sense àncora,
+    retorna el pom intacte). Si algun dia apareix una fitxa amb deltes purs sense base, és una
+    peça NOVA (declarar la base a part), no un cas que aquest codi cobreixi silenciosament.
+
+    valors: {pid:{talla:valor}} (claus en cas original). Retorna 'absoluts' | 'deltes'.
+    """
+    base_norm = _norm(base_label)
+    run_norm = [_norm(x) for x in run_ordenat]
+    TOL = 1e-9
+
+    evaluables = 0   # POMs amb forma avaluable (no constants)
+    creixents = 0    # POMs que pugen talla a talla en la majoria de trams
+    ratios = []      # magnitud relativa (mediana cel·les-no-base / base) per POM amb base
+
+    for pom_vals in (valors or {}).values():
+        vnorm = {_norm(k): v for k, v in (pom_vals or {}).items()}
+        seq = []
+        for lab in run_norm:
+            v = vnorm.get(lab)
+            if v in (None, ''):
+                continue
+            try:
+                seq.append(float(v))
+            except (TypeError, ValueError):
+                continue
+        if len(seq) >= 3:
+            inc = sum(1 for i in range(len(seq) - 1) if seq[i + 1] > seq[i] + TOL)
+            dec = sum(1 for i in range(len(seq) - 1) if seq[i + 1] < seq[i] - TOL)
+            total = len(seq) - 1
+            if inc == 0 and dec == 0:
+                pass  # constant → neutre, s'exclou de l'agregat
+            else:
+                evaluables += 1
+                # creixent-fort: puja en la majoria (>=meitat) dels trams del run.
+                if inc >= max(1, (total + 1) // 2):
+                    creixents += 1
+
+        # Desempat secundari: magnitud RELATIVA al base del mateix POM.
+        bv = vnorm.get(base_norm)
+        try:
+            B = abs(float(bv)) if bv not in (None, '') else None
+        except (TypeError, ValueError):
+            B = None
+        if B and B > TOL:
+            no_base = []
+            for lab, v in vnorm.items():
+                if lab == base_norm or v in (None, ''):
+                    continue
+                try:
+                    no_base.append(abs(float(v)))
+                except (TypeError, ValueError):
+                    continue
+            if no_base:
+                no_base.sort()
+                k = len(no_base)
+                med = no_base[k // 2] if k % 2 else (no_base[k // 2 - 1] + no_base[k // 2]) / 2.0
+                ratios.append(med / B)
+
+    # PRIMARI (monotonia): si la majoria de POMs avaluables creixen talla a talla → absoluts.
+    if evaluables > 0 and (creixents / evaluables) > 0.5:
+        return 'absoluts'
+
+    # SECUNDARI (magnitud relativa): cel·les no-base ≪ base (p.ex. deltes ~1-2cm sobre base ~40
+    # → ratio ~0.03) → deltes. Llindar 0.15 provisional, relatiu al base, mai absolut en cm.
+    if ratios:
+        ratios.sort()
+        k = len(ratios)
+        med_ratio = ratios[k // 2] if k % 2 else (ratios[k // 2 - 1] + ratios[k // 2]) / 2.0
+        if med_ratio < 0.15:
+            return 'deltes'
+
+    # Default segur: sense senyal clar de delta → absoluts (= comportament d'avui).
+    return 'absoluts'
+
+
+def deltes_a_absoluts(valors, base_label, run_ordenat):
+    """Converteix valors expressats com a INCREMENTS (deltes consecutius, format C) a ABSOLUTS.
+
+    Inversa exacta del que detect_grading deriva: la cel·la base es manté (és l'absolut base);
+    cap a la dreta de la base = base + suma acumulada dels deltes consecutius; cap a l'esquerra
+    = base − suma acumulada. Mateixa convenció d'ordre/posició que detect_grading → cal el
+    MATEIX run_ordenat (model.size_run_model).
+
+    CONTRACTE: el mode deltes assumeix base ABSOLUTA + increments a la resta de talles (la cel·la
+    base porta el valor absolut, p.ex. '6':42.4, no un delta). Deltes PURS sense base absoluta NO
+    es contemplen: sense àncora (base absent del run o sense valor) la conversió degrada amb
+    gràcia i retorna el pom intacte. Si algun dia apareix una fitxa amb deltes purs sense base,
+    és una peça NOVA (declarar la base a part), no un cas que aquest codi cobreixi silenciosament.
+
+    valors: {pid:{talla:valor}} (claus en cas original). Retorna un dict NOU amb les MATEIXES
+    claus originals per pom, amb els valors convertits a absoluts. Robust: si manca la base o un
+    delta intermedi, degrada amb gràcia (deixa les cel·les no-calculables amb el valor original;
+    no peta). NO toca detect_grading.
+    """
+    base_norm = _norm(base_label)
+    run_norm = [_norm(x) for x in run_ordenat]
+    if base_norm not in run_norm:
+        return valors  # sense base al run no es pot ancorar → es retorna tal qual
+    base_idx = run_norm.index(base_norm)
+
+    out = {}
+    for pid, pom_vals in (valors or {}).items():
+        vnorm = {_norm(k): v for k, v in (pom_vals or {}).items()}
+        try:
+            base_v = vnorm.get(base_norm)
+            B = float(base_v) if base_v not in (None, '') else None
+        except (TypeError, ValueError):
+            B = None
+        if B is None:
+            out[pid] = dict(pom_vals)  # sense valor base no es pot convertir; intacte
+            continue
+
+        abs_by_norm = {base_norm: round(B, 2)}
+        # Cap a la dreta de la base: suma acumulada dels deltes consecutius.
+        acc = B
+        for j in range(base_idx + 1, len(run_norm)):
+            d = vnorm.get(run_norm[j])
+            try:
+                acc = acc + float(d) if d not in (None, '') else None
+            except (TypeError, ValueError):
+                acc = None
+            if acc is None:
+                break  # manca un delta → atura aquesta direcció (degrada)
+            abs_by_norm[run_norm[j]] = round(acc, 2)
+        # Cap a l'esquerra de la base: resta acumulada.
+        acc = B
+        for j in range(base_idx - 1, -1, -1):
+            d = vnorm.get(run_norm[j])
+            try:
+                acc = acc - float(d) if d not in (None, '') else None
+            except (TypeError, ValueError):
+                acc = None
+            if acc is None:
+                break
+            abs_by_norm[run_norm[j]] = round(acc, 2)
+
+        # Reconstruir preservant les claus ORIGINALS d'entrada; cel·les no-calculables → valor
+        # original (degradació amb gràcia, mai KeyError).
+        out[pid] = {k: abs_by_norm.get(_norm(k), v) for k, v in pom_vals.items()}
+    return out

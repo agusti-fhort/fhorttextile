@@ -1566,6 +1566,10 @@ def import_session_mesures_view(request, token):
         net.append({'pom_master_id': pid, 'talla_label': talla, 'valor': valor})
 
     session.resultat = {**(session.resultat or {}), 'mesures': net}
+    # 1C-2a: si el wizard declara el mode dels valors (absoluts/deltes), desar-lo per al W5.
+    valors_mode = request.data.get('valors_mode')
+    if valors_mode in ('absoluts', 'deltes'):
+        session.resultat = {**session.resultat, 'valors_mode': valors_mode}
     session.estat = 'MESURES_OK'
     session.save(update_fields=['resultat', 'estat', 'actualitzat_at'])
 
@@ -1679,6 +1683,20 @@ def import_session_confirmar_view(request, token):
 
         # base_size reflecteix el valor (possiblement) reconciliat.
         base_size = (model.base_size_label or '').strip()
+
+        # ── 1C-2a. Si la fitxa portava INCREMENTS (deltes) en comptes de mesures absolutes,
+        # convertir-los a absoluts AQUÍ — abans dels TRES consumidors de `valors`
+        # (BaseMeasurement a 1693, chain de GradedSpec a 1733, derive_grading_rule_set) —
+        # perquè tots tres rebin absoluts i detect_grading/derive quedin INTACTES. Default
+        # 'absoluts' = camí d'avui sense canvi (la conversió només s'activa si s'ha declarat).
+        valors_mode = (session.resultat or {}).get('valors_mode') or 'absoluts'
+        if valors_mode == 'deltes':
+            from fhort.pom.grading_utils import deltes_a_absoluts
+            run_ordenat_conv = [
+                s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·')
+                if s.strip()
+            ]
+            valors = deltes_a_absoluts(valors, base_size, run_ordenat_conv)
 
         # ── 1. Mana el document: neteja files buides de plantilla i crea NOMÉS els confirmats.
         BaseMeasurement.objects.filter(model=model, base_value_cm__isnull=True).delete()
