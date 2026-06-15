@@ -1624,6 +1624,7 @@ def import_session_confirmar_view(request, token):
     from fhort.accounts.models import UserProfile
     from fhort.pom.models import POMMaster
     from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
+    from fhort.models_app.matching import match_size_system
 
     session = ImportSession.objects.filter(token=token).select_related('model').first()
     if not session:
@@ -1647,9 +1648,38 @@ def import_session_confirmar_view(request, token):
             continue
         valors.setdefault(pid, {})[m['talla_label']] = m['valor']
 
-    base_size = (model.base_size_label or '').strip()
-
     with transaction.atomic():
+        # ── 0c. Reconciliació size_system/base/run des de l'extracció (tanca Capa 0).
+        # Deriva el sistema NET del run detectat de la fitxa via match_size_system, en
+        # comptes de confiar en la classificació del wizard (que pot haver triat un sistema
+        # incorrecte). Estricte: només re-apunta amb match perfecte (afecta grading i DXF).
+        extraccio = (session.resultat or {}).get('extraccio') or {}
+        run_detectat = extraccio.get('sizes') or []
+        base_detectada = extraccio.get('base_size')
+        target_codi = model.target or ''
+        if not target_codi and model.size_system_id:
+            _ss_target = model.size_system.targets.first()
+            if _ss_target:
+                target_codi = _ss_target.codi
+        if run_detectat and base_detectada and target_codi:
+            mr = match_size_system(target_codi, run_detectat, base_detectada)
+            if mr.ok and mr.score == 1.0 and mr.base_ok:
+                model.size_system = mr.size_system
+                model.base_size_label = base_detectada
+                model.size_run_model = '·'.join(run_detectat)
+                model.save(update_fields=['size_system', 'base_size_label', 'size_run_model'])
+            else:
+                session.avisos = (session.avisos or []) + [
+                    f"Size system no reconciliat automàticament (match {mr.score:.0%} per target "
+                    f"'{target_codi}'): es manté la classificació manual. Revisa que el sistema "
+                    f"de talles assignat sigui correcte per a aquest run."]
+        else:
+            session.avisos = (session.avisos or []) + [
+                "Reconciliació de talles omesa: manca run detectat, base o target a la sessió."]
+
+        # base_size reflecteix el valor (possiblement) reconciliat.
+        base_size = (model.base_size_label or '').strip()
+
         # ── 1. Mana el document: neteja files buides de plantilla i crea NOMÉS els confirmats.
         BaseMeasurement.objects.filter(model=model, base_value_cm__isnull=True).delete()
 
@@ -1759,7 +1789,7 @@ def import_session_confirmar_view(request, token):
 
         # ── 6. Tanca la sessió.
         session.estat = 'CONFIRMAT'
-        session.save(update_fields=['estat', 'actualitzat_at'])
+        session.save(update_fields=['estat', 'avisos', 'actualitzat_at'])
 
     return Response({
         'ok': True,
