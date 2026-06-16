@@ -84,10 +84,14 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
             fora = bool(vr is not None and (vr < vt - tol_minus or vr > vt + tol_plus))
 
             pom = line.pom
+            # SC-4: codi de fitxa = BaseMeasurement.nom_fitxa (com la taula Mesures, gold mono);
+            # fallback al codi canònic del POM si encara no s'ha posat nomenclatura de croquis.
+            codi_fitxa = (bm.nom_fitxa if bm and bm.nom_fitxa else '') or (pom.pom_code if pom else '')
             out.append({
                 'id': line.id,
                 'pom_id': line.pom_id,
                 'codi': pom.pom_code if pom else '',
+                'codi_fitxa': codi_fitxa,
                 'nom': pom.name_cat if pom else '',
                 'is_key': pom.is_key_measure if pom else False,
                 'valor_teoric': vt,

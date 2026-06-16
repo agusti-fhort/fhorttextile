@@ -97,16 +97,19 @@ def model_te_deltes(model) -> bool:
 
 def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
                        *, user_profile_id: int | None = None) -> dict:
-    """Resol un SizeCheck Pendent (Acceptat | Descartat).
+    """Resol un SizeCheck Pendent amb 2 accions ben diferenciades:
 
-    En 'Acceptat': cada SizeCheckLine amb decisio='tolerancia_acceptada' i valor_real no
-    null escriu BaseMeasurement amb origen='CHECKED' (NOMÉS base). Guarda abs(<1e-6) contra
-    el valor base VIGENT → no escriu canvis nuls. El signal F1 registra el canvi (context
-    'checked'). Si hi ha canvi de base i el model té deltes, regradua les talles via el
-    motor resident (mirror de close_piece_fitting): NO toca ModelGradingRule.
+    GRAVAR (estat='Acceptat'): les línies sense decisió expressa passen a
+    'tolerancia_acceptada'; després escriu BaseMeasurement origen='CHECKED' (NOMÉS base)
+    de les acceptades amb valor_real editat (abs<1e-6 contra el vigent → skip). Si hi ha
+    canvi de base i el model té deltes, regradua via el motor resident (mirror de
+    close_piece_fitting; NO toca ModelGradingRule). Finalitza la tasca Kanban → Done.
+
+    DESCARTAR (estat='Descartat'): NO toca cap línia, NO escriu CHECKED, NO regradua i NO
+    finalitza la tasca (queda viva per mesurar més tard). El check queda com a constància.
 
     Retorna {'estat', 'written', 'lines_accepted', 'base_changed', 'te_deltes',
-             'regradat', 'nova_version'}.
+             'regradat', 'nova_version', 'tasca_finalitzada'}.
     """
     from fhort.models_app.models import (
         BaseMeasurement, Model, SizeCheck, SizeCheckLine,
@@ -130,8 +133,19 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
 
     written = 0
     lines_accepted = 0
+    base_changed = False
+    te_deltes = model_te_deltes(model)
+    regradat = False
+    nova_version = None
+    tasca_finalitzada = False
 
     if estat == 'Acceptat':
+        # GRAVAR: les línies sense decisió expressa s'accepten (tolerància acceptada).
+        SizeCheckLine.objects.filter(size_check=sc, decisio__isnull=True).update(
+            decisio='tolerancia_acceptada'
+        )
+
+        # Escriu CHECKED de les acceptades amb valor_real editat (NOMÉS base; abs<1e-6 skip).
         lines = list(
             SizeCheckLine.objects.filter(size_check=sc, decisio='tolerancia_acceptada')
             .select_related('pom')
@@ -140,7 +154,6 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
             if line.valor_real is None:
                 continue
             lines_accepted += 1
-            # Escriptura CHECKED — només la base (NO deltes ni ModelGradingRule).
             bm, _created = BaseMeasurement.objects.get_or_create(
                 model=model, pom=line.pom,
                 defaults={'base_value_cm': line.valor_real, 'origen': 'CHECKED'},
@@ -156,38 +169,54 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
             bm.save()
             written += 1
 
-    base_changed = written > 0
-    te_deltes = model_te_deltes(model)
-    regradat = False
-    nova_version = None
+        base_changed = written > 0
 
-    # Propagació: regradua les talles des de la base nova (mirror de close_piece_fitting).
-    # Només si hi ha hagut canvi de base I el model té deltes. NO toca ModelGradingRule.
-    if base_changed and te_deltes:
-        from django.db.models import F, Max
-        from fhort.fitting.models import GradingVersion
-        from fhort.fitting.services import _resolve_working_size_fitting
-        from fhort.pom.services import generate_graded_specs
+        # Propagació: regradua les talles des de la base nova (mirror de close_piece_fitting).
+        # Només si hi ha canvi de base I el model té deltes. NO toca ModelGradingRule.
+        if base_changed and te_deltes:
+            from django.db.models import F, Max
+            from fhort.fitting.models import GradingVersion
+            from fhort.fitting.services import _resolve_working_size_fitting
+            from fhort.pom.services import generate_graded_specs
 
-        sf = _resolve_working_size_fitting(model)
-        if sf is not None:
-            GradingVersion.objects.filter(size_fitting=sf, is_active=True).update(is_active=False)
-            max_num = GradingVersion.objects.filter(size_fitting=sf).aggregate(
-                m=Max('version_number')
-            )['m'] or 0
-            nv = GradingVersion.objects.create(
-                size_fitting=sf,
-                version_number=max_num + 1,
-                is_active=True,
-                creat_per=profile,
-                nom=f'Size check {sc.pk}',
-            )
-            nova_version = nv.version_number
-            Model.objects.filter(pk=model.pk).update(
-                measurements_version=F('measurements_version') + 1
-            )
-            generate_graded_specs(sf.pk)   # llegeix base nova + regles residents
-            regradat = True
+            sf = _resolve_working_size_fitting(model)
+            if sf is not None:
+                GradingVersion.objects.filter(size_fitting=sf, is_active=True).update(is_active=False)
+                max_num = GradingVersion.objects.filter(size_fitting=sf).aggregate(
+                    m=Max('version_number')
+                )['m'] or 0
+                nv = GradingVersion.objects.create(
+                    size_fitting=sf,
+                    version_number=max_num + 1,
+                    is_active=True,
+                    creat_per=profile,
+                    nom=f'Size check {sc.pk}',
+                )
+                nova_version = nv.version_number
+                Model.objects.filter(pk=model.pk).update(
+                    measurements_version=F('measurements_version') + 1
+                )
+                generate_graded_specs(sf.pk)   # llegeix base nova + regles residents
+                regradat = True
+
+        # GRAVAR finalitza la tasca Kanban size_check → Done. Gate TOU: si no existeix
+        # la tasca o la transició no és vàlida, NO peta.
+        try:
+            from fhort.tasks.models import ModelTask
+            from fhort.tasks.services_c import transition_task
+            task = (ModelTask.objects
+                    .filter(model=model, task_type__code='size_check')
+                    .exclude(status='Done').order_by('-id').first())
+            if task is not None:
+                if task.status != 'InProgress':
+                    transition_task(task, 'InProgress', profile)   # Done només des d'InProgress
+                transition_task(task, 'Done', profile)
+                tasca_finalitzada = True
+        except Exception as e:
+            logger.warning(f"SizeCheck {sc.pk}: no s'ha pogut finalitzar la tasca size_check: {e}")
+
+    # DESCARTAR (estat == 'Descartat'): NO toca línies, NO escriu CHECKED, NO regradua i NO
+    # finalitza la tasca (queda viva per mesurar més tard). El check queda com a constància.
 
     sc.estat = estat
     sc.resolt_per = profile
@@ -196,10 +225,12 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
 
     logger.info(
         f"SizeCheck {sc.pk} resolved [{estat}]: {lines_accepted} accepted, {written} written, "
-        f"te_deltes={te_deltes} regradat={regradat} nova_version={nova_version}"
+        f"te_deltes={te_deltes} regradat={regradat} nova_version={nova_version} "
+        f"tasca_finalitzada={tasca_finalitzada}"
     )
     return {
         'estat': estat, 'written': written, 'lines_accepted': lines_accepted,
         'base_changed': base_changed, 'te_deltes': te_deltes,
         'regradat': regradat, 'nova_version': nova_version,
+        'tasca_finalitzada': tasca_finalitzada,
     }

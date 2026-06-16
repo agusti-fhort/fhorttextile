@@ -7,13 +7,16 @@ import SizeCheckCell from './SizeCheckCell'
 const MONO = 'IBM Plex Mono, monospace'
 const fmtDate = (v) => v ? new Date(v).toLocaleString('ca-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 
-const th = { padding: '6px 8px', borderBottom: '1px solid var(--border)', fontFamily: MONO, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textAlign: 'left', whiteSpace: 'nowrap' }
-const tdRO = { padding: '5px 8px', borderBottom: '0.5px solid var(--border)', fontFamily: MONO, fontSize: 12 }
+// Tokens idèntics a la taula Mesures (EditableTable).
+const TEXT_2 = 'var(--color-text-secondary, #868685)'
+const BORDER = 'var(--color-border-tertiary, #e0d5c5)'
+const th = { padding: '6px 10px', borderBottom: `1px solid ${BORDER}`, fontFamily: MONO, fontSize: 11, fontWeight: 600, color: TEXT_2, textAlign: 'left', whiteSpace: 'nowrap' }
+const tdRO = { padding: '4px 10px', borderBottom: `0.5px solid ${BORDER}`, fontFamily: MONO, fontSize: 12 }
 
 const btn = (variant) => ({
   fontFamily: MONO, fontSize: 12, padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
   border: '0.5px solid var(--gray-l)',
-  background: variant === 'ok' ? 'var(--ok)' : variant === 'err' ? 'var(--err)' : variant === 'plain' ? 'var(--white)' : 'var(--gold)',
+  background: variant === 'err' ? 'var(--err)' : variant === 'plain' ? 'var(--white)' : 'var(--gold)',
   color: variant === 'plain' ? 'var(--text-main)' : '#fff', fontWeight: 500,
 })
 
@@ -70,8 +73,15 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
     sizeChecks.resolve(check.id, estat)
       .then(r => {
         const d = r.data || {}
-        const extra = d.regradat ? ` · grading regradat (v${d.nova_version})` : ''
-        onFeedback?.({ type: 'ok', text: `Check ${estat.toLowerCase()} · ${d.written || 0} mesura(es) a la base${extra}` })
+        let text
+        if (estat === 'Acceptat') {
+          const extra = d.regradat ? ` · grading regradat (v${d.nova_version})` : ''
+          const tk = d.tasca_finalitzada ? ' · tasca finalitzada' : ''
+          text = `Size check gravat · ${d.written || 0} mesura(es) a la base${extra}${tk}`
+        } else {
+          text = 'Size check descartat · la tasca segueix pendent'
+        }
+        onFeedback?.({ type: 'ok', text })
         // Resolt = feina acabada a la superfície de treball → torna al Kanban (el tècnic marca Done allà).
         if (editable) navigate('/tasques/kanban')
         else load()
@@ -106,6 +116,7 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
                 <th style={th}>POM</th>
                 <th style={th}>{t('sizecheck.col_measure', 'Mesura')}</th>
                 <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_theoretical', 'Teòric')}</th>
+                <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_tolerance', 'Tolerància')}</th>
                 <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_real', 'Real (proto)')}</th>
                 <th style={{ ...th, textAlign: 'center' }}>{t('sizecheck.col_decision', 'Decisió')}</th>
                 <th style={th}>{t('sizecheck.col_note', 'Nota')}</th>
@@ -114,8 +125,8 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
             <tbody>
               {(check.lines || []).map(line => (
                 <tr key={line.id}>
-                  <td style={{ ...tdRO, fontWeight: line.is_key ? 700 : 400 }}>{line.codi}</td>
-                  <td style={{ ...tdRO, color: 'var(--text-muted)' }}>{line.nom}</td>
+                  <td style={{ ...tdRO, fontFamily: MONO, color: 'var(--gold)', fontWeight: line.is_key ? 700 : 400 }}>{line.codi_fitxa || line.codi}</td>
+                  <td style={{ ...tdRO, color: TEXT_2 }}>{line.nom}</td>
                   <SizeCheckCell line={line} disabled={!editable} />
                 </tr>
               ))}
@@ -124,7 +135,7 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
 
           {editable && (
             <div style={{ display: 'flex', gap: 10 }}>
-              <button style={btn('ok')} disabled={busy} onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.accept', 'Acceptar')}</button>
+              <button style={btn('gold')} disabled={busy} onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.save', 'Gravar size check')}</button>
               <button style={btn('err')} disabled={busy} onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard', 'Descartar')}</button>
             </div>
           )}
@@ -170,7 +181,7 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button style={btn('plain')} disabled={busy} onClick={() => setConfirm(null)}>{t('common.cancel', 'Cancel·lar')}</button>
-              <button style={btn('ok')} disabled={busy} onClick={() => doResolve('Acceptat')}>{t('sizecheck.confirm_propagate', 'Acceptar i propagar')}</button>
+              <button style={btn('gold')} disabled={busy} onClick={() => doResolve('Acceptat')}>{t('sizecheck.confirm_propagate', 'Gravar i propagar')}</button>
             </div>
           </div>
         </div>
