@@ -79,7 +79,7 @@ export default function Alerts() {
                 color:      estat === e ? 'var(--white)' : 'var(--gray)',
                 border: '0.5px solid #e4e4e2', borderRadius: 8,
                 padding: '6px 14px', fontSize: 12,
-                cursor: 'pointer', fontFamily: 'var(--font)',
+                cursor: 'pointer', 
               }}
             >
               {e}
@@ -190,6 +190,5 @@ const btnStyle = (color) => ({
   padding: '4px 10px',
   fontSize: 11,
   cursor: 'pointer',
-  fontFamily: 'var(--font)',
   fontWeight: 500,
 })

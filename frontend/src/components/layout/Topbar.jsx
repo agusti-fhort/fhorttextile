@@ -127,7 +127,6 @@ export default function Topbar() {
               fontSize: 12,
               fontWeight: 500,
               cursor: 'pointer',
-              fontFamily: 'var(--font)',
             }}
           >
             <i className="ti ti-plus" style={{fontSize: 15}} />

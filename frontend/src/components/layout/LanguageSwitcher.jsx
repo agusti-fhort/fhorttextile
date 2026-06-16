@@ -22,7 +22,6 @@ export default function LanguageSwitcher() {
         borderRadius: 8,
         padding: '0 8px',
         fontSize: 12,
-        fontFamily: 'var(--font)',
         color: 'var(--charcoal)',
         cursor: 'pointer',
         outline: 'none',

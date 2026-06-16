@@ -23,7 +23,6 @@ const filterBtn = (active) => ({
   color:      active ? 'var(--white)' : 'var(--gray)',
   border: '0.5px solid #e4e4e2', borderRadius: 8,
   padding: '5px 12px', fontSize: 11, cursor: 'pointer',
-  fontFamily: 'var(--font)',
 })
 
 // Cercle de color d'assignació (color_avatar). Fallback --gold si null.
@@ -300,7 +299,7 @@ export default function FittingSessionList() {
           marginLeft: 'auto',
           background: 'var(--charcoal)', color: 'var(--white)',
           border: 'none', borderRadius: 8, padding: '8px 16px',
-          fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font)',
+          fontSize: 12, cursor: 'pointer', 
         }}>
           + {t('fitting.sessions.new')}
         </button>
@@ -408,7 +407,7 @@ export default function FittingSessionList() {
                                   style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none',
                                     border: 'none', cursor: 'pointer', padding: '7px 10px', fontSize: 12,
                                     color: it.danger ? 'var(--err)' : 'var(--text-main)',
-                                    borderRadius: 6, fontFamily: 'var(--font)' }}>
+                                    borderRadius: 6 }}>
                                   <i className={`ti ${it.icon}`} style={{ fontSize: 14, color: it.danger ? 'var(--err)' : 'var(--gray)' }} /> {it.label}
                                 </button>
                               ))}

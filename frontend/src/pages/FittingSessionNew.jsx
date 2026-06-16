@@ -18,7 +18,7 @@ const labelStyle = {
 const inputStyle = {
   width: '100%', padding: '8px 10px', fontSize: 13,
   border: '0.5px solid #e4e4e2', borderRadius: 8,
-  fontFamily: 'var(--font)', background: 'var(--white)',
+  background: 'var(--white)',
   color: 'var(--charcoal)', boxSizing: 'border-box',
 }
 const fieldStyle = { marginBottom: '1rem' }
@@ -128,7 +128,7 @@ export default function FittingSessionNew() {
             <button type="button" onClick={() => navigate('/fittings')} style={{
               background: 'var(--white)', color: 'var(--gray)',
               border: '0.5px solid #e4e4e2', borderRadius: 8,
-              padding: '8px 16px', fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font)',
+              padding: '8px 16px', fontSize: 12, cursor: 'pointer', 
             }}>
               {t('app.cancel')}
             </button>
@@ -136,7 +136,7 @@ export default function FittingSessionNew() {
               background: 'var(--charcoal)', color: 'var(--white)',
               border: 'none', borderRadius: 8, padding: '8px 16px',
               fontSize: 12, cursor: submitting ? 'default' : 'pointer',
-              opacity: submitting ? 0.6 : 1, fontFamily: 'var(--font)',
+              opacity: submitting ? 0.6 : 1, 
             }}>
               {submitting ? t('fitting.session.creating') : t('fitting.session.create')}
             </button>

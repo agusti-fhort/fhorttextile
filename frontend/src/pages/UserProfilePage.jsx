@@ -101,7 +101,7 @@ export default function UserProfilePage() {
             background: 'var(--gold)', color: 'white',
             border: 'none', borderRadius: 8,
             padding: '10px 16px', fontSize: 12, fontWeight: 500,
-            cursor: 'pointer', fontFamily: 'var(--font)',
+            cursor: 'pointer', 
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}
         >

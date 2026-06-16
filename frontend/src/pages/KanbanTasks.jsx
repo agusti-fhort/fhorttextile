@@ -559,7 +559,7 @@ function GateRow({ gate, selected, onClick, onValidate, t }) {
   return (
     <div style={{
       border: `${selected ? '1px' : '0.5px'} solid ${AMBER_BORDER}`,
-      background: selected ? CREMA : 'var(--gate, #fff8ec)', borderRadius: 8, overflow: 'hidden',
+      background: selected ? CREMA : 'var(--gate)', borderRadius: 8, overflow: 'hidden',
     }}>
       <button onClick={onClick} style={{
         textAlign: 'left', width: '100%', border: 'none', background: 'transparent',

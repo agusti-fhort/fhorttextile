@@ -107,7 +107,7 @@ export default function TimeTracking() {
                   background: 'var(--white)', color: 'var(--gray)',
                   border: '0.5px solid #e4e4e2', borderRadius: 8,
                   padding: '8px 18px', fontSize: 12,
-                  cursor: 'not-allowed', fontFamily: 'var(--font)',
+                  cursor: 'not-allowed', 
                   display: 'flex', alignItems: 'center', gap: 6,
                 }}>
                   <i className="ti ti-player-pause" style={{fontSize: 14}} />
@@ -121,7 +121,6 @@ export default function TimeTracking() {
                     color: 'white', border: 'none', borderRadius: 8,
                     padding: '8px 18px', fontSize: 12,
                     cursor: submitting ? 'not-allowed' : 'pointer',
-                    fontFamily: 'var(--font)',
                     display: 'flex', alignItems: 'center', gap: 6,
                   }}
                 >

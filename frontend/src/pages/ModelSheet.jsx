@@ -660,7 +660,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           {/* Capçalera del panel */}
           <div style={{
             background: 'var(--bg-sidebar)',
-            borderBottom: '1px solid var(--hairline)',
+            borderBottom: '1px solid var(--base-hairline)',
             padding: '8px 12px',
             display: 'flex', alignItems: 'center',
             justifyContent: 'space-between',
