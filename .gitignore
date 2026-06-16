@@ -11,3 +11,5 @@ frontend/.env.development
 backoffice/dist/
 backoffice/dist/
 backoffice/
+ESTAT_PROJECTE.md
+ESTAT_BACKOFFICE.md
