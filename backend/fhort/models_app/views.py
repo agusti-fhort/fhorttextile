@@ -304,6 +304,16 @@ def create_model_wizard(request):
             data_objectiu=data_objectiu,
             **garment_fields,
         )
+        # PG-2 Cas B: si s'ha triat ruleset, materialitza'n les regles al model (origen=CANONICAL).
+        # El model ja està desat (create fora de transacció); l'atomic embolcalla NOMÉS la
+        # materialització → si peta, no queda cap MGR parcial i el model gradua igualment pel
+        # fallback PG-1 (ruleset extern). Degradació gràcil INTENCIONAL, no descuit.
+        if model.grading_rule_set_id:
+            from django.db import transaction
+            from fhort.models_app.services import materialize_model_grading_rules
+            with transaction.atomic():
+                materialize_model_grading_rules(
+                    model, model.grading_rule_set.regles.all(), origen='CANONICAL')
         return Response({'id': model.id, 'codi_intern': model.codi_intern}, status=201)
 
     # Multi-piece: one GarmentSet + N piece Models, codi_intern = codi_base-NN.
@@ -333,6 +343,13 @@ def create_model_wizard(request):
                 piece_number=i,
                 **garment_fields,
             )
+            # PG-2 Cas B (multi-peça): cada peça hereta el ruleset via garment_fields →
+            # materialitza les seves regles residents. Dins l'atomic del set: una fallada
+            # avorta tot el conjunt (atòmic per disseny del multi-peça).
+            if piece.grading_rule_set_id:
+                from fhort.models_app.services import materialize_model_grading_rules
+                materialize_model_grading_rules(
+                    piece, piece.grading_rule_set.regles.all(), origen='CANONICAL')
             pieces.append({
                 'id': piece.id,
                 'codi_intern': piece.codi_intern,
@@ -366,6 +383,15 @@ def update_model_step2(request, model_id):
         model.collection = d['collection'] or ''
 
     model.save()
+    # PG-2 Cas B: re-materialitza si hi ha ruleset (wipe-and-recreate cobreix canvi de profile).
+    # L'atomic embolcalla només la materialització → si peta, el model queda sense MGR i gradua
+    # pel fallback PG-1 (ruleset extern). Degradació gràcil INTENCIONAL, no descuit.
+    if model.grading_rule_set_id:
+        from django.db import transaction
+        from fhort.models_app.services import materialize_model_grading_rules
+        with transaction.atomic():
+            materialize_model_grading_rules(
+                model, model.grading_rule_set.regles.all(), origen='CANONICAL')
     return Response({'id': model.id, 'codi_intern': model.codi_intern})
 
 

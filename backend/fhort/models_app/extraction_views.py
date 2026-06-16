@@ -1899,6 +1899,11 @@ def import_session_confirmar_view(request, token):
                 if new_rule_set is not None:
                     model.grading_rule_set = new_rule_set
                     model.save(update_fields=['grading_rule_set'])
+                    # PG-2 Cas A: materialitza les regles residents (origen=IMPORTED). El motor
+                    # (PG-1) les llegeix amb prioritat; el ruleset extern queda com a punter/rastre.
+                    from fhort.models_app.services import materialize_model_grading_rules
+                    materialize_model_grading_rules(
+                        model, new_rule_set.regles.all(), origen='IMPORTED')
         except Exception as e:
             # Rollback del savepoint (creació + re-apuntat junts): la fila del ruleset ja no
             # existeix. Restaurem la FK en memòria AQUÍ, abans de qualsevol model.save()
