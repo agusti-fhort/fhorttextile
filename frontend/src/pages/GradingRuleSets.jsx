@@ -189,20 +189,27 @@ export default function GradingRuleSets() {
     [allRuleSets]
   )
 
-  const handleDelete = async (rs) => {
+  const handleDelete = async (rs, force = false) => {
     if (rs.is_system_default) {
       setMsg({ type: 'error', text: 'No es pot esborrar un RuleSet de sistema.' })
       return
     }
-    if (!confirm(`Esborrar "${rs.nom}"?`)) return
+    if (!force && !confirm(`Esborrar "${rs.nom}"?`)) return
     try {
-      const r = await fetch(`${API}/api/v1/grading-rule-sets/${rs.id}/`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      })
+      const r = await fetch(
+        `${API}/api/v1/grading-rule-sets/${rs.id}/${force ? '?force=1' : ''}`,
+        { method: 'DELETE', headers: authHeaders() },
+      )
       if (r.ok || r.status === 204) {
         setAllRuleSets(prev => prev.filter(x => x.id !== rs.id))
         setMsg({ type: 'ok', text: 'RuleSet esborrat.' })
+      } else if (r.status === 409) {
+        // Té perfils i/o models dependents → avís clar (missatge del backend, font única) +
+        // cascada controlada si es confirma.
+        const d = await r.json().catch(() => ({}))
+        if (confirm(d.message || 'Aquest RuleSet té dependències. Esborrar-lo igualment?')) {
+          return handleDelete(rs, true)
+        }
       } else {
         setMsg({ type: 'error', text: `Error ${r.status} esborrant.` })
       }

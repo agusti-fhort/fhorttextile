@@ -1,3 +1,4 @@
+from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.exceptions import PermissionDenied
@@ -16,6 +17,7 @@ from .models import (
     POMMaster,
     SizeDefinition,
     SizeSystem,
+    SizingProfile,
 )
 from .serializers import (
     GarmentGroupSerializer,
@@ -157,7 +159,38 @@ class GradingRuleSetViewSet(viewsets.ModelViewSet):
                 {'error': 'No es pot esborrar un RuleSet de sistema.'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        return super().destroy(request, *args, **kwargs)
+        # SizingProfile.grading_rule_set és PROTECT → un delete directe peta amb 500. A més,
+        # Model.grading_rule_set és SET_NULL → esborrar deixa els models dependents sense grading
+        # derivat (silenciosament). Per consentiment informat: si hi ha perfils O models, retorna
+        # 409 amb els recomptes i un missatge clar. Amb ?force=1: cascada controlada (esborra
+        # perfils + ruleset; les regles cauen per CASCADE; els models es buiden per SET_NULL — NO
+        # s'esborren). is_system_default segueix 403.
+        from fhort.models_app.models import Model
+        n_prof = SizingProfile.objects.filter(grading_rule_set=instance).count()
+        n_models = Model.objects.filter(grading_rule_set=instance).count()
+        force = str(request.query_params.get('force', '')).lower() in ('1', 'true', 'yes')
+        if (n_prof or n_models) and not force:
+            parts = []
+            if n_prof:
+                parts.append(f'{n_prof} perfil(s) de talles')
+            if n_models:
+                parts.append(f'{n_models} model(s)')
+            efectes = []
+            if n_prof:
+                efectes.append("n'eliminarà els perfils i les regles")
+            if n_models:
+                efectes.append('deixarà els models sense grading derivat')
+            return Response(
+                {'error': 'protected', 'profiles': n_prof, 'models_afectats': n_models,
+                 'message': (f"Aquest RuleSet té {' i '.join(parts)} que en depenen. "
+                             f"Esborrar-lo {' i '.join(efectes)}. Continuar?")},
+                status=status.HTTP_409_CONFLICT,
+            )
+        with transaction.atomic():
+            if n_prof:
+                SizingProfile.objects.filter(grading_rule_set=instance).delete()
+            instance.delete()  # CASCADE: GradingRule + GradingException; Model → SET_NULL
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class GradingRuleViewSet(viewsets.ModelViewSet):
