@@ -6,10 +6,11 @@ import Feedback from '../components/ui/Feedback'
 import ActionsMenu from '../components/model/ActionsMenu'
 import ProductionTab from '../components/model/ProductionTab'
 import FittingTab from '../components/model/FittingTab'
+import SizeCheckTab from '../components/model/SizeCheckTab'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 
 const API = import.meta.env.VITE_API_URL || ''
-const TABS = ['Resum', 'Mesures', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
+const TABS = ['Resum', 'Mesures', 'Size Check', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
 
 // ── Helpers de viabilitat (purs) ──────────────────────────────────────────
 // Aproximació estàndard: dl-dv laborables, sense festius. Jornada 420 min/dia.
@@ -204,6 +205,7 @@ export default function ModelSheet({ defaultTab = 'Resum' }) {
             />
           </div>
         )}
+        {activeTab === 'Size Check' && <SizeCheckTab model={model} onFeedback={setFeedback} />}
         {activeTab === 'Fitting' && <FittingTab model={model} onFeedback={setFeedback} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
         {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}

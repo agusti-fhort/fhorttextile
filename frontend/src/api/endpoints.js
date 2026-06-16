@@ -308,6 +308,21 @@ export const fittingPhotos = {
   list: (params) => client.get('/api/v1/fitting-photos/', { params }),
 }
 
+// SC-1 — Size Check: validació del proto a talla base, ABANS del fitting.
+export const sizeChecks = {
+  list: (params) => client.get('/api/v1/size-checks/', { params }),         // ?model & estat
+  get: (id) => client.get(`/api/v1/size-checks/${id}/`),
+  // Obre o reutilitza el check Pendent del model (idempotent: reusa si n'hi ha un de viu).
+  open: (modelId) => client.post('/api/v1/size-checks/open/', { model_id: modelId }),
+  resolve: (id, estat, missatge = '') =>
+    client.post(`/api/v1/size-checks/${id}/resolve/`, { estat, missatge_fabricant: missatge }),
+}
+
+// Autosave de cel·la del size check: PATCH de valor_real / acceptat / nota.
+export const sizeCheckLines = {
+  update: (id, data) => client.patch(`/api/v1/size-check-lines/${id}/`, data),
+}
+
 export const gradingVersions = {
   list: (params) => client.get('/api/v1/grading-versions/', { params }),
 }
