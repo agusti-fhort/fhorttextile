@@ -79,6 +79,31 @@ def detect_grading(valors_per_talla, run_ordenat, base_label) -> dict:
     }
 
 
+def derive_break_fields(logica, increment, valors_step, run_ordenat):
+    """Forma canònica PEÇA A → (increment_base, increment_break, talla_break_label, talla_break_pos).
+
+    STEP: primer delta del run = base; primera etiqueta del run on el delta canvia = break.
+    LINEAR: base = increment, sense break. Tot None si no derivable. NO coneix above_xl.
+
+    Nucli extret byte-a-byte de derive_grading_rule_set (camí d'import W5/Library); el command
+    backfill hi delega NOMÉS el cas (a) STEP-per-etiqueta i conserva inline la branca ISO above_xl.
+    """
+    ib = ibrk = tlabel = tpos = None
+    if logica == 'STEP' and isinstance(valors_step, dict):
+        seq = [(l, valors_step[l]) for l in run_ordenat
+               if l in valors_step and valors_step[l] is not None]
+        if seq:
+            ib = float(seq[0][1])
+            for l, d in seq:
+                if abs(float(d) - ib) > 0.001:
+                    tlabel, ibrk = l, float(d)
+                    break
+            tpos = run_ordenat.index(tlabel) if (tlabel and tlabel in run_ordenat) else None
+    elif logica == 'LINEAR':
+        ib = float(increment or 0)
+    return ib, ibrk, tlabel, tpos
+
+
 def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_ids,
                             size_system, garment_group, target_codi, construction_codi,
                             fit_type_codi, nom, nom_sufix_unic, avisos):
@@ -239,19 +264,8 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
         for pm, res, valor_base in pom_specs:
             # Peça A — omplir la forma canònica a més de valors_step (origen). STEP → derivar
             # increment_base/talla_break_label/increment_break del run; LINEAR → increment uniforme.
-            ib = ibrk = tlabel = tpos = None
-            if res['logica'] == 'STEP' and isinstance(res.get('valors_step'), dict):
-                seq = [(l, res['valors_step'][l]) for l in run_ordenat
-                       if l in res['valors_step'] and res['valors_step'][l] is not None]
-                if seq:
-                    ib = float(seq[0][1])
-                    for l, d in seq:
-                        if abs(float(d) - ib) > 0.001:
-                            tlabel, ibrk = l, float(d)
-                            break
-                    tpos = run_ordenat.index(tlabel) if (tlabel and tlabel in run_ordenat) else None
-            elif res['logica'] == 'LINEAR':
-                ib = float(res.get('increment') or 0)
+            ib, ibrk, tlabel, tpos = derive_break_fields(
+                res['logica'], res.get('increment'), res.get('valors_step'), run_ordenat)
             GradingRule.objects.create(
                 rule_set=new_rule_set,
                 pom=pm,

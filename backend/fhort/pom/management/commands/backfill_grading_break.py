@@ -32,6 +32,7 @@ class Command(BaseCommand):
 
     def handle(self, *a, **o):
         from fhort.pom.models import GradingRule, SizeDefinition
+        from fhort.pom.grading_utils import derive_break_fields
 
         dry = o['dry_run']
         with schema_context(o['schema']):
@@ -54,18 +55,16 @@ class Command(BaseCommand):
                 ib = ibrk = tlabel = tpos = None
 
                 if r.logica == 'STEP' and vs and 'above_xl' not in vs:
-                    # (a) import STEP per-etiqueta
+                    # (a) import STEP per-etiqueta — delega al nucli canònic (PEÇA A).
                     ordre = run if run else list(vs.keys())
                     seq = [(l, vs[l]) for l in ordre if l in vs and vs[l] is not None]
                     if not seq:
                         st['noresolt'] += 1
                         noresolt_rs[r.rule_set.nom] = noresolt_rs.get(r.rule_set.nom, 0) + 1
                         continue
-                    ib = float(seq[0][1])
-                    for l, d in seq:
-                        if abs(float(d) - ib) > 0.001:
-                            tlabel, ibrk = l, float(d)
-                            break
+                    # seq des d'`ordre` (fallback vs.keys()), però tpos sempre des de `run`
+                    # com a l'original: sense run, tlabel pot resoldre però tpos queda None.
+                    ib, ibrk, tlabel, _ = derive_break_fields(r.logica, None, vs, ordre)
                     tpos = run.index(tlabel) if (tlabel and tlabel in run) else None
                     st['step'] += 1
 

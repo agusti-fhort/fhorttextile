@@ -286,6 +286,7 @@ def size_map_create_view(request):
             SizingProfile, POMMaster, Target, ConstructionType, FitType,
             GarmentType,
         )
+        from fhort.pom.grading_utils import derive_break_fields
 
         data = request.data or {}
         accio = data.get('accio') or 'CREAR'
@@ -429,19 +430,32 @@ def size_map_create_view(request):
             if base_def is None and grading:
                 warnings.append("No s'ha pogut resoldre cap talla base; regles de grading omeses.")
             else:
+                # run ordenat del size system: MATEIXA font que el preview 3C (l.232-233) i que
+                # el run_of() del backfill — SizeDefinition de `ss` ordenades per `ordre`. Ja
+                # materialitzades al pas 2. Alimenta la forma canònica PEÇA A (increment_base...).
+                run_ordenat = list(
+                    SizeDefinition.objects.filter(size_system=ss)
+                    .order_by('ordre').values_list('etiqueta', flat=True))
                 for g in grading:
                     pom_id = g.get('pom_id')
                     pom = POMMaster.objects.filter(pk=pom_id).first()
                     if pom is None:
                         warnings.append(f"POM id={pom_id} no trobat; regla omesa.")
                         continue
+                    logica_eff = g.get('logica') or 'LINEAR'
+                    ib, ibrk, tlabel, tpos = derive_break_fields(
+                        logica_eff, g.get('increment'), g.get('valors_step'), run_ordenat)
                     GradingRule.objects.update_or_create(
                         rule_set=rule_set, pom=pom,
                         defaults={
                             'talla_base': base_def,
-                            'logica': g.get('logica') or 'LINEAR',
+                            'logica': logica_eff,
                             'increment': g.get('increment') or 0,
                             'valors_step': g.get('valors_step'),
+                            'increment_base': ib,
+                            'increment_break': ibrk,
+                            'talla_break_label': tlabel,
+                            'talla_break_pos': tpos,
                             'actiu': True,
                         },
                     )
