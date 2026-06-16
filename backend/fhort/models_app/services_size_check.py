@@ -13,18 +13,45 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+def _materialize_lines(size_check, model) -> int:
+    """Crea una SizeCheckLine per cada BaseMeasurement VIGENT del model.
+
+    valor_teoric = snapshot del base_value_cm en aquest moment; valor_real null (el tècnic
+    l'anota); decisio/nota als defaults. Només s'invoca quan el check NO té cap línia
+    (crear de nou o reomplir un Pendent orfe) → no clobbera feina anotada. Retorna n línies.
+    """
+    from fhort.models_app.models import BaseMeasurement, SizeCheckLine
+    bms = (
+        BaseMeasurement.objects
+        .filter(model=model, is_active=True, base_value_cm__isnull=False)
+        .select_related('pom')
+    )
+    n = 0
+    for bm in bms:
+        SizeCheckLine.objects.create(
+            size_check=size_check,
+            pom=bm.pom,
+            valor_teoric=bm.base_value_cm,   # snapshot del vigent en crear la línia
+            valor_real=None,                 # el tècnic l'anota
+        )
+        n += 1
+    return n
+
+
 def open_size_check(model_id: int, *, created_by_id: int | None = None):
-    """Obre (o reutilitza) un SizeCheck Pendent del model i materialitza les línies.
+    """Obre (o reutilitza) un SizeCheck Pendent del model i garanteix les línies.
 
     Reutilitza el SizeCheck Pendent viu si n'hi ha (no en crea un de segon); l'històric
     són els resolts. Cada open parteix del BaseMeasurement VIGENT: una línia per cada
     BaseMeasurement actiu amb valor (base_value_cm no null), valor_teoric = snapshot.
 
+    GARANTIA: si el model té BaseMeasurements vigents, open MAI retorna un check sense
+    línies — si reusa un Pendent orfe (0 línies) el reomple; si ja en té, NO el regenera
+    (preserva valor_real/decisio anotats).
+
     Retorna (SizeCheck, n_lines).
     """
-    from fhort.models_app.models import (
-        Model, BaseMeasurement, SizeCheck, SizeCheckLine,
-    )
+    from fhort.models_app.models import Model, SizeCheck
 
     model = Model.objects.get(pk=model_id)
 
@@ -34,6 +61,10 @@ def open_size_check(model_id: int, *, created_by_id: int | None = None):
     )
     if existing is not None:
         n = existing.linies.count()
+        if n == 0:
+            # Pendent orfe → reomple des dels BaseMeasurements vigents (no regenera si ja en té).
+            n = _materialize_lines(existing, model)
+            logger.info(f"SizeCheck {existing.pk} reomplert (orfe): {n} lines")
         return existing, n
 
     sc = SizeCheck.objects.create(
@@ -42,23 +73,7 @@ def open_size_check(model_id: int, *, created_by_id: int | None = None):
         talla_base_label=(model.base_size_label or '').strip(),
         created_by_id=created_by_id,
     )
-
-    bms = (
-        BaseMeasurement.objects
-        .filter(model=model, is_active=True, base_value_cm__isnull=False)
-        .select_related('pom')
-    )
-    n = 0
-    for bm in bms:
-        SizeCheckLine.objects.create(
-            size_check=sc,
-            pom=bm.pom,
-            valor_teoric=bm.base_value_cm,   # snapshot del vigent en crear la línia
-            valor_real=None,                 # el tècnic l'anota
-            acceptat=False,
-        )
-        n += 1
-
+    n = _materialize_lines(sc, model)
     logger.info(f"SizeCheck {sc.pk} created for model {model_id}: {n} lines")
     return sc, n
 
