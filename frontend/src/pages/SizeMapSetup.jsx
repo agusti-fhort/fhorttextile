@@ -26,11 +26,8 @@ const CONF_BADGE = {
 }
 
 const STEPS = [
-  { n: 1, key: 'size_map_step_target' },
-  { n: 2, key: 'size_map_step_match' },
-  { n: 3, key: 'size_map_step_talles' },
-  { n: 4, key: 'size_map_step_grading' },
-  { n: 5, key: 'size_map_step_perfils' },
+  { n: 1, key: 'size_map_screen_config', label: 'Configuració' },
+  { n: 2, key: 'size_map_screen_import', label: 'Importació i confirmació' },
 ]
 
 const card = { border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 16, marginBottom: 14 }
@@ -186,11 +183,11 @@ export default function SizeMapSetup() {
 // ─────────────────────────────────────────────────────────────────────────────
 // WIZARD
 // ─────────────────────────────────────────────────────────────────────────────
-function Stepper({ step, t }) {
+function Stepper({ screen, t }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 18, overflowX: 'auto' }}>
       {STEPS.map((s, i) => {
-        const done = s.n < step, active = s.n === step
+        const done = s.n < screen, active = s.n === screen
         return (
           <div key={s.n} style={{ display: 'flex', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px' }}>
@@ -201,7 +198,7 @@ function Stepper({ step, t }) {
                 color: active ? '#fff' : done ? 'var(--gold)' : 'var(--gray)',
               }}>{s.n}</span>
               <span style={{ fontSize: 11.5, fontFamily: MONO, color: active ? 'var(--text-main)' : 'var(--gray)', fontWeight: active ? 600 : 400 }}>
-                {t(s.key)}
+                {t(s.key, s.label)}
               </span>
             </div>
             {i < STEPS.length - 1 && <i className="ti ti-chevron-right" style={{ fontSize: 13, color: 'var(--gray-l)' }} />}
@@ -427,7 +424,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         </div>
       )}
 
-      <Stepper step={step} t={t} />
+      <Stepper screen={step <= 3 ? 1 : 2} t={t} />
       {err && <Feedback feedback={{ type: 'err', text: err }} onDismiss={() => setErr(null)} />}
 
       {/* ---- P1 ---- */}
@@ -455,6 +452,25 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           </Field>
           <Field label={t('size_map_f_base', 'Talla base')}>
             <input value={wiz.base_size} onChange={e => set({ base_size: e.target.value })} placeholder="M" style={{ ...selS, width: 120 }} />
+          </Field>
+          {/* Classificació (moguda de l'antic P5): defineix el destí del grading rule + perfils. */}
+          <Field label={t('size_map_p_construction', 'Construcció')}>
+            <select value={wiz.construction_id} onChange={e => set({ construction_id: e.target.value })} style={{ ...selS, width: '100%' }}>
+              <option value="">—</option>
+              {lookups.constructions.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
+            </select>
+          </Field>
+          <Field label={t('size_map_p_fit', 'Fit type')}>
+            <select value={wiz.fit_type_id} onChange={e => set({ fit_type_id: e.target.value })} style={{ ...selS, width: '100%' }}>
+              <option value="">—</option>
+              {lookups.fit_types.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
+            </select>
+          </Field>
+          <Field label={t('size_map_p_garment', 'Garment type')}>
+            <select value={wiz.garment_type_id} onChange={e => set({ garment_type_id: e.target.value })} style={{ ...selS, width: '100%' }}>
+              <option value="">—</option>
+              {lookups.garment_types.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
+            </select>
           </Field>
           <button onClick={goMatch} disabled={busy || !wiz.target_codi || labels().length === 0 || !wiz.base_size}
             style={{ ...primaryBtn }}>{t('size_map_next', 'Següent')}</button>
@@ -553,11 +569,11 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         </div>
       )}
 
-      {/* ---- P4 ---- */}
-      {step === 4 && (
+      {/* ---- PANTALLA 2 (a): pujada de fitxer + taula de grading ---- */}
+      {step >= 4 && (
         <div style={card}>
-          {/* Opció A — pujada de fitxer ric (Excel/PDF/imatge): reusa el motor d'extracció
-              del model → match per codi+nom + grading derivat. Alternativa al paste manual. */}
+          {/* Pujada de fitxer ric (Excel/PDF/imatge): reusa el motor d'extracció del model
+              → match per codi+nom + grading derivat sobre les talles definides a la Pantalla 1. */}
           <Field label={t('size_map_g_file', 'Puja la fitxa (Excel, PDF o imatge)')}
             hint={t('size_map_g_file_hint', 'Extracció automàtica de POMs i valors. Els codis no resolts es poden vincular manualment a sota.')}>
             <label htmlFor="size-map-grading-file"
@@ -573,20 +589,6 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                 onChange={e => { calcGradingFromFile(e.target.files[0]); e.target.value = '' }} />
             </label>
           </Field>
-
-          <div style={{ fontSize: 11, color: 'var(--gray)', margin: '4px 0 10px' }}>
-            {t('size_map_g_or', '— o enganxa la taula manualment —')}
-          </div>
-
-          <Field label={t('size_map_g_paste', 'Taula de mides (enganxa des d\'Excel)')}
-            hint={t('size_map_g_hint', 'Primera fila: POM seguit de les etiquetes. Tab o punt i coma com a separador; coma = decimal.')}>
-            <textarea value={wiz.gradingText} onChange={e => set({ gradingText: e.target.value })} rows={6}
-              style={{ ...selS, width: '100%', resize: 'vertical', fontFamily: MONO }}
-              placeholder={'POM\tS\tM\tL\tXL\nCH\t46\t48\t50\t53'} />
-          </Field>
-          <button onClick={calcGrading} disabled={busy || !wiz.gradingText.trim()} style={{ ...primaryBtn, marginBottom: 14 }}>
-            <i className="ti ti-calculator" />{t('size_map_calc', 'Calcular increments')}
-          </button>
 
           {gradingAvisos.length > 0 && (
             <ul style={{ margin: '0 0 14px', padding: '8px 12px 8px 26px', background: 'var(--warn-bg)',
@@ -660,16 +662,22 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
               </table>
             </div>
           )}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setStep(3)} style={ghostBtn}>{t('size_map_back', 'Enrere')}</button>
-            <button onClick={() => setStep(5)} style={primaryBtn}>{t('size_map_next', 'Següent')}</button>
-          </div>
         </div>
       )}
 
-      {/* ---- P5 ---- */}
-      {step === 5 && (
+      {/* ---- PANTALLA 2 (b): perfils + destí + confirmació ---- */}
+      {step >= 4 && (
         <div style={card}>
+          {/* Destí (de la decisió resolta a la Pantalla 1). REUTILITZAR no modifica el sistema:
+              només crea un GradingRuleSet nou lligat (confirmat al backend, pas 1-2 del create). */}
+          <div style={{ background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+                        padding: '8px 12px', marginBottom: 14, fontSize: 12 }}>
+            {wiz.decision === 'CREAR'
+              ? <span>{t('size_map_dest_new', 'Es crearà un sistema de talles NOU amb la seva graduació.')}</span>
+              : <span>{t('size_map_dest_reuse', "S'associarà al sistema existent")}
+                  {' '}<b>{(wiz.candidates.find(c => String(c.size_system_id) === String(wiz.size_system_id)) || {}).nom || ''}</b>.
+                  {' '}{t('size_map_dest_reuse2', 'Es crea un grading rule NOU; el sistema NO es modifica.')}</span>}
+          </div>
           <Field label={t('size_map_p_targets', 'Targets dels perfils')} hint={t('size_map_p_targets_hint', 'Es crea un perfil per cada target seleccionat')}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {lookups.targets.map(o => {
@@ -682,24 +690,6 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                 )
               })}
             </div>
-          </Field>
-          <Field label={t('size_map_p_construction', 'Construcció')}>
-            <select value={wiz.construction_id} onChange={e => set({ construction_id: e.target.value })} style={{ ...selS, width: '100%' }}>
-              <option value="">—</option>
-              {lookups.constructions.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
-            </select>
-          </Field>
-          <Field label={t('size_map_p_fit', 'Fit type')}>
-            <select value={wiz.fit_type_id} onChange={e => set({ fit_type_id: e.target.value })} style={{ ...selS, width: '100%' }}>
-              <option value="">—</option>
-              {lookups.fit_types.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
-            </select>
-          </Field>
-          <Field label={t('size_map_p_garment', 'Garment type')}>
-            <select value={wiz.garment_type_id} onChange={e => set({ garment_type_id: e.target.value })} style={{ ...selS, width: '100%' }}>
-              <option value="">—</option>
-              {lookups.garment_types.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
-            </select>
           </Field>
           {wiz.decision === 'CREAR' && (
             <Field label={t('size_map_p_nom', 'Nom del sistema (opcional)')}>
@@ -761,7 +751,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           )}
 
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => { setConflict(null); setStep(4) }} style={ghostBtn}>{t('size_map_back', 'Enrere')}</button>
+            <button onClick={() => { setConflict(null); setStep(3) }} style={ghostBtn}>{t('size_map_back', 'Enrere')}</button>
             <button onClick={doCreate} disabled={busy} style={primaryBtn}>
               <i className="ti ti-check" />{t('size_map_create_btn', 'Crear')}
             </button>

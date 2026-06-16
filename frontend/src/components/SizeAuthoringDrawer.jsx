@@ -1,9 +1,9 @@
 import { useTranslation } from 'react-i18next'
 import { Wizard } from '../pages/SizeMapSetup'
 
-// Drawer d'autoria de talles muntable (1C-3). Embolcalla el Wizard de 5 passos extret
-// de SizeMapSetup amb el patró de drawer (overlay + panell), mateix patró que
-// SizeSystemDrawer però amb amplada 1100 (porta la graella POM×talla dels passos 3/4).
+// Modal central d'autoria de talles muntable (1C-3). Embolcalla el Wizard de 5 passos extret
+// de SizeMapSetup amb el patró de modal centrat (overlay fosc + panell centrat), amplada ~1100
+// (porta la graella POM×talla dels passos 3/4). El Wizard interior NO es toca.
 // Contracte: { open, prefill, onComplete, onClose }. prefill=null → autoria directa.
 export default function SizeAuthoringDrawer({ open, prefill = null, onComplete, onClose }) {
   const { t } = useTranslation()
@@ -11,23 +11,24 @@ export default function SizeAuthoringDrawer({ open, prefill = null, onComplete, 
   if (!open) return null
 
   return (
-    <>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200,
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        padding: '3vh 16px', overflowY: 'auto',
+      }}
+    >
       <div
-        onClick={onClose}
+        onClick={e => e.stopPropagation()}
         style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
-          zIndex: 200, transition: 'opacity 0.2s',
+          width: 'min(1100px, 96vw)', maxHeight: '94vh',
+          background: '#fff', zIndex: 201, borderRadius: 12,
+          boxShadow: '0 12px 48px rgba(0,0,0,0.22)',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          fontFamily: 'IBM Plex Sans, sans-serif',
         }}
-      />
-
-      <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0,
-        width: 'min(1100px, 95vw)',
-        background: '#fff', zIndex: 201,
-        boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
-        display: 'flex', flexDirection: 'column',
-        fontFamily: 'IBM Plex Sans, sans-serif',
-      }}>
+      >
         <div style={{
           padding: '1.25rem 1.5rem',
           borderBottom: '1px solid #e5e7eb',
@@ -56,6 +57,6 @@ export default function SizeAuthoringDrawer({ open, prefill = null, onComplete, 
           <Wizard t={t} prefill={prefill} onClose={onClose} onComplete={onComplete} />
         </div>
       </div>
-    </>
+    </div>
   )
 }

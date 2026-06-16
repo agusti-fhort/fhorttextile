@@ -248,12 +248,7 @@ export default function GradingRuleSets() {
             {allRuleSets.length} conjunts de regles · {totalRegles} regles totals
           </p>
         </div>
-        <button
-          onClick={() => { setEditTarget(null); setShowModal(true) }}
-          style={btnPrimary}
-        >
-          + Nou RuleSet
-        </button>
+        {/* Creació centralitzada a la Size Library; aquí només consulta/edita/esborra. */}
       </div>
 
       {/* Missatge */}
@@ -393,12 +388,9 @@ export default function GradingRuleSets() {
           borderRadius: 8, textAlign: 'center', color: 'var(--gray, #868685)', fontSize: 12,
         }}>
           No hi ha cap RuleSet per a aquesta combinació.
-          <button
-            onClick={() => { setEditTarget(null); setShowModal(true) }}
-            style={{ ...btnPrimary, display: 'block', margin: '0.75rem auto 0' }}
-          >
-            + Crear RuleSet per a {selectedTarget} · {selectedConstruction} · {selectedFit} · {selectedGarmentGroup}
-          </button>
+          <div style={{ marginTop: 8, fontSize: 11 }}>
+            Crea'n un des de la Size Library.
+          </div>
         </div>
       )}
 
