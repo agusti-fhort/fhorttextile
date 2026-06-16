@@ -10,19 +10,16 @@ Tots els endpoints requereixen la capacitat CONFIGURE.
 import re
 
 from django.db import transaction
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from fhort.accounts.capabilities import HasCapability, CONFIGURE
+from fhort.pom.grading_utils import _norm, detect_grading, derive_break_fields
 
 
 class _Configure(HasCapability):
     required_capability = CONFIGURE
-
-
-def _norm(label) -> str:
-    """Normalitza una etiqueta per comparar (upper + strip), com fa el run."""
-    return str(label or '').strip().upper()
 
 
 def _unique_size_system_code(base: str):
@@ -222,7 +219,6 @@ def size_map_grading_preview_view(request):
         data = request.data or {}
         ssid = data.get('size_system_id')
         base_size = data.get('base_size') or ''
-        base_norm = _norm(base_size)
         taula = data.get('taula') or []
 
         # Run ordenat: unió d'etiquetes presents, ordenades pel size_system si es dóna.
@@ -240,63 +236,38 @@ def size_map_grading_preview_view(request):
             run = sorted(all_labels, key=lambda l: order_map.get(_norm(l), 9999))
         else:
             run = list(all_labels)
-        run_norm = [_norm(x) for x in run]
-        base_idx = run_norm.index(base_norm) if base_norm in run_norm else None
 
         results = []
         for row in taula:
             codi = row.get('pom_codi_client')
             valors_raw = row.get('valors') or {}
-            valors = {_norm(k): v for k, v in valors_raw.items()}
 
-            pom, _mtype, _conf = find_pom_master(codi, '')
+            # descripció si el paste la porta (avui no); el fitxer SÍ → match per nom.
+            pom, mtype, conf = find_pom_master(codi, row.get('descripcio') or '')
             warning = ''
             if pom is None:
                 warning = f"POM '{codi}' no resolt al catàleg."
 
-            logica = None
-            increment = None
-            valors_step = None
+            det = detect_grading(valors_raw, run, base_size)
+            if det['warning']:
+                warning = (warning + ' ' if warning else '') + det['warning']
 
-            if base_idx is None:
-                warning = (warning + ' ' if warning else '') + \
-                    f"Talla base '{base_size}' no és al run de talles."
-            else:
-                deltas = {}
-                for j, lab in enumerate(run_norm):
-                    if j == base_idx:
-                        continue
-                    if j > base_idx:
-                        inner = run_norm[j - 1]
-                        v_out, v_in = valors.get(lab), valors.get(inner)
-                        sign = 1.0
-                    else:
-                        inner = run_norm[j + 1]
-                        v_out, v_in = valors.get(lab), valors.get(inner)
-                        sign = -1.0
-                    if v_out is None or v_in is None:
-                        warning = (warning + ' ' if warning else '') + \
-                            f"Falta valor per calcular el delta de la talla {run[j]}."
-                        continue
-                    # format C: delta positiu en sentit de creixement cap enfora.
-                    deltas[run[j]] = round(sign * (float(v_out) - float(v_in)), 2)
-
-                if deltas:
-                    vals = list(deltas.values())
-                    if all(d == 0 for d in vals):
-                        logica, increment = 'FIXED', 0.0
-                    elif all(d == vals[0] for d in vals):
-                        logica, increment = 'LINEAR', vals[0]
-                    else:
-                        logica, valors_step = 'STEP', deltas
+            ib, ibrk, tlabel, tpos = derive_break_fields(
+                det['logica'], det['increment'], det['valors_step'], run)
 
             results.append({
                 'pom_codi_client': codi,
                 'pom_id': pom.id if pom else None,
                 'pom_nom': pom.nom_client if pom else None,
-                'logica_detectada': logica,
-                'increment': increment,
-                'valors_step': valors_step,
+                'match_type': mtype,
+                'confidence': conf,
+                'logica_detectada': det['logica'],
+                'increment': det['increment'],
+                'valors_step': det['valors_step'],
+                'increment_base': ib,
+                'increment_break': ibrk,
+                'talla_break_label': tlabel,
+                'talla_break_pos': tpos,
                 'valors_calculats': {k: valors_raw.get(k) for k in valors_raw},
                 'warning': warning,
             })
@@ -305,6 +276,152 @@ def size_map_grading_preview_view(request):
     except Exception as e:
         import logging
         logging.getLogger(__name__).exception("size_map_grading_preview_view error")
+        return Response({'error': str(e)}, status=500)
+
+
+def _parse_grading_excel(file_bytes):
+    """Parser Excel propi de la Size Library (format simple de graduació):
+    capçalera a la fila 1, A=codi, B=descripció, C endavant=talles. Retorna
+    (poms, talles): poms=[{'codi_fitxa','descripcio','values':{talla:float}}].
+    Distint de _parse_excel_poms (fitxa de model: A=codi, C=descr, D=dim, E+=talles)."""
+    import openpyxl, io
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return [], []
+    header = rows[0]
+    size_cols = [(i, str(h).strip()) for i, h in enumerate(header)
+                 if i >= 2 and h is not None and str(h).strip()]
+    talles = [lbl for _, lbl in size_cols]
+    poms = []
+    for row in rows[1:]:
+        if not row or row[0] is None or str(row[0]).strip() == '':
+            continue
+        codi = str(row[0]).strip()
+        desc = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ''
+        values = {}
+        for ci, lbl in size_cols:
+            if ci < len(row) and row[ci] is not None:
+                try:
+                    values[lbl] = float(str(row[ci]).replace(',', '.'))
+                except (ValueError, TypeError):
+                    pass
+        if values:
+            poms.append({'codi_fitxa': codi, 'descripcio': desc, 'values': values})
+    return poms, talles
+
+
+@api_view(['POST'])
+@permission_classes([_Configure])
+def size_map_grading_preview_file_view(request):
+    """POST size-map/grading-preview-file/ — preview de grading des d'un FITXER.
+
+    Multipart: {file, size_system_id (opt), base_size}. Excel → _parse_grading_excel (parser
+    propi de la Library: A=codi, B=descripció, C+=talles); PDF/imatge → extract_from_file (Opus,
+    funció PURA del motor del model). Normalitza a [{codi_fitxa, descripcio, values}], resol
+    find_pom_master AMB descripció (match per nom) i deriva el grading amb la MATEIXA lògica que
+    el preview de paste (detect_grading + derive_break_fields). Cap persistència.
+    Robust per fila: un POM que falla a la derivació s'omet amb avís, no aborta tot.
+    """
+    try:
+        from fhort.pom.models import SizeDefinition
+        from fhort.models_app.extraction_views import find_pom_master
+        from fhort.models_app.extraction_service import extract_from_file
+
+        f = request.FILES.get('file')
+        if f is None:
+            return Response({'error': 'Cal adjuntar un fitxer (camp "file").'}, status=400)
+        ssid = request.data.get('size_system_id')
+        base_size = (request.data.get('base_size') or '').strip()
+
+        name = (f.name or '').lower()
+        file_bytes = f.read()
+        avisos = []
+
+        # 1-2. Extracció → llista comuna [{codi_fitxa, descripcio, values}].
+        poms_in = []
+        if name.endswith(('.xlsx', '.xls')):
+            raw_poms, _talles = _parse_grading_excel(file_bytes)
+            for p in raw_poms:
+                poms_in.append({
+                    'codi_fitxa': (p.get('codi_fitxa') or '').strip(),
+                    'descripcio': (p.get('descripcio') or '').strip(),
+                    'values': p.get('values') or {},
+                })
+        elif name.endswith(('.pdf', '.png', '.jpg', '.jpeg', '.webp')):
+            extracted = extract_from_file(file_bytes, f.name)
+            for m in (extracted.get('measurements') or []):
+                poms_in.append({
+                    'codi_fitxa': (m.get('client_code') or m.get('code') or '').strip(),
+                    'descripcio': (m.get('description') or '').strip(),
+                    'values': m.get('values') or {},
+                })
+            if not poms_in:
+                avisos.append("La IA no ha retornat cap mesura llegible del document.")
+        else:
+            return Response({'error': (
+                f"Format no suportat: {name}. "
+                "Accepta .xlsx/.xls/.pdf/.png/.jpg/.jpeg/.webp.")}, status=400)
+
+        if not poms_in:
+            return Response({'results': [], 'run': [], 'base_size': base_size,
+                             'avisos': avisos or ["No s'han trobat POMs al fitxer."]}, status=200)
+
+        # 3. run ordenat — MATEIXA font que el preview de paste i el create.
+        run = []
+        if ssid:
+            run = list(SizeDefinition.objects.filter(size_system_id=ssid)
+                       .order_by('ordre').values_list('etiqueta', flat=True))
+        if not run:
+            for p in poms_in:
+                for k in (p['values'] or {}).keys():
+                    if k not in run:
+                        run.append(k)
+
+        # 4-5. matching (amb descripció) + derivació de grading, robust per fila.
+        results = []
+        for p in poms_in:
+            codi = p['codi_fitxa']
+            descripcio = p['descripcio']
+            values = p['values'] or {}
+            try:
+                pom, mtype, conf = find_pom_master(codi, descripcio)
+            except Exception:
+                pom, mtype, conf = None, 'no_match', 'NO_MATCH'
+            warning = '' if pom else f"POM '{codi}' no resolt al catàleg."
+            try:
+                det = detect_grading(values, run, base_size)
+            except Exception as e:
+                avisos.append(f"POM '{codi}': grading no derivat ({e}); omès.")
+                continue
+            if det['warning']:
+                warning = (warning + ' ' if warning else '') + det['warning']
+            ib, ibrk, tlabel, tpos = derive_break_fields(
+                det['logica'], det['increment'], det['valors_step'], run)
+            results.append({
+                'pom_codi_client': codi,
+                'pom_descripcio': descripcio,
+                'pom_id': pom.id if pom else None,
+                'pom_nom': pom.nom_client if pom else None,
+                'match_type': mtype,
+                'confidence': conf,
+                'logica_detectada': det['logica'],
+                'increment': det['increment'],
+                'valors_step': det['valors_step'],
+                'increment_base': ib,
+                'increment_break': ibrk,
+                'talla_break_label': tlabel,
+                'talla_break_pos': tpos,
+                'valors_calculats': {k: values.get(k) for k in values},
+                'warning': warning,
+            })
+
+        return Response({'results': results, 'run': run, 'base_size': base_size,
+                         'avisos': avisos})
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("size_map_grading_preview_file_view error")
         return Response({'error': str(e)}, status=500)
 
 
@@ -325,6 +442,7 @@ def size_map_create_view(request):
             SizingProfile, POMMaster, Target, ConstructionType, FitType,
             GarmentType,
         )
+        from fhort.pom.grading_utils import derive_break_fields
 
         data = request.data or {}
         accio = data.get('accio') or 'CREAR'
@@ -337,10 +455,45 @@ def size_map_create_view(request):
         perfils = data.get('perfils') or []
         base_size = (data.get('base_size') or '').strip()
         src_ssid = data.get('size_system_id')
+        # 1C-4b-be — resolució de conflictes de graduació (N graduacions per combinació,
+        # distingides pel nom). on_conflict: None | 'new' | 'update'.
+        on_conflict = data.get('on_conflict')
+        nom_variant = (data.get('nom_variant') or '').strip() or None
 
         warnings = []
 
         target = Target.objects.filter(codi=target_codi).first() if target_codi else None
+
+        # ── Pre-check d'avís-i-confirma (NOMÉS REUTILITZAR: el sistema ja existeix i la
+        # combinació és coneguda d'entrada). CREAR/CLONAR creen sistema nou → combinació
+        # nova → mai conflicte. Es fa ABANS d'escriure res; MAI sobreescriure en silenci.
+        if accio == 'REUTILITZAR' and on_conflict is None:
+            ss_check = SizeSystem.objects.filter(pk=src_ssid).first()
+            if ss_check is not None:
+                existing = []
+                for p in perfils:
+                    p_target = Target.objects.filter(codi=p.get('target_codi')).first()
+                    construction = ConstructionType.objects.filter(pk=p.get('construction_id')).first()
+                    fit_type = FitType.objects.filter(pk=p.get('fit_type_id')).first()
+                    if not (p_target and construction and fit_type):
+                        continue
+                    qs = SizingProfile.objects.filter(
+                        size_system=ss_check, target=p_target,
+                        construction=construction, fit_type=fit_type,
+                    ).select_related('grading_rule_set', 'target', 'construction', 'fit_type')
+                    for prof in qs:
+                        existing.append({
+                            'nom': prof.grading_rule_set.nom if prof.grading_rule_set_id else '',
+                            'id': prof.id,
+                            'combinacio': f"{p_target.codi}/{construction.codi}/{fit_type.codi}",
+                        })
+                if existing:
+                    return Response({
+                        'conflict': True,
+                        'existing': existing,
+                        'message': ('Ja existeix/en graduació/ns per a aquesta/es combinació/ns. '
+                                    'Tria actualitzar-ne una o crear-ne una de nova amb un nom.'),
+                    }, status=status.HTTP_409_CONFLICT)
 
         with transaction.atomic():
             # ---- 1. Resoldre / crear el SizeSystem ----
@@ -353,9 +506,12 @@ def size_map_create_view(request):
                 nom = f"{parent.nom} — {cust} Run {nn:02d}"
                 ss = SizeSystem.objects.create(
                     codi=codi, nom=nom, base_unit=base_unit or parent.base_unit,
-                    target=target or parent.target, actiu=True,
-                    parent=parent, customer_codi=customer_codi,
+                    actiu=True, parent=parent, customer_codi=customer_codi,
                 )
+                if target:
+                    ss.targets.add(target)
+                else:
+                    ss.targets.set(parent.targets.all())
                 # Copiar les talles del pare, després merge amb les de l'input.
                 for d in SizeDefinition.objects.filter(size_system=parent).order_by('ordre'):
                     SizeDefinition.objects.create(
@@ -370,8 +526,10 @@ def size_map_create_view(request):
                 nom = nom_custom or f"{(_target_nom(target) if target else target_codi) or 'Sistema'} {base_unit} — {cust} Run {nn:02d}".strip()
                 ss = SizeSystem.objects.create(
                     codi=codi, nom=nom, base_unit=base_unit,
-                    target=target, actiu=True, customer_codi=customer_codi,
+                    actiu=True, customer_codi=customer_codi,
                 )
+                if target:
+                    ss.targets.add(target)
 
             # ---- 2. Talles de l'input (merge per (size_system, etiqueta)) ----
             if accio in ('CLONAR', 'CREAR'):
@@ -398,12 +556,29 @@ def size_map_create_view(request):
             if base_def is None:
                 base_def = SizeDefinition.objects.filter(size_system=ss).order_by('ordre').first()
 
-            # ---- 4. GradingRuleSet ----
-            rs_nom = f"{ss.nom} — Grading"
-            rule_set, _ = GradingRuleSet.objects.update_or_create(
-                nom=rs_nom, size_system=ss,
-                defaults={'actiu': True, 'target': target},
-            )
+            # ---- 4. GradingRuleSet (graduació; el nom és el discriminador de variant) ----
+            # nom explícit del payload, o fallback derivat. filter().first() en lloc de
+            # get_or_create: GradingRuleSet no té unique (size_system, nom) → evita
+            # MultipleObjectsReturned davant dades brutes.
+            rs_nom = nom_variant or f"{ss.nom} — Grading"
+            if on_conflict == 'update':
+                rule_set = GradingRuleSet.objects.filter(size_system=ss, nom=rs_nom).first()
+                if rule_set is None:
+                    return Response(
+                        {'error': f"Graduació a actualitzar no trobada (nom='{rs_nom}')."},
+                        status=status.HTTP_400_BAD_REQUEST)
+                rule_set.actiu = True
+                if target:
+                    rule_set.target = target
+                rule_set.save(update_fields=['actiu', 'target'])
+            else:
+                # on_conflict=='new' o cas sense conflicte: reusa la graduació d'aquest
+                # nom si ja existeix, si no en crea una de nova.
+                rule_set = GradingRuleSet.objects.filter(size_system=ss, nom=rs_nom).first()
+                if rule_set is None:
+                    rule_set = GradingRuleSet.objects.create(
+                        nom=rs_nom, size_system=ss, actiu=True, target=target,
+                    )
             if target:
                 rule_set.targets.add(target)
 
@@ -411,19 +586,32 @@ def size_map_create_view(request):
             if base_def is None and grading:
                 warnings.append("No s'ha pogut resoldre cap talla base; regles de grading omeses.")
             else:
+                # run ordenat del size system: MATEIXA font que el preview 3C (l.232-233) i que
+                # el run_of() del backfill — SizeDefinition de `ss` ordenades per `ordre`. Ja
+                # materialitzades al pas 2. Alimenta la forma canònica PEÇA A (increment_base...).
+                run_ordenat = list(
+                    SizeDefinition.objects.filter(size_system=ss)
+                    .order_by('ordre').values_list('etiqueta', flat=True))
                 for g in grading:
                     pom_id = g.get('pom_id')
                     pom = POMMaster.objects.filter(pk=pom_id).first()
                     if pom is None:
                         warnings.append(f"POM id={pom_id} no trobat; regla omesa.")
                         continue
+                    logica_eff = g.get('logica') or 'LINEAR'
+                    ib, ibrk, tlabel, tpos = derive_break_fields(
+                        logica_eff, g.get('increment'), g.get('valors_step'), run_ordenat)
                     GradingRule.objects.update_or_create(
                         rule_set=rule_set, pom=pom,
                         defaults={
                             'talla_base': base_def,
-                            'logica': g.get('logica') or 'LINEAR',
+                            'logica': logica_eff,
                             'increment': g.get('increment') or 0,
                             'valors_step': g.get('valors_step'),
+                            'increment_base': ib,
+                            'increment_break': ibrk,
+                            'talla_break_label': tlabel,
+                            'talla_break_pos': tpos,
                             'actiu': True,
                         },
                     )
@@ -441,15 +629,23 @@ def size_map_create_view(request):
                         f"construction={p.get('construction_id')}, fit={p.get('fit_type_id')}, "
                         f"garment={p.get('garment_type_id')}); omès.")
                     continue
-                profile, _ = SizingProfile.objects.update_or_create(
-                    target=p_target, construction=construction, size_system=ss,
-                    defaults={
-                        'fit_type': fit_type,
-                        'garment_type': garment_type,
-                        'grading_rule_set': rule_set,
-                        'is_default': True,
-                    },
-                )
+                # fit_type i grading_rule_set formen part de la IDENTITAT (filter, no
+                # defaults) → s'acaba la reassignació silenciosa de fit i la col·lisió
+                # intra-crida. La regla N-perfils permet coexistir variants pel rule_set.
+                profile = SizingProfile.objects.filter(
+                    size_system=ss, target=p_target, construction=construction,
+                    fit_type=fit_type, grading_rule_set=rule_set,
+                ).first()
+                if profile is not None:
+                    profile.garment_type = garment_type
+                    profile.is_default = True
+                    profile.save(update_fields=['garment_type', 'is_default'])
+                else:
+                    profile = SizingProfile.objects.create(
+                        target=p_target, construction=construction, size_system=ss,
+                        fit_type=fit_type, garment_type=garment_type,
+                        grading_rule_set=rule_set, is_default=True,
+                    )
                 sizing_profile_ids.append(profile.id)
 
         return Response({

@@ -4,10 +4,13 @@ import { VersionBadge } from "./VersionBadge"
 import { GradingHistoryPanel } from "./GradingHistoryPanel"
 import { useUnit } from "./UnitToggle"
 import { ExportSizeSetCSV, ExportGradingCSV } from "./ExportButton"
+import SizeSystemDrawer from "./SizeSystem/SizeSystemDrawer"
+import useAuthStore from "../store/auth"
 import { sizingProfiles, gradingRuleSets } from "../api/endpoints"
 
 export function SizeSetDetail({ profileId, onClose, onRefresh }) {
   const { unit, format } = useUnit()
+  const canConfigure = !!useAuthStore(s => s.user)?.capabilities?.includes('configure')
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState({})
@@ -15,6 +18,8 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
   const [msg, setMsg] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
   const [restoring, setRestoring] = useState(false)
+  // SIZE-2a — edició post-hoc de talles del sistema (CRUD reubicat des de /poms/sizes).
+  const [editTalles, setEditTalles] = useState(false)
 
   const reloadProfile = () => {
     if (!profileId) return
@@ -148,6 +153,20 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
               }}
             >
               {restoring ? '...' : '↺ Restaurar'}
+            </button>
+          )}
+          {canConfigure && profile.size_system?.id && (
+            <button
+              onClick={() => setEditTalles(true)}
+              title="Editar les talles del sistema"
+              style={{
+                padding: '2px 8px', borderRadius: 3, fontSize: 10,
+                background: '#fff', color: '#c27a2a',
+                border: '1px solid #e0c8a0', cursor: 'pointer',
+                fontFamily: 'IBM Plex Mono, monospace',
+              }}
+            >
+              ✎ Editar talles
             </button>
           )}
           {onClose && (
@@ -298,6 +317,15 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
           ℹ Aquest és un perfil estàndard ISO. Per personalitzar els increments,
           clona\'l i crea la teva versió pròpia.
         </div>
+      )}
+
+      {/* SIZE-2a — drawer d'edició de talles del sistema (CRUD reubicat des de /poms/sizes). */}
+      {editTalles && profile.size_system?.id && (
+        <SizeSystemDrawer
+          sizeSystem={profile.size_system}
+          onClose={() => { setEditTalles(false); reloadProfile() }}
+          onDeleted={() => { setEditTalles(false); onRefresh && onRefresh(); onClose && onClose() }}
+        />
       )}
     </div>
   )

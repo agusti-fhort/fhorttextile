@@ -58,8 +58,6 @@ const navGroups = [
   { sectionKey: 'nav.section_config_tecnica', items: [
     { to: '/garment-types', labelKey: 'nav.garment_types', icon: 'ti-shirt' },
     { to: '/poms', labelKey: 'nav.poms_list', icon: 'ti-ruler-measure' },
-    { to: '/poms/sizes', labelKey: 'nav.sizes', icon: 'ti-arrows-maximize' },
-    { to: '/configuracio/size-map', labelKey: 'nav.size_map', icon: 'ti-ruler-2', cap: 'configure' },
     { to: '/size-library', labelKey: 'nav.size_library', icon: 'ti-books' },
     { to: '/poms/grading', labelKey: 'nav.grading', icon: 'ti-chart-dots' },
     { to: '/task-types', labelKey: 'nav.tasques_catalog', icon: 'ti-list-details' },
@@ -306,12 +304,12 @@ export default function Sidebar() {
     <aside style={{
       width: 240,
       background: C.bg,
-      height: '100vh',
+      height: import.meta.env.VITE_STAGING === 'true' ? 'calc(100vh - 28px)' : '100vh',
       display: 'flex',
       flexDirection: 'column',
       position: 'fixed',
       left: 0,
-      top: 0,
+      top: import.meta.env.VITE_STAGING === 'true' ? '28px' : '0',
       zIndex: 100,            // per sobre de capçaleres sticky de pàgina (Topbar/FittingDetail zIndex:10)
       borderRight: `1px solid ${C.border}`,
       overflowY: 'auto',

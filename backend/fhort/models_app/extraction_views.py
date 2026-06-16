@@ -1012,8 +1012,10 @@ def import_session_talles_view(request, token):
     size_map_prefill = None
     if not ready:
         target_codi = model.target or ''
-        if not target_codi and model.size_system_id and model.size_system.target_id:
-            target_codi = model.size_system.target.codi
+        if not target_codi and model.size_system_id:
+            _ss_target = model.size_system.targets.first()
+            if _ss_target:
+                target_codi = _ss_target.codi
         size_map_prefill = {
             'target_codi': target_codi or None,
             'labels': talles_sel or sense_desti,
@@ -1073,7 +1075,16 @@ def find_pom_master(code, description):
     """
     from fhort.pom.models import POMMaster
 
-    # Strategy 0 — positional letter+digit codes (D1, G2s...).
+    # Strategy 1 — exact match by codi_client. Va PRIMER: un codi_client EXACTE sempre ha de
+    # guanyar un match per prefix (p.ex. 'SH DR' → 'SH DR', no 'SH'). Abans anava DESPRÉS del
+    # root-prefix i 'SH DR' es resolia erròniament a 'SH' (col·lisió que perdia 'SH DR').
+    if code:
+        pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).first()
+        if pm:
+            return pm, 'exact_code', 'HIGH'
+
+    # Strategy 0 — codis posicionals lletra+dígit (D1, G2s...): sense exacte, prova el root de
+    # lletres inicials. DESPRÉS de l'exacte perquè no segresti codis amb sufix com 'SH DR'.
     if code:
         m = _re.match(r'^([A-Za-z]+)', code)
         if m and m.group(1) != code:
@@ -1081,11 +1092,6 @@ def find_pom_master(code, description):
             pm = POMMaster.objects.filter(codi_client__iexact=root, actiu=True).first()
             if pm:
                 return pm, 'root_code_match', 'MEDIUM'
-
-    # Strategy 1 — exact match by codi_client.
-    pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).first()
-    if pm:
-        return pm, 'exact_code', 'HIGH'
 
     if not description:
         return None, 'no_match', 'NO_MATCH'
@@ -1395,6 +1401,21 @@ def import_session_extraccio_view(request, token):
     session.estat = 'POMS'
     session.save(update_fields=['resultat', 'poms_extrets', 'avisos', 'estat', 'actualitzat_at'])
 
+    # 1C-2b: suggeriment del mode dels valors (default del toggle al front). Es calcula sobre
+    # els POMs amb match (identitat canònica) i sobre el run/base del DOCUMENT (extracted) —
+    # mateix origen que les claus de `values`. Cosmètic → mai pot petar W2; default 'absoluts'.
+    try:
+        from fhort.pom.grading_utils import suggest_valors_mode
+        vals_per_pom = {
+            p['pom_master_id']: p['values']
+            for p in poms_extrets
+            if p.get('pom_master_id') and p.get('values')
+        }
+        suggested_valors_mode = suggest_valors_mode(
+            vals_per_pom, extracted.get('base_size'), extracted.get('sizes') or [])
+    except Exception:
+        suggested_valors_mode = 'absoluts'
+
     return Response({
         'estat': session.estat,
         'poms_extrets': poms_extrets,
@@ -1403,6 +1424,7 @@ def import_session_extraccio_view(request, token):
         'sizes': extracted.get('sizes') or [],
         'grading_status': grading_status,
         'avisos': avisos,
+        'suggested_valors_mode': suggested_valors_mode,
     }, status=200)
 
 
@@ -1564,10 +1586,94 @@ def import_session_mesures_view(request, token):
         net.append({'pom_master_id': pid, 'talla_label': talla, 'valor': valor})
 
     session.resultat = {**(session.resultat or {}), 'mesures': net}
+    # 1C-2a: si el wizard declara el mode dels valors (absoluts/deltes), desar-lo per al W5.
+    valors_mode = request.data.get('valors_mode')
+    if valors_mode in ('absoluts', 'deltes'):
+        session.resultat = {**session.resultat, 'valors_mode': valors_mode}
     session.estat = 'MESURES_OK'
     session.save(update_fields=['resultat', 'estat', 'actualitzat_at'])
 
     return Response({'ok': True, 'estat': session.estat, 'n_valors': len(net)}, status=200)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def import_session_library_prefill_view(request, token):
+    """
+    POST /api/v1/import-sessions/<token>/library-prefill/  (1C-3 — pont fitxa → Size Library)
+
+    Construeix el prefill ENRIQUIT per a la Size Library des de l'extracció ja feta: run + base
+    + target + POMs amb els seus valors per talla, en ABSOLUTS. Si la fitxa era en mode 'deltes',
+    converteix amb deltes_a_absoluts (1C-2a) abans d'enviar (el camí Library deriva amb
+    detect_grading, que espera absoluts). NO crea res: només llegeix la sessió. Robust: degrada.
+    """
+    from fhort.models_app.models import ImportSession
+
+    session = ImportSession.objects.filter(token=token).select_related('model').first()
+    if not session:
+        return Response({'error': 'Sessió no trobada'}, status=404)
+    model = session.model
+
+    # valors {pid:{talla:valor}} des de les mesures desades (els valors EDITATS al W3).
+    valors = {}
+    for m in (session.resultat or {}).get('mesures', []):
+        try:
+            pid = int(m['pom_master_id'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if m.get('talla_label') in (None, ''):
+            continue
+        valors.setdefault(pid, {})[m['talla_label']] = m.get('valor')
+
+    base_size = ((model.base_size_label if model else '') or '').strip()
+    run = [s.strip() for s in ((model.size_run_model if model else '') or '')
+           .replace(';', '·').split('·') if s.strip()]
+
+    # Mode deltes → absoluts ABANS d'enviar (reusa 1C-2a; una sola font de conversió).
+    if ((session.resultat or {}).get('valors_mode') or 'absoluts') == 'deltes' and run and base_size:
+        from fhort.pom.grading_utils import deltes_a_absoluts
+        valors = deltes_a_absoluts(valors, base_size, run)
+
+    # codi_client per pom des del CATÀLEG (font autoritativa per pid), no de la còpia
+    # serialitzada a poms_extrets. find_pom_master al camí Library matcheja codi_client__iexact
+    # (Strategy 1, exact_code HIGH) → round-trip garantit al MATEIX POMMaster.
+    from fhort.pom.models import POMMaster
+    codi_by_pid = {
+        pm.id: (pm.codi_client or '')
+        for pm in POMMaster.objects.filter(id__in=list(valors.keys()))
+    }
+
+    poms = []
+    for pid, vals in valors.items():
+        net = {k: v for k, v in (vals or {}).items() if v not in (None, '')}
+        if net:
+            poms.append({'pom_codi': codi_by_pid.get(pid) or '', 'valors': net})
+
+    target_codi = (model.target if model else '') or ''
+    if not target_codi and model and model.size_system_id:
+        _t = model.size_system.targets.first()
+        if _t:
+            target_codi = _t.codi
+
+    # Classificació del model resolta a IDs (com 1B, codi__iexact) perquè el drawer pugui crear
+    # el SizingProfile (target+construction+fit+garment_type). garment_type ja és FK al model.
+    from fhort.pom.models import ConstructionType, FitType
+    rs_constr = (ConstructionType.objects.filter(codi__iexact=model.construction).first()
+                 if (model and model.construction) else None)
+    rs_fit = (FitType.objects.filter(codi__iexact=model.fit_type).first()
+              if (model and model.fit_type) else None)
+
+    return Response({
+        'target_codi': target_codi or None,
+        'labels': run,
+        'base_size': base_size or None,
+        'poms': poms,
+        'construction_id': rs_constr.id if rs_constr else None,
+        'fit_type_id': rs_fit.id if rs_fit else None,
+        'garment_type_id': (model.garment_type_id if model else None),
+        'import_session_token': str(session.token),
+        'model_id': model.id if model else None,
+    }, status=200)
 
 
 # ═══════════════════════════ W4 — Teixit ═══════════════════════════
@@ -1622,6 +1728,7 @@ def import_session_confirmar_view(request, token):
     from fhort.accounts.models import UserProfile
     from fhort.pom.models import POMMaster
     from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
+    from fhort.models_app.matching import match_size_system
 
     session = ImportSession.objects.filter(token=token).select_related('model').first()
     if not session:
@@ -1645,9 +1752,52 @@ def import_session_confirmar_view(request, token):
             continue
         valors.setdefault(pid, {})[m['talla_label']] = m['valor']
 
-    base_size = (model.base_size_label or '').strip()
-
     with transaction.atomic():
+        # ── 0c. Reconciliació size_system/base/run des de l'extracció (tanca Capa 0).
+        # Deriva el sistema NET del run detectat de la fitxa via match_size_system, en
+        # comptes de confiar en la classificació del wizard (que pot haver triat un sistema
+        # incorrecte). Estricte: només re-apunta amb match perfecte (afecta grading i DXF).
+        extraccio = (session.resultat or {}).get('extraccio') or {}
+        run_detectat = extraccio.get('sizes') or []
+        base_detectada = extraccio.get('base_size')
+        target_codi = model.target or ''
+        if not target_codi and model.size_system_id:
+            _ss_target = model.size_system.targets.first()
+            if _ss_target:
+                target_codi = _ss_target.codi
+        if run_detectat and base_detectada and target_codi:
+            mr = match_size_system(target_codi, run_detectat, base_detectada)
+            if mr.ok and mr.score == 1.0 and mr.base_ok:
+                model.size_system = mr.size_system
+                model.base_size_label = base_detectada
+                model.size_run_model = '·'.join(run_detectat)
+                model.save(update_fields=['size_system', 'base_size_label', 'size_run_model'])
+            else:
+                session.avisos = (session.avisos or []) + [
+                    f"Size system no reconciliat automàticament (match {mr.score:.0%} per target "
+                    f"'{target_codi}'): es manté la classificació manual. Revisa que el sistema "
+                    f"de talles assignat sigui correcte per a aquest run."]
+        else:
+            session.avisos = (session.avisos or []) + [
+                "Reconciliació de talles omesa: manca run detectat, base o target a la sessió."]
+
+        # base_size reflecteix el valor (possiblement) reconciliat.
+        base_size = (model.base_size_label or '').strip()
+
+        # ── 1C-2a. Si la fitxa portava INCREMENTS (deltes) en comptes de mesures absolutes,
+        # convertir-los a absoluts AQUÍ — abans dels TRES consumidors de `valors`
+        # (BaseMeasurement a 1693, chain de GradedSpec a 1733, derive_grading_rule_set) —
+        # perquè tots tres rebin absoluts i detect_grading/derive quedin INTACTES. Default
+        # 'absoluts' = camí d'avui sense canvi (la conversió només s'activa si s'ha declarat).
+        valors_mode = (session.resultat or {}).get('valors_mode') or 'absoluts'
+        if valors_mode == 'deltes':
+            from fhort.pom.grading_utils import deltes_a_absoluts
+            run_ordenat_conv = [
+                s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·')
+                if s.strip()
+            ]
+            valors = deltes_a_absoluts(valors, base_size, run_ordenat_conv)
+
         # ── 1. Mana el document: neteja files buides de plantilla i crea NOMÉS els confirmats.
         BaseMeasurement.objects.filter(model=model, base_value_cm__isnull=True).delete()
 
@@ -1718,6 +1868,80 @@ def import_session_confirmar_view(request, token):
                 )
                 n_specs += 1
 
+        # ── 3b. Derivar la regla de grading des dels valors i re-apuntar-hi el model.
+        # La derivació (detect_grading per POM + dedup + anti-proliferació 1D + crear/
+        # reutilitzar el ruleset) viu a pom.grading_utils.derive_grading_rule_set (pura de
+        # model: 1C-1) perquè la Size Library la pugui cridar amb dades del fitxer. Aquí el
+        # W5 la crida amb dades del model i fa el re-apuntat A FORA. Chain de GradedSpec no
+        # tocat. Degradació amb gràcia: un error de desament no atura l'import.
+        from fhort.pom.grading_utils import derive_grading_rule_set
+
+        new_rule_set = None
+        n_rules = 0
+        grading_avisos = []
+        prev_grs_id = model.grading_rule_set_id  # per restaurar la FK si el desament peta
+        try:
+            with transaction.atomic():
+                new_rule_set = derive_grading_rule_set(
+                    size_run_model=model.size_run_model,
+                    base_size=base_size,
+                    valors=valors,
+                    confirmed_pom_ids=confirmed_pom_ids,
+                    size_system=model.size_system,
+                    garment_group=model.garment_group,
+                    target_codi=model.target,
+                    construction_codi=model.construction,
+                    fit_type_codi=model.fit_type,
+                    nom=f"Importació fitxa · {model.codi_intern}",
+                    nom_sufix_unic=size_fitting.codi,
+                    avisos=grading_avisos,
+                )
+                if new_rule_set is not None:
+                    model.grading_rule_set = new_rule_set
+                    model.save(update_fields=['grading_rule_set'])
+                    # PG-2 Cas A: materialitza les regles residents (origen=IMPORTED). El motor
+                    # (PG-1) les llegeix amb prioritat; el ruleset extern queda com a punter/rastre.
+                    from fhort.models_app.services import materialize_model_grading_rules
+                    materialize_model_grading_rules(
+                        model, new_rule_set.regles.all(), origen='IMPORTED')
+                    # PG-3 Cas A: compara el grading materialitzat (del document) amb el canònic
+                    # de la Library que encaixaria i emet advertència. NOMÉS informa: embolcallat
+                    # en try propi perquè un error de comparació NO faci rollback del grading ja
+                    # materialitzat (degradació gràcil — no bloqueja, no muta grading).
+                    try:
+                        from fhort.pom.grading_utils import (
+                            cerca_canonic_equivalent, grading_rules_match)
+                        canonic = cerca_canonic_equivalent(model)
+                        if canonic is None:
+                            grading_avisos.append(
+                                "Grading específic per aquest model: cap graduació canònica de "
+                                "la Library hi encaixa.")
+                        else:
+                            ok, divs = grading_rules_match(
+                                model.grading_rules.all(), canonic.regles.all())
+                            if not ok:
+                                detall = "; ".join(
+                                    f"{d['pom_codi']}: {d['detall']}" for d in divs[:5])
+                                grading_avisos.append(
+                                    f"El grading del document difereix del canònic "
+                                    f"'{canonic.nom}': {detall}")
+                            # encaixa → cap append (silenci)
+                    except Exception as _cmp_e:
+                        grading_avisos.append(
+                            f"Comparació amb el grading canònic omesa (error: {_cmp_e}).")
+        except Exception as e:
+            # Rollback del savepoint (creació + re-apuntat junts): la fila del ruleset ja no
+            # existeix. Restaurem la FK en memòria AQUÍ, abans de qualsevol model.save()
+            # posterior de l'import (p.ex. teixit), perquè no escrigui un id mort.
+            model.grading_rule_set_id = prev_grs_id
+            new_rule_set = None
+            grading_avisos.append(
+                f"Grading no derivat (error en desar regles: {e}); es manté el ruleset previ.")
+        n_rules = new_rule_set.regles.count() if new_rule_set else 0
+
+        if grading_avisos:
+            session.avisos = (session.avisos or []) + grading_avisos
+
         # ── 4. PDF/document → ModelFitxer(categoria='Document') amb versionat (re-import = v2).
         doc_fitxer = None
         if session.document:
@@ -1757,7 +1981,7 @@ def import_session_confirmar_view(request, token):
 
         # ── 6. Tanca la sessió.
         session.estat = 'CONFIRMAT'
-        session.save(update_fields=['estat', 'actualitzat_at'])
+        session.save(update_fields=['estat', 'avisos', 'actualitzat_at'])
 
     return Response({
         'ok': True,
@@ -1769,5 +1993,8 @@ def import_session_confirmar_view(request, token):
         'size_fitting': size_fitting.codi,
         'document_fitxer': (doc_fitxer.nom_fitxer if doc_fitxer else None),
         'teixit_aplicat': teixit_aplicat,
+        'grading_rule_set': (new_rule_set.nom if new_rule_set else None),
+        'grading_rules': n_rules,
+        'grading_avisos': grading_avisos,
         'message': f'Importació confirmada: {n_bm} POMs, {n_specs} valors de grading (tancat).',
     }, status=201)
