@@ -11,6 +11,108 @@ def _norm(label) -> str:
     return str(label or '').strip().upper()
 
 
+def _step_equal(a, b):
+    """Igualtat numèrica de valors_step (dict {etiqueta: delta} o None) amb tolerància
+    0.001 sobre claus normalitzades (_norm). Funció de mòdul (PG-3): la comparteixen
+    l'anti-proliferació 1D de derive_grading_rule_set i grading_rules_match."""
+    if not a and not b:
+        return True
+    if bool(a) != bool(b):
+        return False
+    na = {_norm(k): float(v) for k, v in a.items()}
+    nb = {_norm(k): float(v) for k, v in b.items()}
+    if set(na) != set(nb):
+        return False
+    return all(abs(na[k] - nb[k]) < 0.001 for k in na)
+
+
+def grading_rules_match(model_rules, canonical_rules):
+    """Compara regles residents (ModelGradingRule) vs regles d'un canònic (GradingRule).
+
+    Compara la FORMA del grading, que és INVARIANT a la talla base: el motor (_apply_rule)
+    ancora a model.base_size_label, no a rule.talla_base (mer metadata del seed). Per això NO
+    es compara la talla base — fer-ho compararia l'ancoratge, no el grading, i emmascararia
+    divergències reals quan el model i el canònic tenen bases diferents (cas normal: seeds
+    ancorats a M, models a la seva pròpia base).
+
+    4 dimensions:
+      1. mateix conjunt de pom_id (estricte)
+      2. logica (literal)
+      3. increment (float(x or 0), tol 0.001)
+      4. valors_step (via _step_equal de mòdul)
+
+    NO compara increment_base/break directament (els canònics es deriven de logica+increment+
+    valors_step). Retorna (match: bool, divergencies: list[dict]) amb el primer eix divergent
+    per pom, {'pom_codi', 'detall'}, per construir l'advertència.
+    """
+    m_by = {r.pom_id: r for r in model_rules}
+    c_by = {r.pom_id: r for r in canonical_rules}
+    divs = []
+
+    def _codi(rule):
+        return getattr(getattr(rule, 'pom', None), 'codi_client', None) or getattr(rule, 'pom_id', '?')
+
+    # (1) mateix conjunt de pom_id
+    nomes_model = set(m_by) - set(c_by)
+    nomes_canonic = set(c_by) - set(m_by)
+    for pid in nomes_model:
+        divs.append({'pom_codi': _codi(m_by[pid]), 'detall': 'POM al model però no al canònic'})
+    for pid in nomes_canonic:
+        divs.append({'pom_codi': _codi(c_by[pid]), 'detall': 'POM al canònic però no al model'})
+
+    for pid in set(m_by) & set(c_by):
+        mr, cr = m_by[pid], c_by[pid]
+        # (2) logica
+        if (mr.logica or '') != (cr.logica or ''):
+            divs.append({'pom_codi': _codi(mr), 'detall': f'lògica {mr.logica} ≠ {cr.logica}'})
+            continue
+        # (3) increment
+        if abs(float(mr.increment or 0) - float(cr.increment or 0)) >= 0.001:
+            divs.append({'pom_codi': _codi(mr), 'detall': f'increment {mr.increment} ≠ {cr.increment}'})
+            continue
+        # (4) valors_step
+        if not _step_equal(mr.valors_step, cr.valors_step):
+            divs.append({'pom_codi': _codi(mr), 'detall': 'valors_step difereixen'})
+            continue
+
+    return (len(divs) == 0, divs)
+
+
+def cerca_canonic_equivalent(model):
+    """Busca el GradingRuleSet canònic (is_system_default=True) que encaixa amb la
+    classificació del model. None si no n'hi ha cap o si falta la classificació mínima.
+
+    Font de la classificació: els CAMPS PROPIS del model (no model.grading_rule_set, que
+    seria circular en Cas A). target/construction/fit_type són codis (string) al model →
+    es resolen a FK via codi__iexact, mateix patró que derive_grading_rule_set.
+
+    DEUTE (PG-3): el match de target va per la M2M `targets` (autoritativa), mentre que
+    l'anti-proliferació 1D de derive_grading_rule_set encara filtra pel FK legacy `target`.
+    Si un canònic té el target a la M2M però no al FK (o viceversa) divergiran. No es toca
+    el 1D avui; queda anotat com a deute fins que el FK `target` es retiri.
+    """
+    from fhort.pom.models import Target, ConstructionType, FitType, GradingRuleSet
+    ss = model.size_system        # FK directe
+    tgt = Target.objects.filter(codi__iexact=model.target).first() if model.target else None
+    constr = ConstructionType.objects.filter(codi__iexact=model.construction).first() if model.construction else None
+    fit = FitType.objects.filter(codi__iexact=model.fit_type).first() if model.fit_type else None
+    if not (ss and tgt):          # classificació mínima per cercar
+        return None
+    # Eixos de match (regla de negoci): size_system + target + construction + fit_type. NO
+    # garment_group: els seeds canònics ISO tenen garment_group=NULL, mentre que els models
+    # solen portar-lo poblat → incloure'l faria que CAP model encaixés (fals "grading
+    # específic" sistemàtic). El 1D sí filtra per garment_group perquè compara contra rulesets
+    # CUSTOM derivats del propi model (que sí el porten); aquí comparem contra els seeds.
+    # construction/fit_type None → WHERE ..._id IS NULL: un canònic sense construction/fit
+    # encaixa amb un model sense construction/fit (intencional, no descuit).
+    return GradingRuleSet.objects.filter(
+        is_system_default=True,
+        size_system=ss,
+        construction=constr, fit_type=fit,
+        targets=tgt,              # M2M (no el FK legacy `target`) — veure DEUTE al docstring
+    ).distinct().first()
+
+
 def detect_grading(valors_per_talla, run_ordenat, base_label) -> dict:
     """Detecta la lògica de grading d'un POM a partir dels seus valors per talla.
 
@@ -200,19 +302,6 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
         avisos.append(
             "Cap regla de grading derivada dels valors; es manté el ruleset previ del model.")
         return None
-
-    def _step_equal(a, b):
-        # valors_step (dict {etiqueta: delta}) o None. Igualtat numèrica amb tolerància sobre
-        # claus normalitzades (mateix criteri que el motor: _norm = str(x).strip().upper()).
-        if not a and not b:
-            return True
-        if bool(a) != bool(b):
-            return False
-        na = {_norm(k): float(v) for k, v in a.items()}
-        nb = {_norm(k): float(v) for k, v in b.items()}
-        if set(na) != set(nb):
-            return False
-        return all(abs(na[k] - nb[k]) < 0.001 for k in na)
 
     with transaction.atomic():
         rs_target = Target.objects.filter(codi__iexact=target_codi).first() if target_codi else None

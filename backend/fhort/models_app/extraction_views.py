@@ -1904,6 +1904,31 @@ def import_session_confirmar_view(request, token):
                     from fhort.models_app.services import materialize_model_grading_rules
                     materialize_model_grading_rules(
                         model, new_rule_set.regles.all(), origen='IMPORTED')
+                    # PG-3 Cas A: compara el grading materialitzat (del document) amb el canònic
+                    # de la Library que encaixaria i emet advertència. NOMÉS informa: embolcallat
+                    # en try propi perquè un error de comparació NO faci rollback del grading ja
+                    # materialitzat (degradació gràcil — no bloqueja, no muta grading).
+                    try:
+                        from fhort.pom.grading_utils import (
+                            cerca_canonic_equivalent, grading_rules_match)
+                        canonic = cerca_canonic_equivalent(model)
+                        if canonic is None:
+                            grading_avisos.append(
+                                "Grading específic per aquest model: cap graduació canònica de "
+                                "la Library hi encaixa.")
+                        else:
+                            ok, divs = grading_rules_match(
+                                model.grading_rules.all(), canonic.regles.all())
+                            if not ok:
+                                detall = "; ".join(
+                                    f"{d['pom_codi']}: {d['detall']}" for d in divs[:5])
+                                grading_avisos.append(
+                                    f"El grading del document difereix del canònic "
+                                    f"'{canonic.nom}': {detall}")
+                            # encaixa → cap append (silenci)
+                    except Exception as _cmp_e:
+                        grading_avisos.append(
+                            f"Comparació amb el grading canònic omesa (error: {_cmp_e}).")
         except Exception as e:
             # Rollback del savepoint (creació + re-apuntat junts): la fila del ruleset ja no
             # existeix. Restaurem la FK en memòria AQUÍ, abans de qualsevol model.save()
