@@ -60,7 +60,7 @@ const btnSecondary = {
   fontFamily: 'IBM Plex Mono, monospace',
 }
 
-export default function ModelSheet({ defaultTab = 'Resum' }) {
+export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = false }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -205,7 +205,7 @@ export default function ModelSheet({ defaultTab = 'Resum' }) {
             />
           </div>
         )}
-        {activeTab === 'Size Check' && <SizeCheckTab model={model} onFeedback={setFeedback} />}
+        {activeTab === 'Size Check' && <SizeCheckTab model={model} onFeedback={setFeedback} editable={sizeCheckEditable} />}
         {activeTab === 'Fitting' && <FittingTab model={model} onFeedback={setFeedback} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
         {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}

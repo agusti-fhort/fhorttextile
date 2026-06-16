@@ -126,6 +126,8 @@ export default function App() {
           <Route path="models/:id/mesures" element={<ModelMeasurements />} />
           <Route path="models/:id/teixit" element={<ModelFabric />} />
           <Route path="models/:id/fitxers" element={<ModelSheet defaultTab="Fitxers" />} />
+          {/* SC-2 — superfície de treball del Size Check (des del Kanban): mode editable. */}
+          <Route path="models/:id/size-check" element={<ModelSheet defaultTab="Size Check" sizeCheckEditable />} />
           {/* 5B.6 — capa de sessions de fitting (l'antiga SizeFitting es va jubilar al Pas 1 catàlegs) */}
           <Route path="fittings" element={<FittingSessionList />} />
           <Route path="fittings/new" element={<FittingSessionNew />} />

@@ -608,6 +608,8 @@ function TaskCard({ task, canExecute, onTransition, t }) {
   const isPom = task.task_type_code === 'pom'
   // Tasca de fitxa tècnica: porta d'entrada a l'editor full-screen de la fitxa.
   const isTechSheet = task.task_type_code === 'tech_sheet'
+  // Tasca de size check: porta d'entrada a la graella de validació del proto a talla base.
+  const isSizeCheck = task.task_type_code === 'size_check'
   return (
     <div style={{
       border: '0.5px solid var(--gray-l)', borderRadius: 8,
@@ -670,6 +672,26 @@ function TaskCard({ task, canExecute, onTransition, t }) {
           }}>
             <i className="ti ti-file-text" style={{ fontSize: 12 }} />
             {t('kanban.action.open_tech_sheet', 'Obrir fitxa')}
+          </button>
+        </div>
+      )}
+      {isSizeCheck && (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={() => {
+            // Mateix patró que isPom: auto-iniciar (fire-and-forget) i obrir la graella
+            // del size check en mode treball (editable). L'exclusió mútua i el timer els fa
+            // transition_task al backend (cicle genèric, cap codi especial per size_check).
+            if (canExecute && (task.status === 'Pending' || task.status === 'Paused')) {
+              onTransition(task, 'InProgress')
+            }
+            navigate(`/models/${task.model}/size-check`)
+          }} style={{
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px',
+            borderRadius: 6, border: '0.5px solid var(--gold)', background: 'var(--white)',
+            cursor: 'pointer', color: 'var(--gold)', fontWeight: 500,
+          }}>
+            <i className="ti ti-ruler-measure" style={{ fontSize: 12 }} />
+            {t('kanban.action.open_size_check', 'Obrir size check')}
           </button>
         </div>
       )}

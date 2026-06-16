@@ -15,10 +15,13 @@ const btn = (variant) => ({
   color: '#fff', fontWeight: 500,
 })
 
-// SC-1 — Tab Size Check: validació del proto a talla base, abans del fitting.
-// 1 columna (talla base) editable amb tolerància; el tècnic anota valor_real per POM,
-// accepta/descarta cada línia i resol el check (Acceptat/Descartat + missatge fabricant).
-export default function SizeCheckTab({ model, onFeedback }) {
+// SC-1/SC-2 — Tab Size Check: validació del proto a talla base, abans del fitting.
+// 1 columna (talla base) amb tolerància. Dos modes segons `editable`:
+//  - editable=true  (ruta Kanban /models/:id/size-check): treball. open-on-mount
+//    (crea/reusa el check viu), cel·les editables, resoldre visible.
+//  - editable=false (pestanya Model, default): CONSULTA pura. NOMÉS list+get, MAI
+//    open → visitar-la no crea cap check. Cel·les read-only, sense resoldre ni obrir.
+export default function SizeCheckTab({ model, onFeedback, editable = false }) {
   const [check, setCheck] = useState(null)        // check viu (Pendent) amb lines
   const [history, setHistory] = useState([])      // checks resolts (summary)
   const [loading, setLoading] = useState(true)
@@ -32,7 +35,13 @@ export default function SizeCheckTab({ model, onFeedback }) {
         const rows = r.data?.results ?? r.data ?? []
         setHistory(rows.filter(c => c.estat !== 'Pendent'))
         const live = rows.find(c => c.estat === 'Pendent')
-        if (live) {
+        if (editable) {
+          // Mode treball (Kanban): garanteix un check viu (open idempotent: crea o reusa).
+          const full = await sizeChecks.open(model.id)
+          setCheck(full.data)
+          setMissatge(full.data.missatge_fabricant || '')
+        } else if (live) {
+          // Mode consulta (pestanya Model): NOMÉS list+get, MAI open → no crea res.
           const full = await sizeChecks.get(live.id)
           setCheck(full.data)
           setMissatge(full.data.missatge_fabricant || '')
@@ -42,17 +51,9 @@ export default function SizeCheckTab({ model, onFeedback }) {
       })
       .catch(() => { setCheck(null); setHistory([]) })
       .finally(() => setLoading(false))
-  }, [model.id])
+  }, [model.id, editable])
 
   useEffect(() => { load() }, [load])
-
-  const handleOpen = () => {
-    setBusy(true)
-    sizeChecks.open(model.id)
-      .then(r => { setCheck(r.data); setMissatge(r.data.missatge_fabricant || '') })
-      .catch(e => onFeedback?.({ type: 'err', text: e.response?.data?.error || 'No s\'ha pogut obrir el size check' }))
-      .finally(() => setBusy(false))
-  }
 
   const handleResolve = (estat) => {
     if (!check) return
@@ -74,12 +75,13 @@ export default function SizeCheckTab({ model, onFeedback }) {
         <h2 style={{ fontSize: 15, fontWeight: 500, margin: 0, fontFamily: MONO }}>
           Size Check · talla base {model.base_size_label ? `(${model.base_size_label})` : ''}
         </h2>
-        {!check && <button style={btn('gold')} disabled={busy} onClick={handleOpen}>Obrir size check</button>}
       </div>
 
       {!check && (
         <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>
-          Cap check viu. Obre'n un per validar el proto contra les mesures base vigents.
+          {editable
+            ? 'No s\'ha pogut obrir el size check.'
+            : 'No hi ha cap size check per a aquest model. Inicia\'l des del Kanban (tasca Size Check).'}
         </p>
       )}
 
@@ -101,24 +103,26 @@ export default function SizeCheckTab({ model, onFeedback }) {
                 <tr key={line.id}>
                   <td style={{ ...tdRO, fontWeight: line.is_key ? 700 : 400 }}>{line.codi}</td>
                   <td style={{ ...tdRO, color: 'var(--text-muted)' }}>{line.nom}</td>
-                  <SizeCheckCell line={line} disabled={false} />
+                  <SizeCheckCell line={line} disabled={!editable} />
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 520 }}>
-            <label style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)' }}>Missatge al fabricant</label>
-            <textarea
-              value={missatge} onChange={e => setMissatge(e.target.value)} rows={3}
-              placeholder="Observacions per al fabricant…"
-              style={{ fontFamily: MONO, fontSize: 12, padding: 8, borderRadius: 4, border: '1px solid var(--border)', resize: 'vertical' }}
-            />
-            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-              <button style={btn('ok')} disabled={busy} onClick={() => handleResolve('Acceptat')}>Acceptar</button>
-              <button style={btn('err')} disabled={busy} onClick={() => handleResolve('Descartat')}>Descartar</button>
+          {editable && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 520 }}>
+              <label style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)' }}>Missatge al fabricant</label>
+              <textarea
+                value={missatge} onChange={e => setMissatge(e.target.value)} rows={3}
+                placeholder="Observacions per al fabricant…"
+                style={{ fontFamily: MONO, fontSize: 12, padding: 8, borderRadius: 4, border: '1px solid var(--border)', resize: 'vertical' }}
+              />
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button style={btn('ok')} disabled={busy} onClick={() => handleResolve('Acceptat')}>Acceptar</button>
+                <button style={btn('err')} disabled={busy} onClick={() => handleResolve('Descartat')}>Descartar</button>
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
 
