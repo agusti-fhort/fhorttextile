@@ -45,7 +45,6 @@ export function PhaseStepper({ faseActual, onFaseClick }) {
                 padding: '3px 10px',
                 borderRadius: 3,
                 fontSize: 11,
-                fontFamily: 'IBM Plex Mono, monospace',
                 fontWeight: active ? 700 : done ? 500 : 400,
                 background: active
                   ? '#c27a2a'

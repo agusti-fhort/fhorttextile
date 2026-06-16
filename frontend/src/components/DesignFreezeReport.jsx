@@ -27,7 +27,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
   const thumbnail = extracted?.thumbnail_description
 
   return (
-    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 12 }}>
+    <div style={{ fontSize: 12 }}>
 
       {/* Resultat gate — fons negre, label "PASS" en gold, "RETORNAT" en blanc */}
       <div style={{
@@ -143,7 +143,6 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
                 borderRadius: 4,
                 fontSize: 11,
                 color: '#1d1d1b',
-                fontFamily: 'IBM Plex Mono, monospace',
               }}>
                 <strong style={{ color: '#1d1d1b', fontWeight: 600 }}>{p.code}</strong>
                 {p.base_value_cm && <span style={{ color: '#c27a2a', marginLeft: 4 }}>{p.base_value_cm}</span>}
@@ -183,7 +182,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
           <button onClick={() => onConfirm(extracted)} style={{
             padding: '7px 16px', background: 'var(--bg-muted)',
             color: '#4a9a4a', border: '1px solid #2a4a2a', borderRadius: 4,
-            fontSize: 11, cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace',
+            fontSize: 11, cursor: 'pointer', 
           }}>
             Continuar →
           </button>

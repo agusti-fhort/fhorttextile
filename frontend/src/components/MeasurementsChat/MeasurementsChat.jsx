@@ -63,7 +63,6 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
       height: '100%', minHeight: 400,
       border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
       borderRadius: 8, overflow: 'hidden',
-      fontFamily: 'IBM Plex Mono, monospace',
     }}>
       <div style={{
         padding: '10px 14px',
@@ -116,7 +115,7 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
               border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
               color: 'var(--color-text-secondary, #868685)',
             }}>
-              <span style={{ fontFamily: 'monospace' }}>···</span>
+              <span style={{ }}>···</span>
             </div>
           </div>
         )}
@@ -138,7 +137,6 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
             flex: 1, padding: '7px 10px', fontSize: 13,
             border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
             borderRadius: 6, background: 'var(--color-background-primary, #fff)',
-            fontFamily: 'IBM Plex Mono, monospace',
           }}
         />
         <button type="button" onClick={handleSend} disabled={loading || !input.trim()}

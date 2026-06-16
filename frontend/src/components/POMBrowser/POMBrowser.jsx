@@ -231,7 +231,7 @@ export default function POMBrowser({
 
   // ── Step 'view-poms' ──────────────────────────────────────────────────────
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Breadcrumb + Search */}
       <div style={{
         display: 'flex', gap: 12, padding: '12px 16px',
@@ -247,7 +247,7 @@ export default function POMBrowser({
               padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
               background: '#fff', color: '#868685',
               border: '0.5px solid #e0d5c5',
-              fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
+              fontSize: 11,
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = '#c27a2a'; e.currentTarget.style.color = '#c27a2a' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = '#e0d5c5'; e.currentTarget.style.color = '#868685' }}
@@ -322,7 +322,7 @@ export default function POMBrowser({
                       onMouseEnter={e => { if (!already) e.currentTarget.style.background = '#fdf6ee' }}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      <span style={{ color: '#c27a2a', fontWeight: 600, minWidth: 70, fontFamily: 'monospace' }}>{res.codi_client}</span>
+                      <span style={{ color: '#c27a2a', fontWeight: 600, minWidth: 70 }}>{res.codi_client}</span>
                       <span style={{ flex: 1, color: '#1d1d1b' }}>{res.nom_ca || res.nom_client || res.nom_en}</span>
                       {already && <span style={{ fontSize: 10, color: '#868685' }}>ja assignat</span>}
                     </div>
@@ -426,7 +426,7 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
         onClick={(e) => { e.stopPropagation(); onRemove() }}
         title="Desmarca per treure el POM de l'ítem" style={{ cursor: 'pointer' }} />
       <div onClick={onRowClick} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minWidth: 0 }}>
-        <span style={{ color: '#c27a2a', fontWeight: 600, fontFamily: 'monospace', minWidth: 64 }}>{pom.pom_code}</span>
+        <span style={{ color: '#c27a2a', fontWeight: 600, minWidth: 64 }}>{pom.pom_code}</span>
         <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           <PomNamePair en={pom.name_en} local={pom.name_cat} />
         </span>
@@ -677,7 +677,6 @@ const selectStyle = {
   borderRadius: 8,
   padding: '8px 12px',
   fontSize: 12,
-  fontFamily: 'IBM Plex Mono, monospace',
   outline: 'none',
   minWidth: 220,
 }

@@ -88,7 +88,7 @@ export default function POMCatalogue() {
   }, [filtered])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Capçalera: cerca + recompte (lectura). */}
       <div style={{
         display: 'flex', gap: 12, padding: '12px 16px', alignItems: 'center', flexWrap: 'wrap',
@@ -104,7 +104,7 @@ export default function POMCatalogue() {
           onChange={e => setSearch(e.target.value)}
           style={{
             background: '#fff', border: '0.5px solid #e4e4e2', borderRadius: 8,
-            padding: '8px 12px', fontSize: 12, fontFamily: 'IBM Plex Mono, monospace',
+            padding: '8px 12px', fontSize: 12, 
             outline: 'none', width: 280, marginLeft: 'auto',
           }}
         />
@@ -141,7 +141,7 @@ export default function POMCatalogue() {
                         border: `0.5px solid ${isSel ? '#c27a2a' : '#e8e8e6'}`,
                         background: isSel ? '#fdf6ee' : '#fff',
                       }}>
-                      <span style={{ color: '#c27a2a', fontWeight: 600, fontFamily: 'monospace', minWidth: 64 }}>
+                      <span style={{ color: '#c27a2a', fontWeight: 600, minWidth: 64 }}>
                         {pom.pom_code}
                       </span>
                       <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -150,7 +150,7 @@ export default function POMCatalogue() {
                       {pom.abbreviation && (
                         <span style={{
                           background: '#f5f0ea', color: '#868685', fontSize: 9, padding: '2px 6px',
-                          borderRadius: 3, fontFamily: 'IBM Plex Mono, monospace',
+                          borderRadius: 3, 
                         }}>{pom.abbreviation}</span>
                       )}
                       {pom.is_tenant_only && (

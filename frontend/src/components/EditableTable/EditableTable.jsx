@@ -158,7 +158,6 @@ export default function EditableTable({
           background: '#fff9e6', border: '1px solid #f0c040',
           borderRadius: 8, padding: '10px 16px', marginBottom: 12,
           fontSize: 13, display: 'flex', alignItems: 'center', gap: 10,
-          fontFamily: 'IBM Plex Mono, monospace',
         }}>
           <i className="ti ti-alert-triangle" style={{ color: '#c8900a', fontSize: 16 }} />
           <span>
@@ -173,7 +172,7 @@ export default function EditableTable({
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <table style={{
             width: '100%', borderCollapse: 'collapse',
-            fontSize: 12, fontFamily: 'IBM Plex Mono, monospace',
+            fontSize: 12, 
           }}>
             <thead>
               <tr style={{
@@ -271,7 +270,7 @@ function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete,
           onChange={v => onCellChange(row.id, 'nom_fitxa', v)}
           mono gold readOnly={readOnly} />
       </td>
-      <td style={{ ...tdS, fontFamily: 'monospace', fontSize: 11,
+      <td style={{ ...tdS, fontSize: 11,
                    color: 'var(--color-text-secondary, #868685)' }}>
         {row.pom_code}
         {row.is_key && (
@@ -297,7 +296,7 @@ function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete,
             mono right readOnly={readOnly} />
         </td>
       ))}
-      <td style={{ ...tdS, textAlign: 'right', fontFamily: 'monospace',
+      <td style={{ ...tdS, textAlign: 'right', 
                    color: 'var(--color-text-secondary, #868685)', fontSize: 11 }}>
         {delta}
       </td>
@@ -417,7 +416,7 @@ function AddPOMInline({ onAdd }) {
       <button type="button" onClick={() => setOpen(true)}
         style={{ background: 'none', border: 'none', cursor: 'pointer',
                  fontSize: 12, color: 'var(--gold)', padding: '4px 0',
-                 fontFamily: 'IBM Plex Mono, monospace' }}>
+                 }}>
         <i className="ti ti-plus" /> Afegir POM
       </button>
     )
@@ -432,7 +431,7 @@ function AddPOMInline({ onAdd }) {
         placeholder="Cerca per nom o codi..."
         style={{ padding: '4px 8px', border: '1px solid var(--color-border-tertiary, #e0d5c5)',
                  borderRadius: 4, fontSize: 12, width: 220,
-                 fontFamily: 'IBM Plex Mono, monospace' }}
+                 }}
       />
       {(results.length > 0 || query.length >= 2) && (
         <div style={{
@@ -446,10 +445,10 @@ function AddPOMInline({ onAdd }) {
               onClick={() => { onAdd(p); setQuery(''); setResults([]); setOpen(false) }}
               style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 12,
                        borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-                       fontFamily: 'IBM Plex Mono, monospace' }}
+                       }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--color-background-secondary, #f5f0ea)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <span style={{ fontFamily: 'monospace', color: 'var(--gold)', marginRight: 8 }}>
+              <span style={{ color: 'var(--gold)', marginRight: 8 }}>
                 {p.codi_client}
               </span>
               {p.nom_client || p.nom_ca || p.nom_en}
@@ -459,14 +458,13 @@ function AddPOMInline({ onAdd }) {
             <div style={{
               padding: '8px 12px', fontSize: 12,
               color: 'var(--color-text-secondary, #868685)',
-              fontFamily: 'IBM Plex Mono, monospace',
             }}>
               Cap POM trobat per "{query}".{' '}
               <button type="button"
                 onClick={() => handleCreatePOM(query)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer',
                          color: 'var(--gold)', fontSize: 12, padding: 0,
-                         fontFamily: 'IBM Plex Mono, monospace' }}>
+                         }}>
                 + Crear POM nou "{query}"
               </button>
             </div>

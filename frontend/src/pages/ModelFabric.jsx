@@ -6,20 +6,17 @@ const API = import.meta.env.VITE_API_URL || ''
 const labelStyle = {
   display: 'block', fontSize: 12,
   color: 'var(--color-text-secondary, #868685)', marginBottom: 4,
-  fontFamily: 'IBM Plex Mono, monospace',
 }
 const inputStyle = {
   width: '100%', padding: '7px 10px', fontSize: 13,
   border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
   borderRadius: 6, background: 'var(--color-background-primary, #fff)',
   boxSizing: 'border-box',
-  fontFamily: 'IBM Plex Mono, monospace',
 }
 const btnSecondary = {
   padding: '8px 16px', background: 'transparent', fontSize: 13,
   border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
   borderRadius: 6, cursor: 'pointer',
-  fontFamily: 'IBM Plex Mono, monospace',
 }
 
 export default function ModelFabric() {
@@ -130,7 +127,7 @@ export default function ModelFabric() {
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '2rem 1rem',
-                  fontFamily: 'IBM Plex Mono, monospace' }}>
+                  }}>
 
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
@@ -139,7 +136,7 @@ export default function ModelFabric() {
         background: 'var(--color-background-secondary, #f5f0ea)',
         borderRadius: 8, fontSize: 13,
       }}>
-        <span style={{ fontFamily: 'monospace', color: 'var(--color-text-secondary, #868685)' }}>
+        <span style={{ color: 'var(--color-text-secondary, #868685)' }}>
           {model.codi_intern}
         </span>
         {model.nom_prenda && (
@@ -203,10 +200,9 @@ export default function ModelFabric() {
                       : '0.5px solid var(--color-border-tertiary, #e0d5c5)',
                     background: active ? '#fdf6ee' : 'transparent',
                     color: 'var(--color-text-secondary, #868685)',
-                    fontFamily: 'IBM Plex Mono, monospace',
                   }}>
                   {entry.nom}
-                  <span style={{ marginLeft: 6, fontFamily: 'monospace', fontSize: 11 }}>
+                  <span style={{ marginLeft: 6, fontSize: 11 }}>
                     {entry.warp}%/{entry.weft}%
                   </span>
                 </button>
@@ -222,7 +218,6 @@ export default function ModelFabric() {
               border: 'none',
               background: biaxial ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
               color: biaxial ? '#fff' : 'var(--color-text-secondary, #868685)',
-              fontFamily: 'IBM Plex Mono, monospace',
             }}>
             Warp / Weft
           </button>
@@ -232,7 +227,6 @@ export default function ModelFabric() {
               border: 'none',
               background: !biaxial ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
               color: !biaxial ? '#fff' : 'var(--color-text-secondary, #868685)',
-              fontFamily: 'IBM Plex Mono, monospace',
             }}>
             Single %
           </button>
@@ -303,7 +297,6 @@ export default function ModelFabric() {
               color: '#fff', border: 'none', borderRadius: 6,
               fontSize: 14, fontWeight: 500,
               cursor: saving ? 'not-allowed' : 'pointer',
-              fontFamily: 'IBM Plex Mono, monospace',
             }}>
             {saving ? 'Tancant...' : 'Tancar i finalitzar'}
           </button>

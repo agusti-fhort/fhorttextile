@@ -93,7 +93,7 @@ export default function GarmentPOMMapEditor() {
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: 1100, margin: '0 auto', fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ padding: '24px', maxWidth: 1100, margin: '0 auto' }}>
       <button onClick={() => navigate(-1)} style={{
         background: 'none', border: 'none', cursor: 'pointer',
         color: '#868685', fontSize: 12, marginBottom: 16,
@@ -135,7 +135,7 @@ export default function GarmentPOMMapEditor() {
                   background: selGT === String(gt.id) ? '#f5e6d0' : '#fff',
                   color: selGT === String(gt.id) ? '#c27a2a' : '#1d1d1b',
                   border: `1px solid ${selGT === String(gt.id) ? '#c27a2a' : '#e0d5c5'}`,
-                  fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
+                  fontSize: 11,
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 }}
               >
@@ -177,7 +177,7 @@ export default function GarmentPOMMapEditor() {
                     style={{
                       width: '100%', padding: '7px 10px',
                       border: '1px solid #e0d5c5', borderRadius: 4,
-                      fontSize: 12, fontFamily: 'IBM Plex Mono, monospace',
+                      fontSize: 12, 
                       boxSizing: 'border-box',
                     }}
                   />
@@ -194,7 +194,6 @@ export default function GarmentPOMMapEditor() {
                           onClick={() => addPOM(p.id)}
                           style={{
                             padding: '7px 10px', cursor: 'pointer', fontSize: 11,
-                            fontFamily: 'IBM Plex Mono, monospace',
                             display: 'flex', gap: 8, alignItems: 'center',
                             borderBottom: '1px solid #f5ede0',
                           }}

@@ -132,7 +132,6 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
                 background: showHistory ? '#f5e6d0' : '#fff',
                 color: showHistory ? '#c27a2a' : '#868685',
                 border: '1px solid #e0d5c5', cursor: 'pointer',
-                fontFamily: 'IBM Plex Mono, monospace',
               }}
             >
               ⟳ Historial
@@ -148,7 +147,6 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
                 background: '#fff', color: '#a32d2d',
                 border: '1px solid #f0c0c0',
                 cursor: restoring ? 'not-allowed' : 'pointer',
-                fontFamily: 'IBM Plex Mono, monospace',
                 opacity: restoring ? 0.6 : 1,
               }}
             >
@@ -163,7 +161,6 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
                 padding: '2px 8px', borderRadius: 3, fontSize: 10,
                 background: '#fff', color: '#c27a2a',
                 border: '1px solid #e0c8a0', cursor: 'pointer',
-                fontFamily: 'IBM Plex Mono, monospace',
               }}
             >
               ✎ Editar talles

@@ -43,7 +43,6 @@ export function DesignFreezePanel({ model, token, onApproved }) {
       border: `1px solid ${isApproved ? '#c0dd97' : 'var(--border)'}`,
       borderRadius: 6, padding: '12px 16px', marginBottom: 20,
       background: isApproved ? 'var(--ok-bg)' : '#fdf6ee',
-      fontFamily: 'IBM Plex Mono, monospace',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1 }}>
@@ -68,7 +67,6 @@ export function DesignFreezePanel({ model, token, onApproved }) {
             style={{
               padding: '7px 16px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
               background: 'var(--gold-pale)', color: 'var(--gold)', border: '1px solid #c27a2a',
-              fontFamily: 'IBM Plex Mono, monospace',
             }}
           >
             {loading ? 'Aprovant...' : '✓ Aprovar Design Freeze'}

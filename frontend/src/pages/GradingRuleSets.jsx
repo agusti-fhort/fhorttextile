@@ -229,7 +229,7 @@ export default function GradingRuleSets() {
   }
 
   if (loading) return (
-    <div style={{ padding: '2rem', fontFamily: 'IBM Plex Mono, monospace', fontSize: 12, color: 'var(--text-muted, #868685)' }}>
+    <div style={{ padding: '2rem', fontSize: 12, color: 'var(--text-muted, #868685)' }}>
       Carregant regles de grading...
     </div>
   )
@@ -292,7 +292,7 @@ export default function GradingRuleSets() {
             <div>
               <p style={{ fontSize: 10, color: '#868685', marginBottom: 6,
                 textTransform: 'uppercase', letterSpacing: '.06em',
-                fontFamily: 'IBM Plex Mono, monospace' }}>
+                }}>
                 Tipus de construcció
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -315,7 +315,7 @@ export default function GradingRuleSets() {
               <div>
                 <p style={{ fontSize: 10, color: '#868685', marginBottom: 6,
                   textTransform: 'uppercase', letterSpacing: '.06em',
-                  fontFamily: 'IBM Plex Mono, monospace' }}>
+                  }}>
                   Fit type
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -419,7 +419,6 @@ function StepSection({ number, title, children }) {
         fontSize: 10, fontWeight: 700, color: '#c27a2a',
         letterSpacing: '0.08em', textTransform: 'uppercase',
         margin: '0 0 10px',
-        fontFamily: 'IBM Plex Mono, monospace',
       }}>
         {number} · {title}
       </p>
@@ -443,7 +442,6 @@ function TargetCard({ target, selected, available, onClick }) {
         opacity: available ? 1 : 0.4,
         minWidth: 100, textAlign: 'center',
         transition: 'all .15s',
-        fontFamily: 'IBM Plex Mono, monospace',
       }}
     >
       <div style={{
@@ -474,7 +472,6 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
         fontWeight: selected ? 600 : 400,
         fontSize: 11,
         cursor: 'pointer',
-        fontFamily: 'IBM Plex Mono, monospace',
         transition: 'all .15s',
         textAlign: 'left',
         lineHeight: 1.25,
@@ -603,7 +600,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
           </button>
           <div style={{ minWidth: 0 }}>
             <div style={{
-              fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
+              fontWeight: 600,
               fontSize: 13, color: '#1d1d1b',
             }}>
               {rs.nom}
@@ -627,7 +624,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
               {rs.construction_codi && <span>Construction: <strong>{rs.construction_codi}</strong></span>}
               {rs.fit_type_codi && <span>Fit: <strong>{rs.fit_type_codi}</strong></span>}
               {rs.size_system_nom && <span>Size System: <strong>{rs.size_system_nom}</strong></span>}
-              {rs.codi_sistema && <span style={{ fontFamily: 'IBM Plex Mono, monospace' }}>{rs.codi_sistema}</span>}
+              {rs.codi_sistema && <span style={{ }}>{rs.codi_sistema}</span>}
             </div>
           </div>
         </div>
@@ -667,7 +664,6 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     fontWeight: 600, color: '#868685', fontSize: 10,
                     textTransform: 'uppercase', letterSpacing: '0.06em',
                     borderBottom: '0.5px solid #e0d5c5',
-                    fontFamily: 'IBM Plex Mono, monospace',
                   }}>{h.label}</th>
                 ))}
               </tr>
@@ -683,7 +679,6 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                         abreviatura (CH) daurada més gran a sota. */}
                     <td style={{
                       padding: '7px 12px',
-                      fontFamily: 'IBM Plex Mono, monospace',
                       borderBottom: '0.5px solid #f0eee9',
                       whiteSpace: 'nowrap',
                     }}>
@@ -721,14 +716,14 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                       <span style={{
                         fontSize: 10, padding: '2px 6px', borderRadius: 3,
                         background: logica.bg, color: logica.color,
-                        fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
+                        fontWeight: 600,
                       }}>{r.logica}</span>
                     </td>
                     {/* Δ/talla — Peça A: forma canònica (increment_base) com a TEXT read-only;
                         regles no backfillades (increment_base null) → escalar editable (compat). */}
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
+                      fontWeight: 600,
                       color: Number(r.increment_base ?? r.increment) > 0 ? '#2a5a8a' : '#868685',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
@@ -748,7 +743,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                         regles no backfillades → fallback above_xl editable (compat). */}
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
+                      fontSize: 11,
                       color: (r.increment_base != null ? r.talla_break_label : aboveXl) ? '#c27a2a' : '#c0c0c0',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
@@ -768,13 +763,11 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     </td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      fontFamily: 'IBM Plex Mono, monospace',
                       color: '#868685', fontSize: 11,
                       borderBottom: '0.5px solid #f0eee9',
                     }}>{r.talla_base_etiqueta || '—'}</td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      fontFamily: 'IBM Plex Mono, monospace',
                       color: '#868685',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>{Number(r.valor_base) > 0 ? `${r.valor_base} cm` : '—'}</td>
@@ -846,7 +839,6 @@ function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
           width: 64, textAlign: 'right',
           border: '1px solid #c27a2a', borderRadius: 4,
           padding: '1px 4px', fontSize: 11,
-          fontFamily: 'IBM Plex Mono, monospace',
         }}
       />
     )
@@ -872,7 +864,7 @@ function Pill({ bg, color, children }) {
     <span style={{
       fontSize: 10, padding: '3px 7px', borderRadius: 4,
       background: bg, color,
-      fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
+      fontWeight: 600,
       letterSpacing: '.04em', whiteSpace: 'nowrap',
     }}>{children}</span>
   )
@@ -889,7 +881,6 @@ function ActionBtn({ onClick, label, danger = false }) {
         fontSize: 10, padding: '4px 9px', borderRadius: 4, cursor: 'pointer',
         background: palette.bg, color: palette.fg,
         border: `0.5px solid ${palette.border}`,
-        fontFamily: 'IBM Plex Mono, monospace',
       }}
       onMouseEnter={e => e.currentTarget.style.background = palette.bgHover}
       onMouseLeave={e => e.currentTarget.style.background = palette.bg}
@@ -966,7 +957,6 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
       <label style={{
         fontSize: 10, fontWeight: 600, color: '#868685',
         display: 'block', marginBottom: 4,
-        fontFamily: 'IBM Plex Mono, monospace',
       }}>{label}</label>
       {options ? (
         <select
@@ -1003,7 +993,6 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
           background: '#fff', borderRadius: 12, padding: 24,
           width: '100%', maxWidth: 480,
           boxShadow: '0 10px 40px rgba(0,0,0,0.18)',
-          fontFamily: 'IBM Plex Mono, monospace',
         }}
       >
         <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: '#1d1d1b' }}>
@@ -1024,7 +1013,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
               padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
               background: '#fff', color: '#868685',
               border: '0.5px solid #e0d5c5',
-              fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
+              fontSize: 11,
             }}
           >Cancel·lar</button>
           <button
@@ -1044,7 +1033,7 @@ const btnPrimary = {
   background: '#c27a2a', color: '#fff',
   border: 'none', borderRadius: 6,
   padding: '8px 14px', fontSize: 11, fontWeight: 600,
-  cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace',
+  cursor: 'pointer', 
 }
 
 const modalInput = {
@@ -1053,7 +1042,6 @@ const modalInput = {
   borderRadius: 6,
   padding: '8px 10px',
   fontSize: 12,
-  fontFamily: 'IBM Plex Mono, monospace',
   outline: 'none',
   boxSizing: 'border-box',
   background: '#fff',

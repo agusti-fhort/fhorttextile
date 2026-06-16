@@ -35,7 +35,7 @@ export default function SizeAuthoringDrawer({ open, prefill = null, onComplete, 
           display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
         }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, fontFamily: 'IBM Plex Mono' }}>
+            <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>
               {t('size_map_new_run', 'Nou run de client')}
             </h2>
             <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: '#888' }}>

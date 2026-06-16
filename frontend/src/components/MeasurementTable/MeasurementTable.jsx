@@ -183,11 +183,11 @@ export default function MeasurementTable({
   }
 
   if (loading) {
-    return <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace' }}>Carregant mesures...</div>
+    return <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)' }}>Carregant mesures...</div>
   }
 
   return (
-    <div style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -473,7 +473,6 @@ function EditableCell({ value, editing, readOnly, onStartEdit, onSave, onCancel,
           borderRadius: 3,
           padding: '2px 6px',
           fontSize: 12,
-          fontFamily: 'IBM Plex Mono, monospace',
           textAlign: align,
           outline: 'none',
         }}
@@ -522,7 +521,7 @@ function ViewToggle({ mode, onChange }) {
               background: active ? '#c27a2a' : '#fff',
               color: active ? '#fff' : '#868685',
               border: 'none', cursor: 'pointer',
-              fontSize: 11, fontFamily: 'IBM Plex Mono, monospace',
+              fontSize: 11, 
               fontWeight: active ? 600 : 400,
             }}
           >
@@ -542,7 +541,7 @@ function Th({ children, width, align = 'left', style }) {
       fontSize: 10, letterSpacing: '0.08em',
       textTransform: 'uppercase',
       color: 'var(--text-muted)',
-      fontWeight: 600, fontFamily: 'IBM Plex Mono, monospace',
+      fontWeight: 600, 
       borderBottom: '0.5px solid var(--border)',
       background: '#fafaf8',
       textAlign: align, width, whiteSpace: 'nowrap',
@@ -577,6 +576,6 @@ const btnPrimary = {
   color: '#fff',
   border: 'none',
   cursor: 'pointer',
-  fontSize: 11, fontFamily: 'IBM Plex Mono, monospace',
+  fontSize: 11, 
   fontWeight: 600,
 }

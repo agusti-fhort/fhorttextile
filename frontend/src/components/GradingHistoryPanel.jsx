@@ -22,7 +22,7 @@ export function GradingHistoryPanel({ ruleSetId, onClose }) {
   }, [ruleSetId, token])
 
   return (
-    <div style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ }}>
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid #e0d5c5',

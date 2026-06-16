@@ -52,7 +52,7 @@ export default function OnboardingWizard() {
   }
 
   return (
-    <div style={{ padding: '40px', maxWidth: 600, margin: '0 auto', fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ padding: '40px', maxWidth: 600, margin: '0 auto' }}>
       <div style={{ marginBottom: 8, fontSize: 10, color: '#868685', letterSpacing: '.08em', textTransform: 'uppercase' }}>
         FHORT Textile Tech · Onboarding
       </div>
@@ -92,7 +92,6 @@ export default function OnboardingWizard() {
           <button onClick={() => setStep(1)} style={{
             padding: '9px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer',
             background: '#f5e6d0', color: '#c27a2a', border: '1px solid #c27a2a',
-            fontFamily: 'IBM Plex Mono, monospace',
           }}>Començar →</button>
         </div>
       )}
@@ -104,7 +103,7 @@ export default function OnboardingWizard() {
             <label style={{ fontSize: 11, color: '#868685', display: 'block', marginBottom: 4 }}>Nom de l\'empresa *</label>
             <input value={config.nom_empresa} onChange={e => setConfig(c => ({...c, nom_empresa: e.target.value}))}
               placeholder="Ex: Textiles Brownie SL"
-              style={{ width: '100%', padding: '7px 10px', border: '1px solid #e0d5c5', borderRadius: 4, fontSize: 12, fontFamily: 'IBM Plex Mono, monospace', boxSizing: 'border-box' }} />
+              style={{ width: '100%', padding: '7px 10px', border: '1px solid #e0d5c5', borderRadius: 4, fontSize: 12, boxSizing: 'border-box' }} />
           </div>
           <div style={{ marginBottom: 16 }}>
             <label style={{ fontSize: 11, color: '#868685', display: 'block', marginBottom: 4 }}>Unitats de mesura</label>
@@ -115,7 +114,6 @@ export default function OnboardingWizard() {
                   background: config.unitat_mesura === u ? '#f5e6d0' : '#fff',
                   color: config.unitat_mesura === u ? '#c27a2a' : '#868685',
                   border: `1px solid ${config.unitat_mesura === u ? '#c27a2a' : '#e0d5c5'}`,
-                  fontFamily: 'IBM Plex Mono, monospace',
                 }}>{u}</button>
               ))}
             </div>
@@ -123,7 +121,6 @@ export default function OnboardingWizard() {
           <button onClick={saveConfig} disabled={!config.nom_empresa} style={{
             padding: '9px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer',
             background: '#f5e6d0', color: '#c27a2a', border: '1px solid #c27a2a',
-            fontFamily: 'IBM Plex Mono, monospace',
           }}>Guardar i continuar →</button>
         </div>
       )}
@@ -136,7 +133,7 @@ export default function OnboardingWizard() {
             inicialitzar el catàleg de POMs, grading rules i size systems.
           </p>
           <input type="file" accept=".xlsx" onChange={e => setFile(e.target.files[0])}
-            style={{ marginBottom: 12, fontFamily: 'IBM Plex Mono, monospace', fontSize: 11 }} />
+            style={{ marginBottom: 12, fontSize: 11 }} />
           {file && (
             <div style={{ fontSize: 11, color: '#868685', marginBottom: 12 }}>
               {file.name} · {(file.size/1024).toFixed(0)} KB
@@ -147,7 +144,6 @@ export default function OnboardingWizard() {
             background: file ? '#f5e6d0' : '#f5f0ea',
             color: file ? '#c27a2a' : '#c8b89a',
             border: `1px solid ${file ? '#c27a2a' : '#e0d5c5'}`,
-            fontFamily: 'IBM Plex Mono, monospace',
           }}>{uploading ? 'Carregant...' : '⬆ Carregar Excel'}</button>
         </div>
       )}
@@ -173,7 +169,6 @@ export default function OnboardingWizard() {
           <button onClick={() => navigate('/')} style={{
             padding: '9px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer',
             background: '#f5e6d0', color: '#c27a2a', border: '1px solid #c27a2a',
-            fontFamily: 'IBM Plex Mono, monospace',
           }}>Anar al Dashboard →</button>
         </div>
       )}

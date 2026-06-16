@@ -48,7 +48,6 @@ export function ExportButton({ url, filename, label = "Exportar", type = "csv" }
           background: '#fff', color: '#868685',
           border: '1px solid #e0d5c5',
           cursor: loading ? 'not-allowed' : 'pointer',
-          fontFamily: 'IBM Plex Mono, monospace',
           display: 'flex', alignItems: 'center', gap: 5,
         }}
       >

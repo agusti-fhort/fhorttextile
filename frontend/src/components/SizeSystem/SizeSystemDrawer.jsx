@@ -132,7 +132,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
           display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
         }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, fontFamily: 'IBM Plex Mono' }}>
+            <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>
               {sizeSystem.nom || sizeSystem.codi}
             </h2>
             <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: '#888' }}>
@@ -185,7 +185,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
                             style={{
                               width: '100%', border: '1px solid #c27a2a',
                               borderRadius: 4, padding: '0.15rem 0.3rem',
-                              fontSize: '0.78rem', fontFamily: 'IBM Plex Mono',
+                              fontSize: '0.78rem', 
                               boxSizing: 'border-box',
                             }}
                           />

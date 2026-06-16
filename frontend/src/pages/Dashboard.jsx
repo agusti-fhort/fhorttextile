@@ -99,7 +99,6 @@ export default function Dashboard() {
             border: '1px solid #e0c8a0',
             display: 'flex', alignItems: 'center', gap: 14,
             cursor: 'pointer',
-            fontFamily: 'IBM Plex Mono, monospace',
           }}
         >
           <div style={{

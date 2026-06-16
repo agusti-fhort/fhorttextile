@@ -116,7 +116,6 @@ export default function ModelMeasurements() {
           maxWidth: 1000, margin: '1rem auto 0',
           background: '#fee', border: '1px solid #fcc', borderRadius: 8,
           padding: '0.75rem 1rem', fontSize: 13, color: '#c00',
-          fontFamily: 'IBM Plex Mono, monospace',
         }}>{error}</div>
       )}
 
@@ -125,7 +124,6 @@ export default function ModelMeasurements() {
           maxWidth: 1000, margin: '1rem auto 0',
           background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
           padding: '0.75rem 1rem', fontSize: 13, color: '#7a5a00',
-          fontFamily: 'IBM Plex Mono, monospace',
         }}>{notice}</div>
       )}
 
@@ -326,7 +324,6 @@ export default function ModelMeasurements() {
                     padding: '8px 16px', border: '0.5px solid var(--gold)',
                     borderRadius: 6, background: 'transparent',
                     color: 'var(--gold)', fontSize: 13, cursor: 'pointer',
-                    fontFamily: 'IBM Plex Mono, monospace',
                   }}>
                   {generatingGrading ? '⏳ Generant...' : '⚡ Generar grading automàtic'}
                 </button>
@@ -337,7 +334,6 @@ export default function ModelMeasurements() {
                 padding: '8px 20px', borderRadius: 6, border: 'none',
                 fontSize: 14, fontWeight: 500,
                 background: 'var(--gold)', color: '#fff', cursor: 'pointer',
-                fontFamily: 'IBM Plex Mono, monospace',
               }}>
               Continuar → Teixit
             </button>
@@ -357,9 +353,8 @@ function POMChipSuggerit({ pom, selected, onToggle }) {
           ? '1.5px solid var(--gold)' : '0.5px solid var(--color-border-tertiary, #e0d5c5)',
         background: selected ? '#fdf6ee' : 'transparent',
         color: selected ? '#7a4a10' : 'var(--color-text-secondary, #868685)',
-        fontFamily: 'IBM Plex Mono, monospace',
       }}>
-      <span style={{ fontFamily: 'monospace', marginRight: 4 }}>{pom.pom_code}</span>
+      <span style={{ marginRight: 4 }}>{pom.pom_code}</span>
       {pom.nom_ca || pom.nom_en}
     </button>
   )
@@ -373,7 +368,6 @@ function ModelSummaryBar({ model }) {
       background: 'var(--color-background-secondary, #f5f0ea)',
       border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
       borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13,
-      fontFamily: 'IBM Plex Mono, monospace',
     }}>
       <span><strong>{model.codi_intern}</strong></span>
       {model.nom_prenda && <span>{model.nom_prenda}</span>}
@@ -383,7 +377,7 @@ function ModelSummaryBar({ model }) {
         <span style={{ color: 'var(--gold)' }}>Base: {model.base_size_label}</span>
       )}
       {model.size_run_model && (
-        <span style={{ color: 'var(--color-text-secondary, #868685)', fontFamily: 'monospace' }}>
+        <span style={{ color: 'var(--color-text-secondary, #868685)' }}>
           {model.size_run_model}
         </span>
       )}

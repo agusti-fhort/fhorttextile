@@ -27,7 +27,6 @@ export default function POMs() {
               color: activeTab === tab ? '#fff' : 'var(--color-text-secondary, #868685)',
               cursor: 'pointer', fontSize: 13,
               fontWeight: activeTab === tab ? 500 : 400,
-              fontFamily: 'IBM Plex Mono, monospace',
             }}>
             {tab}
           </button>

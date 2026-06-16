@@ -453,7 +453,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
 
   // ─────────────────────────── Render ───────────────────────────
   return (
-    <div style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ }}>
       <Stepper step={step} />
 
       {error && (
@@ -891,7 +891,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                     style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
                              border: active ? `1.5px solid ${GOLD}` : `0.5px solid ${BORDER}`,
                              background: active ? '#fdf6ee' : 'transparent', color: '#868685' }}>
-                    {entry.nom} <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{entry.warp}%/{entry.weft}%</span>
+                    {entry.nom} <span style={{ fontSize: 11 }}>{entry.warp}%/{entry.weft}%</span>
                   </button>
                 )
               })}

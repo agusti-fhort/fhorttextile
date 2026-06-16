@@ -20,7 +20,6 @@ export function VersionBadge({ isCustom, version, parentNom, onClick }) {
         background: '#f5e6d0', color: '#c27a2a',
         border: '1px solid #c27a2a',
         cursor: onClick ? 'pointer' : 'default',
-        fontFamily: 'IBM Plex Mono, monospace',
         display: 'flex', alignItems: 'center', gap: 4,
       }}
     >

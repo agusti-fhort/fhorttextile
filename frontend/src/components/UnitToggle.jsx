@@ -47,7 +47,7 @@ export function UnitToggle() {
         background: unit === 'INCH' ? '#f5e6d0' : '#f5f0ea',
         color: unit === 'INCH' ? '#c27a2a' : '#868685',
         border: `1px solid ${unit === 'INCH' ? '#c27a2a' : '#e0d5c5'}`,
-        fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
+        fontSize: 11,
         cursor: saving ? 'not-allowed' : 'pointer',
         transition: 'all .15s',
       }}

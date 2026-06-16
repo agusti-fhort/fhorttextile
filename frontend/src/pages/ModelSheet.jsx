@@ -57,7 +57,6 @@ const btnSecondary = {
   borderRadius: 6, padding: '6px 12px', fontSize: 12,
   cursor: 'pointer', color: 'var(--color-text-primary, #1d1d1b)',
   display: 'flex', alignItems: 'center', gap: 4,
-  fontFamily: 'IBM Plex Mono, monospace',
 }
 
 export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = false }) {
@@ -117,14 +116,14 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
     return (
       <div style={{ padding: '2rem', textAlign: 'center',
                     color: 'var(--color-text-secondary, #868685)',
-                    fontFamily: 'IBM Plex Mono, monospace', fontSize: 13 }}>
+                    fontSize: 13 }}>
         Carregant...
       </div>
     )
   }
 
   return (
-    <div style={{ width: '100%', fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ width: '100%' }}>
       <ModelSheetHeader model={model} onDelete={handleDelete} onFeedback={setFeedback} onChanged={reloadModel} />
 
       <div style={{ padding: '0 1.5rem' }}>
@@ -145,7 +144,6 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
               color: activeTab === tab ? '#fff' : 'var(--color-text-secondary, #868685)',
               cursor: 'pointer', fontSize: 13,
               fontWeight: activeTab === tab ? 500 : 400,
-              fontFamily: 'IBM Plex Mono, monospace',
             }}>
             {tab}
           </button>
@@ -174,7 +172,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           marginBottom: 10, gap: 12 }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
-                             fontFamily: 'IBM Plex Mono, monospace' }}>
+                             }}>
                 Consulta — l'edició de mides es fa a la tasca de POM.
               </span>
               {hasPomTask ? (
@@ -236,7 +234,7 @@ function TechSheetTab({ modelId, navigate }) {
 
   if (loading) return (
     <div style={{ padding: '24px', color: 'var(--text-muted)',
-      fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>
+      fontSize: '12px' }}>
       Carregant...
     </div>
   )
@@ -246,7 +244,6 @@ function TechSheetTab({ modelId, navigate }) {
     background: 'transparent',
     border: '1px solid var(--border)',
     color: 'var(--text-main)',
-    fontFamily: 'IBM Plex Mono, monospace',
     fontSize: '11px',
     padding: '5px 12px',
     cursor: 'pointer',
@@ -256,7 +253,7 @@ function TechSheetTab({ modelId, navigate }) {
   if (!sheet || !sheet.has_content) {
     return (
       <div style={{ padding: '24px',
-        fontFamily: 'IBM Plex Mono, monospace' }}>
+        }}>
         <p style={{ color: 'var(--text-muted)', fontSize: '12px',
           marginBottom: '16px' }}>
           Encara no hi ha fitxa tècnica per a aquest model.
@@ -282,7 +279,7 @@ function TechSheetTab({ modelId, navigate }) {
     : '—'
 
   return (
-    <div style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ }}>
 
       {/* Barra superior: info + botons */}
       <div style={{
@@ -350,18 +347,18 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
         <button type="button" onClick={() => navigate('/models')}
           style={{ background: 'none', border: 'none', cursor: 'pointer',
                    fontSize: 13, color: 'var(--color-text-secondary, #868685)',
-                   fontFamily: 'IBM Plex Mono, monospace' }}>
+                   }}>
           ← Models
         </button>
         <span style={{ color: 'var(--color-border-tertiary, #e0d5c5)' }}>›</span>
         <span style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
-                       fontFamily: 'monospace' }}>
+                       }}>
           {model.codi_intern}
         </span>
         {model.codi_client && model.codi_client !== model.codi_intern && (
           <>
             <span style={{ color: 'var(--color-border-tertiary, #e0d5c5)' }}>·</span>
-            <span style={{ fontSize: 13, fontFamily: 'monospace',
+            <span style={{ fontSize: 13, 
                            color: 'var(--color-text-primary, #1d1d1b)', fontWeight: 500 }}>
               {model.codi_client}
             </span>
@@ -482,7 +479,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
   const deadlineCell = editingDeadline ? (
     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
       <input type="date" value={deadlineVal} onChange={e => setDeadlineVal(e.target.value)}
-        style={{ padding: '3px 6px', fontSize: 12, fontFamily: 'IBM Plex Mono, monospace',
+        style={{ padding: '3px 6px', fontSize: 12, 
                  border: '1px solid var(--border)', borderRadius: 4 }} />
       <button type="button" onClick={saveDeadline} disabled={savingDeadline}
         style={{ padding: '3px 10px', background: 'var(--gold)', color: '#fff', border: 'none',
@@ -613,7 +610,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
               </div>
               {model.codi_client && model.codi_client !== model.codi_intern && (
                 <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
-                              fontFamily: 'monospace', marginTop: 2 }}>
+                              marginTop: 2 }}>
                   {model.codi_client}
                 </div>
               )}
@@ -655,7 +652,6 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           border: '1px solid var(--border)',
           borderRadius: '4px',
           overflow: 'hidden',
-          fontFamily: 'IBM Plex Mono, monospace',
         }}>
           {/* Capçalera del panel */}
           <div style={{
@@ -734,7 +730,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                   <select
                     value={modeCalc}
                     onChange={e => setModeCalc(e.target.value)}
-                    style={{ fontFamily: 'IBM Plex Mono, monospace',
+                    style={{ 
                       fontSize: '11px', padding: '4px 6px',
                       border: '1px solid var(--border)',
                       background: 'var(--bg-card)' }}>
@@ -748,7 +744,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                   {modeCalc === 'fi' && (
                     <input type="date" value={inputData}
                       onChange={e => setInputData(e.target.value)}
-                      style={{ fontFamily: 'IBM Plex Mono, monospace',
+                      style={{ 
                         fontSize: '11px', padding: '4px 6px',
                         border: '1px solid var(--border)',
                         background: 'var(--bg-card)' }}
@@ -760,7 +756,6 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                     {[1, 2, 3, 4].map(n => (
                       <button key={n} onClick={() => setNumTecnics(n)}
                         style={{
-                          fontFamily: 'IBM Plex Mono, monospace',
                           fontSize: '11px', padding: '4px 10px',
                           cursor: 'pointer',
                           background: numTecnics === n
@@ -896,7 +891,7 @@ function TabFiles({ modelId }) {
   }
 
   return (
-    <div style={{ width: '100%', fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ width: '100%' }}>
       {error && (
         <div style={{
           background: '#fee', border: '1px solid #fcc', borderRadius: 6,
@@ -981,7 +976,6 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
     <div style={{
       width: 140, border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
       borderRadius: 8, overflow: 'hidden', fontSize: 12,
-      fontFamily: 'IBM Plex Mono, monospace',
     }}>
       <div onClick={onPreview}
         style={{
@@ -1020,7 +1014,7 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
             style={{ flex: 1, padding: '3px 0', fontSize: 11, border: 'none',
                      background: 'var(--color-background-secondary, #f5f0ea)',
                      borderRadius: 4, cursor: 'pointer',
-                     fontFamily: 'IBM Plex Mono, monospace' }}>
+                     }}>
             <i className="ti ti-eye" aria-hidden="true" /> Veure
           </button>
           <button type="button" onClick={onDelete}
@@ -1066,7 +1060,7 @@ function TabAIAnalysis({ modelId }) {
   }
 
   return (
-    <div style={{ maxWidth: 800, fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ maxWidth: 800 }}>
       <div style={{ marginBottom: 16 }}>
         <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)', marginBottom: 12 }}>
           Analitza els fitxers pujats (patrons, escalats, sketches) i detecta
@@ -1078,7 +1072,6 @@ function TabAIAnalysis({ modelId }) {
             padding: '8px 20px', background: loading ? '#ccc' : 'var(--gold)',
             color: '#fff', border: 'none', borderRadius: 6,
             fontSize: 13, fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer',
-            fontFamily: 'IBM Plex Mono, monospace',
           }}>
           {loading ? (
             <><i className="ti ti-loader" aria-hidden="true" /> Analitzant...</>
@@ -1127,7 +1120,7 @@ function TabAIAnalysis({ modelId }) {
                         {alerta.tipus?.replace(/_/g, ' ')}
                       </span>
                       {alerta.pom_afectat && (
-                        <span style={{ fontFamily: 'monospace', fontSize: 12,
+                        <span style={{ fontSize: 12,
                                        color: style.color, fontWeight: 500 }}>
                           {alerta.pom_afectat}
                         </span>

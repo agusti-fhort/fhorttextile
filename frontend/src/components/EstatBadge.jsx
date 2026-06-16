@@ -35,7 +35,6 @@ export function EstatBadge({ estat, size = 'sm' }) {
       padding: `2px ${size === 'xs' ? 6 : 8}px`,
       borderRadius: 3,
       fontSize,
-      fontFamily: 'IBM Plex Mono, monospace',
       fontWeight: 500,
       background: config.bg,
       color: config.text,
