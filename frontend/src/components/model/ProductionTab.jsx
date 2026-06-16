@@ -62,7 +62,7 @@ export default function ProductionTab({ model, onFeedback, onChanged }) {
   )
 }
 
-const STATUS_COLORS = { Requested: '#c27a2a', InProgress: '#2a5a8a', Delivered: '#3b6d11' }
+const STATUS_COLORS = { Requested: 'var(--gold)', InProgress: '#2a5a8a', Delivered: '#3b6d11' }
 function StatusBadge({ status }) {
   return <span style={{ fontSize: 11, fontWeight: 600, color: STATUS_COLORS[status] || 'var(--gray)', fontFamily: MONO }}>{status}</span>
 }

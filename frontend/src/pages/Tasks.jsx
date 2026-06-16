@@ -35,50 +35,50 @@ function ActiveTasks({ token }) {
           <button key={e} onClick={() => setFiltre(e)} style={{
             padding: "4px 12px", borderRadius: 4, fontSize: 11,
             fontFamily: "IBM Plex Mono, monospace", cursor: "pointer",
-            background: filtre === e ? "#f5e6d0" : "#fff",
-            color: filtre === e ? "#c27a2a" : "#868685",
-            border: `1px solid ${filtre === e ? "#c27a2a" : "#e0d5c5"}`,
+            background: filtre === e ? "#f5e6d0" : "var(--white)",
+            color: filtre === e ? "var(--gold)" : "var(--text-muted)",
+            border: `1px solid ${filtre === e ? "var(--gold)" : "var(--border)"}`,
           }}>{e}</button>
         ))}
-        <span style={{ marginLeft: "auto", fontSize: 11, color: "#868685", alignSelf: "center" }}>
+        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-muted)", alignSelf: "center" }}>
           {tasques.length} tasques
         </span>
       </div>
 
       {loading ? (
-        <div style={{ color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
+        <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>
           <thead>
-            <tr style={{ borderBottom: "2px solid #e0d5c5" }}>
+            <tr style={{ borderBottom: "2px solid var(--border)" }}>
               {["Tasca", "Model", "Fase", "Estat", "Gate", "Slots"].map(h => (
-                <th key={h} style={{ textAlign: "left", padding: "6px 8px", color: "#868685", fontWeight: 600, fontSize: 11 }}>{h}</th>
+                <th key={h} style={{ textAlign: "left", padding: "6px 8px", color: "var(--text-muted)", fontWeight: 600, fontSize: 11 }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {tasques.map((t, i) => (
-              <tr key={t.id} style={{ borderBottom: "1px solid #f5ede0", background: i % 2 === 0 ? "#fff" : "#fdf9f5" }}>
-                <td style={{ padding: "7px 8px", color: "#1d1d1b" }}>{t.nom_tasca}</td>
-                <td style={{ padding: "7px 8px", color: "#c27a2a" }}>{t.model_codi || t.model}</td>
+              <tr key={t.id} style={{ borderBottom: "1px solid #f5ede0", background: i % 2 === 0 ? "var(--white)" : "#fdf9f5" }}>
+                <td style={{ padding: "7px 8px", color: "var(--text-main)" }}>{t.nom_tasca}</td>
+                <td style={{ padding: "7px 8px", color: "var(--gold)" }}>{t.model_codi || t.model}</td>
                 <td style={{ padding: "7px 8px" }}>
                   <span style={{
                     padding: "2px 7px", borderRadius: 3, fontSize: 10,
                     background: FASE_COLORS[t.fase] || "#f0ede8",
-                    color: "#1d1d1b",
+                    color: "var(--text-main)",
                   }}>{t.fase}</span>
                 </td>
                 <td style={{ padding: "7px 8px" }}><EstatBadge estat={t.estat} size="xs" /></td>
                 <td style={{ padding: "7px 8px", textAlign: "center" }}>
-                  {t.es_gate && <span style={{ color: "#c27a2a", fontSize: 13 }}>◆</span>}
+                  {t.es_gate && <span style={{ color: "var(--gold)", fontSize: 13 }}>◆</span>}
                 </td>
-                <td style={{ padding: "7px 8px", color: "#868685" }}>
+                <td style={{ padding: "7px 8px", color: "var(--text-muted)" }}>
                   {t.slots_reals > 0 ? `${t.slots_reals}/${t.slots_base}` : t.slots_base || "—"}
                 </td>
               </tr>
             ))}
             {tasques.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: "20px 8px", textAlign: "center", color: "#868685" }}>
+              <tr><td colSpan={6} style={{ padding: "20px 8px", textAlign: "center", color: "var(--text-muted)" }}>
                 Sense tasques en estat "{filtre}"
               </td></tr>
             )}
@@ -95,7 +95,7 @@ export default function Tasks() {
 
   return (
     <div style={{ padding: "24px", maxWidth: 960, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 18, fontFamily: "IBM Plex Mono, monospace", color: "#1d1d1b", marginBottom: 20, fontWeight: 500 }}>
+      <h1 style={{ fontSize: 18, fontFamily: "IBM Plex Mono, monospace", color: "var(--text-main)", marginBottom: 20, fontWeight: 500 }}>
         Tasques
       </h1>
       <ActiveTasks token={token} />

@@ -23,7 +23,7 @@ export default function SizeAuthoringDrawer({ open, prefill = null, onComplete, 
         onClick={e => e.stopPropagation()}
         style={{
           width: 'min(1100px, 96vw)', maxHeight: '94vh',
-          background: '#fff', zIndex: 201, borderRadius: 12,
+          background: 'var(--white)', zIndex: 201, borderRadius: 12,
           boxShadow: '0 12px 48px rgba(0,0,0,0.22)',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
           fontFamily: 'IBM Plex Sans, sans-serif',

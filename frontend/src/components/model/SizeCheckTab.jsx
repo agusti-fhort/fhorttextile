@@ -17,7 +17,7 @@ const btn = (variant) => ({
   fontFamily: MONO, fontSize: 12, padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
   border: '0.5px solid var(--gray-l)',
   background: variant === 'err' ? 'var(--err)' : variant === 'plain' ? 'var(--white)' : 'var(--gold)',
-  color: variant === 'plain' ? 'var(--text-main)' : '#fff', fontWeight: 500,
+  color: variant === 'plain' ? 'var(--text-main)' : 'var(--white)', fontWeight: 500,
 })
 
 const estatColor = (e) => e === 'Acceptat' ? 'var(--ok)' : (e === 'Pendent' ? 'var(--gold)' : 'var(--err)')

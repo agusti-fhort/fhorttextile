@@ -296,7 +296,7 @@ function Stepper({ step, t }) {
                 width: 26, height: 26, borderRadius: '50%', flexShrink: 0, display: 'flex',
                 alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600,
                 background: active ? GOLD : done ? 'var(--ok)' : 'transparent',
-                color: active || done ? '#fff' : 'var(--gray)',
+                color: active || done ? 'var(--white)' : 'var(--gray)',
                 border: active || done ? 'none' : `1px solid ${BORDER}`,
               }}>{done ? '✓' : n}</div>
               <span style={{ fontSize: 12, fontWeight: active ? 600 : 400, color: active ? 'var(--text-main)' : 'var(--gray)', whiteSpace: 'nowrap' }}>
@@ -349,6 +349,6 @@ const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, 
 const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 12, cursor: 'pointer', fontFamily: MONO }
 const th = { textAlign: 'left', padding: '8px 10px', borderBottom: `0.5px solid ${BORDER}`, position: 'sticky', top: 0, background: 'var(--white)', fontSize: 11, color: 'var(--gray)' }
 const td = { padding: '7px 10px', borderBottom: `0.5px solid ${BORDER}`, verticalAlign: 'top' }
-const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : GOLD, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 14, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
+const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : GOLD, color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 14, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
 const ghostBtn = (disabled) => ({ background: 'var(--white)', color: GOLD, border: `0.5px solid ${GOLD}`, borderRadius: 6, padding: '7px 14px', fontSize: 12, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, fontFamily: MONO })
-const chip = (active) => ({ padding: '5px 12px', borderRadius: 6, fontFamily: MONO, fontSize: 12, cursor: 'pointer', border: active ? `1.5px solid ${GOLD}` : `0.5px solid ${BORDER}`, background: active ? GOLD : 'transparent', color: active ? '#fff' : 'var(--text-main)' })
+const chip = (active) => ({ padding: '5px 12px', borderRadius: 6, fontFamily: MONO, fontSize: 12, cursor: 'pointer', border: active ? `1.5px solid ${GOLD}` : `0.5px solid ${BORDER}`, background: active ? GOLD : 'transparent', color: active ? 'var(--white)' : 'var(--text-main)' })

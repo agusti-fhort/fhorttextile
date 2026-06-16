@@ -20,7 +20,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
     return 'low'
   }
 
-  const confColor = (c) => c === 'high' ? '#4a9a4a' : c === 'medium' ? '#c27a2a' : '#cc4444'
+  const confColor = (c) => c === 'high' ? '#4a9a4a' : c === 'medium' ? 'var(--gold)' : '#cc4444'
 
   const poms = extracted?.poms || []
   const hasGrading = extracted?.has_grading_table
@@ -34,18 +34,18 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
         padding: '10px 16px',
         borderRadius: 6,
         marginBottom: 16,
-        background: '#1d1d1b',
-        border: '1px solid #1d1d1b',
+        background: 'var(--text-main)',
+        border: '1px solid var(--text-main)',
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
-        <span style={{ fontSize: 18, color: pass ? '#c27a2a' : '#ffffff' }}>{pass ? '✓' : '✗'}</span>
+        <span style={{ fontSize: 18, color: pass ? 'var(--gold)' : 'var(--white)' }}>{pass ? '✓' : '✗'}</span>
         <div>
-          <div style={{ fontWeight: 600, color: '#ffffff', fontSize: 13 }}>
-            Design Freeze — <span style={{ color: pass ? '#c27a2a' : '#ffffff' }}>{pass ? 'PASS' : 'RETORNAT'}</span>
+          <div style={{ fontWeight: 600, color: 'var(--white)', fontSize: 13 }}>
+            Design Freeze — <span style={{ color: pass ? 'var(--gold)' : 'var(--white)' }}>{pass ? 'PASS' : 'RETORNAT'}</span>
           </div>
-          <div style={{ color: '#868685', fontSize: 11 }}>{filename}</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{filename}</div>
         </div>
-        <div style={{ marginLeft: 'auto', fontSize: 11, color: '#868685' }}>
+        <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>
           {extracted?.document_type?.replace('_', ' ')}
         </div>
       </div>
@@ -72,14 +72,14 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
       {/* Warnings */}
       {design_freeze?.warnings?.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ color: '#c27a2a', fontSize: 11, marginBottom: 6, letterSpacing: '.05em', textTransform: 'uppercase' }}>
+          <div style={{ color: 'var(--gold)', fontSize: 11, marginBottom: 6, letterSpacing: '.05em', textTransform: 'uppercase' }}>
             Avisos ({design_freeze.warnings.length})
           </div>
           {design_freeze.warnings.map((w, i) => (
             <div key={i} style={{
               padding: '5px 10px', marginBottom: 4,
               background: 'var(--gold-pale)', border: '1px solid var(--gold-l)', borderRadius: 4,
-              color: '#c27a2a', fontSize: 11,
+              color: 'var(--gold)', fontSize: 11,
               display: 'flex', alignItems: 'center', gap: 8,
             }}>
               <span>⚠</span> {typeof w === 'string' ? w : JSON.stringify(w)}
@@ -142,10 +142,10 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
                 border: '1px solid #e0c8a0',
                 borderRadius: 4,
                 fontSize: 11,
-                color: '#1d1d1b',
+                color: 'var(--text-main)',
               }}>
-                <strong style={{ color: '#1d1d1b', fontWeight: 600 }}>{p.code}</strong>
-                {p.base_value_cm && <span style={{ color: '#c27a2a', marginLeft: 4 }}>{p.base_value_cm}</span>}
+                <strong style={{ color: 'var(--text-main)', fontWeight: 600 }}>{p.code}</strong>
+                {p.base_value_cm && <span style={{ color: 'var(--gold)', marginLeft: 4 }}>{p.base_value_cm}</span>}
               </div>
             ))}
           </div>

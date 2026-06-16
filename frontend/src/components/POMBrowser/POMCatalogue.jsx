@@ -92,9 +92,9 @@ export default function POMCatalogue() {
       {/* Capçalera: cerca + recompte (lectura). */}
       <div style={{
         display: 'flex', gap: 12, padding: '12px 16px', alignItems: 'center', flexWrap: 'wrap',
-        borderBottom: '0.5px solid #e4e4e2', background: '#fff',
+        borderBottom: '0.5px solid #e4e4e2', background: 'var(--white)',
       }}>
-        <span style={{ fontSize: 11, color: '#868685' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
           Catàleg de POMs · només consulta
         </span>
         <input
@@ -103,19 +103,19 @@ export default function POMCatalogue() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{
-            background: '#fff', border: '0.5px solid #e4e4e2', borderRadius: 8,
+            background: 'var(--white)', border: '0.5px solid #e4e4e2', borderRadius: 8,
             padding: '8px 12px', fontSize: 12, 
             outline: 'none', width: 280, marginLeft: 'auto',
           }}
         />
-        <span style={{ fontSize: 11, color: '#868685' }}>{filtered.length} POMs</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{filtered.length} POMs</span>
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-          {loading && <p style={{ fontSize: 12, color: '#868685' }}>Carregant catàleg...</p>}
+          {loading && <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Carregant catàleg...</p>}
           {!loading && filtered.length === 0 && (
-            <p style={{ fontSize: 12, color: '#868685', textAlign: 'center', marginTop: 40 }}>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
               {items.length === 0 ? 'Catàleg buit.' : 'Cap POM coincideix amb la cerca.'}
             </p>
           )}
@@ -123,7 +123,7 @@ export default function POMCatalogue() {
           {!loading && groups.map(([cat, rows]) => (
             <div key={cat} style={{ marginBottom: 18 }}>
               <h3 style={{
-                fontSize: 9, fontWeight: 700, color: '#c27a2a',
+                fontSize: 9, fontWeight: 700, color: 'var(--gold)',
                 textTransform: 'uppercase', letterSpacing: '.1em',
                 margin: '0 0 8px', paddingBottom: 4, borderBottom: '0.5px solid #ece2d4',
               }}>
@@ -138,10 +138,10 @@ export default function POMCatalogue() {
                       style={{
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: '7px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
-                        border: `0.5px solid ${isSel ? '#c27a2a' : '#e8e8e6'}`,
-                        background: isSel ? '#fdf6ee' : '#fff',
+                        border: `0.5px solid ${isSel ? 'var(--gold)' : '#e8e8e6'}`,
+                        background: isSel ? '#fdf6ee' : 'var(--white)',
                       }}>
-                      <span style={{ color: '#c27a2a', fontWeight: 600, minWidth: 64 }}>
+                      <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 64 }}>
                         {pom.pom_code}
                       </span>
                       <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -149,7 +149,7 @@ export default function POMCatalogue() {
                       </span>
                       {pom.abbreviation && (
                         <span style={{
-                          background: '#f5f0ea', color: '#868685', fontSize: 9, padding: '2px 6px',
+                          background: '#f5f0ea', color: 'var(--text-muted)', fontSize: 9, padding: '2px 6px',
                           borderRadius: 3, 
                         }}>{pom.abbreviation}</span>
                       )}

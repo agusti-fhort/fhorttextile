@@ -235,7 +235,7 @@ export default function POMBrowser({
       {/* Breadcrumb + Search */}
       <div style={{
         display: 'flex', gap: 12, padding: '12px 16px',
-        borderBottom: '0.5px solid #e4e4e2', background: '#fff',
+        borderBottom: '0.5px solid #e4e4e2', background: 'var(--white)',
         alignItems: 'center', flexWrap: 'wrap',
       }}>
         {(
@@ -245,12 +245,12 @@ export default function POMBrowser({
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
-              background: '#fff', color: '#868685',
-              border: '0.5px solid #e0d5c5',
+              background: 'var(--white)', color: 'var(--text-muted)',
+              border: '0.5px solid var(--border)',
               fontSize: 11,
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#c27a2a'; e.currentTarget.style.color = '#c27a2a' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#e0d5c5'; e.currentTarget.style.color = '#868685' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = 'var(--gold)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)' }}
           >
             ← Canviar tipus
           </button>
@@ -259,21 +259,21 @@ export default function POMBrowser({
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
           {selectedFamily?.grup && (
             <>
-              <span style={{ fontSize: 10, color: '#868685', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
                 {grupLabel(selectedFamily.grup, lang)}
               </span>
-              <span style={{ fontSize: 12, color: '#868685' }}>›</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>›</span>
             </>
           )}
           {selectedFamily && (
             <>
-              <span style={{ fontSize: 12, color: '#868685' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 {gtName(selectedFamily, lang) || selectedFamily.codi_client}
               </span>
-              <span style={{ fontSize: 12, color: '#868685' }}>›</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>›</span>
             </>
           )}
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#1d1d1b' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
             {selectedItem.name || selectedItem.code || '—'}
           </span>
         </div>
@@ -286,7 +286,7 @@ export default function POMBrowser({
           style={{ ...selectStyle, width: 280, flex: '0 1 auto', marginLeft: 'auto' }}
         />
         {mode === 'assign' && (
-          <span style={{ fontSize: 11, color: '#868685' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
             {poms.length} POMs assignats
           </span>
         )}
@@ -306,7 +306,7 @@ export default function POMBrowser({
             {catalogResults.length > 0 && (
               <div style={{
                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-                background: '#fff', border: '0.5px solid #e0d5c5', borderTop: 'none',
+                background: 'var(--white)', border: '0.5px solid var(--border)', borderTop: 'none',
                 borderRadius: '0 0 6px 6px', maxHeight: 240, overflowY: 'auto',
               }}>
                 {catalogResults.map(res => {
@@ -322,9 +322,9 @@ export default function POMBrowser({
                       onMouseEnter={e => { if (!already) e.currentTarget.style.background = '#fdf6ee' }}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      <span style={{ color: '#c27a2a', fontWeight: 600, minWidth: 70 }}>{res.codi_client}</span>
-                      <span style={{ flex: 1, color: '#1d1d1b' }}>{res.nom_ca || res.nom_client || res.nom_en}</span>
-                      {already && <span style={{ fontSize: 10, color: '#868685' }}>ja assignat</span>}
+                      <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 70 }}>{res.codi_client}</span>
+                      <span style={{ flex: 1, color: 'var(--text-main)' }}>{res.nom_ca || res.nom_client || res.nom_en}</span>
+                      {already && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>ja assignat</span>}
                     </div>
                   )
                 })}
@@ -415,8 +415,8 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
     transform: CSS.Transform.toString(transform), transition,
     opacity: isDragging ? 0.6 : 1,
     display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6,
-    border: `0.5px solid ${isSelected ? '#c27a2a' : '#e8e8e6'}`,
-    background: isSelected ? '#fdf6ee' : '#fff', fontSize: 12,
+    border: `0.5px solid ${isSelected ? 'var(--gold)' : '#e8e8e6'}`,
+    background: isSelected ? '#fdf6ee' : 'var(--white)', fontSize: 12,
   }
   return (
     <div ref={setNodeRef} style={style}>
@@ -426,11 +426,11 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
         onClick={(e) => { e.stopPropagation(); onRemove() }}
         title="Desmarca per treure el POM de l'ítem" style={{ cursor: 'pointer' }} />
       <div onClick={onRowClick} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minWidth: 0 }}>
-        <span style={{ color: '#c27a2a', fontWeight: 600, minWidth: 64 }}>{pom.pom_code}</span>
+        <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 64 }}>{pom.pom_code}</span>
         <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           <PomNamePair en={pom.name_en} local={pom.name_cat} />
         </span>
-        {pom.abbreviation && <Pill bg="#f5f0ea" color="#868685" mono>{pom.abbreviation}</Pill>}
+        {pom.abbreviation && <Pill bg="#f5f0ea" color="var(--text-muted)" mono>{pom.abbreviation}</Pill>}
         {pom.applies_woven && <Pill bg="#eef4fc" color="#2a5a8a">W</Pill>}
         {pom.applies_knit && <Pill bg="#f3edfb" color="#6a3a9a">K</Pill>}
         {pom.applies_swim && <Pill bg="#e8f5f5" color="#2a7a7a">S</Pill>}
@@ -444,8 +444,8 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
       <button type="button" onClick={(e) => { e.stopPropagation(); onToggleKey() }}
         title="Marca/desmarca KEY" style={{
           cursor: 'pointer', fontSize: 9, padding: '2px 7px', borderRadius: 3, fontWeight: 600,
-          letterSpacing: '.06em', border: `0.5px solid ${pom.is_key ? '#e0c8a0' : '#e0d5c5'}`,
-          background: pom.is_key ? '#fdf6ee' : '#fff', color: pom.is_key ? '#c27a2a' : '#b0b0ad',
+          letterSpacing: '.06em', border: `0.5px solid ${pom.is_key ? '#e0c8a0' : 'var(--border)'}`,
+          background: pom.is_key ? '#fdf6ee' : 'var(--white)', color: pom.is_key ? 'var(--gold)' : '#b0b0ad',
         }}>KEY</button>
     </div>
   )
@@ -454,10 +454,10 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
 function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
   const borderColor = mode === 'assign' && isActive
     ? '#3b6d11'
-    : isSelected ? '#c27a2a' : '#e0d5c5'
+    : isSelected ? 'var(--gold)' : 'var(--border)'
   const background = mode === 'assign' && isActive
     ? '#f0f9f0'
-    : isSelected ? '#fdf6ee' : '#fff'
+    : isSelected ? '#fdf6ee' : 'var(--white)'
 
   return (
     <div
@@ -470,7 +470,7 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 10, color: '#868685', fontWeight: 500 }}>{pom.pom_code}</span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>{pom.pom_code}</span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {pom.pendent_revisio && (
             <span title="Clon de plantilla — cal revisar el delta" style={{
@@ -482,7 +482,7 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
           )}
           {pom.is_key && (
             <span style={{
-              background: '#fdf6ee', color: '#c27a2a',
+              background: '#fdf6ee', color: 'var(--gold)',
               fontSize: 9, padding: '2px 6px', borderRadius: 3,
               fontWeight: 600, letterSpacing: '.08em',
               border: '0.5px solid #e0c8a0',
@@ -501,20 +501,20 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
         </div>
       </div>
       {/* Convenció sector: anglès primari (negre) + nom localitzat (cursiva gris). */}
-      <p style={{ fontSize: 13, fontWeight: 500, color: '#1d1d1b', margin: 0, lineHeight: 1.3 }}>
+      <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-main)', margin: 0, lineHeight: 1.3 }}>
         {pom.name_en || pom.name_cat}
       </p>
       {pom.name_en && pom.name_cat && pom.name_cat !== pom.name_en && (
-        <p style={{ fontSize: 11, color: '#868685', fontStyle: 'italic', margin: '2px 0 0', lineHeight: 1.3 }}>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', margin: '2px 0 0', lineHeight: 1.3 }}>
           {pom.name_cat}
         </p>
       )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
         {pom.abbreviation && (
-          <Pill bg="#f5f0ea" color="#868685" mono>{pom.abbreviation}</Pill>
+          <Pill bg="#f5f0ea" color="var(--text-muted)" mono>{pom.abbreviation}</Pill>
         )}
         {pom.category && (
-          <Pill bg="#f5f0ea" color="#868685">{pom.category}</Pill>
+          <Pill bg="#f5f0ea" color="var(--text-muted)">{pom.category}</Pill>
         )}
         {pom.applies_woven && <Pill bg="#eef4fc" color="#2a5a8a">WOVEN</Pill>}
         {pom.applies_knit && <Pill bg="#f3edfb" color="#6a3a9a">KNIT</Pill>}
@@ -531,9 +531,9 @@ export function PomNamePair({ en, local }) {
   const secondary = en && local && local !== en ? local : ''
   return (
     <>
-      <span style={{ color: '#1d1d1b' }}>{primary}</span>
+      <span style={{ color: 'var(--text-main)' }}>{primary}</span>
       {secondary && (
-        <span style={{ color: '#868685', fontStyle: 'italic', marginLeft: 8 }}>{secondary}</span>
+        <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginLeft: 8 }}>{secondary}</span>
       )}
     </>
   )
@@ -559,15 +559,15 @@ export function POMDetailPanel({ pom, onClose }) {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
         <div>
-          <span style={{ fontSize: 10, color: '#868685' }}>{pom.pom_code}</span>
-          <h2 style={{ fontSize: 14, fontWeight: 600, margin: '2px 0 0', color: '#1d1d1b' }}>{pom.name_en}</h2>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{pom.pom_code}</span>
+          <h2 style={{ fontSize: 14, fontWeight: 600, margin: '2px 0 0', color: 'var(--text-main)' }}>{pom.name_en}</h2>
           {pom.name_cat && (
-            <p style={{ fontSize: 11, color: '#868685', margin: '2px 0 0' }}>{pom.name_cat}</p>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0' }}>{pom.name_cat}</p>
           )}
         </div>
         <button
           onClick={onClose}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#868685', fontSize: 18, lineHeight: 1 }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, lineHeight: 1 }}
           aria-label="Tancar"
         >×</button>
       </div>
@@ -641,7 +641,7 @@ function DetailSection({ title, children }) {
   return (
     <section style={{ marginBottom: 16 }}>
       <h3 style={{
-        fontSize: 9, fontWeight: 700, color: '#c27a2a',
+        fontSize: 9, fontWeight: 700, color: 'var(--gold)',
         textTransform: 'uppercase', letterSpacing: '.1em',
         margin: '0 0 8px', paddingBottom: 4, borderBottom: '0.5px solid #ece2d4',
       }}>{title}</h3>
@@ -657,12 +657,12 @@ function DetailRow({ label, value, multiline = false, mono = false }) {
   return (
     <div>
       <dt style={{
-        fontSize: 9, fontWeight: 600, color: '#868685',
+        fontSize: 9, fontWeight: 600, color: 'var(--text-muted)',
         textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 2,
       }}>{label}</dt>
       <dd style={{
         margin: 0,
-        color: empty ? '#c0bdb8' : '#1d1d1b',
+        color: empty ? '#c0bdb8' : 'var(--text-main)',
         fontSize: multiline ? 11 : 12,
         lineHeight: multiline ? 1.5 : 1.3,
         fontFamily: mono && !empty ? 'IBM Plex Mono, monospace' : 'inherit',
@@ -672,7 +672,7 @@ function DetailRow({ label, value, multiline = false, mono = false }) {
 }
 
 const selectStyle = {
-  background: '#fff',
+  background: 'var(--white)',
   border: '0.5px solid #e4e4e2',
   borderRadius: 8,
   padding: '8px 12px',
@@ -683,6 +683,6 @@ const selectStyle = {
 
 const hintStyle = {
   fontSize: 12,
-  color: '#868685',
+  color: 'var(--text-muted)',
   margin: 0,
 }

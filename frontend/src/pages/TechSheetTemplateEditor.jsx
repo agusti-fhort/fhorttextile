@@ -294,7 +294,7 @@ export default function TechSheetTemplateEditor() {
         <button onClick={() => navigate('/clients')} style={headerBtn}>
           <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> Tornar
         </button>
-        <button onClick={onExport} disabled={exporting} style={{ ...headerBtn, background: COL.gold, border: 'none', color: '#fff', opacity: exporting ? 0.5 : 1 }}>
+        <button onClick={onExport} disabled={exporting} style={{ ...headerBtn, background: COL.gold, border: 'none', color: 'var(--white)', opacity: exporting ? 0.5 : 1 }}>
           <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? 'Exportant…' : 'Exportar PDF'}
         </button>
         <span style={{ fontSize: 14, fontWeight: 600 }}>Plantilla · {customerData?.nom || `#${customerId}`}</span>
@@ -314,7 +314,7 @@ export default function TechSheetTemplateEditor() {
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFile(f) }} />
           </div>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: COL.gold, color: '#fff', whiteSpace: 'nowrap' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: COL.gold, color: 'var(--white)', whiteSpace: 'nowrap' }}>
           mode plantilla
         </span>
       </header>
@@ -326,12 +326,12 @@ export default function TechSheetTemplateEditor() {
           {canEdit && <button onClick={addPage} style={{ fontSize: 9, padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>+ Pàgina</button>}
           {pages.map((p, i) => (
             <div key={p.id} onClick={() => { setCurrentPage(i); setSelectedId(null) }} style={{ position: 'relative', cursor: 'pointer' }}>
-              <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: '#fff', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
+              <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
                 {thumbnails[i] && <img src={thumbnails[i]} alt={`Pàg ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
               </div>
               <div style={{ fontSize: 9, color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>Pàg. {i + 1}</div>
               {canEdit && pages.length > 1 && (
-                <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title="Eliminar pàgina" style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: '#fff', border: 'none', fontSize: 9, lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
+                <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title="Eliminar pàgina" style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 9, lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
               )}
             </div>
           ))}
@@ -340,14 +340,14 @@ export default function TechSheetTemplateEditor() {
         {/* Stage */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COL.bg, minWidth: 0, overflow: 'auto', position: 'relative' }}>
           {!canEdit && (
-            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: '#fff', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 11, color: COL.textMuted }}>
+            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 11, color: COL.textMuted }}>
               <i className="ti ti-eye" style={{ marginRight: 6 }} />Només lectura (cal `configure`)
             </div>
           )}
-          <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()} style={{ position: 'relative', width: CANVAS_W, height: CANVAS_H, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: '#fff', cursor: (canEdit && tool !== 'select') ? 'crosshair' : 'default' }}>
+          <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()} style={{ position: 'relative', width: CANVAS_W, height: CANVAS_H, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: 'var(--white)', cursor: (canEdit && tool !== 'select') ? 'crosshair' : 'default' }}>
             <Stage ref={stageRef} width={CANVAS_W} height={CANVAS_H} onMouseDown={onStageMouseDown} onMouseMove={onStageMouseMove} onMouseUp={onStageMouseUp}>
               <Layer>
-                <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill="#ffffff" listening={false} />
+                <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill="var(--white)" listening={false} />
                 {ordered.map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={{}} modelData={{ customer_nom: customerData?.nom }} placeholderMode
@@ -370,7 +370,7 @@ export default function TechSheetTemplateEditor() {
                 onChange={e => setEditingText(s => ({ ...s, value: e.target.value }))}
                 onBlur={commitTextEdit}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitTextEdit() } if (e.key === 'Escape') setEditingText(null) }}
-                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 11, color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: '#fff', zIndex: 10 }} />
+                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 11, color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: 'var(--white)', zIndex: 10 }} />
             )}
           </div>
         </div>
@@ -379,7 +379,7 @@ export default function TechSheetTemplateEditor() {
         <aside style={{ width: 180, flexShrink: 0, borderLeft: `1px solid ${COL.border}`, background: COL.bg, display: 'flex', flexDirection: 'column', minHeight: 0, fontFamily: FONT }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
             <SectionTitle>Inserir bloc de dades</SectionTitle>
-            <button onClick={insertHeader} disabled={!canEdit} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: '#fff', fontFamily: FONT, cursor: !canEdit ? 'default' : 'pointer', opacity: !canEdit ? 0.45 : 1 }}>
+            <button onClick={insertHeader} disabled={!canEdit} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: !canEdit ? 'default' : 'pointer', opacity: !canEdit ? 0.45 : 1 }}>
               <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> Capçalera del model
             </button>
             <p style={{ fontSize: 10, color: COL.textMuted, margin: '0 0 8px' }}>
@@ -396,12 +396,12 @@ export default function TechSheetTemplateEditor() {
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'line') && (
                   <label style={propLabel}>Color traç
-                    <input type="color" value={selObj.stroke || '#1d1d1b'} onChange={e => updateObject(selObj.id, { stroke: e.target.value })} style={{ ...propInput, padding: 0, height: 26 }} />
+                    <input type="color" value={selObj.stroke || 'var(--text-main)'} onChange={e => updateObject(selObj.id, { stroke: e.target.value })} style={{ ...propInput, padding: 0, height: 26 }} />
                   </label>
                 )}
                 {selObj.type === 'rect' && (
                   <label style={propLabel}>Emplenat
-                    <input type="color" value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : '#ffffff'} onChange={e => updateObject(selObj.id, { fill: e.target.value })} style={{ ...propInput, padding: 0, height: 26 }} />
+                    <input type="color" value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : 'var(--white)'} onChange={e => updateObject(selObj.id, { fill: e.target.value })} style={{ ...propInput, padding: 0, height: 26 }} />
                   </label>
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (

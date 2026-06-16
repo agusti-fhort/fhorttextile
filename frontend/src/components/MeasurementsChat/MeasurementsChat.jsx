@@ -98,7 +98,7 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
               maxWidth: '80%', padding: '8px 12px', borderRadius: 8, fontSize: 13,
               background: msg.role === 'user'
                 ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
-              color: msg.role === 'user' ? '#fff' : 'var(--color-text-primary, #1d1d1b)',
+              color: msg.role === 'user' ? 'var(--white)' : 'var(--color-text-primary, #1d1d1b)',
               border: msg.role === 'assistant'
                 ? '0.5px solid var(--color-border-tertiary, #e0d5c5)' : 'none',
               whiteSpace: 'pre-wrap',
@@ -142,7 +142,7 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
         <button type="button" onClick={handleSend} disabled={loading || !input.trim()}
           style={{
             padding: '7px 14px', background: loading ? '#ccc' : 'var(--gold)',
-            color: '#fff', border: 'none', borderRadius: 6,
+            color: 'var(--white)', border: 'none', borderRadius: 6,
             fontSize: 13, cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
           }}>
           <i className="ti ti-send" aria-hidden="true" />

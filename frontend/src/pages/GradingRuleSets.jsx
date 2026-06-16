@@ -65,8 +65,8 @@ const GROUP_POM_CATEGORIES = {
 
 const LOGICA_COLORS = {
   LINEAR:  { bg: '#eef4fc', color: '#2a5a8a', label: 'LINEAR' },
-  FIXED:   { bg: '#f5f0ea', color: '#868685', label: 'FIXED' },
-  STEPPED: { bg: '#fdf6ee', color: '#c27a2a', label: 'STEPPED' },
+  FIXED:   { bg: '#f5f0ea', color: 'var(--text-muted)', label: 'FIXED' },
+  STEPPED: { bg: '#fdf6ee', color: 'var(--gold)', label: 'STEPPED' },
 }
 
 export default function GradingRuleSets() {
@@ -290,7 +290,7 @@ export default function GradingRuleSets() {
         <StepSection number={2} title="CONSTRUCCIÓ I FIT">
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
             <div>
-              <p style={{ fontSize: 10, color: '#868685', marginBottom: 6,
+              <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6,
                 textTransform: 'uppercase', letterSpacing: '.06em',
                 }}>
                 Tipus de construcció
@@ -313,7 +313,7 @@ export default function GradingRuleSets() {
             </div>
             {selectedConstruction && availableFits.length > 0 && (
               <div>
-                <p style={{ fontSize: 10, color: '#868685', marginBottom: 6,
+                <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6,
                   textTransform: 'uppercase', letterSpacing: '.06em',
                   }}>
                   Fit type
@@ -384,7 +384,7 @@ export default function GradingRuleSets() {
       {/* Message when there is no match (with the 4 filters applied) */}
       {selectedGarmentGroup && matchingRuleSets.length === 0 && (
         <div style={{
-          marginTop: 24, padding: '2rem', border: '1px dashed #e0d5c5',
+          marginTop: 24, padding: '2rem', border: '1px dashed var(--border)',
           borderRadius: 8, textAlign: 'center', color: 'var(--gray, #868685)', fontSize: 12,
         }}>
           No hi ha cap RuleSet per a aquesta combinació.
@@ -416,7 +416,7 @@ function StepSection({ number, title, children }) {
   return (
     <div style={{ marginBottom: '1.4rem' }}>
       <p style={{
-        fontSize: 10, fontWeight: 700, color: '#c27a2a',
+        fontSize: 10, fontWeight: 700, color: 'var(--gold)',
         letterSpacing: '0.08em', textTransform: 'uppercase',
         margin: '0 0 10px',
       }}>
@@ -434,11 +434,11 @@ function TargetCard({ target, selected, available, onClick }) {
     <div
       onClick={available ? onClick : undefined}
       style={{
-        border: `1px solid ${selected ? '#c27a2a' : '#e0d5c5'}`,
+        border: `1px solid ${selected ? 'var(--gold)' : 'var(--border)'}`,
         borderRadius: 8,
         padding: '8px 14px',
         cursor: available ? 'pointer' : 'not-allowed',
-        background: selected ? '#fdf6ee' : available ? '#fff' : '#f8f8f8',
+        background: selected ? '#fdf6ee' : available ? 'var(--white)' : '#f8f8f8',
         opacity: available ? 1 : 0.4,
         minWidth: 100, textAlign: 'center',
         transition: 'all .15s',
@@ -447,11 +447,11 @@ function TargetCard({ target, selected, available, onClick }) {
       <div style={{
         fontSize: 12,
         fontWeight: selected ? 600 : 400,
-        color: selected ? '#c27a2a' : '#1d1d1b',
+        color: selected ? 'var(--gold)' : 'var(--text-main)',
       }}>
         {target.nom_en}
       </div>
-      <div style={{ fontSize: 9, color: '#868685', marginTop: 2 }}>{target.nom_ca}</div>
+      <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{target.nom_ca}</div>
     </div>
   )
 }
@@ -464,11 +464,11 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
     <button
       onClick={onClick}
       style={{
-        border: `1px solid ${selected ? '#c27a2a' : '#e0d5c5'}`,
+        border: `1px solid ${selected ? 'var(--gold)' : 'var(--border)'}`,
         borderRadius: 6,
         padding: sublabel ? '5px 12px' : '6px 14px',
-        background: selected ? '#fdf6ee' : '#fff',
-        color: selected ? '#c27a2a' : '#1d1d1b',
+        background: selected ? '#fdf6ee' : 'var(--white)',
+        color: selected ? 'var(--gold)' : 'var(--text-main)',
         fontWeight: selected ? 600 : 400,
         fontSize: 11,
         cursor: 'pointer',
@@ -482,7 +482,7 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
         <span style={{
           display: 'block',
           fontSize: 9,
-          color: selected ? '#a06622' : '#868685',
+          color: selected ? '#a06622' : 'var(--text-muted)',
           fontWeight: 400,
           marginTop: 1,
         }}>
@@ -577,13 +577,13 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
 
   return (
     <div style={{
-      border: '1px solid #e0d5c5', borderRadius: 10,
-      marginBottom: 16, overflow: 'hidden', background: '#fff',
+      border: '1px solid var(--border)', borderRadius: 10,
+      marginBottom: 16, overflow: 'hidden', background: 'var(--white)',
       boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
     }}>
       <div style={{
         padding: '12px 18px', background: '#fafaf8',
-        borderBottom: expanded ? '1px solid #e0d5c5' : 'none',
+        borderBottom: expanded ? '1px solid var(--border)' : 'none',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         gap: 14, flexWrap: 'wrap',
       }}>
@@ -592,7 +592,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
             onClick={() => setExpanded(e => !e)}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 12, color: '#868685', padding: 0, lineHeight: 1,
+              fontSize: 12, color: 'var(--text-muted)', padding: 0, lineHeight: 1,
             }}
             aria-label={expanded ? 'Replegar' : 'Desplegar'}
           >
@@ -601,12 +601,12 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
           <div style={{ minWidth: 0 }}>
             <div style={{
               fontWeight: 600,
-              fontSize: 13, color: '#1d1d1b',
+              fontSize: 13, color: 'var(--text-main)',
             }}>
               {rs.nom}
             </div>
             <div style={{
-              fontSize: 11, color: '#868685', marginTop: 2,
+              fontSize: 11, color: 'var(--text-muted)', marginTop: 2,
               display: 'flex', gap: 10, flexWrap: 'wrap',
             }}>
               {/* S16-B: targets array (M2M) — a RuleSet can apply to multiple targets */}
@@ -635,10 +635,10 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
               ? `${reglesCount}/${totalRulesCount} regles`
               : `${reglesCount} regles`}
           </Pill>
-          {breakCount > 0 && <Pill bg="#fdf6ee" color="#c27a2a">{breakCount} amb break</Pill>}
+          {breakCount > 0 && <Pill bg="#fdf6ee" color="var(--gold)">{breakCount} amb break</Pill>}
           <Pill
             bg={rs.is_system_default ? '#f5f0ea' : '#f0f9f0'}
-            color={rs.is_system_default ? '#868685' : '#3b6d11'}
+            color={rs.is_system_default ? 'var(--text-muted)' : '#3b6d11'}
           >{rs.is_system_default ? 'Sistema' : 'Personalitzat'}</Pill>
           {rs.actiu && <Pill bg="#f0f9f0" color="#3b6d11">Actiu</Pill>}
           <ActionBtn onClick={onClone} label="Clonar" />
@@ -661,9 +661,9 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                   <th key={i} style={{
                     padding: '8px 12px',
                     textAlign: h.align,
-                    fontWeight: 600, color: '#868685', fontSize: 10,
+                    fontWeight: 600, color: 'var(--text-muted)', fontSize: 10,
                     textTransform: 'uppercase', letterSpacing: '0.06em',
-                    borderBottom: '0.5px solid #e0d5c5',
+                    borderBottom: '0.5px solid var(--border)',
                   }}>{h.label}</th>
                 ))}
               </tr>
@@ -674,7 +674,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                 const aboveXl = r.valors_step?.above_xl
                 const isKey = r.increment > 0 && r.logica === 'LINEAR'
                 return (
-                  <tr key={r.id} style={{ background: i % 2 === 0 ? '#fff' : '#fafaf8' }}>
+                  <tr key={r.id} style={{ background: i % 2 === 0 ? 'var(--white)' : '#fafaf8' }}>
                     {/* CODI: codi global (POM-001) gris petit a sobre,
                         abreviatura (CH) daurada més gran a sota. */}
                     <td style={{
@@ -684,31 +684,31 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     }}>
                       {r.pom_code_global && (
                         <div style={{
-                          fontSize: 9, color: '#868685',
+                          fontSize: 9, color: 'var(--text-muted)',
                           lineHeight: 1.1, letterSpacing: '.02em',
                         }}>{r.pom_code_global}</div>
                       )}
                       <div style={{
-                        fontSize: 12, color: '#c27a2a', fontWeight: 600,
+                        fontSize: 12, color: 'var(--gold)', fontWeight: 600,
                         lineHeight: 1.15,
                       }}>{r.pom_abbreviation || r.pom_codi}</div>
                     </td>
                     <td style={{
-                      padding: '7px 12px', color: '#1d1d1b',
+                      padding: '7px 12px', color: 'var(--text-main)',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
                       {r.pom_nom_en || r.pom_nom}
                       {isKey && (
                         <span style={{
                           marginLeft: 6, fontSize: 9, padding: '2px 5px', borderRadius: 3,
-                          background: '#fdf6ee', color: '#c27a2a',
+                          background: '#fdf6ee', color: 'var(--gold)',
                           border: '0.5px solid #e0c8a0', fontWeight: 600,
                         }}>KEY</span>
                       )}
                     </td>
                     {showTrad && (
                       <td style={{
-                        padding: '7px 12px', color: '#868685', fontStyle: 'italic',
+                        padding: '7px 12px', color: 'var(--text-muted)', fontStyle: 'italic',
                         borderBottom: '0.5px solid #f0eee9',
                       }}>{r.pom_nom_ca || '—'}</td>
                     )}
@@ -724,7 +724,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
                       fontWeight: 600,
-                      color: Number(r.increment_base ?? r.increment) > 0 ? '#2a5a8a' : '#868685',
+                      color: Number(r.increment_base ?? r.increment) > 0 ? '#2a5a8a' : 'var(--text-muted)',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
                       {r.increment_base != null
@@ -744,7 +744,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
                       fontSize: 11,
-                      color: (r.increment_base != null ? r.talla_break_label : aboveXl) ? '#c27a2a' : '#c0c0c0',
+                      color: (r.increment_base != null ? r.talla_break_label : aboveXl) ? 'var(--gold)' : '#c0c0c0',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
                       {r.increment_base != null
@@ -763,12 +763,12 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     </td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      color: '#868685', fontSize: 11,
+                      color: 'var(--text-muted)', fontSize: 11,
                       borderBottom: '0.5px solid #f0eee9',
                     }}>{r.talla_base_etiqueta || '—'}</td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      color: '#868685',
+                      color: 'var(--text-muted)',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>{Number(r.valor_base) > 0 ? `${r.valor_base} cm` : '—'}</td>
                     {editable && (
@@ -837,7 +837,7 @@ function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
         }}
         style={{
           width: 64, textAlign: 'right',
-          border: '1px solid #c27a2a', borderRadius: 4,
+          border: '1px solid var(--gold)', borderRadius: 4,
           padding: '1px 4px', fontSize: 11,
         }}
       />
@@ -872,8 +872,8 @@ function Pill({ bg, color, children }) {
 
 function ActionBtn({ onClick, label, danger = false }) {
   const palette = danger
-    ? { fg: '#a32d2d', bg: '#fff', border: '#f0c0c0', bgHover: '#fff0f0' }
-    : { fg: '#868685', bg: '#fff', border: '#e0d5c5', bgHover: '#fdf9f5' }
+    ? { fg: '#a32d2d', bg: 'var(--white)', border: '#f0c0c0', bgHover: '#fff0f0' }
+    : { fg: 'var(--text-muted)', bg: 'var(--white)', border: 'var(--border)', bgHover: '#fdf9f5' }
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick() }}
@@ -955,7 +955,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
   const F = ({ label, field, options, disabled }) => (
     <div style={{ marginBottom: 12 }}>
       <label style={{
-        fontSize: 10, fontWeight: 600, color: '#868685',
+        fontSize: 10, fontWeight: 600, color: 'var(--text-muted)',
         display: 'block', marginBottom: 4,
       }}>{label}</label>
       {options ? (
@@ -990,12 +990,12 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: '#fff', borderRadius: 12, padding: 24,
+          background: 'var(--white)', borderRadius: 12, padding: 24,
           width: '100%', maxWidth: 480,
           boxShadow: '0 10px 40px rgba(0,0,0,0.18)',
         }}
       >
-        <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: '#1d1d1b' }}>
+        <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: 'var(--text-main)' }}>
           {isEdit ? 'Editar RuleSet' : 'Nou RuleSet de Grading'}
         </h2>
         <F label="Nom" field="nom" />
@@ -1003,7 +1003,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
         <F label="Target (només referència)" field="target_codi_form" options={TARGETS} disabled />
         <F label="Construction (només referència)" field="construction_codi_form" options={CONSTRUCTIONS} disabled />
         <F label="Fit Type (només referència)" field="fit_type_codi_form" options={FITS} disabled />
-        <p style={{ fontSize: 10, color: '#c27a2a', margin: '4px 0 12px' }}>
+        <p style={{ fontSize: 10, color: 'var(--gold)', margin: '4px 0 12px' }}>
           Nota: Target/Construction/Fit no es poden modificar des d'aquí — backend espera IDs i no hi ha endpoint per resoldre codi→id.
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
@@ -1011,8 +1011,8 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
             onClick={onClose}
             style={{
               padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
-              background: '#fff', color: '#868685',
-              border: '0.5px solid #e0d5c5',
+              background: 'var(--white)', color: 'var(--text-muted)',
+              border: '0.5px solid var(--border)',
               fontSize: 11,
             }}
           >Cancel·lar</button>
@@ -1030,7 +1030,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
 }
 
 const btnPrimary = {
-  background: '#c27a2a', color: '#fff',
+  background: 'var(--gold)', color: 'var(--white)',
   border: 'none', borderRadius: 6,
   padding: '8px 14px', fontSize: 11, fontWeight: 600,
   cursor: 'pointer', 
@@ -1038,11 +1038,11 @@ const btnPrimary = {
 
 const modalInput = {
   width: '100%',
-  border: '0.5px solid #e0d5c5',
+  border: '0.5px solid var(--border)',
   borderRadius: 6,
   padding: '8px 10px',
   fontSize: 12,
   outline: 'none',
   boxSizing: 'border-box',
-  background: '#fff',
+  background: 'var(--white)',
 }

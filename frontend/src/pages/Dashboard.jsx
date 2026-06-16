@@ -7,21 +7,21 @@ import { PhaseStepper } from "../components/PhaseStepper"
 
 const API = import.meta.env.VITE_API_URL || ""
 
-function KPICard({ label, value, sub, color = "#c27a2a", onClick }) {
+function KPICard({ label, value, sub, color = "var(--gold)", onClick }) {
   return (
     <div
       onClick={onClick}
       style={{
-        background: "#fff", border: "1px solid #e0d5c5", borderRadius: 8,
+        background: "var(--white)", border: "1px solid var(--border)", borderRadius: 8,
         padding: "18px 20px", cursor: onClick ? "pointer" : "default",
         transition: "all .1s", flex: 1, minWidth: 140,
       }}
       onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = color)}
-      onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = "#e0d5c5")}
+      onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = "var(--border)")}
     >
-      <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace", marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "IBM Plex Mono, monospace", marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 32, fontWeight: 600, color, fontFamily: "IBM Plex Mono, monospace", lineHeight: 1 }}>{value ?? "—"}</div>
-      {sub && <div style={{ fontSize: 11, color: "#868685", fontFamily: "IBM Plex Mono, monospace", marginTop: 6 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "IBM Plex Mono, monospace", marginTop: 6 }}>{sub}</div>}
     </div>
   )
 }
@@ -103,17 +103,17 @@ export default function Dashboard() {
         >
           <div style={{
             width: 36, height: 36, borderRadius: '50%',
-            background: '#f5e6d0', color: '#c27a2a',
+            background: '#f5e6d0', color: 'var(--gold)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 12, fontWeight: 600,
           }}>
             {onboarding.percentatge}%
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: '#1d1d1b' }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-main)' }}>
               Configuració incompleta
             </div>
-            <div style={{ fontSize: 11, color: '#868685', marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
               {onboarding.passos_pendents
                 ? `Falten ${onboarding.passos_pendents} passos per completar el setup`
                 : 'Completa el setup inicial per desbloquejar totes les funcionalitats'}
@@ -121,7 +121,7 @@ export default function Dashboard() {
           </div>
           <span style={{
             padding: '6px 12px', borderRadius: 6, fontSize: 11,
-            background: '#c27a2a', color: '#fff', fontWeight: 500,
+            background: 'var(--gold)', color: 'var(--white)', fontWeight: 500,
           }}>
             Completar setup →
           </span>
@@ -130,10 +130,10 @@ export default function Dashboard() {
 
       {/* Greeting */}
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 500, color: "#1d1d1b", margin: "0 0 4px" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 500, color: "var(--text-main)", margin: "0 0 4px" }}>
           {salutacio}{me ? `, ${me.full_name?.split(" ")[0] || me.username}` : ""}.
         </h1>
-        <div style={{ fontSize: 13, color: "#868685", fontFamily: "IBM Plex Mono, monospace" }}>
+        <div style={{ fontSize: 13, color: "var(--text-muted)", fontFamily: "IBM Plex Mono, monospace" }}>
           {new Date().toLocaleDateString("ca-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </div>
       </div>
@@ -157,7 +157,7 @@ export default function Dashboard() {
           label="Avisos oberts"
           value={loading ? "…" : avisos.length}
           sub="desviacions POM"
-          color={avisos.length > 0 ? "#a32d2d" : "#868685"}
+          color={avisos.length > 0 ? "#a32d2d" : "var(--text-muted)"}
           onClick={() => navigate("/avisos")}
         />
         <KPICard
@@ -173,23 +173,23 @@ export default function Dashboard() {
         <div>
           <div style={{
             fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
-            textTransform: "uppercase", color: "#c27a2a",
+            textTransform: "uppercase", color: "var(--gold)",
             fontFamily: "IBM Plex Mono, monospace", marginBottom: 12,
           }}>
             Models actius recents
           </div>
           {loading ? (
-            <div style={{ color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
+            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
           ) : recents.length === 0 ? (
             <div style={{
-              padding: "20px", border: "1px dashed #e0d5c5", borderRadius: 8,
-              textAlign: "center", color: "#868685", fontSize: 12,
+              padding: "20px", border: "1px dashed var(--border)", borderRadius: 8,
+              textAlign: "center", color: "var(--text-muted)", fontSize: 12,
               fontFamily: "IBM Plex Mono, monospace",
             }}>
               Sense models en curs.{" "}
               <span
                 onClick={() => navigate("/models/nou")}
-                style={{ color: "#c27a2a", cursor: "pointer", textDecoration: "underline" }}
+                style={{ color: "var(--gold)", cursor: "pointer", textDecoration: "underline" }}
               >
                 Crea el primer
               </span>
@@ -201,18 +201,18 @@ export default function Dashboard() {
                   key={m.id}
                   onClick={() => navigate(`/models/${m.id}`)}
                   style={{
-                    border: "1px solid #e0d5c5", borderRadius: 8, padding: "12px 16px",
-                    cursor: "pointer", background: "#fff",
+                    border: "1px solid var(--border)", borderRadius: 8, padding: "12px 16px",
+                    cursor: "pointer", background: "var(--white)",
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "#fdf9f5"; e.currentTarget.style.borderColor = "#c27a2a" }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#e0d5c5" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#fdf9f5"; e.currentTarget.style.borderColor = "var(--gold)" }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "var(--white)"; e.currentTarget.style.borderColor = "var(--border)" }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                     <div>
-                      <span style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: 12, fontWeight: 700, color: "#c27a2a", marginRight: 10 }}>
+                      <span style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: 12, fontWeight: 700, color: "var(--gold)", marginRight: 10 }}>
                         {m.codi_intern || m.codi_client}
                       </span>
-                      <span style={{ fontSize: 13, color: "#1d1d1b" }}>{m.nom_prenda}</span>
+                      <span style={{ fontSize: 13, color: "var(--text-main)" }}>{m.nom_prenda}</span>
                     </div>
                     <EstatBadge estat={m.estat} size="xs" />
                   </div>
@@ -226,8 +226,8 @@ export default function Dashboard() {
               <button
                 onClick={() => navigate("/models")}
                 style={{
-                  padding: "8px", border: "1px dashed #e0d5c5", borderRadius: 8,
-                  background: "none", color: "#c27a2a", cursor: "pointer",
+                  padding: "8px", border: "1px dashed var(--border)", borderRadius: 8,
+                  background: "none", color: "var(--gold)", cursor: "pointer",
                   fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
                 }}
               >
@@ -241,7 +241,7 @@ export default function Dashboard() {
         <div>
           <div style={{
             fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
-            textTransform: "uppercase", color: "#c27a2a",
+            textTransform: "uppercase", color: "var(--gold)",
             fontFamily: "IBM Plex Mono, monospace", marginBottom: 12,
           }}>
             Avisos POM
@@ -249,16 +249,16 @@ export default function Dashboard() {
           {avisosSummary && (
             <div style={{
               marginBottom: 10, padding: "8px 10px",
-              border: "1px solid #e0d5c5", borderRadius: 6,
-              background: "#fff", fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+              border: "1px solid var(--border)", borderRadius: 6,
+              background: "var(--white)", fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
             }}>
               <div style={{ display: "flex", gap: 12, marginBottom: 6 }}>
                 <span style={{ color: "#a32d2d" }}>● {avisosSummary.oberts ?? 0} oberts</span>
                 <span style={{ color: "#3b6d11" }}>● {avisosSummary.resolts ?? 0} resolts</span>
-                <span style={{ color: "#868685" }}>· {avisosSummary.dies ?? 30}d</span>
+                <span style={{ color: "var(--text-muted)" }}>· {avisosSummary.dies ?? 30}d</span>
               </div>
               {avisosSummary.top_poms?.length > 0 && (
-                <div style={{ color: "#868685", fontSize: 10 }}>
+                <div style={{ color: "var(--text-muted)", fontSize: 10 }}>
                   Top: {avisosSummary.top_poms.slice(0, 3).map(p =>
                     `${p.pom_codi || p.pom} (${p.count})`
                   ).join(" · ")}
@@ -267,10 +267,10 @@ export default function Dashboard() {
             </div>
           )}
           {loading ? (
-            <div style={{ color: "#868685", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
+            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
           ) : avisos.length === 0 ? (
             <div style={{
-              padding: "16px", border: "1px solid #e0d5c5", borderRadius: 8,
+              padding: "16px", border: "1px solid var(--border)", borderRadius: 8,
               textAlign: "center", color: "#3b6d11", fontSize: 12,
               fontFamily: "IBM Plex Mono, monospace", background: "#f0f9f0",
             }}>
@@ -291,7 +291,7 @@ export default function Dashboard() {
                   <div style={{ color: "#a32d2d", fontWeight: 500, marginBottom: 2 }}>
                     {a.pom_codi || a.pom} — {a.model_codi || a.model}
                   </div>
-                  <div style={{ color: "#868685" }}>{a.missatge || a.message || "Desviació detectada"}</div>
+                  <div style={{ color: "var(--text-muted)" }}>{a.missatge || a.message || "Desviació detectada"}</div>
                 </div>
               ))}
               {avisos.length > 6 && (

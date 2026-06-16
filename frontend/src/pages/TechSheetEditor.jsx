@@ -38,8 +38,8 @@ export const PAGE_FORMATS = {
 
 export const FONT = 'IBM Plex Mono, monospace'
 export const COL = {
-  sidebar: '#f0dfc0', gold: '#c27a2a', goldPale: '#f5e6d0',
-  border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', bg: '#f5f0e8',
+  sidebar: '#f0dfc0', gold: 'var(--gold)', goldPale: '#f5e6d0',
+  border: 'var(--border)', textMain: 'var(--text-main)', textMuted: 'var(--text-muted)', bg: '#f5f0e8',
 }
 
 const LAYER_ORDER = { template: 0, data: 1, free: 2 }
@@ -98,8 +98,8 @@ const T_VAL_W = 18 * MM_TO_PX     // valor per talla
 const T_DELTA_W = 16 * MM_TO_PX   // delta (Δ) — UNA sola columna (valor de GradingRule)
 const T_PAD = 2 * MM_TO_PX
 const TBL = {
-  HDR_BG: '#111827', HDR_TEXT: '#ffffff', ROW_EVEN: '#ffffff', ROW_ODD: '#f7f7f7',
-  ROW_BORDER: '#e0d5c5', OUTER: '#c27a2a', REF: '#dc2626', NOM: '#6b7280', VAL: '#1d1d1b',
+  HDR_BG: '#111827', HDR_TEXT: 'var(--white)', ROW_EVEN: 'var(--white)', ROW_ODD: '#f7f7f7',
+  ROW_BORDER: 'var(--border)', OUTER: 'var(--gold)', REF: '#dc2626', NOM: '#6b7280', VAL: 'var(--text-main)',
   BASE_BG: '#fdf6ee', DELTA: '#185fa5',
 }
 
@@ -136,7 +136,7 @@ function buildTablePrimitives(d) {
     const isBase = sl === baseSize
     // Cel·la de capçalera de la talla base: fons gold + text blanc.
     if (isBase) prims.push({ t: 'r', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, fill: TBL.OUTER })
-    prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: isBase ? `${sl}*` : sl, fill: isBase ? '#ffffff' : TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
+    prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: isBase ? `${sl}*` : sl, fill: isBase ? 'var(--white)' : TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
   })
   prims.push({ t: 't', x: deltaX0, y: 0, w: T_DELTA_W, h: T_HDR_H, text: 'Δ', fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
 
@@ -183,7 +183,7 @@ export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLog
   const B1 = 20 * MM_TO_PX, B2 = 12 * MM_TO_PX
   const totalH = B1 + B2
   const PAD = 2 * MM_TO_PX
-  const PH = '#868685'   // color dels placeholders (--text-muted)
+  const PH = 'var(--text-muted)'   // color dels placeholders (--text-muted)
   // En mode plantilla cada camp és un placeholder en cursiva i gris.
   const f = {
     codi: placeholderMode ? '{model.codi}' : (m?.codi_intern || ''),
@@ -195,14 +195,14 @@ export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLog
     resp: placeholderMode ? '{responsable}' : (m?.responsable_nom || ''),
     versio: placeholderMode ? '{versió}' : `v${versio ?? 1}`,
   }
-  const main = '#1d1d1b'
+  const main = 'var(--text-main)'
   const prims = []
-  prims.push({ t: 'r', x: 0, y: 0, w: W, h: B1, fill: '#f5e6d0', stroke: '#c27a2a', sw: 1 })
+  prims.push({ t: 'r', x: 0, y: 0, w: W, h: B1, fill: '#f5e6d0', stroke: 'var(--gold)', sw: 1 })
   prims.push({ t: 't', x: PAD, y: 0, w: W * 0.4 - PAD, h: B1, text: [f.codi, f.nom].filter(Boolean).join(' · '), fill: placeholderMode ? PH : main, size: Math.round(9 * MM_TO_PX), bold: !placeholderMode, italic: placeholderMode, mid: true })
-  prims.push({ t: 't', x: W * 0.4, y: 0, w: W * 0.42, h: B1, text: [m?.customer_nom, f.temporada, f.collection].filter(Boolean).join(' · '), fill: placeholderMode ? PH : '#1d1d1b', italic: placeholderMode, size: Math.round(7 * MM_TO_PX), align: 'center', mid: true })
+  prims.push({ t: 't', x: W * 0.4, y: 0, w: W * 0.42, h: B1, text: [m?.customer_nom, f.temporada, f.collection].filter(Boolean).join(' · '), fill: placeholderMode ? PH : 'var(--text-main)', italic: placeholderMode, size: Math.round(7 * MM_TO_PX), align: 'center', mid: true })
   // Placeholder "(logo)" només si NO hi ha logo real (es pinta a sobre com a imatge).
-  if (!hasLogo) prims.push({ t: 't', x: W * 0.82, y: 0, w: W * 0.18 - PAD, h: B1, text: '(logo)', fill: '#868685', size: Math.round(7 * MM_TO_PX), align: 'right', mid: true })
-  prims.push({ t: 'r', x: 0, y: B1, w: W, h: B2, fill: '#fafafa', stroke: '#e0d5c5', sw: 1 })
+  if (!hasLogo) prims.push({ t: 't', x: W * 0.82, y: 0, w: W * 0.18 - PAD, h: B1, text: '(logo)', fill: 'var(--text-muted)', size: Math.round(7 * MM_TO_PX), align: 'right', mid: true })
+  prims.push({ t: 'r', x: 0, y: B1, w: W, h: B2, fill: '#fafafa', stroke: 'var(--border)', sw: 1 })
   const line2 = [f.tipus, f.sizesys, f.resp, f.versio].filter(Boolean).join(' · ')
   prims.push({ t: 't', x: PAD, y: B1, w: W - 2 * PAD, h: B2, text: line2, fill: placeholderMode ? PH : '#6b7280', italic: placeholderMode, size: Math.round(6.5 * MM_TO_PX), mid: true })
   return { prims, totalW: W, totalH }
@@ -256,7 +256,7 @@ function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, groupProps, 
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
       {hasLogo && <KonvaImage image={logoImg} x={totalW - 45 * MM_TO_PX} y={2 * MM_TO_PX} width={40 * MM_TO_PX} height={16 * MM_TO_PX} listening={false} />}
-      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke="#c27a2a" strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
+      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke="var(--gold)" strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
   )
 }
@@ -271,7 +271,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
   const stage = new Konva.Stage({ container, width: pageW, height: pageH })
   const layer = new Konva.Layer()
   stage.add(layer)
-  layer.add(new Konva.Rect({ x: 0, y: 0, width: pageW, height: pageH, fill: '#ffffff' }))
+  layer.add(new Konva.Rect({ x: 0, y: 0, width: pageW, height: pageH, fill: 'var(--white)' }))
   const ordered = [...(page.objects || [])].sort(
     (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   for (const o of ordered) {
@@ -728,7 +728,7 @@ export default function TechSheetEditor() {
         id: uid(), type: 'text', layer: 'free', x: toMm(pos.x), y: toMm(pos.y),
         width: 120, height: 30, text: 'Doble clic per editar', fontSize: 11,
         fontFamily: FONT, fill: COL.textMain,
-        ...(tool === 'text_box' ? { bgFill: '#ffffff', bgPadding: 4 } : {}),
+        ...(tool === 'text_box' ? { bgFill: 'var(--white)', bgPadding: 4 } : {}),
       }
       addObject(obj); setTool('select'); return
     }
@@ -917,7 +917,7 @@ export default function TechSheetEditor() {
   const badge = (() => {
     if (lockState === 'loading') return { text: 'Carregant…', bg: COL.bg, fg: COL.textMuted }
     if (lockState === 'readonly') return { text: 'Mode consulta', bg: COL.bg, fg: COL.textMuted }
-    if (lockState === 'owned') return { text: 'Editant', bg: COL.gold, fg: '#fff' }
+    if (lockState === 'owned') return { text: 'Editant', bg: COL.gold, fg: 'var(--white)' }
     if (lockState === 'conflict') return { text: `Bloquejada per ${conflict?.locked_by || 'un altre usuari'}`, bg: COL.bg, fg: COL.textMuted }
     return { text: 'Error de bloqueig', bg: COL.bg, fg: COL.textMuted }
   })()
@@ -961,7 +961,7 @@ export default function TechSheetEditor() {
           <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> Tornar al model
         </button>
         <button onClick={onExport} disabled={exporting}
-          style={{ ...headerBtn, background: COL.gold, border: 'none', color: '#fff', opacity: exporting ? 0.5 : 1 }}>
+          style={{ ...headerBtn, background: COL.gold, border: 'none', color: 'var(--white)', opacity: exporting ? 0.5 : 1 }}>
           <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? 'Exportant…' : 'Exportar PDF'}
         </button>
         <span style={{ fontSize: 14, fontWeight: 600 }}>
@@ -988,7 +988,7 @@ export default function TechSheetEditor() {
                     <i className="ti ti-chevron-down" style={{ fontSize: 10 }} />
                   </button>
                   {openGroup === grp.g && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff', border: `1px solid ${COL.border}`, borderRadius: 6, zIndex: 50, minWidth: 160, boxShadow: '0 2px 8px rgba(0,0,0,.08)', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, zIndex: 50, minWidth: 160, boxShadow: '0 2px 8px rgba(0,0,0,.08)', overflow: 'hidden' }}>
                       {grp.tools.map(t => (
                         <button key={t.k} onClick={() => { setTool(t.k); setOpenGroup(null) }}
                           style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: tool === t.k ? COL.goldPale : 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: FONT, color: COL.textMain }}>
@@ -1028,13 +1028,13 @@ export default function TechSheetEditor() {
           )}
           {pages.map((p, i) => (
             <div key={p.id} onClick={() => { setCurrentPage(i); setSelectedId(null) }} style={{ position: 'relative', cursor: 'pointer' }}>
-              <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: '#fff', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
+              <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
                 {thumbnails[i] && <img src={thumbnails[i]} alt={`Pàg ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
               </div>
               <div style={{ fontSize: 9, color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>Pàg. {i + 1}</div>
               {locked && pages.length > 1 && (
                 <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title="Eliminar pàgina"
-                  style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: '#fff', border: 'none', fontSize: 9, lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
+                  style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 9, lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
               )}
             </div>
           ))}
@@ -1043,18 +1043,18 @@ export default function TechSheetEditor() {
         {/* ── Centre: Stage Konva ── */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COL.bg, minWidth: 0, overflow: 'auto', position: 'relative' }}>
           {lockState === 'readonly' && (
-            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: '#fff', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 11, color: COL.textMuted }}>
+            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 11, color: COL.textMuted }}>
               <i className="ti ti-eye" style={{ marginRight: 6 }} />Mode consulta — només lectura
             </div>
           )}
           <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()}
-            style={{ position: 'relative', width: pageW, height: pageH, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: '#fff', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
+            style={{ position: 'relative', width: pageW, height: pageH, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: 'var(--white)', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
             <Stage ref={stageRef} width={pageW} height={pageH}
               onMouseDown={onStageMouseDown} onMouseMove={onStageMouseMove} onMouseUp={onStageMouseUp}>
               {/* Fons blanc + 3 capes en ordre z. Konva no agrupa per `layer`:
                   ordenem els objectes i pintem en una sola Layer (z per ordre d'array). */}
               <Layer>
-                <Rect x={0} y={0} width={pageW} height={pageH} fill="#ffffff" listening={false} />
+                <Rect x={0} y={0} width={pageW} height={pageH} fill="var(--white)" listening={false} />
                 {ordered.map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
@@ -1083,7 +1083,7 @@ export default function TechSheetEditor() {
                 onChange={e => setEditingText(s => ({ ...s, value: e.target.value }))}
                 onBlur={commitTextEdit}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitTextEdit() } if (e.key === 'Escape') setEditingText(null) }}
-                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 11, color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: '#fff', zIndex: 10 }}
+                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 11, color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: 'var(--white)', zIndex: 10 }}
               />
             )}
           </div>
@@ -1095,7 +1095,7 @@ export default function TechSheetEditor() {
             {/* Inserir blocs de dades */}
             <SectionTitle>Inserir bloc de dades</SectionTitle>
             <button onClick={insertHeader} disabled={!locked}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: '#fff', fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
               <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> Capçalera del model
             </button>
             <button onClick={insertLogo} disabled={!locked}
@@ -1104,7 +1104,7 @@ export default function TechSheetEditor() {
               <i className="ti ti-photo" style={{ fontSize: 13 }} /> Logo client
             </button>
             <button onClick={onAddTableClick} disabled={!locked || addingTable || !sizeFittings.length}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: '#fff', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>
               <i className="ti ti-table" style={{ fontSize: 13 }} /> {addingTable ? 'Afegint…' : 'Taula graduada'}
             </button>
             {!sizeFittings.length && <p style={{ fontSize: 10, color: COL.textMuted, margin: '0 0 8px' }}>Cap size fitting.</p>}
@@ -1140,14 +1140,14 @@ export default function TechSheetEditor() {
                       Negreta
                     </label>
                     <div style={propLabel}>Color text
-                      <ColorPicker value={selObj.fill || '#1d1d1b'} onChange={c => updateObject(selObj.id, { fill: c })} />
+                      <ColorPicker value={selObj.fill || 'var(--text-main)'} onChange={c => updateObject(selObj.id, { fill: c })} />
                     </div>
                   </>
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'line' || selObj.type === 'arrow') && (
                   <>
                     <div style={propLabel}>Color traç
-                      <ColorPicker value={selObj.stroke || '#1d1d1b'} onChange={c => updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
+                      <ColorPicker value={selObj.stroke || 'var(--text-main)'} onChange={c => updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
                     </div>
                     <label style={propLabel}>Gruix traç
                       <input type="number" min={0.5} max={5} step={0.5} value={selObj.strokeWidth || (selObj.type === 'arrow' ? 1.5 : 1)}
@@ -1157,7 +1157,7 @@ export default function TechSheetEditor() {
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse') && (
                   <div style={propLabel}>Emplenat
-                    <ColorPicker value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : '#ffffff'} onChange={c => updateObject(selObj.id, { fill: c })} />
+                    <ColorPicker value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : 'var(--white)'} onChange={c => updateObject(selObj.id, { fill: c })} />
                   </div>
                 )}
                 {selObj.type === 'data_block' && (
@@ -1194,7 +1194,7 @@ export default function TechSheetEditor() {
       {/* Selector de size fitting (>1) */}
       {pickFitting && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setPickFitting(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--white)', borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT }}>
             <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Tria un size fitting</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {sizeFittings.map(sf => (
@@ -1212,15 +1212,15 @@ export default function TechSheetEditor() {
 }
 
 // Selector de color ràpid (TS-4c): swatches de marca + color natiu ("Més colors").
-const QUICK_COLORS = ['#1d1d1b', '#185fa5', '#1d9e75', '#dc2626', '#c27a2a', '#ca8a04']
+const QUICK_COLORS = ['var(--text-main)', '#185fa5', '#1d9e75', '#dc2626', 'var(--gold)', '#ca8a04']
 export function ColorPicker({ value, onChange }) {
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginTop: 3 }}>
       {QUICK_COLORS.map(c => (
         <button key={c} type="button" onClick={() => onChange(c)} title={c}
-          style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: value === c ? '2px solid #1d1d1b' : '1px solid #e0d5c5', cursor: 'pointer', padding: 0 }} />
+          style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: value === c ? '2px solid var(--text-main)' : '1px solid var(--border)', cursor: 'pointer', padding: 0 }} />
       ))}
-      <input type="color" value={value || '#1d1d1b'} onChange={e => onChange(e.target.value)} title="Més colors"
+      <input type="color" value={value || 'var(--text-main)'} onChange={e => onChange(e.target.value)} title="Més colors"
         style={{ width: 22, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} />
     </div>
   )
@@ -1230,4 +1230,4 @@ export function SectionTitle({ children }) {
   return <div style={{ fontSize: 10, fontWeight: 600, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
 }
 export const propLabel = { display: 'block', fontSize: 10, color: COL.textMuted, marginBottom: 8 }
-export const propInput = { width: '100%', fontFamily: FONT, fontSize: 12, padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: '#fff', color: COL.textMain, boxSizing: 'border-box' }
+export const propInput = { width: '100%', fontFamily: FONT, fontSize: 12, padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: 'var(--white)', color: COL.textMain, boxSizing: 'border-box' }

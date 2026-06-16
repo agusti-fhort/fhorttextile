@@ -448,7 +448,7 @@ const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, 
 const summaryBox = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 16px', borderRadius: 8, border: '0.5px solid var(--gray-l)', background: 'var(--warn-bg)' }
 const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 12, cursor: 'pointer', fontFamily: MONO }
 const ghostBtn = { background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)', borderRadius: 6, padding: '6px 14px', fontSize: 12, cursor: 'pointer', fontFamily: MONO }
-const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : 'var(--warn)', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 14, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
+const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : 'var(--warn)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 14, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
 
 function Field({ label, children }) {
   return (
@@ -470,7 +470,7 @@ function Chip({ active, onClick, disabled, children }) {
     <button type="button" onClick={onClick} disabled={disabled} style={{
       padding: '6px 14px', borderRadius: 6, fontFamily: MONO, fontSize: 13,
       border: active ? '1.5px solid var(--warn)' : '0.5px solid var(--gray-l)',
-      background: active ? 'var(--warn)' : 'transparent', color: active ? '#fff' : 'var(--text-main)',
+      background: active ? 'var(--warn)' : 'transparent', color: active ? 'var(--white)' : 'var(--text-main)',
       cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled && !active ? 0.5 : 1, fontWeight: active ? 500 : 400,
     }}>{children}</button>
   )

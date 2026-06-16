@@ -217,7 +217,7 @@ export default function CompanyCalendar() {
           <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
             <button onClick={save} disabled={saving} style={{
               display: 'flex', alignItems: 'center', gap: 6,
-              background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 6,
+              background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 6,
               padding: '8px 18px', fontSize: 12, fontWeight: 600,
               cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: MONO,
             }}>

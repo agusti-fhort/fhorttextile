@@ -15,7 +15,7 @@ const thS = {
 }
 const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 12 }
 const btnPrimary = (disabled) => ({
-  background: disabled ? '#ccc' : 'var(--gold)', color: '#fff',
+  background: disabled ? '#ccc' : 'var(--gold)', color: 'var(--white)',
   border: 'none', borderRadius: 6, padding: '7px 18px',
   fontSize: 13, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
 })
@@ -276,7 +276,7 @@ function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete,
         {row.is_key && (
           <span style={{
             marginLeft: 5, fontSize: 8, padding: '1px 4px', borderRadius: 3,
-            background: '#fdf6ee', color: '#c27a2a', border: '0.5px solid #e0c8a0',
+            background: '#fdf6ee', color: 'var(--gold)', border: '0.5px solid #e0c8a0',
             fontWeight: 600, letterSpacing: '.06em', verticalAlign: 'middle',
           }}>KEY</span>
         )}

@@ -217,7 +217,7 @@ export default function ModelFabric() {
               padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
               border: 'none',
               background: biaxial ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
-              color: biaxial ? '#fff' : 'var(--color-text-secondary, #868685)',
+              color: biaxial ? 'var(--white)' : 'var(--color-text-secondary, #868685)',
             }}>
             Warp / Weft
           </button>
@@ -226,7 +226,7 @@ export default function ModelFabric() {
               padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
               border: 'none',
               background: !biaxial ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
-              color: !biaxial ? '#fff' : 'var(--color-text-secondary, #868685)',
+              color: !biaxial ? 'var(--white)' : 'var(--color-text-secondary, #868685)',
             }}>
             Single %
           </button>
@@ -294,7 +294,7 @@ export default function ModelFabric() {
           <button type="button" onClick={handleSave} disabled={saving}
             style={{
               padding: '8px 20px', background: saving ? '#ccc' : 'var(--gold)',
-              color: '#fff', border: 'none', borderRadius: 6,
+              color: 'var(--white)', border: 'none', borderRadius: 6,
               fontSize: 14, fontWeight: 500,
               cursor: saving ? 'not-allowed' : 'pointer',
             }}>

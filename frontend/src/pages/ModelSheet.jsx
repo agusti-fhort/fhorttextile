@@ -141,7 +141,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
             style={{
               padding: '6px 16px', borderRadius: 6, border: 'none',
               background: activeTab === tab ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
-              color: activeTab === tab ? '#fff' : 'var(--color-text-secondary, #868685)',
+              color: activeTab === tab ? 'var(--white)' : 'var(--color-text-secondary, #868685)',
               cursor: 'pointer', fontSize: 13,
               fontWeight: activeTab === tab ? 500 : 400,
             }}>
@@ -383,7 +383,7 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
         </span>
         <span style={{
           fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 600,
-          background: 'var(--gold)', color: '#fff',
+          background: 'var(--gold)', color: 'var(--white)',
         }} title={t('model_sheet.phase')}>
           {model.fase_actual}
         </span>
@@ -482,7 +482,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
         style={{ padding: '3px 6px', fontSize: 12, 
                  border: '1px solid var(--border)', borderRadius: 4 }} />
       <button type="button" onClick={saveDeadline} disabled={savingDeadline}
-        style={{ padding: '3px 10px', background: 'var(--gold)', color: '#fff', border: 'none',
+        style={{ padding: '3px 10px', background: 'var(--gold)', color: 'var(--white)', border: 'none',
                  borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>
         {savingDeadline ? '…' : '✓'}
       </button>
@@ -588,7 +588,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={handleSave} disabled={saving}
-              style={{ padding: '6px 16px', background: 'var(--gold)', color: '#fff',
+              style={{ padding: '6px 16px', background: 'var(--gold)', color: 'var(--white)',
                        border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
               {saving ? 'Guardant...' : '✓ Guardar'}
             </button>
@@ -761,7 +761,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                           background: numTecnics === n
                             ? 'var(--gold)' : 'transparent',
                           color: numTecnics === n
-                            ? '#fff' : 'var(--text-main)',
+                            ? 'var(--white)' : 'var(--text-main)',
                           border: '1px solid var(--border)',
                         }}>
                         {n}T
@@ -819,7 +819,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
 }
 
 const TIPUS_CONFIG = {
-  SKETCH_FLETXES: { label: 'Sketch amb fletxes', icon: 'ti-pencil',             color: '#c27a2a' },
+  SKETCH_FLETXES: { label: 'Sketch amb fletxes', icon: 'ti-pencil',             color: 'var(--gold)' },
   SKETCH_NET:     { label: 'Sketch net',         icon: 'ti-eye',                color: '#137333' },
   PATRO:          { label: 'Patró base',         icon: 'ti-vector-triangle',    color: '#185fa5' },
   MARCADA:        { label: 'Marcada',            icon: 'ti-layout',             color: '#7a4a10' },
@@ -906,7 +906,7 @@ function TabFiles({ modelId }) {
             zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ background: '#fff', borderRadius: 8, padding: 16,
+            style={{ background: 'var(--white)', borderRadius: 8, padding: 16,
                      maxWidth: '90vw', maxHeight: '90vh' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontSize: 13, fontWeight: 500 }}>{popup.nom}</span>
@@ -993,7 +993,7 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
         {fitxer.versio > 1 && (
           <span style={{
             position: 'absolute', top: 4, right: 4,
-            background: 'rgba(0,0,0,0.6)', color: '#fff',
+            background: 'rgba(0,0,0,0.6)', color: 'var(--white)',
             fontSize: 10, padding: '1px 5px', borderRadius: 10,
           }}>
             v{fitxer.versio}
@@ -1070,7 +1070,7 @@ function TabAIAnalysis({ modelId }) {
         <button type="button" onClick={handleAnalyze} disabled={loading}
           style={{
             padding: '8px 20px', background: loading ? '#ccc' : 'var(--gold)',
-            color: '#fff', border: 'none', borderRadius: 6,
+            color: 'var(--white)', border: 'none', borderRadius: 6,
             fontSize: 13, fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer',
           }}>
           {loading ? (

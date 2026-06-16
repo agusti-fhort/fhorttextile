@@ -220,6 +220,6 @@ function NewModelMenu({ open, setOpen, navigate, t }) {
 }
 
 const inp = { padding: '6px 10px', border: '0.5px solid var(--gray-l)', borderRadius: 6, fontSize: 12, fontFamily: MONO, background: 'var(--white)', color: 'var(--text-main)' }
-const faseBadge = { fontFamily: MONO, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: 'var(--gold)', color: '#fff', justifySelf: 'start' }
+const faseBadge = { fontFamily: MONO, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: 'var(--gold)', color: 'var(--white)', justifySelf: 'start' }
 const delBtn = { fontSize: 12, color: '#C0392B', background: 'none', border: '0.5px solid #FADBD8', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', fontFamily: MONO }
 const menuItem = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 10px', borderRadius: 6, fontFamily: MONO, fontSize: 12, color: 'var(--text-main)', cursor: 'pointer' }

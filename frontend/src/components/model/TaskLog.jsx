@@ -5,7 +5,7 @@ import Table from '../ui/Table'
 
 const MONO = 'IBM Plex Mono, monospace'
 const fmt = (v) => v ? new Date(v).toLocaleString('ca-ES', { dateStyle: 'short', timeStyle: 'short' }) : '—'
-const COLORS = { Done: '#3b6d11', InProgress: '#2a5a8a', Paused: '#c27a2a', Cancelled: '#a32d2d', Pending: 'var(--gray)' }
+const COLORS = { Done: '#3b6d11', InProgress: '#2a5a8a', Paused: 'var(--gold)', Cancelled: '#a32d2d', Pending: 'var(--gray)' }
 
 // Pas 5B-fix · Afegit B — Log informatiu (read-only) de les transicions de tasques del model.
 export default function TaskLog({ modelId }) {

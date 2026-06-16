@@ -17,8 +17,8 @@ export function VersionBadge({ isCustom, version, parentNom, onClick }) {
       onClick={onClick}
       style={{
         padding: '2px 8px', borderRadius: 3, fontSize: 10,
-        background: '#f5e6d0', color: '#c27a2a',
-        border: '1px solid #c27a2a',
+        background: '#f5e6d0', color: 'var(--gold)',
+        border: '1px solid var(--gold)',
         cursor: onClick ? 'pointer' : 'default',
         display: 'flex', alignItems: 'center', gap: 4,
       }}

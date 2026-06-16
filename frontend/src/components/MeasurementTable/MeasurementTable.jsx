@@ -11,9 +11,9 @@ const API = import.meta.env.VITE_API_URL || ''
 // fins que existeixi). Mentrestant: optimistic update local + fallback a mock.
 
 const ORIGEN_LABELS = {
-  STANDARD:   { label: 'Estàndard', fg: '#868685', bg: '#f5f0ea',  border: '#e0d5c5' },
+  STANDARD:   { label: 'Estàndard', fg: 'var(--text-muted)', bg: '#f5f0ea',  border: 'var(--border)' },
   IMPORTED:   { label: 'Importat',  fg: '#2a5a8a', bg: '#eef4fc',  border: '#c5d8ee' },
-  MANUAL:     { label: 'Manual',    fg: '#c27a2a', bg: '#fdf6ee',  border: '#e0c8a0' },
+  MANUAL:     { label: 'Manual',    fg: 'var(--gold)', bg: '#fdf6ee',  border: '#e0c8a0' },
   FITTED:     { label: 'Fitting',   fg: '#6a3a9a', bg: '#f3edfb',  border: '#d8c5ee' },
   CALCULATED: { label: 'Calculat',  fg: '#3b6d11', bg: '#f0f9f0',  border: '#c0dd97' },
 }
@@ -196,7 +196,7 @@ export default function MeasurementTable({
         <ViewToggle mode={mode} onChange={setMode} />
         {usingMock && (
           <span style={{
-            fontSize: 10, color: '#c27a2a',
+            fontSize: 10, color: 'var(--gold)',
             background: '#fdf6ee', border: '0.5px solid #e0c8a0',
             padding: '3px 8px', borderRadius: 4,
           }}>
@@ -224,7 +224,7 @@ export default function MeasurementTable({
           {alerts.map((a, i) => (
             <div key={i} style={{
               fontSize: 11,
-              color: a.tipus === 'ERROR' ? '#a32d2d' : '#c27a2a',
+              color: a.tipus === 'ERROR' ? '#a32d2d' : 'var(--gold)',
               padding: '2px 0',
             }}>
               <span style={{ fontWeight: 600, marginRight: 6 }}>{a.tipus}</span>
@@ -241,7 +241,7 @@ export default function MeasurementTable({
           padding: '6px 10px', borderRadius: 6, fontSize: 11,
           background: msg.type === 'info' ? '#fdf6ee' : msg.type === 'warn' ? '#fdf6ee' : '#fff0f0',
           border: `0.5px solid ${msg.type === 'error' ? '#f09595' : '#e0c8a0'}`,
-          color: msg.type === 'error' ? '#a32d2d' : '#c27a2a',
+          color: msg.type === 'error' ? '#a32d2d' : 'var(--gold)',
           display: 'flex', justifyContent: 'space-between',
         }}>
           <span>{msg.text}</span>
@@ -321,7 +321,7 @@ function BaseView({ measurements, readOnly, editingCell, setEditingCell, onEdit,
                 {m.pom_is_key && (
                   <span style={{
                     marginLeft: 6, fontSize: 9, padding: '1px 5px', borderRadius: 3,
-                    background: '#fdf6ee', color: '#c27a2a',
+                    background: '#fdf6ee', color: 'var(--gold)',
                     border: '0.5px solid #e0c8a0', fontWeight: 600, letterSpacing: '.05em',
                   }}>KEY</span>
                 )}
@@ -408,7 +408,7 @@ function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
               <Th key={s} align="right" width={64}
                 style={{
                   background: isBase ? '#fdf6ee' : undefined,
-                  color: isBase ? '#c27a2a' : undefined,
+                  color: isBase ? 'var(--gold)' : undefined,
                 }}>
                 {s}{isBase ? ' ●' : ''}
               </Th>
@@ -431,7 +431,7 @@ function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
                 <Td key={s} align="right" mono
                   style={{
                     background: isBase ? '#fdf6ee' : undefined,
-                    color: isBase && val != null ? '#c27a2a' : undefined,
+                    color: isBase && val != null ? 'var(--gold)' : undefined,
                     fontWeight: isBase ? 600 : 400,
                   }}>
                   {val != null ? Number(val).toFixed(1) : '—'}
@@ -468,8 +468,8 @@ function EditableCell({ value, editing, readOnly, onStartEdit, onSave, onCancel,
         }}
         style={{
           width: '100%',
-          background: '#fff',
-          border: '0.5px solid #c27a2a',
+          background: 'var(--white)',
+          border: '0.5px solid var(--gold)',
           borderRadius: 3,
           padding: '2px 6px',
           fontSize: 12,
@@ -506,7 +506,7 @@ function EditableCell({ value, editing, readOnly, onStartEdit, onSave, onCancel,
 // ── ViewToggle ──────────────────────────────────────────────────────────────
 function ViewToggle({ mode, onChange }) {
   return (
-    <div style={{ display: 'inline-flex', border: '0.5px solid #e0d5c5', borderRadius: 6, overflow: 'hidden' }}>
+    <div style={{ display: 'inline-flex', border: '0.5px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
       {[
         { v: 'base',    label: 'Talla base' },
         { v: 'grading', label: 'Grading' },
@@ -518,8 +518,8 @@ function ViewToggle({ mode, onChange }) {
             onClick={() => onChange(v)}
             style={{
               padding: '6px 14px',
-              background: active ? '#c27a2a' : '#fff',
-              color: active ? '#fff' : '#868685',
+              background: active ? 'var(--gold)' : 'var(--white)',
+              color: active ? 'var(--white)' : 'var(--text-muted)',
               border: 'none', cursor: 'pointer',
               fontSize: 11, 
               fontWeight: active ? 600 : 400,
@@ -566,14 +566,14 @@ function Td({ children, align = 'left', mono, style }) {
 const tableStyle = {
   width: '100%',
   borderCollapse: 'collapse',
-  background: '#fff',
+  background: 'var(--white)',
 }
 
 const btnPrimary = {
   padding: '6px 14px',
   borderRadius: 6,
-  background: '#c27a2a',
-  color: '#fff',
+  background: 'var(--gold)',
+  color: 'var(--white)',
   border: 'none',
   cursor: 'pointer',
   fontSize: 11, 

@@ -25,25 +25,25 @@ export function GradingHistoryPanel({ ruleSetId, onClose }) {
     <div style={{ }}>
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid #e0d5c5',
+        marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border)',
       }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#1d1d1b' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-main)' }}>
           Historial de canvis
         </div>
         {onClose && (
           <button onClick={onClose} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            color: '#868685', fontSize: 18,
+            color: 'var(--text-muted)', fontSize: 18,
           }}>×</button>
         )}
       </div>
 
       {loading ? (
-        <div style={{ color: '#868685', fontSize: 12 }}>Carregant...</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Carregant...</div>
       ) : history.length === 0 ? (
         <div style={{
-          padding: '16px', border: '1px dashed #e0d5c5', borderRadius: 6,
-          textAlign: 'center', color: '#868685', fontSize: 12,
+          padding: '16px', border: '1px dashed var(--border)', borderRadius: 6,
+          textAlign: 'center', color: 'var(--text-muted)', fontSize: 12,
         }}>
           Sense canvis registrats
         </div>
@@ -55,27 +55,27 @@ export function GradingHistoryPanel({ ruleSetId, onClose }) {
               background: '#fdf9f5', border: '1px solid #f0e8d8',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ fontWeight: 600, color: '#c27a2a', fontSize: 11 }}>
+                <span style={{ fontWeight: 600, color: 'var(--gold)', fontSize: 11 }}>
                   {h.pom_codi}
                 </span>
-                <span style={{ fontSize: 10, color: '#868685' }}>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                   {new Date(h.modificat_at).toLocaleDateString('ca-ES', {
                     day: '2-digit', month: '2-digit', year: '2-digit',
                     hour: '2-digit', minute: '2-digit',
                   })}
                 </span>
               </div>
-              <div style={{ fontSize: 11, color: '#1d1d1b' }}>
-                <span style={{ color: '#868685' }}>+{format(h.valor_anterior)}</span>
-                <span style={{ margin: '0 6px', color: '#c27a2a' }}>→</span>
+              <div style={{ fontSize: 11, color: 'var(--text-main)' }}>
+                <span style={{ color: 'var(--text-muted)' }}>+{format(h.valor_anterior)}</span>
+                <span style={{ margin: '0 6px', color: 'var(--gold)' }}>→</span>
                 <span style={{ fontWeight: 500 }}>+{format(h.valor_nou)}</span>
                 {h.nota && (
-                  <span style={{ marginLeft: 8, color: '#868685', fontSize: 10 }}>
+                  <span style={{ marginLeft: 8, color: 'var(--text-muted)', fontSize: 10 }}>
                     "{h.nota}"
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 10, color: '#868685', marginTop: 2 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                 {h.modificat_per}
               </div>
             </div>

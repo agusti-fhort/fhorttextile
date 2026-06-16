@@ -258,7 +258,7 @@ export default function ModelMeasurements() {
                 )}
                 <button type="button" onClick={() => navigate(`/models/${id}/teixit`)}
                   style={{
-                    padding: '8px 20px', background: 'var(--gold)', color: '#fff',
+                    padding: '8px 20px', background: 'var(--gold)', color: 'var(--white)',
                     border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500,
                     cursor: 'pointer',
                   }}>
@@ -333,7 +333,7 @@ export default function ModelMeasurements() {
               style={{
                 padding: '8px 20px', borderRadius: 6, border: 'none',
                 fontSize: 14, fontWeight: 500,
-                background: 'var(--gold)', color: '#fff', cursor: 'pointer',
+                background: 'var(--gold)', color: 'var(--white)', cursor: 'pointer',
               }}>
               Continuar → Teixit
             </button>

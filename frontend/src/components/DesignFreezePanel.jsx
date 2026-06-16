@@ -66,7 +66,7 @@ export function DesignFreezePanel({ model, token, onApproved }) {
             disabled={loading}
             style={{
               padding: '7px 16px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
-              background: 'var(--gold-pale)', color: 'var(--gold)', border: '1px solid #c27a2a',
+              background: 'var(--gold-pale)', color: 'var(--gold)', border: '1px solid var(--gold)',
             }}
           >
             {loading ? 'Aprovant...' : '✓ Aprovar Design Freeze'}

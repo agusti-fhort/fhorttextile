@@ -54,7 +54,7 @@ export default function Topbar() {
   return (
     <header style={{
       height: 56,
-      background: '#ffffff',
+      background: 'var(--white)',
       borderBottom: '1px solid #e8e8e8',
       display: 'flex',
       alignItems: 'center',

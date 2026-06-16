@@ -580,7 +580,7 @@ function GateRow({ gate, selected, onClick, onValidate, t }) {
                 {t('kanban.gate_confirm', { phase: to })}
               </span>
               <button onClick={() => { setConfirming(false); onValidate(gate, to) }}
-                style={{ ...miniBtn, border: 'none', background: 'var(--gold)', color: '#fff', fontWeight: 600 }}>
+                style={{ ...miniBtn, border: 'none', background: 'var(--gold)', color: 'var(--white)', fontWeight: 600 }}>
                 {t('kanban.confirm')}
               </button>
               <button onClick={() => setConfirming(false)}

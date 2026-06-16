@@ -49,10 +49,10 @@ export default function SizeLibrary() {
       {/* Header */}
       <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 18, fontWeight: 500, color: "#1d1d1b", margin: "0 0 4px" }}>
+          <h1 style={{ fontSize: 18, fontWeight: 500, color: "var(--text-main)", margin: "0 0 4px" }}>
             Size Library
           </h1>
-          <div style={{ fontSize: 12, color: "#868685" }}>
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
             Sistemes de talles, runs i grading disponibles per al teu catàleg.
           </div>
         </div>
@@ -61,7 +61,7 @@ export default function SizeLibrary() {
             onClick={() => { setDrawerPrefill(null); setDrawerOpen(true) }}
             style={{
               padding: "8px 14px", borderRadius: 4, fontSize: 12, cursor: "pointer",
-              background: "#f5e6d0", color: "#c27a2a", border: "1px solid #c27a2a",
+              background: "#f5e6d0", color: "var(--gold)", border: "1px solid var(--gold)",
               fontFamily: "IBM Plex Mono, monospace", whiteSpace: "nowrap",
               display: "inline-flex", alignItems: "center", gap: 6,
             }}
@@ -97,7 +97,7 @@ export default function SizeLibrary() {
         {/* Panel de detall */}
         {detailProfileId && (
           <div style={{
-            border: "1px solid #e0d5c5", borderRadius: 8,
+            border: "1px solid var(--border)", borderRadius: 8,
             padding: "16px", background: "#fdf9f5",
             position: "sticky", top: 24,
             maxHeight: "calc(100vh - 120px)", overflowY: "auto",

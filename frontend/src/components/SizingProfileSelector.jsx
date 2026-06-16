@@ -21,7 +21,7 @@ function LoadError({ onRetry, label = "No s'han pogut carregar les dades" }) {
           onClick={onRetry}
           style={{
             padding: "6px 14px", borderRadius: 4, cursor: "pointer",
-            background: "#fff", color: "#c27a2a", border: "1px solid #c27a2a",
+            background: "var(--white)", color: "var(--gold)", border: "1px solid var(--gold)",
             fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
           }}
         >
@@ -157,7 +157,7 @@ export function SizingProfileSelector({
     <div>
       {/* NIVELL 1 — Target */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
           1 · Target — per a qui és la peça?
         </div>
         {lookupsError ? (
@@ -170,15 +170,15 @@ export function SizingProfileSelector({
                 onClick={() => pickTarget(t.codi)}
                 style={{
                   ...chipBase, padding: "10px 14px", borderRadius: 6, fontSize: 12,
-                  background: selectedTarget === t.codi ? "#f5e6d0" : "#fff",
-                  color: selectedTarget === t.codi ? "#c27a2a" : "#1d1d1b",
-                  border: `1px solid ${selectedTarget === t.codi ? "#c27a2a" : "#e0d5c5"}`,
+                  background: selectedTarget === t.codi ? "#f5e6d0" : "var(--white)",
+                  color: selectedTarget === t.codi ? "var(--gold)" : "var(--text-main)",
+                  border: `1px solid ${selectedTarget === t.codi ? "var(--gold)" : "var(--border)"}`,
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                   minWidth: 90,
                 }}
               >
                 <span style={{ fontWeight: selectedTarget === t.codi ? 600 : 400 }}>{t.nom_en}</span>
-                <span style={{ fontSize: 9, color: selectedTarget === t.codi ? "#c27a2a" : "#868685" }}>{t.nom_cat}</span>
+                <span style={{ fontSize: 9, color: selectedTarget === t.codi ? "var(--gold)" : "var(--text-muted)" }}>{t.nom_cat}</span>
               </button>
             ))}
           </div>
@@ -188,7 +188,7 @@ export function SizingProfileSelector({
       {/* NIVELL 2 — Construction */}
       {selectedTarget && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
             2 · Construcció — tipus de teixit
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -196,9 +196,9 @@ export function SizingProfileSelector({
               onClick={() => pickConstruction(selectedConstruction)}
               style={{
                 ...chipBase,
-                background: !selectedConstruction ? "#f5e6d0" : "#fff",
-                color: !selectedConstruction ? "#c27a2a" : "#868685",
-                border: `1px solid ${!selectedConstruction ? "#c27a2a" : "#e0d5c5"}`,
+                background: !selectedConstruction ? "#f5e6d0" : "var(--white)",
+                color: !selectedConstruction ? "var(--gold)" : "var(--text-muted)",
+                border: `1px solid ${!selectedConstruction ? "var(--gold)" : "var(--border)"}`,
               }}
             >
               Tots
@@ -209,13 +209,13 @@ export function SizingProfileSelector({
                 onClick={() => pickConstruction(c.codi)}
                 style={{
                   ...chipBase,
-                  background: selectedConstruction === c.codi ? "#f5e6d0" : "#fff",
-                  color: selectedConstruction === c.codi ? "#c27a2a" : "#1d1d1b",
-                  border: `1px solid ${selectedConstruction === c.codi ? "#c27a2a" : "#e0d5c5"}`,
+                  background: selectedConstruction === c.codi ? "#f5e6d0" : "var(--white)",
+                  color: selectedConstruction === c.codi ? "var(--gold)" : "var(--text-main)",
+                  border: `1px solid ${selectedConstruction === c.codi ? "var(--gold)" : "var(--border)"}`,
                 }}
               >
                 {c.nom_en}
-                <span style={{ fontSize: 10, color: "#868685", marginLeft: 4 }}>{c.nom_cat}</span>
+                <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 4 }}>{c.nom_cat}</span>
               </button>
             ))}
           </div>
@@ -225,7 +225,7 @@ export function SizingProfileSelector({
       {/* NIVELL 3 — Fit: catàleg complet; fade (no clicable) els sense perfils per a la combinació */}
       {selectedTarget && allFitTypes.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
             3 · Fit — caiguda de la peça
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -233,9 +233,9 @@ export function SizingProfileSelector({
               onClick={() => setSelectedFit(null)}
               style={{
                 ...chipBase,
-                background: !selectedFit ? "#f5e6d0" : "#fff",
-                color: !selectedFit ? "#c27a2a" : "#868685",
-                border: `1px solid ${!selectedFit ? "#c27a2a" : "#e0d5c5"}`,
+                background: !selectedFit ? "#f5e6d0" : "var(--white)",
+                color: !selectedFit ? "var(--gold)" : "var(--text-muted)",
+                border: `1px solid ${!selectedFit ? "var(--gold)" : "var(--border)"}`,
               }}
             >
               Tots
@@ -250,9 +250,9 @@ export function SizingProfileSelector({
                   title={isActive ? undefined : "Sense perfils per a aquesta combinació"}
                   style={{
                     ...chipBase,
-                    background: isSel ? "#f5e6d0" : "#fff",
-                    color: isSel ? "#c27a2a" : "#1d1d1b",
-                    border: `1px solid ${isSel ? "#c27a2a" : "#e0d5c5"}`,
+                    background: isSel ? "#f5e6d0" : "var(--white)",
+                    color: isSel ? "var(--gold)" : "var(--text-main)",
+                    border: `1px solid ${isSel ? "var(--gold)" : "var(--border)"}`,
                     ...(!isActive ? { opacity: 0.35, cursor: "default", pointerEvents: "none" } : {}),
                   }}
                 >
@@ -269,11 +269,11 @@ export function SizingProfileSelector({
         <div>
           <div style={{
             fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
-            textTransform: "uppercase", color: "#c27a2a",
+            textTransform: "uppercase", color: "var(--gold)",
             marginBottom: 10, display: "flex", justifyContent: "space-between",
           }}>
             <span>Size Sets disponibles</span>
-            <span style={{ color: "#868685", fontWeight: 400 }}>
+            <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>
               {loadingProfiles ? "Carregant..." : `${visibleProfiles.length} sistemes`}
             </span>
           </div>
@@ -281,13 +281,13 @@ export function SizingProfileSelector({
           {profilesError ? (
             <LoadError onRetry={loadProfiles} label="No s'han pogut carregar els size sets" />
           ) : loadingProfiles ? (
-            <div style={{ color: "#868685", fontSize: 12, padding: "20px 0" }}>
+            <div style={{ color: "var(--text-muted)", fontSize: 12, padding: "20px 0" }}>
               Carregant size sets...
             </div>
           ) : visibleProfiles.length === 0 ? (
             <div style={{
-              padding: "20px", border: "1px dashed #e0d5c5", borderRadius: 8,
-              textAlign: "center", color: "#868685", fontSize: 12,
+              padding: "20px", border: "1px dashed var(--border)", borderRadius: 8,
+              textAlign: "center", color: "var(--text-muted)", fontSize: 12,
             }}>
               Sense size sets per a aquesta combinació.
             </div>
@@ -310,8 +310,8 @@ export function SizingProfileSelector({
 
       {!selectedTarget && (
         <div style={{
-          padding: "40px 24px", border: "1px dashed #e0d5c5", borderRadius: 8,
-          textAlign: "center", color: "#868685", fontSize: 12,
+          padding: "40px 24px", border: "1px dashed var(--border)", borderRadius: 8,
+          textAlign: "center", color: "var(--text-muted)", fontSize: 12,
         }}>
           Selecciona un target per veure els size sets disponibles
         </div>

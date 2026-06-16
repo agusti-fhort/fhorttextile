@@ -20,8 +20,8 @@ const REC_VARIANT = { REUTILITZAR: 'ok', CLONAR: 'gold', CREAR: 'gate' }
 // Badge de confiança del matching (patró del W2): verd/groc/taronja/vermell.
 const CONF_BADGE = {
   HIGH:     { bg: '#f0f9f0', color: '#3b6d11', label: 'alta' },
-  MEDIUM:   { bg: '#fdf6ee', color: '#c27a2a', label: 'mitjana' },
-  LOW:      { bg: '#fdf3ee', color: '#c27a2a', label: 'baixa' },
+  MEDIUM:   { bg: '#fdf6ee', color: 'var(--gold)', label: 'mitjana' },
+  LOW:      { bg: '#fdf3ee', color: 'var(--gold)', label: 'baixa' },
   NO_MATCH: { bg: '#fff0f0', color: '#a32d2d', label: 'sense match' },
 }
 
@@ -195,7 +195,7 @@ function Stepper({ screen, t }) {
                 width: 22, height: 22, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 11, fontFamily: MONO, fontWeight: 600,
                 background: active ? 'var(--gold)' : done ? 'var(--gold-pale)' : 'var(--gray-l)',
-                color: active ? '#fff' : done ? 'var(--gold)' : 'var(--gray)',
+                color: active ? 'var(--white)' : done ? 'var(--gold)' : 'var(--gray)',
               }}>{s.n}</span>
               <span style={{ fontSize: 11.5, fontFamily: MONO, color: active ? 'var(--text-main)' : 'var(--gray)', fontWeight: active ? 600 : 400 }}>
                 {t(s.key, s.label)}

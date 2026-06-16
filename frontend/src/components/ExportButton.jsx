@@ -45,8 +45,8 @@ export function ExportButton({ url, filename, label = "Exportar", type = "csv" }
         disabled={loading}
         style={{
           padding: '5px 12px', borderRadius: 4, fontSize: 11,
-          background: '#fff', color: '#868685',
-          border: '1px solid #e0d5c5',
+          background: 'var(--white)', color: 'var(--text-muted)',
+          border: '1px solid var(--border)',
           cursor: loading ? 'not-allowed' : 'pointer',
           display: 'flex', alignItems: 'center', gap: 5,
         }}

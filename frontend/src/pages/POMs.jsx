@@ -24,7 +24,7 @@ export default function POMs() {
             style={{
               padding: '6px 16px', borderRadius: 6, border: 'none',
               background: activeTab === tab ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
-              color: activeTab === tab ? '#fff' : 'var(--color-text-secondary, #868685)',
+              color: activeTab === tab ? 'var(--white)' : 'var(--color-text-secondary, #868685)',
               cursor: 'pointer', fontSize: 13,
               fontWeight: activeTab === tab ? 500 : 400,
             }}>
