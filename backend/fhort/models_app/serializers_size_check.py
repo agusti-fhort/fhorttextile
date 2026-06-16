@@ -16,7 +16,7 @@ class SizeCheckLineSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SizeCheckLine
-        fields = ['id', 'size_check', 'pom', 'valor_teoric', 'valor_real', 'acceptat', 'nota']
+        fields = ['id', 'size_check', 'pom', 'valor_teoric', 'valor_real', 'decisio', 'nota']
         read_only_fields = ['id', 'size_check', 'pom', 'valor_teoric']
 
 
@@ -42,12 +42,15 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
     model = serializers.SerializerMethodField()
     resolt_per_nom = serializers.CharField(source='resolt_per.nom_complet', read_only=True)
     lines = serializers.SerializerMethodField()
+    # SC-3: precheck per al front — si el model té deltes, en resoldre es propagarà el
+    # grading i cal l'avís+confirma. Reusa el mateix helper que resolve_size_check.
+    te_deltes = serializers.SerializerMethodField()
 
     class Meta:
         model = SizeCheck
         fields = [
             'id', 'estat', 'talla_base_label', 'missatge_fabricant',
-            'resolt_per_nom', 'resolt_at', 'created_at', 'model', 'lines',
+            'resolt_per_nom', 'resolt_at', 'created_at', 'model', 'lines', 'te_deltes',
         ]
 
     def get_model(self, obj):
@@ -56,6 +59,10 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
             'id': m.id, 'codi': m.codi_intern, 'nom': m.nom_prenda,
             'base_size_label': m.base_size_label,
         }
+
+    def get_te_deltes(self, obj):
+        from .services_size_check import model_te_deltes
+        return model_te_deltes(obj.model)
 
     def get_lines(self, obj):
         from .models import BaseMeasurement
@@ -85,7 +92,7 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
                 'is_key': pom.is_key_measure if pom else False,
                 'valor_teoric': vt,
                 'valor_real': vr,
-                'acceptat': line.acceptat,
+                'decisio': line.decisio,
                 'nota': line.nota,
                 'tol_minus': tol_minus,
                 'tol_plus': tol_plus,

@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { sizeChecks } from '../../api/endpoints'
 import SizeCheckCell from './SizeCheckCell'
 
@@ -11,22 +13,24 @@ const tdRO = { padding: '5px 8px', borderBottom: '0.5px solid var(--border)', fo
 const btn = (variant) => ({
   fontFamily: MONO, fontSize: 12, padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
   border: '0.5px solid var(--gray-l)',
-  background: variant === 'ok' ? 'var(--ok)' : variant === 'err' ? 'var(--err)' : 'var(--gold)',
-  color: '#fff', fontWeight: 500,
+  background: variant === 'ok' ? 'var(--ok)' : variant === 'err' ? 'var(--err)' : variant === 'plain' ? 'var(--white)' : 'var(--gold)',
+  color: variant === 'plain' ? 'var(--text-main)' : '#fff', fontWeight: 500,
 })
 
-// SC-1/SC-2 — Tab Size Check: validació del proto a talla base, abans del fitting.
-// 1 columna (talla base) amb tolerància. Dos modes segons `editable`:
+// SC-1/SC-2/SC-3 — Tab Size Check: validació del proto a talla base, abans del fitting.
+// Dos modes segons `editable`:
 //  - editable=true  (ruta Kanban /models/:id/size-check): treball. open-on-mount
 //    (crea/reusa el check viu), cel·les editables, resoldre visible.
 //  - editable=false (pestanya Model, default): CONSULTA pura. NOMÉS list+get, MAI
 //    open → visitar-la no crea cap check. Cel·les read-only, sense resoldre ni obrir.
 export default function SizeCheckTab({ model, onFeedback, editable = false }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
   const [check, setCheck] = useState(null)        // check viu (Pendent) amb lines
   const [history, setHistory] = useState([])      // checks resolts (summary)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [missatge, setMissatge] = useState('')
+  const [confirm, setConfirm] = useState(null)    // estat pendent de confirmació (modal propagació)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -39,12 +43,10 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
           // Mode treball (Kanban): garanteix un check viu (open idempotent: crea o reusa).
           const full = await sizeChecks.open(model.id)
           setCheck(full.data)
-          setMissatge(full.data.missatge_fabricant || '')
         } else if (live) {
           // Mode consulta (pestanya Model): NOMÉS list+get, MAI open → no crea res.
           const full = await sizeChecks.get(live.id)
           setCheck(full.data)
-          setMissatge(full.data.missatge_fabricant || '')
         } else {
           setCheck(null)
         }
@@ -55,19 +57,30 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
 
   useEffect(() => { load() }, [load])
 
-  const handleResolve = (estat) => {
+  // Acceptar amb propagació: si el model té deltes, avís+confirma abans de resoldre.
+  const onResolveClick = (estat) => {
+    if (estat === 'Acceptat' && check?.te_deltes) { setConfirm('Acceptat'); return }
+    doResolve(estat)
+  }
+
+  const doResolve = (estat) => {
     if (!check) return
+    setConfirm(null)
     setBusy(true)
-    sizeChecks.resolve(check.id, estat, missatge)
+    sizeChecks.resolve(check.id, estat)
       .then(r => {
-        onFeedback?.({ type: 'ok', text: `Check ${estat.toLowerCase()} · ${r.data.written} mesura(es) escrita(es)` })
-        load()
+        const d = r.data || {}
+        const extra = d.regradat ? ` · grading regradat (v${d.nova_version})` : ''
+        onFeedback?.({ type: 'ok', text: `Check ${estat.toLowerCase()} · ${d.written || 0} mesura(es) a la base${extra}` })
+        // Resolt = feina acabada a la superfície de treball → torna al Kanban (el tècnic marca Done allà).
+        if (editable) navigate('/tasques/kanban')
+        else load()
       })
-      .catch(e => onFeedback?.({ type: 'err', text: e.response?.data?.error || 'No s\'ha pogut resoldre' }))
+      .catch(e => onFeedback?.({ type: 'err', text: e.response?.data?.error || t('sizecheck.resolve_error', 'No s\'ha pogut resoldre') }))
       .finally(() => setBusy(false))
   }
 
-  if (loading) return <div style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>Carregant…</div>
+  if (loading) return <div style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading', 'Carregant…')}</div>
 
   return (
     <div>
@@ -80,8 +93,8 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
       {!check && (
         <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>
           {editable
-            ? 'No s\'ha pogut obrir el size check.'
-            : 'No hi ha cap size check per a aquest model. Inicia\'l des del Kanban (tasca Size Check).'}
+            ? t('sizecheck.open_error', 'No s\'ha pogut obrir el size check.')
+            : t('sizecheck.consult_empty', 'No hi ha cap size check per a aquest model. Inicia\'l des del Kanban (tasca Size Check).')}
         </p>
       )}
 
@@ -91,11 +104,11 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
             <thead>
               <tr>
                 <th style={th}>POM</th>
-                <th style={th}>Mesura</th>
-                <th style={{ ...th, textAlign: 'right' }}>Teòric</th>
-                <th style={{ ...th, textAlign: 'right' }}>Real (proto)</th>
-                <th style={{ ...th, textAlign: 'center' }}>Accepta</th>
-                <th style={th}>Nota</th>
+                <th style={th}>{t('sizecheck.col_measure', 'Mesura')}</th>
+                <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_theoretical', 'Teòric')}</th>
+                <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_real', 'Real (proto)')}</th>
+                <th style={{ ...th, textAlign: 'center' }}>{t('sizecheck.col_decision', 'Decisió')}</th>
+                <th style={th}>{t('sizecheck.col_note', 'Nota')}</th>
               </tr>
             </thead>
             <tbody>
@@ -110,17 +123,9 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
           </table>
 
           {editable && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 520 }}>
-              <label style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)' }}>Missatge al fabricant</label>
-              <textarea
-                value={missatge} onChange={e => setMissatge(e.target.value)} rows={3}
-                placeholder="Observacions per al fabricant…"
-                style={{ fontFamily: MONO, fontSize: 12, padding: 8, borderRadius: 4, border: '1px solid var(--border)', resize: 'vertical' }}
-              />
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                <button style={btn('ok')} disabled={busy} onClick={() => handleResolve('Acceptat')}>Acceptar</button>
-                <button style={btn('err')} disabled={busy} onClick={() => handleResolve('Descartat')}>Descartar</button>
-              </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button style={btn('ok')} disabled={busy} onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.accept', 'Acceptar')}</button>
+              <button style={btn('err')} disabled={busy} onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard', 'Descartar')}</button>
             </div>
           )}
         </>
@@ -128,14 +133,13 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
 
       {history.length > 0 && (
         <div style={{ marginTop: 28 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>Històric</h3>
+          <h3 style={{ fontSize: 13, fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>{t('sizecheck.history', 'Històric')}</h3>
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                <th style={th}>Data</th>
-                <th style={th}>Estat</th>
-                <th style={th}>Resolt per</th>
-                <th style={th}>Missatge</th>
+                <th style={th}>{t('sizecheck.col_date', 'Data')}</th>
+                <th style={th}>{t('sizecheck.col_status', 'Estat')}</th>
+                <th style={th}>{t('sizecheck.col_resolved_by', 'Resolt per')}</th>
               </tr>
             </thead>
             <tbody>
@@ -144,11 +148,31 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
                   <td style={tdRO}>{fmtDate(h.resolt_at || h.created_at)}</td>
                   <td style={{ ...tdRO, fontWeight: 600, color: h.estat === 'Acceptat' ? 'var(--ok)' : 'var(--err)' }}>{h.estat}</td>
                   <td style={tdRO}>{h.resolt_per_nom || '—'}</td>
-                  <td style={{ ...tdRO, color: 'var(--text-muted)' }}>{h.missatge_fabricant || '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {confirm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }} onClick={() => setConfirm(null)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--white)', borderRadius: 8, padding: 24, maxWidth: 460,
+            fontFamily: MONO, boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>{t('sizecheck.propagate_title', 'Propagar correccions al grading?')}</h3>
+            <p style={{ margin: '0 0 18px', fontSize: 12, lineHeight: 1.5, color: 'var(--text-main)' }}>
+              {t('sizecheck.propagate_warning', 'Les correccions acceptades s\'escriuran a la talla base i es propagaran al grading segons els deltes informats.')}
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button style={btn('plain')} disabled={busy} onClick={() => setConfirm(null)}>{t('common.cancel', 'Cancel·lar')}</button>
+              <button style={btn('ok')} disabled={busy} onClick={() => doResolve('Acceptat')}>{t('sizecheck.confirm_propagate', 'Acceptar i propagar')}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

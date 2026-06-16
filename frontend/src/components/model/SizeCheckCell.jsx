@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { sizeCheckLines } from '../../api/endpoints'
 
 const MONO = 'IBM Plex Mono, monospace'
@@ -38,17 +39,26 @@ const td = { padding: '5px 8px', borderBottom: '0.5px solid var(--border)', vert
 // Recompute LOCAL del fora-tolerància mentre s'edita (font de veritat = backend, però
 // volem feedback en viu): vermell quan el valor surt de [teòric-tol_minus, teòric+tol_plus].
 function isFora(valorReal, valorTeoric, tolMinus, tolPlus) {
-  if (valorReal === '' || valorReal == null) return false   // null → gris
+  if (valorReal === '' || valorReal == null) return false
   const vr = Number(valorReal)
   if (Number.isNaN(vr)) return false
   return vr < valorTeoric - tolMinus || vr > valorTeoric + tolPlus
 }
 
-// Cel·les editables d'una línia del size check: valor_real (vermell si fora_tol), acceptat, nota.
-// Retorna un fragment de <td> perquè la <table> viu al SizeCheckTab.
+// Cel·les editables d'una línia del size check. SC-3:
+//  - "Real (proto)" parteix del valor TEÒRIC com a prefill, però amb flag `editat`: un
+//    valor NO tocat NO compta com a mesura (valor_real es manté null al backend → semàfor
+//    neutre, no es propaga). Vermell només si fora tolerància I editat.
+//  - "Decisió" és un <select> i18n (Tolerància acceptada / Valor descartat).
+//  - Nota: en 'valor_descartat' es preescriu un text editable; en acceptat és lliure.
 export default function SizeCheckCell({ line, disabled, onLocalChange }) {
-  const [valor, setValor] = useState(line.valor_real ?? '')
-  const [acceptat, setAcceptat] = useState(!!line.acceptat)
+  const { t } = useTranslation()
+  const NOTA_DESCARTAT = t('sizecheck.note_discarded_default', 'Cenyir-se a les mesures originals')
+
+  // editat = ja hi ha una mesura real al backend (valor_real no null).
+  const [editat, setEditat] = useState(line.valor_real != null)
+  const [valor, setValor] = useState(line.valor_real ?? line.valor_teoric ?? '')   // prefill des del teòric
+  const [decisio, setDecisio] = useState(line.decisio ?? '')
   const [nota, setNota] = useState(line.nota ?? '')
 
   const persistValor = useCallback(
@@ -59,13 +69,26 @@ export default function SizeCheckCell({ line, disabled, onLocalChange }) {
   const [valorState, saveValor] = useDebouncedSave(persistValor)
   const [notaState, saveNota] = useDebouncedSave(persistNota)
 
-  const fora = isFora(valor, line.valor_teoric, line.tol_minus, line.tol_plus)
+  // Vermell només si el valor és EDITAT i fora de tolerància (un prefill no tocat = neutre).
+  const fora = editat && isFora(valor, line.valor_teoric, line.tol_minus, line.tol_plus)
 
-  const toggleAcceptat = () => {
-    const next = !acceptat
-    setAcceptat(next)
-    sizeCheckLines.update(line.id, { acceptat: next }).catch(() => setAcceptat(!next))
-    onLocalChange?.(line.id, { acceptat: next })
+  const onValorChange = (raw) => {
+    setValor(raw)
+    setEditat(raw !== '')          // editat només quan hi ha valor; buidar-lo = no mesura
+    saveValor(raw)
+    onLocalChange?.(line.id, { valor_real: raw, editat: raw !== '' })
+  }
+
+  const onDecisioChange = (v) => {
+    const next = v || null
+    setDecisio(v)
+    sizeCheckLines.update(line.id, { decisio: next }).catch(() => setDecisio(decisio))
+    // Descartat → preescriu la nota (editable) si encara és buida; no clobberem una nota escrita.
+    if (next === 'valor_descartat' && !nota) {
+      setNota(NOTA_DESCARTAT)
+      saveNota(NOTA_DESCARTAT)
+    }
+    onLocalChange?.(line.id, { decisio: next })
   }
 
   return (
@@ -74,18 +97,30 @@ export default function SizeCheckCell({ line, disabled, onLocalChange }) {
       <td style={{ ...td, textAlign: 'right', position: 'relative' }}>
         <input
           type="number" step="0.1" value={valor} disabled={disabled}
-          onChange={e => { setValor(e.target.value); saveValor(e.target.value); onLocalChange?.(line.id, { valor_real: e.target.value }) }}
+          onChange={e => onValorChange(e.target.value)}
           style={{
             font: 'inherit', fontFamily: MONO, width: 80, padding: '2px 4px', textAlign: 'right',
             border: '1px solid var(--border)', borderRadius: 4, background: disabled ? 'var(--gray-l)' : 'var(--white)',
-            color: fora ? 'var(--err)' : 'var(--text-main)', fontWeight: fora ? 700 : 400,
+            color: fora ? 'var(--err)' : (editat ? 'var(--text-main)' : 'var(--text-muted)'),
+            fontWeight: fora ? 700 : 400,
             fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
           }}
         />
         <SaveStatus state={valorState} />
       </td>
       <td style={{ ...td, textAlign: 'center' }}>
-        <input type="checkbox" checked={acceptat} disabled={disabled} onChange={toggleAcceptat} />
+        <select
+          value={decisio} disabled={disabled} onChange={e => onDecisioChange(e.target.value)}
+          style={{
+            font: 'inherit', fontFamily: MONO, fontSize: 11, padding: '2px 4px',
+            border: '1px solid var(--border)', borderRadius: 4,
+            background: disabled ? 'var(--gray-l)' : 'var(--white)', color: 'var(--text-main)',
+          }}
+        >
+          <option value="">{t('sizecheck.decisio.none', '—')}</option>
+          <option value="tolerancia_acceptada">{t('sizecheck.decisio.accepted', 'Tolerància acceptada')}</option>
+          <option value="valor_descartat">{t('sizecheck.decisio.discarded', 'Valor descartat')}</option>
+        </select>
       </td>
       <td style={{ ...td, position: 'relative' }}>
         <input

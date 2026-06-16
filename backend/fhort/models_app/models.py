@@ -832,7 +832,14 @@ class SizeCheckLine(models.Model):
     )
     valor_teoric = models.FloatField()
     valor_real = models.FloatField(null=True, blank=True)
-    acceptat = models.BooleanField(default=False)
+    # SC-3: decisió per línia (substitueix el bool acceptat). null = sense decidir encara.
+    #   tolerancia_acceptada → el valor_real es propaga a la base (CHECKED) en resoldre.
+    #   valor_descartat      → es manté la base original; nota preescrita.
+    DECISIO_CHOICES = [
+        ('tolerancia_acceptada', 'Tolerància acceptada'),
+        ('valor_descartat', 'Valor descartat'),
+    ]
+    decisio = models.CharField(max_length=24, choices=DECISIO_CHOICES, null=True, blank=True)
     nota = models.CharField(max_length=200, blank=True, default='')
 
     class Meta:

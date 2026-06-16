@@ -63,18 +63,38 @@ def open_size_check(model_id: int, *, created_by_id: int | None = None):
     return sc, n
 
 
+def model_te_deltes(model) -> bool:
+    """El model té regles de grading (deltes informats)?
+
+    Resident (ModelGradingRule, PG-0) o fallback al GradingRuleSet compartit. És el
+    booleà que decideix si una correcció de base es propaga a les talles en resoldre.
+    """
+    from fhort.models_app.models import ModelGradingRule
+    if ModelGradingRule.objects.filter(model=model, actiu=True).exists():
+        return True
+    if model.grading_rule_set_id:
+        from fhort.pom.models import GradingRule
+        return GradingRule.objects.filter(
+            rule_set_id=model.grading_rule_set_id, actiu=True
+        ).exists()
+    return False
+
+
 def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
                        *, user_profile_id: int | None = None) -> dict:
-    """Resol un SizeCheck Pendent (Acceptat | Descartat) + missatge fabricant.
+    """Resol un SizeCheck Pendent (Acceptat | Descartat).
 
-    En 'Acceptat': cada SizeCheckLine amb acceptat=True i valor_real no null escriu
-    BaseMeasurement amb origen='CHECKED' (només base). Guarda abs(<1e-6) contra el valor
-    base VIGENT → no escriu canvis nuls. El signal F1 registra el canvi (context 'checked').
+    En 'Acceptat': cada SizeCheckLine amb decisio='tolerancia_acceptada' i valor_real no
+    null escriu BaseMeasurement amb origen='CHECKED' (NOMÉS base). Guarda abs(<1e-6) contra
+    el valor base VIGENT → no escriu canvis nuls. El signal F1 registra el canvi (context
+    'checked'). Si hi ha canvi de base i el model té deltes, regradua les talles via el
+    motor resident (mirror de close_piece_fitting): NO toca ModelGradingRule.
 
-    Retorna {'estat', 'written', 'lines_accepted'}.
+    Retorna {'estat', 'written', 'lines_accepted', 'base_changed', 'te_deltes',
+             'regradat', 'nova_version'}.
     """
     from fhort.models_app.models import (
-        BaseMeasurement, SizeCheck, SizeCheckLine,
+        BaseMeasurement, Model, SizeCheck, SizeCheckLine,
     )
 
     if estat not in ('Acceptat', 'Descartat'):
@@ -98,7 +118,7 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
 
     if estat == 'Acceptat':
         lines = list(
-            SizeCheckLine.objects.filter(size_check=sc, acceptat=True)
+            SizeCheckLine.objects.filter(size_check=sc, decisio='tolerancia_acceptada')
             .select_related('pom')
         )
         for line in lines:
@@ -121,13 +141,50 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
             bm.save()
             written += 1
 
+    base_changed = written > 0
+    te_deltes = model_te_deltes(model)
+    regradat = False
+    nova_version = None
+
+    # Propagació: regradua les talles des de la base nova (mirror de close_piece_fitting).
+    # Només si hi ha hagut canvi de base I el model té deltes. NO toca ModelGradingRule.
+    if base_changed and te_deltes:
+        from django.db.models import F, Max
+        from fhort.fitting.models import GradingVersion
+        from fhort.fitting.services import _resolve_working_size_fitting
+        from fhort.pom.services import generate_graded_specs
+
+        sf = _resolve_working_size_fitting(model)
+        if sf is not None:
+            GradingVersion.objects.filter(size_fitting=sf, is_active=True).update(is_active=False)
+            max_num = GradingVersion.objects.filter(size_fitting=sf).aggregate(
+                m=Max('version_number')
+            )['m'] or 0
+            nv = GradingVersion.objects.create(
+                size_fitting=sf,
+                version_number=max_num + 1,
+                is_active=True,
+                creat_per=profile,
+                nom=f'Size check {sc.pk}',
+            )
+            nova_version = nv.version_number
+            Model.objects.filter(pk=model.pk).update(
+                measurements_version=F('measurements_version') + 1
+            )
+            generate_graded_specs(sf.pk)   # llegeix base nova + regles residents
+            regradat = True
+
     sc.estat = estat
-    sc.missatge_fabricant = missatge or ''
     sc.resolt_per = profile
     sc.resolt_at = timezone.now()
-    sc.save(update_fields=['estat', 'missatge_fabricant', 'resolt_per', 'resolt_at'])
+    sc.save(update_fields=['estat', 'resolt_per', 'resolt_at'])
 
     logger.info(
-        f"SizeCheck {sc.pk} resolved [{estat}]: {lines_accepted} accepted, {written} written"
+        f"SizeCheck {sc.pk} resolved [{estat}]: {lines_accepted} accepted, {written} written, "
+        f"te_deltes={te_deltes} regradat={regradat} nova_version={nova_version}"
     )
-    return {'estat': estat, 'written': written, 'lines_accepted': lines_accepted}
+    return {
+        'estat': estat, 'written': written, 'lines_accepted': lines_accepted,
+        'base_changed': base_changed, 'te_deltes': te_deltes,
+        'regradat': regradat, 'nova_version': nova_version,
+    }
