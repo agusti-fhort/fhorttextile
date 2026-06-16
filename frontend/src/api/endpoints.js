@@ -314,8 +314,11 @@ export const sizeChecks = {
   get: (id) => client.get(`/api/v1/size-checks/${id}/`),
   // Obre o reutilitza el check Pendent del model (idempotent: reusa si n'hi ha un de viu).
   open: (modelId) => client.post('/api/v1/size-checks/open/', { model_id: modelId }),
-  resolve: (id, estat, missatge = '') =>
-    client.post(`/api/v1/size-checks/${id}/resolve/`, { estat, missatge_fabricant: missatge }),
+  // SC-5: data_represa (YYYY-MM-DD) reagenda la tasca size_check quan queda viva (Rebutjat/Descartat).
+  resolve: (id, estat, { missatge = '', data_represa = null } = {}) =>
+    client.post(`/api/v1/size-checks/${id}/resolve/`, {
+      estat, missatge_fabricant: missatge, data_represa,
+    }),
 }
 
 // Autosave de cel·la del size check: PATCH de valor_real / acceptat / nota.

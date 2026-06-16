@@ -20,38 +20,40 @@ const btn = (variant) => ({
   color: variant === 'plain' ? 'var(--text-main)' : '#fff', fontWeight: 500,
 })
 
-// SC-1/SC-2/SC-3 — Tab Size Check: validació del proto a talla base, abans del fitting.
-// Dos modes segons `editable`:
-//  - editable=true  (ruta Kanban /models/:id/size-check): treball. open-on-mount
-//    (crea/reusa el check viu), cel·les editables, resoldre visible.
-//  - editable=false (pestanya Model, default): CONSULTA pura. NOMÉS list+get, MAI
-//    open → visitar-la no crea cap check. Cel·les read-only, sense resoldre ni obrir.
+const estatColor = (e) => e === 'Acceptat' ? 'var(--ok)' : (e === 'Pendent' ? 'var(--gold)' : 'var(--err)')
+
+// SC-1..SC-5 — Tab Size Check: validació del proto a talla base, abans del fitting.
+// editable=true  (ruta Kanban): treball (open-on-mount, cel·les editables, Gravar/Descartar).
+// editable=false (pestanya Model): CONSULTA. Mostra l'Històric clicable + la taula read-only
+//   del check seleccionat (per defecte el més recent). MAI fa open.
 export default function SizeCheckTab({ model, onFeedback, editable = false }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [check, setCheck] = useState(null)        // check viu (Pendent) amb lines
-  const [history, setHistory] = useState([])      // checks resolts (summary)
+  const [check, setCheck] = useState(null)        // check mostrat a la taula
+  const [history, setHistory] = useState([])      // tots els checks del model (summary)
+  const [selectedId, setSelectedId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [confirm, setConfirm] = useState(null)    // estat pendent de confirmació (modal propagació)
+  const [confirm, setConfirm] = useState(null)        // modal propagació (Acceptat net amb deltes)
+  const [reschedule, setReschedule] = useState(null)  // {estat, descartades} → modal reagendar
+  const [reDate, setReDate] = useState('')
 
   const load = useCallback(() => {
     setLoading(true)
     sizeChecks.list({ model: model.id, ordering: '-created_at', page_size: 100 })
       .then(async r => {
         const rows = r.data?.results ?? r.data ?? []
-        setHistory(rows.filter(c => c.estat !== 'Pendent'))
-        const live = rows.find(c => c.estat === 'Pendent')
+        setHistory(rows)
         if (editable) {
           // Mode treball (Kanban): garanteix un check viu (open idempotent: crea o reusa).
           const full = await sizeChecks.open(model.id)
-          setCheck(full.data)
-        } else if (live) {
-          // Mode consulta (pestanya Model): NOMÉS list+get, MAI open → no crea res.
-          const full = await sizeChecks.get(live.id)
-          setCheck(full.data)
+          setCheck(full.data); setSelectedId(full.data.id)
+        } else if (rows.length) {
+          // Mode consulta: mostra el més recent (rows[0]); NO fa open (no crea res).
+          const full = await sizeChecks.get(rows[0].id)
+          setCheck(full.data); setSelectedId(rows[0].id)
         } else {
-          setCheck(null)
+          setCheck(null); setSelectedId(null)
         }
       })
       .catch(() => { setCheck(null); setHistory([]) })
@@ -60,35 +62,109 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
 
   useEffect(() => { load() }, [load])
 
-  // Acceptar amb propagació: si el model té deltes, avís+confirma abans de resoldre.
-  const onResolveClick = (estat) => {
-    if (estat === 'Acceptat' && check?.te_deltes) { setConfirm('Acceptat'); return }
-    doResolve(estat)
+  // Consulta: clic a una fila de l'Històric → mostra aquella taula.
+  const selectCheck = (id) => {
+    setSelectedId(id)
+    sizeChecks.get(id).then(r => setCheck(r.data)).catch(() => {})
   }
 
-  const doResolve = (estat) => {
+  const hasDescartades = (check?.lines || []).some(l => l.decisio === 'valor_descartat')
+
+  const onResolveClick = (estat) => {
+    if (estat === 'Acceptat') {
+      if (hasDescartades) { openReschedule('Acceptat', true); return }      // → Rebutjat
+      if (check?.te_deltes) { setConfirm('Acceptat'); return }              // propagació
+      doResolve('Acceptat'); return
+    }
+    openReschedule('Descartat', false)                                      // Descartar
+  }
+
+  const openReschedule = (estat, descartades) => {
+    setReDate(check?.data_represa_default || '')
+    setReschedule({ estat, descartades })
+  }
+
+  const doResolve = (estat, opts = {}) => {
     if (!check) return
-    setConfirm(null)
+    setConfirm(null); setReschedule(null)
     setBusy(true)
-    sizeChecks.resolve(check.id, estat)
+    sizeChecks.resolve(check.id, estat, opts)
       .then(r => {
         const d = r.data || {}
+        const dr = d.data_represa
         let text
-        if (estat === 'Acceptat') {
+        if (d.estat === 'Acceptat') {
           const extra = d.regradat ? ` · grading regradat (v${d.nova_version})` : ''
-          const tk = d.tasca_finalitzada ? ' · tasca finalitzada' : ''
-          text = `Size check gravat · ${d.written || 0} mesura(es) a la base${extra}${tk}`
+          text = t('sizecheck.fb_saved', 'Gravat i propagat · {{n}} mesures', { n: d.written || 0 }) + extra
+        } else if (d.estat === 'Rebutjat') {
+          text = t('sizecheck.fb_rejected', 'Proto no acceptat · reagendat a {{d}} · tasca pendent', { d: dr || '—' })
         } else {
-          text = 'Size check descartat · la tasca segueix pendent'
+          text = t('sizecheck.fb_discarded', 'Descartat · reagendat a {{d}} · tasca pendent', { d: dr || '—' })
         }
         onFeedback?.({ type: 'ok', text })
-        // Resolt = feina acabada a la superfície de treball → torna al Kanban (el tècnic marca Done allà).
-        if (editable) navigate('/tasques/kanban')
+        if (editable) navigate('/tasques/kanban')   // feina acabada a la superfície de treball
         else load()
       })
       .catch(e => onFeedback?.({ type: 'err', text: e.response?.data?.error || t('sizecheck.resolve_error', 'No s\'ha pogut resoldre') }))
       .finally(() => setBusy(false))
   }
+
+  const renderGrid = (c) => (
+    <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 16 }}>
+      <thead>
+        <tr>
+          <th style={th}>POM</th>
+          <th style={th}>{t('sizecheck.col_measure', 'Mesura')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_theoretical', 'Teòric')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_tolerance', 'Tolerància')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_real', 'Real (proto)')}</th>
+          <th style={{ ...th, textAlign: 'center' }}>{t('sizecheck.col_decision', 'Decisió')}</th>
+          <th style={th}>{t('sizecheck.col_note', 'Nota')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {(c.lines || []).map(line => (
+          <tr key={line.id}>
+            <td style={{ ...tdRO, fontFamily: MONO, color: 'var(--gold)', fontWeight: line.is_key ? 700 : 400 }}>{line.codi_fitxa || line.codi}</td>
+            <td style={{ ...tdRO, color: TEXT_2 }}>{line.nom}</td>
+            {/* En consulta sempre disabled; en treball, editable. */}
+            <SizeCheckCell key={`${c.id}-${line.id}`} line={line} disabled={!editable} />
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+
+  const renderHistory = (clickable) => (
+    history.length > 0 && (
+      <div style={{ marginTop: 28 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>{t('sizecheck.history', 'Històric')}</h3>
+        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={th}>{t('sizecheck.col_date', 'Data')}</th>
+              <th style={th}>{t('sizecheck.col_status', 'Estat')}</th>
+              <th style={th}>{t('sizecheck.col_resolved_by', 'Resolt per')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {history.map(h => (
+              <tr key={h.id}
+                  onClick={clickable ? () => selectCheck(h.id) : undefined}
+                  style={{
+                    cursor: clickable ? 'pointer' : 'default',
+                    background: clickable && h.id === selectedId ? 'var(--color-background-secondary, #f5f0ea)' : undefined,
+                  }}>
+                <td style={tdRO}>{fmtDate(h.resolt_at || h.created_at)}</td>
+                <td style={{ ...tdRO, fontWeight: 600, color: estatColor(h.estat) }}>{h.estat}</td>
+                <td style={tdRO}>{h.resolt_per_nom || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  )
 
   if (loading) return <div style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading', 'Carregant…')}</div>
 
@@ -108,73 +184,37 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
         </p>
       )}
 
-      {check && (
+      {/* MODE TREBALL (Kanban): graella editable + botons, després històric. */}
+      {editable && check && (
         <>
-          <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 16 }}>
-            <thead>
-              <tr>
-                <th style={th}>POM</th>
-                <th style={th}>{t('sizecheck.col_measure', 'Mesura')}</th>
-                <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_theoretical', 'Teòric')}</th>
-                <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_tolerance', 'Tolerància')}</th>
-                <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_real', 'Real (proto)')}</th>
-                <th style={{ ...th, textAlign: 'center' }}>{t('sizecheck.col_decision', 'Decisió')}</th>
-                <th style={th}>{t('sizecheck.col_note', 'Nota')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(check.lines || []).map(line => (
-                <tr key={line.id}>
-                  <td style={{ ...tdRO, fontFamily: MONO, color: 'var(--gold)', fontWeight: line.is_key ? 700 : 400 }}>{line.codi_fitxa || line.codi}</td>
-                  <td style={{ ...tdRO, color: TEXT_2 }}>{line.nom}</td>
-                  <SizeCheckCell line={line} disabled={!editable} />
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {renderGrid(check)}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button style={btn('gold')} disabled={busy} onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.save', 'Gravar size check')}</button>
+            <button style={btn('err')} disabled={busy} onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard', 'Descartar')}</button>
+          </div>
+        </>
+      )}
+      {editable && renderHistory(false)}
 
-          {editable && (
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button style={btn('gold')} disabled={busy} onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.save', 'Gravar size check')}</button>
-              <button style={btn('err')} disabled={busy} onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard', 'Descartar')}</button>
+      {/* MODE CONSULTA: Històric clicable a dalt, taula read-only del seleccionat a sota. */}
+      {!editable && (
+        <>
+          {renderHistory(true)}
+          {check && (
+            <div style={{ marginTop: 20 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>
+                {t('sizecheck.validated_table', 'Taula validada')} · <span style={{ color: estatColor(check.estat) }}>{check.estat}</span>
+              </h3>
+              {renderGrid(check)}
             </div>
           )}
         </>
       )}
 
-      {history.length > 0 && (
-        <div style={{ marginTop: 28 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>{t('sizecheck.history', 'Històric')}</h3>
-          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-            <thead>
-              <tr>
-                <th style={th}>{t('sizecheck.col_date', 'Data')}</th>
-                <th style={th}>{t('sizecheck.col_status', 'Estat')}</th>
-                <th style={th}>{t('sizecheck.col_resolved_by', 'Resolt per')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map(h => (
-                <tr key={h.id}>
-                  <td style={tdRO}>{fmtDate(h.resolt_at || h.created_at)}</td>
-                  <td style={{ ...tdRO, fontWeight: 600, color: h.estat === 'Acceptat' ? 'var(--ok)' : 'var(--err)' }}>{h.estat}</td>
-                  <td style={tdRO}>{h.resolt_per_nom || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
+      {/* Modal propagació (Acceptat net amb deltes). */}
       {confirm && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-        }} onClick={() => setConfirm(null)}>
-          <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 8, padding: 24, maxWidth: 460,
-            fontFamily: MONO, boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-          }}>
+        <div style={overlay} onClick={() => setConfirm(null)}>
+          <div onClick={e => e.stopPropagation()} style={modal}>
             <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>{t('sizecheck.propagate_title', 'Propagar correccions al grading?')}</h3>
             <p style={{ margin: '0 0 18px', fontSize: 12, lineHeight: 1.5, color: 'var(--text-main)' }}>
               {t('sizecheck.propagate_warning', 'Les correccions acceptades s\'escriuran a la talla base i es propagaran al grading segons els deltes informats.')}
@@ -186,6 +226,41 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
           </div>
         </div>
       )}
+
+      {/* Modal reagendar (Gravar-amb-descartades o Descartar): data OBLIGATÒRIA de represa. */}
+      {reschedule && (
+        <div style={overlay} onClick={() => setReschedule(null)}>
+          <div onClick={e => e.stopPropagation()} style={modal}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>{t('sizecheck.reschedule_title', 'Reagendar el size check')}</h3>
+            {reschedule.descartades && (
+              <p style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.5, color: 'var(--err)' }}>
+                {t('sizecheck.reschedule_rejected', 'No es propaga al grading: hi ha mesures descartades, el proto s\'ha de refer.')}
+              </p>
+            )}
+            <p style={{ margin: '0 0 8px', fontSize: 12, lineHeight: 1.5, color: 'var(--text-main)' }}>
+              {t('sizecheck.reschedule_help', 'Data prevista de represa (la tasca queda pendent al calendari):')}
+            </p>
+            <input type="date" value={reDate} onChange={e => setReDate(e.target.value)}
+                   style={{ fontFamily: MONO, fontSize: 13, padding: '6px 8px', borderRadius: 4, border: `1px solid ${BORDER}`, marginBottom: 18, width: '100%', boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button style={btn('plain')} disabled={busy} onClick={() => setReschedule(null)}>{t('common.cancel', 'Cancel·lar')}</button>
+              <button style={btn(reschedule.estat === 'Descartat' ? 'err' : 'gold')} disabled={busy || !reDate}
+                      onClick={() => doResolve(reschedule.estat, { data_represa: reDate })}>
+                {t('sizecheck.reschedule_confirm', 'Reagendar')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
+}
+
+const overlay = {
+  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex',
+  alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+}
+const modal = {
+  background: 'var(--white)', borderRadius: 8, padding: 24, maxWidth: 460,
+  fontFamily: MONO, boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
 }
