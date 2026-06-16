@@ -63,11 +63,25 @@ def detect_grading(valors_per_talla, run_ordenat, base_label) -> dict:
             deltas[run_ordenat[j]] = round(sign * (float(v_out) - float(v_in)), 2)
 
         if deltas:
+            # deltes en ordre de run (dict construït iterant run_norm). Comptem punts de canvi
+            # de pas (transicions delta[i] != delta[i-1], tol 0.001): 0 o 1 break = LINEAR
+            # (delta uniforme, o un sol esglaó com el CHEST — fórmula viva amb base+break);
+            # ≥2 breaks (multi-esglaó o valors sense progressió) = STEP.
             vals = list(deltas.values())
+            nb = 0
+            prev = vals[0]
+            for d in vals[1:]:
+                if abs(d - prev) > 0.001:
+                    nb += 1
+                    prev = d
             if all(d == 0 for d in vals):
                 logica, increment = 'FIXED', 0.0
-            elif all(d == vals[0] for d in vals):
+            elif nb == 0:
                 logica, increment = 'LINEAR', vals[0]
+            elif nb == 1:
+                # LINEAR amb UN break: increment = delta base; valors_step poblat com a origen
+                # d'on derive_break_fields treu base+break.
+                logica, increment, valors_step = 'LINEAR', vals[0], deltas
             else:
                 logica, valors_step = 'STEP', deltas
 
@@ -82,24 +96,27 @@ def detect_grading(valors_per_talla, run_ordenat, base_label) -> dict:
 def derive_break_fields(logica, increment, valors_step, run_ordenat):
     """Forma canònica PEÇA A → (increment_base, increment_break, talla_break_label, talla_break_pos).
 
-    STEP: primer delta del run = base; primera etiqueta del run on el delta canvia = break.
-    LINEAR: base = increment, sense break. Tot None si no derivable. NO coneix above_xl.
+    Break AGNÒSTIC a la lògica: sempre que hi hagi `valors_step` amb claus que són etiquetes
+    reals del run, deriva primer delta del run = base; primera etiqueta on el delta canvia =
+    break. Funciona igual per LINEAR-amb-break (CHEST) i per STEP multi-break.
+    Sense `valors_step` derivable → base = increment (LINEAR/FIXED pur), sense break.
 
-    Nucli extret byte-a-byte de derive_grading_rule_set (camí d'import W5/Library); el command
-    backfill hi delega NOMÉS el cas (a) STEP-per-etiqueta i conserva inline la branca ISO above_xl.
+    Blindatge above_xl: el filtre `l in run_ordenat` exclou la clau sintètica 'above_xl' (no és
+    etiqueta del run) PER CONSTRUCCIÓ → mai break espuri. La forma ISO above_xl la resol la
+    branca (b) inline del backfill, que NO passa per aquí.
     """
     ib = ibrk = tlabel = tpos = None
-    if logica == 'STEP' and isinstance(valors_step, dict):
-        seq = [(l, valors_step[l]) for l in run_ordenat
-               if l in valors_step and valors_step[l] is not None]
-        if seq:
-            ib = float(seq[0][1])
-            for l, d in seq:
-                if abs(float(d) - ib) > 0.001:
-                    tlabel, ibrk = l, float(d)
-                    break
-            tpos = run_ordenat.index(tlabel) if (tlabel and tlabel in run_ordenat) else None
-    elif logica == 'LINEAR':
+    seq = ([(l, valors_step[l]) for l in run_ordenat
+            if l in valors_step and valors_step[l] is not None]
+           if isinstance(valors_step, dict) else [])
+    if seq:
+        ib = float(seq[0][1])
+        for l, d in seq:
+            if abs(float(d) - ib) > 0.001:
+                tlabel, ibrk = l, float(d)
+                break
+        tpos = run_ordenat.index(tlabel) if (tlabel and tlabel in run_ordenat) else None
+    elif increment is not None:
         ib = float(increment or 0)
     return ib, ibrk, tlabel, tpos
 

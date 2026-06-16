@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from fhort.accounts.capabilities import HasCapability, CONFIGURE
-from fhort.pom.grading_utils import _norm, detect_grading
+from fhort.pom.grading_utils import _norm, detect_grading, derive_break_fields
 
 
 class _Configure(HasCapability):
@@ -242,7 +242,8 @@ def size_map_grading_preview_view(request):
             codi = row.get('pom_codi_client')
             valors_raw = row.get('valors') or {}
 
-            pom, _mtype, _conf = find_pom_master(codi, '')
+            # descripció si el paste la porta (avui no); el fitxer SÍ → match per nom.
+            pom, mtype, conf = find_pom_master(codi, row.get('descripcio') or '')
             warning = ''
             if pom is None:
                 warning = f"POM '{codi}' no resolt al catàleg."
@@ -251,13 +252,22 @@ def size_map_grading_preview_view(request):
             if det['warning']:
                 warning = (warning + ' ' if warning else '') + det['warning']
 
+            ib, ibrk, tlabel, tpos = derive_break_fields(
+                det['logica'], det['increment'], det['valors_step'], run)
+
             results.append({
                 'pom_codi_client': codi,
                 'pom_id': pom.id if pom else None,
                 'pom_nom': pom.nom_client if pom else None,
+                'match_type': mtype,
+                'confidence': conf,
                 'logica_detectada': det['logica'],
                 'increment': det['increment'],
                 'valors_step': det['valors_step'],
+                'increment_base': ib,
+                'increment_break': ibrk,
+                'talla_break_label': tlabel,
+                'talla_break_pos': tpos,
                 'valors_calculats': {k: valors_raw.get(k) for k in valors_raw},
                 'warning': warning,
             })
@@ -266,6 +276,152 @@ def size_map_grading_preview_view(request):
     except Exception as e:
         import logging
         logging.getLogger(__name__).exception("size_map_grading_preview_view error")
+        return Response({'error': str(e)}, status=500)
+
+
+def _parse_grading_excel(file_bytes):
+    """Parser Excel propi de la Size Library (format simple de graduació):
+    capçalera a la fila 1, A=codi, B=descripció, C endavant=talles. Retorna
+    (poms, talles): poms=[{'codi_fitxa','descripcio','values':{talla:float}}].
+    Distint de _parse_excel_poms (fitxa de model: A=codi, C=descr, D=dim, E+=talles)."""
+    import openpyxl, io
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return [], []
+    header = rows[0]
+    size_cols = [(i, str(h).strip()) for i, h in enumerate(header)
+                 if i >= 2 and h is not None and str(h).strip()]
+    talles = [lbl for _, lbl in size_cols]
+    poms = []
+    for row in rows[1:]:
+        if not row or row[0] is None or str(row[0]).strip() == '':
+            continue
+        codi = str(row[0]).strip()
+        desc = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ''
+        values = {}
+        for ci, lbl in size_cols:
+            if ci < len(row) and row[ci] is not None:
+                try:
+                    values[lbl] = float(str(row[ci]).replace(',', '.'))
+                except (ValueError, TypeError):
+                    pass
+        if values:
+            poms.append({'codi_fitxa': codi, 'descripcio': desc, 'values': values})
+    return poms, talles
+
+
+@api_view(['POST'])
+@permission_classes([_Configure])
+def size_map_grading_preview_file_view(request):
+    """POST size-map/grading-preview-file/ — preview de grading des d'un FITXER.
+
+    Multipart: {file, size_system_id (opt), base_size}. Excel → _parse_grading_excel (parser
+    propi de la Library: A=codi, B=descripció, C+=talles); PDF/imatge → extract_from_file (Opus,
+    funció PURA del motor del model). Normalitza a [{codi_fitxa, descripcio, values}], resol
+    find_pom_master AMB descripció (match per nom) i deriva el grading amb la MATEIXA lògica que
+    el preview de paste (detect_grading + derive_break_fields). Cap persistència.
+    Robust per fila: un POM que falla a la derivació s'omet amb avís, no aborta tot.
+    """
+    try:
+        from fhort.pom.models import SizeDefinition
+        from fhort.models_app.extraction_views import find_pom_master
+        from fhort.models_app.extraction_service import extract_from_file
+
+        f = request.FILES.get('file')
+        if f is None:
+            return Response({'error': 'Cal adjuntar un fitxer (camp "file").'}, status=400)
+        ssid = request.data.get('size_system_id')
+        base_size = (request.data.get('base_size') or '').strip()
+
+        name = (f.name or '').lower()
+        file_bytes = f.read()
+        avisos = []
+
+        # 1-2. Extracció → llista comuna [{codi_fitxa, descripcio, values}].
+        poms_in = []
+        if name.endswith(('.xlsx', '.xls')):
+            raw_poms, _talles = _parse_grading_excel(file_bytes)
+            for p in raw_poms:
+                poms_in.append({
+                    'codi_fitxa': (p.get('codi_fitxa') or '').strip(),
+                    'descripcio': (p.get('descripcio') or '').strip(),
+                    'values': p.get('values') or {},
+                })
+        elif name.endswith(('.pdf', '.png', '.jpg', '.jpeg', '.webp')):
+            extracted = extract_from_file(file_bytes, f.name)
+            for m in (extracted.get('measurements') or []):
+                poms_in.append({
+                    'codi_fitxa': (m.get('client_code') or m.get('code') or '').strip(),
+                    'descripcio': (m.get('description') or '').strip(),
+                    'values': m.get('values') or {},
+                })
+            if not poms_in:
+                avisos.append("La IA no ha retornat cap mesura llegible del document.")
+        else:
+            return Response({'error': (
+                f"Format no suportat: {name}. "
+                "Accepta .xlsx/.xls/.pdf/.png/.jpg/.jpeg/.webp.")}, status=400)
+
+        if not poms_in:
+            return Response({'results': [], 'run': [], 'base_size': base_size,
+                             'avisos': avisos or ["No s'han trobat POMs al fitxer."]}, status=200)
+
+        # 3. run ordenat — MATEIXA font que el preview de paste i el create.
+        run = []
+        if ssid:
+            run = list(SizeDefinition.objects.filter(size_system_id=ssid)
+                       .order_by('ordre').values_list('etiqueta', flat=True))
+        if not run:
+            for p in poms_in:
+                for k in (p['values'] or {}).keys():
+                    if k not in run:
+                        run.append(k)
+
+        # 4-5. matching (amb descripció) + derivació de grading, robust per fila.
+        results = []
+        for p in poms_in:
+            codi = p['codi_fitxa']
+            descripcio = p['descripcio']
+            values = p['values'] or {}
+            try:
+                pom, mtype, conf = find_pom_master(codi, descripcio)
+            except Exception:
+                pom, mtype, conf = None, 'no_match', 'NO_MATCH'
+            warning = '' if pom else f"POM '{codi}' no resolt al catàleg."
+            try:
+                det = detect_grading(values, run, base_size)
+            except Exception as e:
+                avisos.append(f"POM '{codi}': grading no derivat ({e}); omès.")
+                continue
+            if det['warning']:
+                warning = (warning + ' ' if warning else '') + det['warning']
+            ib, ibrk, tlabel, tpos = derive_break_fields(
+                det['logica'], det['increment'], det['valors_step'], run)
+            results.append({
+                'pom_codi_client': codi,
+                'pom_descripcio': descripcio,
+                'pom_id': pom.id if pom else None,
+                'pom_nom': pom.nom_client if pom else None,
+                'match_type': mtype,
+                'confidence': conf,
+                'logica_detectada': det['logica'],
+                'increment': det['increment'],
+                'valors_step': det['valors_step'],
+                'increment_base': ib,
+                'increment_break': ibrk,
+                'talla_break_label': tlabel,
+                'talla_break_pos': tpos,
+                'valors_calculats': {k: values.get(k) for k in values},
+                'warning': warning,
+            })
+
+        return Response({'results': results, 'run': run, 'base_size': base_size,
+                         'avisos': avisos})
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("size_map_grading_preview_file_view error")
         return Response({'error': str(e)}, status=500)
 
 

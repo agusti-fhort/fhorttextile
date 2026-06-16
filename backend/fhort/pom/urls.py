@@ -50,16 +50,18 @@ try:
         size_map_match_view,
         size_map_preview_view,
         size_map_grading_preview_view,
+        size_map_grading_preview_file_view,
         size_map_create_view,
         size_map_systems_view,
     )
     _size_map_paths = [
-        path('size-map/lookups/',         size_map_lookups_view),
-        path('size-map/match/',           size_map_match_view),
-        path('size-map/preview/',         size_map_preview_view),
-        path('size-map/grading-preview/', size_map_grading_preview_view),
-        path('size-map/create/',          size_map_create_view),
-        path('size-map/systems/',         size_map_systems_view),
+        path('size-map/lookups/',              size_map_lookups_view),
+        path('size-map/match/',                size_map_match_view),
+        path('size-map/preview/',              size_map_preview_view),
+        path('size-map/grading-preview/',      size_map_grading_preview_view),
+        path('size-map/grading-preview-file/', size_map_grading_preview_file_view),
+        path('size-map/create/',               size_map_create_view),
+        path('size-map/systems/',              size_map_systems_view),
     ]
 except Exception:
     _size_map_paths = []

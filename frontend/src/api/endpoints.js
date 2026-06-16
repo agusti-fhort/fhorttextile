@@ -81,6 +81,9 @@ export const sizeMap = {
   match:          (data) => client.post('/api/v1/size-map/match/', data),
   preview:        (data) => client.post('/api/v1/size-map/preview/', data),
   gradingPreview: (data) => client.post('/api/v1/size-map/grading-preview/', data),
+  gradingPreviewFile: (formData) => client.post('/api/v1/size-map/grading-preview-file/', formData, {
+    headers: { 'Content-Type': undefined },
+  }),
   create:         (data) => client.post('/api/v1/size-map/create/', data),
   systems:        (params) => client.get('/api/v1/size-map/systems/', { params }),
 }

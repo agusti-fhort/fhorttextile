@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
-import { sizeMap } from '../api/endpoints'
+import { sizeMap, poms } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Table from '../components/ui/Table'
@@ -17,6 +17,13 @@ const MONO = 'IBM Plex Mono, monospace'
 const BASE_UNITS = ['ALPHA', 'NUMERIC_EU', 'NUMERIC_US', 'CM_HEIGHT', 'MONTHS', 'AGE_YEARS']
 const LOGICA = ['LINEAR', 'STEP', 'FIXED', 'ZERO']
 const REC_VARIANT = { REUTILITZAR: 'ok', CLONAR: 'gold', CREAR: 'gate' }
+// Badge de confiança del matching (patró del W2): verd/groc/taronja/vermell.
+const CONF_BADGE = {
+  HIGH:     { bg: '#f0f9f0', color: '#3b6d11', label: 'alta' },
+  MEDIUM:   { bg: '#fdf6ee', color: '#c27a2a', label: 'mitjana' },
+  LOW:      { bg: '#fdf3ee', color: '#c27a2a', label: 'baixa' },
+  NO_MATCH: { bg: '#fff0f0', color: '#a32d2d', label: 'sense match' },
+}
 
 const STEPS = [
   { n: 1, key: 'size_map_step_target' },
@@ -52,11 +59,15 @@ function readPrefill() {
 function parseTable(text) {
   const lines = (text || '').trim().split(/\r?\n/).filter(l => l.trim())
   if (lines.length < 2) return { sizeLabels: [], taula: [] }
-  const split = (l) => l.split(/\t|,|;/).map(c => c.trim())
-  const header = split(lines[0])
+  // Separador detectat UN COP des del header: TAB o ';' deixen la coma lliure com a
+  // decimal (10,5); només CSV pur usa la coma com a separador de columna. Evita trencar
+  // decimals europeus, que /\t|,|;/ partia (10,5 → 10 i 5).
+  const sep = /\t/.test(lines[0]) ? '\t' : (/;/.test(lines[0]) ? ';' : ',')
+  const splitCols = (l) => l.split(sep).map(c => c.trim())
+  const header = splitCols(lines[0])
   const sizeLabels = header.slice(1).filter(Boolean)
   const taula = lines.slice(1).map(l => {
-    const cells = split(l)
+    const cells = splitCols(l)
     const valors = {}
     sizeLabels.forEach((lbl, i) => {
       const v = cells[i + 1]
@@ -255,6 +266,17 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
     }).catch(() => {})
   }, [])
 
+  // Catàleg de POMs (tenant) per al match manual al pas Grading: si un codi de l'Excel del
+  // client no resol (p.ex. 'B'), l'usuari el pot vincular al POM canònic. Una sola crida;
+  // si falla, el select queda buit però el flux no peta. max_page_size=200 > catàleg actual.
+  const [catalegPoms, setCatalegPoms] = useState([])
+  useEffect(() => {
+    poms.list({ page_size: 200, actiu: true }).then(r => {
+      const arr = r.data?.results || r.data || []
+      setCatalegPoms(arr.map(p => ({ pom_id: p.id, codi_client: p.codi_client, nom: p.nom_client })))
+    }).catch(() => setCatalegPoms([]))
+  }, [])
+
   const labels = () => wiz.labelsText.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
 
   // P1 → match
@@ -292,20 +314,38 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       .finally(() => setBusy(false))
   }
 
-  // P4 → grading preview
+  // P4 → grading preview. Mapatge comú per a paste i fitxer (mateixa forma de fila).
+  const [gradingAvisos, setGradingAvisos] = useState([])
+  const applyGradingData = (data) => {
+    const results = (data?.results || []).map(x => ({
+      ...x, logica: x.logica_detectada || 'LINEAR',
+      increment: x.increment ?? 0,
+      valors_step_text: x.valors_step ? JSON.stringify(x.valors_step) : '',
+    }))
+    set({ gradingResults: results, gradingRun: data?.run || [] })
+    setGradingAvisos(data?.avisos || [])
+  }
+
   const calcGrading = () => {
-    setErr(null); setBusy(true)
+    setErr(null); setGradingAvisos([]); setBusy(true)
     const { taula } = parseTable(wiz.gradingText)
     sizeMap.gradingPreview({ size_system_id: wiz.size_system_id, base_size: wiz.base_size, taula })
-      .then(r => {
-        const results = (r.data?.results || []).map(x => ({
-          ...x, logica: x.logica_detectada || 'LINEAR',
-          increment: x.increment ?? 0,
-          valors_step_text: x.valors_step ? JSON.stringify(x.valors_step) : '',
-        }))
-        set({ gradingResults: results, gradingRun: r.data?.run || [] })
-      })
+      .then(r => applyGradingData(r.data))
       .catch(e => setErr(e?.response?.data?.error || t('size_map_grading_err', 'Error en el càlcul de grading.')))
+      .finally(() => setBusy(false))
+  }
+
+  // P4 alternatiu → pujada de fitxer (Excel/PDF/imatge): reusa el motor d'extracció del model.
+  const calcGradingFromFile = (fileObj) => {
+    if (!fileObj) return
+    setErr(null); setGradingAvisos([]); setBusy(true)
+    const fd = new FormData()
+    fd.append('file', fileObj)
+    if (wiz.size_system_id) fd.append('size_system_id', wiz.size_system_id)
+    fd.append('base_size', wiz.base_size || '')
+    sizeMap.gradingPreviewFile(fd)
+      .then(r => applyGradingData(r.data))
+      .catch(e => setErr(e?.response?.data?.error || t('size_map_file_err', 'Error processant el fitxer.')))
       .finally(() => setBusy(false))
   }
 
@@ -316,11 +356,12 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       .filter(g => g.pom_id)
       .map(g => {
         const row = { pom_id: g.pom_id, logica: g.logica }
-        if (g.logica === 'STEP') {
-          try { row.valors_step = g.valors_step_text ? JSON.parse(g.valors_step_text) : (g.valors_step || {}) } catch { row.valors_step = g.valors_step || {} }
-        } else {
-          row.increment = Number(g.increment) || 0
-        }
+        // valors_step és l'ORIGEN del break: enviar-lo sempre que el preview el va produir
+        // (també per LINEAR amb break, p.ex. CHEST) perquè el create en derivi base+break.
+        let vs = null
+        try { vs = g.valors_step_text ? JSON.parse(g.valors_step_text) : (g.valors_step || null) } catch { vs = g.valors_step || null }
+        if (vs && Object.keys(vs).length) row.valors_step = vs
+        if (g.logica !== 'STEP') row.increment = Number(g.increment) || 0
         return row
       })
     const perfils = wiz.perfilTargets.map(tc => ({
@@ -347,6 +388,15 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   }
 
   const submitCreate = (extra = {}) => {
+    // Guard anti-descart-silenciós: buildPayload filtra els !pom_id; abans d'enviar, avisa
+    // l'usuari de quins codis de client no s'han vinculat (i per tant no es desaran).
+    const noResolts = wiz.gradingResults.filter(g => !g.pom_id)
+    if (noResolts.length > 0) {
+      const codis = noResolts.map(g => g.pom_codi_client).join(', ')
+      const msg = `${noResolts.length} POM(s) sense vincular (${codis}) no es desaran.\n`
+        + `Vincula'ls al catàleg o continua sense ells?`
+      if (!window.confirm(msg)) return
+    }
     setErr(null); setConflict(null); setBusy(true)
     sizeMap.create(buildPayload(extra))
       .then(r => { onComplete(r.data) })
@@ -506,8 +556,30 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       {/* ---- P4 ---- */}
       {step === 4 && (
         <div style={card}>
+          {/* Opció A — pujada de fitxer ric (Excel/PDF/imatge): reusa el motor d'extracció
+              del model → match per codi+nom + grading derivat. Alternativa al paste manual. */}
+          <Field label={t('size_map_g_file', 'Puja la fitxa (Excel, PDF o imatge)')}
+            hint={t('size_map_g_file_hint', 'Extracció automàtica de POMs i valors. Els codis no resolts es poden vincular manualment a sota.')}>
+            <label htmlFor="size-map-grading-file"
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); calcGradingFromFile(e.dataTransfer.files[0]) }}
+              style={{ display: 'block', border: '1px dashed var(--gray-l)', borderRadius: 8,
+                       padding: 14, textAlign: 'center', cursor: busy ? 'wait' : 'pointer',
+                       color: 'var(--gray)', fontSize: 13 }}>
+              <i className="ti ti-upload" style={{ fontSize: 18, marginRight: 6 }} />
+              {busy ? t('size_map_g_file_busy', 'Analitzant fitxer…') : t('size_map_g_file_drop', 'Arrossega o selecciona un fitxer')}
+              <input id="size-map-grading-file" type="file" accept=".xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp"
+                style={{ display: 'none' }} disabled={busy}
+                onChange={e => { calcGradingFromFile(e.target.files[0]); e.target.value = '' }} />
+            </label>
+          </Field>
+
+          <div style={{ fontSize: 11, color: 'var(--gray)', margin: '4px 0 10px' }}>
+            {t('size_map_g_or', '— o enganxa la taula manualment —')}
+          </div>
+
           <Field label={t('size_map_g_paste', 'Taula de mides (enganxa des d\'Excel)')}
-            hint={t('size_map_g_hint', 'Primera fila: POM seguit de les etiquetes. Tab / coma / punt i coma.')}>
+            hint={t('size_map_g_hint', 'Primera fila: POM seguit de les etiquetes. Tab o punt i coma com a separador; coma = decimal.')}>
             <textarea value={wiz.gradingText} onChange={e => set({ gradingText: e.target.value })} rows={6}
               style={{ ...selS, width: '100%', resize: 'vertical', fontFamily: MONO }}
               placeholder={'POM\tS\tM\tL\tXL\nCH\t46\t48\t50\t53'} />
@@ -515,6 +587,13 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           <button onClick={calcGrading} disabled={busy || !wiz.gradingText.trim()} style={{ ...primaryBtn, marginBottom: 14 }}>
             <i className="ti ti-calculator" />{t('size_map_calc', 'Calcular increments')}
           </button>
+
+          {gradingAvisos.length > 0 && (
+            <ul style={{ margin: '0 0 14px', padding: '8px 12px 8px 26px', background: 'var(--warn-bg)',
+                         borderRadius: 8, fontSize: 11, color: 'var(--warn)' }}>
+              {gradingAvisos.map((a, k) => <li key={k}>{a}</li>)}
+            </ul>
+          )}
 
           {wiz.gradingResults.length > 0 && (
             <div style={{ overflowX: 'auto', marginBottom: 14 }}>
@@ -533,8 +612,31 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                     return (
                       <tr key={i} style={{ borderTop: '0.5px solid var(--gray-l)', background: g.pom_id ? 'transparent' : 'var(--warn-bg)' }}>
                         <td style={{ padding: 6 }}>
+                          {/* codi de client (nomenclatura seva, ex 'B') + descripció del fitxer
+                              com a referència; badge de confiança; si no resol, select de catàleg. */}
                           <div style={{ fontFamily: MONO }}>{g.pom_codi_client}</div>
-                          {g.pom_nom && <div style={{ fontSize: 10, color: 'var(--gray)' }}>{g.pom_nom}</div>}
+                          {g.pom_descripcio && <div style={{ fontSize: 10, color: 'var(--gray)' }}>{g.pom_descripcio}</div>}
+                          {(() => {
+                            const cb = CONF_BADGE[(g.confidence || '').toUpperCase()]
+                            return cb ? (
+                              <span style={{ display: 'inline-block', marginTop: 2, fontSize: 10, fontWeight: 600,
+                                             padding: '1px 6px', borderRadius: 8, background: cb.bg, color: cb.color }}>
+                                {cb.label}</span>
+                            ) : null
+                          })()}
+                          {g.pom_id
+                            ? (g.pom_nom && <div style={{ fontSize: 10, color: 'var(--gray)' }}>→ {g.pom_nom}</div>)
+                            : (
+                              <select value={g.pom_id || ''} style={{ ...selS, padding: '3px 6px', fontSize: 11, marginTop: 2, maxWidth: 260 }}
+                                onChange={e => {
+                                  const id = Number(e.target.value) || null
+                                  const picked = catalegPoms.find(p => p.pom_id === id)
+                                  set({ gradingResults: wiz.gradingResults.map((r, j) => j === i ? { ...r, pom_id: id, pom_nom: picked ? picked.nom : null } : r) })
+                                }}>
+                                <option value="">{t('size_map_link_pom', 'Vincular a POM del catàleg…')}</option>
+                                {catalegPoms.map(p => <option key={p.pom_id} value={p.pom_id}>{p.codi_client} — {p.nom}</option>)}
+                              </select>
+                            )}
                         </td>
                         <td style={{ padding: 6 }}>
                           <select value={g.logica} onChange={e => upd('logica', e.target.value)} style={{ ...selS, padding: '3px 6px' }}>
@@ -542,11 +644,13 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                           </select>
                         </td>
                         <td style={{ padding: 6 }}>
-                          {g.logica === 'STEP'
-                            ? <input value={g.valors_step_text} onChange={e => upd('valors_step_text', e.target.value)}
-                                style={{ ...selS, width: 280, padding: '3px 6px', fontFamily: MONO }} placeholder='{"S":2,"L":2}' />
-                            : <input type="number" value={g.increment} onChange={e => upd('increment', e.target.value)}
-                                style={{ ...selS, width: 90, padding: '3px 6px' }} />}
+                          {g.increment_base == null
+                            ? (g.valors_step_text
+                                ? <span style={{ fontFamily: MONO, fontSize: 11 }}>{g.valors_step_text}</span>
+                                : <span style={{ color: 'var(--gray)' }}>—</span>)
+                            : (g.increment_break != null
+                                ? <span>+{g.increment_base} · +{g.increment_break} {t('size_map_g_break_from', 'des de')} {g.talla_break_label}</span>
+                                : <span>+{g.increment_base}</span>)}
                         </td>
                         <td style={{ padding: 6, color: 'var(--warn)', fontSize: 11 }}>{g.warning || ''}</td>
                       </tr>
