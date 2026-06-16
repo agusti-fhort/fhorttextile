@@ -337,7 +337,7 @@ export default function FittingSessionList() {
       <Card padding={0}>
         {loading ? (
           <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-            {t('common.loading', 'Carregant...')}
+            {t('common.loading', 'Carregant…')}
           </div>
         ) : !hasRows ? (
           <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>

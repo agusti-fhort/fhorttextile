@@ -17,7 +17,7 @@ export default function UserProfilePage() {
 
   if (loading) return (
     <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-      Carregant...
+      Carregant…
     </div>
   )
   if (!profile) return (

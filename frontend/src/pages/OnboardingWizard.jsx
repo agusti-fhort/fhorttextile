@@ -144,7 +144,7 @@ export default function OnboardingWizard() {
             background: file ? '#f5e6d0' : '#f5f0ea',
             color: file ? 'var(--gold)' : '#c8b89a',
             border: `1px solid ${file ? 'var(--gold)' : 'var(--border)'}`,
-          }}>{uploading ? 'Carregant...' : '⬆ Carregar Excel'}</button>
+          }}>{uploading ? 'Carregant…' : '⬆ Carregar Excel'}</button>
         </div>
       )}
 

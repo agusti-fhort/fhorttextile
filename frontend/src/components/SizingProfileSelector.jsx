@@ -274,7 +274,7 @@ export function SizingProfileSelector({
           }}>
             <span>Size Sets disponibles</span>
             <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>
-              {loadingProfiles ? "Carregant..." : `${visibleProfiles.length} sistemes`}
+              {loadingProfiles ? "Carregant…" : `${visibleProfiles.length} sistemes`}
             </span>
           </div>
 

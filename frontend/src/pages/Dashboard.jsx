@@ -179,7 +179,7 @@ export default function Dashboard() {
             Models actius recents
           </div>
           {loading ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
+            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant…</div>
           ) : recents.length === 0 ? (
             <div style={{
               padding: "20px", border: "1px dashed var(--border)", borderRadius: 8,
@@ -267,7 +267,7 @@ export default function Dashboard() {
             </div>
           )}
           {loading ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
+            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant…</div>
           ) : avisos.length === 0 ? (
             <div style={{
               padding: "16px", border: "1px solid var(--border)", borderRadius: 8,

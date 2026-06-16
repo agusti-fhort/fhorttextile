@@ -2,7 +2,7 @@ export default function Table({ columns, data, onRowClick, loading, empty, loadi
   if (loading) {
     return (
       <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-        {loadingText || 'Carregant...'}
+        {loadingText || 'Carregant…'}
       </div>
     )
   }

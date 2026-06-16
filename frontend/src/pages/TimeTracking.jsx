@@ -82,7 +82,7 @@ export default function TimeTracking() {
         <Card title="Timer actiu" icon="ti-player-play" padding={0}>
           {loading ? (
             <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-              Carregant...
+              Carregant…
             </div>
           ) : !actiu ? (
             <div style={{

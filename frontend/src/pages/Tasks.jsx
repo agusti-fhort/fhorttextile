@@ -46,7 +46,7 @@ function ActiveTasks({ token }) {
       </div>
 
       {loading ? (
-        <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant...</div>
+        <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant…</div>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>
           <thead>

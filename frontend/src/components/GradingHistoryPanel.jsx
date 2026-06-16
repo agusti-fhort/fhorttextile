@@ -39,7 +39,7 @@ export function GradingHistoryPanel({ ruleSetId, onClose }) {
       </div>
 
       {loading ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Carregant...</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Carregant…</div>
       ) : history.length === 0 ? (
         <div style={{
           padding: '16px', border: '1px dashed var(--border)', borderRadius: 6,

@@ -91,7 +91,7 @@ export default function Alerts() {
       <Card padding={0}>
         {loading ? (
           <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-            Carregant...
+            Carregant…
           </div>
         ) : data.length === 0 ? (
           <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>

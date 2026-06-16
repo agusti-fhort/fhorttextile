@@ -117,7 +117,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
       <div style={{ padding: '2rem', textAlign: 'center',
                     color: 'var(--color-text-secondary, #868685)',
                     fontSize: 13 }}>
-        Carregant...
+        Carregant…
       </div>
     )
   }
@@ -235,7 +235,7 @@ function TechSheetTab({ modelId, navigate }) {
   if (loading) return (
     <div style={{ padding: '24px', color: 'var(--text-muted)',
       fontSize: '12px' }}>
-      Carregant...
+      Carregant…
     </div>
   )
 

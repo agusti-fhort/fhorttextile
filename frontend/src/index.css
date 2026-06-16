@@ -40,3 +40,6 @@ body {
   background: var(--bg-main);
   color: var(--text-main);
 }
+
+/* Spinner global (icones de càrrega: afegir animation: spin 0.8s linear infinite). */
+@keyframes spin { to { transform: rotate(360deg); } }
