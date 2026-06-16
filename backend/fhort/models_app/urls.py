@@ -42,6 +42,7 @@ try:
         import_session_poms_view,
         import_session_grading_preview_view,
         import_session_mesures_view,
+        import_session_library_prefill_view,
         import_session_teixit_view,
         import_session_confirmar_view,
     )
@@ -61,6 +62,8 @@ try:
              name='import-session-grading-preview'),
         path('import-sessions/<uuid:token>/mesures/', import_session_mesures_view,
              name='import-session-mesures'),
+        path('import-sessions/<uuid:token>/library-prefill/', import_session_library_prefill_view,
+             name='import-session-library-prefill'),
         path('import-sessions/<uuid:token>/teixit/', import_session_teixit_view,
              name='import-session-teixit'),
         path('import-sessions/<uuid:token>/confirmar/', import_session_confirmar_view,

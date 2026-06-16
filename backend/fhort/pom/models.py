@@ -277,10 +277,9 @@ class SizeSystem(models.Model):
 
 
 
-    # Sprint S1
-    target = models.ForeignKey(
-        'Target', null=True, blank=True,
-        on_delete=models.SET_NULL,
+    # Sprint S1 → 0a: target FK migrat a M2M (harmonitza amb GradingRuleSet.targets).
+    targets = models.ManyToManyField(
+        'Target', blank=True,
         related_name='size_systems',
     )
     base_unit = models.CharField(
@@ -529,6 +528,12 @@ class GradingRule(models.Model):
     valor_base = models.DecimalField(max_digits=7, decimal_places=2, default=0)
     increment = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     valors_step = models.JSONField(null=True, blank=True)
+    # Peça A — forma canònica d'aplicació (break ancorat per ETIQUETA, resolt al run de
+    # graduació). valors_step roman com a origen/auditoria. NULL = no backfillat → fallback.
+    increment_base = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    increment_break = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    talla_break_label = models.CharField(max_length=30, null=True, blank=True)
+    talla_break_pos = models.IntegerField(null=True, blank=True)  # cache opcional (run del ruleset)
     actiu = models.BooleanField(default=True)
 
     class Meta:
@@ -740,7 +745,6 @@ class BodyMeasurementISO(models.Model):
 class SizingProfile(models.Model):
     """
     Sizing profile: combination target+garment+construction+fit -> size_system+grading.
-    It is the heart of the SizingProfileWizard.
     Public (global) schema — tenants can create their own versions via parent_profile.
     """
     target           = models.ForeignKey('Target', on_delete=models.PROTECT,

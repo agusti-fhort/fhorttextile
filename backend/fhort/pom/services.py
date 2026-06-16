@@ -60,7 +60,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     base_idx = size_run.index(base_size)
 
     # Load the RuleSet rules
-    rules = _load_grading_rules(model.grading_rule_set_id)
+    rules = _load_grading_rules(model)
     exceptions = _load_grading_exceptions(model.grading_rule_set_id)
     # Sprint 5B.3: per-model overrides from validated fittings (highest priority).
     model_overrides = _load_model_overrides(model.pk)
@@ -159,7 +159,7 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
         return {}
     base_idx = size_run.index(base_size)
 
-    rules = _load_grading_rules(model.grading_rule_set_id)
+    rules = _load_grading_rules(model)
     exceptions = _load_grading_exceptions(model.grading_rule_set_id)
     model_overrides = _load_model_overrides(model.pk)
 
@@ -353,15 +353,30 @@ def update_client_profile(
 # PRIVATE HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _load_grading_rules(rule_set_id: int) -> dict:
-    """Return {pom_id: rule_obj} for the given RuleSet."""
+def _load_grading_rules(model) -> dict:
+    """Return {pom_id: rule_obj} for the model's grading rules.
+
+    PG-1 — Fallback: ModelGradingRule (resident al model) té prioritat; si el model
+    no en té cap, recau a GradingRule del GradingRuleSet extern (camí vell). Així el
+    comportament NO canvia fins que un backfill ompli ModelGradingRule. _apply_rule
+    llegeix per getattr → tots dos rule_obj són intercanviables.
+
+    Imports DINS la funció (mateix idioma que la resta del fitxer) per evitar cicles
+    models_app ↔ pom a load time.
+    """
     try:
-        from fhort.pom.models import GradingRule
-        return {r.pom_id: r for r in GradingRule.objects.filter(
-            rule_set_id=rule_set_id, actiu=True
-        )}
+        from fhort.models_app.models import ModelGradingRule
+        rules = ModelGradingRule.objects.filter(model_id=model.id, actiu=True)
+        if rules.exists():
+            return {r.pom_id: r for r in rules}
+        if model.grading_rule_set_id:
+            from fhort.pom.models import GradingRule
+            return {r.pom_id: r for r in GradingRule.objects.filter(
+                rule_set_id=model.grading_rule_set_id, actiu=True
+            )}
+        return {}
     except Exception as e:
-        logger.warning(f"Could not load GradingRules: {e}")
+        logger.warning(f"Could not load grading rules: {e}")
         return {}
 
 
@@ -479,6 +494,30 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
     """
     grading_type = rule.logica
     increment = float(rule.increment) if rule.increment else 0.0
+
+    # Peça A — forma CANÒNICA: si increment_base està poblat, el motor gradua des d'aquí
+    # (unifica import STEP, import LINEAR-amb-break i ISO above_xl). El llindar es resol per
+    # ETIQUETA contra el RUN DE GRADUACIÓ (size_run del model), no contra el run del ruleset →
+    # portable i cobreix rulesets sense size_system. Label absent al run → cap break (uniforme).
+    if getattr(rule, 'increment_base', None) is not None:
+        ib = float(rule.increment_base)
+        brk = float(rule.increment_break) if rule.increment_break is not None else ib
+        if size_idx == base_idx:
+            return base_val, grading_type
+        break_idx = None
+        if rule.talla_break_label and size_run:
+            norm = [_norm_label(x) for x in size_run]
+            tl = _norm_label(rule.talla_break_label)
+            if tl in norm:
+                break_idx = norm.index(tl)
+        if size_idx > base_idx:
+            path, sign = range(base_idx + 1, size_idx + 1), 1.0
+        else:
+            path, sign = range(size_idx, base_idx), -1.0
+        total = 0.0
+        for j in path:
+            total += brk if (break_idx is not None and j >= break_idx) else ib
+        return base_val + sign * total, grading_type
 
     if grading_type == 'LINEAR':
         return base_val + (steps * increment), 'LINEAR'

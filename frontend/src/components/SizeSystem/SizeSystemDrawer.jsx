@@ -13,8 +13,6 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
 
   useEffect(() => {
     if (!sizeSystem) return
-    console.log('SizeSystem prop:', sizeSystem)
-    console.log('Fetching definitions for id:', sizeSystem?.id)
     setLoading(true)
     fetch(`/api/v1/size-definitions/?size_system=${sizeSystem.id}&page_size=50`, {
       headers: authHeaders(),

@@ -189,20 +189,27 @@ export default function GradingRuleSets() {
     [allRuleSets]
   )
 
-  const handleDelete = async (rs) => {
+  const handleDelete = async (rs, force = false) => {
     if (rs.is_system_default) {
       setMsg({ type: 'error', text: 'No es pot esborrar un RuleSet de sistema.' })
       return
     }
-    if (!confirm(`Esborrar "${rs.nom}"?`)) return
+    if (!force && !confirm(`Esborrar "${rs.nom}"?`)) return
     try {
-      const r = await fetch(`${API}/api/v1/grading-rule-sets/${rs.id}/`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      })
+      const r = await fetch(
+        `${API}/api/v1/grading-rule-sets/${rs.id}/${force ? '?force=1' : ''}`,
+        { method: 'DELETE', headers: authHeaders() },
+      )
       if (r.ok || r.status === 204) {
         setAllRuleSets(prev => prev.filter(x => x.id !== rs.id))
         setMsg({ type: 'ok', text: 'RuleSet esborrat.' })
+      } else if (r.status === 409) {
+        // Té perfils i/o models dependents → avís clar (missatge del backend, font única) +
+        // cascada controlada si es confirma.
+        const d = await r.json().catch(() => ({}))
+        if (confirm(d.message || 'Aquest RuleSet té dependències. Esborrar-lo igualment?')) {
+          return handleDelete(rs, true)
+        }
       } else {
         setMsg({ type: 'error', text: `Error ${r.status} esborrant.` })
       }
@@ -241,12 +248,7 @@ export default function GradingRuleSets() {
             {allRuleSets.length} conjunts de regles · {totalRegles} regles totals
           </p>
         </div>
-        <button
-          onClick={() => { setEditTarget(null); setShowModal(true) }}
-          style={btnPrimary}
-        >
-          + Nou RuleSet
-        </button>
+        {/* Creació centralitzada a la Size Library; aquí només consulta/edita/esborra. */}
       </div>
 
       {/* Missatge */}
@@ -386,12 +388,9 @@ export default function GradingRuleSets() {
           borderRadius: 8, textAlign: 'center', color: 'var(--gray, #868685)', fontSize: 12,
         }}>
           No hi ha cap RuleSet per a aquesta combinació.
-          <button
-            onClick={() => { setEditTarget(null); setShowModal(true) }}
-            style={{ ...btnPrimary, display: 'block', margin: '0.75rem auto 0' }}
-          >
-            + Crear RuleSet per a {selectedTarget} · {selectedConstruction} · {selectedFit} · {selectedGarmentGroup}
-          </button>
+          <div style={{ marginTop: 8, fontSize: 11 }}>
+            Crea'n un des de la Size Library.
+          </div>
         </div>
       )}
 
@@ -517,7 +516,8 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
   const editable = !rs.is_system_default
   const reglesCount = visibleRules.length
   const totalRulesCount = localRules.length
-  const aboveXlCount = visibleRules.filter(r => r.valors_step?.above_xl != null).length
+  const breakCount = visibleRules.filter(
+    r => r.talla_break_label != null || r.valors_step?.above_xl != null).length
 
   const updateLocalRule = (id, patch) => {
     setLocalRules(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
@@ -572,7 +572,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
     ...(showTrad ? [{ label: 'Traducció', align: 'left' }] : []),
     { label: 'Lògica',     align: 'left'  },
     { label: 'Δ/talla',    align: 'right' },
-    { label: 'Δ>XL',       align: 'right' },
+    { label: 'Δ break',    align: 'right' },
     { label: 'Talla base', align: 'right' },
     { label: 'Valor base', align: 'right' },
     ...(editable ? [{ label: '', align: 'center' }] : []),
@@ -638,7 +638,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
               ? `${reglesCount}/${totalRulesCount} regles`
               : `${reglesCount} regles`}
           </Pill>
-          {aboveXlCount > 0 && <Pill bg="#fdf6ee" color="#c27a2a">{aboveXlCount} Δ&gt;XL</Pill>}
+          {breakCount > 0 && <Pill bg="#fdf6ee" color="#c27a2a">{breakCount} amb break</Pill>}
           <Pill
             bg={rs.is_system_default ? '#f5f0ea' : '#f0f9f0'}
             color={rs.is_system_default ? '#868685' : '#3b6d11'}
@@ -724,33 +724,47 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                         fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
                       }}>{r.logica}</span>
                     </td>
+                    {/* Δ/talla — Peça A: forma canònica (increment_base) com a TEXT read-only;
+                        regles no backfillades (increment_base null) → escalar editable (compat). */}
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
                       fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
-                      color: Number(r.increment) > 0 ? '#2a5a8a' : '#868685',
+                      color: Number(r.increment_base ?? r.increment) > 0 ? '#2a5a8a' : '#868685',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
-                      <EditableIncrement
-                        value={Number(r.increment) || 0}
-                        ruleId={r.id}
-                        field="increment"
-                        readOnly={!editable}
-                        onSave={handleSaveRule}
-                      />
+                      {r.increment_base != null
+                        ? (Number(r.increment_base) > 0 ? `+${Number(r.increment_base)} cm` : '—')
+                        : (
+                          <EditableIncrement
+                            value={Number(r.increment) || 0}
+                            ruleId={r.id}
+                            field="increment"
+                            readOnly={!editable}
+                            onSave={handleSaveRule}
+                          />
+                        )}
                     </td>
+                    {/* Δ break — Peça A: increment_break + "des de {talla_break_label}" (text);
+                        regles no backfillades → fallback above_xl editable (compat). */}
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      fontFamily: 'IBM Plex Mono, monospace',
-                      color: aboveXl ? '#c27a2a' : '#c0c0c0',
+                      fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
+                      color: (r.increment_base != null ? r.talla_break_label : aboveXl) ? '#c27a2a' : '#c0c0c0',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
-                      <EditableIncrement
-                        value={aboveXl != null ? Number(aboveXl) : 0}
-                        ruleId={r.id}
-                        field="above_xl"
-                        readOnly={!editable}
-                        onSave={handleSaveRule}
-                      />
+                      {r.increment_base != null
+                        ? (r.talla_break_label
+                            ? `+${Number(r.increment_break)} des de ${r.talla_break_label}`
+                            : '—')
+                        : (
+                          <EditableIncrement
+                            value={aboveXl != null ? Number(aboveXl) : 0}
+                            ruleId={r.id}
+                            field="above_xl"
+                            readOnly={!editable}
+                            onSave={handleSaveRule}
+                          />
+                        )}
                     </td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',

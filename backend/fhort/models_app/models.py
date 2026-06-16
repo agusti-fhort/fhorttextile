@@ -3,6 +3,11 @@ import uuid
 from django.db import models
 from django.conf import settings
 
+# Single source of truth per a les opcions de lògica de grading. ModelGradingRule
+# (resident al model) en reusa les choices: si demà canvien a pom.GradingRule, no
+# divergeixen. pom.models no importa models_app → cap import circular a load time.
+from fhort.pom.models import GradingRule
+
 
 # Minimal stubs: the spec requires the Model.contracte/linia_contracte FKs
 # but does not define these models. Extend when the contracts app is built.
@@ -611,6 +616,62 @@ class ModelGradingOverride(models.Model):
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client} @ {self.size_label} = {self.value_cm}cm'
+
+
+class ModelGradingRule(models.Model):
+    """PG-0 — Graduació canònica RESIDENT al model (una regla per (model, POM)).
+
+    Materialitza dins el tenant la mateixa forma canònica que pom.GradingRule, però
+    penjant del Model en lloc d'un GradingRuleSet compartit extern. NO duplica la base
+    (viu a BaseMeasurement) ni la config de run (model.size_run_model /
+    model.base_size_label ja la porten): el break es resol per ETIQUETA contra el run
+    del model, igual que fa _apply_rule avui.
+
+    PG-0 només crea l'entitat — RES la consumeix encara. Cap canvi de comportament.
+    """
+    ORIGEN_CHOICES = [
+        ('IMPORTED', 'Importat de fitxa externa'),
+        ('CANONICAL', 'Derivat canònicament'),
+        ('MANUAL', 'Introduït manualment'),
+    ]
+
+    model = models.ForeignKey(
+        'models_app.Model', on_delete=models.CASCADE, related_name='grading_rules',
+    )
+    # db_constraint=False: 'pom' és app SHARED (taula també a 'public'), però aquest model
+    # és tenant-only → un constraint de BD cap a pom_pommaster petaria a 'public'. L'FK és
+    # lògic (ORM). Mateix patró cross-schema que pom.GarmentPOMMap.garment_type_item.
+    pom = models.ForeignKey(
+        'pom.POMMaster', on_delete=models.PROTECT, related_name='model_grading_rules',
+        db_constraint=False,
+    )
+
+    logica = models.CharField(max_length=20, choices=GradingRule.LOGICA_CHOICES)
+
+    # Legacy LINEAR/FIXED: _apply_rule té una branca de fallback que llegeix `increment`
+    # quan increment_base és NULL. Sense aquest camp, una regla no-canònica no graduaria.
+    increment = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    valors_step = models.JSONField(null=True, blank=True)  # STEP origen/auditoria
+
+    # Forma canònica d'aplicació (break ancorat per ETIQUETA, resolt al run del model).
+    # valors_step roman com a origen/auditoria. NULL = no canònic → fallback a `increment`.
+    increment_base = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    increment_break = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    talla_break_label = models.CharField(max_length=30, null=True, blank=True)
+    talla_break_pos = models.IntegerField(null=True, blank=True)  # cache opcional (run del model)
+
+    origen = models.CharField(max_length=20, default='CANONICAL', choices=ORIGEN_CHOICES)
+    actiu = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Regla grading (model)'
+        verbose_name_plural = 'Regles grading (model)'
+        unique_together = [('model', 'pom')]
+
+    def __str__(self):
+        return f'{self.model} · {self.pom.codi_client} ({self.logica})'
 
 
 # ───────────────────────── Import massiu de models (bulk) ─────────────────────────

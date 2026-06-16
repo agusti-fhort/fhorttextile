@@ -62,3 +62,27 @@ def reserve_sequence_range(customer, year, season, n):
         seq.save(update_fields=['last_seq'])
         last = seq.last_seq
     return (first, last)
+
+
+def materialize_model_grading_rules(model, source_rules, origen):
+    """Materialitza regles de grading residents al model des d'un iterable de
+    GradingRule. Wipe-and-recreate: el set resultant és EXACTAMENT source_rules.
+
+    NO copia valor_base ni talla_base (viuen a BaseMeasurement / model.base_size_label).
+    Idempotent per (model): esborra les regles residents prèvies abans de recrear.
+    origen: 'IMPORTED' (W5) | 'CANONICAL' (wizard) | 'MANUAL'.
+    """
+    from fhort.models_app.models import ModelGradingRule
+    model.grading_rules.all().delete()
+    objs = [
+        ModelGradingRule(
+            model=model, pom_id=r.pom_id,
+            logica=r.logica, increment=r.increment, valors_step=r.valors_step,
+            increment_base=r.increment_base, increment_break=r.increment_break,
+            talla_break_label=r.talla_break_label, talla_break_pos=r.talla_break_pos,
+            origen=origen, actiu=True,
+        )
+        for r in source_rules
+    ]
+    ModelGradingRule.objects.bulk_create(objs)
+    return len(objs)

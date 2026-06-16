@@ -18,7 +18,6 @@ const PATH_TO_KEY = {
   '/fitxers':                   'nav.fitxers',
   '/poms':                      'nav.poms',
   '/poms/grading':              'nav.grading',
-  '/poms/sizes':                'nav.sizes',
   '/avisos':                    'nav.avisos',
   '/ia':                        'nav.ia',
   '/perfil':                    'nav.perfil',
@@ -62,7 +61,7 @@ export default function Topbar() {
       padding: '0 1.5rem',
       gap: '1rem',
       position: 'sticky',
-      top: 0,
+      top: import.meta.env.VITE_STAGING === 'true' ? '28px' : '0',
       zIndex: 10,
     }}>
       <div style={{display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray)'}}>

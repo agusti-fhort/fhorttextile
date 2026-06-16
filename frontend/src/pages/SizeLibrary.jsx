@@ -2,13 +2,34 @@ import { useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { SizeSetDetail } from "../components/SizeSetDetail"
 import { SizingProfileSelector } from "../components/SizingProfileSelector"
+import SizeAuthoringDrawer from "../components/SizeAuthoringDrawer"
+import useAuthStore from "../store/auth"
 import { sizingProfiles } from "../api/endpoints"
 
+// 1C-3b — ?prefill= (base64 unicode-safe d'un JSON), mateix patró que SizeMapSetup.readPrefill.
+function readPrefill(p) {
+  if (!p) return null
+  try { return JSON.parse(decodeURIComponent(escape(atob(p)))) } catch { return null }
+}
+
 export default function SizeLibrary() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const canConfigure = !!useAuthStore(s => s.user)?.capabilities?.includes('configure')
 
   const [detailProfileId, setDetailProfileId] = useState(null)
   const [msg, setMsg] = useState(null)
+  // Si venim de l'ImportWizard amb ?prefill=, obrim el drawer auto-omplert (decisió ii: sense represa).
+  const [drawerPrefill, setDrawerPrefill] = useState(() => readPrefill(searchParams.get('prefill')))
+  const [drawerOpen, setDrawerOpen] = useState(() => !!readPrefill(searchParams.get('prefill')))
+  const [selectorKey, setSelectorKey] = useState(0)
+
+  // Treu ?prefill de la URL (mantenint ?target) perquè el drawer no es re-obri en re-render.
+  const clearPrefillParam = () => {
+    if (!searchParams.get('prefill')) return
+    const next = new URLSearchParams(searchParams)
+    next.delete('prefill')
+    setSearchParams(next, { replace: true })
+  }
 
   const handleClone = async (profile) => {
     try {
@@ -26,13 +47,28 @@ export default function SizeLibrary() {
   return (
     <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto", fontFamily: "IBM Plex Mono, monospace" }}>
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 500, color: "#1d1d1b", margin: "0 0 4px" }}>
-          Size Library
-        </h1>
-        <div style={{ fontSize: 12, color: "#868685" }}>
-          Sistemes de talles, runs i grading disponibles per al teu catàleg.
+      <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 18, fontWeight: 500, color: "#1d1d1b", margin: "0 0 4px" }}>
+            Size Library
+          </h1>
+          <div style={{ fontSize: 12, color: "#868685" }}>
+            Sistemes de talles, runs i grading disponibles per al teu catàleg.
+          </div>
         </div>
+        {canConfigure && (
+          <button
+            onClick={() => { setDrawerPrefill(null); setDrawerOpen(true) }}
+            style={{
+              padding: "8px 14px", borderRadius: 4, fontSize: 12, cursor: "pointer",
+              background: "#f5e6d0", color: "#c27a2a", border: "1px solid #c27a2a",
+              fontFamily: "IBM Plex Mono, monospace", whiteSpace: "nowrap",
+              display: "inline-flex", alignItems: "center", gap: 6,
+            }}
+          >
+            <i className="ti ti-plus" style={{ fontSize: 13 }} /> Crear / Importar
+          </button>
+        )}
       </div>
 
       {/* Missatge global */}
@@ -51,6 +87,7 @@ export default function SizeLibrary() {
 
       <div style={{ display: "grid", gridTemplateColumns: detailProfileId ? "1fr 420px" : "1fr", gap: 24, alignItems: "start" }}>
         <SizingProfileSelector
+          key={selectorKey}
           initialTarget={searchParams.get('target')}
           onDetail={(profile) => setDetailProfileId(profile.id)}
           onClone={handleClone}
@@ -68,10 +105,26 @@ export default function SizeLibrary() {
             <SizeSetDetail
               profileId={detailProfileId}
               onClose={() => setDetailProfileId(null)}
+              onRefresh={() => { setDetailProfileId(null); setSelectorKey(k => k + 1) }}
             />
           </div>
         )}
       </div>
+
+      {/* Drawer d'autoria de talles (1C-3) — prefill nul en autoria directa, o el de
+          ?prefill quan venim de l'ImportWizard (1C-3b). */}
+      <SizeAuthoringDrawer
+        open={drawerOpen}
+        prefill={drawerPrefill}
+        onClose={() => { setDrawerOpen(false); setDrawerPrefill(null); clearPrefillParam() }}
+        onComplete={() => {
+          setDrawerOpen(false)
+          setDrawerPrefill(null)
+          clearPrefillParam()
+          setSelectorKey(k => k + 1)
+          setMsg({ type: 'ok', text: 'Sistema de talles creat' })
+        }}
+      />
     </div>
   )
 }
