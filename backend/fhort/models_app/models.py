@@ -788,8 +788,9 @@ class SizeCheck(models.Model):
     SENSE unique_together — un model pot acumular N checks al llarg del temps."""
     ESTAT_CHOICES = [
         ('Pendent', 'Pendent'),
-        ('Acceptat', 'Acceptat'),
-        ('Descartat', 'Descartat'),
+        ('Acceptat', 'Acceptat'),      # gravat amb totes acceptades → propaga al grading
+        ('Rebutjat', 'Rebutjat'),      # gravat però amb mesures descartades → NO propaga (proto a refer)
+        ('Descartat', 'Descartat'),    # decisió de no mesurar ara → NO propaga; tasca reagendada
     ]
 
     model = models.ForeignKey(

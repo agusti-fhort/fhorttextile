@@ -116,6 +116,23 @@ def add_working_minutes(profile, start, minutes):
     raise RuntimeError('add_working_minutes: límit de seguretat superat')
 
 
+def add_working_days(start_date, n, profile=None):
+    """Data resultant d'avançar `n` dies LABORABLES des de `start_date` (exclòs el dia
+    inicial). Salta caps de setmana, festius i absències. profile=None → calendari
+    d'empresa pur. Retorna un datetime.date."""
+    cal = CompanyCalendar.load()
+    is_absent = _absence_dates(profile)
+    d = start_date
+    added = 0
+    for _ in range(_SAFETY_DAYS):
+        if added >= n:
+            return d
+        d = d + _dt.timedelta(days=1)
+        if _day_trams(profile, cal, d, is_absent):   # dia laborable (no festiu/absència/jornada buida)
+            added += 1
+    raise RuntimeError('add_working_days: límit de seguretat superat')
+
+
 def prev_working_slot(profile, before):
     """Mirall ENRERE de next_working_slot: darrer instant hàbil <= `before` (datetime naïf),
     entès com el FINAL de feina disponible. Si `before` cau dins un tram (s < before <= e)

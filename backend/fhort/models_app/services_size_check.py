@@ -96,20 +96,25 @@ def model_te_deltes(model) -> bool:
 
 
 def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
-                       *, user_profile_id: int | None = None) -> dict:
-    """Resol un SizeCheck Pendent amb 2 accions ben diferenciades:
+                       *, user_profile_id: int | None = None, data_represa=None) -> dict:
+    """Resol un SizeCheck Pendent. L'acció sol·licitada (`estat`) i les decisions de línia
+    determinen l'estat FINAL i si es propaga al grading:
 
-    GRAVAR (estat='Acceptat'): les línies sense decisió expressa passen a
-    'tolerancia_acceptada'; després escriu BaseMeasurement origen='CHECKED' (NOMÉS base)
-    de les acceptades amb valor_real editat (abs<1e-6 contra el vigent → skip). Si hi ha
-    canvi de base i el model té deltes, regradua via el motor resident (mirror de
-    close_piece_fitting; NO toca ModelGradingRule). Finalitza la tasca Kanban → Done.
+    GRAVAR (estat='Acceptat'):
+      · cap línia 'valor_descartat' → estat='Acceptat': promou None→'tolerancia_acceptada',
+        escriu CHECKED (NOMÉS base, abs<1e-6 skip), regradua si base canvia i té deltes
+        (mirror close_piece_fitting; NO toca ModelGradingRule), finalitza tasca → Done.
+      · alguna línia 'valor_descartat' → estat='Rebutjat': NO promou, NO CHECKED, NO regrade,
+        NO Done (proto a refer). Es grava la constància de decisions.
+    DESCARTAR (estat='Descartat'): NO toca línies, NO propaga, tasca viva.
 
-    DESCARTAR (estat='Descartat'): NO toca cap línia, NO escriu CHECKED, NO regradua i NO
-    finalitza la tasca (queda viva per mesurar més tard). El check queda com a constància.
+    REAGENDAR: quan la tasca queda viva (Rebutjat o Descartat) i ve `data_represa` (date o
+    'YYYY-MM-DD'), fixa la tasca size_check al calendari: planned_start/end (calendari
+    laboral) + planned_locked, status Pending. Gate tou (sense tasca → no peta).
 
-    Retorna {'estat', 'written', 'lines_accepted', 'base_changed', 'te_deltes',
-             'regradat', 'nova_version', 'tasca_finalitzada'}.
+    Retorna {'estat', 'propagat', 'descartades', 'written', 'lines_accepted', 'base_changed',
+             'te_deltes', 'regradat', 'nova_version', 'tasca_finalitzada', 'reagendada',
+             'data_represa'}.
     """
     from fhort.models_app.models import (
         BaseMeasurement, Model, SizeCheck, SizeCheckLine,
@@ -131,6 +136,15 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
         profile = UserProfile.objects.select_related('user').filter(pk=user_profile_id).first()
         auth_user = profile.user if profile else None
 
+    descartades = SizeCheckLine.objects.filter(size_check=sc, decisio='valor_descartat').count()
+
+    # Estat final: GRAVAR amb descartades → Rebutjat (no propaga); sense → Acceptat (propaga).
+    if estat == 'Acceptat':
+        final_estat = 'Rebutjat' if descartades > 0 else 'Acceptat'
+    else:
+        final_estat = 'Descartat'
+    propagat = (final_estat == 'Acceptat')
+
     written = 0
     lines_accepted = 0
     base_changed = False
@@ -139,8 +153,8 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
     nova_version = None
     tasca_finalitzada = False
 
-    if estat == 'Acceptat':
-        # GRAVAR: les línies sense decisió expressa s'accepten (tolerància acceptada).
+    if propagat:
+        # GRAVAR-acceptat: les línies sense decisió expressa s'accepten (tolerància acceptada).
         SizeCheckLine.objects.filter(size_check=sc, decisio__isnull=True).update(
             decisio='tolerancia_acceptada'
         )
@@ -199,8 +213,8 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
                 generate_graded_specs(sf.pk)   # llegeix base nova + regles residents
                 regradat = True
 
-        # GRAVAR finalitza la tasca Kanban size_check → Done. Gate TOU: si no existeix
-        # la tasca o la transició no és vàlida, NO peta.
+        # Finalitza la tasca Kanban size_check → Done. Gate TOU: si no existeix la tasca
+        # o la transició no és vàlida, NO peta.
         try:
             from fhort.tasks.models import ModelTask
             from fhort.tasks.services_c import transition_task
@@ -215,22 +229,54 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
         except Exception as e:
             logger.warning(f"SizeCheck {sc.pk}: no s'ha pogut finalitzar la tasca size_check: {e}")
 
-    # DESCARTAR (estat == 'Descartat'): NO toca línies, NO escriu CHECKED, NO regradua i NO
-    # finalitza la tasca (queda viva per mesurar més tard). El check queda com a constància.
+    # Rebutjat / Descartat: NO es propaga; la tasca queda viva. Si ve data_represa, reagenda.
+    reagendada = False
+    if final_estat in ('Rebutjat', 'Descartat') and data_represa:
+        reagendada = _reagenda_tasca_size_check(model, data_represa)
 
-    sc.estat = estat
+    sc.estat = final_estat
     sc.resolt_per = profile
     sc.resolt_at = timezone.now()
     sc.save(update_fields=['estat', 'resolt_per', 'resolt_at'])
 
     logger.info(
-        f"SizeCheck {sc.pk} resolved [{estat}]: {lines_accepted} accepted, {written} written, "
-        f"te_deltes={te_deltes} regradat={regradat} nova_version={nova_version} "
-        f"tasca_finalitzada={tasca_finalitzada}"
+        f"SizeCheck {sc.pk} resolved [{final_estat}] (req {estat}): descartades={descartades} "
+        f"propagat={propagat} written={written} regradat={regradat} nova_version={nova_version} "
+        f"tasca_finalitzada={tasca_finalitzada} reagendada={reagendada}"
     )
     return {
-        'estat': estat, 'written': written, 'lines_accepted': lines_accepted,
-        'base_changed': base_changed, 'te_deltes': te_deltes,
-        'regradat': regradat, 'nova_version': nova_version,
-        'tasca_finalitzada': tasca_finalitzada,
+        'estat': final_estat, 'propagat': propagat, 'descartades': descartades,
+        'written': written, 'lines_accepted': lines_accepted, 'base_changed': base_changed,
+        'te_deltes': te_deltes, 'regradat': regradat, 'nova_version': nova_version,
+        'tasca_finalitzada': tasca_finalitzada, 'reagendada': reagendada,
+        'data_represa': str(data_represa) if data_represa else None,
     }
+
+
+def _reagenda_tasca_size_check(model, data_represa) -> bool:
+    """Fixa la tasca size_check del model a `data_represa` al calendari laboral: planned_start
+    (08:00 del primer instant hàbil) + planned_end (+estimated o 60') + planned_locked, status
+    Pending. Gate tou: sense tasca o data invàlida → False (no peta)."""
+    import datetime as _dt
+    try:
+        from django.utils import timezone as djtz
+        from fhort.tasks.models import ModelTask
+        from fhort.planning.calendar_service import next_working_slot, add_working_minutes
+
+        task = (ModelTask.objects
+                .filter(model=model, task_type__code='size_check')
+                .exclude(status='Done').order_by('-id').first())
+        if task is None:
+            return False
+        d = _dt.date.fromisoformat(data_represa) if isinstance(data_represa, str) else data_represa
+        prof = task.assignee
+        naive_start = next_working_slot(prof, _dt.datetime.combine(d, _dt.time(8, 0)))
+        naive_end = add_working_minutes(prof, naive_start, task.estimated_minutes or 60)
+        task.planned_start = djtz.make_aware(naive_start)
+        task.planned_end = djtz.make_aware(naive_end)
+        task.planned_locked = True
+        task.save(update_fields=['planned_start', 'planned_end', 'planned_locked', 'updated_at'])
+        return True
+    except Exception as e:
+        logger.warning(f"SizeCheck reagenda: no s'ha pogut reagendar size_check del model {model.pk}: {e}")
+        return False

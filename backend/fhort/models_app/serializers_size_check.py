@@ -45,12 +45,15 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
     # SC-3: precheck per al front — si el model té deltes, en resoldre es propagarà el
     # grading i cal l'avís+confirma. Reusa el mateix helper que resolve_size_check.
     te_deltes = serializers.SerializerMethodField()
+    # SC-5: default per al modal de reagendar (avui + 5 dies LABORABLES, calendari d'empresa).
+    data_represa_default = serializers.SerializerMethodField()
 
     class Meta:
         model = SizeCheck
         fields = [
             'id', 'estat', 'talla_base_label', 'missatge_fabricant',
             'resolt_per_nom', 'resolt_at', 'created_at', 'model', 'lines', 'te_deltes',
+            'data_represa_default',
         ]
 
     def get_model(self, obj):
@@ -63,6 +66,14 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
     def get_te_deltes(self, obj):
         from .services_size_check import model_te_deltes
         return model_te_deltes(obj.model)
+
+    def get_data_represa_default(self, obj):
+        from django.utils import timezone
+        from fhort.planning.calendar_service import add_working_days
+        try:
+            return add_working_days(timezone.localdate(), 5).isoformat()
+        except Exception:
+            return None
 
     def get_lines(self, obj):
         from .models import BaseMeasurement

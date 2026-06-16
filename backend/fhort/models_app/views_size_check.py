@@ -61,12 +61,14 @@ class SizeCheckViewSet(mixins.RetrieveModelMixin,
 
     @action(detail=True, methods=['post'])
     def resolve(self, request, pk=None):
-        """POST /size-checks/<pk>/resolve/ {estat, missatge_fabricant} — resol el check."""
+        """POST /size-checks/<pk>/resolve/ {estat, missatge_fabricant, data_represa} — resol el check."""
         estat = request.data.get('estat')
         missatge = request.data.get('missatge_fabricant', '')
+        data_represa = request.data.get('data_represa') or None
         try:
             result = sc_services.resolve_size_check(
-                int(pk), estat, missatge, user_profile_id=_profile_id(request),
+                int(pk), estat, missatge,
+                user_profile_id=_profile_id(request), data_represa=data_represa,
             )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
