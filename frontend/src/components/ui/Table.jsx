@@ -1,15 +1,18 @@
+import { useTranslation } from 'react-i18next'
+
 export default function Table({ columns, data, onRowClick, loading, empty, loadingText }) {
+  const { t } = useTranslation()
   if (loading) {
     return (
-      <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-        {loadingText || 'Carregant...'}
+      <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
+        {loadingText || t('common.loading')}
       </div>
     )
   }
   if (!data || data.length === 0) {
     return (
-      <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-        {empty || 'No hi ha dades per mostrar.'}
+      <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
+        {empty || t('app.empty')}
       </div>
     )
   }
@@ -20,7 +23,7 @@ export default function Table({ columns, data, onRowClick, loading, empty, loadi
           {columns.map(col => (
             <th key={col.key} style={{
               padding: '0.7rem 1rem',
-              fontSize: 10, letterSpacing: '0.1em',
+              fontSize: 'var(--fs-label)', letterSpacing: '0.1em',
               textTransform: 'uppercase',
               color: 'var(--gray)', fontWeight: 400,
               borderBottom: '0.5px solid var(--gray-l)',
@@ -46,7 +49,7 @@ export default function Table({ columns, data, onRowClick, loading, empty, loadi
             {columns.map(col => (
               <td key={col.key} style={{
                 padding: '0.75rem 1rem',
-                fontSize: 12,
+                fontSize: 'var(--fs-body)',
                 textAlign: col.align || 'left',
                 ...col.cellStyle,
               }}>

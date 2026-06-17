@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useSearchParams } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { SizeSetDetail } from "../components/SizeSetDetail"
 import { SizingProfileSelector } from "../components/SizingProfileSelector"
 import SizeAuthoringDrawer from "../components/SizeAuthoringDrawer"
@@ -13,6 +14,7 @@ function readPrefill(p) {
 }
 
 export default function SizeLibrary() {
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const canConfigure = !!useAuthStore(s => s.user)?.capabilities?.includes('configure')
 
@@ -37,7 +39,7 @@ export default function SizeLibrary() {
       setMsg({ type: 'ok', text: d?.missatge })
     } catch (e) {
       if (e.response) {
-        setMsg({ type: 'error', text: e.response.data?.error || 'Error clonant el perfil' })
+        setMsg({ type: 'error', text: e.response.data?.error || t('size_library.clone_error') })
       } else {
         setMsg({ type: 'error', text: String(e) })
       }
@@ -49,24 +51,24 @@ export default function SizeLibrary() {
       {/* Header */}
       <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 18, fontWeight: 500, color: "#1d1d1b", margin: "0 0 4px" }}>
-            Size Library
+          <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, color: "var(--text-main)", margin: "0 0 4px" }}>
+            {t('nav.size_library')}
           </h1>
-          <div style={{ fontSize: 12, color: "#868685" }}>
-            Sistemes de talles, runs i grading disponibles per al teu catàleg.
+          <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-muted)" }}>
+            {t('size_library.subtitle')}
           </div>
         </div>
         {canConfigure && (
           <button
             onClick={() => { setDrawerPrefill(null); setDrawerOpen(true) }}
             style={{
-              padding: "8px 14px", borderRadius: 4, fontSize: 12, cursor: "pointer",
-              background: "#f5e6d0", color: "#c27a2a", border: "1px solid #c27a2a",
+              padding: "8px 14px", borderRadius: 4, fontSize: 'var(--fs-body)', cursor: "pointer",
+              background: "#f5e6d0", color: "var(--gold)", border: "1px solid var(--gold)",
               fontFamily: "IBM Plex Mono, monospace", whiteSpace: "nowrap",
               display: "inline-flex", alignItems: "center", gap: 6,
             }}
           >
-            <i className="ti ti-plus" style={{ fontSize: 13 }} /> Crear / Importar
+            <i className="ti ti-plus" style={{ fontSize: 13 }} /> {t('size_library.create_import')}
           </button>
         )}
       </div>
@@ -74,7 +76,7 @@ export default function SizeLibrary() {
       {/* Missatge global */}
       {msg && (
         <div style={{
-          padding: "8px 12px", marginBottom: 16, borderRadius: 4, fontSize: 11,
+          padding: "8px 12px", marginBottom: 16, borderRadius: 4, fontSize: 'var(--fs-body)',
           background: msg.type === 'ok' ? "#f0f9f0" : "#fff0f0",
           border: `1px solid ${msg.type === 'ok' ? "#c0dd97" : "#f09595"}`,
           color: msg.type === 'ok' ? "#3b6d11" : "#a32d2d",
@@ -97,7 +99,7 @@ export default function SizeLibrary() {
         {/* Panel de detall */}
         {detailProfileId && (
           <div style={{
-            border: "1px solid #e0d5c5", borderRadius: 8,
+            border: "1px solid var(--border)", borderRadius: 8,
             padding: "16px", background: "#fdf9f5",
             position: "sticky", top: 24,
             maxHeight: "calc(100vh - 120px)", overflowY: "auto",
@@ -122,7 +124,7 @@ export default function SizeLibrary() {
           setDrawerPrefill(null)
           clearPrefillParam()
           setSelectorKey(k => k + 1)
-          setMsg({ type: 'ok', text: 'Sistema de talles creat' })
+          setMsg({ type: 'ok', text: t('size_library.created') })
         }}
       />
     </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
@@ -38,9 +39,14 @@ export const PAGE_FORMATS = {
 
 export const FONT = 'IBM Plex Mono, monospace'
 export const COL = {
-  sidebar: '#f0dfc0', gold: '#c27a2a', goldPale: '#f5e6d0',
-  border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', bg: '#f5f0e8',
+  sidebar: '#f0dfc0', gold: 'var(--gold)', goldPale: '#f5e6d0',
+  border: 'var(--border)', textMain: 'var(--text-main)', textMuted: 'var(--text-muted)', bg: '#f5f0e8',
 }
+// Paleta LITERAL del canvas: Konva pinta sobre <canvas> via ctx.fillStyle i NO resol
+// CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
+// build*Primitives, Rects de fons/selecció, text_box, previews) DEUEN usar aquests literals,
+// no COL (que és per al DOM, on var() sí resol). Valors = mateixos hex que els tokens de :root.
+const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685' }
 
 const LAYER_ORDER = { template: 0, data: 1, free: 2 }
 // TS-4c — eines per "família" de creació (mateixa mecànica de drag).
@@ -87,7 +93,7 @@ function useImage(src) {
 // "primitives" {t:'r'|'t'|'l', ...}. Així no hi ha drift entre canvas i PDF.
 // Cos de text coherent amb el document: 9pt (= 3.175mm a 72dpi) ≈ 8px.
 const T_FONT = Math.round(3.175 * MM_TO_PX)   // ~8px (9pt)
-const T_FONT_CA = Math.round(2.5 * MM_TO_PX)  // ~6px (7pt) — subtítol nom_ca
+const T_FONT_CA = Math.round(2.8222 * MM_TO_PX)  // ~7px (8pt) — subtítol nom_ca (terra de domini 8pt)
 // TS-4c: alçada de fila derivada del contingut (2 línies + padding), no fixa.
 const T_ROW_PAD = 3   // px de padding vertical per línia
 const T_ROW_H = T_FONT + T_FONT_CA + T_ROW_PAD * 3   // dalt nom_en + entre + baix nom_ca
@@ -98,8 +104,8 @@ const T_VAL_W = 18 * MM_TO_PX     // valor per talla
 const T_DELTA_W = 16 * MM_TO_PX   // delta (Δ) — UNA sola columna (valor de GradingRule)
 const T_PAD = 2 * MM_TO_PX
 const TBL = {
-  HDR_BG: '#111827', HDR_TEXT: '#ffffff', ROW_EVEN: '#ffffff', ROW_ODD: '#f7f7f7',
-  ROW_BORDER: '#e0d5c5', OUTER: '#c27a2a', REF: '#dc2626', NOM: '#6b7280', VAL: '#1d1d1b',
+  HDR_BG: '#111827', HDR_TEXT: KONVA_COL.white, ROW_EVEN: KONVA_COL.white, ROW_ODD: '#f7f7f7',
+  ROW_BORDER: KONVA_COL.border, OUTER: KONVA_COL.gold, REF: '#dc2626', NOM: '#6b7280', VAL: KONVA_COL.textMain,
   BASE_BG: '#fdf6ee', DELTA: '#185fa5',
 }
 
@@ -136,7 +142,7 @@ function buildTablePrimitives(d) {
     const isBase = sl === baseSize
     // Cel·la de capçalera de la talla base: fons gold + text blanc.
     if (isBase) prims.push({ t: 'r', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, fill: TBL.OUTER })
-    prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: isBase ? `${sl}*` : sl, fill: isBase ? '#ffffff' : TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
+    prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: isBase ? `${sl}*` : sl, fill: isBase ? KONVA_COL.white : TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
   })
   prims.push({ t: 't', x: deltaX0, y: 0, w: T_DELTA_W, h: T_HDR_H, text: 'Δ', fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
 
@@ -183,7 +189,7 @@ export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLog
   const B1 = 20 * MM_TO_PX, B2 = 12 * MM_TO_PX
   const totalH = B1 + B2
   const PAD = 2 * MM_TO_PX
-  const PH = '#868685'   // color dels placeholders (--text-muted)
+  const PH = KONVA_COL.textMuted   // color dels placeholders (literal: Konva no fa CSS)
   // En mode plantilla cada camp és un placeholder en cursiva i gris.
   const f = {
     codi: placeholderMode ? '{model.codi}' : (m?.codi_intern || ''),
@@ -195,14 +201,14 @@ export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLog
     resp: placeholderMode ? '{responsable}' : (m?.responsable_nom || ''),
     versio: placeholderMode ? '{versió}' : `v${versio ?? 1}`,
   }
-  const main = '#1d1d1b'
+  const main = KONVA_COL.textMain
   const prims = []
-  prims.push({ t: 'r', x: 0, y: 0, w: W, h: B1, fill: '#f5e6d0', stroke: '#c27a2a', sw: 1 })
+  prims.push({ t: 'r', x: 0, y: 0, w: W, h: B1, fill: '#f5e6d0', stroke: KONVA_COL.gold, sw: 1 })
   prims.push({ t: 't', x: PAD, y: 0, w: W * 0.4 - PAD, h: B1, text: [f.codi, f.nom].filter(Boolean).join(' · '), fill: placeholderMode ? PH : main, size: Math.round(9 * MM_TO_PX), bold: !placeholderMode, italic: placeholderMode, mid: true })
-  prims.push({ t: 't', x: W * 0.4, y: 0, w: W * 0.42, h: B1, text: [m?.customer_nom, f.temporada, f.collection].filter(Boolean).join(' · '), fill: placeholderMode ? PH : '#1d1d1b', italic: placeholderMode, size: Math.round(7 * MM_TO_PX), align: 'center', mid: true })
+  prims.push({ t: 't', x: W * 0.4, y: 0, w: W * 0.42, h: B1, text: [m?.customer_nom, f.temporada, f.collection].filter(Boolean).join(' · '), fill: placeholderMode ? PH : KONVA_COL.textMain, italic: placeholderMode, size: Math.round(7 * MM_TO_PX), align: 'center', mid: true })
   // Placeholder "(logo)" només si NO hi ha logo real (es pinta a sobre com a imatge).
-  if (!hasLogo) prims.push({ t: 't', x: W * 0.82, y: 0, w: W * 0.18 - PAD, h: B1, text: '(logo)', fill: '#868685', size: Math.round(7 * MM_TO_PX), align: 'right', mid: true })
-  prims.push({ t: 'r', x: 0, y: B1, w: W, h: B2, fill: '#fafafa', stroke: '#e0d5c5', sw: 1 })
+  if (!hasLogo) prims.push({ t: 't', x: W * 0.82, y: 0, w: W * 0.18 - PAD, h: B1, text: '(logo)', fill: KONVA_COL.textMuted, size: Math.round(7 * MM_TO_PX), align: 'right', mid: true })
+  prims.push({ t: 'r', x: 0, y: B1, w: W, h: B2, fill: '#fafafa', stroke: KONVA_COL.border, sw: 1 })
   const line2 = [f.tipus, f.sizesys, f.resp, f.versio].filter(Boolean).join(' · ')
   prims.push({ t: 't', x: PAD, y: B1, w: W - 2 * PAD, h: B2, text: line2, fill: placeholderMode ? PH : '#6b7280', italic: placeholderMode, size: Math.round(6.5 * MM_TO_PX), mid: true })
   return { prims, totalW: W, totalH }
@@ -256,7 +262,7 @@ function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, groupProps, 
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
       {hasLogo && <KonvaImage image={logoImg} x={totalW - 45 * MM_TO_PX} y={2 * MM_TO_PX} width={40 * MM_TO_PX} height={16 * MM_TO_PX} listening={false} />}
-      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke="#c27a2a" strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
+      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={KONVA_COL.gold} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
   )
 }
@@ -271,7 +277,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
   const stage = new Konva.Stage({ container, width: pageW, height: pageH })
   const layer = new Konva.Layer()
   stage.add(layer)
-  layer.add(new Konva.Rect({ x: 0, y: 0, width: pageW, height: pageH, fill: '#ffffff' }))
+  layer.add(new Konva.Rect({ x: 0, y: 0, width: pageW, height: pageH, fill: KONVA_COL.white }))
   const ordered = [...(page.objects || [])].sort(
     (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   for (const o of ordered) {
@@ -284,29 +290,29 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
       layer.add(new Konva.Text({
         x: toPx(o.x), y: toPx(o.y), width: o.width ? toPx(o.width) : undefined,
         text: o.text || '', fontSize: o.fontSize || 11, fontFamily: o.fontFamily || FONT,
-        fontStyle: o.fontStyle || 'normal', fill: o.fill || COL.textMain,
+        fontStyle: o.fontStyle || 'normal', fill: o.fill || KONVA_COL.textMain,
       }))
     } else if (o.type === 'rect') {
       layer.add(new Konva.Rect({
         x: toPx(o.x), y: toPx(o.y), width: toPx(o.width), height: toPx(o.height),
         fill: o.fill && o.fill !== 'transparent' ? o.fill : undefined,
-        stroke: o.stroke || COL.gold, strokeWidth: o.strokeWidth || 1, cornerRadius: o.cornerRadius || 0,
+        stroke: o.stroke || KONVA_COL.gold, strokeWidth: o.strokeWidth || 1, cornerRadius: o.cornerRadius || 0,
       }))
     } else if (o.type === 'ellipse') {
       layer.add(new Konva.Ellipse({
         x: toPx(o.x), y: toPx(o.y), radiusX: toPx(o.rx), radiusY: toPx(o.ry),
         fill: o.fill && o.fill !== 'transparent' ? o.fill : undefined,
-        stroke: o.stroke || COL.textMain, strokeWidth: o.strokeWidth || 1.5,
+        stroke: o.stroke || KONVA_COL.textMain, strokeWidth: o.strokeWidth || 1.5,
       }))
     } else if (o.type === 'line') {
       layer.add(new Konva.Line({
-        points: (o.points || []).map(toPx), stroke: o.stroke || COL.textMain,
+        points: (o.points || []).map(toPx), stroke: o.stroke || KONVA_COL.textMain,
         strokeWidth: o.strokeWidth || 1, dash: o.dash || undefined, lineCap: 'round', lineJoin: 'round',
       }))
     } else if (o.type === 'arrow') {
       layer.add(new Konva.Arrow({
         points: [toPx(o.x), toPx(o.y), toPx(o.x2), toPx(o.y2)],
-        stroke: o.stroke || COL.textMain, fill: o.fill || o.stroke || COL.textMain,
+        stroke: o.stroke || KONVA_COL.textMain, fill: o.fill || o.stroke || KONVA_COL.textMain,
         strokeWidth: o.strokeWidth || 1.5, pointerLength: 8, pointerWidth: 6, pointerAtBeginning: !!o.arrow2,
       }))
     } else if (o.type === 'data_block') {
@@ -362,7 +368,7 @@ function ImageObj({ obj, src, common }) {
   if (!img) {
     // Placeholder mentre carrega / si falla.
     return <Rect {...common} width={toPx(obj.width)} height={toPx(obj.height || obj.width)}
-      fill={COL.goldPale} stroke={COL.border} dash={[4, 4]} />
+      fill={COL.goldPale} stroke={KONVA_COL.border} dash={[4, 4]} />
   }
   return <KonvaImage {...common} image={img}
     width={toPx(obj.width)} height={toPx(obj.height || obj.width)} />
@@ -386,8 +392,8 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     if (!data) {
       return (
         <Group {...common}>
-          <Rect width={toPx(obj.width || 120)} height={toPx(obj.height || 40)} fill={COL.goldPale} stroke={COL.border} dash={[4, 4]} />
-          <Text x={6} y={6} text={data === null ? 'Sense grading actiu' : 'Carregant taula…'} fontSize={12} fontFamily={FONT} fill={COL.textMuted} listening={false} />
+          <Rect width={toPx(obj.width || 120)} height={toPx(obj.height || 40)} fill={COL.goldPale} stroke={KONVA_COL.border} dash={[4, 4]} />
+          <Text x={6} y={6} text={data === null ? 'Sense grading actiu' : 'Carregant taula…'} fontSize={12} fontFamily={FONT} fill={KONVA_COL.textMuted} listening={false} />
         </Group>
       )
     }
@@ -401,34 +407,34 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
         <Group {...common} onDblClick={onDblText} onDblTap={onDblText}>
           <Rect x={-pad} y={-pad} width={w + pad * 2} height={fs * 1.6 + pad * 2} fill={obj.bgFill} cornerRadius={3} />
           <Text text={obj.text || ''} width={w} fontSize={fs} fontFamily={obj.fontFamily || FONT}
-            fontStyle={obj.fontStyle || 'normal'} fill={obj.fill || COL.textMain} listening={false} />
+            fontStyle={obj.fontStyle || 'normal'} fill={obj.fill || KONVA_COL.textMain} listening={false} />
         </Group>
       )
     }
     return <Text {...common} text={obj.text || ''} width={obj.width ? toPx(obj.width) : undefined}
       fontSize={obj.fontSize || 11} fontFamily={obj.fontFamily || FONT} fontStyle={obj.fontStyle || 'normal'}
-      fill={obj.fill || COL.textMain}
+      fill={obj.fill || KONVA_COL.textMain}
       onDblClick={onDblText} onDblTap={onDblText} />
   }
   if (obj.type === 'rect') {
     return <Rect {...common} width={toPx(obj.width)} height={toPx(obj.height)}
       fill={obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined}
-      stroke={obj.stroke || COL.gold} strokeWidth={obj.strokeWidth || 1} cornerRadius={obj.cornerRadius || 0} />
+      stroke={obj.stroke || KONVA_COL.gold} strokeWidth={obj.strokeWidth || 1} cornerRadius={obj.cornerRadius || 0} />
   }
   if (obj.type === 'ellipse') {
     return <Ellipse {...common} radiusX={toPx(obj.rx)} radiusY={toPx(obj.ry)}
       fill={obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined}
-      stroke={obj.stroke || COL.textMain} strokeWidth={obj.strokeWidth || 1.5} />
+      stroke={obj.stroke || KONVA_COL.textMain} strokeWidth={obj.strokeWidth || 1.5} />
   }
   if (obj.type === 'line') {
     return <Line {...common} x={0} y={0} points={(obj.points || []).map(toPx)}
-      stroke={obj.stroke || COL.textMain} strokeWidth={obj.strokeWidth || 1} dash={obj.dash || undefined}
+      stroke={obj.stroke || KONVA_COL.textMain} strokeWidth={obj.strokeWidth || 1} dash={obj.dash || undefined}
       lineCap="round" lineJoin="round" hitStrokeWidth={10} />
   }
   if (obj.type === 'arrow') {
     return <Arrow {...common} x={0} y={0}
       points={[toPx(obj.x), toPx(obj.y), toPx(obj.x2), toPx(obj.y2)]}
-      stroke={obj.stroke || COL.textMain} fill={obj.fill || obj.stroke || COL.textMain}
+      stroke={obj.stroke || KONVA_COL.textMain} fill={obj.fill || obj.stroke || KONVA_COL.textMain}
       strokeWidth={obj.strokeWidth || 1.5} pointerLength={8} pointerWidth={6}
       pointerAtBeginning={!!obj.arrow2} hitStrokeWidth={10} />
   }
@@ -440,6 +446,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
 
 // ════════════════════════════════ Component ═════════════════════════════════
 export default function TechSheetEditor() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -727,8 +734,8 @@ export default function TechSheetEditor() {
       const obj = {
         id: uid(), type: 'text', layer: 'free', x: toMm(pos.x), y: toMm(pos.y),
         width: 120, height: 30, text: 'Doble clic per editar', fontSize: 11,
-        fontFamily: FONT, fill: COL.textMain,
-        ...(tool === 'text_box' ? { bgFill: '#ffffff', bgPadding: 4 } : {}),
+        fontFamily: FONT, fill: KONVA_COL.textMain,
+        ...(tool === 'text_box' ? { bgFill: KONVA_COL.white, bgPadding: 4 } : {}),
       }
       addObject(obj); setTool('select'); return
     }
@@ -761,17 +768,17 @@ export default function TechSheetEditor() {
     if (d.type === 'rect' || d.type === 'rect_round') {
       const x = Math.min(d.startX, pos.x), y = Math.min(d.startY, pos.y)
       const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
-      if (w > 3 && h > 3) obj = { ...base, type: 'rect', x: toMm(x), y: toMm(y), width: toMm(w), height: toMm(h), fill: 'transparent', stroke: COL.gold, strokeWidth: 1, ...(d.type === 'rect_round' ? { cornerRadius: 8 } : {}) }
+      if (w > 3 && h > 3) obj = { ...base, type: 'rect', x: toMm(x), y: toMm(y), width: toMm(w), height: toMm(h), fill: 'transparent', stroke: KONVA_COL.gold, strokeWidth: 1, ...(d.type === 'rect_round' ? { cornerRadius: 8 } : {}) }
     } else if (d.type === 'ellipse') {
       const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
-      if (w > 3 && h > 3) obj = { ...base, type: 'ellipse', x: toMm((d.startX + pos.x) / 2), y: toMm((d.startY + pos.y) / 2), rx: toMm(w / 2), ry: toMm(h / 2), stroke: COL.textMain, strokeWidth: 1.5, fill: 'transparent' }
+      if (w > 3 && h > 3) obj = { ...base, type: 'ellipse', x: toMm((d.startX + pos.x) / 2), y: toMm((d.startY + pos.y) / 2), rx: toMm(w / 2), ry: toMm(h / 2), stroke: KONVA_COL.textMain, strokeWidth: 1.5, fill: 'transparent' }
     } else if (d.type === 'line' || d.type === 'line_dot') {
-      obj = { ...base, type: 'line', x: 0, y: 0, points: [toMm(d.startX), toMm(d.startY), toMm(pos.x), toMm(pos.y)], stroke: COL.textMain, strokeWidth: 1, ...(d.type === 'line_dot' ? { dash: [4, 4] } : {}) }
+      obj = { ...base, type: 'line', x: 0, y: 0, points: [toMm(d.startX), toMm(d.startY), toMm(pos.x), toMm(pos.y)], stroke: KONVA_COL.textMain, strokeWidth: 1, ...(d.type === 'line_dot' ? { dash: [4, 4] } : {}) }
     } else if (d.type === 'arrow' || d.type === 'arrow2') {
       const dist = Math.hypot(pos.x - d.startX, pos.y - d.startY)
-      if (dist > 5) obj = { ...base, type: 'arrow', x: toMm(d.startX), y: toMm(d.startY), x2: toMm(pos.x), y2: toMm(pos.y), stroke: COL.textMain, fill: COL.textMain, strokeWidth: 1.5, ...(d.type === 'arrow2' ? { arrow2: true } : {}) }
+      if (dist > 5) obj = { ...base, type: 'arrow', x: toMm(d.startX), y: toMm(d.startY), x2: toMm(pos.x), y2: toMm(pos.y), stroke: KONVA_COL.textMain, fill: KONVA_COL.textMain, strokeWidth: 1.5, ...(d.type === 'arrow2' ? { arrow2: true } : {}) }
     } else if (d.type === 'draw') {
-      if (d.points.length >= 4) obj = { ...base, type: 'line', x: 0, y: 0, points: d.points.map(toMm), stroke: COL.textMain, strokeWidth: 1 }
+      if (d.points.length >= 4) obj = { ...base, type: 'line', x: 0, y: 0, points: d.points.map(toMm), stroke: KONVA_COL.textMain, strokeWidth: 1 }
     }
     setDrawTemp(null)
     if (obj) { addObject(obj); setTool('select') }
@@ -809,7 +816,7 @@ export default function TechSheetEditor() {
   // Insereix el logo del client com a imatge lliure (redimensionable). TS-4c.
   const insertLogo = () => {
     if (!locked) return
-    if (!customerLogoUrl) { flash('Aquest client no té logo. Puja\'l des de Clients.'); return }
+    if (!customerLogoUrl) { flash(t('tech_sheet.flash_no_logo')); return }
     addObject({ id: uid(), type: 'image', kind: 'logo', layer: 'free', x: 10, y: 8, width: 40, height: 20, src: customerLogoUrl })
   }
   const addModelFitxer = async (f) => {
@@ -836,9 +843,9 @@ export default function TechSheetEditor() {
     setAddingTable(true)
     try {
       const r = await fetch(`${API}/api/v1/fitting/${sfId}/graded-table/`, { headers: authHeaders })
-      if (!r.ok) { flash('Aquest size fitting no té grading actiu.'); return }
+      if (!r.ok) { flash(t('tech_sheet.flash_no_grading')); return }
       const data = await r.json()
-      if (!data.rows || !data.rows.length) { flash('Taula buida.'); return }
+      if (!data.rows || !data.rows.length) { flash(t('tech_sheet.flash_empty_table')); return }
       const { totalW, totalH } = buildTablePrimitives(data)
       // Auto-fit a l'àrea útil del format actual (marge 10mm per costat); el factor es
       // persisteix com a obj.scale (i és reajustable manualment via el panell).
@@ -865,7 +872,7 @@ export default function TechSheetEditor() {
   const insertHeader = () => {
     if (!locked) return
     if (objectsOf(currentPage).some(o => o.type === 'data_block' && o.kind === 'header')) {
-      flash('Ja hi ha una capçalera en aquesta pàgina.'); return
+      flash(t('tech_sheet.flash_header_exists')); return
     }
     const { totalW, totalH } = buildHeaderPrimitives(model, sheet?.versio)
     addObject({
@@ -882,7 +889,7 @@ export default function TechSheetEditor() {
   }
   const removePage = (index) => {
     if (!locked || pages.length <= 1) return
-    if (!window.confirm('Esborrar aquesta pàgina?')) return
+    if (!window.confirm(t('tech_sheet.confirm_delete_page'))) return
     setPages(ps => ps.filter((_, i) => i !== index))
     setCurrentPage(ci => Math.min(ci, pages.length - 2))
     setSelectedId(null)
@@ -915,16 +922,16 @@ export default function TechSheetEditor() {
 
   // ── UI ───────────────────────────────────────────────────────────────────
   const badge = (() => {
-    if (lockState === 'loading') return { text: 'Carregant…', bg: COL.bg, fg: COL.textMuted }
-    if (lockState === 'readonly') return { text: 'Mode consulta', bg: COL.bg, fg: COL.textMuted }
-    if (lockState === 'owned') return { text: 'Editant', bg: COL.gold, fg: '#fff' }
-    if (lockState === 'conflict') return { text: `Bloquejada per ${conflict?.locked_by || 'un altre usuari'}`, bg: COL.bg, fg: COL.textMuted }
-    return { text: 'Error de bloqueig', bg: COL.bg, fg: COL.textMuted }
+    if (lockState === 'loading') return { text: t('model_sheet.loading'), bg: COL.bg, fg: COL.textMuted }
+    if (lockState === 'readonly') return { text: t('tech_sheet.badge_readonly'), bg: COL.bg, fg: COL.textMuted }
+    if (lockState === 'owned') return { text: t('tech_sheet.badge_editing'), bg: COL.gold, fg: 'var(--white)' }
+    if (lockState === 'conflict') return { text: t('tech_sheet.badge_locked_by', { user: conflict?.locked_by || t('tech_sheet.another_user') }), bg: COL.bg, fg: COL.textMuted }
+    return { text: t('tech_sheet.badge_lock_error'), bg: COL.bg, fg: COL.textMuted }
   })()
-  const saveLabel = saveState === 'saving' ? 'Desant…' : saveState === 'saved' ? 'Desat ✓' : saveState === 'error' ? 'Error desant' : null
+  const saveLabel = saveState === 'saving' ? t('tech_sheet.saving') : saveState === 'saved' ? t('tech_sheet.saved') : saveState === 'error' ? t('tech_sheet.save_error') : null
 
   const headerBtn = {
-    display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '5px 10px',
+    display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '5px 10px',
     borderRadius: 6, border: `1px solid ${COL.border}`, background: 'transparent',
     cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
@@ -934,47 +941,47 @@ export default function TechSheetEditor() {
 
   // Eines agrupades en desplegables (TS-4c). 'select' és standalone.
   const TOOL_GROUPS = [
-    { g: 'shapes', icon: 'ti-shape', label: 'Formes', tools: [
-      { k: 'rect', icon: 'ti-square', label: 'Rectangle' },
-      { k: 'rect_round', icon: 'ti-square-rounded', label: 'Rectangle arrodonit' },
-      { k: 'ellipse', icon: 'ti-circle', label: 'El·lipse' },
+    { g: 'shapes', icon: 'ti-shape', label: t('tech_sheet.tool_group_shapes'), tools: [
+      { k: 'rect', icon: 'ti-square', label: t('tech_sheet.tool_rect') },
+      { k: 'rect_round', icon: 'ti-square-rounded', label: t('tech_sheet.tool_rect_round') },
+      { k: 'ellipse', icon: 'ti-circle', label: t('tech_sheet.tool_ellipse') },
     ] },
-    { g: 'draw', icon: 'ti-pencil', label: 'Dibuix', tools: [
-      { k: 'line', icon: 'ti-minus', label: 'Línia' },
-      { k: 'line_dot', icon: 'ti-line-dashed', label: 'Línia de punts' },
-      { k: 'arrow', icon: 'ti-arrow-right', label: 'Fletxa →' },
-      { k: 'arrow2', icon: 'ti-arrows-horizontal', label: 'Fletxa ↔' },
-      { k: 'draw', icon: 'ti-scribble', label: 'Lliure' },
+    { g: 'draw', icon: 'ti-pencil', label: t('tech_sheet.tool_group_draw'), tools: [
+      { k: 'line', icon: 'ti-minus', label: t('tech_sheet.tool_line') },
+      { k: 'line_dot', icon: 'ti-line-dashed', label: t('tech_sheet.tool_line_dot') },
+      { k: 'arrow', icon: 'ti-arrow-right', label: t('tech_sheet.tool_arrow') },
+      { k: 'arrow2', icon: 'ti-arrows-horizontal', label: t('tech_sheet.tool_arrow2') },
+      { k: 'draw', icon: 'ti-scribble', label: t('tech_sheet.tool_draw') },
     ] },
-    { g: 'text', icon: 'ti-typography', label: 'Text', tools: [
-      { k: 'text', icon: 'ti-cursor-text', label: 'Text' },
-      { k: 'text_box', icon: 'ti-text-caption', label: 'Text amb fons' },
+    { g: 'text', icon: 'ti-typography', label: t('tech_sheet.tool_group_text'), tools: [
+      { k: 'text', icon: 'ti-cursor-text', label: t('tech_sheet.tool_text') },
+      { k: 'text_box', icon: 'ti-text-caption', label: t('tech_sheet.tool_text_box') },
     ] },
   ]
-  const activeTool = (grp) => grp.tools.some(t => t.k === tool)
+  const activeTool = (grp) => grp.tools.some(tl => tl.k === tool)
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: '#faf7f2', fontFamily: FONT }}>
       {/* ── Topbar ── */}
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.7rem 1.2rem', borderBottom: `1px solid #e3cfa3`, background: COL.sidebar, color: COL.textMain }}>
         <button onClick={() => navigate(`/models/${id}`)} style={headerBtn}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> Tornar al model
+          <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('tech_sheet.back_to_model')}
         </button>
         <button onClick={onExport} disabled={exporting}
-          style={{ ...headerBtn, background: COL.gold, border: 'none', color: '#fff', opacity: exporting ? 0.5 : 1 }}>
-          <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? 'Exportant…' : 'Exportar PDF'}
+          style={{ ...headerBtn, background: COL.gold, border: 'none', color: 'var(--white)', opacity: exporting ? 0.5 : 1 }}>
+          <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? t('tech_sheet.exporting') : t('tech_sheet.export_pdf')}
         </button>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>
+        <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 600 }}>
           {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
         </span>
-        <span style={{ fontSize: 11, color: COL.textMuted }}>Pàgina {currentPage + 1} de {pages.length}</span>
-        {saveLabel && <span style={{ fontSize: 11, color: COL.textMuted }}>{saveLabel}</span>}
-        {notice && <span style={{ fontSize: 11, color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
+        <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
+        {saveLabel && <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{saveLabel}</span>}
+        {notice && <span style={{ fontSize: 'var(--fs-body)', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
 
         {/* Eines (només en edició): select + grups desplegables + imatge */}
         {locked && (
           <div ref={toolbarRef} style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
-            <button onClick={() => { setTool('select'); setOpenGroup(null) }} title="Seleccionar"
+            <button onClick={() => { setTool('select'); setOpenGroup(null) }} title={t('tech_sheet.tool_select')}
               style={{ ...headerBtn, padding: '5px 8px', borderColor: tool === 'select' ? COL.gold : COL.border, background: tool === 'select' ? COL.goldPale : 'transparent', color: tool === 'select' ? COL.gold : COL.textMain }}>
               <i className="ti ti-pointer" style={{ fontSize: 15 }} />
             </button>
@@ -988,11 +995,11 @@ export default function TechSheetEditor() {
                     <i className="ti ti-chevron-down" style={{ fontSize: 10 }} />
                   </button>
                   {openGroup === grp.g && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff', border: `1px solid ${COL.border}`, borderRadius: 6, zIndex: 50, minWidth: 160, boxShadow: '0 2px 8px rgba(0,0,0,.08)', overflow: 'hidden' }}>
-                      {grp.tools.map(t => (
-                        <button key={t.k} onClick={() => { setTool(t.k); setOpenGroup(null) }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: tool === t.k ? COL.goldPale : 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: FONT, color: COL.textMain }}>
-                          <i className={`ti ${t.icon}`} style={{ fontSize: 14 }} />{t.label}
+                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, zIndex: 50, minWidth: 160, boxShadow: '0 2px 8px rgba(0,0,0,.08)', overflow: 'hidden' }}>
+                      {grp.tools.map(tl => (
+                        <button key={tl.k} onClick={() => { setTool(tl.k); setOpenGroup(null) }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: tool === tl.k ? COL.goldPale : 'transparent', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-body)', fontFamily: FONT, color: COL.textMain }}>
+                          <i className={`ti ${tl.icon}`} style={{ fontSize: 14 }} />{tl.label}
                         </button>
                       ))}
                     </div>
@@ -1000,7 +1007,7 @@ export default function TechSheetEditor() {
                 </div>
               )
             })}
-            <button onClick={() => fileRef.current?.click()} title="Imatge" style={{ ...headerBtn, padding: '5px 8px' }}>
+            <button onClick={() => fileRef.current?.click()} title={t('tech_sheet.tool_image')} style={{ ...headerBtn, padding: '5px 8px' }}>
               <i className="ti ti-photo" style={{ fontSize: 15 }} />
             </button>
             <input ref={fileRef} type="file" accept="image/*" hidden
@@ -1010,11 +1017,11 @@ export default function TechSheetEditor() {
 
         {/* Format de pàgina (tot el document) */}
         <select value={pageFormat} onChange={e => setPageFormat(e.target.value)} disabled={!locked}
-          title="Format de pàgina" style={{ ...headerBtn, padding: '5px 8px', marginLeft: locked ? 0 : 16, cursor: locked ? 'pointer' : 'default' }}>
+          title={t('tech_sheet.page_format')} style={{ ...headerBtn, padding: '5px 8px', marginLeft: locked ? 0 : 16, cursor: locked ? 'pointer' : 'default' }}>
           {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
 
-        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>
           v{sheet?.versio ?? 1} · {badge.text}
         </span>
       </header>
@@ -1022,19 +1029,19 @@ export default function TechSheetEditor() {
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* ── Esquerra: pàgines ── */}
         <div style={{ width: 96, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', padding: '8px 5px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ color: COL.gold, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pàgines</div>
+          <div style={{ color: COL.gold, fontSize: 'var(--fs-caption)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tech_sheet.pages')}</div>
           {locked && (
-            <button onClick={addPage} style={{ fontSize: 9, padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>+ Pàgina</button>
+            <button onClick={addPage} style={{ fontSize: 'var(--fs-caption)', padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>{t('tech_sheet.add_page')}</button>
           )}
           {pages.map((p, i) => (
             <div key={p.id} onClick={() => { setCurrentPage(i); setSelectedId(null) }} style={{ position: 'relative', cursor: 'pointer' }}>
-              <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: '#fff', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
-                {thumbnails[i] && <img src={thumbnails[i]} alt={`Pàg ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
+              <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
+                {thumbnails[i] && <img src={thumbnails[i]} alt={t('tech_sheet.page_n', { n: i + 1 })} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
               </div>
-              <div style={{ fontSize: 9, color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>Pàg. {i + 1}</div>
+              <div style={{ fontSize: 'var(--fs-caption)', color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>{t('tech_sheet.page_n', { n: i + 1 })}</div>
               {locked && pages.length > 1 && (
-                <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title="Eliminar pàgina"
-                  style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: '#fff', border: 'none', fontSize: 9, lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
+                <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title={t('tech_sheet.delete_page')}
+                  style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 'var(--fs-caption)', lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
               )}
             </div>
           ))}
@@ -1043,18 +1050,18 @@ export default function TechSheetEditor() {
         {/* ── Centre: Stage Konva ── */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COL.bg, minWidth: 0, overflow: 'auto', position: 'relative' }}>
           {lockState === 'readonly' && (
-            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: '#fff', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 11, color: COL.textMuted }}>
-              <i className="ti ti-eye" style={{ marginRight: 6 }} />Mode consulta — només lectura
+            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-body)', color: COL.textMuted }}>
+              <i className="ti ti-eye" style={{ marginRight: 6 }} />{t('tech_sheet.readonly_overlay')}
             </div>
           )}
           <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()}
-            style={{ position: 'relative', width: pageW, height: pageH, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: '#fff', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
+            style={{ position: 'relative', width: pageW, height: pageH, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: 'var(--white)', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
             <Stage ref={stageRef} width={pageW} height={pageH}
               onMouseDown={onStageMouseDown} onMouseMove={onStageMouseMove} onMouseUp={onStageMouseUp}>
               {/* Fons blanc + 3 capes en ordre z. Konva no agrupa per `layer`:
                   ordenem els objectes i pintem en una sola Layer (z per ordre d'array). */}
               <Layer>
-                <Rect x={0} y={0} width={pageW} height={pageH} fill="#ffffff" listening={false} />
+                <Rect x={0} y={0} width={pageW} height={pageH} fill={KONVA_COL.white} listening={false} />
                 {ordered.map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
@@ -1067,10 +1074,10 @@ export default function TechSheetEditor() {
                     onDblText={() => startTextEdit(o)} />
                 ))}
                 {/* Forma temporal mentre es dibuixa */}
-                {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}
-                {drawTemp?.type === 'ellipse' && <Ellipse x={drawTemp.x + drawTemp.w / 2} y={drawTemp.y + drawTemp.h / 2} radiusX={drawTemp.w / 2} radiusY={drawTemp.h / 2} stroke={COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
-                {(drawTemp?.type === 'line' || drawTemp?.type === 'line_dot' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
-                {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={COL.textMain} fill={COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
+                {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}
+                {drawTemp?.type === 'ellipse' && <Ellipse x={drawTemp.x + drawTemp.w / 2} y={drawTemp.y + drawTemp.h / 2} radiusX={drawTemp.w / 2} radiusY={drawTemp.h / 2} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
+                {(drawTemp?.type === 'line' || drawTemp?.type === 'line_dot' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
+                {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={KONVA_COL.textMain} fill={KONVA_COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
                 <Transformer ref={trRef} rotateEnabled={false} ignoreStroke keepRatio={selObj?.type === 'data_block'}
                   boundBoxFunc={(oldB, newB) => (newB.width < 10 || newB.height < 10 ? oldB : newB)} />
               </Layer>
@@ -1083,7 +1090,7 @@ export default function TechSheetEditor() {
                 onChange={e => setEditingText(s => ({ ...s, value: e.target.value }))}
                 onBlur={commitTextEdit}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitTextEdit() } if (e.key === 'Escape') setEditingText(null) }}
-                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 11, color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: '#fff', zIndex: 10 }}
+                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 'var(--fs-body)', color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: 'var(--white)', zIndex: 10 }}
               />
             )}
           </div>
@@ -1093,32 +1100,32 @@ export default function TechSheetEditor() {
         <aside style={{ width: 180, flexShrink: 0, borderLeft: `1px solid ${COL.border}`, background: COL.bg, display: 'flex', flexDirection: 'column', minHeight: 0, fontFamily: FONT }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
             {/* Inserir blocs de dades */}
-            <SectionTitle>Inserir bloc de dades</SectionTitle>
+            <SectionTitle>{t('tech_sheet.insert_data_block')}</SectionTitle>
             <button onClick={insertHeader} disabled={!locked}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: '#fff', fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
-              <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> Capçalera del model
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
+              <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> {t('tech_sheet.model_header')}
             </button>
             <button onClick={insertLogo} disabled={!locked}
-              title={customerLogoUrl ? 'Insereix el logo del client' : 'Aquest client no té logo'}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
-              <i className="ti ti-photo" style={{ fontSize: 13 }} /> Logo client
+              title={customerLogoUrl ? t('tech_sheet.insert_logo_title') : t('tech_sheet.no_logo_title')}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
+              <i className="ti ti-photo" style={{ fontSize: 13 }} /> {t('tech_sheet.client_logo')}
             </button>
             <button onClick={onAddTableClick} disabled={!locked || addingTable || !sizeFittings.length}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: '#fff', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>
-              <i className="ti ti-table" style={{ fontSize: 13 }} /> {addingTable ? 'Afegint…' : 'Taula graduada'}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>
+              <i className="ti ti-table" style={{ fontSize: 13 }} /> {addingTable ? t('tech_sheet.adding') : t('tech_sheet.graded_table')}
             </button>
-            {!sizeFittings.length && <p style={{ fontSize: 10, color: COL.textMuted, margin: '0 0 8px' }}>Cap size fitting.</p>}
+            {!sizeFittings.length && <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.no_size_fitting')}</p>}
 
             {/* Fitxers del model */}
-            <SectionTitle>Fitxers del model ({fitxers.length})</SectionTitle>
+            <SectionTitle>{t('tech_sheet.model_files', { n: fitxers.length })}</SectionTitle>
             {fitxers.length === 0 ? (
-              <p style={{ fontSize: 10, color: COL.textMuted }}>Cap fitxer.</p>
+              <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>{t('tech_sheet.no_files')}</p>
             ) : fitxers.map(f => {
               const hasUrl = !!(f.url_extern || f.fitxer)
               return (
                 <button key={f.id} onClick={() => addModelFitxer(f)} disabled={!hasUrl || !locked}
                   title={f.nom_fitxer}
-                  style={{ width: '100%', textAlign: 'left', fontSize: 10, padding: '5px 6px', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 4, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: (!hasUrl || !locked) ? 'default' : 'pointer', opacity: (!hasUrl || !locked) ? 0.5 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  style={{ width: '100%', textAlign: 'left', fontSize: 'var(--fs-label)', padding: '5px 6px', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 4, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: (!hasUrl || !locked) ? 'default' : 'pointer', opacity: (!hasUrl || !locked) ? 0.5 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   <i className="ti ti-photo-plus" style={{ fontSize: 11, marginRight: 5 }} />{f.nom_fitxer}
                 </button>
               )
@@ -1127,41 +1134,41 @@ export default function TechSheetEditor() {
             {/* Propietats de l'objecte seleccionat (TS-4b) */}
             {selObj && locked && (
               <>
-                <SectionTitle>Element · {selObj.type}</SectionTitle>
+                <SectionTitle>{t('tech_sheet.element')} · {selObj.type}</SectionTitle>
                 {selObj.type === 'text' && (
                   <>
-                    <label style={propLabel}>Mida font
+                    <label style={propLabel}>{t('tech_sheet.font_size')}
                       <input type="number" min={6} max={48} value={selObj.fontSize || 11}
                         onChange={e => updateObject(selObj.id, { fontSize: Number(e.target.value) || 11 })} style={propInput} />
                     </label>
                     <label style={{ ...propLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <input type="checkbox" checked={selObj.fontStyle === 'bold'}
                         onChange={e => updateObject(selObj.id, { fontStyle: e.target.checked ? 'bold' : 'normal' })} />
-                      Negreta
+                      {t('tech_sheet.bold')}
                     </label>
-                    <div style={propLabel}>Color text
-                      <ColorPicker value={selObj.fill || '#1d1d1b'} onChange={c => updateObject(selObj.id, { fill: c })} />
+                    <div style={propLabel}>{t('tech_sheet.text_color')}
+                      <ColorPicker value={selObj.fill || KONVA_COL.textMain} onChange={c => updateObject(selObj.id, { fill: c })} />
                     </div>
                   </>
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'line' || selObj.type === 'arrow') && (
                   <>
-                    <div style={propLabel}>Color traç
-                      <ColorPicker value={selObj.stroke || '#1d1d1b'} onChange={c => updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
+                    <div style={propLabel}>{t('tech_sheet.stroke_color')}
+                      <ColorPicker value={selObj.stroke || KONVA_COL.textMain} onChange={c => updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
                     </div>
-                    <label style={propLabel}>Gruix traç
+                    <label style={propLabel}>{t('tech_sheet.stroke_width')}
                       <input type="number" min={0.5} max={5} step={0.5} value={selObj.strokeWidth || (selObj.type === 'arrow' ? 1.5 : 1)}
                         onChange={e => updateObject(selObj.id, { strokeWidth: Number(e.target.value) || 1 })} style={propInput} />
                     </label>
                   </>
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse') && (
-                  <div style={propLabel}>Emplenat
-                    <ColorPicker value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : '#ffffff'} onChange={c => updateObject(selObj.id, { fill: c })} />
+                  <div style={propLabel}>{t('tech_sheet.fill')}
+                    <ColorPicker value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : KONVA_COL.white} onChange={c => updateObject(selObj.id, { fill: c })} />
                   </div>
                 )}
                 {selObj.type === 'data_block' && (
-                  <label style={propLabel}>Escala (%)
+                  <label style={propLabel}>{t('tech_sheet.scale_pct')}
                     <input type="number" min={10} max={200} step={5} value={Math.round((selObj.scale || 1) * 100)}
                       onChange={e => updateObject(selObj.id, { scale: Math.max(0.1, (Number(e.target.value) || 100) / 100) })} style={propInput} />
                   </label>
@@ -1169,11 +1176,11 @@ export default function TechSheetEditor() {
                 {/* Posició X/Y (mm) per a objectes posicionats (no línia/fletxa). */}
                 {selObj.type !== 'line' && selObj.type !== 'arrow' && (
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <label style={{ ...propLabel, flex: 1 }}>X (mm)
+                    <label style={{ ...propLabel, flex: 1 }}>{t('tech_sheet.pos_x')}
                       <input type="number" step={1} value={Math.round((selObj.x || 0) * 10) / 10}
                         onChange={e => updateObject(selObj.id, { x: Number(e.target.value) || 0 })} style={propInput} />
                     </label>
-                    <label style={{ ...propLabel, flex: 1 }}>Y (mm)
+                    <label style={{ ...propLabel, flex: 1 }}>{t('tech_sheet.pos_y')}
                       <input type="number" step={1} value={Math.round((selObj.y || 0) * 10) / 10}
                         onChange={e => updateObject(selObj.id, { y: Number(e.target.value) || 0 })} style={propInput} />
                     </label>
@@ -1181,8 +1188,8 @@ export default function TechSheetEditor() {
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
                   <button onClick={() => deleteObject(selObj.id)}
-                    style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 6, border: `1px solid #e74c3c`, borderRadius: 5, background: 'transparent', color: '#e74c3c', fontFamily: FONT, cursor: 'pointer' }}>
-                    <i className="ti ti-trash" style={{ fontSize: 12, marginRight: 5 }} />Eliminar
+                    style={{ width: '100%', fontSize: 'var(--fs-body)', padding: '5px 8px', marginTop: 6, border: `1px solid #e74c3c`, borderRadius: 5, background: 'transparent', color: '#e74c3c', fontFamily: FONT, cursor: 'pointer' }}>
+                    <i className="ti ti-trash" style={{ fontSize: 12, marginRight: 5 }} />{t('app.delete')}
                   </button>
                 )}
               </>
@@ -1194,12 +1201,12 @@ export default function TechSheetEditor() {
       {/* Selector de size fitting (>1) */}
       {pickFitting && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setPickFitting(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Tria un size fitting</h2>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--white)', borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.pick_size_fitting')}</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {sizeFittings.map(sf => (
                 <button key={sf.id} onClick={() => { setPickFitting(false); insertGradedTable(sf.id) }}
-                  style={{ textAlign: 'left', fontSize: 12, padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
                   {sf.codi}{sf.tipus ? ` · ${sf.tipus}` : ''}
                 </button>
               ))}
@@ -1212,22 +1219,24 @@ export default function TechSheetEditor() {
 }
 
 // Selector de color ràpid (TS-4c): swatches de marca + color natiu ("Més colors").
-const QUICK_COLORS = ['#1d1d1b', '#185fa5', '#1d9e75', '#dc2626', '#c27a2a', '#ca8a04']
+// Literals: el color triat s'escriu a obj.fill/stroke i el pinta Konva (no resol var()).
+const QUICK_COLORS = [KONVA_COL.textMain, '#185fa5', '#1d9e75', '#dc2626', KONVA_COL.gold, '#ca8a04']
 export function ColorPicker({ value, onChange }) {
+  const { t } = useTranslation()
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginTop: 3 }}>
       {QUICK_COLORS.map(c => (
         <button key={c} type="button" onClick={() => onChange(c)} title={c}
-          style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: value === c ? '2px solid #1d1d1b' : '1px solid #e0d5c5', cursor: 'pointer', padding: 0 }} />
+          style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: value === c ? '2px solid var(--text-main)' : '1px solid var(--border)', cursor: 'pointer', padding: 0 }} />
       ))}
-      <input type="color" value={value || '#1d1d1b'} onChange={e => onChange(e.target.value)} title="Més colors"
+      <input type="color" value={value || KONVA_COL.textMain} onChange={e => onChange(e.target.value)} title={t('tech_sheet.more_colors')}
         style={{ width: 22, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} />
     </div>
   )
 }
 
 export function SectionTitle({ children }) {
-  return <div style={{ fontSize: 10, fontWeight: 600, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
+  return <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
 }
-export const propLabel = { display: 'block', fontSize: 10, color: COL.textMuted, marginBottom: 8 }
-export const propInput = { width: '100%', fontFamily: FONT, fontSize: 12, padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: '#fff', color: COL.textMain, boxSizing: 'border-box' }
+export const propLabel = { display: 'block', fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 8 }
+export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: 'var(--white)', color: COL.textMain, boxSizing: 'border-box' }

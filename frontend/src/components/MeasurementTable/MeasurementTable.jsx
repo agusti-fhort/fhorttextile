@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
+import i18n from '../../i18n'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -11,9 +13,9 @@ const API = import.meta.env.VITE_API_URL || ''
 // fins que existeixi). Mentrestant: optimistic update local + fallback a mock.
 
 const ORIGEN_LABELS = {
-  STANDARD:   { label: 'Estàndard', fg: '#868685', bg: '#f5f0ea',  border: '#e0d5c5' },
+  STANDARD:   { label: 'Estàndard', fg: 'var(--text-muted)', bg: '#f5f0ea',  border: 'var(--border)' },
   IMPORTED:   { label: 'Importat',  fg: '#2a5a8a', bg: '#eef4fc',  border: '#c5d8ee' },
-  MANUAL:     { label: 'Manual',    fg: '#c27a2a', bg: '#fdf6ee',  border: '#e0c8a0' },
+  MANUAL:     { label: 'Manual',    fg: 'var(--gold)', bg: '#fdf6ee',  border: '#e0c8a0' },
   FITTED:     { label: 'Fitting',   fg: '#6a3a9a', bg: '#f3edfb',  border: '#d8c5ee' },
   CALCULATED: { label: 'Calculat',  fg: '#3b6d11', bg: '#f0f9f0',  border: '#c0dd97' },
 }
@@ -54,7 +56,7 @@ function checkCoherence(measurements) {
     if (diff < 2) {
       alerts.push({
         tipus: 'WARN',
-        missatge: `Pit (${byCode['POM-001']}) gairebé igual a Cintura (${byCode['POM-003']}). Diferència: ${diff.toFixed(1)} cm.`,
+        missatge: i18n.t('measurement_table.coherence.chest_waist', { chest: byCode['POM-001'], waist: byCode['POM-003'], diff: diff.toFixed(1) }),
       })
     }
   }
@@ -62,7 +64,7 @@ function checkCoherence(measurements) {
     if (byCode['POM-056'] <= byCode['POM-055']) {
       alerts.push({
         tipus: 'ERROR',
-        missatge: `Tiro posterior (${byCode['POM-056']}) hauria de ser > Tiro davanter (${byCode['POM-055']}).`,
+        missatge: i18n.t('measurement_table.coherence.back_front_rise', { back: byCode['POM-056'], front: byCode['POM-055'] }),
       })
     }
   }
@@ -70,7 +72,7 @@ function checkCoherence(measurements) {
     if (byCode['POM-022'] <= byCode['POM-020']) {
       alerts.push({
         tipus: 'WARN',
-        missatge: `Llarg màniga CB (${byCode['POM-022']}) hauria de ser > Llarg màniga (${byCode['POM-020']}).`,
+        missatge: i18n.t('measurement_table.coherence.sleeve_cb', { cb: byCode['POM-022'], base: byCode['POM-020'] }),
       })
     }
   }
@@ -85,6 +87,7 @@ export default function MeasurementTable({
   readOnly = false,
   onAlert = () => {},
 }) {
+  const { t } = useTranslation()
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
 
   const [mode, setMode] = useState(initialMode)
@@ -152,18 +155,18 @@ export default function MeasurementTable({
         body: JSON.stringify({ [field]: value }),
       })
       if (!res.ok && (res.status === 404 || res.status === 405)) {
-        setMsg({ type: 'warn', text: 'Edició no persistida — endpoint PATCH pendent al backend.' })
+        setMsg({ type: 'warn', text: t('measurement_table.msg.edit_not_persisted') })
       } else if (!res.ok) {
-        setMsg({ type: 'error', text: `Error ${res.status} guardant.` })
+        setMsg({ type: 'error', text: t('measurement_table.msg.save_error', { status: res.status }) })
       }
     } catch {
-      setMsg({ type: 'warn', text: 'Edició local — backend no disponible.' })
+      setMsg({ type: 'warn', text: t('measurement_table.msg.edit_local') })
     }
   }
 
   const handleDelete = async (id) => {
     if (readOnly) return
-    if (!confirm('Eliminar aquesta mesura?')) return
+    if (!confirm(t('measurement_table.confirm_delete'))) return
     setMeasurements(prev => prev.filter(m => m.id !== id))
 
     if (String(id).startsWith('mock-')) return
@@ -173,21 +176,21 @@ export default function MeasurementTable({
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok && (res.status === 404 || res.status === 405)) {
-        setMsg({ type: 'warn', text: 'Eliminació no persistida — endpoint DELETE pendent al backend.' })
+        setMsg({ type: 'warn', text: t('measurement_table.msg.delete_not_persisted') })
       } else if (!res.ok) {
-        setMsg({ type: 'error', text: `Error ${res.status} eliminant.` })
+        setMsg({ type: 'error', text: t('measurement_table.msg.delete_error', { status: res.status }) })
       }
     } catch {
-      setMsg({ type: 'warn', text: 'Eliminació local — backend no disponible.' })
+      setMsg({ type: 'warn', text: t('measurement_table.msg.delete_local') })
     }
   }
 
   if (loading) {
-    return <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace' }}>Carregant mesures...</div>
+    return <div style={{ padding: 16, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('measurement_table.loading')}</div>
   }
 
   return (
-    <div style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -196,18 +199,18 @@ export default function MeasurementTable({
         <ViewToggle mode={mode} onChange={setMode} />
         {usingMock && (
           <span style={{
-            fontSize: 10, color: '#c27a2a',
+            fontSize: 'var(--fs-label)', color: 'var(--gold)',
             background: '#fdf6ee', border: '0.5px solid #e0c8a0',
             padding: '3px 8px', borderRadius: 4,
           }}>
-            mock data · backend retorna error
+            {t('measurement_table.mock_badge')}
           </span>
         )}
         {!readOnly && (
           <button
-            onClick={() => setMsg({ type: 'info', text: 'TODO: integrar POMBrowser per afegir POMs al model (endpoint POST pendent al backend).' })}
+            onClick={() => setMsg({ type: 'info', text: t('measurement_table.todo_add_pom') })}
             style={btnPrimary}
-          >+ Afegir POM</button>
+          >{t('measurement_table.add_pom')}</button>
         )}
       </div>
 
@@ -223,8 +226,8 @@ export default function MeasurementTable({
         }}>
           {alerts.map((a, i) => (
             <div key={i} style={{
-              fontSize: 11,
-              color: a.tipus === 'ERROR' ? '#a32d2d' : '#c27a2a',
+              fontSize: 'var(--fs-body)',
+              color: a.tipus === 'ERROR' ? '#a32d2d' : 'var(--gold)',
               padding: '2px 0',
             }}>
               <span style={{ fontWeight: 600, marginRight: 6 }}>{a.tipus}</span>
@@ -238,14 +241,14 @@ export default function MeasurementTable({
       {msg && (
         <div style={{
           margin: '4px 0 12px',
-          padding: '6px 10px', borderRadius: 6, fontSize: 11,
+          padding: '6px 10px', borderRadius: 6, fontSize: 'var(--fs-body)',
           background: msg.type === 'info' ? '#fdf6ee' : msg.type === 'warn' ? '#fdf6ee' : '#fff0f0',
           border: `0.5px solid ${msg.type === 'error' ? '#f09595' : '#e0c8a0'}`,
-          color: msg.type === 'error' ? '#a32d2d' : '#c27a2a',
+          color: msg.type === 'error' ? '#a32d2d' : 'var(--gold)',
           display: 'flex', justifyContent: 'space-between',
         }}>
           <span>{msg.text}</span>
-          <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14 }}>×</button>
+          <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 'var(--fs-h3)' }}>×</button>
         </div>
       )}
 
@@ -273,10 +276,10 @@ export default function MeasurementTable({
       {measurements.length === 0 && !loading && (
         <div style={{
           padding: '14px',
-          fontSize: 11, color: 'var(--text-muted)',
+          fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
           textAlign: 'center',
         }}>
-          Cap mesura definida. Afegeix POMs per començar.
+          {t('measurement_table.empty')}
         </div>
       )}
     </div>
@@ -285,16 +288,17 @@ export default function MeasurementTable({
 
 // ── Vista BASE ──────────────────────────────────────────────────────────────
 function BaseView({ measurements, readOnly, editingCell, setEditingCell, onEdit, onDelete }) {
+  const { t } = useTranslation()
   return (
     <table style={tableStyle}>
       <thead>
         <tr>
-          <Th width={70}>Nom fitxa</Th>
+          <Th width={70}>{t('measurement_table.col.sheet_name')}</Th>
           <Th>POM</Th>
-          <Th width={80}>Codi</Th>
-          <Th width={100} align="right">Valor base</Th>
-          <Th width={90}>Origen</Th>
-          <Th>Notes</Th>
+          <Th width={80}>{t('measurement_table.col.code')}</Th>
+          <Th width={100} align="right">{t('measurement_table.col.base_value')}</Th>
+          <Th width={90}>{t('measurement_table.col.origin')}</Th>
+          <Th>{t('measurement_table.col.notes')}</Th>
           {!readOnly && <Th width={28} />}
         </tr>
       </thead>
@@ -320,8 +324,8 @@ function BaseView({ measurements, readOnly, editingCell, setEditingCell, onEdit,
                 </span>
                 {m.pom_is_key && (
                   <span style={{
-                    marginLeft: 6, fontSize: 9, padding: '1px 5px', borderRadius: 3,
-                    background: '#fdf6ee', color: '#c27a2a',
+                    marginLeft: 6, fontSize: 'var(--fs-caption)', padding: '1px 5px', borderRadius: 3,
+                    background: '#fdf6ee', color: 'var(--gold)',
                     border: '0.5px solid #e0c8a0', fontWeight: 600, letterSpacing: '.05em',
                   }}>KEY</span>
                 )}
@@ -342,21 +346,21 @@ function BaseView({ measurements, readOnly, editingCell, setEditingCell, onEdit,
               </Td>
               <Td>
                 <span style={{
-                  fontSize: 9, padding: '2px 6px', borderRadius: 3,
+                  fontSize: 'var(--fs-caption)', padding: '2px 6px', borderRadius: 3,
                   background: origen.bg, color: origen.fg,
                   border: `0.5px solid ${origen.border}`,
                   fontWeight: 600, letterSpacing: '.05em',
-                }}>{origen.label}</span>
+                }}>{t(`measurement_table.origen.${m.origen}`, origen.label)}</span>
               </Td>
               <Td><span style={{ color: 'var(--text-muted)' }}>{m.notes || '—'}</span></Td>
               {!readOnly && (
                 <Td align="center">
                   <button
                     onClick={() => onDelete(m.id)}
-                    title="Eliminar"
+                    title={t('app.delete')}
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer',
-                      color: '#c0c0c0', fontSize: 14, lineHeight: 1, padding: '2px 4px',
+                      color: '#c0c0c0', fontSize: 'var(--fs-h3)', lineHeight: 1, padding: '2px 4px',
                     }}
                     onMouseEnter={e => e.currentTarget.style.color = '#a32d2d'}
                     onMouseLeave={e => e.currentTarget.style.color = '#c0c0c0'}
@@ -373,10 +377,11 @@ function BaseView({ measurements, readOnly, editingCell, setEditingCell, onEdit,
 
 // ── Vista GRADING ───────────────────────────────────────────────────────────
 function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
+  const { t } = useTranslation()
   if (!sizeRun.length) {
     return (
-      <div style={{ padding: 16, fontSize: 11, color: 'var(--text-muted)' }}>
-        Configura el size run del model per veure el grading.
+      <div style={{ padding: 16, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+        {t('measurement_table.grading_empty')}
       </div>
     )
   }
@@ -400,7 +405,7 @@ function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
     <table style={tableStyle}>
       <thead>
         <tr>
-          <Th width={70}>Nom</Th>
+          <Th width={70}>{t('measurement_table.col.name')}</Th>
           <Th>POM</Th>
           {sizeRun.map(s => {
             const isBase = s === baseSize
@@ -408,13 +413,13 @@ function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
               <Th key={s} align="right" width={64}
                 style={{
                   background: isBase ? '#fdf6ee' : undefined,
-                  color: isBase ? '#c27a2a' : undefined,
+                  color: isBase ? 'var(--gold)' : undefined,
                 }}>
                 {s}{isBase ? ' ●' : ''}
               </Th>
             )
           })}
-          <Th align="right" width={80}>Δ/talla</Th>
+          <Th align="right" width={80}>{t('measurement_table.col.delta_per_size')}</Th>
         </tr>
       </thead>
       <tbody>
@@ -431,7 +436,7 @@ function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
                 <Td key={s} align="right" mono
                   style={{
                     background: isBase ? '#fdf6ee' : undefined,
-                    color: isBase && val != null ? '#c27a2a' : undefined,
+                    color: isBase && val != null ? 'var(--gold)' : undefined,
                     fontWeight: isBase ? 600 : 400,
                   }}>
                   {val != null ? Number(val).toFixed(1) : '—'}
@@ -450,6 +455,7 @@ function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
 
 // ── EditableCell ────────────────────────────────────────────────────────────
 function EditableCell({ value, editing, readOnly, onStartEdit, onSave, onCancel, suffix = '', type = 'text', align = 'left', mono }) {
+  const { t } = useTranslation()
   const [draft, setDraft] = useState(value)
   useEffect(() => { setDraft(value) }, [value])
 
@@ -468,12 +474,11 @@ function EditableCell({ value, editing, readOnly, onStartEdit, onSave, onCancel,
         }}
         style={{
           width: '100%',
-          background: '#fff',
-          border: '0.5px solid #c27a2a',
+          background: 'var(--white)',
+          border: '0.5px solid var(--gold)',
           borderRadius: 3,
           padding: '2px 6px',
-          fontSize: 12,
-          fontFamily: 'IBM Plex Mono, monospace',
+          fontSize: 'var(--fs-body)',
           textAlign: align,
           outline: 'none',
         }}
@@ -485,7 +490,7 @@ function EditableCell({ value, editing, readOnly, onStartEdit, onSave, onCancel,
   return (
     <span
       onClick={readOnly ? undefined : onStartEdit}
-      title={readOnly ? '' : 'Click per editar'}
+      title={readOnly ? '' : t('measurement_table.click_to_edit')}
       style={{
         display: 'inline-block',
         padding: '2px 6px',
@@ -506,11 +511,12 @@ function EditableCell({ value, editing, readOnly, onStartEdit, onSave, onCancel,
 
 // ── ViewToggle ──────────────────────────────────────────────────────────────
 function ViewToggle({ mode, onChange }) {
+  const { t } = useTranslation()
   return (
-    <div style={{ display: 'inline-flex', border: '0.5px solid #e0d5c5', borderRadius: 6, overflow: 'hidden' }}>
+    <div style={{ display: 'inline-flex', border: '0.5px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
       {[
-        { v: 'base',    label: 'Talla base' },
-        { v: 'grading', label: 'Grading' },
+        { v: 'base',    label: t('measurement_table.view.base') },
+        { v: 'grading', label: t('measurement_table.view.grading') },
       ].map(({ v, label }) => {
         const active = mode === v
         return (
@@ -519,10 +525,10 @@ function ViewToggle({ mode, onChange }) {
             onClick={() => onChange(v)}
             style={{
               padding: '6px 14px',
-              background: active ? '#c27a2a' : '#fff',
-              color: active ? '#fff' : '#868685',
+              background: active ? 'var(--gold)' : 'var(--white)',
+              color: active ? 'var(--white)' : 'var(--text-muted)',
               border: 'none', cursor: 'pointer',
-              fontSize: 11, fontFamily: 'IBM Plex Mono, monospace',
+              fontSize: 'var(--fs-body)', 
               fontWeight: active ? 600 : 400,
             }}
           >
@@ -539,10 +545,10 @@ function Th({ children, width, align = 'left', style }) {
   return (
     <th style={{
       padding: '8px 10px',
-      fontSize: 10, letterSpacing: '0.08em',
+      fontSize: 'var(--fs-label)', letterSpacing: '0.08em',
       textTransform: 'uppercase',
       color: 'var(--text-muted)',
-      fontWeight: 600, fontFamily: 'IBM Plex Mono, monospace',
+      fontWeight: 600, 
       borderBottom: '0.5px solid var(--border)',
       background: '#fafaf8',
       textAlign: align, width, whiteSpace: 'nowrap',
@@ -567,16 +573,16 @@ function Td({ children, align = 'left', mono, style }) {
 const tableStyle = {
   width: '100%',
   borderCollapse: 'collapse',
-  background: '#fff',
+  background: 'var(--white)',
 }
 
 const btnPrimary = {
   padding: '6px 14px',
   borderRadius: 6,
-  background: '#c27a2a',
-  color: '#fff',
+  background: 'var(--gold)',
+  color: 'var(--white)',
   border: 'none',
   cursor: 'pointer',
-  fontSize: 11, fontFamily: 'IBM Plex Mono, monospace',
+  fontSize: 'var(--fs-body)', 
   fontWeight: 600,
 }

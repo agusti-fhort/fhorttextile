@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
 import { SizeSetCard } from "./SizeSetCard"
 import { targets as targetsApi, constructionTypes, fitTypes, sizingProfiles } from "../api/endpoints"
 
@@ -9,23 +10,24 @@ const TARGET_ORDER = [
   "GIRL","BOY","TEEN_GIRL","TEEN_BOY","MATERNITY"
 ]
 
-function LoadError({ onRetry, label = "No s'han pogut carregar les dades" }) {
+function LoadError({ onRetry, label }) {
+  const { t } = useTranslation()
   return (
     <div style={{
       padding: "20px", border: "1px dashed #f0a0a0", borderRadius: 8,
-      textAlign: "center", color: "#a32d2d", fontSize: 12, background: "#fff8f8",
+      textAlign: "center", color: "#a32d2d", fontSize: 'var(--fs-body)', background: "#fff8f8",
     }}>
-      {label}
+      {label || t("size_library.load_error")}
       <div style={{ marginTop: 10 }}>
         <button
           onClick={onRetry}
           style={{
             padding: "6px 14px", borderRadius: 4, cursor: "pointer",
-            background: "#fff", color: "#c27a2a", border: "1px solid #c27a2a",
-            fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+            background: "var(--white)", color: "var(--gold)", border: "1px solid var(--gold)",
+            fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)',
           }}
         >
-          ↺ Reintentar
+          ↺ {t("size_library.retry")}
         </button>
       </div>
     </div>
@@ -34,7 +36,7 @@ function LoadError({ onRetry, label = "No s'han pogut carregar les dades" }) {
 
 const chipBase = {
   padding: "6px 14px", borderRadius: 4, cursor: "pointer",
-  fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+  fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)',
 }
 
 /**
@@ -62,6 +64,7 @@ export function SizingProfileSelector({
   onClone,
   onSelectionChange,
 }) {
+  const { t } = useTranslation()
   const [targets, setTargets] = useState([])
   const [constructions, setConstructions] = useState([])
   const [allFitTypes, setAllFitTypes] = useState([])
@@ -157,28 +160,27 @@ export function SizingProfileSelector({
     <div>
       {/* NIVELL 1 — Target */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 10 }}>
-          1 · Target — per a qui és la peça?
+        <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
+          1 · {t("size_library.step_target")}
         </div>
         {lookupsError ? (
           <LoadError onRetry={loadLookups} />
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {targets.map(t => (
+            {targets.map(tg => (
               <button
-                key={t.codi}
-                onClick={() => pickTarget(t.codi)}
+                key={tg.codi}
+                onClick={() => pickTarget(tg.codi)}
                 style={{
-                  ...chipBase, padding: "10px 14px", borderRadius: 6, fontSize: 12,
-                  background: selectedTarget === t.codi ? "#f5e6d0" : "#fff",
-                  color: selectedTarget === t.codi ? "#c27a2a" : "#1d1d1b",
-                  border: `1px solid ${selectedTarget === t.codi ? "#c27a2a" : "#e0d5c5"}`,
+                  ...chipBase, padding: "10px 14px", borderRadius: 6, fontSize: 'var(--fs-body)',
+                  background: selectedTarget === tg.codi ? "#f5e6d0" : "var(--white)",
+                  color: selectedTarget === tg.codi ? "var(--gold)" : "var(--text-main)",
+                  border: `1px solid ${selectedTarget === tg.codi ? "var(--gold)" : "var(--border)"}`,
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                   minWidth: 90,
                 }}
               >
-                <span style={{ fontWeight: selectedTarget === t.codi ? 600 : 400 }}>{t.nom_en}</span>
-                <span style={{ fontSize: 9, color: selectedTarget === t.codi ? "#c27a2a" : "#868685" }}>{t.nom_cat}</span>
+                <span style={{ fontWeight: selectedTarget === tg.codi ? 600 : 400 }}>{t(`model_wizard.target_${tg.codi}`, tg.nom_en)}</span>
               </button>
             ))}
           </div>
@@ -188,20 +190,20 @@ export function SizingProfileSelector({
       {/* NIVELL 2 — Construction */}
       {selectedTarget && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 10 }}>
-            2 · Construcció — tipus de teixit
+          <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
+            2 · {t("size_library.step_construction")}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               onClick={() => pickConstruction(selectedConstruction)}
               style={{
                 ...chipBase,
-                background: !selectedConstruction ? "#f5e6d0" : "#fff",
-                color: !selectedConstruction ? "#c27a2a" : "#868685",
-                border: `1px solid ${!selectedConstruction ? "#c27a2a" : "#e0d5c5"}`,
+                background: !selectedConstruction ? "#f5e6d0" : "var(--white)",
+                color: !selectedConstruction ? "var(--gold)" : "var(--text-muted)",
+                border: `1px solid ${!selectedConstruction ? "var(--gold)" : "var(--border)"}`,
               }}
             >
-              Tots
+              {t("size_library.all")}
             </button>
             {constructions.map(c => (
               <button
@@ -209,13 +211,12 @@ export function SizingProfileSelector({
                 onClick={() => pickConstruction(c.codi)}
                 style={{
                   ...chipBase,
-                  background: selectedConstruction === c.codi ? "#f5e6d0" : "#fff",
-                  color: selectedConstruction === c.codi ? "#c27a2a" : "#1d1d1b",
-                  border: `1px solid ${selectedConstruction === c.codi ? "#c27a2a" : "#e0d5c5"}`,
+                  background: selectedConstruction === c.codi ? "#f5e6d0" : "var(--white)",
+                  color: selectedConstruction === c.codi ? "var(--gold)" : "var(--text-main)",
+                  border: `1px solid ${selectedConstruction === c.codi ? "var(--gold)" : "var(--border)"}`,
                 }}
               >
-                {c.nom_en}
-                <span style={{ fontSize: 10, color: "#868685", marginLeft: 4 }}>{c.nom_cat}</span>
+                {t(`model_wizard.construction_${c.codi}`, c.nom_en)}
               </button>
             ))}
           </div>
@@ -225,20 +226,20 @@ export function SizingProfileSelector({
       {/* NIVELL 3 — Fit: catàleg complet; fade (no clicable) els sense perfils per a la combinació */}
       {selectedTarget && allFitTypes.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#c27a2a", marginBottom: 10 }}>
-            3 · Fit — caiguda de la peça
+          <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
+            3 · {t("size_library.step_fit")}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               onClick={() => setSelectedFit(null)}
               style={{
                 ...chipBase,
-                background: !selectedFit ? "#f5e6d0" : "#fff",
-                color: !selectedFit ? "#c27a2a" : "#868685",
-                border: `1px solid ${!selectedFit ? "#c27a2a" : "#e0d5c5"}`,
+                background: !selectedFit ? "#f5e6d0" : "var(--white)",
+                color: !selectedFit ? "var(--gold)" : "var(--text-muted)",
+                border: `1px solid ${!selectedFit ? "var(--gold)" : "var(--border)"}`,
               }}
             >
-              Tots
+              {t("size_library.all")}
             </button>
             {allFitTypes.map(ft => {
               const isActive = activeFitCodis.has(ft.codi)
@@ -247,16 +248,16 @@ export function SizingProfileSelector({
                 <button
                   key={ft.codi}
                   onClick={isActive ? () => setSelectedFit(isSel ? null : ft.codi) : undefined}
-                  title={isActive ? undefined : "Sense perfils per a aquesta combinació"}
+                  title={isActive ? undefined : t("size_library.fit_no_profiles")}
                   style={{
                     ...chipBase,
-                    background: isSel ? "#f5e6d0" : "#fff",
-                    color: isSel ? "#c27a2a" : "#1d1d1b",
-                    border: `1px solid ${isSel ? "#c27a2a" : "#e0d5c5"}`,
+                    background: isSel ? "#f5e6d0" : "var(--white)",
+                    color: isSel ? "var(--gold)" : "var(--text-main)",
+                    border: `1px solid ${isSel ? "var(--gold)" : "var(--border)"}`,
                     ...(!isActive ? { opacity: 0.35, cursor: "default", pointerEvents: "none" } : {}),
                   }}
                 >
-                  {ft.nom_en}
+                  {t(`model_wizard.fit_${ft.codi}`, ft.nom_en)}
                 </button>
               )
             })}
@@ -268,28 +269,28 @@ export function SizingProfileSelector({
       {selectedTarget && (
         <div>
           <div style={{
-            fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
-            textTransform: "uppercase", color: "#c27a2a",
+            fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em",
+            textTransform: "uppercase", color: "var(--gold)",
             marginBottom: 10, display: "flex", justifyContent: "space-between",
           }}>
-            <span>Size Sets disponibles</span>
-            <span style={{ color: "#868685", fontWeight: 400 }}>
-              {loadingProfiles ? "Carregant..." : `${visibleProfiles.length} sistemes`}
+            <span>{t("size_library.sizesets_available")}</span>
+            <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>
+              {loadingProfiles ? t("common.loading") : t("size_library.systems_count", { count: visibleProfiles.length })}
             </span>
           </div>
 
           {profilesError ? (
-            <LoadError onRetry={loadProfiles} label="No s'han pogut carregar els size sets" />
+            <LoadError onRetry={loadProfiles} label={t("size_library.load_error_sizesets")} />
           ) : loadingProfiles ? (
-            <div style={{ color: "#868685", fontSize: 12, padding: "20px 0" }}>
-              Carregant size sets...
+            <div style={{ color: "var(--text-muted)", fontSize: 'var(--fs-body)', padding: "20px 0" }}>
+              {t("size_library.loading_sizesets")}
             </div>
           ) : visibleProfiles.length === 0 ? (
             <div style={{
-              padding: "20px", border: "1px dashed #e0d5c5", borderRadius: 8,
-              textAlign: "center", color: "#868685", fontSize: 12,
+              padding: "20px", border: "1px dashed var(--border)", borderRadius: 8,
+              textAlign: "center", color: "var(--text-muted)", fontSize: 'var(--fs-body)',
             }}>
-              Sense size sets per a aquesta combinació.
+              {t("size_library.empty_combination")}
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
@@ -310,10 +311,10 @@ export function SizingProfileSelector({
 
       {!selectedTarget && (
         <div style={{
-          padding: "40px 24px", border: "1px dashed #e0d5c5", borderRadius: 8,
-          textAlign: "center", color: "#868685", fontSize: 12,
+          padding: "40px 24px", border: "1px dashed var(--border)", borderRadius: 8,
+          textAlign: "center", color: "var(--text-muted)", fontSize: 'var(--fs-body)',
         }}>
-          Selecciona un target per veure els size sets disponibles
+          {t("size_library.select_target_hint")}
         </div>
       )}
     </div>

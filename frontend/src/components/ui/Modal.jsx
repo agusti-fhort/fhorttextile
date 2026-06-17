@@ -15,8 +15,8 @@ export default function Modal({ title, subtitle, children, confirmLabel, cancelL
         background: 'var(--white)', borderRadius: 12, padding: 22,
         width: 460, maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto',
       }}>
-        <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: subtitle ? 4 : 16, fontFamily: MONO }}>{title}</h2>
-        {subtitle && <p style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 16 }}>{subtitle}</p>}
+        <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: subtitle ? 4 : 16, fontFamily: MONO }}>{title}</h2>
+        {subtitle && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 16 }}>{subtitle}</p>}
         {children}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
           <button onClick={onCancel} style={{ ...selS, cursor: 'pointer' }}>{cancelLabel}</button>

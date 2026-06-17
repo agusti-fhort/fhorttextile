@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Modal from '../ui/Modal'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -8,19 +9,20 @@ const API = import.meta.env.VITE_API_URL || ''
 const encodePrefill = (obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj))))
 
 const STEPS = [
-  { n: 1, label: 'Talles' },
-  { n: 2, label: 'POMs' },
-  { n: 3, label: 'Mesures' },
-  { n: 4, label: 'Teixit' },
-  { n: 5, label: 'Guardar' },
+  { n: 1, labelKey: 'import_wizard.step.sizes' },
+  { n: 2, labelKey: 'import_wizard.step.poms' },
+  { n: 3, labelKey: 'import_wizard.step.measures' },
+  { n: 4, labelKey: 'import_wizard.step.fabric' },
+  { n: 5, labelKey: 'import_wizard.step.save' },
 ]
 
 const norm = (s) => (s || '').trim().toUpperCase()
 const GOLD = 'var(--gold, #c79a3a)'
-const BORDER = 'var(--color-border-tertiary, #e0d5c5)'
+const BORDER = 'var(--border)'
 
 // ───────────────────────────── Stepper header ─────────────────────────────
 function Stepper({ step }) {
+  const { t } = useTranslation()
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, margin: '0 0 20px' }}>
       {STEPS.map((s, i) => {
@@ -32,15 +34,15 @@ function Stepper({ step }) {
               <div style={{
                 width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 600,
+                fontSize: 'var(--fs-body)', fontWeight: 600,
                 background: active ? GOLD : done ? '#3b6d11' : 'transparent',
-                color: active || done ? '#fff' : '#868685',
+                color: active || done ? 'var(--white)' : 'var(--text-muted)',
                 border: active || done ? 'none' : `1px solid ${BORDER}`,
               }}>{done ? '✓' : s.n}</div>
               <span style={{
-                fontSize: 12, fontWeight: active ? 600 : 400,
-                color: active ? '#1d1d1b' : '#868685', whiteSpace: 'nowrap',
-              }}>{s.label}</span>
+                fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 400,
+                color: active ? 'var(--text-main)' : 'var(--text-muted)', whiteSpace: 'nowrap',
+              }}>{t(s.labelKey)}</span>
             </div>
             {i < STEPS.length - 1 && (
               <div style={{ flex: 1, height: 1, background: done ? '#3b6d11' : BORDER, margin: '0 10px' }} />
@@ -54,25 +56,27 @@ function Stepper({ step }) {
 
 // ───────────────────────────── Talla chip ─────────────────────────────
 function TallaChip({ label, ok, onRemove }) {
+  const { t } = useTranslation()
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '4px 8px 4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+      padding: '4px 8px 4px 10px', borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 500,
       background: ok ? '#f0f9f0' : '#fff0f0',
       border: `1px solid ${ok ? '#c0dd97' : '#f0c0c0'}`,
       color: ok ? '#3b6d11' : '#a32d2d',
     }}>
       {ok ? '✓' : '✗'} {label}
       {onRemove && (
-        <button onClick={onRemove} title="Treure aquesta talla"
+        <button onClick={onRemove} title={t('import_wizard.remove_size')}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit',
-                   fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                   fontSize: 'var(--fs-h3)', lineHeight: 1, padding: 0 }}>×</button>
       )}
     </span>
   )
 }
 
 export default function ImportWizard({ model, onCancel, onComplete }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
   const authHeaders = { Authorization: `Bearer ${token}` }
@@ -139,13 +143,13 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         method: 'POST', headers: authHeaders, body: fd,
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(data.error || `Error ${res.status}`); setUploading(false); return }
+      if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setUploading(false); return }
       setSessionToken(data.token)
       setCribratge(data)
       setTallesSel(data.run_talles_document || [])
       setConfigurat(data.run_configurat || [])
     } catch (e) {
-      setError(`Error de connexió: ${String(e)}`)
+      setError(t('import_wizard.err_connection', { detail: String(e) }))
     }
     setUploading(false)
   }
@@ -161,7 +165,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       body: JSON.stringify({ talles_seleccionades: tallesSel, accio }),
     })
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) { setError(data.error || `Error ${res.status}`); return null }
+    if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); return null }
     setSizeMapPrefill(data.size_map_prefill || null)
     return data
   }
@@ -195,7 +199,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     setSavingTalles(false)
     if (!data) return
     if (data.ready) { setStep(2); runExtraccio() }
-    else setError(`Encara hi ha talles sense destí: ${(data.sense_desti || []).join(', ')}`)
+    else setError(t('import_wizard.sizes_no_dest', { sizes: (data.sense_desti || []).join(', ') }))
   }
 
   const canContinue = tallesSel.length > 0 && senseDesti.length === 0 && !savingTalles
@@ -208,14 +212,14 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         method: 'POST', headers: authHeaders,
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(data.error || `Error ${res.status}`); setExtracting(false); return }
+      if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setExtracting(false); return }
       setPomsExtrets(data.poms_extrets || [])
       setExtraccioMeta({ header: data.header, base_size: data.base_size, sizes: data.sizes,
                          grading_status: data.grading_status, avisos: data.avisos || [] })
       if (data.suggested_valors_mode === 'absoluts' || data.suggested_valors_mode === 'deltes')
         setValorsMode(data.suggested_valors_mode)
     } catch (e) {
-      setError(`Error de connexió: ${String(e)}`)
+      setError(t('import_wizard.err_connection', { detail: String(e) }))
     }
     setExtracting(false)
   }
@@ -234,7 +238,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       const data = await res.json().catch(() => ({}))
       setCataleg(data.results || data || [])
       setShowAddPom(true)
-    } catch (e) { setError(`Error carregant el catàleg: ${String(e)}`) }
+    } catch (e) { setError(t('import_wizard.err_catalog', { detail: String(e) })) }
   }
 
   const addPomManual = (pm) => {
@@ -259,13 +263,13 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         body: JSON.stringify({ poms_confirmats: ids, poms_tenant_only: tenantOnly }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(data.error || `Error ${res.status}`); setSavingPoms(false); return }
+      if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setSavingPoms(false); return }
       // El backend retorna els POMs amb els pom_master_id tenant-only ja assignats.
       const updated = data.poms_extrets || pomsExtrets
       setPomsExtrets(updated)
       buildTaula(updated)
       setStep(3)
-    } catch (e) { setError(`Error de connexió: ${String(e)}`) }
+    } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setSavingPoms(false)
   }
 
@@ -312,7 +316,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         body: JSON.stringify({ base_values }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(data.error || `Error ${res.status}`); setGradingLoading(false); return }
+      if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setGradingLoading(false); return }
       const grading = data.grading || {}
       // Omple NOMÉS les cel·les buides; preserva els valors extrets del document.
       setTaula(prev => {
@@ -328,7 +332,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         }
         return next
       })
-    } catch (e) { setError(`Error de connexió: ${String(e)}`) }
+    } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setGradingLoading(false)
   }
 
@@ -348,10 +352,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         body: JSON.stringify({ mesures, valors_mode: valorsMode }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(data.error || `Error ${res.status}`); setSavingMesures(false); return }
+      if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setSavingMesures(false); return }
       loadIso()
       setStep(4)
-    } catch (e) { setError(`Error de connexió: ${String(e)}`) }
+    } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setSavingMesures(false)
   }
 
@@ -377,9 +381,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         method: 'POST', headers: authHeaders,
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(data.error || `Error ${res.status}`); setSavingMesures(false); return }
+      if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setSavingMesures(false); return }
       navigate(`/size-library?prefill=${encodeURIComponent(encodePrefill(data))}`)
-    } catch (e) { setError(`Error de connexió: ${String(e)}`) }
+    } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setSavingMesures(false)
   }
 
@@ -425,10 +429,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
           body: JSON.stringify(buildTeixitPayload()),
         })
         const data = await res.json().catch(() => ({}))
-        if (!res.ok) { setError(data.error || `Error ${res.status}`); setSavingTeixit(false); return }
+        if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setSavingTeixit(false); return }
       }
       setStep(5)
-    } catch (e) { setError(`Error de connexió: ${String(e)}`) }
+    } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setSavingTeixit(false)
   }
 
@@ -445,20 +449,20 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         method: 'POST', headers: authHeaders,
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(data.error || `Error ${res.status}`); setConfirming(false); return }
+      if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setConfirming(false); return }
       onComplete && onComplete(data.model_id)
-    } catch (e) { setError(`Error de connexió: ${String(e)}`) }
+    } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setConfirming(false)
   }
 
   // ─────────────────────────── Render ───────────────────────────
   return (
-    <div style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
+    <div style={{ }}>
       <Stepper step={step} />
 
       {error && (
         <div style={{ background: '#fff0f0', border: '1px solid #f0c0c0', color: '#a32d2d',
-                      borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 12 }}>
+                      borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
           {error}
         </div>
       )}
@@ -473,25 +477,25 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             style={{
               border: `2px dashed ${BORDER}`, borderRadius: 12, padding: '3rem 2rem',
               textAlign: 'center', cursor: 'pointer', marginBottom: 16,
-              background: file ? '#f0f9f0' : 'var(--color-background-secondary, #f5f0ea)',
+              background: file ? '#f0f9f0' : 'var(--bg-muted)',
             }}>
             <input id="import-wizard-file" type="file" accept=".pdf,.xlsx,.xls,image/*"
               style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />
             <i className="ti ti-upload" style={{ fontSize: 32, color: GOLD }} />
-            <div style={{ fontSize: 14, fontWeight: 500, marginTop: 8 }}>
-              {file ? file.name : 'Arrossega la fitxa tècnica aquí'}
+            <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginTop: 8 }}>
+              {file ? file.name : t('import_wizard.drop_file')}
             </div>
-            <div style={{ fontSize: 12, color: '#868685', marginTop: 4 }}>
-              PDF, Excel o imatge · Clica per seleccionar
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 4 }}>
+              {t('import_wizard.file_hint')}
             </div>
           </div>
           {file && (
             <div style={{ textAlign: 'center' }}>
               <button type="button" onClick={handleUpload} disabled={uploading}
-                style={{ padding: '10px 24px', borderRadius: 6, border: 'none', fontSize: 14,
-                         fontWeight: 600, background: uploading ? '#ccc' : GOLD, color: '#fff',
+                style={{ padding: '10px 24px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-h3)',
+                         fontWeight: 600, background: uploading ? '#ccc' : GOLD, color: 'var(--white)',
                          cursor: uploading ? 'not-allowed' : 'pointer' }}>
-                {uploading ? '⏳ Analitzant document...' : '⚡ Analitzar talles'}
+                {uploading ? t('import_wizard.analyzing_doc') : t('import_wizard.analyze_sizes')}
               </button>
             </div>
           )}
@@ -502,22 +506,20 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         <div>
           {/* Avís multi-model (gating de cribratge, no bloqueja el pas de talles) */}
           {cribratge.num_models > 1 && (
-            <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: '#c27a2a',
-                          borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 12 }}>
-              ⚠ El document conté {cribratge.num_models} models detectats
-              ({(cribratge.model_detectat || []).map(m => m.nom).join(', ')}).
-              La importació tractarà un sol model.
+            <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: 'var(--gold)',
+                          borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
+              ⚠ {t('import_wizard.multimodel_warn', { count: cribratge.num_models, names: (cribratge.model_detectat || []).map(m => m.nom).join(', ') })}
             </div>
           )}
 
           {/* Taula en construcció: columnes = talles seleccionades */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: '#868685', marginBottom: 6 }}>
-              Columnes de la taula (talles confirmades):
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 6 }}>
+              {t('import_wizard.table_columns')}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {tallesSel.length === 0
-                ? <span style={{ fontSize: 12, color: '#a32d2d' }}>Cap talla seleccionada</span>
+                ? <span style={{ fontSize: 'var(--fs-body)', color: '#a32d2d' }}>{t('import_wizard.no_sizes_selected')}</span>
                 : tallesSel.map(t => (
                     <TallaChip key={t} label={t} ok={teDesti(t)} onRemove={() => removeTalla(t)} />
                   ))}
@@ -527,15 +529,15 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
           {/* Dues columnes: document vs configurat */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
-                Talles del document <span style={{ color: '#868685' }}>({cribratge.sistema_talles})</span>
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, marginBottom: 8 }}>
+                {t('import_wizard.doc_sizes')} <span style={{ color: 'var(--text-muted)' }}>({cribratge.sistema_talles})</span>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {docLabels.map(t => {
                   const sel = tallesSel.some(x => norm(x) === norm(t))
                   return (
                     <span key={t} onClick={() => sel ? removeTalla(t) : addTalla(t)}
-                      style={{ cursor: 'pointer', padding: '4px 9px', borderRadius: 6, fontSize: 12,
+                      style={{ cursor: 'pointer', padding: '4px 9px', borderRadius: 6, fontSize: 'var(--fs-body)',
                                border: `1px solid ${teDesti(t) ? '#c0dd97' : '#f0c0c0'}`,
                                background: !sel ? '#f5f0ea' : teDesti(t) ? '#f0f9f0' : '#fff0f0',
                                color: !sel ? '#aaa' : teDesti(t) ? '#3b6d11' : '#a32d2d',
@@ -547,24 +549,24 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
               </div>
             </div>
             <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
-                Talles configurades al model
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, marginBottom: 8 }}>
+                {t('import_wizard.model_sizes')}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {(configurat || []).length === 0
-                  ? <span style={{ fontSize: 12, color: '#868685' }}>Cap run configurat</span>
+                  ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('import_wizard.no_run_configured')}</span>
                   : configurat.map(t => (
-                      <span key={t} style={{ padding: '4px 9px', borderRadius: 6, fontSize: 12,
-                                             border: `1px solid ${BORDER}`, background: '#fff' }}>{t}</span>
+                      <span key={t} style={{ padding: '4px 9px', borderRadius: 6, fontSize: 'var(--fs-body)',
+                                             border: `1px solid ${BORDER}`, background: 'var(--white)' }}>{t}</span>
                     ))}
               </div>
               {configurablesNoSel.length > 0 && (
-                <div style={{ marginTop: 10, fontSize: 11, color: '#868685' }}>
-                  Afegir a la taula:
+                <div style={{ marginTop: 10, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                  {t('import_wizard.add_to_table')}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                     {configurablesNoSel.map(t => (
                       <button key={t} onClick={() => addTalla(t)}
-                        style={{ padding: '3px 8px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                        style={{ padding: '3px 8px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
                                  border: `1px dashed ${GOLD}`, background: 'transparent', color: GOLD }}>
                         + {t}
                       </button>
@@ -579,20 +581,18 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
           {senseDesti.length > 0 && (
             <div style={{ background: '#fff0f0', border: '1px solid #f0c0c0', borderRadius: 8,
                           padding: '10px 12px', marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: '#a32d2d', marginBottom: 8 }}>
-                {senseDesti.length} talla(es) del document sense destí al sistema configurat:
-                <b> {senseDesti.join(', ')}</b>. Tria una talla per treure-la, o alinea el model
-                al run del document.
+              <div style={{ fontSize: 'var(--fs-body)', color: '#a32d2d', marginBottom: 8 }}>
+                {t('import_wizard.mismatch_warn', { count: senseDesti.length, sizes: senseDesti.join(', ') })}
               </div>
               <button type="button" onClick={handleAlinear} disabled={savingTalles}
-                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
+                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
                          border: `1px solid ${GOLD}`, background: 'transparent', color: GOLD }}>
-                {savingTalles ? '⏳...' : `⤵ Alinear: adoptar ${tallesSel.join('·')} com a run del model`}
+                {savingTalles ? '⏳...' : `⤵ ${t('import_wizard.align_adopt', { sizes: tallesSel.join('·') })}`}
               </button>
               <button type="button" onClick={() => setConfirmSizeMap(true)}
-                style={{ marginLeft: 8, padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
+                style={{ marginLeft: 8, padding: '6px 14px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
                          border: '0.5px solid #c0c0c0', background: 'transparent', color: '#666' }}>
-                ⚙ Configurar run de client
+                ⚙ {t('import_wizard.configure_client_run')}
               </button>
             </div>
           )}
@@ -601,15 +601,15 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
             <button type="button" onClick={onCancel}
               style={{ padding: '8px 16px', border: `0.5px solid ${BORDER}`, borderRadius: 6,
-                       background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
-              ← Cancel·lar
+                       background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
+              ← {t('app.cancel')}
             </button>
             <button type="button" onClick={handleContinue} disabled={!canContinue}
-              title={canContinue ? '' : 'Resol el desajust de talles per continuar'}
-              style={{ padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 14,
-                       fontWeight: 500, color: '#fff', background: canContinue ? GOLD : '#ccc',
+              title={canContinue ? '' : t('import_wizard.resolve_mismatch')}
+              style={{ padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-h3)',
+                       fontWeight: 500, color: 'var(--white)', background: canContinue ? GOLD : '#ccc',
                        cursor: canContinue ? 'pointer' : 'not-allowed' }}>
-              Continuar → POMs
+              {t('import_wizard.continue_poms')}
             </button>
           </div>
         </div>
@@ -620,22 +620,22 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         <div>
           {/* Talles confirmades (Pas 1) sempre visibles */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: '#868685', marginBottom: 6 }}>
-              Talles confirmades (columnes de la taula):
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 6 }}>
+              {t('import_wizard.confirmed_sizes')}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {tallesSel.map(t => (
-                <span key={t} style={{ padding: '3px 9px', borderRadius: 6, fontSize: 12,
+                <span key={t} style={{ padding: '3px 9px', borderRadius: 6, fontSize: 'var(--fs-body)',
                                        border: `1px solid #c0dd97`, background: '#f0f9f0', color: '#3b6d11' }}>{t}</span>
               ))}
             </div>
           </div>
 
           {extracting && (
-            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#868685' }}>
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
               <div style={{ fontSize: 28, marginBottom: 12 }}>⏳</div>
-              <div style={{ fontSize: 14 }}>Extraient POMs del document...</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>Anàlisi de visió (pot trigar uns segons)</div>
+              <div style={{ fontSize: 'var(--fs-h3)' }}>{t('import_wizard.extracting_poms')}</div>
+              <div style={{ fontSize: 'var(--fs-body)', marginTop: 4 }}>{t('import_wizard.vision_analysis')}</div>
             </div>
           )}
 
@@ -643,15 +643,15 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             <div>
               {/* Avisos d'extracció */}
               {(extraccioMeta?.avisos || []).length > 0 && (
-                <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: '#c27a2a',
-                              borderRadius: 8, padding: '8px 12px', fontSize: 12, marginBottom: 12 }}>
+                <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: 'var(--gold)',
+                              borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
                   {extraccioMeta.avisos.map((a, i) => <div key={i}>⚠ {a}</div>)}
                 </div>
               )}
 
-              <div style={{ fontSize: 12, color: '#868685', marginBottom: 8 }}>
-                {pomsExtrets.length} POMs detectats · {pomsActius} actius
-                {extraccioMeta?.base_size && <> · talla base: <b>{extraccioMeta.base_size}</b></>}
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>
+                {t('import_wizard.poms_summary', { count: pomsExtrets.length, active: pomsActius })}
+                {extraccioMeta?.base_size && <> · {t('import_wizard.base_size_label')}: <b>{extraccioMeta.base_size}</b></>}
               </div>
 
               <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
@@ -665,39 +665,39 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                     <div key={idx} style={{
                       display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
                       borderTop: idx ? `1px solid ${BORDER}` : 'none',
-                      background: !p.actiu ? '#f7f7f5' : tenantOnly ? '#f3f0fb' : low ? '#fdf3ee' : '#fff',
+                      background: !p.actiu ? '#f7f7f5' : tenantOnly ? '#f3f0fb' : low ? '#fdf3ee' : 'var(--white)',
                       opacity: p.actiu ? 1 : 0.55,
                     }}>
                       <input type="checkbox" checked={!!p.actiu}
                         onChange={() => noMatch ? toggleTenantOnly(idx) : togglePom(idx)} />
-                      <div style={{ flex: '0 0 90px', fontWeight: 600, fontSize: 13 }}>
+                      <div style={{ flex: '0 0 90px', fontWeight: 600, fontSize: 'var(--fs-body)' }}>
                         {p.codi_fitxa || '—'}
                       </div>
-                      <div style={{ fontSize: 16, color: '#868685' }}>→</div>
-                      <div style={{ flex: 1, fontSize: 13 }}>
+                      <div style={{ fontSize: 'var(--fs-h3)', color: 'var(--text-muted)' }}>→</div>
+                      <div style={{ flex: 1, fontSize: 'var(--fs-body)' }}>
                         {noMatch
                           ? (tenantOnly
                               ? <span style={{ color: '#5b3fa3' }}>
-                                  {p.descripcio || 'sense descripció'}
-                                  <span style={{ marginLeft: 8, fontSize: 11, color: '#868685' }}>
-                                    · s'afegirà al catàleg del tenant
+                                  {p.descripcio || t('import_wizard.no_description')}
+                                  <span style={{ marginLeft: 8, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                                    {t('import_wizard.will_add_tenant')}
                                   </span>
                                 </span>
                               : <span style={{ color: '#a32d2d' }}>
-                                  Sense match — {p.descripcio || 'sense descripció'}
+                                  {t('import_wizard.no_match')} — {p.descripcio || t('import_wizard.no_description')}
                                   <span onClick={() => toggleTenantOnly(idx)}
-                                    style={{ marginLeft: 8, fontSize: 12, color: GOLD,
+                                    style={{ marginLeft: 8, fontSize: 'var(--fs-body)', color: GOLD,
                                              cursor: 'pointer', textDecoration: 'underline' }}>
-                                    Afegir com a propi
+                                    {t('import_wizard.add_as_own')}
                                   </span>
                                 </span>)
                           : <><b>{p.pom_codi}</b> · {p.pom_nom || p.descripcio}</>}
                       </div>
                       <span style={{
-                        fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+                        fontSize: 'var(--fs-body)', fontWeight: 600, padding: '2px 8px', borderRadius: 10,
                         background: tenantOnly ? '#ede7fb' : noMatch ? '#fff0f0' : (low || med) ? '#fdf6ee' : '#f0f9f0',
-                        color: tenantOnly ? '#5b3fa3' : noMatch ? '#a32d2d' : (low || med) ? '#c27a2a' : '#3b6d11',
-                      }}>{tenantOnly ? 'tenant-only' : noMatch ? 'sense match' : conf.toLowerCase()}</span>
+                        color: tenantOnly ? '#5b3fa3' : noMatch ? '#a32d2d' : (low || med) ? 'var(--gold)' : '#3b6d11',
+                      }}>{tenantOnly ? 'tenant-only' : noMatch ? t('import_wizard.no_match_badge') : conf.toLowerCase()}</span>
                     </div>
                   )
                 })}
@@ -707,16 +707,16 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
               <div style={{ marginBottom: 16 }}>
                 {!showAddPom ? (
                   <button type="button" onClick={loadCataleg}
-                    style={{ padding: '6px 12px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
+                    style={{ padding: '6px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
                              border: `1px dashed ${GOLD}`, background: 'transparent', color: GOLD }}>
-                    + Afegir POM del catàleg
+                    {t('import_wizard.add_pom_catalog')}
                   </button>
                 ) : (
                   <select onChange={e => { const pm = (cataleg || []).find(c => String(c.id) === e.target.value); if (pm) addPomManual(pm) }}
                     defaultValue=""
-                    style={{ padding: '8px', borderRadius: 6, fontSize: 13, border: `1px solid ${BORDER}`,
+                    style={{ padding: '8px', borderRadius: 6, fontSize: 'var(--fs-body)', border: `1px solid ${BORDER}`,
                              fontFamily: 'inherit', minWidth: 320 }}>
-                    <option value="" disabled>Tria un POM del catàleg…</option>
+                    <option value="" disabled>{t('import_wizard.choose_pom')}</option>
                     {(cataleg || []).map(c => (
                       <option key={c.id} value={c.id}>{c.codi_client} · {c.nom_client}</option>
                     ))}
@@ -727,15 +727,15 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <button type="button" onClick={() => setStep(1)}
                   style={{ padding: '8px 16px', border: `0.5px solid ${BORDER}`, borderRadius: 6,
-                           background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
-                  ← Enrere
+                           background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
+                  ← {t('app.back')}
                 </button>
                 <button type="button" onClick={handleContinuePoms} disabled={pomsActius === 0 || savingPoms}
-                  style={{ padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 14,
-                           fontWeight: 500, color: '#fff',
+                  style={{ padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-h3)',
+                           fontWeight: 500, color: 'var(--white)',
                            background: pomsActius && !savingPoms ? GOLD : '#ccc',
                            cursor: pomsActius && !savingPoms ? 'pointer' : 'not-allowed' }}>
-                  Continuar → Mesures
+                  {t('import_wizard.continue_measures')}
                 </button>
               </div>
             </div>
@@ -746,48 +746,45 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       {/* ═══════════════ PAS 3 — MESURES ═══════════════ */}
       {step === 3 && (
         <div>
-          <div style={{ fontSize: 12, color: '#868685', marginBottom: 10 }}>
-            Taula de mesures · {pomsTaula.length} POMs × {tallesSel.length} talles ·
-            talla base: <b>{baseSize}</b>. Edita qualsevol valor; les cel·les buides es poden
-            omplir amb el grading automàtic.
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 10 }}>
+            {t('import_wizard.table_intro', { poms: pomsTaula.length, sizes: tallesSel.length, base: baseSize })}
           </div>
 
           {/* 1C-2b — com estan expressats els valors de la fitxa (default suggerit per l'heurística) */}
           <div style={{ marginBottom: 12 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button type="button" onClick={() => setValorsMode('absoluts')}
-                style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: 'none',
+                style={{ padding: '4px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer', border: 'none',
                          background: valorsMode === 'absoluts' ? GOLD : '#f5f0ea',
-                         color: valorsMode === 'absoluts' ? '#fff' : '#868685' }}>Mesures absolutes</button>
+                         color: valorsMode === 'absoluts' ? 'var(--white)' : 'var(--text-muted)' }}>{t('import_wizard.absolute_measures')}</button>
               <button type="button" onClick={() => setValorsMode('deltes')}
-                style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: 'none',
+                style={{ padding: '4px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer', border: 'none',
                          background: valorsMode === 'deltes' ? GOLD : '#f5f0ea',
-                         color: valorsMode === 'deltes' ? '#fff' : '#868685' }}>Increments</button>
+                         color: valorsMode === 'deltes' ? 'var(--white)' : 'var(--text-muted)' }}>{t('import_wizard.increments')}</button>
             </div>
-            <div style={{ fontSize: 11, color: '#868685', marginTop: 5 }}>
-              Com estan expressats els valors de la fitxa: mesures finals per talla, o increments
-              respecte a la talla base.{valorsMode === 'deltes'
-                ? ' Es convertiran a mesures absolutes en desar.' : ''}
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 5 }}>
+              {t('import_wizard.values_help')}{valorsMode === 'deltes'
+                ? t('import_wizard.values_help_deltes') : ''}
             </div>
           </div>
 
           {emptyCols.length > 0 && (
-            <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: '#c27a2a',
-                          borderRadius: 8, padding: '8px 12px', fontSize: 12, marginBottom: 10,
+            <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: 'var(--gold)',
+                          borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 10,
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <span>Talles sense valors al document: <b>{emptyCols.join(', ')}</b>.</span>
+              <span>{t('import_wizard.sizes_no_values')} <b>{emptyCols.join(', ')}</b>.</span>
               <button type="button" onClick={handleGenerarGrading} disabled={gradingLoading || !baseTeValors}
-                title={baseTeValors ? '' : 'Cal valors a la talla base primer'}
-                style={{ padding: '6px 12px', borderRadius: 6, fontSize: 13, whiteSpace: 'nowrap',
+                title={baseTeValors ? '' : t('import_wizard.need_base_values')}
+                style={{ padding: '6px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', whiteSpace: 'nowrap',
                          border: `1px solid ${GOLD}`, background: 'transparent', color: GOLD,
                          cursor: baseTeValors && !gradingLoading ? 'pointer' : 'not-allowed' }}>
-                {gradingLoading ? '⏳ Generant...' : '⚡ Generar grading'}
+                {gradingLoading ? t('import_wizard.generating') : t('import_wizard.generate_grading')}
               </button>
             </div>
           )}
 
           <div style={{ overflowX: 'auto', border: `1px solid ${BORDER}`, borderRadius: 8, marginBottom: 16 }}>
-            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 'var(--fs-body)' }}>
               <thead>
                 <tr style={{ background: '#f5f0ea' }}>
                   <th style={{ padding: '8px 10px', textAlign: 'left', position: 'sticky', left: 0,
@@ -795,8 +792,8 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                   {tallesSel.map(talla => (
                     <th key={talla} style={{ padding: '8px 10px', textAlign: 'center', minWidth: 64,
                           background: talla === baseSize ? '#f0e7cf' : '#f5f0ea',
-                          color: talla === baseSize ? '#7a5a00' : '#1d1d1b' }}>
-                      {talla}{talla === baseSize && <div style={{ fontSize: 9 }}>base</div>}
+                          color: talla === baseSize ? '#7a5a00' : 'var(--text-main)' }}>
+                      {talla}{talla === baseSize && <div style={{ fontSize: 'var(--fs-caption)' }}>{t('import_wizard.col_base')}</div>}
                     </th>
                   ))}
                 </tr>
@@ -804,17 +801,17 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
               <tbody>
                 {pomsTaula.map(p => (
                   <tr key={p.pom_master_id} style={{ borderTop: `1px solid ${BORDER}` }}>
-                    <td style={{ padding: '6px 10px', position: 'sticky', left: 0, background: '#fff' }}>
+                    <td style={{ padding: '6px 10px', position: 'sticky', left: 0, background: 'var(--white)' }}>
                       <b>{p.pom_codi || p.codi_fitxa}</b>
-                      <div style={{ fontSize: 10, color: '#868685' }}>{p.pom_nom || p.descripcio}</div>
+                      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{p.pom_nom || p.descripcio}</div>
                     </td>
                     {tallesSel.map(talla => (
                       <td key={talla} style={{ padding: '2px', textAlign: 'center',
-                            background: talla === baseSize ? '#fbf7ec' : '#fff' }}>
+                            background: talla === baseSize ? '#fbf7ec' : 'var(--white)' }}>
                         <input type="number" step="0.1"
                           value={taula[p.pom_master_id]?.[talla] ?? ''}
                           onChange={e => setCell(p.pom_master_id, talla, e.target.value)}
-                          style={{ width: 56, padding: '4px', textAlign: 'center', fontSize: 12,
+                          style={{ width: 56, padding: '4px', textAlign: 'center', fontSize: 'var(--fs-body)',
                                    border: `1px solid ${BORDER}`, borderRadius: 4,
                                    fontFamily: 'inherit' }} />
                       </td>
@@ -828,25 +825,25 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <button type="button" onClick={() => setStep(2)}
               style={{ padding: '8px 16px', border: `0.5px solid ${BORDER}`, borderRadius: 6,
-                       background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
-              ← Enrere
+                       background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
+              ← {t('app.back')}
             </button>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={goCrearLibrary} disabled={!baseTeValors || savingMesures}
-                title={baseTeValors ? 'Crear un run a la Size Library des d\'aquesta fitxa'
-                                    : 'La talla base necessita almenys un valor'}
+                title={baseTeValors ? t('import_wizard.create_library_title')
+                                    : t('import_wizard.base_needs_value')}
                 style={{ padding: '8px 16px', borderRadius: 6, border: `1px solid ${GOLD}`,
-                         background: 'transparent', color: GOLD, fontSize: 13,
+                         background: 'transparent', color: GOLD, fontSize: 'var(--fs-body)',
                          cursor: baseTeValors && !savingMesures ? 'pointer' : 'not-allowed' }}>
-                Crear a la Size Library
+                {t('import_wizard.create_library')}
               </button>
               <button type="button" onClick={handleContinueMesures} disabled={!baseTeValors || savingMesures}
-                title={baseTeValors ? '' : 'La talla base necessita almenys un valor'}
-                style={{ padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 14,
-                         fontWeight: 500, color: '#fff',
+                title={baseTeValors ? '' : t('import_wizard.base_needs_value')}
+                style={{ padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-h3)',
+                         fontWeight: 500, color: 'var(--white)',
                          background: baseTeValors && !savingMesures ? GOLD : '#ccc',
                          cursor: baseTeValors && !savingMesures ? 'pointer' : 'not-allowed' }}>
-                Continuar → Teixit
+                {t('import_wizard.continue_fabric')}
               </button>
             </div>
           </div>
@@ -856,89 +853,89 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       {/* ═══════════════ PAS 4 — TEIXIT ═══════════════ */}
       {step === 4 && (
         <div>
-          <div style={{ fontSize: 12, color: '#868685', marginBottom: 12 }}>
-            Teixit i encongiment <b>(opcional)</b> — pots ometre aquest pas.
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
+            {t('import_wizard.fabric_and_shrinkage')} <b>{t('import_wizard.optional')}</b> {t('import_wizard.skip_step_hint')}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
             <div>
-              <label style={{ fontSize: 12, color: '#868685', display: 'block', marginBottom: 4 }}>Teixit principal</label>
+              <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('import_wizard.fabric_main_label')}</label>
               <input value={teixit.fabric_main}
-                onChange={e => setTeixit(t => ({ ...t, fabric_main: e.target.value }))}
-                placeholder="ex: Viscose Chiffon"
-                style={{ width: '100%', padding: '7px 10px', fontSize: 13, borderRadius: 6,
+                onChange={e => setTeixit(prev => ({ ...prev, fabric_main: e.target.value }))}
+                placeholder={t('import_wizard.fabric_main_ph')}
+                style={{ width: '100%', padding: '7px 10px', fontSize: 'var(--fs-body)', borderRadius: 6,
                          border: `1px solid ${BORDER}`, boxSizing: 'border-box', fontFamily: 'inherit' }} />
             </div>
             <div>
-              <label style={{ fontSize: 12, color: '#868685', display: 'block', marginBottom: 4 }}>Composició</label>
+              <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('import_wizard.composition')}</label>
               <input value={teixit.fabric_composition}
-                onChange={e => setTeixit(t => ({ ...t, fabric_composition: e.target.value }))}
-                placeholder="ex: 100% Viscose"
-                style={{ width: '100%', padding: '7px 10px', fontSize: 13, borderRadius: 6,
+                onChange={e => setTeixit(prev => ({ ...prev, fabric_composition: e.target.value }))}
+                placeholder={t('import_wizard.composition_ph')}
+                style={{ width: '100%', padding: '7px 10px', fontSize: 'var(--fs-body)', borderRadius: 6,
                          border: `1px solid ${BORDER}`, boxSizing: 'border-box', fontFamily: 'inherit' }} />
             </div>
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, color: '#868685', display: 'block', marginBottom: 6 }}>
-              Encongiment — ISO estàndard (clica per omplir):
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
+              {t('import_wizard.shrinkage_iso')}
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
               {isoTable.map(entry => {
                 const active = teixit.shrinkage_type === 'ISO' && teixit.shrinkage_iso_key === entry.id
                 return (
                   <button key={entry.id} type="button" onClick={() => selectIso(entry)}
-                    style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                    style={{ padding: '4px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
                              border: active ? `1.5px solid ${GOLD}` : `0.5px solid ${BORDER}`,
-                             background: active ? '#fdf6ee' : 'transparent', color: '#868685' }}>
-                    {entry.nom} <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{entry.warp}%/{entry.weft}%</span>
+                             background: active ? '#fdf6ee' : 'transparent', color: 'var(--text-muted)' }}>
+                    {entry.nom} <span style={{ fontSize: 'var(--fs-body)' }}>{entry.warp}%/{entry.weft}%</span>
                   </button>
                 )
               })}
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
               <button type="button" onClick={() => setBiaxial(true)}
-                style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: 'none',
-                         background: biaxial ? GOLD : '#f5f0ea', color: biaxial ? '#fff' : '#868685' }}>Warp / Weft</button>
+                style={{ padding: '4px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer', border: 'none',
+                         background: biaxial ? GOLD : '#f5f0ea', color: biaxial ? 'var(--white)' : 'var(--text-muted)' }}>Warp / Weft</button>
               <button type="button" onClick={() => setBiaxial(false)}
-                style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: 'none',
-                         background: !biaxial ? GOLD : '#f5f0ea', color: !biaxial ? '#fff' : '#868685' }}>Single %</button>
+                style={{ padding: '4px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer', border: 'none',
+                         background: !biaxial ? GOLD : '#f5f0ea', color: !biaxial ? 'var(--white)' : 'var(--text-muted)' }}>Single %</button>
             </div>
             {biaxial ? (
               <div style={{ display: 'flex', gap: 12 }}>
                 <input type="number" step="0.5" min="0" max="30" value={teixit.shrinkage_warp}
                   onChange={e => setTeixit(t => ({ ...t, shrinkage_warp: e.target.value, shrinkage_type: 'SUPPLIER', shrinkage_iso_key: '' }))}
-                  placeholder="Warp %" style={{ width: 90, padding: '7px 10px', fontSize: 13, borderRadius: 6, border: `1px solid ${BORDER}`, fontFamily: 'inherit' }} />
+                  placeholder="Warp %" style={{ width: 90, padding: '7px 10px', fontSize: 'var(--fs-body)', borderRadius: 6, border: `1px solid ${BORDER}`, fontFamily: 'inherit' }} />
                 <input type="number" step="0.5" min="0" max="30" value={teixit.shrinkage_weft}
                   onChange={e => setTeixit(t => ({ ...t, shrinkage_weft: e.target.value, shrinkage_type: 'SUPPLIER', shrinkage_iso_key: '' }))}
-                  placeholder="Weft %" style={{ width: 90, padding: '7px 10px', fontSize: 13, borderRadius: 6, border: `1px solid ${BORDER}`, fontFamily: 'inherit' }} />
+                  placeholder="Weft %" style={{ width: 90, padding: '7px 10px', fontSize: 'var(--fs-body)', borderRadius: 6, border: `1px solid ${BORDER}`, fontFamily: 'inherit' }} />
               </div>
             ) : (
               <input type="number" step="0.5" min="0" max="30" value={teixit.shrinkage_pct}
                 onChange={e => setTeixit(t => ({ ...t, shrinkage_pct: e.target.value, shrinkage_type: 'SUPPLIER' }))}
-                placeholder="Shrinkage %" style={{ width: 110, padding: '7px 10px', fontSize: 13, borderRadius: 6, border: `1px solid ${BORDER}`, fontFamily: 'inherit' }} />
+                placeholder="Shrinkage %" style={{ width: 110, padding: '7px 10px', fontSize: 'var(--fs-body)', borderRadius: 6, border: `1px solid ${BORDER}`, fontFamily: 'inherit' }} />
             )}
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={{ fontSize: 12, color: '#868685', display: 'block', marginBottom: 4 }}>Notes</label>
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('import_wizard.notes')}</label>
             <textarea value={teixit.fabric_notes} rows={2}
               onChange={e => setTeixit(t => ({ ...t, fabric_notes: e.target.value }))}
-              style={{ width: '100%', padding: '7px 10px', fontSize: 13, borderRadius: 6, resize: 'vertical',
+              style={{ width: '100%', padding: '7px 10px', fontSize: 'var(--fs-body)', borderRadius: 6, resize: 'vertical',
                        border: `1px solid ${BORDER}`, boxSizing: 'border-box', fontFamily: 'inherit' }} />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <button type="button" onClick={() => setStep(3)}
               style={{ padding: '8px 16px', border: `0.5px solid ${BORDER}`, borderRadius: 6,
-                       background: 'transparent', cursor: 'pointer', fontSize: 13 }}>← Enrere</button>
+                       background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>← {t('app.back')}</button>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={() => handleSaveTeixit(true)} disabled={savingTeixit}
                 style={{ padding: '8px 16px', border: `0.5px solid ${BORDER}`, borderRadius: 6,
-                         background: 'transparent', cursor: 'pointer', fontSize: 13 }}>Ometre →</button>
+                         background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>{t('import_wizard.skip')}</button>
               <button type="button" onClick={() => handleSaveTeixit(false)} disabled={savingTeixit}
-                style={{ padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 14, fontWeight: 500,
-                         color: '#fff', background: GOLD, cursor: 'pointer' }}>Continuar → Guardar</button>
+                style={{ padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-h3)', fontWeight: 500,
+                         color: 'var(--white)', background: GOLD, cursor: 'pointer' }}>{t('import_wizard.continue_save')}</button>
             </div>
           </div>
         </div>
@@ -947,38 +944,37 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       {/* ═══════════════ PAS 5 — GUARDAR ═══════════════ */}
       {step === 5 && (
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Resum de la importació</div>
+          <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('import_wizard.summary_title')}</div>
           <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
             {[
-              ['Model destí', `${model.codi_intern} · ${model.nom_prenda || ''}`],
-              ['Talles', `${tallesSel.length} (${tallesSel.join('·')})`],
-              ['POMs', `${pomsActius} confirmats`],
-              ['Valors de mesura', `${nValors}`],
-              ['Teixit', teixitInformat ? (teixit.fabric_main || 'informat') : 'no informat'],
+              [t('import_wizard.target_model'), `${model.codi_intern} · ${model.nom_prenda || ''}`],
+              [t('import_wizard.step.sizes'), `${tallesSel.length} (${tallesSel.join('·')})`],
+              [t('import_wizard.step.poms'), t('import_wizard.confirmed_count', { count: pomsActius })],
+              [t('import_wizard.measure_values'), `${nValors}`],
+              [t('import_wizard.step.fabric'), teixitInformat ? (teixit.fabric_main || t('import_wizard.fabric_informed')) : t('import_wizard.fabric_not_informed')],
             ].map(([k, v], i) => (
-              <div key={k} style={{ display: 'flex', padding: '8px 12px', fontSize: 13,
+              <div key={k} style={{ display: 'flex', padding: '8px 12px', fontSize: 'var(--fs-body)',
                                     borderTop: i ? `1px solid ${BORDER}` : 'none' }}>
-                <div style={{ flex: '0 0 160px', color: '#868685' }}>{k}</div>
+                <div style={{ flex: '0 0 160px', color: 'var(--text-muted)' }}>{k}</div>
                 <div style={{ flex: 1, fontWeight: 500 }}>{v}</div>
               </div>
             ))}
           </div>
 
           <div style={{ background: '#f0f9f0', border: '1px solid #c0dd97', color: '#3b6d11',
-                        borderRadius: 8, padding: '8px 12px', fontSize: 12, marginBottom: 16 }}>
-            Mana el document: es crearan <b>només</b> els {pomsActius} POMs confirmats (sense files
-            buides de plantilla), amb grading tancat (v1). El PDF es desa com a document origen.
+                        borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 16 }}>
+            {t('import_wizard.mana_doc', { count: pomsActius })}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <button type="button" onClick={() => setStep(4)}
               style={{ padding: '8px 16px', border: `0.5px solid ${BORDER}`, borderRadius: 6,
-                       background: 'transparent', cursor: 'pointer', fontSize: 13 }}>← Enrere</button>
+                       background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>← {t('app.back')}</button>
             <button type="button" onClick={handleConfirmar} disabled={confirming}
-              style={{ padding: '8px 24px', borderRadius: 6, border: 'none', fontSize: 14, fontWeight: 600,
-                       color: '#fff', background: confirming ? '#ccc' : GOLD,
+              style={{ padding: '8px 24px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-h3)', fontWeight: 600,
+                       color: 'var(--white)', background: confirming ? '#ccc' : GOLD,
                        cursor: confirming ? 'not-allowed' : 'pointer' }}>
-              {confirming ? '⏳ Guardant...' : '✓ Confirmar i guardar'}
+              {confirming ? t('import_wizard.confirming') : t('import_wizard.confirm_save')}
             </button>
           </div>
         </div>
@@ -986,15 +982,14 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
 
       {confirmSizeMap && (
         <Modal
-          title="Configurar el run a la Size Library"
-          confirmLabel="Anar a la Library"
-          cancelLabel="Cancel·lar"
+          title={t('import_wizard.configure_run_title')}
+          confirmLabel={t('import_wizard.go_to_library')}
+          cancelLabel={t('app.cancel')}
           onCancel={() => setConfirmSizeMap(false)}
           onConfirm={() => { setConfirmSizeMap(false); goConfigureRun() }}
         >
-          <p style={{ fontSize: 13, color: '#444', lineHeight: 1.5 }}>
-            Sortiràs cap a la Size Library per generar aquesta graduació. Quan l'hagis
-            creada, hauràs de tornar a aquest model manualment per continuar la importació.
+          <p style={{ fontSize: 'var(--fs-body)', color: '#444', lineHeight: 1.5 }}>
+            {t('import_wizard.modal_body')}
           </p>
         </Modal>
       )}

@@ -12,16 +12,16 @@ import { selS, primaryBtn } from '../components/ui/buttons'
 // desat per fila) · (3) gestió d'items (+ Item / editar / esborrar). Plantilla Peça 0.
 // El temps és PREVIST (estimació base; s'ajusta amb dades reals — no es mostren camps Welford).
 const MONO = 'IBM Plex Mono, monospace'
-const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: 2 }
+const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 'var(--fs-h3)', padding: 2 }
 const actBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)',
+  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
 }
 const thS = {
-  fontFamily: MONO, fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', padding: '8px 6px',
+  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', padding: '8px 6px',
   textTransform: 'uppercase', letterSpacing: '.03em', borderBottom: '0.5px solid var(--gray-l)', whiteSpace: 'nowrap',
 }
-const tdS = { padding: '6px 8px', fontSize: 12, borderBottom: '0.5px solid var(--gray-l)', verticalAlign: 'middle' }
+const tdS = { padding: '6px 8px', fontSize: 'var(--fs-body)', borderBottom: '0.5px solid var(--gray-l)', verticalAlign: 'middle' }
 
 export default function GarmentTypes() {
   const { t } = useTranslation()
@@ -160,8 +160,8 @@ export default function GarmentTypes() {
     <div style={{ minWidth: 0, maxWidth: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('garment_types.title')}</h1>
-          <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('garment_types.subtitle')}</p>
+          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('garment_types.title')}</h1>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('garment_types.subtitle')}</p>
         </div>
         {canEdit && <button onClick={() => setTypeModal({ mode: 'create' })} style={{ ...primaryBtn, marginLeft: 0 }}>
           <i className="ti ti-plus" style={{ fontSize: 14 }} />{t('garment_types.new')}
@@ -195,11 +195,11 @@ export default function GarmentTypes() {
                         padding: '9px 12px', cursor: 'pointer', borderBottom: '0.5px solid var(--gray-l)',
                         background: x.id === selectedId ? 'var(--warn-bg)' : 'transparent',
                       }}>
-                        <div style={{ fontFamily: MONO, fontSize: 12, fontWeight: 600, color: x.id === selectedId ? 'var(--warn)' : 'var(--text-main)' }}>
+                        <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: x.id === selectedId ? 'var(--warn)' : 'var(--text-main)' }}>
                           {x.nom_client || x.nom_ca || x.codi_client}
-                          {!x.actiu && <span style={{ marginLeft: 6, fontSize: 9, color: 'var(--gray)' }}>({t('garment_types.inactive')})</span>}
+                          {!x.actiu && <span style={{ marginLeft: 6, fontSize: 'var(--fs-caption)', color: 'var(--gray)' }}>({t('garment_types.inactive')})</span>}
                         </div>
-                        <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--gray)' }}>{x.codi_client} · {x.grup}</div>
+                        <div style={{ fontFamily: MONO, fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>{x.codi_client} · {x.grup}</div>
                       </div>
                     ))}
                 </div>
@@ -213,12 +213,12 @@ export default function GarmentTypes() {
                     <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 16, marginBottom: 14 }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                         <div>
-                          <div style={{ fontFamily: MONO, fontSize: 15, fontWeight: 600 }}>{selected.nom_client || selected.nom_ca}</div>
-                          <div style={{ fontFamily: MONO, fontSize: 11, color: 'var(--gray)', marginTop: 2 }}>
+                          <div style={{ fontFamily: MONO, fontSize: 'var(--fs-h3)', fontWeight: 600 }}>{selected.nom_client || selected.nom_ca}</div>
+                          <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gray)', marginTop: 2 }}>
                             {selected.codi_client} · {selected.grup} · {selected.actiu ? t('garment_types.active') : t('garment_types.inactive')}
-                            {selected.is_system && <span style={{ marginLeft: 6, fontSize: 10 }}>· {t('garment_types.system')}</span>}
+                            {selected.is_system && <span style={{ marginLeft: 6, fontSize: 'var(--fs-label)' }}>· {t('garment_types.system')}</span>}
                           </div>
-                          {selected.global_codi && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>{t('garment_types.global')}: {selected.global_codi} · {selected.global_nom}</div>}
+                          {selected.global_codi && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 4 }}>{t('garment_types.global')}: {selected.global_codi} · {selected.global_nom}</div>}
                         </div>
                         {canEdit && (
                           <div style={{ display: 'flex', gap: 6 }}>
@@ -231,7 +231,7 @@ export default function GarmentTypes() {
 
                     {/* (3) gestió d'items: + Item */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 600 }}>{t('garment_types.matrix')} · {items.length} {t('garment_types.items').toLowerCase()}</span>
+                      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('garment_types.matrix')} · {items.length} {t('garment_types.items').toLowerCase()}</span>
                       {canEdit && <button onClick={() => setItemModal({ mode: 'create' })} style={{ ...primaryBtn, marginLeft: 0 }}>
                         <i className="ti ti-plus" style={{ fontSize: 13 }} />{t('garment_types.new_item')}
                       </button>}
@@ -256,8 +256,8 @@ export default function GarmentTypes() {
                                     <td style={{ ...tdS, position: 'sticky', left: 0, background: dirty[it.id] ? 'var(--warn-bg)' : 'var(--white)', zIndex: 1 }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                          <div style={{ fontWeight: 600 }}>{it.code}{!it.active && <span style={{ marginLeft: 5, fontSize: 9, color: 'var(--gray)' }}>({t('garment_types.inactive')})</span>}</div>
-                                          <div style={{ fontSize: 10, color: 'var(--gray)' }}>{it.name}</div>
+                                          <div style={{ fontWeight: 600 }}>{it.code}{!it.active && <span style={{ marginLeft: 5, fontSize: 'var(--fs-caption)', color: 'var(--gray)' }}>({t('garment_types.inactive')})</span>}</div>
+                                          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>{it.name}</div>
                                         </div>
                                         {canEdit && (
                                           <>
@@ -273,7 +273,7 @@ export default function GarmentTypes() {
                                         <td key={c.id} style={{ ...tdS, textAlign: 'center', padding: 4 }}>
                                           <input type="number" min="0" value={cell.value} disabled={!canEdit || savingRow === it.id}
                                             onChange={e => setCell(it.id, c.id, e.target.value)}
-                                            style={{ width: 50, textAlign: 'right', fontFamily: MONO, fontSize: 11, border: '0.5px solid var(--gray-l)', borderRadius: 4, padding: '3px 4px', background: 'var(--white)' }} />
+                                            style={{ width: 50, textAlign: 'right', fontFamily: MONO, fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 4, padding: '3px 4px', background: 'var(--white)' }} />
                                         </td>
                                       )
                                     })}
@@ -342,7 +342,7 @@ function TypeModal({ mode, tt, t, saving, setSaving, onCancel, onSaved, onError 
       <Field label={t('garment_types.f_nom_client')}><input value={f.nom_client} onChange={e => set('nom_client', e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
       <Field label={t('garment_types.f_nom_ca')}><input value={f.nom_ca} onChange={e => set('nom_ca', e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
       <Field label={t('garment_types.f_grup')}><input value={f.grup} onChange={e => set('grup', e.target.value)} placeholder="TOPS / BOTTOMS / …" style={{ ...selS, width: '100%' }} /></Field>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginBottom: 8 }}>
         <input type="checkbox" checked={f.actiu} onChange={e => set('actiu', e.target.checked)} /><span>{t('garment_types.active')}</span>
       </label>
       <button type="button" onClick={() => setMore(m => !m)} style={{ ...actBtn, marginBottom: more ? 12 : 0 }}>
@@ -355,7 +355,7 @@ function TypeModal({ mode, tt, t, saving, setSaving, onCancel, onSaved, onError 
           <Field label={t('garment_types.f_nom_es')}><input value={f.nom_es} onChange={e => set('nom_es', e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
           <Field label={t('garment_types.f_construccio')}><input value={f.construccio_habitual} onChange={e => set('construccio_habitual', e.target.value)} placeholder="WOVEN / KNIT / …" style={{ ...selS, width: '100%' }} /></Field>
           {isEdit && (
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+            <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 4 }}>
               {tt?.is_system && <div>{t('garment_types.system_note')}</div>}
               <div>{t('garment_types.advanced_note')}</div>
             </div>
@@ -400,7 +400,7 @@ function ItemModal({ mode, item, typeId, t, saving, setSaving, onCancel, onSaved
         <input type="number" value={order} onChange={e => setOrder(e.target.value)} style={{ ...selS, width: '100%' }} />
         <Hint>{t('garment_types.order_hint')}</Hint>
       </Field>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginTop: 4 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginTop: 4 }}>
         <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /><span>{t('garment_types.active')}</span>
       </label>
     </Modal>
@@ -410,11 +410,11 @@ function ItemModal({ mode, item, typeId, t, saving, setSaving, onCancel, onSaved
 function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <label style={{ fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
+      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   )
 }
 function Hint({ children }) {
-  return <div style={{ fontSize: 10, color: 'var(--gray)', marginTop: 4 }}>{children}</div>
+  return <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginTop: 4 }}>{children}</div>
 }

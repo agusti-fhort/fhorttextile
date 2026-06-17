@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import i18n from '../i18n'
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
 } from '@dnd-kit/core'
@@ -26,20 +27,20 @@ const AMBER = 'var(--warn)'
 const TZ = 'Europe/Madrid'
 
 const thS = {
-  fontFamily: MONO, fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textAlign: 'left',
+  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', textAlign: 'left',
   padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.04em',
   borderBottom: '0.5px solid var(--gray-l)', whiteSpace: 'nowrap',
 }
-const tdS = { padding: '8px 10px', fontSize: 12, borderBottom: '0.5px solid var(--gray-l)', verticalAlign: 'middle' }
+const tdS = { padding: '8px 10px', fontSize: 'var(--fs-body)', borderBottom: '0.5px solid var(--gray-l)', verticalAlign: 'middle' }
 
 function localDateTime(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('ca-ES',
+  return new Date(iso).toLocaleString(i18n.language || 'ca',
     { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 function localDate(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('ca-ES', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' })
+  return new Date(iso).toLocaleDateString(i18n.language || 'ca', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 function localISODate(iso) {   // 'YYYY-MM-DD' en hora local (per comparar amb data_objectiu)
   if (!iso) return null
@@ -238,15 +239,15 @@ export default function Planning() {
   if (!canPlan) return (
     <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
       <i className="ti ti-lock" style={{ fontSize: 32, color: 'var(--gray)' }} />
-      <p style={{ marginTop: 12, fontSize: 13, color: 'var(--gray)' }}>{t('planning.no_access')}</p>
+      <p style={{ marginTop: 12, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('planning.no_access')}</p>
     </div>
   )
 
   return (
     <div style={{ minWidth: 0, maxWidth: '100%' }}>
       <div style={{ marginBottom: '1rem' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('planning.title')}</h1>
-        <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('planning.subtitle')}</p>
+        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('planning.title')}</h1>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('planning.subtitle')}</p>
       </div>
 
       <Feedback feedback={feedback} />
@@ -256,7 +257,7 @@ export default function Planning() {
         <div style={{ display: 'flex', border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
           {[['pending', 'tab_pending'], ['assigned', 'tab_assigned']].map(([val, key]) => (
             <button key={val} onClick={() => setTab(val)} style={{
-              fontFamily: MONO, fontSize: 12, padding: '7px 16px', border: 'none', cursor: 'pointer',
+              fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '7px 16px', border: 'none', cursor: 'pointer',
               background: tab === val ? CREMA : 'var(--white)', color: tab === val ? AMBER : 'var(--gray)',
               fontWeight: tab === val ? 600 : 400,
             }}>{t(`planning.${key}`)} ({rows.filter(r => r.folder === val).length})</button>
@@ -284,7 +285,7 @@ export default function Planning() {
                       <th style={thS}>{t('planning.col_name')}</th>
                       <th style={thS}>{t('planning.col_priority')}</th>
                       <th style={thS}>{t('planning.col_deadline')}</th>
-                      <th style={thS}>Inici màxim</th>
+                      <th style={thS}>{t('planning.col_max_start')}</th>
                       <th style={thS}>{t('planning.col_pending_count')}</th>
                     </tr></thead>
                     <tbody>
@@ -337,9 +338,9 @@ function TechGroup({ g, t, usersById, techOptions, sensors, expanded, onToggle, 
     <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '0.5px solid var(--gray-l)' }}>
         <i className="ti ti-user" style={{ fontSize: 14, color: 'var(--gray)' }} />
-        <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 600 }}>{g.name}</span>
-        <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--gray)' }}>· {g.rows.length} {t('planning.models_word')}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)', fontFamily: MONO }}>{t('planning.drag_hint')}</span>
+        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600 }}>{g.name}</span>
+        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>· {g.rows.length} {t('planning.models_word')}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>{t('planning.drag_hint')}</span>
       </div>
       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead><tr>
@@ -379,17 +380,17 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
       <tr ref={setNodeRef} style={style}>
         <td style={tdS}>
           <span {...attributes} {...listeners} title={t('planning.drag_hint')}
-            style={{ cursor: 'grab', color: 'var(--text-muted)', fontSize: 15, display: 'inline-block', lineHeight: 1 }}>⠿</span>
+            style={{ cursor: 'grab', color: 'var(--text-muted)', fontSize: 'var(--fs-h3)', display: 'inline-block', lineHeight: 1 }}>⠿</span>
         </td>
         <td style={{ ...tdS, cursor: 'pointer' }} onClick={onToggle}>
           <i className={`ti ti-chevron-${expanded ? 'down' : 'right'}`} style={{ fontSize: 14 }} />
         </td>
         <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600, cursor: 'pointer' }} onClick={onToggle}>
           {r.codi}
-          {r.viab?.semafor === 'critical' && <span style={{ marginLeft: 8, color: 'var(--err)', fontSize: 11, fontWeight: 600 }}>Crític</span>}
-          {r.viab?.semafor === 'at_risk' && <span style={{ marginLeft: 8, color: 'var(--warn)', fontSize: 11, fontWeight: 600 }}>En risc</span>}
-          {r.viab?.semafor === 'on_track' && <span style={{ marginLeft: 8, color: 'var(--ok)', fontSize: 11 }}>En termini</span>}
-          <div style={{ fontFamily: 'inherit', fontWeight: 400, color: 'var(--gray)', fontSize: 11 }}>{r.nom}</div>
+          {r.viab?.semafor === 'critical' && <span style={{ marginLeft: 8, color: 'var(--err)', fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('planning.critical')}</span>}
+          {r.viab?.semafor === 'at_risk' && <span style={{ marginLeft: 8, color: 'var(--warn)', fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('planning.at_risk')}</span>}
+          {r.viab?.semafor === 'on_track' && <span style={{ marginLeft: 8, color: 'var(--ok)', fontSize: 'var(--fs-body)' }}>{t('planning.on_track')}</span>}
+          <div style={{ fontFamily: 'inherit', fontWeight: 400, color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>{r.nom}</div>
         </td>
         <td style={tdS}>{localDate(r.predStart)}</td>
         <td style={tdS}>{fmtMins(r.temps)}</td>
@@ -397,7 +398,7 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
         <td style={tdS}>
           <button onClick={onUnassign} disabled={saving} title={t('planning.unassign')} style={{
             background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-            padding: '4px 9px', fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)',
+            padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
           }}>{t('planning.unassign')}</button>
         </td>
       </tr>
@@ -421,7 +422,7 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
                       )}
                     </td>
                     <td style={{ ...tdS, width: 110 }}>
-                      <span style={{ fontFamily: MONO, fontSize: 11, color: done ? 'var(--ok)' : 'var(--text-muted)' }}>{tk.status}</span>
+                      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: done ? 'var(--ok)' : 'var(--text-muted)' }}>{tk.status}</span>
                     </td>
                     <td style={tdS}>
                       {done ? `${t('planning.done_at')}: ${localDate(tk.finished_at)}`

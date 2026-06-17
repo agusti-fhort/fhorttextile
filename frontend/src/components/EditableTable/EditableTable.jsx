@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core'
@@ -9,20 +10,20 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 
 const thS = {
-  padding: '6px 10px', textAlign: 'left', fontSize: 11,
+  padding: '6px 10px', textAlign: 'left', fontSize: 'var(--fs-body)',
   fontWeight: 500, whiteSpace: 'nowrap',
-  borderBottom: '1px solid var(--color-border-tertiary, #e0d5c5)',
+  borderBottom: '1px solid var(--border)',
 }
-const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 12 }
+const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 'var(--fs-body)' }
 const btnPrimary = (disabled) => ({
-  background: disabled ? '#ccc' : 'var(--gold)', color: '#fff',
+  background: disabled ? '#ccc' : 'var(--gold)', color: 'var(--white)',
   border: 'none', borderRadius: 6, padding: '7px 18px',
-  fontSize: 13, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
+  fontSize: 'var(--fs-body)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
 })
 const btnSecondary = {
-  background: 'transparent', color: 'var(--color-text-secondary, #868685)',
-  border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-  borderRadius: 6, padding: '7px 14px', fontSize: 13, cursor: 'pointer',
+  background: 'transparent', color: 'var(--text-muted)',
+  border: '0.5px solid var(--border)',
+  borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer',
 }
 
 export default function EditableTable({
@@ -35,6 +36,7 @@ export default function EditableTable({
   readOnly = false,
   onSaved,
 }) {
+  const { t } = useTranslation()
   const [localRows, setLocalRows] = useState(rows)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -157,14 +159,12 @@ export default function EditableTable({
         <div style={{
           background: '#fff9e6', border: '1px solid #f0c040',
           borderRadius: 8, padding: '10px 16px', marginBottom: 12,
-          fontSize: 13, display: 'flex', alignItems: 'center', gap: 10,
-          fontFamily: 'IBM Plex Mono, monospace',
+          fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <i className="ti ti-alert-triangle" style={{ color: '#c8900a', fontSize: 16 }} />
           <span>
-            <strong>Taula importada per IA.</strong>{' '}
-            Revisa cada fila abans de confirmar — la IA pot cometre errors.
-            Edita, afegeix o elimina files si cal.
+            <strong>{t('editable_table.import_title')}</strong>{' '}
+            {t('editable_table.import_hint')}
           </span>
         </div>
       )}
@@ -173,18 +173,18 @@ export default function EditableTable({
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <table style={{
             width: '100%', borderCollapse: 'collapse',
-            fontSize: 12, fontFamily: 'IBM Plex Mono, monospace',
+            fontSize: 'var(--fs-body)', 
           }}>
             <thead>
               <tr style={{
-                background: 'var(--color-background-secondary, #f5f0ea)',
-                borderBottom: '1px solid var(--color-border-tertiary, #e0d5c5)',
+                background: 'var(--bg-muted)',
+                borderBottom: '1px solid var(--border)',
               }}>
                 {!readOnly && <th style={thS}></th>}
                 <th style={thS}>#</th>
-                <th style={thS}>Nom fitxa</th>
+                <th style={thS}>{t('editable_table.col.sheet_name')}</th>
                 <th style={thS}>POM</th>
-                <th style={{ ...thS, minWidth: 200 }}>Descripció</th>
+                <th style={{ ...thS, minWidth: 200 }}>{t('editable_table.col.description')}</th>
                 {sizeRun.map(s => (
                   <th key={s} style={{
                     ...thS, textAlign: 'right', minWidth: 60,
@@ -194,7 +194,7 @@ export default function EditableTable({
                     {s}{s === baseSize ? ' ★' : ''}
                   </th>
                 ))}
-                <th style={{ ...thS, textAlign: 'right', color: 'var(--color-text-secondary, #868685)' }}>Δ</th>
+                <th style={{ ...thS, textAlign: 'right', color: 'var(--text-muted)' }}>Δ</th>
                 {!readOnly && <th style={thS}></th>}
               </tr>
             </thead>
@@ -231,11 +231,11 @@ export default function EditableTable({
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
           <button type="button" onClick={() => { setLocalRows(rows); setDirty(false) }}
             style={btnSecondary}>
-            ↩ Descartar canvis
+            ↩ {t('editable_table.discard')}
           </button>
           <button type="button" onClick={handleSave} disabled={saving}
             style={btnPrimary(saving)}>
-            {saving ? 'Guardant...' : '✓ Confirmar taula'}
+            {saving ? t('common.saving') : `✓ ${t('editable_table.confirm_table')}`}
           </button>
         </div>
       )}
@@ -244,6 +244,7 @@ export default function EditableTable({
 }
 
 function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete, delta }) {
+  const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
 
@@ -251,8 +252,8 @@ function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete,
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    background: isDragging ? 'var(--color-background-secondary, #f5f0ea)' : undefined,
-    borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+    background: isDragging ? 'var(--bg-muted)' : undefined,
+    borderBottom: '0.5px solid var(--border)',
   }
 
   return (
@@ -260,24 +261,24 @@ function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete,
       {!readOnly && (
         <td style={tdS}>
           <span {...attributes} {...listeners}
-            style={{ cursor: 'grab', color: 'var(--color-text-secondary, #868685)', fontSize: 16 }}>
+            style={{ cursor: 'grab', color: 'var(--text-muted)', fontSize: 'var(--fs-h3)' }}>
             ⠿
           </span>
         </td>
       )}
-      <td style={{ ...tdS, color: 'var(--color-text-secondary, #868685)' }}>{(row.ordre ?? 0) + 1}</td>
+      <td style={{ ...tdS, color: 'var(--text-muted)' }}>{(row.ordre ?? 0) + 1}</td>
       <td style={tdS}>
         <EditableCell value={row.nom_fitxa}
           onChange={v => onCellChange(row.id, 'nom_fitxa', v)}
           mono gold readOnly={readOnly} />
       </td>
-      <td style={{ ...tdS, fontFamily: 'monospace', fontSize: 11,
-                   color: 'var(--color-text-secondary, #868685)' }}>
+      <td style={{ ...tdS, fontSize: 'var(--fs-body)',
+                   color: 'var(--text-muted)' }}>
         {row.pom_code}
         {row.is_key && (
           <span style={{
-            marginLeft: 5, fontSize: 8, padding: '1px 4px', borderRadius: 3,
-            background: '#fdf6ee', color: '#c27a2a', border: '0.5px solid #e0c8a0',
+            marginLeft: 5, fontSize: 'var(--fs-caption)', padding: '1px 4px', borderRadius: 3,
+            background: '#fdf6ee', color: 'var(--gold)', border: '0.5px solid #e0c8a0',
             fontWeight: 600, letterSpacing: '.06em', verticalAlign: 'middle',
           }}>KEY</span>
         )}
@@ -297,16 +298,16 @@ function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete,
             mono right readOnly={readOnly} />
         </td>
       ))}
-      <td style={{ ...tdS, textAlign: 'right', fontFamily: 'monospace',
-                   color: 'var(--color-text-secondary, #868685)', fontSize: 11 }}>
+      <td style={{ ...tdS, textAlign: 'right', 
+                   color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
         {delta}
       </td>
       {!readOnly && (
         <td style={tdS}>
           <button type="button" onClick={() => onDelete(row.id)}
             style={{ background: 'none', border: 'none', cursor: 'pointer',
-                     color: 'var(--color-text-secondary, #868685)', fontSize: 14, padding: '2px 4px' }}
-            title="Eliminar fila">
+                     color: 'var(--text-muted)', fontSize: 'var(--fs-h3)', padding: '2px 4px' }}
+            title={t('editable_table.delete_row')}>
             ✕
           </button>
         </td>
@@ -323,7 +324,7 @@ function EditableCell({ value, onChange, mono, gold, right, readOnly }) {
 
   if (readOnly || !editing) {
     const display = (val !== '' && val != null) ? val
-      : <span style={{ color: 'var(--color-text-secondary, #868685)' }}>—</span>
+      : <span style={{ color: 'var(--text-muted)' }}>—</span>
     return (
       <span
         onClick={() => !readOnly && setEditing(true)}
@@ -335,7 +336,7 @@ function EditableCell({ value, onChange, mono, gold, right, readOnly }) {
           minWidth: 30, padding: '1px 2px',
           borderBottom: readOnly ? 'none' : '1px dashed transparent',
         }}
-        onMouseEnter={e => { if (!readOnly) e.currentTarget.style.borderBottomColor = 'var(--color-border-tertiary, #e0d5c5)' }}
+        onMouseEnter={e => { if (!readOnly) e.currentTarget.style.borderBottomColor = 'var(--border)' }}
         onMouseLeave={e => { e.currentTarget.style.borderBottomColor = 'transparent' }}>
         {display}
       </span>
@@ -358,7 +359,7 @@ function EditableCell({ value, onChange, mono, gold, right, readOnly }) {
       style={{
         width: mono ? 60 : '100%', padding: '1px 4px',
         border: '1px solid var(--gold)', borderRadius: 3,
-        fontSize: 12, fontFamily: mono ? 'monospace' : undefined,
+        fontSize: 'var(--fs-body)', fontFamily: mono ? 'monospace' : undefined,
         textAlign: right ? 'right' : undefined,
         background: '#fdf6ee',
       }}
@@ -367,6 +368,7 @@ function EditableCell({ value, onChange, mono, gold, right, readOnly }) {
 }
 
 function AddPOMInline({ onAdd }) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [open, setOpen] = useState(false)
@@ -416,9 +418,9 @@ function AddPOMInline({ onAdd }) {
     return (
       <button type="button" onClick={() => setOpen(true)}
         style={{ background: 'none', border: 'none', cursor: 'pointer',
-                 fontSize: 12, color: 'var(--gold)', padding: '4px 0',
-                 fontFamily: 'IBM Plex Mono, monospace' }}>
-        <i className="ti ti-plus" /> Afegir POM
+                 fontSize: 'var(--fs-body)', color: 'var(--gold)', padding: '4px 0',
+                 }}>
+        <i className="ti ti-plus" /> {t('editable_table.add_pom')}
       </button>
     )
   }
@@ -429,27 +431,27 @@ function AddPOMInline({ onAdd }) {
         autoFocus
         value={query}
         onChange={e => setQuery(e.target.value)}
-        placeholder="Cerca per nom o codi..."
-        style={{ padding: '4px 8px', border: '1px solid var(--color-border-tertiary, #e0d5c5)',
-                 borderRadius: 4, fontSize: 12, width: 220,
-                 fontFamily: 'IBM Plex Mono, monospace' }}
+        placeholder={t('editable_table.search_placeholder')}
+        style={{ padding: '4px 8px', border: '1px solid var(--border)',
+                 borderRadius: 4, fontSize: 'var(--fs-body)', width: 220,
+                 }}
       />
       {(results.length > 0 || query.length >= 2) && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, marginTop: 4,
-          background: 'var(--color-background-primary, #fff)',
-          border: '0.5px solid var(--color-border-tertiary, #e0d5c5)', borderRadius: 6,
+          background: 'var(--bg-main)',
+          border: '0.5px solid var(--border)', borderRadius: 6,
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)', zIndex: 100, minWidth: 280,
         }}>
           {results.map(p => (
             <div key={p.id}
               onClick={() => { onAdd(p); setQuery(''); setResults([]); setOpen(false) }}
-              style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 12,
-                       borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-                       fontFamily: 'IBM Plex Mono, monospace' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--color-background-secondary, #f5f0ea)'}
+              style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 'var(--fs-body)',
+                       borderBottom: '0.5px solid var(--border)',
+                       }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-muted)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <span style={{ fontFamily: 'monospace', color: 'var(--gold)', marginRight: 8 }}>
+              <span style={{ color: 'var(--gold)', marginRight: 8 }}>
                 {p.codi_client}
               </span>
               {p.nom_client || p.nom_ca || p.nom_en}
@@ -457,17 +459,16 @@ function AddPOMInline({ onAdd }) {
           ))}
           {query.length >= 2 && results.length === 0 && (
             <div style={{
-              padding: '8px 12px', fontSize: 12,
-              color: 'var(--color-text-secondary, #868685)',
-              fontFamily: 'IBM Plex Mono, monospace',
+              padding: '8px 12px', fontSize: 'var(--fs-body)',
+              color: 'var(--text-muted)',
             }}>
-              Cap POM trobat per "{query}".{' '}
+              {t('editable_table.no_pom_found', { query })}{' '}
               <button type="button"
                 onClick={() => handleCreatePOM(query)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer',
-                         color: 'var(--gold)', fontSize: 12, padding: 0,
-                         fontFamily: 'IBM Plex Mono, monospace' }}>
-                + Crear POM nou "{query}"
+                         color: 'var(--gold)', fontSize: 'var(--fs-body)', padding: 0,
+                         }}>
+                + {t('editable_table.create_pom', { query })}
               </button>
             </div>
           )}
@@ -475,7 +476,7 @@ function AddPOMInline({ onAdd }) {
       )}
       <button type="button" onClick={() => { setOpen(false); setQuery('') }}
         style={{ background: 'none', border: 'none', cursor: 'pointer',
-                 fontSize: 12, color: 'var(--color-text-secondary, #868685)' }}>
+                 fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
         ✕
       </button>
     </div>

@@ -12,13 +12,13 @@ function todayISO() {
 }
 
 const labelStyle = {
-  display: 'block', fontSize: 11, color: 'var(--gray)',
+  display: 'block', fontSize: 'var(--fs-body)', color: 'var(--gray)',
   marginBottom: 4, fontWeight: 400,
 }
 const inputStyle = {
-  width: '100%', padding: '8px 10px', fontSize: 13,
+  width: '100%', padding: '8px 10px', fontSize: 'var(--fs-body)',
   border: '0.5px solid #e4e4e2', borderRadius: 8,
-  fontFamily: 'var(--font)', background: 'var(--white)',
+  background: 'var(--white)',
   color: 'var(--charcoal)', boxSizing: 'border-box',
 }
 const fieldStyle = { marginBottom: '1rem' }
@@ -69,7 +69,7 @@ export default function FittingSessionNew() {
   return (
     <div style={{maxWidth: 560}}>
       <div style={{marginBottom: '1.5rem'}}>
-        <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>{t('fitting.sessions.new')}</h1>
+        <h1 style={{fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4}}>{t('fitting.sessions.new')}</h1>
       </div>
 
       <Card>
@@ -121,22 +121,22 @@ export default function FittingSessionNew() {
           </div>
 
           {error && (
-            <div style={{fontSize: 12, color: 'var(--err)', marginBottom: '1rem'}}>{error}</div>
+            <div style={{fontSize: 'var(--fs-body)', color: 'var(--err)', marginBottom: '1rem'}}>{error}</div>
           )}
 
           <div style={{display: 'flex', gap: '0.5rem', justifyContent: 'flex-end'}}>
             <button type="button" onClick={() => navigate('/fittings')} style={{
               background: 'var(--white)', color: 'var(--gray)',
               border: '0.5px solid #e4e4e2', borderRadius: 8,
-              padding: '8px 16px', fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font)',
+              padding: '8px 16px', fontSize: 'var(--fs-body)', cursor: 'pointer', 
             }}>
               {t('app.cancel')}
             </button>
             <button type="submit" disabled={submitting} style={{
               background: 'var(--charcoal)', color: 'var(--white)',
               border: 'none', borderRadius: 8, padding: '8px 16px',
-              fontSize: 12, cursor: submitting ? 'default' : 'pointer',
-              opacity: submitting ? 0.6 : 1, fontFamily: 'var(--font)',
+              fontSize: 'var(--fs-body)', cursor: submitting ? 'default' : 'pointer',
+              opacity: submitting ? 0.6 : 1, 
             }}>
               {submitting ? t('fitting.session.creating') : t('fitting.session.create')}
             </button>

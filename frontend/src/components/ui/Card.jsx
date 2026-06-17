@@ -14,7 +14,7 @@ export default function Card({ title, icon, action, children, padding, style }) 
           display: 'flex', alignItems: 'center', gap: '0.8rem',
         }}>
           {icon && <i className={`ti ${icon}`} style={{fontSize: 18, color: 'var(--gold)'}} />}
-          {title && <span style={{fontSize: 14, fontWeight: 500}}>{title}</span>}
+          {title && <span style={{fontSize: 'var(--fs-h3)', fontWeight: 500}}>{title}</span>}
           {action && <div style={{marginLeft: 'auto'}}>{action}</div>}
         </div>
       )}

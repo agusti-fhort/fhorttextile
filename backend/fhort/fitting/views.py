@@ -36,6 +36,11 @@ from fhort.accounts.capabilities import HasCapability, SCHEDULE_FITTINGS
 
 logger = logging.getLogger(__name__)
 
+# Guard d'escriptura sobre fitting segellat (Tancada/Anullada). Missatge i codi IDÈNTICS
+# als dos punts (propagar + partial_update) perquè el front els distingeixi amb una sola
+# comprovació. Vegeu services.fitting_line_is_locked.
+SEALED_SESSION_DETAIL = 'Sessió de fitting tancada; no es pot modificar.'
+
 
 class _ScheduleFittingsPerm(HasCapability):
     required_capability = SCHEDULE_FITTINGS
@@ -463,8 +468,82 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
     """Autosave only: PATCH a cell's valor_real / nota. No list/create/destroy/PUT."""
     permission_classes = [IsAuthenticated]
     serializer_class = PieceFittingLineSerializer
-    queryset = PieceFittingLine.objects.select_related('pom').all()
-    http_method_names = ['get', 'patch', 'head', 'options']
+    # select_related fins a la sessió: el guard d'estat (fitting_line_is_locked) la consulta
+    # sense queries extra a partial_update/propagar.
+    queryset = PieceFittingLine.objects.select_related('pom', 'piece_fitting__session').all()
+    http_method_names = ['get', 'patch', 'post', 'head', 'options']
+
+    def partial_update(self, request, *args, **kwargs):
+        # Guard: sessió segellada (Tancada/Anullada) → rebutja ABANS de desar; delega si editable.
+        line = self.get_object()
+        if services.fitting_line_is_locked(line):
+            return Response({'detail': SEALED_SESSION_DETAIL}, status=status.HTTP_409_CONFLICT)
+        return super().partial_update(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'], url_path='propagar')
+    def propagar(self, request, pk=None):
+        """Ancoratge en temps d'edició. Desa el valor_real de la cel·la editada i, si el
+        règim és LINEAR/canònic, propaga el delta a les germanes del mateix POM (escrivint
+        el seu valor_real). `valor_teoric` NO es toca mai. Retorna les línies del POM.
+
+        STEP/FIXED/ZERO/EXCEPTION o sense regla → només desa la cel·la (germanes intactes).
+        Permís = el del viewset (IsAuthenticated), igual que l'autosave."""
+        from django.db import transaction
+        from fhort.pom.services import _load_grading_rules
+        from fhort.pom.grading_utils import propaga_ancoratges
+
+        line = self.get_object()
+        pf = line.piece_fitting
+
+        # Guard: sessió segellada (Tancada/Anullada) → cap escriptura, abans de qualsevol save.
+        if services.fitting_line_is_locked(line):
+            return Response({'detail': SEALED_SESSION_DETAIL}, status=status.HTTP_409_CONFLICT)
+
+        def _resp(propagat, motiu, warnings=None):
+            linies = (PieceFittingLine.objects
+                      .filter(piece_fitting=pf, pom=line.pom)
+                      .select_related('pom').order_by('size_label'))
+            return Response({
+                'propagat': propagat,
+                'motiu': motiu,
+                'warnings': warnings or [],
+                'linies': PieceFittingLineSerializer(linies, many=True).data,
+            })
+
+        # 1-2. Desa SEMPRE la cel·la ancorada (valor_real | null).
+        raw = request.data.get('valor_real', None)
+        anchor_val = None if raw in (None, '') else float(raw)
+        line.valor_real = anchor_val
+        line.save(update_fields=['valor_real'])
+        if anchor_val is None:                       # treure ancoratge → no propaga
+            return _resp(False, 'sense_ancoratge')
+
+        # 3. Regla resident → fallback (cadena de _load_grading_rules).
+        rule = _load_grading_rules(pf.model).get(line.pom_id)
+        if rule is None:
+            return _resp(False, 'sense_regla')
+
+        # 4. Propaga NOMÉS si LINEAR o canònic. PG-4b-3a: STEP MAI propaga, encara que
+        # increment_base estigui poblat (logica és la veritat del règim).
+        logica = getattr(rule, 'logica', None)
+        canonic = getattr(rule, 'increment_base', None) is not None
+        propaga = (logica != 'STEP') and (canonic or logica == 'LINEAR')
+        if not propaga:
+            return _resp(False, logica or 'desconegut')
+
+        # 5. Propaga el delta des de l'ancoratge → valor_real de les germanes (valor_teoric intacte).
+        size_run = [s.strip() for s in (pf.model.size_run_model or '')
+                    .replace(';', '·').split('·') if s.strip()]
+        warnings = []
+        teorics = propaga_ancoratges(rule, line.size_label, anchor_val, size_run, warnings=warnings)
+        with transaction.atomic():
+            for sl, val in teorics.items():
+                if val is None:
+                    continue
+                (PieceFittingLine.objects
+                 .filter(piece_fitting=pf, pom=line.pom, size_label=sl)
+                 .update(valor_real=val))
+        return _resp(True, logica or 'CANONIC', warnings)
 
 
 class FittingPhotoViewSet(mixins.ListModelMixin,

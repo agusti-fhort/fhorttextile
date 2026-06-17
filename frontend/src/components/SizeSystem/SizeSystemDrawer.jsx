@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
+  const { t } = useTranslation()
   const [definitions, setDefinitions] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
@@ -46,7 +48,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
   }
 
   const handleDelete = async (defId) => {
-    if (!confirm('Esborrar aquesta talla?')) return
+    if (!confirm(t('size_system.confirm_delete_size'))) return
     const res = await fetch(`/api/v1/size-definitions/${defId}/`, {
       method: 'DELETE',
       headers: authHeaders(),
@@ -58,7 +60,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
 
   const handleDeleteSystem = async () => {
     const name = sizeSystem.nom || sizeSystem.codi
-    if (!confirm(`Esborrar el sistema de talles ${name}? Aquesta acció és irreversible.`)) return
+    if (!confirm(t('size_system.confirm_delete_system', { name }))) return
     const res = await fetch(`/api/v1/size-systems/${sizeSystem.id}/`, {
       method: 'DELETE',
       headers: authHeaders(),
@@ -68,7 +70,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
       onClose()
       if (onDeleted) onDeleted(deletedId)
     } else {
-      let msg = 'No s\'ha pogut esborrar el sistema'
+      let msg = t('size_system.err_delete_system')
       try {
         const d = await res.json()
         msg = d.detail || d.error || msg
@@ -99,13 +101,13 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
   if (!sizeSystem) return null
 
   const COLS = [
-    { key: 'etiqueta',       label: 'Talla',    width: 60 },
-    { key: 'body_height_cm', label: 'Alçada',   width: 70 },
-    { key: 'body_bust_cm',   label: 'Pit',      width: 60 },
-    { key: 'body_waist_cm',  label: 'Cintura',  width: 70 },
-    { key: 'body_hip_cm',    label: 'Maluc',    width: 60 },
-    { key: 'age_months_min', label: 'Edat min', width: 70 },
-    { key: 'age_months_max', label: 'Edat max', width: 70 },
+    { key: 'etiqueta',       labelKey: 'size_system.col.size',    width: 60 },
+    { key: 'body_height_cm', labelKey: 'size_system.col.height',  width: 70 },
+    { key: 'body_bust_cm',   labelKey: 'size_system.col.bust',    width: 60 },
+    { key: 'body_waist_cm',  labelKey: 'size_system.col.waist',   width: 70 },
+    { key: 'body_hip_cm',    labelKey: 'size_system.col.hip',     width: 60 },
+    { key: 'age_months_min', labelKey: 'size_system.col.age_min', width: 70 },
+    { key: 'age_months_max', labelKey: 'size_system.col.age_max', width: 70 },
   ]
 
   return (
@@ -121,7 +123,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0,
         width: 'min(680px, 90vw)',
-        background: '#fff', zIndex: 201,
+        background: 'var(--white)', zIndex: 201,
         boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
         display: 'flex', flexDirection: 'column',
         fontFamily: 'IBM Plex Sans, sans-serif',
@@ -132,11 +134,11 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
           display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
         }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, fontFamily: 'IBM Plex Mono' }}>
+            <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>
               {sizeSystem.nom || sizeSystem.codi}
             </h2>
             <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: '#888' }}>
-              Codi: {sizeSystem.codi} · {definitions.length} talles definides
+              {t('size_system.code')}: {sizeSystem.codi} · {t('size_system.sizes_defined', { count: definitions.length })}
             </p>
           </div>
           <button
@@ -152,7 +154,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
 
         <div style={{ flex: 1, overflow: 'auto', padding: '1.25rem 1.5rem' }}>
           {loading ? (
-            <p style={{ color: '#888', fontSize: '0.85rem' }}>Carregant talles...</p>
+            <p style={{ color: '#888', fontSize: '0.85rem' }}>{t('common.loading')}</p>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
@@ -164,7 +166,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
                       borderBottom: '1px solid #e5e7eb', textTransform: 'uppercase',
                       width: c.width,
                     }}>
-                      {c.label}
+                      {t(c.labelKey)}
                     </th>
                   ))}
                   <th style={{ width: 60 }} />
@@ -172,7 +174,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
               </thead>
               <tbody>
                 {definitions.map((def, i) => (
-                  <tr key={def.id} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                  <tr key={def.id} style={{ background: i % 2 === 0 ? 'var(--white)' : '#fafafa' }}>
                     {COLS.map(c => (
                       <td key={c.key} style={{
                         padding: '0.35rem 0.5rem',
@@ -183,9 +185,9 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
                             value={draft[c.key] ?? ''}
                             onChange={e => setDraft(d => ({ ...d, [c.key]: e.target.value }))}
                             style={{
-                              width: '100%', border: '1px solid #c27a2a',
+                              width: '100%', border: '1px solid var(--gold)',
                               borderRadius: 4, padding: '0.15rem 0.3rem',
-                              fontSize: '0.78rem', fontFamily: 'IBM Plex Mono',
+                              fontSize: '0.78rem', 
                               boxSizing: 'border-box',
                             }}
                           />
@@ -193,7 +195,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
                           <span style={{
                             fontFamily: c.key === 'etiqueta' ? 'IBM Plex Mono' : 'inherit',
                             fontWeight: c.key === 'etiqueta' ? 600 : 400,
-                            color: c.key === 'etiqueta' ? '#c27a2a' : '#444',
+                            color: c.key === 'etiqueta' ? 'var(--gold)' : '#444',
                           }}>
                             {def[c.key] != null ? def[c.key] : '—'}
                             {c.key.includes('cm') && def[c.key] != null ? ' cm' : ''}
@@ -210,7 +212,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
                           <button onClick={handleSave}
                             style={{
                               fontSize: '0.7rem', padding: '0.15rem 0.4rem',
-                              background: '#c27a2a', color: '#fff', border: 'none',
+                              background: 'var(--gold)', color: 'var(--white)', border: 'none',
                               borderRadius: 3, cursor: 'pointer', marginRight: 4,
                             }}>
                             ✓
@@ -232,7 +234,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
                               background: 'none', color: '#888', border: '1px solid #ddd',
                               borderRadius: 3, cursor: 'pointer', marginRight: 4,
                             }}>
-                            Editar
+                            {t('app.edit')}
                           </button>
                           <button onClick={() => handleDelete(def.id)}
                             style={{
@@ -255,7 +257,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
                         padding: '1rem', color: '#aaa',
                         textAlign: 'center', fontSize: '0.85rem',
                       }}>
-                      Sense talles definides
+                      {t('size_system.empty')}
                     </td>
                   </tr>
                 )}
@@ -271,28 +273,28 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
         }}>
           <button onClick={handleAdd}
             style={{
-              padding: '0.4rem 0.85rem', border: '1px solid #c27a2a',
-              borderRadius: 6, background: '#fff', color: '#c27a2a',
+              padding: '0.4rem 0.85rem', border: '1px solid var(--gold)',
+              borderRadius: 6, background: 'var(--white)', color: 'var(--gold)',
               cursor: 'pointer', fontSize: '0.82rem', fontWeight: 500,
             }}>
-            + Afegir talla
+            {t('size_system.add_size')}
           </button>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button onClick={handleDeleteSystem}
               style={{
                 padding: '0.4rem 0.85rem', border: '1px solid #C0392B',
-                borderRadius: 6, background: '#fff', color: '#C0392B',
+                borderRadius: 6, background: 'var(--white)', color: '#C0392B',
                 cursor: 'pointer', fontSize: '0.82rem',
               }}>
-              Esborrar sistema
+              {t('size_system.delete_system')}
             </button>
             <button onClick={onClose}
               style={{
                 padding: '0.4rem 0.85rem', border: '1px solid #ddd',
-                borderRadius: 6, background: '#fff', color: '#666',
+                borderRadius: 6, background: 'var(--white)', color: '#666',
                 cursor: 'pointer', fontSize: '0.82rem',
               }}>
-              Tancar
+              {t('app.close')}
             </button>
           </div>
         </div>

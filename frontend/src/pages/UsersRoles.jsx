@@ -17,12 +17,12 @@ const AMBER_TEXT = 'var(--warn)'      // #854f0b
 const MONO = 'IBM Plex Mono, monospace'
 
 const thBase = {
-  fontFamily: MONO, fontSize: 10, fontWeight: 600, color: 'var(--text-muted)',
+  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)',
   padding: '8px 8px', textTransform: 'uppercase', letterSpacing: '.04em',
   whiteSpace: 'nowrap', borderBottom: '0.5px solid var(--gray-l)',
 }
 const inputS = {
-  fontFamily: MONO, fontSize: 12, padding: '6px 10px',
+  fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 10px',
   border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)',
   color: 'var(--text-main)',
 }
@@ -141,13 +141,13 @@ export default function UsersRoles() {
   }
 
   if (me == null) {
-    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13 }}>{t('usersRoles.loading')}</div>
+    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>{t('usersRoles.loading')}</div>
   }
   if (!canManage) {
     return (
       <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
         <i className="ti ti-lock" style={{ fontSize: 32, color: 'var(--gray)' }} />
-        <p style={{ marginTop: 12, fontSize: 13, color: 'var(--gray)' }}>{t('usersRoles.no_access')}</p>
+        <p style={{ marginTop: 12, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('usersRoles.no_access')}</p>
       </div>
     )
   }
@@ -155,8 +155,8 @@ export default function UsersRoles() {
   return (
     <div style={{ minWidth: 0, maxWidth: '100%' }}>
       <div style={{ marginBottom: '1.2rem' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>{t('usersRoles.title')}</h1>
-        <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('usersRoles.subtitle')}</p>
+        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4 }}>{t('usersRoles.title')}</h1>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('usersRoles.subtitle')}</p>
       </div>
 
       {/* Barra de filtres */}
@@ -176,8 +176,8 @@ export default function UsersRoles() {
         {/* Botó "Nou usuari" (la pàgina ja està gated per manage_users). */}
         <button onClick={() => setNewUserOpen(true)} style={{
           marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
-          background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 6,
-          padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: MONO,
+          background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 6,
+          padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', fontFamily: MONO,
         }}>
           <i className="ti ti-plus" style={{ fontSize: 14 }} />
           {t('usersRoles.new_user')}
@@ -199,19 +199,19 @@ export default function UsersRoles() {
 
       {feedback && (
         <div style={{
-          fontSize: 12, padding: '8px 12px', borderRadius: 6, marginBottom: 12,
+          fontSize: 'var(--fs-body)', padding: '8px 12px', borderRadius: 6, marginBottom: 12,
           background: feedback.type === 'ok' ? 'var(--ok-bg)' : 'var(--err-bg)',
           color: feedback.type === 'ok' ? 'var(--ok)' : 'var(--err)',
         }}>{feedback.text}</div>
       )}
 
       {loading ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13 }}>{t('usersRoles.loading')}</div>
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>{t('usersRoles.loading')}</div>
       ) : rows.length === 0 ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13 }}>{t('usersRoles.empty')}</div>
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>{t('usersRoles.empty')}</div>
       ) : (
         <div style={{ overflowX: 'auto', maxWidth: '100%', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
-          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 'var(--fs-body)' }}>
             <thead>
               <tr>
                 <th style={{ ...thBase, position: 'sticky', left: 0, zIndex: 2, background: CREMA,
@@ -258,10 +258,10 @@ export default function UsersRoles() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} />
                         <div>
-                          <div style={{ fontFamily: MONO, fontSize: 12, fontWeight: 600, color: 'var(--text-main)' }}>
+                          <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-main)' }}>
                             {u.full_name || u.username}
                           </div>
-                          <div style={{ fontSize: 10, color: AMBER_TEXT, marginTop: 2 }}>
+                          <div style={{ fontSize: 'var(--fs-label)', color: AMBER_TEXT, marginTop: 2 }}>
                             {t('usersRoles.role')}: {u.rol_nom || '—'}
                           </div>
                         </div>
@@ -280,7 +280,7 @@ export default function UsersRoles() {
                       {canManage && (
                         <button onClick={() => setEditUser(u)} title={t('usersRoles.edit')} style={{
                           display: 'inline-flex', alignItems: 'center', gap: 5,
-                          fontFamily: MONO, fontSize: 11, padding: '5px 10px', borderRadius: 6,
+                          fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 6,
                           border: '0.5px solid var(--gray-l)', background: 'var(--white)',
                           color: 'var(--text-main)', cursor: 'pointer', whiteSpace: 'nowrap',
                         }}>
@@ -307,8 +307,8 @@ export default function UsersRoles() {
             background: 'var(--white)', borderRadius: 12, padding: '1.5rem',
             maxWidth: 400, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
           }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 10 }}>{t('usersRoles.confirm_title')}</h2>
-            <p style={{ fontSize: 13, color: 'var(--text-main)', lineHeight: 1.5, marginBottom: 18 }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 10 }}>{t('usersRoles.confirm_title')}</h2>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', lineHeight: 1.5, marginBottom: 18 }}>
               {t('usersRoles.confirm_msg', { action: confirmState.label, count: selected.size })}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
@@ -316,7 +316,7 @@ export default function UsersRoles() {
                 ...inputS, cursor: 'pointer', border: '0.5px solid var(--gray-l)', color: 'var(--gray)',
               }}>{t('usersRoles.cancel')}</button>
               <button onClick={applyBulk} style={{
-                ...inputS, cursor: 'pointer', border: 'none', background: 'var(--gold)', color: '#fff', fontWeight: 600,
+                ...inputS, cursor: 'pointer', border: 'none', background: 'var(--gold)', color: 'var(--white)', fontWeight: 600,
               }}>{t('usersRoles.confirm')}</button>
             </div>
           </div>
@@ -355,11 +355,11 @@ export default function UsersRoles() {
 function BulkBar({ t, count, roles, taskTypes, onSetRole, onActive, onTask }) {
   const [taskCode, setTaskCode] = useState('')
   const selS = { ...{
-    fontFamily: MONO, fontSize: 12, padding: '5px 8px',
+    fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 8px',
     border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)',
   } }
   const btn = {
-    fontFamily: MONO, fontSize: 12, padding: '5px 10px', borderRadius: 6,
+    fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 6,
     border: '0.5px solid var(--gray-l)', background: 'var(--white)', cursor: 'pointer', color: 'var(--text-main)',
   }
   return (
@@ -368,7 +368,7 @@ function BulkBar({ t, count, roles, taskTypes, onSetRole, onActive, onTask }) {
       padding: '10px 12px', marginBottom: 12, borderRadius: 8,
       background: CREMA, border: `0.5px solid ${AMBER_BORDER}`,
     }}>
-      <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 600, color: AMBER_TEXT }}>
+      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: AMBER_TEXT }}>
         {t('usersRoles.selected', { n: count })}
       </span>
       {/* set_role */}
@@ -409,10 +409,10 @@ function NewUserModal({ t, roles, onClose, onCreated }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const fieldS = {
-    fontFamily: MONO, fontSize: 13, padding: '8px 10px', width: '100%', boxSizing: 'border-box',
+    fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 10px', width: '100%', boxSizing: 'border-box',
     border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)',
   }
-  const labelS = { fontSize: 11, color: AMBER_TEXT, fontFamily: MONO, marginBottom: 4, display: 'block' }
+  const labelS = { fontSize: 'var(--fs-body)', color: AMBER_TEXT, fontFamily: MONO, marginBottom: 4, display: 'block' }
 
   function submit() {
     // Validació client mínima; la resta (únic, rol vàlid…) la valida el backend.
@@ -436,7 +436,7 @@ function NewUserModal({ t, roles, onClose, onCreated }) {
         background: 'var(--white)', borderRadius: 12, padding: '1.5rem',
         maxWidth: 420, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
       }}>
-        <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>{t('usersRoles.nu_title')}</h2>
+        <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 14 }}>{t('usersRoles.nu_title')}</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <label style={labelS}>{t('usersRoles.nu_username')} *</label>
@@ -459,22 +459,22 @@ function NewUserModal({ t, roles, onClose, onCreated }) {
           <div>
             <label style={labelS}>{t('usersRoles.nu_password')} *</label>
             <input type="password" value={form.password} onChange={e => set('password', e.target.value)} style={fieldS} />
-            <div style={{ fontSize: 10, color: 'var(--gray)', marginTop: 4 }}>{t('usersRoles.nu_password_hint')}</div>
+            <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginTop: 4 }}>{t('usersRoles.nu_password_hint')}</div>
           </div>
         </div>
         {error && (
-          <div style={{ marginTop: 12, fontSize: 12, padding: '8px 10px', borderRadius: 6,
+          <div style={{ marginTop: 12, fontSize: 'var(--fs-body)', padding: '8px 10px', borderRadius: 6,
                         background: 'var(--err-bg)', color: 'var(--err)' }}>{error}</div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
           <button onClick={onClose} disabled={saving} style={{
-            fontFamily: MONO, fontSize: 13, padding: '8px 14px', borderRadius: 6,
+            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 6,
             cursor: 'pointer', border: '0.5px solid var(--gray-l)', background: 'var(--white)', color: 'var(--gray)',
           }}>{t('usersRoles.cancel')}</button>
           <button onClick={submit} disabled={saving} style={{
-            fontFamily: MONO, fontSize: 13, padding: '8px 16px', borderRadius: 6,
+            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 6,
             cursor: saving ? 'default' : 'pointer', border: 'none',
-            background: 'var(--gold)', color: '#fff', fontWeight: 600, opacity: saving ? 0.6 : 1,
+            background: 'var(--gold)', color: 'var(--white)', fontWeight: 600, opacity: saving ? 0.6 : 1,
           }}>{t('usersRoles.nu_create')}</button>
         </div>
       </div>
@@ -509,10 +509,10 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
   }
 
   const fieldS = {
-    fontFamily: MONO, fontSize: 13, padding: '8px 10px', width: '100%', boxSizing: 'border-box',
+    fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 10px', width: '100%', boxSizing: 'border-box',
     border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)',
   }
-  const labelS = { fontSize: 11, color: AMBER_TEXT, fontFamily: MONO, marginBottom: 4, display: 'block' }
+  const labelS = { fontSize: 'var(--fs-body)', color: AMBER_TEXT, fontFamily: MONO, marginBottom: 4, display: 'block' }
 
   function submit() {
     // PATCH parcial: només els camps modificats vs l'estat inicial.
@@ -542,7 +542,7 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
         maxWidth: 460, width: '92%', maxHeight: '88vh', overflowY: 'auto',
         boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
       }}>
-        <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>
+        <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 14 }}>
           {t('usersRoles.ue_title')} — {user.full_name || user.username}
         </h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -570,13 +570,13 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
                      style={{ width: 48, height: 32, padding: 0, border: '0.5px solid var(--gray-l)',
                               borderRadius: 6, background: 'var(--white)', cursor: 'pointer' }} />
               <ColorDot color={form.color_avatar} size={24} />
-              <span style={{ fontFamily: MONO, fontSize: 12, color: 'var(--gray)' }}>{form.color_avatar}</span>
+              <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{form.color_avatar}</span>
             </div>
           </div>
           <div>
             <label style={labelS}>{t('usersRoles.ue_tasks')}</label>
             {isAdmin && (
-              <div style={{ fontSize: 11, color: AMBER_TEXT, marginBottom: 8 }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: AMBER_TEXT, marginBottom: 8 }}>
                 {t('usersRoles.ue_bypass_note')}
               </div>
             )}
@@ -585,7 +585,7 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
                 const checked = isAdmin ? true : tasksSet.has(tt.code)
                 return (
                   <label key={tt.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 7, fontFamily: MONO, fontSize: 12,
+                    display: 'flex', alignItems: 'center', gap: 7, fontFamily: MONO, fontSize: 'var(--fs-body)',
                     color: 'var(--text-main)', cursor: isAdmin ? 'default' : 'pointer',
                     opacity: isAdmin ? 0.6 : 1,
                   }}>
@@ -599,18 +599,18 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
           </div>
         </div>
         {error && (
-          <div style={{ marginTop: 12, fontSize: 12, padding: '8px 10px', borderRadius: 6,
+          <div style={{ marginTop: 12, fontSize: 'var(--fs-body)', padding: '8px 10px', borderRadius: 6,
                         background: 'var(--err-bg)', color: 'var(--err)' }}>{error}</div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
           <button onClick={onClose} disabled={saving} style={{
-            fontFamily: MONO, fontSize: 13, padding: '8px 14px', borderRadius: 6,
+            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 6,
             cursor: 'pointer', border: '0.5px solid var(--gray-l)', background: 'var(--white)', color: 'var(--gray)',
           }}>{t('usersRoles.cancel')}</button>
           <button onClick={submit} disabled={saving} style={{
-            fontFamily: MONO, fontSize: 13, padding: '8px 16px', borderRadius: 6,
+            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 6,
             cursor: saving ? 'default' : 'pointer', border: 'none',
-            background: 'var(--gold)', color: '#fff', fontWeight: 600, opacity: saving ? 0.6 : 1,
+            background: 'var(--gold)', color: 'var(--white)', fontWeight: 600, opacity: saving ? 0.6 : 1,
           }}>{saving ? t('usersRoles.ue_saving') : t('usersRoles.ue_save')}</button>
         </div>
       </div>

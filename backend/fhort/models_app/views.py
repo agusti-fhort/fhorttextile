@@ -1318,3 +1318,57 @@ def registre_activitat_view(request):
         },
         'results': results,
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def set_pom_regim_view(request, model_id, pom_id):
+    """PG-4b-3a — UPSERT del règim (logica) d'UNA ModelGradingRule resident per (model, pom).
+
+    Body: {logica: 'LINEAR'|'STEP'}. Si la resident existeix → actualitza logica + origen='MANUAL'.
+    Si no → la materialitza copiant els camps canònics del fallback GradingRule del rule_set
+    (segur: amb logica='STEP' el motor ignora increment_base — es conserva latent). Sense fallback
+    → 400 (no es crea cap resident buida). Innocu sobre el grading persistent (no toca
+    measurements_version / GradedSpec / GradingVersion; només el proper generate_graded_specs).
+    """
+    from fhort.models_app.models import ModelGradingRule
+    from fhort.pom.models import GradingRule
+
+    logica = (request.data.get('logica') or '').strip().upper()
+    if logica not in ('LINEAR', 'STEP'):
+        return Response({'detail': "logica ha de ser 'LINEAR' o 'STEP'."}, status=400)
+
+    model = Model.objects.filter(pk=model_id).first()
+    if model is None:
+        return Response({'detail': 'Model no trobat.'}, status=404)
+
+    with transaction.atomic():
+        rule = ModelGradingRule.objects.filter(model=model, pom_id=pom_id).first()
+        if rule is not None:
+            rule.logica = logica
+            rule.origen = 'MANUAL'
+            rule.save(update_fields=['logica', 'origen', 'updated_at'])
+        else:
+            src = (GradingRule.objects.filter(
+                       rule_set_id=model.grading_rule_set_id, pom_id=pom_id).first()
+                   if model.grading_rule_set_id else None)
+            if src is None:
+                return Response(
+                    {'detail': "No hi ha regla de fallback per a aquest POM; cal definir-la "
+                               "al catàleg abans de triar-ne el règim."}, status=400)
+            rule = ModelGradingRule.objects.create(
+                model=model, pom_id=pom_id, logica=logica, origen='MANUAL', actiu=True,
+                increment=src.increment, valors_step=src.valors_step,
+                increment_base=src.increment_base, increment_break=src.increment_break,
+                talla_break_label=src.talla_break_label, talla_break_pos=src.talla_break_pos,
+            )
+
+    return Response({
+        'model': model.id,
+        'pom': rule.pom_id,
+        'logica': rule.logica,
+        'origen': rule.origen,
+        'increment_base': float(rule.increment_base) if rule.increment_base is not None else None,
+        'increment_break': float(rule.increment_break) if rule.increment_break is not None else None,
+        'talla_break_label': rule.talla_break_label,
+    })

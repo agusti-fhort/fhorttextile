@@ -1,54 +1,63 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 
 const API = import.meta.env.VITE_API_URL || ''
 
 // ── Constants ────────────────────────────────────────────────────────────────
+// Enums de referència (vocabulari controlat). codi = id (mai traduït); nom_en/nom_ca/nom_es =
+// display bilingüe (anglès primari + nom localitzat per i18n.language). Convenció de sector.
 const TARGETS = [
-  { codi: 'WOMAN',         nom_en: 'Woman',         nom_ca: 'Dona' },
-  { codi: 'MAN',           nom_en: 'Man',           nom_ca: 'Home' },
-  { codi: 'UNISEX_ADULT',  nom_en: 'Unisex Adult',  nom_ca: 'Unisex adult' },
-  { codi: 'BABY_GIRL',     nom_en: 'Baby Girl',     nom_ca: 'Nadó nena' },
-  { codi: 'BABY_BOY',      nom_en: 'Baby Boy',      nom_ca: 'Nadó nen' },
-  { codi: 'BABY_UNISEX',   nom_en: 'Baby Unisex',   nom_ca: 'Nadó unisex' },
-  { codi: 'TODDLER_GIRL',  nom_en: 'Toddler Girl',  nom_ca: 'Nena toddler' },
-  { codi: 'TODDLER_BOY',   nom_en: 'Toddler Boy',   nom_ca: 'Nen toddler' },
-  { codi: 'GIRL',          nom_en: 'Girl',          nom_ca: 'Nena' },
-  { codi: 'BOY',           nom_en: 'Boy',           nom_ca: 'Nen' },
-  { codi: 'TEEN_GIRL',     nom_en: 'Teen Girl',     nom_ca: 'Adolescent nena' },
-  { codi: 'TEEN_BOY',      nom_en: 'Teen Boy',      nom_ca: 'Adolescent nen' },
-  { codi: 'MATERNITY',     nom_en: 'Maternity',     nom_ca: 'Maternitat' },
+  { codi: 'WOMAN',         nom_en: 'Woman',         nom_ca: 'Dona',            nom_es: 'Mujer' },
+  { codi: 'MAN',           nom_en: 'Man',           nom_ca: 'Home',            nom_es: 'Hombre' },
+  { codi: 'UNISEX_ADULT',  nom_en: 'Unisex Adult',  nom_ca: 'Unisex adult',    nom_es: 'Unisex adulto' },
+  { codi: 'BABY_GIRL',     nom_en: 'Baby Girl',     nom_ca: 'Nadó nena',       nom_es: 'Bebé niña' },
+  { codi: 'BABY_BOY',      nom_en: 'Baby Boy',      nom_ca: 'Nadó nen',        nom_es: 'Bebé niño' },
+  { codi: 'BABY_UNISEX',   nom_en: 'Baby Unisex',   nom_ca: 'Nadó unisex',     nom_es: 'Bebé unisex' },
+  { codi: 'TODDLER_GIRL',  nom_en: 'Toddler Girl',  nom_ca: 'Nena toddler',    nom_es: 'Niña toddler' },
+  { codi: 'TODDLER_BOY',   nom_en: 'Toddler Boy',   nom_ca: 'Nen toddler',     nom_es: 'Niño toddler' },
+  { codi: 'GIRL',          nom_en: 'Girl',          nom_ca: 'Nena',            nom_es: 'Niña' },
+  { codi: 'BOY',           nom_en: 'Boy',           nom_ca: 'Nen',             nom_es: 'Niño' },
+  { codi: 'TEEN_GIRL',     nom_en: 'Teen Girl',     nom_ca: 'Adolescent nena', nom_es: 'Adolescente niña' },
+  { codi: 'TEEN_BOY',      nom_en: 'Teen Boy',      nom_ca: 'Adolescent nen',  nom_es: 'Adolescente niño' },
+  { codi: 'MATERNITY',     nom_en: 'Maternity',     nom_ca: 'Maternitat',      nom_es: 'Maternidad' },
 ]
 
 const CONSTRUCTIONS = [
-  { codi: 'WOVEN',        nom_en: 'Woven',        nom_ca: 'Teixit pla' },
-  { codi: 'KNIT',         nom_en: 'Knit',         nom_ca: 'Punt jersey' },
-  { codi: 'STRETCH_KNIT', nom_en: 'Stretch Knit', nom_ca: 'Punt elàstic' },
-  { codi: 'TECHNICAL',    nom_en: 'Technical',    nom_ca: 'Tècnic' },
+  { codi: 'WOVEN',        nom_en: 'Woven',        nom_ca: 'Teixit pla',   nom_es: 'Tejido plano' },
+  { codi: 'KNIT',         nom_en: 'Knit',         nom_ca: 'Punt jersey',  nom_es: 'Punto jersey' },
+  { codi: 'STRETCH_KNIT', nom_en: 'Stretch Knit', nom_ca: 'Punt elàstic', nom_es: 'Punto elástico' },
+  { codi: 'TECHNICAL',    nom_en: 'Technical',    nom_ca: 'Tècnic',       nom_es: 'Técnico' },
 ]
 
 const FITS = [
-  { codi: 'REGULAR',   nom_en: 'Regular',   nom_ca: 'Regular' },
-  { codi: 'SLIM',      nom_en: 'Slim',      nom_ca: 'Ajustat' },
-  { codi: 'RELAXED',   nom_en: 'Relaxed',   nom_ca: 'Relaxat' },
-  { codi: 'OVERSIZED', nom_en: 'Oversized', nom_ca: 'Oversize' },
-  { codi: 'FLARED',    nom_en: 'Flared',    nom_ca: 'Evasé' },
-  { codi: 'BODYCON',   nom_en: 'Bodycon',   nom_ca: 'Bodycon' },
-  { codi: 'ATHLETIC',  nom_en: 'Athletic',  nom_ca: 'Esportiu' },
-  { codi: 'STRAIGHT',  nom_en: 'Straight',  nom_ca: 'Recte' },
-  { codi: 'TAPERED',   nom_en: 'Tapered',   nom_ca: 'Cònic' },
-  { codi: 'CUSTOM',    nom_en: 'Custom',    nom_ca: 'Personalitzat' },
+  { codi: 'REGULAR',   nom_en: 'Regular',   nom_ca: 'Regular',         nom_es: 'Regular' },
+  { codi: 'SLIM',      nom_en: 'Slim',      nom_ca: 'Ajustat',         nom_es: 'Ajustado' },
+  { codi: 'RELAXED',   nom_en: 'Relaxed',   nom_ca: 'Relaxat',         nom_es: 'Relajado' },
+  { codi: 'OVERSIZED', nom_en: 'Oversized', nom_ca: 'Oversize',        nom_es: 'Oversize' },
+  { codi: 'FLARED',    nom_en: 'Flared',    nom_ca: 'Evasé',           nom_es: 'Evasé' },
+  { codi: 'BODYCON',   nom_en: 'Bodycon',   nom_ca: 'Bodycon',         nom_es: 'Bodycon' },
+  { codi: 'ATHLETIC',  nom_en: 'Athletic',  nom_ca: 'Esportiu',        nom_es: 'Deportivo' },
+  { codi: 'STRAIGHT',  nom_en: 'Straight',  nom_ca: 'Recte',           nom_es: 'Recto' },
+  { codi: 'TAPERED',   nom_en: 'Tapered',   nom_ca: 'Cònic',           nom_es: 'Cónico' },
+  { codi: 'CUSTOM',    nom_en: 'Custom',    nom_ca: 'Personalitzat',   nom_es: 'Personalizado' },
 ]
 
 const GARMENT_GROUPS = [
-  { codi: 'TOPS',        nom_en: 'Tops',        nom_ca: 'Parts superiors' },
-  { codi: 'BOTTOMS',     nom_en: 'Bottoms',     nom_ca: 'Parts inferiors' },
-  { codi: 'DRESSES',     nom_en: 'Dresses',     nom_ca: 'Vestits' },
-  { codi: 'OUTERWEAR',   nom_en: 'Outerwear',   nom_ca: 'Abrics' },
-  { codi: 'UNDERWEAR',   nom_en: 'Underwear',   nom_ca: 'Interior' },
-  { codi: 'SWIMWEAR',    nom_en: 'Swimwear',    nom_ca: 'Bany' },
-  { codi: 'ACCESSORIES', nom_en: 'Accessories', nom_ca: 'Complements' },
+  { codi: 'TOPS',        nom_en: 'Tops',        nom_ca: 'Parts superiors', nom_es: 'Partes superiores' },
+  { codi: 'BOTTOMS',     nom_en: 'Bottoms',     nom_ca: 'Parts inferiors', nom_es: 'Partes inferiores' },
+  { codi: 'DRESSES',     nom_en: 'Dresses',     nom_ca: 'Vestits',         nom_es: 'Vestidos' },
+  { codi: 'OUTERWEAR',   nom_en: 'Outerwear',   nom_ca: 'Abrics',          nom_es: 'Abrigos' },
+  { codi: 'UNDERWEAR',   nom_en: 'Underwear',   nom_ca: 'Interior',        nom_es: 'Interior' },
+  { codi: 'SWIMWEAR',    nom_en: 'Swimwear',    nom_ca: 'Bany',            nom_es: 'Baño' },
+  { codi: 'ACCESSORIES', nom_en: 'Accessories', nom_ca: 'Complements',     nom_es: 'Complementos' },
 ]
+
+// Nom localitzat secundari segons i18n.language (anglès es mostra com a primari a part).
+function nomLocal(obj, lang) {
+  if (!obj) return ''
+  return lang === 'es' ? (obj.nom_es || obj.nom_en) : lang === 'ca' ? (obj.nom_ca || obj.nom_en) : obj.nom_en
+}
 
 // S16-B fix: mapping grup → categories POM rellevants. La taula de regles
 // filters POMs by the selected group, showing only those belonging to
@@ -65,11 +74,12 @@ const GROUP_POM_CATEGORIES = {
 
 const LOGICA_COLORS = {
   LINEAR:  { bg: '#eef4fc', color: '#2a5a8a', label: 'LINEAR' },
-  FIXED:   { bg: '#f5f0ea', color: '#868685', label: 'FIXED' },
-  STEPPED: { bg: '#fdf6ee', color: '#c27a2a', label: 'STEPPED' },
+  FIXED:   { bg: '#f5f0ea', color: 'var(--text-muted)', label: 'FIXED' },
+  STEPPED: { bg: '#fdf6ee', color: 'var(--gold)', label: 'STEPPED' },
 }
 
 export default function GradingRuleSets() {
+  const { t, i18n } = useTranslation()
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
 
   const [allRuleSets, setAllRuleSets] = useState([])
@@ -85,7 +95,7 @@ export default function GradingRuleSets() {
   // del FK id que retorna el RuleSet (`rs.garment_group`). El serializer no
   // exposes `garment_group_codi`, only the translated name (not usable as a key).
   const [garmentGroupCodiById, setGarmentGroupCodiById] = useState({})
-  const lang = 'ca'
+  const lang = (i18n.language || 'ca').slice(0, 2)
 
   const authHeaders = () => token ? { Authorization: `Bearer ${token}` } : {}
 
@@ -191,10 +201,10 @@ export default function GradingRuleSets() {
 
   const handleDelete = async (rs, force = false) => {
     if (rs.is_system_default) {
-      setMsg({ type: 'error', text: 'No es pot esborrar un RuleSet de sistema.' })
+      setMsg({ type: 'error', text: t('grading.err_system_delete') })
       return
     }
-    if (!force && !confirm(`Esborrar "${rs.nom}"?`)) return
+    if (!force && !confirm(t('grading.confirm_delete', { name: rs.nom }))) return
     try {
       const r = await fetch(
         `${API}/api/v1/grading-rule-sets/${rs.id}/${force ? '?force=1' : ''}`,
@@ -202,16 +212,16 @@ export default function GradingRuleSets() {
       )
       if (r.ok || r.status === 204) {
         setAllRuleSets(prev => prev.filter(x => x.id !== rs.id))
-        setMsg({ type: 'ok', text: 'RuleSet esborrat.' })
+        setMsg({ type: 'ok', text: t('grading.deleted') })
       } else if (r.status === 409) {
         // Té perfils i/o models dependents → avís clar (missatge del backend, font única) +
         // cascada controlada si es confirma.
         const d = await r.json().catch(() => ({}))
-        if (confirm(d.message || 'Aquest RuleSet té dependències. Esborrar-lo igualment?')) {
+        if (confirm(d.message || t('grading.confirm_delete_deps'))) {
           return handleDelete(rs, true)
         }
       } else {
-        setMsg({ type: 'error', text: `Error ${r.status} esborrant.` })
+        setMsg({ type: 'error', text: t('grading.delete_error', { status: r.status }) })
       }
     } catch (e) {
       setMsg({ type: 'error', text: String(e) })
@@ -225,12 +235,12 @@ export default function GradingRuleSets() {
       return [...prev, saved]
     })
     setShowModal(false)
-    setMsg({ type: 'ok', text: editTarget?.id ? 'RuleSet actualitzat.' : 'RuleSet creat.' })
+    setMsg({ type: 'ok', text: editTarget?.id ? t('grading.updated') : t('grading.created') })
   }
 
   if (loading) return (
-    <div style={{ padding: '2rem', fontFamily: 'IBM Plex Mono, monospace', fontSize: 12, color: 'var(--text-muted, #868685)' }}>
-      Carregant regles de grading...
+    <div style={{ padding: '2rem', fontSize: 'var(--fs-body)', color: 'var(--text-muted, #868685)' }}>
+      {t('grading.loading')}
     </div>
   )
 
@@ -243,9 +253,9 @@ export default function GradingRuleSets() {
         marginBottom: '1.5rem', gap: 12,
       }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>Grading Rules</h1>
-          <p style={{ fontSize: 12, color: 'var(--gray, #868685)', fontWeight: 300 }}>
-            {allRuleSets.length} conjunts de regles · {totalRegles} regles totals
+          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4 }}>{t('nav.grading')}</h1>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray, #868685)', fontWeight: 300 }}>
+            {t('grading.summary', { sets: allRuleSets.length, rules: totalRegles })}
           </p>
         </div>
         {/* Creació centralitzada a la Size Library; aquí només consulta/edita/esborra. */}
@@ -254,19 +264,19 @@ export default function GradingRuleSets() {
       {/* Missatge */}
       {msg && (
         <div style={{
-          padding: '8px 12px', borderRadius: 6, fontSize: 11, marginBottom: 12,
+          padding: '8px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', marginBottom: 12,
           background: msg.type === 'ok' ? '#f0f9f0' : '#fff0f0',
           border: `0.5px solid ${msg.type === 'ok' ? '#c0dd97' : '#f09595'}`,
           color: msg.type === 'ok' ? '#3b6d11' : '#a32d2d',
           display: 'flex', justifyContent: 'space-between',
         }}>
           <span>{msg.text}</span>
-          <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14 }}>×</button>
+          <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 'var(--fs-h3)' }}>×</button>
         </div>
       )}
 
       {/* Pas 1: Target */}
-      <StepSection number={1} title="TARGET — PER A QUI ÉS LA PEÇA?">
+      <StepSection number={1} title={t('grading.step_target')}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {TARGETS.map(t => (
             <TargetCard
@@ -287,20 +297,19 @@ export default function GradingRuleSets() {
 
       {/* Pas 2: Construction + Fit al mateix nivell */}
       {selectedTarget && (availableConstructions.length > 0 || availableFits.length > 0) && (
-        <StepSection number={2} title="CONSTRUCCIÓ I FIT">
+        <StepSection number={2} title={t('grading.step_construction_fit')}>
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
             <div>
-              <p style={{ fontSize: 10, color: '#868685', marginBottom: 6,
+              <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 6,
                 textTransform: 'uppercase', letterSpacing: '.06em',
-                fontFamily: 'IBM Plex Mono, monospace' }}>
-                Tipus de construcció
+                }}>
+                {t('grading.construction_type')}
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {availableConstructions.map(c => (
                   <SelectionButton
                     key={c.codi}
-                    label={c.nom_en}
-                    sublabel={lang !== 'en' ? c.nom_ca : null}
+                    label={t(`model_wizard.construction_${c.codi}`, c.nom_en)}
                     selected={selectedConstruction === c.codi}
                     onClick={() => {
                       setSelectedConstruction(c.codi)
@@ -313,17 +322,16 @@ export default function GradingRuleSets() {
             </div>
             {selectedConstruction && availableFits.length > 0 && (
               <div>
-                <p style={{ fontSize: 10, color: '#868685', marginBottom: 6,
+                <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 6,
                   textTransform: 'uppercase', letterSpacing: '.06em',
-                  fontFamily: 'IBM Plex Mono, monospace' }}>
-                  Fit type
+                  }}>
+                  {t('grading.fit_type_label')}
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {availableFits.map(f => (
                     <SelectionButton
                       key={f.codi}
-                      label={f.nom_en}
-                      sublabel={lang !== 'en' ? f.nom_ca : null}
+                      label={t(`model_wizard.fit_${f.codi}`, f.nom_en)}
                       selected={selectedFit === f.codi}
                       onClick={() => {
                         setSelectedFit(f.codi)
@@ -340,13 +348,13 @@ export default function GradingRuleSets() {
 
       {/* Pas 3: Garment Group */}
       {selectedFit && (
-        <StepSection number={3} title="GRUP DE PEÇA">
+        <StepSection number={3} title={t('grading.step_group')}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {GARMENT_GROUPS.map(g => (
               <SelectionButton
                 key={g.codi}
                 label={g.nom_en}
-                sublabel={lang !== 'en' ? g.nom_ca : null}
+                sublabel={lang !== 'en' ? nomLocal(g, lang) : null}
                 selected={selectedGarmentGroup === g.codi}
                 onClick={() => setSelectedGarmentGroup(g.codi)}
               />
@@ -384,12 +392,12 @@ export default function GradingRuleSets() {
       {/* Message when there is no match (with the 4 filters applied) */}
       {selectedGarmentGroup && matchingRuleSets.length === 0 && (
         <div style={{
-          marginTop: 24, padding: '2rem', border: '1px dashed #e0d5c5',
-          borderRadius: 8, textAlign: 'center', color: 'var(--gray, #868685)', fontSize: 12,
+          marginTop: 24, padding: '2rem', border: '1px dashed var(--border)',
+          borderRadius: 8, textAlign: 'center', color: 'var(--gray, #868685)', fontSize: 'var(--fs-body)',
         }}>
-          No hi ha cap RuleSet per a aquesta combinació.
-          <div style={{ marginTop: 8, fontSize: 11 }}>
-            Crea'n un des de la Size Library.
+          {t('grading.no_match')}
+          <div style={{ marginTop: 8, fontSize: 'var(--fs-body)' }}>
+            {t('grading.create_from_library')}
           </div>
         </div>
       )}
@@ -416,10 +424,9 @@ function StepSection({ number, title, children }) {
   return (
     <div style={{ marginBottom: '1.4rem' }}>
       <p style={{
-        fontSize: 10, fontWeight: 700, color: '#c27a2a',
+        fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--gold)',
         letterSpacing: '0.08em', textTransform: 'uppercase',
         margin: '0 0 10px',
-        fontFamily: 'IBM Plex Mono, monospace',
       }}>
         {number} · {title}
       </p>
@@ -431,29 +438,28 @@ function StepSection({ number, title, children }) {
 // ── TargetCard ──────────────────────────────────────────────────────────────
 // Same pattern as Size Library: nom_en primary (large), nom_ca secondary (small grey).
 function TargetCard({ target, selected, available, onClick }) {
+  const { t } = useTranslation()
   return (
     <div
       onClick={available ? onClick : undefined}
       style={{
-        border: `1px solid ${selected ? '#c27a2a' : '#e0d5c5'}`,
+        border: `1px solid ${selected ? 'var(--gold)' : 'var(--border)'}`,
         borderRadius: 8,
         padding: '8px 14px',
         cursor: available ? 'pointer' : 'not-allowed',
-        background: selected ? '#fdf6ee' : available ? '#fff' : '#f8f8f8',
+        background: selected ? '#fdf6ee' : available ? 'var(--white)' : '#f8f8f8',
         opacity: available ? 1 : 0.4,
         minWidth: 100, textAlign: 'center',
         transition: 'all .15s',
-        fontFamily: 'IBM Plex Mono, monospace',
       }}
     >
       <div style={{
-        fontSize: 12,
+        fontSize: 'var(--fs-body)',
         fontWeight: selected ? 600 : 400,
-        color: selected ? '#c27a2a' : '#1d1d1b',
+        color: selected ? 'var(--gold)' : 'var(--text-main)',
       }}>
-        {target.nom_en}
+        {t(`model_wizard.target_${target.codi}`, target.nom_en)}
       </div>
-      <div style={{ fontSize: 9, color: '#868685', marginTop: 2 }}>{target.nom_ca}</div>
     </div>
   )
 }
@@ -466,15 +472,14 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
     <button
       onClick={onClick}
       style={{
-        border: `1px solid ${selected ? '#c27a2a' : '#e0d5c5'}`,
+        border: `1px solid ${selected ? 'var(--gold)' : 'var(--border)'}`,
         borderRadius: 6,
         padding: sublabel ? '5px 12px' : '6px 14px',
-        background: selected ? '#fdf6ee' : '#fff',
-        color: selected ? '#c27a2a' : '#1d1d1b',
+        background: selected ? '#fdf6ee' : 'var(--white)',
+        color: selected ? 'var(--gold)' : 'var(--text-main)',
         fontWeight: selected ? 600 : 400,
-        fontSize: 11,
+        fontSize: 'var(--fs-body)',
         cursor: 'pointer',
-        fontFamily: 'IBM Plex Mono, monospace',
         transition: 'all .15s',
         textAlign: 'left',
         lineHeight: 1.25,
@@ -484,8 +489,8 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
       {sublabel && (
         <span style={{
           display: 'block',
-          fontSize: 9,
-          color: selected ? '#a06622' : '#868685',
+          fontSize: 'var(--fs-caption)',
+          color: selected ? '#a06622' : 'var(--text-muted)',
           fontWeight: 400,
           marginTop: 1,
         }}>
@@ -498,6 +503,7 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
 
 // ── RuleSetCard ─────────────────────────────────────────────────────────────
 function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEdit, onDelete }) {
+  const { t } = useTranslation()
   // S16-B: collapsed by default (the user already arrives here with 4 filters applied
   // and the card is a focal point, not the previous navigational list).
   const [expanded, setExpanded] = useState(false)
@@ -549,7 +555,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
   }
 
   const handleDeactivateRule = async (ruleId) => {
-    if (!confirm('Marcar aquesta regla com a inactiva?')) return
+    if (!confirm(t('grading.confirm_deactivate'))) return
     try {
       const res = await fetch(`${API}/api/v1/grading-rules/${ruleId}/`, {
         method: 'DELETE',
@@ -567,26 +573,26 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
   // Table headers (translation only if lang ≠ en).
   const showTrad = lang !== 'en'
   const headers = [
-    { label: 'Codi',       align: 'left'  },
-    { label: 'Nom POM',    align: 'left'  },
-    ...(showTrad ? [{ label: 'Traducció', align: 'left' }] : []),
-    { label: 'Lògica',     align: 'left'  },
-    { label: 'Δ/talla',    align: 'right' },
-    { label: 'Δ break',    align: 'right' },
-    { label: 'Talla base', align: 'right' },
-    { label: 'Valor base', align: 'right' },
+    { label: t('grading.col.code'),       align: 'left'  },
+    { label: t('grading.col.pom_name'),    align: 'left'  },
+    ...(showTrad ? [{ label: t('grading.col.translation'), align: 'left' }] : []),
+    { label: t('grading.col.logic'),     align: 'left'  },
+    { label: t('grading.col.delta_size'),    align: 'right' },
+    { label: t('grading.col.delta_break'),    align: 'right' },
+    { label: t('grading.col.base_size'), align: 'right' },
+    { label: t('grading.col.base_value'), align: 'right' },
     ...(editable ? [{ label: '', align: 'center' }] : []),
   ]
 
   return (
     <div style={{
-      border: '1px solid #e0d5c5', borderRadius: 10,
-      marginBottom: 16, overflow: 'hidden', background: '#fff',
+      border: '1px solid var(--border)', borderRadius: 10,
+      marginBottom: 16, overflow: 'hidden', background: 'var(--white)',
       boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
     }}>
       <div style={{
         padding: '12px 18px', background: '#fafaf8',
-        borderBottom: expanded ? '1px solid #e0d5c5' : 'none',
+        borderBottom: expanded ? '1px solid var(--border)' : 'none',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         gap: 14, flexWrap: 'wrap',
       }}>
@@ -595,39 +601,39 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
             onClick={() => setExpanded(e => !e)}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 12, color: '#868685', padding: 0, lineHeight: 1,
+              fontSize: 'var(--fs-body)', color: 'var(--text-muted)', padding: 0, lineHeight: 1,
             }}
-            aria-label={expanded ? 'Replegar' : 'Desplegar'}
+            aria-label={expanded ? t('grading.collapse') : t('grading.expand')}
           >
             {expanded ? '▾' : '▸'}
           </button>
           <div style={{ minWidth: 0 }}>
             <div style={{
-              fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
-              fontSize: 13, color: '#1d1d1b',
+              fontWeight: 600,
+              fontSize: 'var(--fs-body)', color: 'var(--text-main)',
             }}>
               {rs.nom}
             </div>
             <div style={{
-              fontSize: 11, color: '#868685', marginTop: 2,
+              fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2,
               display: 'flex', gap: 10, flexWrap: 'wrap',
             }}>
               {/* S16-B: targets array (M2M) — a RuleSet can apply to multiple targets */}
               {rs.targets_codis?.length > 0 && (
                 <span>
-                  {rs.targets_codis.length > 1 ? 'Targets: ' : 'Target: '}
-                  {rs.targets_codis.map((t, i) => (
-                    <span key={t}>
+                  {rs.targets_codis.length > 1 ? t('grading.targets_label') : t('grading.target_label')}
+                  {rs.targets_codis.map((tc, i) => (
+                    <span key={tc}>
                       {i > 0 && <span style={{ color: '#bbb' }}> · </span>}
-                      <strong>{t}</strong>
+                      <strong>{t(`model_wizard.target_${tc}`, tc)}</strong>
                     </span>
                   ))}
                 </span>
               )}
-              {rs.construction_codi && <span>Construction: <strong>{rs.construction_codi}</strong></span>}
-              {rs.fit_type_codi && <span>Fit: <strong>{rs.fit_type_codi}</strong></span>}
-              {rs.size_system_nom && <span>Size System: <strong>{rs.size_system_nom}</strong></span>}
-              {rs.codi_sistema && <span style={{ fontFamily: 'IBM Plex Mono, monospace' }}>{rs.codi_sistema}</span>}
+              {rs.construction_codi && <span>{t('grading.construction_label')}<strong>{t(`model_wizard.construction_${rs.construction_codi}`, rs.construction_codi)}</strong></span>}
+              {rs.fit_type_codi && <span>{t('grading.fit_label')}<strong>{rs.fit_type_codi}</strong></span>}
+              {rs.size_system_nom && <span>{t('grading.size_system_label')}<strong>{rs.size_system_nom}</strong></span>}
+              {rs.codi_sistema && <span style={{ }}>{rs.codi_sistema}</span>}
             </div>
           </div>
         </div>
@@ -635,20 +641,20 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Pill bg="#eef4fc" color="#2a5a8a">
             {relevantCategories && reglesCount !== totalRulesCount
-              ? `${reglesCount}/${totalRulesCount} regles`
-              : `${reglesCount} regles`}
+              ? t('grading.rules_count_filtered', { count: reglesCount, total: totalRulesCount })
+              : t('grading.rules_count', { count: reglesCount })}
           </Pill>
-          {breakCount > 0 && <Pill bg="#fdf6ee" color="#c27a2a">{breakCount} amb break</Pill>}
+          {breakCount > 0 && <Pill bg="#fdf6ee" color="var(--gold)">{t('grading.with_break', { count: breakCount })}</Pill>}
           <Pill
             bg={rs.is_system_default ? '#f5f0ea' : '#f0f9f0'}
-            color={rs.is_system_default ? '#868685' : '#3b6d11'}
-          >{rs.is_system_default ? 'Sistema' : 'Personalitzat'}</Pill>
-          {rs.actiu && <Pill bg="#f0f9f0" color="#3b6d11">Actiu</Pill>}
-          <ActionBtn onClick={onClone} label="Clonar" />
+            color={rs.is_system_default ? 'var(--text-muted)' : '#3b6d11'}
+          >{rs.is_system_default ? t('grading.system') : t('grading.custom')}</Pill>
+          {rs.actiu && <Pill bg="#f0f9f0" color="#3b6d11">{t('grading.active')}</Pill>}
+          <ActionBtn onClick={onClone} label={t('grading.clone')} />
           {!rs.is_system_default && (
             <>
-              <ActionBtn onClick={onEdit} label="Editar" />
-              <ActionBtn onClick={onDelete} label="Esborrar" danger />
+              <ActionBtn onClick={onEdit} label={t('app.edit')} />
+              <ActionBtn onClick={onDelete} label={t('app.delete')} danger />
             </>
           )}
         </div>
@@ -657,17 +663,16 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
       {/* Taula */}
       {expanded && visibleRules.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', fontSize: 'var(--fs-body)', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#fafaf8' }}>
                 {headers.map((h, i) => (
                   <th key={i} style={{
                     padding: '8px 12px',
                     textAlign: h.align,
-                    fontWeight: 600, color: '#868685', fontSize: 10,
+                    fontWeight: 600, color: 'var(--text-muted)', fontSize: 'var(--fs-label)',
                     textTransform: 'uppercase', letterSpacing: '0.06em',
-                    borderBottom: '0.5px solid #e0d5c5',
-                    fontFamily: 'IBM Plex Mono, monospace',
+                    borderBottom: '0.5px solid var(--border)',
                   }}>{h.label}</th>
                 ))}
               </tr>
@@ -678,58 +683,57 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                 const aboveXl = r.valors_step?.above_xl
                 const isKey = r.increment > 0 && r.logica === 'LINEAR'
                 return (
-                  <tr key={r.id} style={{ background: i % 2 === 0 ? '#fff' : '#fafaf8' }}>
+                  <tr key={r.id} style={{ background: i % 2 === 0 ? 'var(--white)' : '#fafaf8' }}>
                     {/* CODI: codi global (POM-001) gris petit a sobre,
                         abreviatura (CH) daurada més gran a sota. */}
                     <td style={{
                       padding: '7px 12px',
-                      fontFamily: 'IBM Plex Mono, monospace',
                       borderBottom: '0.5px solid #f0eee9',
                       whiteSpace: 'nowrap',
                     }}>
                       {r.pom_code_global && (
                         <div style={{
-                          fontSize: 9, color: '#868685',
+                          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
                           lineHeight: 1.1, letterSpacing: '.02em',
                         }}>{r.pom_code_global}</div>
                       )}
                       <div style={{
-                        fontSize: 12, color: '#c27a2a', fontWeight: 600,
+                        fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 600,
                         lineHeight: 1.15,
                       }}>{r.pom_abbreviation || r.pom_codi}</div>
                     </td>
                     <td style={{
-                      padding: '7px 12px', color: '#1d1d1b',
+                      padding: '7px 12px', color: 'var(--text-main)',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
                       {r.pom_nom_en || r.pom_nom}
                       {isKey && (
                         <span style={{
-                          marginLeft: 6, fontSize: 9, padding: '2px 5px', borderRadius: 3,
-                          background: '#fdf6ee', color: '#c27a2a',
+                          marginLeft: 6, fontSize: 'var(--fs-caption)', padding: '2px 5px', borderRadius: 3,
+                          background: '#fdf6ee', color: 'var(--gold)',
                           border: '0.5px solid #e0c8a0', fontWeight: 600,
                         }}>KEY</span>
                       )}
                     </td>
                     {showTrad && (
                       <td style={{
-                        padding: '7px 12px', color: '#868685', fontStyle: 'italic',
+                        padding: '7px 12px', color: 'var(--text-muted)', fontStyle: 'italic',
                         borderBottom: '0.5px solid #f0eee9',
                       }}>{r.pom_nom_ca || '—'}</td>
                     )}
                     <td style={{ padding: '7px 12px', borderBottom: '0.5px solid #f0eee9' }}>
                       <span style={{
-                        fontSize: 10, padding: '2px 6px', borderRadius: 3,
+                        fontSize: 'var(--fs-label)', padding: '2px 6px', borderRadius: 3,
                         background: logica.bg, color: logica.color,
-                        fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
+                        fontWeight: 600,
                       }}>{r.logica}</span>
                     </td>
                     {/* Δ/talla — Peça A: forma canònica (increment_base) com a TEXT read-only;
                         regles no backfillades (increment_base null) → escalar editable (compat). */}
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
-                      color: Number(r.increment_base ?? r.increment) > 0 ? '#2a5a8a' : '#868685',
+                      fontWeight: 600,
+                      color: Number(r.increment_base ?? r.increment) > 0 ? '#2a5a8a' : 'var(--text-muted)',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
                       {r.increment_base != null
@@ -748,13 +752,13 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                         regles no backfillades → fallback above_xl editable (compat). */}
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
-                      color: (r.increment_base != null ? r.talla_break_label : aboveXl) ? '#c27a2a' : '#c0c0c0',
+                      fontSize: 'var(--fs-body)',
+                      color: (r.increment_base != null ? r.talla_break_label : aboveXl) ? 'var(--gold)' : '#c0c0c0',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
                       {r.increment_base != null
                         ? (r.talla_break_label
-                            ? `+${Number(r.increment_break)} des de ${r.talla_break_label}`
+                            ? t('grading.break_from', { value: Number(r.increment_break), size: r.talla_break_label })
                             : '—')
                         : (
                           <EditableIncrement
@@ -768,14 +772,12 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     </td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      fontFamily: 'IBM Plex Mono, monospace',
-                      color: '#868685', fontSize: 11,
+                      color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>{r.talla_base_etiqueta || '—'}</td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      fontFamily: 'IBM Plex Mono, monospace',
-                      color: '#868685',
+                      color: 'var(--text-muted)',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>{Number(r.valor_base) > 0 ? `${r.valor_base} cm` : '—'}</td>
                     {editable && (
@@ -785,7 +787,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                       }}>
                         <ActionBtn
                           onClick={() => handleDeactivateRule(r.id)}
-                          label="Inactivar"
+                          label={t('grading.deactivate')}
                           danger
                         />
                       </td>
@@ -799,10 +801,10 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
       )}
 
       {expanded && visibleRules.length === 0 && (
-        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#bbb', fontSize: 12 }}>
+        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#bbb', fontSize: 'var(--fs-body)' }}>
           {localRules.length === 0
-            ? 'Cap regla definida per a aquest RuleSet.'
-            : `Cap regla rellevant per a ${garmentGroup} (${localRules.length} amagades).`}
+            ? t('grading.no_rules')
+            : t('grading.no_relevant_rules', { group: garmentGroup, count: localRules.length })}
         </div>
       )}
     </div>
@@ -813,6 +815,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
 // Show a numeric value. If readOnly, render as static text.
 // If editable, click → inline numeric input. Enter saves, Escape cancels.
 function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
+  const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   useEffect(() => { setDraft(value) }, [value])
@@ -844,9 +847,8 @@ function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
         }}
         style={{
           width: 64, textAlign: 'right',
-          border: '1px solid #c27a2a', borderRadius: 4,
-          padding: '1px 4px', fontSize: 11,
-          fontFamily: 'IBM Plex Mono, monospace',
+          border: '1px solid var(--gold)', borderRadius: 4,
+          padding: '1px 4px', fontSize: 'var(--fs-body)',
         }}
       />
     )
@@ -855,7 +857,7 @@ function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
   return (
     <span
       onClick={() => setEditing(true)}
-      title="Click per editar"
+      title={t('measurement_table.click_to_edit')}
       style={{
         cursor: 'pointer',
         borderBottom: '1px dashed #c0c0c0',
@@ -870,9 +872,9 @@ function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
 function Pill({ bg, color, children }) {
   return (
     <span style={{
-      fontSize: 10, padding: '3px 7px', borderRadius: 4,
+      fontSize: 'var(--fs-label)', padding: '3px 7px', borderRadius: 4,
       background: bg, color,
-      fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600,
+      fontWeight: 600,
       letterSpacing: '.04em', whiteSpace: 'nowrap',
     }}>{children}</span>
   )
@@ -880,16 +882,15 @@ function Pill({ bg, color, children }) {
 
 function ActionBtn({ onClick, label, danger = false }) {
   const palette = danger
-    ? { fg: '#a32d2d', bg: '#fff', border: '#f0c0c0', bgHover: '#fff0f0' }
-    : { fg: '#868685', bg: '#fff', border: '#e0d5c5', bgHover: '#fdf9f5' }
+    ? { fg: '#a32d2d', bg: 'var(--white)', border: '#f0c0c0', bgHover: '#fff0f0' }
+    : { fg: 'var(--text-muted)', bg: 'var(--white)', border: 'var(--border)', bgHover: '#fdf9f5' }
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick() }}
       style={{
-        fontSize: 10, padding: '4px 9px', borderRadius: 4, cursor: 'pointer',
+        fontSize: 'var(--fs-label)', padding: '4px 9px', borderRadius: 4, cursor: 'pointer',
         background: palette.bg, color: palette.fg,
         border: `0.5px solid ${palette.border}`,
-        fontFamily: 'IBM Plex Mono, monospace',
       }}
       onMouseEnter={e => e.currentTarget.style.background = palette.bgHover}
       onMouseLeave={e => e.currentTarget.style.background = palette.bg}
@@ -901,6 +902,7 @@ function ActionBtn({ onClick, label, danger = false }) {
 
 // ── RuleSetModal ────────────────────────────────────────────────────────────
 function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, authHeaders, onSave, onError, onClose }) {
+  const { t } = useTranslation()
   const isEdit = !!rs?.id
   const [form, setForm] = useState({
     nom:          rs?.nom          || '',
@@ -920,7 +922,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
   const [saving, setSaving] = useState(false)
 
   const handleSubmit = async () => {
-    if (!form.nom.trim()) { onError('Nom obligatori'); return }
+    if (!form.nom.trim()) { onError(t('grading.name_required')); return }
     setSaving(true)
 
     const url = isEdit
@@ -964,9 +966,8 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
   const F = ({ label, field, options, disabled }) => (
     <div style={{ marginBottom: 12 }}>
       <label style={{
-        fontSize: 10, fontWeight: 600, color: '#868685',
+        fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)',
         display: 'block', marginBottom: 4,
-        fontFamily: 'IBM Plex Mono, monospace',
       }}>{label}</label>
       {options ? (
         <select
@@ -975,7 +976,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
           onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
           style={modalInput}
         >
-          <option value="">— Selecciona —</option>
+          <option value="">{t('grading.select_placeholder')}</option>
           {options.map(o => <option key={o.codi} value={o.codi}>{o.nom_en}</option>)}
         </select>
       ) : (
@@ -1000,39 +1001,38 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: '#fff', borderRadius: 12, padding: 24,
+          background: 'var(--white)', borderRadius: 12, padding: 24,
           width: '100%', maxWidth: 480,
           boxShadow: '0 10px 40px rgba(0,0,0,0.18)',
-          fontFamily: 'IBM Plex Mono, monospace',
         }}
       >
-        <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: '#1d1d1b' }}>
-          {isEdit ? 'Editar RuleSet' : 'Nou RuleSet de Grading'}
+        <h2 style={{ margin: '0 0 16px', fontSize: 'var(--fs-h3)', fontWeight: 600, color: 'var(--text-main)' }}>
+          {isEdit ? t('grading.modal_edit') : t('grading.modal_new')}
         </h2>
-        <F label="Nom" field="nom" />
-        <F label="Codi sistema" field="codi_sistema" />
-        <F label="Target (només referència)" field="target_codi_form" options={TARGETS} disabled />
-        <F label="Construction (només referència)" field="construction_codi_form" options={CONSTRUCTIONS} disabled />
-        <F label="Fit Type (només referència)" field="fit_type_codi_form" options={FITS} disabled />
-        <p style={{ fontSize: 10, color: '#c27a2a', margin: '4px 0 12px' }}>
-          Nota: Target/Construction/Fit no es poden modificar des d'aquí — backend espera IDs i no hi ha endpoint per resoldre codi→id.
+        <F label={t('grading.field_name')} field="nom" />
+        <F label={t('grading.field_codi')} field="codi_sistema" />
+        <F label={t('grading.field_target_ref')} field="target_codi_form" options={TARGETS} disabled />
+        <F label={t('grading.field_construction_ref')} field="construction_codi_form" options={CONSTRUCTIONS} disabled />
+        <F label={t('grading.field_fit_ref')} field="fit_type_codi_form" options={FITS} disabled />
+        <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)', margin: '4px 0 12px' }}>
+          {t('grading.modal_note')}
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
           <button
             onClick={onClose}
             style={{
               padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
-              background: '#fff', color: '#868685',
-              border: '0.5px solid #e0d5c5',
-              fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
+              background: 'var(--white)', color: 'var(--text-muted)',
+              border: '0.5px solid var(--border)',
+              fontSize: 'var(--fs-body)',
             }}
-          >Cancel·lar</button>
+          >{t('app.cancel')}</button>
           <button
             onClick={handleSubmit}
             disabled={saving}
             style={{ ...btnPrimary, opacity: saving ? 0.6 : 1, cursor: saving ? 'not-allowed' : 'pointer' }}
           >
-            {saving ? 'Guardant...' : (isEdit ? 'Guardar' : 'Crear')}
+            {saving ? t('common.saving') : (isEdit ? t('app.save') : t('app.create'))}
           </button>
         </div>
       </div>
@@ -1041,20 +1041,19 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
 }
 
 const btnPrimary = {
-  background: '#c27a2a', color: '#fff',
+  background: 'var(--gold)', color: 'var(--white)',
   border: 'none', borderRadius: 6,
-  padding: '8px 14px', fontSize: 11, fontWeight: 600,
-  cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace',
+  padding: '8px 14px', fontSize: 'var(--fs-body)', fontWeight: 600,
+  cursor: 'pointer', 
 }
 
 const modalInput = {
   width: '100%',
-  border: '0.5px solid #e0d5c5',
+  border: '0.5px solid var(--border)',
   borderRadius: 6,
   padding: '8px 10px',
-  fontSize: 12,
-  fontFamily: 'IBM Plex Mono, monospace',
+  fontSize: 'var(--fs-body)',
   outline: 'none',
   boxSizing: 'border-box',
-  background: '#fff',
+  background: 'var(--white)',
 }

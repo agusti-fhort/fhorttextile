@@ -14,7 +14,7 @@ import { primaryBtn } from '../components/ui/buttons'
 const MONO = 'IBM Plex Mono, monospace'
 const actBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)',
+  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
 }
 
 export default function Customers() {
@@ -93,13 +93,13 @@ export default function Customers() {
   const columns = [
     { key: 'codi', label: t('clients.col_codi'), render: r => (
       <span style={{ fontFamily: MONO, fontWeight: 600 }}>
-        {r.codi}{r.is_self && <span style={{ marginLeft: 6, fontSize: 9, color: 'var(--gray)' }}>({t('clients.self')})</span>}
+        {r.codi}{r.is_self && <span style={{ marginLeft: 6, fontSize: 'var(--fs-caption)', color: 'var(--gray)' }}>({t('clients.self')})</span>}
       </span>
     ) },
     { key: 'nom', label: t('clients.col_nom'), render: r => r.nom },
     { key: 'active', label: t('clients.col_active'), render: r => (
       <span style={{
-        fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, fontFamily: MONO,
+        fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px', borderRadius: 999, fontFamily: MONO,
         background: r.active ? 'var(--ok-bg)' : 'var(--gray-l)', color: r.active ? 'var(--ok)' : 'var(--gray)',
       }}>{r.active ? t('clients.active') : t('clients.inactive')}</span>
     ) },
@@ -123,8 +123,8 @@ export default function Customers() {
       <input ref={logoRef} type="file" accept="image/*" hidden onChange={handleLogoUpload} />
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('clients.title')}</h1>
-          <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('clients.subtitle')}</p>
+          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('clients.title')}</h1>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('clients.subtitle')}</p>
         </div>
         {canEdit && (
           <button onClick={() => setModal({ mode: 'create' })} style={{ ...primaryBtn, marginLeft: 0 }}>

@@ -29,6 +29,16 @@
   --err-bg:     #fcebeb;
   --gate:       #534ab7;
   --gate-bg:    #eeedfe;
+
+  /* Escala tipogràfica (Fase 2) — noms semàntics per rol, no per valor.
+     8·10·12·14·18·22·32. El 8 és el terra (= mínim 8pt de la fitxa tècnica). */
+  --fs-caption: 8px;   /* captions, hints, badges menors */
+  --fs-label:   10px;  /* labels bold / eyebrow (uppercase, letterSpacing) */
+  --fs-body:    12px;  /* cos de text (rol majoritari) */
+  --fs-h3:      14px;  /* títol de secció */
+  --fs-h2:      18px;  /* subcapçalera */
+  --fs-h1:      22px;  /* títol de pàgina */
+  --fs-display: 32px;  /* display */
 }
 
 * { font-family: 'IBM Plex Mono', monospace; box-sizing: border-box; margin: 0; padding: 0; }
@@ -40,3 +50,6 @@ body {
   background: var(--bg-main);
   color: var(--text-main);
 }
+
+/* Spinner global (icones de càrrega: afegir animation: spin 0.8s linear infinite). */
+@keyframes spin { to { transform: rotate(360deg); } }

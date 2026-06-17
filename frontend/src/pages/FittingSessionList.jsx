@@ -22,8 +22,7 @@ const filterBtn = (active) => ({
   background: active ? 'var(--charcoal)' : 'var(--white)',
   color:      active ? 'var(--white)' : 'var(--gray)',
   border: '0.5px solid #e4e4e2', borderRadius: 8,
-  padding: '5px 12px', fontSize: 11, cursor: 'pointer',
-  fontFamily: 'var(--font)',
+  padding: '5px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer',
 })
 
 // Cercle de color d'assignació (color_avatar). Fallback --gold si null.
@@ -40,21 +39,21 @@ const AttendeeDots = ({ attendees }) => {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
       {shown.map(a => <ColorDot key={a.id} color={a.color_avatar} />)}
-      {extra > 0 && <span style={{ fontSize: 10, color: 'var(--gray)' }}>+{extra}</span>}
+      {extra > 0 && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>+{extra}</span>}
     </span>
   )
 }
 
 const thStyle = (align) => ({
-  padding: '0.7rem 1rem', fontSize: 10, letterSpacing: '0.1em',
+  padding: '0.7rem 1rem', fontSize: 'var(--fs-label)', letterSpacing: '0.1em',
   textTransform: 'uppercase', color: 'var(--gray)', fontWeight: 400,
   borderBottom: '0.5px solid var(--gray-l)', textAlign: align || 'left', whiteSpace: 'nowrap',
 })
 const tdStyle = (align, extra) => ({
-  padding: '0.75rem 1rem', fontSize: 12, textAlign: align || 'left', ...extra,
+  padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', textAlign: align || 'left', ...extra,
 })
 const miniBtn = (primary) => ({
-  fontSize: 11, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+  fontSize: 'var(--fs-body)', padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
   border: primary ? 'none' : '0.5px solid var(--gray-l)',
   background: primary ? 'var(--charcoal)' : 'var(--white)',
   color: primary ? 'var(--white)' : 'var(--gray)',
@@ -181,7 +180,7 @@ export default function FittingSessionList() {
   }
 
   const doAddModel = () => {
-    if (!modalGrup.model_id) { setModalGrup(m => ({ ...m, err: t('fitting.group.select_model', 'Selecciona un model') })); return }
+    if (!modalGrup.model_id) { setModalGrup(m => ({ ...m, err: t('fitting.group.select_model') })); return }
     setActBusy(true)
     const payload = { model_id: Number(modalGrup.model_id) }
     if (modalGrup.fase) payload.fase = modalGrup.fase
@@ -189,7 +188,7 @@ export default function FittingSessionList() {
       .then(() => { setModalGrup(null); load() })
       .catch(e => setModalGrup(m => ({ ...m,
         err: e.response?.status === 409
-          ? (e.response?.data?.error || t('fitting.group.model_in_group', 'Model ja és al grup'))
+          ? (e.response?.data?.error || t('fitting.group.model_in_group'))
           : (e.response?.data?.error || 'error') })))
       .finally(() => setActBusy(false))
   }
@@ -211,8 +210,7 @@ export default function FittingSessionList() {
         if (e.response?.status === 409) {
           const models = (e.response.data?.conflicts || [])
             .map(c => c.model_codi || `#${c.id}`).join(', ')
-          setModalGrup(m => ({ ...m, err: t('fitting.group.remove_conflict',
-            { models, defaultValue: `No es pot eliminar: hi ha sessions ja obertes ({{models}}). Descarta-les primer.` }) }))
+          setModalGrup(m => ({ ...m, err: t('fitting.group.remove_conflict', { models }) }))
         } else {
           setModalGrup(m => ({ ...m, err: e.response?.data?.error || 'error' }))
         }
@@ -227,7 +225,7 @@ export default function FittingSessionList() {
       .then(() => { setRowAction(null); load() })
       .catch(e => setRowAction({ id, tipus: 'delete',
         err: e.response?.status === 409
-          ? t('fitting.row.use_discard', 'Usa Descartar per a sessions ja obertes.')
+          ? t('fitting.row.use_discard')
           : (e.response?.data?.error || 'error') }))
       .finally(() => setActBusy(false))
   }
@@ -241,17 +239,17 @@ export default function FittingSessionList() {
   }
 
   // Cel·la d'accions d'una sessió (eliminar si Programada; descartar si Programada/Oberta).
-  const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray)', fontSize: 14, padding: '2px 4px' }
+  const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray)', fontSize: 'var(--fs-h3)', padding: '2px 4px' }
   const SessionActionsCell = ({ s }) => (
     <span style={{ display: 'inline-flex', gap: 4, justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
       {(s.estat === 'Programada' || s.estat === 'Oberta') && (
-        <button style={iconBtn} title={t('fitting.row.discard', 'Descartar sessió')}
+        <button style={iconBtn} title={t('fitting.row.discard')}
           onClick={() => setRowAction({ id: s.id, tipus: 'discard', motiu: '', err: null })}>
           <i className="ti ti-circle-x" />
         </button>
       )}
       {s.estat === 'Programada' && (
-        <button style={{ ...iconBtn, color: 'var(--err)' }} title={t('fitting.row.delete', 'Eliminar')}
+        <button style={{ ...iconBtn, color: 'var(--err)' }} title={t('fitting.row.delete')}
           disabled={actBusy} onClick={() => doRemove(s.id)}>
           <i className="ti ti-trash" />
         </button>
@@ -267,18 +265,18 @@ export default function FittingSessionList() {
         <td colSpan={colSpan} style={{ padding: '10px 16px' }}>
           {rowAction.tipus === 'delete' ? (
             // Ajust 2 — sense confirmació: el borrat és directe; aquí només es mostra l'error (p.ex. 409).
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 'var(--fs-body)' }}>
               {rowAction.err && <span style={{ color: 'var(--err)' }}>{rowAction.err}</span>}
-              <button style={miniBtn(false)} onClick={() => setRowAction(null)}>{t('common.dismiss', 'D\'acord')}</button>
+              <button style={miniBtn(false)} onClick={() => setRowAction(null)}>{t('common.dismiss')}</button>
             </span>
           ) : (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 12, flexWrap: 'wrap' }}>
-              {t('fitting.row.discard_label', 'Motiu (opcional):')}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 'var(--fs-body)', flexWrap: 'wrap' }}>
+              {t('fitting.row.discard_label')}
               <input type="text" value={rowAction.motiu || ''} autoFocus
                 onChange={e => setRowAction(r => ({ ...r, motiu: e.target.value }))}
-                style={{ fontSize: 12, padding: '3px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, minWidth: 220 }} />
-              <button style={miniBtn(true)} disabled={actBusy} onClick={() => doDiscard(id, rowAction.motiu)}>{t('common.confirm', 'Confirmar')}</button>
-              <button style={miniBtn(false)} disabled={actBusy} onClick={() => setRowAction(null)}>{t('common.cancel', 'Cancel·lar')}</button>
+                style={{ fontSize: 'var(--fs-body)', padding: '3px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, minWidth: 220 }} />
+              <button style={miniBtn(true)} disabled={actBusy} onClick={() => doDiscard(id, rowAction.motiu)}>{t('common.confirm')}</button>
+              <button style={miniBtn(false)} disabled={actBusy} onClick={() => setRowAction(null)}>{t('common.cancel')}</button>
               {rowAction.err && <span style={{ color: 'var(--err)' }}>{rowAction.err}</span>}
             </span>
           )}
@@ -291,8 +289,8 @@ export default function FittingSessionList() {
     <div>
       <div style={{display: 'flex', alignItems: 'flex-start', marginBottom: '1.5rem'}}>
         <div>
-          <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>{t('fitting.sessions.title')}</h1>
-          <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
+          <h1 style={{fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4}}>{t('fitting.sessions.title')}</h1>
+          <p style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300}}>
             {stats.total}
           </p>
         </div>
@@ -300,7 +298,7 @@ export default function FittingSessionList() {
           marginLeft: 'auto',
           background: 'var(--charcoal)', color: 'var(--white)',
           border: 'none', borderRadius: 8, padding: '8px 16px',
-          fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font)',
+          fontSize: 'var(--fs-body)', cursor: 'pointer', 
         }}>
           + {t('fitting.sessions.new')}
         </button>
@@ -317,7 +315,7 @@ export default function FittingSessionList() {
       </div>
 
       <div style={{display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap'}}>
-        <span style={{fontSize: 11, color: 'var(--gray)', alignSelf: 'center', marginRight: 4}}>
+        <span style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', alignSelf: 'center', marginRight: 4}}>
           {t('fitting.session.fase')}:
         </span>
         {FASES.map(f => (
@@ -325,7 +323,7 @@ export default function FittingSessionList() {
             {f || t('fitting.sessions.all')}
           </button>
         ))}
-        <span style={{fontSize: 11, color: 'var(--gray)', alignSelf: 'center', marginLeft: 12, marginRight: 4}}>
+        <span style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', alignSelf: 'center', marginLeft: 12, marginRight: 4}}>
           {t('fitting.session.estat')}:
         </span>
         {ESTATS.map(e => (
@@ -337,11 +335,11 @@ export default function FittingSessionList() {
 
       <Card padding={0}>
         {loading ? (
-          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-            {t('common.loading', 'Carregant...')}
+          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
+            {t('common.loading')}
           </div>
         ) : !hasRows ? (
-          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
+          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
             {t('fitting.sessions.empty')}
           </div>
         ) : (
@@ -352,8 +350,8 @@ export default function FittingSessionList() {
                 <th style={thStyle()}>{t('fitting.session.target')}</th>
                 <th style={thStyle()}>{t('fitting.session.fase')}</th>
                 <th style={thStyle()}>{t('fitting.session.estat')}</th>
-                <th style={thStyle()}>{t('fitting.session.attendees', 'Assistents')}</th>
-                <th style={thStyle('right')}>{t('fitting.session.min', 'Min')}</th>
+                <th style={thStyle()}>{t('fitting.session.attendees')}</th>
+                <th style={thStyle('right')}>{t('fitting.session.min')}</th>
                 <th style={thStyle('right')}>{t('fitting.session.n_peces')}</th>
                 <th style={thStyle('right')}></th>
               </tr>
@@ -372,14 +370,14 @@ export default function FittingSessionList() {
                       <td style={tdStyle()}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                           <i className="ti ti-chevron-right" style={{
-                            fontSize: 14, transition: 'transform 0.15s',
+                            fontSize: 'var(--fs-h3)', transition: 'transform 0.15s',
                             transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }} />
                           <span>{primera.data || '—'}{primera.start_time ? ` · ${primera.start_time.slice(0, 5)}` : ''}</span>
                         </span>
                       </td>
                       <td style={tdStyle()}>
                         <span style={{ fontWeight: 500 }}>
-                          {t('fitting.convocatoria', 'Convocatòria')} · {sessions.length} {t('fitting.models', 'models')}
+                          {t('fitting.convocatoria')} · {sessions.length} {t('fitting.models')}
                         </span>
                       </td>
                       <td style={tdStyle()}><Badge variant="gate">{primera.fase_display || primera.fase}</Badge></td>
@@ -388,7 +386,7 @@ export default function FittingSessionList() {
                       <td style={tdStyle('right', { fontVariantNumeric: 'tabular-nums' })}>{sum(sessions, 'duracio_minuts')}</td>
                       <td style={tdStyle('right', { fontVariantNumeric: 'tabular-nums' })}>{sum(sessions, 'n_peces')}</td>
                       <td style={tdStyle('right', { position: 'relative', overflow: 'visible' })} onClick={e => e.stopPropagation()}>
-                        <button style={iconBtn} title={t('fitting.group.actions', 'Accions de grup')}
+                        <button style={iconBtn} title={t('fitting.group.actions')}
                           onClick={() => setMenuGrup(menuGrup === uuid ? null : uuid)}>
                           <i className="ti ti-dots-vertical" />
                         </button>
@@ -399,16 +397,16 @@ export default function FittingSessionList() {
                               border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                               minWidth: 170, textAlign: 'left', padding: 4 }}>
                               {[
-                                { k: 'reschedule', icon: 'ti-calendar-event', label: t('fitting.group.reschedule', 'Reagendar') },
-                                { k: 'addModel', icon: 'ti-plus', label: t('fitting.group.add_model', 'Afegir model') },
-                                { k: 'attendees', icon: 'ti-users', label: t('fitting.group.attendees', 'Canviar assistents') },
-                                { k: 'removeGroup', icon: 'ti-trash', label: t('fitting.group.remove', 'Eliminar convocatòria'), danger: true },
+                                { k: 'reschedule', icon: 'ti-calendar-event', label: t('fitting.group.reschedule') },
+                                { k: 'addModel', icon: 'ti-plus', label: t('fitting.group.add_model') },
+                                { k: 'attendees', icon: 'ti-users', label: t('fitting.group.attendees') },
+                                { k: 'removeGroup', icon: 'ti-trash', label: t('fitting.group.remove'), danger: true },
                               ].map(it => (
                                 <button key={it.k} onClick={() => openGrupModal(uuid, it.k, sessions)}
                                   style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none',
-                                    border: 'none', cursor: 'pointer', padding: '7px 10px', fontSize: 12,
+                                    border: 'none', cursor: 'pointer', padding: '7px 10px', fontSize: 'var(--fs-body)',
                                     color: it.danger ? 'var(--err)' : 'var(--text-main)',
-                                    borderRadius: 6, fontFamily: 'var(--font)' }}>
+                                    borderRadius: 6 }}>
                                   <i className={`ti ${it.icon}`} style={{ fontSize: 14, color: it.danger ? 'var(--err)' : 'var(--gray)' }} /> {it.label}
                                 </button>
                               ))}
@@ -420,7 +418,7 @@ export default function FittingSessionList() {
                     {isOpen && sessions.map((s, j) => (
                       <Fragment key={`${uuid}-${s.id}`}>
                       <tr onClick={() => navigate(`/fittings/${s.id}`)}
-                        style={{ background: 'var(--bg-card)', cursor: 'pointer', fontSize: 13,
+                        style={{ background: 'var(--bg-card)', cursor: 'pointer', fontSize: 'var(--fs-body)',
                                  borderBottom: j < sessions.length - 1 ? '0.5px solid var(--gray-l)' : '0.5px solid var(--gray-l)' }}>
                         <td style={tdStyle(null, { paddingLeft: 24, borderLeft: '2px solid var(--gold-pale)', color: 'var(--gray)' })}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -428,7 +426,7 @@ export default function FittingSessionList() {
                             {s.start_time ? s.start_time.slice(0, 5) : '—'}
                           </span>
                         </td>
-                        <td style={tdStyle(null, { fontSize: 11, color: 'var(--gold)', fontWeight: 500 })}>{s.target?.label || '—'}</td>
+                        <td style={tdStyle(null, { fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 500 })}>{s.target?.label || '—'}</td>
                         <td style={tdStyle(null, { color: 'var(--gray)' })}>—</td>
                         <td style={tdStyle()}><Badge variant={estatVariant[s.estat] || 'gray'}>{s.estat_display || s.estat}</Badge></td>
                         <td style={tdStyle(null, { color: 'var(--gray)' })}>—</td>
@@ -454,7 +452,7 @@ export default function FittingSessionList() {
                   <td style={tdStyle(null, { color: 'var(--gray)', fontWeight: 300 })}>
                     {r.data || '—'}{r.start_time ? ` · ${r.start_time.slice(0, 5)}` : ''}
                   </td>
-                  <td style={tdStyle(null, { fontSize: 11, color: 'var(--gold)', fontWeight: 500 })}>{r.target?.label || '—'}</td>
+                  <td style={tdStyle(null, { fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 500 })}>{r.target?.label || '—'}</td>
                   <td style={tdStyle()}><Badge variant="gate">{r.fase_display || r.fase}</Badge></td>
                   <td style={tdStyle()}><Badge variant={estatVariant[r.estat] || 'gray'}>{r.estat_display || r.estat}</Badge></td>
                   <td style={tdStyle()}><AttendeeDots attendees={r.attendees_info} /></td>
@@ -472,56 +470,56 @@ export default function FittingSessionList() {
 
       {/* ── Modals de grup (C2) ── */}
       {modalGrup?.tipus === 'reschedule' && (
-        <Modal title={t('fitting.group.reschedule', 'Reagendar')}
-          confirmLabel={actBusy ? t('common.saving', 'Desant…') : t('common.confirm', 'Confirmar')}
-          cancelLabel={t('common.cancel', 'Cancel·lar')} confirmDisabled={actBusy}
+        <Modal title={t('fitting.group.reschedule')}
+          confirmLabel={actBusy ? t('common.saving') : t('common.confirm')}
+          cancelLabel={t('common.cancel')} confirmDisabled={actBusy}
           onConfirm={doReschedule} onCancel={() => !actBusy && setModalGrup(null)}>
-          <label style={{ fontSize: 11, color: 'var(--gray)' }}>{t('fitting.session.date', 'Data')}</label>
+          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('fitting.session.date')}</label>
           <input type="date" value={modalGrup.data} onChange={e => setModalGrup(m => ({ ...m, data: e.target.value }))}
-            style={{ width: '100%', marginBottom: 12, padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 13 }} />
-          <label style={{ fontSize: 11, color: 'var(--gray)' }}>{t('fitting.group.start_time_opt', "Hora d'inici (opcional)")}</label>
+            style={{ width: '100%', marginBottom: 12, padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 'var(--fs-body)' }} />
+          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('fitting.group.start_time_opt')}</label>
           <input type="time" value={modalGrup.start_time} onChange={e => setModalGrup(m => ({ ...m, start_time: e.target.value }))}
-            style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 13 }} />
-          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 10 }}>{modalGrup.err}</div>}
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 'var(--fs-body)' }} />
+          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginTop: 10 }}>{modalGrup.err}</div>}
         </Modal>
       )}
 
       {modalGrup?.tipus === 'addModel' && (
-        <Modal title={t('fitting.group.add_model', 'Afegir model')}
-          confirmLabel={actBusy ? t('common.saving', 'Desant…') : t('common.confirm', 'Confirmar')}
-          cancelLabel={t('common.cancel', 'Cancel·lar')} confirmDisabled={actBusy}
+        <Modal title={t('fitting.group.add_model')}
+          confirmLabel={actBusy ? t('common.saving') : t('common.confirm')}
+          cancelLabel={t('common.cancel')} confirmDisabled={actBusy}
           onConfirm={doAddModel} onCancel={() => !actBusy && setModalGrup(null)}>
-          <label style={{ fontSize: 11, color: 'var(--gray)' }}>{t('fitting.session.target', 'Model')}</label>
+          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('fitting.session.target')}</label>
           <select value={modalGrup.model_id} onChange={e => setModalGrup(m => ({ ...m, model_id: e.target.value }))}
-            style={{ width: '100%', marginBottom: 12, padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 13 }}>
-            <option value="">— {t('fitting.group.select_model', 'Selecciona un model')} —</option>
+            style={{ width: '100%', marginBottom: 12, padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 'var(--fs-body)' }}>
+            <option value="">— {t('fitting.group.select_model')} —</option>
             {modelOpts.map(m => (
               <option key={m.id} value={m.id}>{m.codi_intern}{m.nom_prenda ? ` · ${m.nom_prenda}` : ''}</option>
             ))}
           </select>
-          <label style={{ fontSize: 11, color: 'var(--gray)' }}>{t('fitting.session.fase', 'Fase')}</label>
+          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('fitting.session.fase')}</label>
           <select value={modalGrup.fase} onChange={e => setModalGrup(m => ({ ...m, fase: e.target.value }))}
-            style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 13 }}>
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 'var(--fs-body)' }}>
             {FASES.filter(Boolean).map(f => <option key={f} value={f}>{f}</option>)}
           </select>
-          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 10 }}>{modalGrup.err}</div>}
+          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginTop: 10 }}>{modalGrup.err}</div>}
         </Modal>
       )}
 
       {modalGrup?.tipus === 'attendees' && (
-        <Modal title={t('fitting.group.attendees', 'Canviar assistents')}
-          confirmLabel={actBusy ? t('common.saving', 'Desant…') : t('common.confirm', 'Confirmar')}
-          cancelLabel={t('common.cancel', 'Cancel·lar')} confirmDisabled={actBusy}
+        <Modal title={t('fitting.group.attendees')}
+          confirmLabel={actBusy ? t('common.saving') : t('common.confirm')}
+          cancelLabel={t('common.cancel')} confirmDisabled={actBusy}
           onConfirm={doAttendees} onCancel={() => !actBusy && setModalGrup(null)}>
           {eligibles.length === 0
-            ? <div style={{ fontSize: 12, color: 'var(--gray)' }}>{t('model_sheet.fitting_no_attendees', 'Cap assistent elegible.')}</div>
+            ? <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('model_sheet.fitting_no_attendees')}</div>
             : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflowY: 'auto' }}>
                 {eligibles.map(e => {
                   const sel = (modalGrup.attendee_ids || []).includes(e.profile_id)
                   return (
                     <label key={e.profile_id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                      padding: '5px 6px', borderRadius: 6, fontSize: 12, background: sel ? 'var(--gold-pale)' : 'transparent' }}>
+                      padding: '5px 6px', borderRadius: 6, fontSize: 'var(--fs-body)', background: sel ? 'var(--gold-pale)' : 'transparent' }}>
                       <input type="checkbox" checked={sel} style={{ accentColor: 'var(--gold)' }}
                         onChange={() => setModalGrup(m => ({ ...m,
                           attendee_ids: sel
@@ -534,19 +532,19 @@ export default function FittingSessionList() {
                 })}
               </div>
             )}
-          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 10 }}>{modalGrup.err}</div>}
+          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginTop: 10 }}>{modalGrup.err}</div>}
         </Modal>
       )}
 
       {modalGrup?.tipus === 'removeGroup' && (
-        <Modal title={t('fitting.group.remove', 'Eliminar convocatòria')}
-          confirmLabel={actBusy ? t('common.saving', 'Desant…') : t('fitting.row.delete', 'Eliminar')}
-          cancelLabel={t('common.cancel', 'Cancel·lar')} confirmDisabled={actBusy}
+        <Modal title={t('fitting.group.remove')}
+          confirmLabel={actBusy ? t('common.saving') : t('fitting.row.delete')}
+          cancelLabel={t('common.cancel')} confirmDisabled={actBusy}
           onConfirm={doRemoveGroup} onCancel={() => !actBusy && setModalGrup(null)}>
-          <p style={{ fontSize: 13, lineHeight: 1.5 }}>
-            {t('fitting.group.remove_warn', "S'eliminaran totes les sessions de la convocatòria. Aquesta acció no es pot desfer.")}
+          <p style={{ fontSize: 'var(--fs-body)', lineHeight: 1.5 }}>
+            {t('fitting.group.remove_warn')}
           </p>
-          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 10 }}>{modalGrup.err}</div>}
+          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginTop: 10 }}>{modalGrup.err}</div>}
         </Modal>
       )}
     </div>

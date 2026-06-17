@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 
 const GARMENT_ICONS = {
   'dress': '👗', 'top': '👚', 'trousers': '👖', 'skirt': '🩱',
@@ -5,6 +6,7 @@ const GARMENT_ICONS = {
 }
 
 export function DesignFreezeReport({ result, onConfirm, onReject }) {
+  const { t } = useTranslation()
   if (!result) return null
   const { extracted, design_freeze, filename } = result
   const pass = design_freeze?.pass
@@ -20,32 +22,32 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
     return 'low'
   }
 
-  const confColor = (c) => c === 'high' ? '#4a9a4a' : c === 'medium' ? '#c27a2a' : '#cc4444'
+  const confColor = (c) => c === 'high' ? '#4a9a4a' : c === 'medium' ? 'var(--gold)' : '#cc4444'
 
   const poms = extracted?.poms || []
   const hasGrading = extracted?.has_grading_table
   const thumbnail = extracted?.thumbnail_description
 
   return (
-    <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 12 }}>
+    <div style={{ fontSize: 'var(--fs-body)' }}>
 
       {/* Resultat gate — fons negre, label "PASS" en gold, "RETORNAT" en blanc */}
       <div style={{
         padding: '10px 16px',
         borderRadius: 6,
         marginBottom: 16,
-        background: '#1d1d1b',
-        border: '1px solid #1d1d1b',
+        background: 'var(--text-main)',
+        border: '1px solid var(--text-main)',
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
-        <span style={{ fontSize: 18, color: pass ? '#c27a2a' : '#ffffff' }}>{pass ? '✓' : '✗'}</span>
+        <span style={{ fontSize: 'var(--fs-h2)', color: pass ? 'var(--gold)' : 'var(--white)' }}>{pass ? '✓' : '✗'}</span>
         <div>
-          <div style={{ fontWeight: 600, color: '#ffffff', fontSize: 13 }}>
-            Design Freeze — <span style={{ color: pass ? '#c27a2a' : '#ffffff' }}>{pass ? 'PASS' : 'RETORNAT'}</span>
+          <div style={{ fontWeight: 600, color: 'var(--white)', fontSize: 'var(--fs-body)' }}>
+            Design Freeze — <span style={{ color: pass ? 'var(--gold)' : 'var(--white)' }}>{pass ? 'PASS' : t('design_freeze.returned')}</span>
           </div>
-          <div style={{ color: '#868685', fontSize: 11 }}>{filename}</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{filename}</div>
         </div>
-        <div style={{ marginLeft: 'auto', fontSize: 11, color: '#868685' }}>
+        <div style={{ marginLeft: 'auto', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
           {extracted?.document_type?.replace('_', ' ')}
         </div>
       </div>
@@ -53,14 +55,14 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
       {/* Blockers */}
       {design_freeze?.blockers?.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ color: '#cc4444', fontSize: 11, marginBottom: 6, letterSpacing: '.05em', textTransform: 'uppercase' }}>
-            Camps bloquejants ({design_freeze.blockers.length})
+          <div style={{ color: '#cc4444', fontSize: 'var(--fs-body)', marginBottom: 6, letterSpacing: '.05em', textTransform: 'uppercase' }}>
+            {t('design_freeze.blockers', { count: design_freeze.blockers.length })}
           </div>
           {design_freeze.blockers.map((b, i) => (
             <div key={i} style={{
               padding: '5px 10px', marginBottom: 4,
               background: 'var(--bg-muted)', border: '1px solid #4a2020', borderRadius: 4,
-              color: '#cc6666', fontSize: 11,
+              color: '#cc6666', fontSize: 'var(--fs-body)',
               display: 'flex', alignItems: 'center', gap: 8,
             }}>
               <span>✗</span> {b}
@@ -72,14 +74,14 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
       {/* Warnings */}
       {design_freeze?.warnings?.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ color: '#c27a2a', fontSize: 11, marginBottom: 6, letterSpacing: '.05em', textTransform: 'uppercase' }}>
-            Avisos ({design_freeze.warnings.length})
+          <div style={{ color: 'var(--gold)', fontSize: 'var(--fs-body)', marginBottom: 6, letterSpacing: '.05em', textTransform: 'uppercase' }}>
+            {t('design_freeze.warnings', { count: design_freeze.warnings.length })}
           </div>
           {design_freeze.warnings.map((w, i) => (
             <div key={i} style={{
               padding: '5px 10px', marginBottom: 4,
               background: 'var(--gold-pale)', border: '1px solid var(--gold-l)', borderRadius: 4,
-              color: '#c27a2a', fontSize: 11,
+              color: 'var(--gold)', fontSize: 'var(--fs-body)',
               display: 'flex', alignItems: 'center', gap: 8,
             }}>
               <span>⚠</span> {typeof w === 'string' ? w : JSON.stringify(w)}
@@ -90,24 +92,24 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
 
       {/* Camps extrets */}
       <div style={{ marginBottom: 16 }}>
-        <div style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 8, letterSpacing: '.05em', textTransform: 'uppercase' }}>
-          Dades extretes
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginBottom: 8, letterSpacing: '.05em', textTransform: 'uppercase' }}>
+          {t('design_freeze.extracted_data')}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
           {[
-            ['Marca', 'brand'],
-            ['Estil', 'style_name'],
-            ['Codi', 'style_code'],
-            ['Temporada', 'season'],
-            ['Any', 'year'],
-            ['Prenda', 'garment_type'],
-            ['Material', 'main_fabric'],
-            ['Composició', 'fabric_composition'],
-            ['Talla base', 'base_size'],
-            ['Run talles', 'size_run'],
-            ['Dissenyador', 'designer'],
-            ['Patronista', 'patternmaker'],
-          ].map(([label, field]) => {
+            ['brand', 'brand'],
+            ['style', 'style_name'],
+            ['code', 'style_code'],
+            ['season', 'season'],
+            ['year', 'year'],
+            ['garment', 'garment_type'],
+            ['material', 'main_fabric'],
+            ['composition', 'fabric_composition'],
+            ['base_size', 'base_size'],
+            ['size_run', 'size_run'],
+            ['designer', 'designer'],
+            ['patternmaker', 'patternmaker'],
+          ].map(([labelKey, field]) => {
             const v = val(field)
             const c = conf(field)
             return (
@@ -117,10 +119,10 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
                 borderRadius: 3,
                 display: 'flex', justifyContent: 'space-between', gap: 8,
               }}>
-                <span style={{ color: 'var(--text-main)' }}>{label}</span>
+                <span style={{ color: 'var(--text-main)' }}>{t(`design_freeze.field.${labelKey}`)}</span>
                 <span style={{ color: v ? '#aaa' : 'var(--border)', textAlign: 'right', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {v || '—'}
-                  {v && <span style={{ marginLeft: 4, fontSize: 9, color: confColor(c) }}>●</span>}
+                  {v && <span style={{ marginLeft: 4, fontSize: 'var(--fs-caption)', color: confColor(c) }}>●</span>}
                 </span>
               </div>
             )
@@ -131,8 +133,8 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
       {/* POMs detectats */}
       {poms.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 8, letterSpacing: '.05em', textTransform: 'uppercase' }}>
-            POMs detectats ({poms.length}) {hasGrading && '· taula de grading inclosa'}
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginBottom: 8, letterSpacing: '.05em', textTransform: 'uppercase' }}>
+            {t('design_freeze.poms_detected', { count: poms.length })} {hasGrading && t('design_freeze.grading_included')}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {poms.map((p, i) => (
@@ -141,18 +143,17 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
                 background: '#f5e6d0',
                 border: '1px solid #e0c8a0',
                 borderRadius: 4,
-                fontSize: 11,
-                color: '#1d1d1b',
-                fontFamily: 'IBM Plex Mono, monospace',
+                fontSize: 'var(--fs-body)',
+                color: 'var(--text-main)',
               }}>
-                <strong style={{ color: '#1d1d1b', fontWeight: 600 }}>{p.code}</strong>
-                {p.base_value_cm && <span style={{ color: '#c27a2a', marginLeft: 4 }}>{p.base_value_cm}</span>}
+                <strong style={{ color: 'var(--text-main)', fontWeight: 600 }}>{p.code}</strong>
+                {p.base_value_cm && <span style={{ color: 'var(--gold)', marginLeft: 4 }}>{p.base_value_cm}</span>}
               </div>
             ))}
           </div>
           {poms.some(p => !p.base_value_cm) && (
-            <div style={{ fontSize: 10, color: 'var(--text-main)', marginTop: 4 }}>
-              POMs sense valor de talla base — es generaran des de les Grading Rules del client
+            <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-main)', marginTop: 4 }}>
+              {t('design_freeze.poms_no_base')}
             </div>
           )}
         </div>
@@ -163,9 +164,9 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
         <div style={{
           padding: '8px 12px', marginBottom: 16,
           background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4,
-          fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5,
+          fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5,
         }}>
-          <span style={{ color: 'var(--text-main)', fontStyle: 'normal' }}>Descripció visual: </span>
+          <span style={{ color: 'var(--text-main)', fontStyle: 'normal' }}>{t('design_freeze.visual_description')}</span>
           {thumbnail}
         </div>
       )}
@@ -175,17 +176,17 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
         <button onClick={onReject} style={{
           padding: '7px 16px', background: 'transparent',
           color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 4,
-          fontSize: 11, cursor: 'pointer',
+          fontSize: 'var(--fs-body)', cursor: 'pointer',
         }}>
-          ← Tornar
+          ← {t('app.back')}
         </button>
         {pass && (
           <button onClick={() => onConfirm(extracted)} style={{
             padding: '7px 16px', background: 'var(--bg-muted)',
             color: '#4a9a4a', border: '1px solid #2a4a2a', borderRadius: 4,
-            fontSize: 11, cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace',
+            fontSize: 'var(--fs-body)', cursor: 'pointer', 
           }}>
-            Continuar →
+            {t('design_freeze.continue')} →
           </button>
         )}
       </div>

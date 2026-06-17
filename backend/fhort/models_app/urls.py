@@ -22,12 +22,17 @@ from .views import (
     update_model_step2,
     upload_file_view,
     measurements_chat_view,
+    set_pom_regim_view,
 )
+
+from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
 
 router = DefaultRouter()
 router.register('models', ModelViewSet, basename='model')
 router.register('model-fitxers', ModelFitxerViewSet, basename='model-fitxer')
 router.register('base-measurements', BaseMeasurementViewSet, basename='base-measurement')
+router.register('size-checks', SizeCheckViewSet, basename='size-check')
+router.register('size-check-lines', SizeCheckLineViewSet, basename='size-check-line')
 
 # Sprint 6 — AI extraction. Paths before the router so 'models/extract-from-file/'
 # is not captured by 'models/<pk>/' of the ModelViewSet detail.
@@ -166,6 +171,7 @@ urlpatterns = (
         path('models/<int:model_id>/analisi-ia/', ai_analysis_view),
         path('models/<int:model_id>/xat-mesures/', measurements_chat_view),
         path('models/<int:model_id>/generar-grading/', generate_grading_view),
+        path('models/<int:model_id>/pom/<int:pom_id>/regim/', set_pom_regim_view),
         path('models/iso-shrinkage/', iso_shrinkage_view),
         path('models/<int:model_id>/update-fabric/', update_fabric_view),
         path('models/<int:model_id>/albara/', consumption_delivery_view),

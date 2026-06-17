@@ -9,7 +9,7 @@ export default function Shell() {
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
           background: '#f59e0b', color: '#000',
-          textAlign: 'center', fontSize: '12px',
+          textAlign: 'center', fontSize: 'var(--fs-body)',
           fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600,
           padding: '4px 0', letterSpacing: '0.05em'
         }}>

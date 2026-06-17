@@ -56,17 +56,17 @@ export default function ProductionTab({ model, onFeedback, onChanged }) {
 
   return (
     <div>
-      <h2 style={{ fontSize: 15, fontWeight: 500, margin: '0 0 14px', fontFamily: MONO }}>{t('model_sheet.production_title')}</h2>
+      <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, margin: '0 0 14px', fontFamily: MONO }}>{t('model_sheet.production_title')}</h2>
       <Table columns={columns} data={list} loading={loading} empty={t('model_sheet.no_productions')} />
     </div>
   )
 }
 
-const STATUS_COLORS = { Requested: '#c27a2a', InProgress: '#2a5a8a', Delivered: '#3b6d11' }
+const STATUS_COLORS = { Requested: 'var(--gold)', InProgress: '#2a5a8a', Delivered: '#3b6d11' }
 function StatusBadge({ status }) {
-  return <span style={{ fontSize: 11, fontWeight: 600, color: STATUS_COLORS[status] || 'var(--gray)', fontFamily: MONO }}>{status}</span>
+  return <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: STATUS_COLORS[status] || 'var(--gray)', fontFamily: MONO }}>{status}</span>
 }
 const miniBtn = {
-  fontFamily: MONO, fontSize: 11, padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
+  fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
   background: 'var(--white)', color: 'var(--text-main)', border: '0.5px solid var(--gray-l)',
 }

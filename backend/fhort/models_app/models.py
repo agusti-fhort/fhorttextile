@@ -485,6 +485,7 @@ class BaseMeasurement(models.Model):
         ('FITTED',     'Modificat en fitting'),
         ('CALCULATED', 'Calculat des de talla base + delta'),
         ('TEMPLATE',   'Materialitzat de plantilla (sense valor encara)'),
+        ('CHECKED',    'Validat en size check (proto a talla base)'),
     ]
 
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='base_measurements')
@@ -773,6 +774,83 @@ class ConsumptionRecord(models.Model):
 
     def __str__(self):
         return f'{self.code_snapshot} · {self.period}'
+
+
+# ───────────────────────── Size Check (SC-0) ─────────────────────────
+# Validació del proto a talla base, ABANS del fitting. Entitat NETA (no reusa
+# PieceFitting). Germana estructural de PieceFitting/PieceFittingLine però viu a
+# models_app perquè toca Model + BaseMeasurement (tots dos aquí) i és pre-fitting.
+# En acceptar-se, escriu BaseMeasurement amb origen='CHECKED' (rastre via el signal
+# F1, mateix patró que el bloc FITTED de fitting/services.py).
+
+class SizeCheck(models.Model):
+    """Un check de talla base per a un model (proto vs esperat). Historial repetible:
+    SENSE unique_together — un model pot acumular N checks al llarg del temps."""
+    ESTAT_CHOICES = [
+        ('Pendent', 'Pendent'),
+        ('Acceptat', 'Acceptat'),      # gravat amb totes acceptades → propaga al grading
+        ('Rebutjat', 'Rebutjat'),      # gravat però amb mesures descartades → NO propaga (proto a refer)
+        ('Descartat', 'Descartat'),    # decisió de no mesurar ara → NO propaga; tasca reagendada
+    ]
+
+    model = models.ForeignKey(
+        'models_app.Model', on_delete=models.PROTECT, related_name='size_checks',
+    )
+    estat = models.CharField(max_length=10, choices=ESTAT_CHOICES, default='Pendent')
+    talla_base_label = models.CharField(max_length=20)
+    missatge_fabricant = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='size_checks_creats',
+    )
+    resolt_per = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='size_checks_resolts',
+    )
+    resolt_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Validació de talla'
+        verbose_name_plural = 'Validacions de talla'
+        ordering = ['model', '-created_at']
+
+    def __str__(self):
+        return f'SizeCheck #{self.pk} · {self.model} [{self.estat}]'
+
+
+class SizeCheckLine(models.Model):
+    """Una fila (POM) del check, només a talla base. valor_teoric = snapshot del
+    BaseMeasurement.base_value_cm vigent en crear la línia; valor_real = mesura del tècnic."""
+    size_check = models.ForeignKey(
+        SizeCheck, on_delete=models.CASCADE, related_name='linies',
+    )
+    # db_constraint=False: 'pom' és app SHARED (taula també a 'public') però aquest model
+    # és tenant-only → mateix patró cross-schema que ModelGradingRule.pom.
+    pom = models.ForeignKey(
+        'pom.POMMaster', on_delete=models.PROTECT, related_name='+',
+        db_constraint=False,
+    )
+    valor_teoric = models.FloatField()
+    valor_real = models.FloatField(null=True, blank=True)
+    # SC-3: decisió per línia (substitueix el bool acceptat). null = sense decidir encara.
+    #   tolerancia_acceptada → el valor_real es propaga a la base (CHECKED) en resoldre.
+    #   valor_descartat      → es manté la base original; nota preescrita.
+    DECISIO_CHOICES = [
+        ('tolerancia_acceptada', 'Tolerància acceptada'),
+        ('valor_descartat', 'Valor descartat'),
+    ]
+    decisio = models.CharField(max_length=24, choices=DECISIO_CHOICES, null=True, blank=True)
+    nota = models.CharField(max_length=200, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Línia de validació de talla'
+        verbose_name_plural = 'Línies de validació de talla'
+        ordering = ['size_check', 'pom']
+        unique_together = [('size_check', 'pom')]
+
+    def __str__(self):
+        return f'{self.size_check_id} · {self.pom.codi_client}'
 
 
 # Fitxa tècnica editable (editor full-screen). Definit a tech_sheet_models.py i importat

@@ -1,10 +1,12 @@
 
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import useAuthStore from "../store/auth"
 
 const API = import.meta.env.VITE_API_URL || ""
 
-export function ExportButton({ url, filename, label = "Exportar", type = "csv" }) {
+export function ExportButton({ url, filename, label, type = "csv" }) {
+  const { t } = useTranslation()
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -44,19 +46,18 @@ export function ExportButton({ url, filename, label = "Exportar", type = "csv" }
         onClick={handleExport}
         disabled={loading}
         style={{
-          padding: '5px 12px', borderRadius: 4, fontSize: 11,
-          background: '#fff', color: '#868685',
-          border: '1px solid #e0d5c5',
+          padding: '5px 12px', borderRadius: 4, fontSize: 'var(--fs-body)',
+          background: 'var(--white)', color: 'var(--text-muted)',
+          border: '1px solid var(--border)',
           cursor: loading ? 'not-allowed' : 'pointer',
-          fontFamily: 'IBM Plex Mono, monospace',
           display: 'flex', alignItems: 'center', gap: 5,
         }}
       >
         <span>{loading ? '...' : icon}</span>
-        <span>{loading ? 'Generant...' : `${label} ${ext}`}</span>
+        <span>{loading ? t('export_button.generating') : `${label || t('export_button.export')} ${ext}`}</span>
       </button>
       {error && (
-        <div style={{ fontSize: 10, color: '#a32d2d', marginTop: 3 }}>{error}</div>
+        <div style={{ fontSize: 'var(--fs-label)', color: '#a32d2d', marginTop: 3 }}>{error}</div>
       )}
     </div>
   )
@@ -97,11 +98,12 @@ export function ExportFittingCSV({ fittingId }) {
 }
 
 export function ExportModelPDF({ modelId, nomModel }) {
+  const { t } = useTranslation()
   return (
     <ExportButton
       url={`/api/v1/models/${modelId}/export/pdf/`}
       filename={`spec_${nomModel || modelId}.pdf`}
-      label="Fitxa tècnica"
+      label={t('model_sheet.tab_tech_sheet')}
       type="pdf"
     />
   )

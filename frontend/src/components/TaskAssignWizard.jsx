@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { taskTypes as taskTypesApi, plan as planApi, modelTasks as modelTaskItems } from '../api/endpoints'
 import { selS, primaryBtn } from './ui/buttons'
 
@@ -36,10 +37,11 @@ function fmtDateTime(iso) {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-const labelS = { fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }
+const labelS = { fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }
 const secondaryBtn = { ...selS, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }
 
 export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) {
+  const { t } = useTranslation()
   const nModels = modelIds.length
 
   const [taskTypes, setTaskTypes] = useState([])
@@ -171,7 +173,7 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
         setTimeout(() => { onSuccess?.(); onClose?.() }, 2000)
       })
       .catch(err => {
-        setSubmitError(err.response?.data?.error || 'Error en assignar. Torna-ho a intentar.')
+        setSubmitError(err.response?.data?.error || t('taskassign.err_assign'))
       })
       .finally(() => setSubmitting(false))
   }
@@ -194,15 +196,15 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
           borderBottom: '1px solid var(--border)',
         }}>
           <i className="ti ti-users-plus" style={{ fontSize: 18, color: 'var(--gold)' }} />
-          <h2 style={{ fontSize: 16, fontWeight: 500, fontFamily: MONO }}>Assignar tasques</h2>
+          <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, fontFamily: MONO }}>{t('taskassign.title')}</h2>
           <span style={{
-            fontSize: 11, padding: '2px 8px', borderRadius: 10, background: 'var(--gold-pale)',
+            fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 10, background: 'var(--gold-pale)',
             color: 'var(--gold)', fontWeight: 600,
-          }}>{nModels} {nModels === 1 ? 'model' : 'models'}</span>
+          }}>{nModels} {nModels === 1 ? t('taskassign.model') : t('taskassign.models')}</span>
           <button onClick={onClose} style={{
             marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-muted)', fontSize: 18, display: 'flex', alignItems: 'center',
-          }} title="Tancar"><i className="ti ti-x" /></button>
+            color: 'var(--text-muted)', fontSize: 'var(--fs-h2)', display: 'flex', alignItems: 'center',
+          }} title={t('app.close')}><i className="ti ti-x" /></button>
         </div>
 
         {/* ── COS (scroll) ── */}
@@ -212,20 +214,20 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
             <div style={{ flexBasis: '45%', display: 'flex', flexDirection: 'column', gap: 18 }}>
               {/* [A] TaskType */}
               <div>
-                <label style={labelS}>Tipus de tasca</label>
+                <label style={labelS}>{t('taskassign.task_type')}</label>
                 <select
                   value={selectedTT?.id ?? ''}
                   onChange={onChangeTT}
                   disabled={loadingTT}
                   style={{ ...selS, width: '100%', marginTop: 6, cursor: 'pointer' }}
                 >
-                  <option value="">{loadingTT ? 'Carregant…' : 'Selecciona una tasca…'}</option>
+                  <option value="">{loadingTT ? t('common.loading') : t('taskassign.select_task')}</option>
                   {taskTypes.map(tt => {
                     const isBlocked = blockedTypes.has(tt.code)
                     return (
                       <option key={tt.id} value={tt.id} disabled={isBlocked}
                         style={isBlocked ? { color: 'var(--text-muted)' } : undefined}>
-                        {tt.code} · {tt.name}{isBlocked ? ' (ja assignada)' : ''}
+                        {tt.code} · {tt.name}{isBlocked ? ` ${t('taskassign.already_assigned')}` : ''}
                       </option>
                     )
                   })}
@@ -234,14 +236,14 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
 
               {/* [C] Dates */}
               <div>
-                <label style={labelS}>Data</label>
+                <label style={labelS}>{t('taskassign.date')}</label>
                 <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {[
-                    ['none', 'Sense data — s’afegeix a la cua automàticament'],
-                    ['start', 'Data d’inici'],
-                    ['end', 'Data de fi'],
+                    ['none', t('taskassign.date_none')],
+                    ['start', t('taskassign.date_start')],
+                    ['end', t('taskassign.date_end')],
                   ].map(([val, lbl]) => (
-                    <label key={val} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
+                    <label key={val} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
                       <input type="radio" name="dateMode" checked={dateMode === val}
                              onChange={() => onChangeDateMode(val)} />
                       <span>{lbl}</span>
@@ -254,10 +256,10 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
                 )}
                 {dateMode !== 'none' && (
                   <div style={{
-                    marginTop: 8, fontSize: 11, padding: '6px 8px', borderRadius: 6,
+                    marginTop: 8, fontSize: 'var(--fs-body)', padding: '6px 8px', borderRadius: 6,
                     background: 'var(--warn-bg)', color: 'var(--warn)',
                   }}>
-                    <i className="ti ti-alert-triangle" /> Fixar una data altera la cua de prioritats del tècnic.
+                    <i className="ti ti-alert-triangle" /> {t('taskassign.date_warn')}
                   </div>
                 )}
               </div>
@@ -265,21 +267,21 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
 
             {/* COLUMNA DRETA 55% — Zona B */}
             <div style={{ flexBasis: '55%' }}>
-              <label style={labelS}>Persona</label>
+              <label style={labelS}>{t('taskassign.person')}</label>
               <div style={{ marginTop: 8, maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {!selectedTT && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 4px' }}>
-                    Selecciona primer un tipus de tasca.
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', padding: '12px 4px' }}>
+                    {t('taskassign.select_task_first')}
                   </div>
                 )}
                 {selectedTT && loadingEleg && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 4px', textAlign: 'center' }}>
-                    <i className="ti ti-loader-2" style={{ marginRight: 6 }} />Carregant tècnics…
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', padding: '12px 4px', textAlign: 'center' }}>
+                    <i className="ti ti-loader-2" style={{ marginRight: 6 }} />{t('taskassign.loading_techs')}
                   </div>
                 )}
                 {selectedTT && !loadingEleg && elegibles.length === 0 && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 4px' }}>
-                    Cap tècnic elegible per a aquesta tasca.
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', padding: '12px 4px' }}>
+                    {t('taskassign.no_eligible')}
                   </div>
                 )}
                 {selectedTT && !loadingEleg && elegibles.map(p => {
@@ -298,12 +300,12 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
                     >
                       <ColorDot color={p.color_avatar} size={20} />
                       <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>{p.full_name}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          Lliure des de: {p.disponible_des_de ? fmtDate(p.disponible_des_de) : 'Ara lliure'}
+                        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500 }}>{p.full_name}</span>
+                        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                          {t('taskassign.free_from')} {p.disponible_des_de ? fmtDate(p.disponible_des_de) : t('taskassign.free_now')}
                         </span>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {p.models_en_cua} {p.models_en_cua === 1 ? 'model' : 'models'} en cua
+                        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                          {p.models_en_cua} {p.models_en_cua === 1 ? t('taskassign.model') : t('taskassign.models')} {t('taskassign.in_queue')}
                         </span>
                       </span>
                     </button>
@@ -322,7 +324,7 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
                 opacity: (!selectedTT || !selectedPerson) ? 0.5 : 1,
                 cursor: (!selectedTT || !selectedPerson) ? 'not-allowed' : 'pointer',
               }}>
-              <i className="ti ti-plus" /> Afegir assignació
+              <i className="ti ti-plus" /> {t('taskassign.add_assignment')}
             </button>
           </div>
 
@@ -330,17 +332,17 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
           {duplicateWarning && (
             <div style={{
               marginTop: 10, padding: '10px 12px', borderRadius: 6,
-              background: 'var(--warn-bg)', color: 'var(--warn)', fontSize: 12,
+              background: 'var(--warn-bg)', color: 'var(--warn)', fontSize: 'var(--fs-body)',
               border: '1px solid var(--warn)',
             }}>
               <div style={{ marginBottom: 8 }}>
-                Ja hi ha una assignació per a «{ttNom(duplicateWarning)}». Vols substituir-la?
+                {t('taskassign.duplicate_warn', { name: ttNom(duplicateWarning) })}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button type="button" onClick={confirmReplace}
-                  style={{ ...primaryBtn, marginLeft: 0, padding: '5px 12px' }}>Substituir</button>
+                  style={{ ...primaryBtn, marginLeft: 0, padding: '5px 12px' }}>{t('taskassign.replace')}</button>
                 <button type="button" onClick={() => setDuplicateWarning(null)}
-                  style={{ ...selS, cursor: 'pointer' }}>Cancel·lar</button>
+                  style={{ ...selS, cursor: 'pointer' }}>{t('app.cancel')}</button>
               </div>
             </div>
           )}
@@ -351,40 +353,40 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
               // Resultats post-submit (visibles 2s abans de tancar)
               <div>
                 <div style={{
-                  fontSize: 12, padding: '8px 12px', borderRadius: 6, marginBottom: 10,
+                  fontSize: 'var(--fs-body)', padding: '8px 12px', borderRadius: 6, marginBottom: 10,
                   background: 'var(--ok-bg)', color: 'var(--ok)',
                 }}>
-                  <i className="ti ti-check" /> Assignació completada: {submitResult.fets} fetes, {submitResult.creats} creades.
+                  <i className="ti ti-check" /> {t('taskassign.completed', { done: submitResult.fets, created: submitResult.creats })}
                 </div>
                 {submitResult.reassignats?.length > 0 && (
-                  <div style={{ fontSize: 12, padding: '6px 12px', borderRadius: 6, marginBottom: 8, background: 'var(--warn-bg)', color: 'var(--warn)' }}>
-                    {submitResult.reassignats.length} tasques reassignades.
+                  <div style={{ fontSize: 'var(--fs-body)', padding: '6px 12px', borderRadius: 6, marginBottom: 8, background: 'var(--warn-bg)', color: 'var(--warn)' }}>
+                    {t('taskassign.reassigned', { count: submitResult.reassignats.length })}
                   </div>
                 )}
                 {submitResult.warnings?.length > 0 && (
-                  <div style={{ fontSize: 11, padding: '6px 12px', borderRadius: 6, marginBottom: 8, background: 'var(--warn-bg)', color: 'var(--warn)' }}>
+                  <div style={{ fontSize: 'var(--fs-body)', padding: '6px 12px', borderRadius: 6, marginBottom: 8, background: 'var(--warn-bg)', color: 'var(--warn)' }}>
                     {submitResult.warnings.join(' · ')}
                   </div>
                 )}
                 <div style={{ maxHeight: 160, overflowY: 'auto' }}>
                   {submitResult.resultats?.map((r, i) => (
-                    <div key={`r${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
+                    <div key={`r${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
                       <i className="ti ti-circle-check" style={{ color: 'var(--ok)' }} />
                       <span style={{ fontWeight: 500 }}>{ttNom(r.task_type_code)}</span>
                       <span style={{ color: 'var(--text-muted)' }}>
-                        · {r.planned_start ? `${fmtDateTime(r.planned_start)} → ${fmtDateTime(r.planned_end)}` : 'cua'}
+                        · {r.planned_start ? `${fmtDateTime(r.planned_start)} → ${fmtDateTime(r.planned_end)}` : t('taskassign.queue')}
                       </span>
                       {r.en_risc && (
-                        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--err)', fontWeight: 600 }}>
-                          <i className="ti ti-alert-triangle" /> EN RISC
+                        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', color: 'var(--err)', fontWeight: 600 }}>
+                          <i className="ti ti-alert-triangle" /> {t('taskassign.at_risk')}
                         </span>
                       )}
                     </div>
                   ))}
                   {submitResult.omesos?.map((o, i) => (
-                    <div key={`o${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '5px 0', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                    <div key={`o${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', padding: '5px 0', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
                       <i className="ti ti-alert-circle" />
-                      <span>{ttNom(o.task_type_code)} · model {o.model_id} · {o.motiu}</span>
+                      <span>{ttNom(o.task_type_code)} · {t('taskassign.model')} {o.model_id} · {o.motiu}</span>
                     </div>
                   ))}
                 </div>
@@ -393,35 +395,35 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
               // Resum de línies acumulades
               <div>
                 {lines.length === 0 ? (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '10px 0' }}>
-                    Cap assignació afegida encara.
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', padding: '10px 0' }}>
+                    {t('taskassign.empty')}
                   </div>
                 ) : (
                   <div style={{ maxHeight: 120, overflowY: 'auto' }}>
                     {lines.map((l, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
                         <ColorDot color={l.assignee_color} size={14} />
                         <span style={{ fontWeight: 500 }}>{l.task_type_nom}</span>
                         <span style={{ color: 'var(--text-muted)' }}>· {l.assignee_nom} ·</span>
                         <span style={{ color: 'var(--text-muted)' }}>
-                          {l.planned_start ? `inici ${fmtDate(l.planned_start)}`
-                            : l.planned_end ? `fi ${fmtDate(l.planned_end)}` : 'cua'}
+                          {l.planned_start ? `${t('taskassign.start')} ${fmtDate(l.planned_start)}`
+                            : l.planned_end ? `${t('taskassign.end')} ${fmtDate(l.planned_end)}` : t('taskassign.queue')}
                         </span>
                         <button type="button" onClick={() => removeLine(i)}
-                          style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14 }}
-                          title="Eliminar"><i className="ti ti-x" /></button>
+                          style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 'var(--fs-h3)' }}
+                          title={t('app.delete')}><i className="ti ti-x" /></button>
                       </div>
                     ))}
                   </div>
                 )}
-                <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>
-                  {lines.length} assign. × {nModels} models = <strong style={{ color: 'var(--text-main)' }}>{totalTasques}</strong> tasques
+                <div style={{ marginTop: 10, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                  {lines.length} {t('taskassign.assign_abbr')} × {nModels} {t('taskassign.models')} = <strong style={{ color: 'var(--text-main)' }}>{totalTasques}</strong> {t('taskassign.tasks')}
                 </div>
               </div>
             )}
 
             {submitError && (
-              <div style={{ marginTop: 10, fontSize: 12, padding: '8px 12px', borderRadius: 6, background: 'var(--err-bg)', color: 'var(--err)' }}>
+              <div style={{ marginTop: 10, fontSize: 'var(--fs-body)', padding: '8px 12px', borderRadius: 6, background: 'var(--err-bg)', color: 'var(--err)' }}>
                 {submitError}
               </div>
             )}
@@ -433,7 +435,7 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
           display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px',
           borderTop: '1px solid var(--border)',
         }}>
-          <button onClick={onClose} style={{ ...selS, cursor: 'pointer' }}>Cancel·lar</button>
+          <button onClick={onClose} style={{ ...selS, cursor: 'pointer' }}>{t('app.cancel')}</button>
           <button onClick={onConfirm} disabled={!lines.length || submitting}
             style={{
               ...primaryBtn, marginLeft: 0,
@@ -441,8 +443,8 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
               cursor: (!lines.length || submitting) ? 'not-allowed' : 'pointer',
             }}>
             {submitting
-              ? <><i className="ti ti-loader-2" /> Assignant…</>
-              : <><i className="ti ti-arrow-right" /> Confirmar → {totalTasques} {totalTasques === 1 ? 'tasca' : 'tasques'}</>}
+              ? <><i className="ti ti-loader-2" /> {t('taskassign.assigning')}</>
+              : <><i className="ti ti-arrow-right" /> {t('app.confirm')} → {totalTasques} {totalTasques === 1 ? t('taskassign.task') : t('taskassign.tasks')}</>}
           </button>
         </div>
       </div>

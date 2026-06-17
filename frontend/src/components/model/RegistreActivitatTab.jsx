@@ -38,18 +38,18 @@ export default function RegistreActivitatTab({ modelId }) {
   }, [modelId])
 
   if (loading) {
-    return <div style={{ padding: 24, color: 'var(--color-text-secondary, #868685)', fontFamily: MONO }}>{t('common.loading', 'Carregant…')}</div>
+    return <div style={{ padding: 24, color: 'var(--text-muted)', fontFamily: MONO }}>{t('common.loading')}</div>
   }
   if (error) {
-    return <div style={{ padding: 24, color: 'var(--err, #c0392b)', fontFamily: MONO }}>{t('common.error', 'Error')}: {error}</div>
+    return <div style={{ padding: 24, color: 'var(--err, #c0392b)', fontFamily: MONO }}>{t('common.error')}: {error}</div>
   }
 
   // Estat NO meritat — encara no ha iniciat activitat.
   if (data && data.merited === false) {
     return (
-      <div style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-secondary, #868685)', fontFamily: MONO }}>
+      <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontFamily: MONO }}>
         <i className="ti ti-clock-off" style={{ fontSize: 32, display: 'block', marginBottom: 8 }} />
-        {t('albara.notMerited', 'Aquest model encara no ha iniciat activitat')}
+        {t('albara.notMerited')}
       </div>
     )
   }
@@ -57,23 +57,23 @@ export default function RegistreActivitatTab({ modelId }) {
   const { header, steps = [], totals = {}, per_technician = [], history = [] } = data || {}
 
   const stepCols = [
-    { key: 'task_type', label: t('albara.taskType', 'Tasca'), render: r => r.task_type || '—' },
-    { key: 'status', label: t('albara.status', 'Estat'), render: r => <Badge variant={STATUS_VARIANT[r.status] || 'gray'}>{r.status || '—'}</Badge> },
-    { key: 'minutes', label: t('albara.time', 'Temps'), align: 'right', render: r => toHours(r.minutes) },
-    { key: 'started_at', label: t('albara.start', 'Inici'), render: r => fmtDateTime(r.started_at) },
-    { key: 'finished_at', label: t('albara.end', 'Fi'), render: r => fmtDateTime(r.finished_at) },
+    { key: 'task_type', label: t('albara.taskType'), render: r => r.task_type || '—' },
+    { key: 'status', label: t('albara.status'), render: r => <Badge variant={STATUS_VARIANT[r.status] || 'gray'}>{r.status || '—'}</Badge> },
+    { key: 'minutes', label: t('albara.time'), align: 'right', render: r => toHours(r.minutes) },
+    { key: 'started_at', label: t('albara.start'), render: r => fmtDateTime(r.started_at) },
+    { key: 'finished_at', label: t('albara.end'), render: r => fmtDateTime(r.finished_at) },
   ]
 
   const techCols = [
-    { key: 'label', label: t('albara.technician', 'Tècnic'), render: r => r.label || '—' },
-    { key: 'minutes', label: t('albara.time', 'Temps'), align: 'right', render: r => toHours(r.minutes) },
+    { key: 'label', label: t('albara.technician'), render: r => r.label || '—' },
+    { key: 'minutes', label: t('albara.time'), align: 'right', render: r => toHours(r.minutes) },
   ]
 
   const historyCols = [
-    { key: 'task_type', label: t('albara.taskType', 'Tasca'), render: r => r.task_type || '—' },
-    { key: 'transition', label: t('albara.status', 'Estat'), render: r => `${r.from ?? '—'} → ${r.to ?? '—'}` },
-    { key: 'by', label: t('albara.technician', 'Tècnic'), render: r => r.by || '—' },
-    { key: 'at', label: t('albara.end', 'Fi'), render: r => fmtDateTime(r.at) },
+    { key: 'task_type', label: t('albara.taskType'), render: r => r.task_type || '—' },
+    { key: 'transition', label: t('albara.status'), render: r => `${r.from ?? '—'} → ${r.to ?? '—'}` },
+    { key: 'by', label: t('albara.technician'), render: r => r.by || '—' },
+    { key: 'at', label: t('albara.end'), render: r => fmtDateTime(r.at) },
   ]
 
   return (
@@ -81,7 +81,7 @@ export default function RegistreActivitatTab({ modelId }) {
       {/* 1. Capçalera immutable */}
       <div style={{
         background: 'var(--bg-card, #fafafa)',
-        border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+        border: '0.5px solid var(--border)',
         borderRadius: 8, padding: 16,
         display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16,
       }}>
@@ -89,21 +89,21 @@ export default function RegistreActivitatTab({ modelId }) {
           <span style={{ color: 'var(--gold)', fontWeight: 600 }}>{header?.code}</span>
           {header?.name && <span style={{ marginLeft: 8 }}>{header.name}</span>}
         </div>
-        <div style={{ textAlign: 'right', color: 'var(--color-text-secondary, #868685)', fontSize: 13 }}>
-          <div>{t('albara.period', 'Període')}: {header?.period || '—'}</div>
-          <div>{t('albara.meritedAt', 'Inici activitat')}: {fmtDateTime(header?.merited_at)}</div>
+        <div style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+          <div>{t('albara.period')}: {header?.period || '—'}</div>
+          <div>{t('albara.meritedAt')}: {fmtDateTime(header?.merited_at)}</div>
         </div>
       </div>
 
       {/* 2. Resum — tres StatCard */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-        <StatCard icon="ti-clock" label={t('albara.totalTime', 'Temps total')} value={toHours(totals.total_minutes)} />
-        <StatCard icon="ti-list-check" label={t('albara.steps', 'Passos')} value={steps.length} />
-        <StatCard icon="ti-rotate" label={t('albara.rectifications', 'Rectificacions')} value={totals.rectifications ?? 0} />
+        <StatCard icon="ti-clock" label={t('albara.totalTime')} value={toHours(totals.total_minutes)} />
+        <StatCard icon="ti-list-check" label={t('albara.steps')} value={steps.length} />
+        <StatCard icon="ti-rotate" label={t('albara.rectifications')} value={totals.rectifications ?? 0} />
       </div>
 
       {/* 3. Taula de passos */}
-      <Table columns={stepCols} data={steps} empty={t('albara.notMerited', 'Aquest model encara no ha iniciat activitat')} />
+      <Table columns={stepCols} data={steps} empty={t('albara.notMerited')} />
 
       {/* 4. Repartiment per tècnic */}
       <Table columns={techCols} data={per_technician} empty="—" />
@@ -114,11 +114,11 @@ export default function RegistreActivitatTab({ modelId }) {
           onClick={() => setShowHistory(v => !v)}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--gold)', fontFamily: MONO, fontSize: 13,
+            color: 'var(--gold)', fontFamily: MONO, fontSize: 'var(--fs-body)',
             display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 0',
           }}>
           <i className={`ti ti-chevron-${showHistory ? 'up' : 'down'}`} />
-          {t('albara.history', 'Historial')}
+          {t('albara.history')}
         </button>
         {showHistory && (
           <Table columns={historyCols} data={history} empty="—" />

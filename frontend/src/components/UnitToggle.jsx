@@ -45,15 +45,15 @@ export function UnitToggle() {
         display: 'flex', alignItems: 'center', gap: 4,
         padding: '4px 10px', borderRadius: 4,
         background: unit === 'INCH' ? '#f5e6d0' : '#f5f0ea',
-        color: unit === 'INCH' ? '#c27a2a' : '#868685',
-        border: `1px solid ${unit === 'INCH' ? '#c27a2a' : '#e0d5c5'}`,
-        fontFamily: 'IBM Plex Mono, monospace', fontSize: 11,
+        color: unit === 'INCH' ? 'var(--gold)' : 'var(--text-muted)',
+        border: `1px solid ${unit === 'INCH' ? 'var(--gold)' : 'var(--border)'}`,
+        fontSize: 'var(--fs-body)',
         cursor: saving ? 'not-allowed' : 'pointer',
         transition: 'all .15s',
       }}
     >
       <span style={{ fontWeight: 600 }}>{unit === 'CM' ? 'cm' : 'inch'}</span>
-      <span style={{ fontSize: 9, color: '#868685' }}>
+      <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
         {unit === 'CM' ? '→ inch' : '→ cm'}
       </span>
     </button>

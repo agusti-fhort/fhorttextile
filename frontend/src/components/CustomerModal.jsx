@@ -40,7 +40,7 @@ export default function CustomerModal({ mode, customer, t, onCancel, onSaved, on
       <Field label={t('clients.col_nom')}>
         <input value={nom} onChange={e => setNom(e.target.value)} style={{ ...selS, width: '100%' }} />
       </Field>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginTop: 4 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginTop: 4 }}>
         <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /><span>{t('clients.active')}</span>
       </label>
     </Modal>
@@ -50,7 +50,7 @@ export default function CustomerModal({ mode, customer, t, onCancel, onSaved, on
 function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
+      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   )

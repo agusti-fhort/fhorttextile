@@ -499,7 +499,9 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
     # (unifica import STEP, import LINEAR-amb-break i ISO above_xl). El llindar es resol per
     # ETIQUETA contra el RUN DE GRADUACIÓ (size_run del model), no contra el run del ruleset →
     # portable i cobreix rulesets sense size_system. Label absent al run → cap break (uniforme).
-    if getattr(rule, 'increment_base', None) is not None:
+    # PG-4b-3a: `logica` és la veritat del règim. STEP NO grada canònic encara que increment_base
+    # estigui poblat (es conserva latent per a STEP↔LINEAR no-destructiu) → cau a la branca STEP.
+    if grading_type != 'STEP' and getattr(rule, 'increment_base', None) is not None:
         ib = float(rule.increment_base)
         brk = float(rule.increment_break) if rule.increment_break is not None else ib
         if size_idx == base_idx:

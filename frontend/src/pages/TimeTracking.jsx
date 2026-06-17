@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { timers } from '../api/endpoints'
 import TimerWidget from '../components/ui/TimerWidget'
 import Card from '../components/ui/Card'
@@ -16,6 +17,7 @@ function diffMins(start, end) {
 }
 
 export default function TimeTracking() {
+  const { t, i18n } = useTranslation()
   const [allTimers, setAllTimers] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -49,6 +51,7 @@ export default function TimeTracking() {
     }
   }
 
+  const dateLocale = i18n.language === 'es' ? 'es-ES' : i18n.language === 'en' ? 'en-GB' : 'ca-ES'
   const last7Days = (() => {
     const days = []
     for (let i = 6; i >= 0; i--) {
@@ -58,7 +61,7 @@ export default function TimeTracking() {
       const mins = allTimers
         .filter(t => (t.data_inici || t.created_at || '').slice(0, 10) === key)
         .reduce((acc, t) => acc + diffMins(t.data_inici || t.created_at, t.data_fi), 0)
-      days.push({ key, mins, label: d.toLocaleDateString('ca-ES', { weekday: 'short', day: 'numeric' }) })
+      days.push({ key, mins, label: d.toLocaleDateString(dateLocale, { weekday: 'short', day: 'numeric' }) })
     }
     return days
   })()
@@ -69,9 +72,9 @@ export default function TimeTracking() {
   return (
     <div>
       <div style={{marginBottom: '1.5rem'}}>
-        <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>Temps</h1>
-        <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
-          Control de timers del tècnic
+        <h1 style={{fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4}}>{t('time_tracking.title')}</h1>
+        <p style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300}}>
+          {t('time_tracking.subtitle')}
         </p>
       </div>
 
@@ -79,23 +82,23 @@ export default function TimeTracking() {
         display: 'grid', gridTemplateColumns: '1fr 1fr',
         gap: '1.2rem', marginBottom: '1.2rem',
       }}>
-        <Card title="Timer actiu" icon="ti-player-play" padding={0}>
+        <Card title={t('time_tracking.active_timer')} icon="ti-player-play" padding={0}>
           {loading ? (
-            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-              Carregant...
+            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
+              {t('time_tracking.loading')}
             </div>
           ) : !actiu ? (
             <div style={{
               padding: '3rem 1rem', textAlign: 'center',
-              color: 'var(--gray)', fontSize: 13,
+              color: 'var(--gray)', fontSize: 'var(--fs-body)',
             }}>
               <i className="ti ti-clock-off" style={{fontSize: 32, display: 'block', marginBottom: 12, color: 'var(--gray-l)'}} />
-              Cap tasca en curs
+              {t('time_tracking.no_active_task')}
             </div>
           ) : (
             <>
               <TimerWidget
-                tasca={actiu.tasca_nom || actiu.nom_tasca || `Tasca #${actiu.tasca}`}
+                tasca={actiu.tasca_nom || actiu.nom_tasca || t('time_tracking.task_n', { n: actiu.tasca })}
                 model={actiu.model_codi || actiu.model}
                 inici={actiu.data_inici || actiu.created_at}
               />
@@ -106,12 +109,12 @@ export default function TimeTracking() {
                 <button disabled style={{
                   background: 'var(--white)', color: 'var(--gray)',
                   border: '0.5px solid #e4e4e2', borderRadius: 8,
-                  padding: '8px 18px', fontSize: 12,
-                  cursor: 'not-allowed', fontFamily: 'var(--font)',
+                  padding: '8px 18px', fontSize: 'var(--fs-body)',
+                  cursor: 'not-allowed', 
                   display: 'flex', alignItems: 'center', gap: 6,
                 }}>
                   <i className="ti ti-player-pause" style={{fontSize: 14}} />
-                  Pausa
+                  {t('time_tracking.pause')}
                 </button>
                 <button
                   onClick={closeActive}
@@ -119,50 +122,49 @@ export default function TimeTracking() {
                   style={{
                     background: submitting ? 'rgba(163,45,45,0.5)' : 'var(--err)',
                     color: 'white', border: 'none', borderRadius: 8,
-                    padding: '8px 18px', fontSize: 12,
+                    padding: '8px 18px', fontSize: 'var(--fs-body)',
                     cursor: submitting ? 'not-allowed' : 'pointer',
-                    fontFamily: 'var(--font)',
                     display: 'flex', alignItems: 'center', gap: 6,
                   }}
                 >
                   <i className="ti ti-player-stop" style={{fontSize: 14}} />
-                  {submitting ? 'Aturant...' : 'Aturar'}
+                  {submitting ? t('time_tracking.stopping') : t('time_tracking.stop')}
                 </button>
               </div>
             </>
           )}
         </Card>
 
-        <Card title={`Avui (${dayTimers.length} entrades)`} icon="ti-calendar-event" padding={0}>
+        <Card title={t('time_tracking.today_entries', { count: dayTimers.length })} icon="ti-calendar-event" padding={0}>
           {dayTimers.length === 0 ? (
-            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-              Sense entrades avui
+            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
+              {t('time_tracking.no_entries_today')}
             </div>
           ) : (
             <div>
-              {dayTimers.map(t => (
-                <div key={t.id} style={{
+              {dayTimers.map(entry => (
+                <div key={entry.id} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: '0.7rem 1.2rem',
                   borderBottom: '0.5px solid var(--gray-l)',
-                  fontSize: 12,
+                  fontSize: 'var(--fs-body)',
                 }}>
                   <div>
                     <div style={{marginBottom: 2}}>
                       <span style={{color: 'var(--gold)', fontWeight: 500, marginRight: 8}}>
-                        {t.model_codi || t.model}
+                        {entry.model_codi || entry.model}
                       </span>
-                      {t.tasca_nom || t.nom_tasca || `Tasca #${t.tasca}`}
+                      {entry.tasca_nom || entry.nom_tasca || t('time_tracking.task_n', { n: entry.tasca })}
                     </div>
-                    <div style={{fontSize: 10, color: 'var(--gray)'}}>
-                      {(t.data_inici || '').slice(11, 16)} – {(t.data_fi || '').slice(11, 16)}
+                    <div style={{fontSize: 'var(--fs-label)', color: 'var(--gray)'}}>
+                      {(entry.data_inici || '').slice(11, 16)} – {(entry.data_fi || '').slice(11, 16)}
                     </div>
                   </div>
                   <span style={{
-                    fontSize: 12, fontWeight: 500,
+                    fontSize: 'var(--fs-body)', fontWeight: 500,
                     fontVariantNumeric: 'tabular-nums',
                   }}>
-                    {t.minuts ?? diffMins(t.data_inici || t.created_at, t.data_fi)}min
+                    {t('time_tracking.min_value', { n: entry.minuts ?? diffMins(entry.data_inici || entry.created_at, entry.data_fi) })}
                   </span>
                 </div>
               ))}
@@ -171,7 +173,7 @@ export default function TimeTracking() {
         </Card>
       </div>
 
-      <Card title="Resum setmanal" icon="ti-chart-bar">
+      <Card title={t('time_tracking.weekly_summary')} icon="ti-chart-bar">
         <div style={{
           display: 'flex', alignItems: 'flex-end',
           justifyContent: 'space-between', gap: '0.6rem',
@@ -183,7 +185,7 @@ export default function TimeTracking() {
               alignItems: 'center', gap: 6,
             }}>
               <div style={{
-                fontSize: 10, color: 'var(--gray)',
+                fontSize: 'var(--fs-label)', color: 'var(--gray)',
                 fontVariantNumeric: 'tabular-nums',
               }}>
                 {d.mins > 0 ? format(d.mins * 60) : '—'}
@@ -196,7 +198,7 @@ export default function TimeTracking() {
                 borderRadius: '4px 4px 0 0',
                 transition: 'height 0.3s',
               }} />
-              <div style={{fontSize: 10, color: 'var(--gray)', textTransform: 'capitalize'}}>
+              <div style={{fontSize: 'var(--fs-label)', color: 'var(--gray)', textTransform: 'capitalize'}}>
                 {d.label}
               </div>
             </div>
@@ -207,9 +209,9 @@ export default function TimeTracking() {
           paddingTop: '0.8rem',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <span style={{fontSize: 11, color: 'var(--gray)'}}>Total setmanal</span>
+          <span style={{fontSize: 'var(--fs-body)', color: 'var(--gray)'}}>{t('time_tracking.weekly_total')}</span>
           <span style={{
-            fontSize: 22, fontWeight: 500, color: 'var(--gold)',
+            fontSize: 'var(--fs-h1)', fontWeight: 500, color: 'var(--gold)',
             fontVariantNumeric: 'tabular-nums',
           }}>
             {format(totalSetmana * 60)}

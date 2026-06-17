@@ -40,7 +40,6 @@ class TransitionError(Exception):
 
 
 @transaction.atomic
-@transaction.atomic
 def transition_task(task, to_status, profile):
     """Aplica una transició d'estat. Imposa 'una sola InProgress per tècnic' (global):
     en entrar a InProgress, pausa l'altra InProgress del mateix tècnic (tanca timer + log).

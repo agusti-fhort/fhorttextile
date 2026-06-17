@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, pieceFittings, pieceFittingLines, fittingPhotos, modelFitxers } from '../api/endpoints'
+import { fittingSessions, pieceFittings, pieceFittingLines, fittingPhotos, modelFitxers, models } from '../api/endpoints'
 import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
@@ -10,6 +10,7 @@ const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
 
 const COL_POM_W = 78
 const COL_NOM_W = 150
+const COL_REG_W = 118   // PG-4b-3c — columna de règim (select LINEAR/STEP + etiqueta de regla)
 
 // Ordre de talles segons el size run del model: split per '·' (U+00B7) o ';' + trim
 // (mateixa normalització que el backend, que desa amb '·' però admet ';').
@@ -40,15 +41,6 @@ function useDebouncedSave(persist) {
   return [state, schedule]
 }
 
-// Autosave d'una cel·la de línia (valor_real / nota). Debounce PER (line.id, field).
-function useCellAutosave(lineId, field, isNumber) {
-  const persist = useCallback((raw) => {
-    const value = isNumber ? (raw === '' ? null : Number(raw)) : raw
-    return pieceFittingLines.update(lineId, { [field]: value })
-  }, [lineId, field, isNumber])
-  return useDebouncedSave(persist)
-}
-
 // Autosave d'un camp de context de la sessió (model_persona / lloc...). PATCH sessió.
 function useSessionField(sessionId, field) {
   const persist = useCallback((raw) => fittingSessions.update(sessionId, { [field]: raw }), [sessionId, field])
@@ -66,8 +58,8 @@ function SaveStatus({ state, inline, absolute }) {
   const s = map[state]
   // absolute = no ocupa espai (no altera l'alçada de la fila de la graella).
   const pos = absolute
-    ? { position: 'absolute', bottom: 1, left: 4, fontSize: 8, pointerEvents: 'none' }
-    : { display: inline ? 'inline-block' : 'block', marginLeft: inline ? 6 : 0, marginTop: inline ? 0 : 1, fontSize: 9 }
+    ? { position: 'absolute', bottom: 1, left: 4, fontSize: 'var(--fs-caption)', pointerEvents: 'none' }
+    : { display: inline ? 'inline-block' : 'block', marginLeft: inline ? 6 : 0, marginTop: inline ? 0 : 1, fontSize: 'var(--fs-caption)' }
   return <span style={{ color: s.color, ...pos }}>{s.txt}</span>
 }
 
@@ -93,8 +85,20 @@ function VersionCell({ value, isBase, baseSize, groupStart }) {
 // Fit actual (valor_real): única cel·la editable. Vermell+negreta si difereix de Base.
 // Stepper natiu (fletxes); amplada suficient per "104,75" + fletxes. Sense nota per cel·la
 // (el comentari és global del fitting, viu a Observacions).
-function CurrentFitCell({ line, baseSize, baseValue, value, onValue }) {
-  const [realState, saveReal] = useCellAutosave(line?.id, 'valor_real', true)
+function CurrentFitCell({ line, baseSize, baseValue, value, edited, onValue, onAnchor, onPropagated, focusRef }) {
+  // Persist segons règim del POM (ve a la línia): STEP → PATCH pur, només aquesta cel·la.
+  // LINEAR/canònic → propaga el delta i repinta les germanes amb el valor_real propagat.
+  const lineId = line?.id
+  const isStep = line?.logica === 'STEP'
+  const persist = useCallback((raw) => {
+    const v = raw === '' ? null : Number(raw)
+    if (isStep) return pieceFittingLines.update(lineId, { valor_real: v })
+    return pieceFittingLines.propagar(lineId, v).then(res => {
+      onPropagated(res.data?.linies || [])
+      return res
+    })
+  }, [lineId, isStep, onPropagated])
+  const [realState, saveReal] = useDebouncedSave(persist)
 
   if (!line) return <td style={cellTd(baseSize, false, baseSize)} />
 
@@ -105,12 +109,15 @@ function CurrentFitCell({ line, baseSize, baseValue, value, onValue }) {
     <td style={{ ...cellTd(baseSize, false, baseSize), position: 'relative' }}>
       <input
         type="number" step="0.1" value={value}
-        onChange={e => { onValue(line.id, e.target.value); saveReal(e.target.value) }}
+        onFocus={() => { focusRef.current = line.id }}
+        onBlur={() => { if (focusRef.current === line.id) focusRef.current = null }}
+        onChange={e => { onValue(line.id, e.target.value); onAnchor(line.id); saveReal(e.target.value) }}
         style={{
           font: 'inherit', width: 88, padding: '2px 4px', textAlign: 'right',
           border: '1px solid var(--border)', borderRadius: 4, background: 'var(--white)',
           color: modified ? 'var(--err)' : 'var(--text-main)',
-          fontWeight: modified ? 700 : 400,
+          // Ancoratge editat a mà → negreta; germana modificada però propagada → vermell normal.
+          fontWeight: modified && edited ? 700 : 400,
           fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
         }}
       />
@@ -123,13 +130,13 @@ function EditableContextField({ sessionId, field, label, value }) {
   const [v, setV] = useState(value ?? '')
   const [state, schedule] = useSessionField(sessionId, field)
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
       {label}:&nbsp;
       <input
         value={v} onChange={e => { setV(e.target.value); schedule(e.target.value) }}
         placeholder="—"
         style={{
-          width: 120, padding: '1px 2px', fontSize: 11, color: 'var(--text-main)',
+          width: 120, padding: '1px 2px', fontSize: 'var(--fs-body)', color: 'var(--text-main)',
           border: 'none', borderBottom: '1px solid var(--border)', borderRadius: 0,
           background: 'transparent', boxSizing: 'border-box',
         }}
@@ -165,21 +172,21 @@ function ModelFilesPanel({ modelId }) {
 
   const renderGroup = (label, files) => (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500, marginBottom: 6 }}>
+      <div style={{ fontSize: 'var(--fs-label)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500, marginBottom: 6 }}>
         {label}
       </div>
       {(!files || files.length === 0) ? (
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>{t('fitting.info.no_files')}</div>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }}>{t('fitting.info.no_files')}</div>
       ) : (
         files.map(f => {
           const url = f.fitxer || f.url_extern || null
           return (
-            <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '3px 0' }}>
+            <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', padding: '3px 0' }}>
               <i className="ti ti-file" style={{ fontSize: 13, color: 'var(--gold)' }} />
               <span style={{ color: 'var(--text-main)' }}>{f.nom_fitxer}</span>
               {url && (
                 <a href={url} target="_blank" rel="noopener noreferrer"
-                  style={{ marginLeft: 4, fontSize: 11, color: 'var(--gold)', textDecoration: 'none' }}>
+                  style={{ marginLeft: 4, fontSize: 'var(--fs-body)', color: 'var(--gold)', textDecoration: 'none' }}>
                   ↓ {t('fitting.info.download')}
                 </a>
               )}
@@ -193,7 +200,7 @@ function ModelFilesPanel({ modelId }) {
   return (
     <Card title={t('fitting.info.title')} icon="ti-info-circle" style={{ marginBottom: '1.5rem' }}>
       {groups === null ? (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('app.loading')}</div>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('app.loading')}</div>
       ) : (
         <>
           {renderGroup(t('fitting.info.patterns'), groups.patterns)}
@@ -289,7 +296,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
       try {
         await fittingSessions.seal(session.id)   // D4: segellat independent (no toca fase)
       } catch (e) {
-        setError(t('fitting.save.seal_error', 'Error segellant la sessió.'))
+        setError(t('fitting.save.seal_error'))
         setBusy(false); return
       }
       setBusy(false); onSaved()
@@ -318,7 +325,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
     setBusy(true); setError(null)
     fittingSessions.discardSession(session.id, discardMotiu)
       .then(() => { setBusy(false); onSaved() })
-      .catch(() => { setBusy(false); setError(t('fitting.save.discard_session_error', 'Error descartant la sessió.')) })
+      .catch(() => { setBusy(false); setError(t('fitting.save.discard_session_error')) })
   }
 
   // D3 — registrar mesures (crea la peça i mostra la graella). Si no hi ha taula de talles → avís.
@@ -329,8 +336,8 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
       .catch(e => {
         const msg = e?.response?.data?.error || ''
         setPieceErr(/SizeFitting|talles|GradingVersion/i.test(msg)
-          ? t('fitting.save.no_sizes', 'Aquest model no té taula de talles generada. Pots gravar la revisió sense mesures.')
-          : (msg || t('fitting.save.piece_error', 'Error registrant mesures.')))
+          ? t('fitting.save.no_sizes')
+          : (msg || t('fitting.save.piece_error')))
       })
   }
 
@@ -354,48 +361,48 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
       return client.post('/api/v1/fitting-photos/', fd)
     }))
       .then(reloadPhotos)
-      .catch(() => setError(t('fitting.save.image_error', 'Error pujant la imatge.')))
+      .catch(() => setError(t('fitting.save.image_error')))
       .finally(() => { setUploading(false); e.target.value = '' })
   }
 
   const sectionTitle = (icon, label) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500, marginBottom: 10 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500, marginBottom: 10 }}>
       <i className={`ti ${icon}`} style={{ fontSize: 14, color: 'var(--gold)' }} />{label}
     </div>
   )
-  const muted = { fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }
+  const muted = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
         <button onClick={onBack} disabled={busy} style={{
-          background: 'none', border: 'none', color: 'var(--text-muted)', cursor: busy ? 'default' : 'pointer', fontSize: 12, padding: 0, marginRight: 12,
+          background: 'none', border: 'none', color: 'var(--text-muted)', cursor: busy ? 'default' : 'pointer', fontSize: 'var(--fs-body)', padding: 0, marginRight: 12,
         }}>← {t('fitting.save.back')}</button>
-        <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-main)' }}>{t('fitting.save.title')}</span>
+        <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, color: 'var(--text-main)' }}>{t('fitting.save.title')}</span>
       </div>
 
       {grids === null ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('app.loading')}</div>
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
       ) : (
         <>
           {/* D3 — TAULA DE MESURES (opcional): registrar/veure mesures. No bloqueja la revisió. */}
           {!readOnly && (
-            <Card title={t('fitting.save.measures', 'Taula de mesures')} style={{ marginBottom: '1.25rem' }}>
+            <Card title={t('fitting.save.measures')} style={{ marginBottom: '1.25rem' }}>
               {hasPieces ? (
                 <button onClick={onShowGrid} style={{
                   background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
-                  borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer',
-                }}>{t('fitting.save.view_measures', 'Veure / editar taula')}</button>
+                  borderRadius: 8, padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer',
+                }}>{t('fitting.save.view_measures')}</button>
               ) : (
                 <>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-                    {t('fitting.save.no_measures', 'Encara no hi ha mesures registrades (opcional).')}
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>
+                    {t('fitting.save.no_measures')}
                   </div>
                   <button onClick={registrarMesures} disabled={creatingPiece} style={{
                     background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
-                    borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: creatingPiece ? 'default' : 'pointer',
-                  }}>{creatingPiece ? t('fitting.piece.creating') : t('fitting.save.register_measures', 'Registrar mesures')}</button>
-                  {pieceErr && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 8 }}>{pieceErr}</div>}
+                    borderRadius: 8, padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: creatingPiece ? 'default' : 'pointer',
+                  }}>{creatingPiece ? t('fitting.piece.creating') : t('fitting.save.register_measures')}</button>
+                  {pieceErr && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginTop: 8 }}>{pieceErr}</div>}
                 </>
               )}
             </Card>
@@ -408,11 +415,11 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
               if (!piecesWithChanges.length) return <div style={muted}>{t('fitting.save.no_changes')}</div>
               return piecesWithChanges.map(({ g, sizeLabels, baseLabel, rows, isMod }) => (
                 <div key={g.id} style={{ marginBottom: 18 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-main)', marginBottom: 8 }}>
+                  <div style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)', marginBottom: 8 }}>
                     {g.model?.codi}{g.model?.nom ? ` · ${g.model.nom}` : ''}
                   </div>
                   <div style={{ overflowX: 'auto' }}>
-                    <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
                       <thead>
                         <tr>
                           <th style={{ ...thStyle, textAlign: 'left' }}>{t('fitting.grid.pom')}</th>
@@ -464,7 +471,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
               onBlur={saveNotes}
               placeholder={t('fitting.save.no_observations')}
               style={{
-                width: '100%', minHeight: 80, padding: '8px 10px', fontSize: 13,
+                width: '100%', minHeight: 80, padding: '8px 10px', fontSize: 'var(--fs-body)',
                 border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)',
                 color: 'var(--text-main)', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit',
               }}
@@ -475,11 +482,11 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
           <Card title={t('fitting.save.images')} style={{ marginBottom: '1.25rem' }}>
             <label style={{
               display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 10,
-              cursor: uploading ? 'default' : 'pointer', fontSize: 12, color: 'var(--gold)',
+              cursor: uploading ? 'default' : 'pointer', fontSize: 'var(--fs-body)', color: 'var(--gold)',
             }}>
               <input type="file" accept="image/*" multiple onChange={onUpload} disabled={uploading} style={{ display: 'none' }} />
               <i className="ti ti-upload" style={{ fontSize: 14 }} />
-              {uploading ? t('fitting.save.uploading', 'Pujant…') : t('fitting.save.add_images', 'Afegir imatges')}
+              {uploading ? t('fitting.save.uploading') : t('fitting.save.add_images')}
             </label>
             {photos.length === 0 ? (
               <div style={muted}>{t('fitting.save.no_images')}</div>
@@ -501,50 +508,50 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
           )}
 
           {error && (
-            <div style={{ color: 'var(--err)', fontSize: 12, marginBottom: 12 }}>{error}</div>
+            <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 12 }}>{error}</div>
           )}
           {progress && busy && (
-            <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 12 }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
               {t('fitting.save.saving_progress', { done: progress.done, total: progress.total })}
             </div>
           )}
 
           {/* ACCIONS */}
           {readOnly ? (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', paddingTop: 4 }}>
-              {t('fitting.save.read_only', 'Sessió tancada o anul·lada (només lectura).')}
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', paddingTop: 4 }}>
+              {t('fitting.save.read_only')}
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, flexWrap: 'wrap' }}>
               <button onClick={doSave} disabled={busy} style={{
                 background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 8,
-                padding: '8px 18px', fontSize: 13, fontWeight: 500, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
-              }}>{t('fitting.save.save_and_back', 'Gravar i tornar')}</button>
+                padding: '8px 18px', fontSize: 'var(--fs-body)', fontWeight: 500, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
+              }}>{t('fitting.save.save_and_back')}</button>
               {hasPieces && (
                 <button onClick={doDiscard} disabled={busy} style={{
                   background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
-                  padding: '8px 18px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
-                }}>{t('fitting.save.discard_changes', 'Descartar canvis')}</button>
+                  padding: '8px 18px', fontSize: 'var(--fs-body)', cursor: busy ? 'default' : 'pointer',
+                }}>{t('fitting.save.discard_changes')}</button>
               )}
               {/* D5 — Descartar sessió (anul·lar) amb motiu inline */}
               {!discardOpen ? (
                 <button onClick={() => setDiscardOpen(true)} disabled={busy} style={{
                   marginLeft: 'auto', background: 'var(--white)', color: 'var(--err)', border: '0.5px solid var(--err)', borderRadius: 8,
-                  padding: '8px 18px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
-                }}>{t('fitting.save.discard_session', 'Descartar sessió')}</button>
+                  padding: '8px 18px', fontSize: 'var(--fs-body)', cursor: busy ? 'default' : 'pointer',
+                }}>{t('fitting.save.discard_session')}</button>
               ) : (
                 <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                   <input type="text" value={discardMotiu} onChange={e => setDiscardMotiu(e.target.value)}
-                    placeholder={t('fitting.save.discard_motiu_ph', 'Motiu (opcional)')}
-                    style={{ fontSize: 12, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, minWidth: 200 }} />
+                    placeholder={t('fitting.save.discard_motiu_ph')}
+                    style={{ fontSize: 'var(--fs-body)', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, minWidth: 200 }} />
                   <button onClick={doDiscardSession} disabled={busy} style={{
                     background: 'var(--err)', color: 'var(--white)', border: 'none', borderRadius: 8,
-                    padding: '8px 14px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
-                  }}>{t('common.confirm', 'Confirmar')}</button>
+                    padding: '8px 14px', fontSize: 'var(--fs-body)', cursor: busy ? 'default' : 'pointer',
+                  }}>{t('common.confirm')}</button>
                   <button onClick={() => { setDiscardOpen(false); setDiscardMotiu('') }} disabled={busy} style={{
                     background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
-                    padding: '8px 14px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
-                  }}>{t('common.cancel', 'Cancel·lar')}</button>
+                    padding: '8px 14px', fontSize: 'var(--fs-body)', cursor: busy ? 'default' : 'pointer',
+                  }}>{t('common.cancel')}</button>
                 </span>
               )}
             </div>
@@ -570,6 +577,13 @@ export default function FittingDetail() {
   const [reviewMode, setReviewMode] = useState(true)
   // Valors editables lligats al parent → modificat reactiu i remuntatge net per peça.
   const [reals, setReals] = useState({})
+  // Ancoratge únic mòbil (PG-4b-3b): conté NOMÉS la id de l'última cel·la editada a mà → negreta.
+  // Les germanes propagades hi queden fora → vermell normal.
+  const [editedIds, setEditedIds] = useState(() => new Set())
+  // Race guard: id de la cel·la amb focus ara mateix; el repintat de propagar no l'ha de sobreescriure.
+  const focusedIdRef = useRef(null)
+  // Avís discret si setPomRegim falla (p.ex. 400 sense fallback); no trenca la graella.
+  const [regimErr, setRegimErr] = useState(null)
 
   const loadSession = useCallback((selectFirst = false) => {
     return fittingSessions.get(id).then(res => {
@@ -601,6 +615,8 @@ export default function FittingDetail() {
         const r = {}
         for (const l of res.data.lines || []) { r[l.id] = l.valor_real ?? '' }
         setReals(r)
+        setEditedIds(new Set())   // canvi de peça → cap ancoratge actiu
+        focusedIdRef.current = null
       })
       .finally(() => setGridLoading(false))
   }, [activePieceId])
@@ -616,7 +632,7 @@ export default function FittingDetail() {
   }
 
   if (loading) {
-    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('app.loading')}</div>
+    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
   }
   if (!session) return null
 
@@ -637,10 +653,27 @@ export default function FittingDetail() {
   const sizeLabels = orderedSizes(model.size_run_model, present)
   const pomMap = new Map()
   for (const l of lines) {
-    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, { pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key, cells: {} })
+    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, {
+      pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key,
+      // Règim per POM (mateix valor a cada talla) → etiqueta de regla a la capçalera de fila.
+      logica: l.logica, increment_base: l.increment_base,
+      increment_break: l.increment_break, talla_break_label: l.talla_break_label,
+      cells: {},
+    })
     pomMap.get(l.pom_id).cells[l.size_label] = l
   }
   const pomRows = [...pomMap.values()]
+
+  // Etiqueta de regla compacta (delta·break) per a la capçalera de fila POM.
+  // LINEAR amb break: "+2 · break XXL +2.5" · LINEAR uniforme: "+2" · STEP: "lliure" · sense regla: res.
+  const regleLabel = (row) => {
+    if (row.logica == null) return ''
+    if (row.logica === 'STEP') return 'lliure'
+    if (row.increment_base == null) return ''
+    if (row.increment_break != null && row.talla_break_label)
+      return `+${row.increment_base} · break ${row.talla_break_label} +${row.increment_break}`
+    return `+${row.increment_base}`
+  }
 
   // Columnes d'evolució: unió de version_number entre totes les línies (ascendent).
   // El primer (v1) és Base; els següents (v2..vM) són Fit 1..Fit (M-1); després el fit
@@ -652,7 +685,37 @@ export default function FittingDetail() {
     idx === 0 ? t('fitting.grid.base') : t('fitting.grid.fit', { n: vn - 1 })
   const groupSpan = versionNumbers.length + 1  // versions read-only + fit actual
 
+  // Funcions planes (NO hooks): es declaren després dels early-returns, com onValue.
   const onValue = (lineId, v) => setReals(r => ({ ...r, [lineId]: v }))
+  // Tocar una cel·la la converteix en l'ancoratge únic (les anteriors passen a propagades/normal).
+  const onAnchor = (lineId) => setEditedIds(new Set([lineId]))
+  // Aplica les línies que torna propagar; omet la cel·la amb focus (l'usuari pot estar-hi teclejant).
+  const applyPropagar = (linies) => setReals(r => {
+    const next = { ...r }
+    for (const ln of linies) {
+      if (ln.id === focusedIdRef.current) continue
+      next[ln.id] = ln.valor_real ?? ''
+    }
+    return next
+  })
+
+  // PG-4b-3c — canvi de règim del POM des de la capçalera de fila. Materialitza NOMÉS si difereix
+  // (mirar no materialitza). Èxit → actualitza in-place les línies del POM (logica + deltas) perquè
+  // la propagació posterior obeeixi el nou règim, sense reload sencer. Error (400 sense fallback) →
+  // avís discret; el select revé sol al valor anterior (és controlat per row.logica, inalterat).
+  const onRegimChange = (row, nova) => {
+    if (!nova || nova === (row.logica ?? '')) return
+    setRegimErr(null)
+    models.setPomRegim(session.model, row.pom_id, nova)
+      .then(res => {
+        const d = res.data
+        setGrid(g => g ? { ...g, lines: (g.lines || []).map(l => l.pom_id === row.pom_id
+          ? { ...l, logica: d.logica, increment_base: d.increment_base,
+              increment_break: d.increment_break, talla_break_label: d.talla_break_label }
+          : l) } : g)
+      })
+      .catch(err => setRegimErr(err?.response?.data?.detail || 'No s\'ha pogut canviar el règim.'))
+  }
 
   const stickyHd = (left, w) => ({
     ...thStyle, position: 'sticky', left, zIndex: 3, minWidth: w, width: w,
@@ -669,22 +732,22 @@ export default function FittingDetail() {
       <div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-muted)', padding: '10px 14px', marginBottom: '1rem', borderBottom: '0.5px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
           <button onClick={() => navigate('/fittings')} style={{
-            background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: 0, marginRight: 12,
+            background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: 0, marginRight: 12,
           }}>← {t('app.back')}</button>
           <Badge variant="gate" style={{ marginRight: 6 }}>{session.fase_display || session.fase}</Badge>
           <Badge variant={estatVariant[session.estat] || 'gray'}>{session.estat_display || session.estat}</Badge>
         </div>
         {/* Línia 1 — identitat */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.9rem', flexWrap: 'wrap', marginBottom: 6 }}>
-          {idCodi && <Badge variant="gold" style={{ fontSize: 12 }}>{idCodi}</Badge>}
-          {idNom && <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-main)' }}>{idNom}</span>}
-          {collection && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('fitting.id.collection')}: {collection}</span>}
-          {clientRef && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('fitting.id.client_ref')}: {clientRef}</span>}
+          {idCodi && <Badge variant="gold" style={{ fontSize: 'var(--fs-body)' }}>{idCodi}</Badge>}
+          {idNom && <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, color: 'var(--text-main)' }}>{idNom}</span>}
+          {collection && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('fitting.id.collection')}: {collection}</span>}
+          {clientRef && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('fitting.id.client_ref')}: {clientRef}</span>}
         </div>
         {/* Línia 2 — context de sessió (persona/lloc editables inline; responsable read-only) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', flexWrap: 'wrap' }}>
           <EditableContextField sessionId={session.id} field="model_persona" label={t('fitting.id.persona')} value={session.model_persona} />
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('fitting.id.responsible')}: {session.responsable_nom || '—'}</span>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('fitting.id.responsible')}: {session.responsable_nom || '—'}</span>
           <EditableContextField sessionId={session.id} field="lloc" label={t('fitting.id.location')} value={session.lloc} />
           {/* Icona Info cablada al panell de fitxers (B1); ti-photo/ti-note stub fins a B2 */}
           <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
@@ -728,7 +791,7 @@ export default function FittingDetail() {
       {!reviewMode && (<>
       {/* Selector de peça */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 4 }}>{t('fitting.piece.select')}:</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginRight: 4 }}>{t('fitting.piece.select')}:</span>
         {pieces.map(p => {
           const active = p.id === activePieceId
           return (
@@ -737,7 +800,7 @@ export default function FittingDetail() {
               background: active ? 'var(--gold-pale)' : 'var(--white)',
               color: active ? 'var(--text-main)' : 'var(--text-muted)',
               border: `1px solid ${active ? 'var(--gold)' : 'var(--border)'}`, borderRadius: 8, padding: '5px 12px',
-              fontSize: 11, cursor: 'pointer',
+              fontSize: 'var(--fs-body)', cursor: 'pointer',
             }}>
               {p.model_codi || `#${p.model}`}
             </button>
@@ -746,34 +809,38 @@ export default function FittingDetail() {
         {session.model && (
           <button onClick={createPiece} disabled={creatingPiece} style={{
             background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
-            borderRadius: 8, padding: '5px 12px', fontSize: 11, cursor: creatingPiece ? 'default' : 'pointer',
+            borderRadius: 8, padding: '5px 12px', fontSize: 'var(--fs-body)', cursor: creatingPiece ? 'default' : 'pointer',
           }}>+ {creatingPiece ? t('fitting.piece.creating') : t('fitting.piece.create')}</button>
         )}
         <button onClick={() => setReviewMode(true)} style={{
           marginLeft: 'auto', background: 'var(--gold)', color: 'var(--white)', border: 'none',
-          borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-        }}>← {t('fitting.save.back_to_review', 'Tornar a revisió')}</button>
+          borderRadius: 8, padding: '6px 14px', fontSize: 'var(--fs-body)', fontWeight: 500, cursor: 'pointer',
+        }}>← {t('fitting.save.back_to_review')}</button>
       </div>
 
       {pieces.length === 0 && (
-        <Card><div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('fitting.piece.none')}</div></Card>
+        <Card><div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('fitting.piece.none')}</div></Card>
       )}
 
       {/* Graella matricial */}
       {activePieceId && (
         <Card padding={0} style={{ marginBottom: '1.5rem' }}>
+          {regimErr && (
+            <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', padding: '6px 10px' }}>{regimErr}</div>
+          )}
           {gridLoading ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('app.loading')}</div>
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
           ) : lines.length === 0 ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('fitting.grid.empty')}</div>
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
-              <table key={activePieceId} style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+              <table key={activePieceId} style={{ borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
                 <thead>
                   {/* Pis 1: talla (colspan = versions + fit actual) */}
                   <tr>
                     <th rowSpan={2} style={stickyHd(0, COL_POM_W)}>{t('fitting.grid.pom')}</th>
                     <th rowSpan={2} style={stickyHd(COL_POM_W, COL_NOM_W)}>{t('fitting.grid.name')}</th>
+                    <th rowSpan={2} style={stickyHd(COL_POM_W + COL_NOM_W, COL_REG_W)}>Règim</th>
                     {sizeLabels.map(s => {
                       const base = s === baseLabel
                       return (
@@ -793,7 +860,7 @@ export default function FittingDetail() {
                     {sizeLabels.flatMap(s => {
                       const base = s === baseLabel
                       const sub = (groupStart, groupEnd) => ({
-                        ...thStyle, textAlign: 'right', fontSize: 9, padding: '3px 8px',
+                        ...thStyle, textAlign: 'right', fontSize: 'var(--fs-caption)', padding: '3px 8px',
                         background: base ? 'var(--gold-pale)' : 'var(--bg-muted)',
                         borderLeft: groupStart && base ? '1px solid var(--gold)' : '0.5px solid var(--border)',
                         borderRight: groupEnd && base ? '1px solid var(--gold)' : undefined,
@@ -814,11 +881,32 @@ export default function FittingDetail() {
                     return (
                       <tr key={row.pom_id} style={{ background: rowBg }}>
                         <td style={stickyTd(0, COL_POM_W, rowBg)}>
-                          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--gold)' }}>
-                            {row.codi}{row.is_key && <i className="ti ti-star-filled" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title="key measure" />}
+                          <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--gold)' }}>
+                            {row.codi}{row.is_key && <i className="ti ti-star-filled" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title={t('fitting.key_measure')} />}
                           </span>
                         </td>
-                        <td style={{ ...stickyTd(COL_POM_W, COL_NOM_W, rowBg), fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'normal' }}>{row.nom}</td>
+                        <td style={{ ...stickyTd(COL_POM_W, COL_NOM_W, rowBg), fontSize: 'var(--fs-body)', color: 'var(--text-muted)', whiteSpace: 'normal' }}>{row.nom}</td>
+                        <td style={stickyTd(COL_POM_W + COL_NOM_W, COL_REG_W, rowBg)}>
+                          {/* PG-4b-3c — règim del POM: select (dalt) + etiqueta de regla (sota, moguda des de la capçalera). */}
+                          <select
+                            value={row.logica ?? ''}
+                            onChange={e => onRegimChange(row, e.target.value)}
+                            style={{
+                              font: 'inherit', fontSize: 'var(--fs-label)', width: '100%', padding: '1px 2px',
+                              border: '1px solid var(--border)', borderRadius: 4,
+                              background: 'var(--white)', color: 'var(--text-main)', boxSizing: 'border-box',
+                            }}
+                          >
+                            {row.logica == null && <option value="">—</option>}
+                            <option value="LINEAR">LINEAR</option>
+                            <option value="STEP">STEP</option>
+                          </select>
+                          {regleLabel(row) && (
+                            <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: 'var(--text-muted)', whiteSpace: 'nowrap', marginTop: 1 }}>
+                              {regleLabel(row)}
+                            </div>
+                          )}
+                        </td>
                         {sizeLabels.flatMap(s => {
                           const base = s === baseLabel
                           const line = row.cells[s]
@@ -831,7 +919,9 @@ export default function FittingDetail() {
                           ))
                           cells.push(
                             <CurrentFitCell key={`${s}-cur`} line={line} baseSize={base} baseValue={baseValue}
-                              value={line ? reals[line.id] ?? '' : ''} onValue={onValue} />
+                              value={line ? reals[line.id] ?? '' : ''}
+                              edited={line ? editedIds.has(line.id) : false}
+                              onValue={onValue} onAnchor={onAnchor} onPropagated={applyPropagar} focusRef={focusedIdRef} />
                           )
                           return cells
                         })}
@@ -851,7 +941,7 @@ export default function FittingDetail() {
 }
 
 const thStyle = {
-  padding: '0.5rem 0.8rem', fontSize: 10, letterSpacing: '0.08em',
+  padding: '0.5rem 0.8rem', fontSize: 'var(--fs-label)', letterSpacing: '0.08em',
   textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500,
   borderBottom: '0.5px solid var(--border)', whiteSpace: 'nowrap',
 }

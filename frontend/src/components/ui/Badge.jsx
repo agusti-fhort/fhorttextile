@@ -12,7 +12,7 @@ export default function Badge({ variant = 'gray', icon, children, style }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
-      fontSize: 11, padding: '3px 8px', borderRadius: 6,
+      fontSize: 'var(--fs-body)', padding: '3px 8px', borderRadius: 6,
       background: v.bg, color: v.color,
       fontWeight: 400, whiteSpace: 'nowrap',
       ...style,
