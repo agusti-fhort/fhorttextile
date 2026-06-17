@@ -185,19 +185,19 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
                           marginBottom: 10, gap: 12 }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
                              }}>
-                Consulta — l'edició de mides es fa a la tasca de POM.
+                {t('model_sheet.measures_consult')}
               </span>
               {hasPomTask ? (
                 <button type="button" onClick={() => navigate(`/models/${id}/mesures`)}
                   style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
                   <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
-                  Editar a la tasca de POM
+                  {t('model_sheet.edit_in_pom')}
                 </button>
               ) : (
-                <span title="Aquest model no té cap tasca de POM definida"
+                <span title={t('model_sheet.no_pom_task_title')}
                   style={{ ...btnSecondary, opacity: 0.5, cursor: 'not-allowed' }}>
                   <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
-                  Sense tasca de POM
+                  {t('model_sheet.no_pom_task')}
                 </span>
               )}
             </div>

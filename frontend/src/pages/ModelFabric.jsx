@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -20,6 +21,7 @@ const btnSecondary = {
 }
 
 export default function ModelFabric() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -60,7 +62,7 @@ export default function ModelFabric() {
         fabric_notes: modelData.fabric_notes || '',
       })
       if (modelData.shrinkage_pct != null) setBiaxial(false)
-    }).catch(() => setError('Error carregant dades'))
+    }).catch(() => setError(t('errors.load_failed')))
   }, [id])
 
   const handleISOSelect = (isoEntry) => {
@@ -110,14 +112,14 @@ export default function ModelFabric() {
       })
       if (!rc.ok) {
         const d = await rc.json().catch(() => ({}))
-        setError(d.error || 'No s\'ha pogut tancar la taula.')
+        setError(d.error || t('model_fabric.err_close_table'))
         return
       }
 
       // 3) Èxit: el flux de mides es tanca → tornar al Kanban (no a /fitxers).
       navigate('/tasques/kanban')
     } catch {
-      setError('Error de connexió')
+      setError(t('model_sheet.err_connection'))
     } finally {
       setSaving(false)
     }
@@ -148,10 +150,10 @@ export default function ModelFabric() {
       </div>
 
       <h2 style={{ fontSize: 18, fontWeight: 500, marginBottom: '0.25rem' }}>
-        Fabric &amp; Shrinkage
+        {t('model_fabric.title')}
       </h2>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)', marginBottom: '1.5rem' }}>
-        Optional — skip if no information available.
+        {t('model_fabric.subtitle')}
       </p>
 
       {error && (
@@ -162,27 +164,27 @@ export default function ModelFabric() {
       )}
 
       <div style={{ marginBottom: 16 }}>
-        <label style={labelStyle}>Main Fabric</label>
+        <label style={labelStyle}>{t('model_sheet.field_main_fabric')}</label>
         <input value={form.fabric_main}
           onChange={e => setForm(f => ({...f, fabric_main: e.target.value}))}
-          placeholder="ex: Viscose Chiffon Print"
+          placeholder={t('model_fabric.ph_fabric')}
           style={inputStyle} />
       </div>
 
       <div style={{ marginBottom: 20 }}>
-        <label style={labelStyle}>Composition</label>
+        <label style={labelStyle}>{t('model_sheet.field_composition')}</label>
         <input value={form.fabric_composition}
           onChange={e => setForm(f => ({...f, fabric_composition: e.target.value}))}
-          placeholder="ex: 100% Viscose"
+          placeholder={t('model_fabric.ph_composition')}
           style={inputStyle} />
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <label style={labelStyle}>Shrinkage</label>
+        <label style={labelStyle}>{t('model_sheet.field_shrinkage')}</label>
 
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)', marginBottom: 6 }}>
-            ISO standard — select to auto-fill:
+            {t('model_fabric.iso_hint')}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {isoTable.map(entry => {
@@ -219,7 +221,7 @@ export default function ModelFabric() {
               background: biaxial ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
               color: biaxial ? 'var(--white)' : 'var(--color-text-secondary, #868685)',
             }}>
-            Warp / Weft
+            {t('model_fabric.mode_biaxial')}
           </button>
           <button type="button" onClick={() => setBiaxial(false)}
             style={{
@@ -228,54 +230,54 @@ export default function ModelFabric() {
               background: !biaxial ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
               color: !biaxial ? 'var(--white)' : 'var(--color-text-secondary, #868685)',
             }}>
-            Single %
+            {t('model_fabric.mode_single')}
           </button>
         </div>
 
         {biaxial ? (
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <label style={{ ...labelStyle, fontSize: 11 }}>Warp (%)</label>
+              <label style={{ ...labelStyle, fontSize: 11 }}>{t('model_fabric.warp_pct')}</label>
               <input type="number" step="0.5" min="0" max="30"
                 value={form.shrinkage_warp}
                 onChange={e => setForm(f => ({
                   ...f, shrinkage_warp: e.target.value, shrinkage_type: 'SUPPLIER',
                   shrinkage_iso_key: ''
                 }))}
-                placeholder="ex: 3"
+                placeholder={t('model_fabric.ph_pct')}
                 style={{ ...inputStyle, width: 80 }} />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ ...labelStyle, fontSize: 11 }}>Weft (%)</label>
+              <label style={{ ...labelStyle, fontSize: 11 }}>{t('model_fabric.weft_pct')}</label>
               <input type="number" step="0.5" min="0" max="30"
                 value={form.shrinkage_weft}
                 onChange={e => setForm(f => ({
                   ...f, shrinkage_weft: e.target.value, shrinkage_type: 'SUPPLIER',
                   shrinkage_iso_key: ''
                 }))}
-                placeholder="ex: 3"
+                placeholder={t('model_fabric.ph_pct')}
                 style={{ ...inputStyle, width: 80 }} />
             </div>
           </div>
         ) : (
           <div>
-            <label style={{ ...labelStyle, fontSize: 11 }}>Shrinkage (%)</label>
+            <label style={{ ...labelStyle, fontSize: 11 }}>{t('model_fabric.shrinkage_pct_label')}</label>
             <input type="number" step="0.5" min="0" max="30"
               value={form.shrinkage_pct}
               onChange={e => setForm(f => ({
                 ...f, shrinkage_pct: e.target.value, shrinkage_type: 'SUPPLIER'
               }))}
-              placeholder="ex: 3"
+              placeholder={t('model_fabric.ph_pct')}
               style={{ ...inputStyle, width: 80 }} />
           </div>
         )}
       </div>
 
       <div style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>Notes</label>
+        <label style={labelStyle}>{t('model.fields.observacions')}</label>
         <textarea value={form.fabric_notes}
           onChange={e => setForm(f => ({...f, fabric_notes: e.target.value}))}
-          rows={2} placeholder="Optional notes..."
+          rows={2} placeholder={t('model_fabric.ph_notes')}
           style={{ ...inputStyle, resize: 'vertical' }} />
       </div>
 
@@ -283,13 +285,13 @@ export default function ModelFabric() {
         <button type="button"
           onClick={() => navigate(`/models/${id}/mesures`)}
           style={btnSecondary}>
-          ← Back
+          ← {t('app.back')}
         </button>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button"
             onClick={() => navigate(`/models/${id}/fitxers`)}
             style={btnSecondary}>
-            Skip →
+            {t('model_fabric.skip')}
           </button>
           <button type="button" onClick={handleSave} disabled={saving}
             style={{
@@ -298,7 +300,7 @@ export default function ModelFabric() {
               fontSize: 14, fontWeight: 500,
               cursor: saving ? 'not-allowed' : 'pointer',
             }}>
-            {saving ? 'Tancant...' : 'Tancar i finalitzar'}
+            {saving ? t('model_fabric.closing') : t('model_fabric.close_finish')}
           </button>
         </div>
       </div>

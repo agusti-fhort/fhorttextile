@@ -367,7 +367,11 @@
     "out_of_deadline": "⚠ fora de deadline",
     "needed_start": "→ Inici necessari:",
     "past_date": "⚠ data passada",
-    "viab_disclaimer": "Estimació orientativa · jornada 420 min/dia · dies laborables (dl-dv) · sense festius"
+    "viab_disclaimer": "Estimació orientativa · jornada 420 min/dia · dies laborables (dl-dv) · sense festius",
+    "measures_consult": "Consulta — l'edició de mides es fa a la tasca de POM.",
+    "edit_in_pom": "Editar a la tasca de POM",
+    "no_pom_task": "Sense tasca de POM",
+    "no_pom_task_title": "Aquest model no té cap tasca de POM definida"
   },
   "model_wizard": {
     "customer": "Client",
@@ -1118,5 +1122,44 @@
     "weekly_summary": "Resum setmanal",
     "weekly_total": "Total setmanal",
     "min_value": "{{n}}min"
+  },
+
+  "model_measurements": {
+    "err_grading": "Error generant grading",
+    "notice_no_item": "Aquest model no té tipus d'ítem (garment_type_item) definit: no es materialitzen els POMs de la plantilla.",
+    "title": "Mesures i grading",
+    "intro": "Introdueix les mesures de la talla base. El sistema calcularà el grading per a totes les talles.",
+    "manual_title": "Introduir manualment",
+    "manual_desc": "El sistema proposa els POMs estàndard per a {{type}}. Introdueix els valors de la talla base.",
+    "this_garment": "aquest tipus de peça",
+    "poms_available": "{{total}} POMs disponibles · {{key}} KEY",
+    "import_title": "Importar de fitxa tècnica",
+    "import_desc": "Puja un PDF o imatge de la fitxa tècnica del client. La IA extraurà les mesures, talles i grading automàticament.",
+    "suggested_poms": "POMs suggerits per a aquest tipus de peça — clica per afegir a la taula:",
+    "generating": "⏳ Generant…",
+    "generate_grading": "⚡ Generar grading automàtic",
+    "continue_fabric": "Continuar → Teixit",
+    "table_title": "Taula de mesures i grading",
+    "edit_measures": "✏ Editar mesures",
+    "base_prefix": "Base:"
+  },
+
+  "model_fabric": {
+    "err_close_table": "No s'ha pogut tancar la taula.",
+    "title": "Fabric & Shrinkage",
+    "subtitle": "Opcional — omet-ho si no hi ha informació.",
+    "iso_hint": "Estàndard ISO — selecciona per autoemplenar:",
+    "mode_biaxial": "Warp / Weft",
+    "mode_single": "% únic",
+    "warp_pct": "Warp (%)",
+    "weft_pct": "Weft (%)",
+    "shrinkage_pct_label": "Shrinkage (%)",
+    "ph_fabric": "ex: Viscose Chiffon Print",
+    "ph_composition": "ex: 100% Viscose",
+    "ph_pct": "ex: 3",
+    "ph_notes": "Notes opcionals…",
+    "skip": "Ometre →",
+    "closing": "Tancant…",
+    "close_finish": "Tancar i finalitzar"
   }
 }

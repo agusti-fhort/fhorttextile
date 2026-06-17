@@ -367,7 +367,11 @@
     "out_of_deadline": "⚠ past deadline",
     "needed_start": "→ Needed start:",
     "past_date": "⚠ past date",
-    "viab_disclaimer": "Indicative estimate · 420 min/day · working days (Mon–Fri) · no holidays"
+    "viab_disclaimer": "Indicative estimate · 420 min/day · working days (Mon–Fri) · no holidays",
+    "measures_consult": "Consultation — measurement editing is done in the POM task.",
+    "edit_in_pom": "Edit in the POM task",
+    "no_pom_task": "No POM task",
+    "no_pom_task_title": "This model has no POM task defined"
   },
   "model_wizard": {
     "customer": "Customer",
@@ -1118,5 +1122,44 @@
     "weekly_summary": "Weekly summary",
     "weekly_total": "Weekly total",
     "min_value": "{{n}}min"
+  },
+
+  "model_measurements": {
+    "err_grading": "Error generating grading",
+    "notice_no_item": "This model has no item type (garment_type_item) defined: the template POMs are not materialized.",
+    "title": "Measurements and grading",
+    "intro": "Enter the base size measurements. The system will compute grading for all sizes.",
+    "manual_title": "Enter manually",
+    "manual_desc": "The system proposes the standard POMs for {{type}}. Enter the base size values.",
+    "this_garment": "this garment type",
+    "poms_available": "{{total}} POMs available · {{key}} KEY",
+    "import_title": "Import from tech sheet",
+    "import_desc": "Upload a PDF or image of the client tech sheet. The AI will extract measurements, sizes and grading automatically.",
+    "suggested_poms": "Suggested POMs for this garment type — click to add to the table:",
+    "generating": "⏳ Generating…",
+    "generate_grading": "⚡ Auto-generate grading",
+    "continue_fabric": "Continue → Fabric",
+    "table_title": "Measurements and grading table",
+    "edit_measures": "✏ Edit measurements",
+    "base_prefix": "Base:"
+  },
+
+  "model_fabric": {
+    "err_close_table": "Could not close the table.",
+    "title": "Fabric & Shrinkage",
+    "subtitle": "Optional — skip if no information available.",
+    "iso_hint": "ISO standard — select to auto-fill:",
+    "mode_biaxial": "Warp / Weft",
+    "mode_single": "Single %",
+    "warp_pct": "Warp (%)",
+    "weft_pct": "Weft (%)",
+    "shrinkage_pct_label": "Shrinkage (%)",
+    "ph_fabric": "e.g. Viscose Chiffon Print",
+    "ph_composition": "e.g. 100% Viscose",
+    "ph_pct": "e.g. 3",
+    "ph_notes": "Optional notes…",
+    "skip": "Skip →",
+    "closing": "Closing…",
+    "close_finish": "Close and finish"
   }
 }

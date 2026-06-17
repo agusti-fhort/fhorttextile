@@ -367,7 +367,11 @@
     "out_of_deadline": "⚠ fuera de deadline",
     "needed_start": "→ Inicio necesario:",
     "past_date": "⚠ fecha pasada",
-    "viab_disclaimer": "Estimación orientativa · jornada 420 min/día · días laborables (lu-vi) · sin festivos"
+    "viab_disclaimer": "Estimación orientativa · jornada 420 min/día · días laborables (lu-vi) · sin festivos",
+    "measures_consult": "Consulta — la edición de medidas se hace en la tarea de POM.",
+    "edit_in_pom": "Editar en la tarea de POM",
+    "no_pom_task": "Sin tarea de POM",
+    "no_pom_task_title": "Este modelo no tiene ninguna tarea de POM definida"
   },
   "model_wizard": {
     "customer": "Cliente",
@@ -1118,5 +1122,44 @@
     "weekly_summary": "Resumen semanal",
     "weekly_total": "Total semanal",
     "min_value": "{{n}}min"
+  },
+
+  "model_measurements": {
+    "err_grading": "Error generando el grading",
+    "notice_no_item": "Este modelo no tiene tipo de ítem (garment_type_item) definido: no se materializan los POMs de la plantilla.",
+    "title": "Medidas y grading",
+    "intro": "Introduce las medidas de la talla base. El sistema calculará el grading para todas las tallas.",
+    "manual_title": "Introducir manualmente",
+    "manual_desc": "El sistema propone los POMs estándar para {{type}}. Introduce los valores de la talla base.",
+    "this_garment": "este tipo de prenda",
+    "poms_available": "{{total}} POMs disponibles · {{key}} KEY",
+    "import_title": "Importar de ficha técnica",
+    "import_desc": "Sube un PDF o imagen de la ficha técnica del cliente. La IA extraerá las medidas, tallas y grading automáticamente.",
+    "suggested_poms": "POMs sugeridos para este tipo de prenda — haz clic para añadir a la tabla:",
+    "generating": "⏳ Generando…",
+    "generate_grading": "⚡ Generar grading automático",
+    "continue_fabric": "Continuar → Tejido",
+    "table_title": "Tabla de medidas y grading",
+    "edit_measures": "✏ Editar medidas",
+    "base_prefix": "Base:"
+  },
+
+  "model_fabric": {
+    "err_close_table": "No se ha podido cerrar la tabla.",
+    "title": "Fabric & Shrinkage",
+    "subtitle": "Opcional — omítelo si no hay información.",
+    "iso_hint": "Estándar ISO — selecciona para autorrellenar:",
+    "mode_biaxial": "Warp / Weft",
+    "mode_single": "% único",
+    "warp_pct": "Warp (%)",
+    "weft_pct": "Weft (%)",
+    "shrinkage_pct_label": "Shrinkage (%)",
+    "ph_fabric": "ej: Viscose Chiffon Print",
+    "ph_composition": "ej: 100% Viscose",
+    "ph_pct": "ej: 3",
+    "ph_notes": "Notas opcionales…",
+    "skip": "Omitir →",
+    "closing": "Cerrando…",
+    "close_finish": "Cerrar y finalizar"
   }
 }

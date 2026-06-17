@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import EditableTable from '../components/EditableTable/EditableTable'
 import ImportWizard from '../components/ImportWizard/ImportWizard'
 
@@ -12,6 +13,7 @@ const thStyle = {
 const tdStyle = { padding: '6px 12px', verticalAlign: 'middle' }
 
 export default function ModelMeasurements() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -43,7 +45,7 @@ export default function ModelMeasurements() {
       const poms = pomsData.poms || []
       setPomsSuggerits(poms)
       setSelectedPomIds(prev => prev.length > 0 ? prev : poms.filter(p => p.is_key).map(p => p.pom_id))
-    }).catch(() => setError('Error carregant les dades'))
+    }).catch(() => setError(t('errors.load_failed')))
   }, [id])
 
   const togglePom = (pom) => {
@@ -67,10 +69,10 @@ export default function ModelMeasurements() {
         fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
           .then(r => r.json()).then(refreshTableMeta).catch(() => {})
       } else {
-        setError(d.error || 'Error generant grading')
+        setError(d.error || t('model_measurements.err_grading'))
       }
     } catch {
-      setError('Error de connexió')
+      setError(t('model_sheet.err_connection'))
     } finally {
       setGeneratingGrading(false)
     }
@@ -104,7 +106,7 @@ export default function ModelMeasurements() {
         .then(() => loadTable())
         .catch(() => loadTable())
     } else {
-      setNotice("Aquest model no té tipus d'ítem (garment_type_item) definit: no es materialitzen els POMs de la plantilla.")
+      setNotice(t('model_measurements.notice_no_item'))
       loadTable()
     }
   }, [id, model])
@@ -129,7 +131,7 @@ export default function ModelMeasurements() {
 
       {mode === 'loading' && !error && (
         <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-          Carregant…
+          {t('model_sheet.loading')}
         </div>
       )}
 
@@ -138,10 +140,10 @@ export default function ModelMeasurements() {
           <ModelSummaryBar model={model} />
 
           <h2 style={{ fontSize: 18, fontWeight: 500, margin: '1.5rem 0 0.5rem' }}>
-            Mesures i grading
+            {t('model_measurements.title')}
           </h2>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)', marginBottom: '1.5rem' }}>
-            Introdueix les mesures de la talla base. El sistema calcularà el grading per a totes les talles.
+            {t('model_measurements.intro')}
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -154,14 +156,13 @@ export default function ModelMeasurements() {
               <div style={{ fontSize: 28, marginBottom: 8 }}>
                 <i className="ti ti-pencil" style={{ color: 'var(--gold)' }} />
               </div>
-              <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6 }}>Introduir manualment</div>
+              <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.manual_title')}</div>
               <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)' }}>
-                El sistema proposa els POMs estàndard per a {model?.garment_type_nom || 'aquest tipus de peça'}.
-                Introdueix els valors de la talla base.
+                {t('model_measurements.manual_desc', { type: model?.garment_type_nom || t('model_measurements.this_garment') })}
               </div>
               {pomsSuggerits.length > 0 && (
                 <div style={{ marginTop: 12, fontSize: 12, color: 'var(--gold)' }}>
-                  {pomsSuggerits.length} POMs disponibles · {pomsSuggerits.filter(p => p.is_key).length} KEY
+                  {t('model_measurements.poms_available', { total: pomsSuggerits.length, key: pomsSuggerits.filter(p => p.is_key).length })}
                 </div>
               )}
             </div>
@@ -175,10 +176,9 @@ export default function ModelMeasurements() {
               <div style={{ fontSize: 28, marginBottom: 8 }}>
                 <i className="ti ti-bolt" style={{ color: 'var(--gold)' }} />
               </div>
-              <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6 }}>Importar de fitxa tècnica</div>
+              <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.import_title')}</div>
               <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)' }}>
-                Puja un PDF o imatge de la fitxa tècnica del client.
-                La IA extraurà les mesures, talles i grading automàticament.
+                {t('model_measurements.import_desc')}
               </div>
             </div>
           </div>
@@ -192,7 +192,7 @@ export default function ModelMeasurements() {
           {taulaRows.length === 0 && pomsSuggerits.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)', marginBottom: 8 }}>
-                POMs suggerits per a aquest tipus de peça — clica per afegir a la taula:
+                {t('model_measurements.suggested_poms')}
               </div>
               {pomsSuggerits.filter(p => p.is_key).length > 0 && (
                 <div style={{ marginBottom: 8 }}>
@@ -242,7 +242,7 @@ export default function ModelMeasurements() {
             <button type="button" onClick={() => setMode('selector')}
               style={{ padding: '8px 16px', border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
                        borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
-              ← Enrere
+              ← {t('app.back')}
             </button>
             {taulaRows.length > 0 && (
               <div style={{ display: 'flex', gap: 8 }}>
@@ -253,7 +253,7 @@ export default function ModelMeasurements() {
                       borderRadius: 6, background: 'transparent',
                       color: 'var(--gold)', fontSize: 13, cursor: 'pointer',
                     }}>
-                    {generatingGrading ? '⏳ Generant...' : '⚡ Generar grading automàtic'}
+                    {generatingGrading ? t('model_measurements.generating') : t('model_measurements.generate_grading')}
                   </button>
                 )}
                 <button type="button" onClick={() => navigate(`/models/${id}/teixit`)}
@@ -262,7 +262,7 @@ export default function ModelMeasurements() {
                     border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500,
                     cursor: 'pointer',
                   }}>
-                  Continuar → Teixit
+                  {t('model_measurements.continue_fabric')}
                 </button>
               </div>
             )}
@@ -294,12 +294,12 @@ export default function ModelMeasurements() {
           <div style={{ display: 'flex', justifyContent: 'space-between',
                         alignItems: 'center', marginBottom: 12 }}>
             <h2 style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>
-              Taula de mesures i grading
+              {t('model_measurements.table_title')}
             </h2>
             <button type="button" onClick={() => setMode('manual')}
               style={{ padding: '6px 14px', border: '0.5px solid var(--color-border-tertiary)',
                        borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
-              ✏ Editar mesures
+              {t('model_measurements.edit_measures')}
             </button>
           </div>
 
@@ -335,7 +335,7 @@ export default function ModelMeasurements() {
                 fontSize: 14, fontWeight: 500,
                 background: 'var(--gold)', color: 'var(--white)', cursor: 'pointer',
               }}>
-              Continuar → Teixit
+              {t('model_measurements.continue_fabric')}
             </button>
           </div>
         </div>
@@ -361,6 +361,7 @@ function POMChipSuggerit({ pom, selected, onToggle }) {
 }
 
 function ModelSummaryBar({ model }) {
+  const { t } = useTranslation()
   if (!model) return null
   return (
     <div style={{
@@ -374,7 +375,7 @@ function ModelSummaryBar({ model }) {
       {model.target && <span style={{ color: 'var(--color-text-secondary, #868685)' }}>{model.target}</span>}
       {model.construction && <span style={{ color: 'var(--color-text-secondary, #868685)' }}>{model.construction}</span>}
       {model.base_size_label && (
-        <span style={{ color: 'var(--gold)' }}>Base: {model.base_size_label}</span>
+        <span style={{ color: 'var(--gold)' }}>{t('model_measurements.base_prefix')} {model.base_size_label}</span>
       )}
       {model.size_run_model && (
         <span style={{ color: 'var(--color-text-secondary, #868685)' }}>
