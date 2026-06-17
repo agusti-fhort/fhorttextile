@@ -45,7 +45,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
           {!compact && (
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
               {name !== sysName && <>{sysName} · </>}
-              {profile?.target?.codi ? t(`model_wizard.target_${profile.target.codi}`, profile.target.nom_en) : profile?.target?.nom_en} · {profile?.construction?.nom_en} · {profile?.fit_type_nom}
+              {profile?.target?.codi ? t(`model_wizard.target_${profile.target.codi}`, profile.target.nom_en) : profile?.target?.nom_en} · {profile?.construction?.codi ? t(`model_wizard.construction_${profile.construction.codi}`, profile.construction.nom_en) : profile?.construction?.nom_en} · {profile?.fit_type_nom}
             </div>
           )}
         </div>

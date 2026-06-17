@@ -373,7 +373,7 @@ function ModelSummaryBar({ model }) {
       <span><strong>{model.codi_intern}</strong></span>
       {model.nom_prenda && <span>{model.nom_prenda}</span>}
       {model.target && <span style={{ color: 'var(--color-text-secondary, #868685)' }}>{t(`model_wizard.target_${model.target}`, model.target)}</span>}
-      {model.construction && <span style={{ color: 'var(--color-text-secondary, #868685)' }}>{model.construction}</span>}
+      {model.construction && <span style={{ color: 'var(--color-text-secondary, #868685)' }}>{t(`model_wizard.construction_${model.construction}`, model.construction)}</span>}
       {model.base_size_label && (
         <span style={{ color: 'var(--gold)' }}>{t('model_measurements.base_prefix')} {model.base_size_label}</span>
       )}

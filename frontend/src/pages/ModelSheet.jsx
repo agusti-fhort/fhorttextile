@@ -527,7 +527,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
     { label: t('model_sheet.field_target'), value: model.target ? t(`model_wizard.target_${model.target}`, model.target) : '—' },
     { label: t('model_sheet.field_garment_type'), value: model.garment_type_nom || '—' },
     { label: t('model_sheet.field_garment_item'), value: model.garment_type_item_nom || '—' },
-    { label: t('model_sheet.field_construction'), value: model.construction || '—' },
+    { label: t('model_sheet.field_construction'), value: model.construction ? t(`model_wizard.construction_${model.construction}`, model.construction) : '—' },
     { label: t('model.fields.fit_type'), value: model.fit_type || '—' },
     { label: t('model_sheet.field_size_system'), value: model.size_system_nom || '—' },
     { label: t('model.fields.base_size_label'), value: model.base_size_label || '—' },

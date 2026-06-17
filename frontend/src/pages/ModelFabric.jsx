@@ -145,7 +145,7 @@ export default function ModelFabric() {
           <span style={{ fontWeight: 500 }}>{model.nom_prenda}</span>
         )}
         {model.construction && (
-          <span style={{ color: 'var(--color-text-secondary, #868685)' }}>{model.construction}</span>
+          <span style={{ color: 'var(--color-text-secondary, #868685)' }}>{t(`model_wizard.construction_${model.construction}`, model.construction)}</span>
         )}
       </div>
 

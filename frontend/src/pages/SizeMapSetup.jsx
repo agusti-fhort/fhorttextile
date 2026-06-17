@@ -457,7 +457,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           <Field label={t('size_map_p_construction')}>
             <select value={wiz.construction_id} onChange={e => set({ construction_id: e.target.value })} style={{ ...selS, width: '100%' }}>
               <option value="">—</option>
-              {lookups.constructions.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
+              {lookups.constructions.map(o => <option key={o.id} value={o.id}>{t(`model_wizard.construction_${o.codi}`, o.nom)} ({o.codi})</option>)}
             </select>
           </Field>
           <Field label={t('size_map_p_fit')}>

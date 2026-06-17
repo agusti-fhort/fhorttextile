@@ -216,8 +216,7 @@ export function SizingProfileSelector({
                   border: `1px solid ${selectedConstruction === c.codi ? "var(--gold)" : "var(--border)"}`,
                 }}
               >
-                {c.nom_en}
-                <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 4 }}>{c.nom_cat}</span>
+                {t(`model_wizard.construction_${c.codi}`, c.nom_en)}
               </button>
             ))}
           </div>

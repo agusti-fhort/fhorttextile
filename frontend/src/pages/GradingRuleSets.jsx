@@ -309,8 +309,7 @@ export default function GradingRuleSets() {
                 {availableConstructions.map(c => (
                   <SelectionButton
                     key={c.codi}
-                    label={c.nom_en}
-                    sublabel={lang !== 'en' ? nomLocal(c, lang) : null}
+                    label={t(`model_wizard.construction_${c.codi}`, c.nom_en)}
                     selected={selectedConstruction === c.codi}
                     onClick={() => {
                       setSelectedConstruction(c.codi)
@@ -632,7 +631,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                   ))}
                 </span>
               )}
-              {rs.construction_codi && <span>{t('grading.construction_label')}<strong>{rs.construction_codi}</strong></span>}
+              {rs.construction_codi && <span>{t('grading.construction_label')}<strong>{t(`model_wizard.construction_${rs.construction_codi}`, rs.construction_codi)}</strong></span>}
               {rs.fit_type_codi && <span>{t('grading.fit_label')}<strong>{rs.fit_type_codi}</strong></span>}
               {rs.size_system_nom && <span>{t('grading.size_system_label')}<strong>{rs.size_system_nom}</strong></span>}
               {rs.codi_sistema && <span style={{ }}>{rs.codi_sistema}</span>}
