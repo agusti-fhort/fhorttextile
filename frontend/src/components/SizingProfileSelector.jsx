@@ -257,7 +257,7 @@ export function SizingProfileSelector({
                     ...(!isActive ? { opacity: 0.35, cursor: "default", pointerEvents: "none" } : {}),
                   }}
                 >
-                  {ft.nom_en}
+                  {t(`model_wizard.fit_${ft.codi}`, ft.nom_en)}
                 </button>
               )
             })}

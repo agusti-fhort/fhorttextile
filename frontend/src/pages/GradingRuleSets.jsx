@@ -331,8 +331,7 @@ export default function GradingRuleSets() {
                   {availableFits.map(f => (
                     <SelectionButton
                       key={f.codi}
-                      label={f.nom_en}
-                      sublabel={lang !== 'en' ? nomLocal(f, lang) : null}
+                      label={t(`model_wizard.fit_${f.codi}`, f.nom_en)}
                       selected={selectedFit === f.codi}
                       onClick={() => {
                         setSelectedFit(f.codi)
