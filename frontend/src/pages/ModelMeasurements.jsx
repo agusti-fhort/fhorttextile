@@ -7,7 +7,7 @@ import ImportWizard from '../components/ImportWizard/ImportWizard'
 const API = import.meta.env.VITE_API_URL || ''
 
 const thStyle = {
-  padding: '8px 12px', textAlign: 'left', fontSize: 12,
+  padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-body)',
   fontWeight: 500, borderBottom: '1px solid var(--border)',
 }
 const tdStyle = { padding: '6px 12px', verticalAlign: 'middle' }
@@ -117,7 +117,7 @@ export default function ModelMeasurements() {
         <div style={{
           maxWidth: 1000, margin: '1rem auto 0',
           background: '#fee', border: '1px solid #fcc', borderRadius: 8,
-          padding: '0.75rem 1rem', fontSize: 13, color: '#c00',
+          padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: '#c00',
         }}>{error}</div>
       )}
 
@@ -125,7 +125,7 @@ export default function ModelMeasurements() {
         <div style={{
           maxWidth: 1000, margin: '1rem auto 0',
           background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
-          padding: '0.75rem 1rem', fontSize: 13, color: '#7a5a00',
+          padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: '#7a5a00',
         }}>{notice}</div>
       )}
 
@@ -139,10 +139,10 @@ export default function ModelMeasurements() {
         <div style={{ maxWidth: 800, margin: '0 auto', padding: '2rem 1rem' }}>
           <ModelSummaryBar model={model} />
 
-          <h2 style={{ fontSize: 18, fontWeight: 500, margin: '1.5rem 0 0.5rem' }}>
+          <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '1.5rem 0 0.5rem' }}>
             {t('model_measurements.title')}
           </h2>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
             {t('model_measurements.intro')}
           </p>
 
@@ -156,12 +156,12 @@ export default function ModelMeasurements() {
               <div style={{ fontSize: 28, marginBottom: 8 }}>
                 <i className="ti ti-pencil" style={{ color: 'var(--gold)' }} />
               </div>
-              <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.manual_title')}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.manual_title')}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                 {t('model_measurements.manual_desc', { type: model?.garment_type_nom || t('model_measurements.this_garment') })}
               </div>
               {pomsSuggerits.length > 0 && (
-                <div style={{ marginTop: 12, fontSize: 12, color: 'var(--gold)' }}>
+                <div style={{ marginTop: 12, fontSize: 'var(--fs-body)', color: 'var(--gold)' }}>
                   {t('model_measurements.poms_available', { total: pomsSuggerits.length, key: pomsSuggerits.filter(p => p.is_key).length })}
                 </div>
               )}
@@ -176,8 +176,8 @@ export default function ModelMeasurements() {
               <div style={{ fontSize: 28, marginBottom: 8 }}>
                 <i className="ti ti-bolt" style={{ color: 'var(--gold)' }} />
               </div>
-              <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.import_title')}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.import_title')}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                 {t('model_measurements.import_desc')}
               </div>
             </div>
@@ -191,12 +191,12 @@ export default function ModelMeasurements() {
 
           {taulaRows.length === 0 && pomsSuggerits.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>
                 {t('model_measurements.suggested_poms')}
               </div>
               {pomsSuggerits.filter(p => p.is_key).length > 0 && (
                 <div style={{ marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, color: 'var(--gold)', marginRight: 6,
+                  <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gold)', marginRight: 6,
                                  fontWeight: 500 }}>KEY</span>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                     {pomsSuggerits.filter(p => p.is_key).map(p => (
@@ -241,7 +241,7 @@ export default function ModelMeasurements() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 24 }}>
             <button type="button" onClick={() => setMode('selector')}
               style={{ padding: '8px 16px', border: '0.5px solid var(--border)',
-                       borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
+                       borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
               ← {t('app.back')}
             </button>
             {taulaRows.length > 0 && (
@@ -251,7 +251,7 @@ export default function ModelMeasurements() {
                     style={{
                       padding: '8px 16px', border: '0.5px solid var(--gold)',
                       borderRadius: 6, background: 'transparent',
-                      color: 'var(--gold)', fontSize: 13, cursor: 'pointer',
+                      color: 'var(--gold)', fontSize: 'var(--fs-body)', cursor: 'pointer',
                     }}>
                     {generatingGrading ? t('model_measurements.generating') : t('model_measurements.generate_grading')}
                   </button>
@@ -259,7 +259,7 @@ export default function ModelMeasurements() {
                 <button type="button" onClick={() => navigate(`/models/${id}/teixit`)}
                   style={{
                     padding: '8px 20px', background: 'var(--gold)', color: 'var(--white)',
-                    border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500,
+                    border: 'none', borderRadius: 6, fontSize: 'var(--fs-h3)', fontWeight: 500,
                     cursor: 'pointer',
                   }}>
                   {t('model_measurements.continue_fabric')}
@@ -293,12 +293,12 @@ export default function ModelMeasurements() {
 
           <div style={{ display: 'flex', justifyContent: 'space-between',
                         alignItems: 'center', marginBottom: 12 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, margin: 0 }}>
               {t('model_measurements.table_title')}
             </h2>
             <button type="button" onClick={() => setMode('manual')}
               style={{ padding: '6px 14px', border: '0.5px solid var(--border)',
-                       borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
+                       borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
               {t('model_measurements.edit_measures')}
             </button>
           </div>
@@ -323,7 +323,7 @@ export default function ModelMeasurements() {
                   style={{
                     padding: '8px 16px', border: '0.5px solid var(--gold)',
                     borderRadius: 6, background: 'transparent',
-                    color: 'var(--gold)', fontSize: 13, cursor: 'pointer',
+                    color: 'var(--gold)', fontSize: 'var(--fs-body)', cursor: 'pointer',
                   }}>
                   {generatingGrading ? t('model_measurements.generating') : t('model_measurements.generate_grading')}
                 </button>
@@ -332,7 +332,7 @@ export default function ModelMeasurements() {
             <button type="button" onClick={() => navigate(`/models/${id}/teixit`)}
               style={{
                 padding: '8px 20px', borderRadius: 6, border: 'none',
-                fontSize: 14, fontWeight: 500,
+                fontSize: 'var(--fs-h3)', fontWeight: 500,
                 background: 'var(--gold)', color: 'var(--white)', cursor: 'pointer',
               }}>
               {t('model_measurements.continue_fabric')}
@@ -348,7 +348,7 @@ function POMChipSuggerit({ pom, selected, onToggle }) {
   return (
     <button type="button" onClick={onToggle}
       style={{
-        padding: '3px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+        padding: '3px 10px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
         border: selected
           ? '1.5px solid var(--gold)' : '0.5px solid var(--border)',
         background: selected ? '#fdf6ee' : 'transparent',
@@ -368,7 +368,7 @@ function ModelSummaryBar({ model }) {
       display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap',
       background: 'var(--bg-muted)',
       border: '0.5px solid var(--border)',
-      borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13,
+      borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 'var(--fs-body)',
     }}>
       <span><strong>{model.codi_intern}</strong></span>
       {model.nom_prenda && <span>{model.nom_prenda}</span>}

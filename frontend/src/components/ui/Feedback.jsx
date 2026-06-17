@@ -6,14 +6,14 @@ export default function Feedback({ feedback, onDismiss }) {
   const ok = feedback.type === 'ok'
   return (
     <div style={{
-      fontSize: 12, padding: '8px 12px', borderRadius: 6, marginBottom: 12,
+      fontSize: 'var(--fs-body)', padding: '8px 12px', borderRadius: 6, marginBottom: 12,
       background: ok ? 'var(--ok-bg)' : 'var(--err-bg)',
       color: ok ? 'var(--ok)' : 'var(--err)',
       display: onDismiss ? 'flex' : 'block', justifyContent: 'space-between', alignItems: 'center', gap: 8,
     }}>
       <span>{feedback.text}</span>
       {onDismiss && (
-        <button onClick={onDismiss} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14 }}>×</button>
+        <button onClick={onDismiss} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 'var(--fs-h3)' }}>×</button>
       )}
     </div>
   )

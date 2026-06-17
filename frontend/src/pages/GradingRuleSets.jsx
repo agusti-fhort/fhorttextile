@@ -239,7 +239,7 @@ export default function GradingRuleSets() {
   }
 
   if (loading) return (
-    <div style={{ padding: '2rem', fontSize: 12, color: 'var(--text-muted, #868685)' }}>
+    <div style={{ padding: '2rem', fontSize: 'var(--fs-body)', color: 'var(--text-muted, #868685)' }}>
       {t('grading.loading')}
     </div>
   )
@@ -253,8 +253,8 @@ export default function GradingRuleSets() {
         marginBottom: '1.5rem', gap: 12,
       }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>{t('nav.grading')}</h1>
-          <p style={{ fontSize: 12, color: 'var(--gray, #868685)', fontWeight: 300 }}>
+          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4 }}>{t('nav.grading')}</h1>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray, #868685)', fontWeight: 300 }}>
             {t('grading.summary', { sets: allRuleSets.length, rules: totalRegles })}
           </p>
         </div>
@@ -264,14 +264,14 @@ export default function GradingRuleSets() {
       {/* Missatge */}
       {msg && (
         <div style={{
-          padding: '8px 12px', borderRadius: 6, fontSize: 11, marginBottom: 12,
+          padding: '8px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', marginBottom: 12,
           background: msg.type === 'ok' ? '#f0f9f0' : '#fff0f0',
           border: `0.5px solid ${msg.type === 'ok' ? '#c0dd97' : '#f09595'}`,
           color: msg.type === 'ok' ? '#3b6d11' : '#a32d2d',
           display: 'flex', justifyContent: 'space-between',
         }}>
           <span>{msg.text}</span>
-          <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14 }}>×</button>
+          <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 'var(--fs-h3)' }}>×</button>
         </div>
       )}
 
@@ -300,7 +300,7 @@ export default function GradingRuleSets() {
         <StepSection number={2} title={t('grading.step_construction_fit')}>
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
             <div>
-              <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6,
+              <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 6,
                 textTransform: 'uppercase', letterSpacing: '.06em',
                 }}>
                 {t('grading.construction_type')}
@@ -322,7 +322,7 @@ export default function GradingRuleSets() {
             </div>
             {selectedConstruction && availableFits.length > 0 && (
               <div>
-                <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6,
+                <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 6,
                   textTransform: 'uppercase', letterSpacing: '.06em',
                   }}>
                   {t('grading.fit_type_label')}
@@ -393,10 +393,10 @@ export default function GradingRuleSets() {
       {selectedGarmentGroup && matchingRuleSets.length === 0 && (
         <div style={{
           marginTop: 24, padding: '2rem', border: '1px dashed var(--border)',
-          borderRadius: 8, textAlign: 'center', color: 'var(--gray, #868685)', fontSize: 12,
+          borderRadius: 8, textAlign: 'center', color: 'var(--gray, #868685)', fontSize: 'var(--fs-body)',
         }}>
           {t('grading.no_match')}
-          <div style={{ marginTop: 8, fontSize: 11 }}>
+          <div style={{ marginTop: 8, fontSize: 'var(--fs-body)' }}>
             {t('grading.create_from_library')}
           </div>
         </div>
@@ -424,7 +424,7 @@ function StepSection({ number, title, children }) {
   return (
     <div style={{ marginBottom: '1.4rem' }}>
       <p style={{
-        fontSize: 10, fontWeight: 700, color: 'var(--gold)',
+        fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--gold)',
         letterSpacing: '0.08em', textTransform: 'uppercase',
         margin: '0 0 10px',
       }}>
@@ -454,7 +454,7 @@ function TargetCard({ target, selected, available, onClick }) {
       }}
     >
       <div style={{
-        fontSize: 12,
+        fontSize: 'var(--fs-body)',
         fontWeight: selected ? 600 : 400,
         color: selected ? 'var(--gold)' : 'var(--text-main)',
       }}>
@@ -478,7 +478,7 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
         background: selected ? '#fdf6ee' : 'var(--white)',
         color: selected ? 'var(--gold)' : 'var(--text-main)',
         fontWeight: selected ? 600 : 400,
-        fontSize: 11,
+        fontSize: 'var(--fs-body)',
         cursor: 'pointer',
         transition: 'all .15s',
         textAlign: 'left',
@@ -489,7 +489,7 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
       {sublabel && (
         <span style={{
           display: 'block',
-          fontSize: 9,
+          fontSize: 'var(--fs-caption)',
           color: selected ? '#a06622' : 'var(--text-muted)',
           fontWeight: 400,
           marginTop: 1,
@@ -601,7 +601,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
             onClick={() => setExpanded(e => !e)}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 12, color: 'var(--text-muted)', padding: 0, lineHeight: 1,
+              fontSize: 'var(--fs-body)', color: 'var(--text-muted)', padding: 0, lineHeight: 1,
             }}
             aria-label={expanded ? t('grading.collapse') : t('grading.expand')}
           >
@@ -610,12 +610,12 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
           <div style={{ minWidth: 0 }}>
             <div style={{
               fontWeight: 600,
-              fontSize: 13, color: 'var(--text-main)',
+              fontSize: 'var(--fs-body)', color: 'var(--text-main)',
             }}>
               {rs.nom}
             </div>
             <div style={{
-              fontSize: 11, color: 'var(--text-muted)', marginTop: 2,
+              fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2,
               display: 'flex', gap: 10, flexWrap: 'wrap',
             }}>
               {/* S16-B: targets array (M2M) — a RuleSet can apply to multiple targets */}
@@ -663,14 +663,14 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
       {/* Taula */}
       {expanded && visibleRules.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', fontSize: 'var(--fs-body)', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#fafaf8' }}>
                 {headers.map((h, i) => (
                   <th key={i} style={{
                     padding: '8px 12px',
                     textAlign: h.align,
-                    fontWeight: 600, color: 'var(--text-muted)', fontSize: 10,
+                    fontWeight: 600, color: 'var(--text-muted)', fontSize: 'var(--fs-label)',
                     textTransform: 'uppercase', letterSpacing: '0.06em',
                     borderBottom: '0.5px solid var(--border)',
                   }}>{h.label}</th>
@@ -693,12 +693,12 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     }}>
                       {r.pom_code_global && (
                         <div style={{
-                          fontSize: 9, color: 'var(--text-muted)',
+                          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
                           lineHeight: 1.1, letterSpacing: '.02em',
                         }}>{r.pom_code_global}</div>
                       )}
                       <div style={{
-                        fontSize: 12, color: 'var(--gold)', fontWeight: 600,
+                        fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 600,
                         lineHeight: 1.15,
                       }}>{r.pom_abbreviation || r.pom_codi}</div>
                     </td>
@@ -709,7 +709,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                       {r.pom_nom_en || r.pom_nom}
                       {isKey && (
                         <span style={{
-                          marginLeft: 6, fontSize: 9, padding: '2px 5px', borderRadius: 3,
+                          marginLeft: 6, fontSize: 'var(--fs-caption)', padding: '2px 5px', borderRadius: 3,
                           background: '#fdf6ee', color: 'var(--gold)',
                           border: '0.5px solid #e0c8a0', fontWeight: 600,
                         }}>KEY</span>
@@ -723,7 +723,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     )}
                     <td style={{ padding: '7px 12px', borderBottom: '0.5px solid #f0eee9' }}>
                       <span style={{
-                        fontSize: 10, padding: '2px 6px', borderRadius: 3,
+                        fontSize: 'var(--fs-label)', padding: '2px 6px', borderRadius: 3,
                         background: logica.bg, color: logica.color,
                         fontWeight: 600,
                       }}>{r.logica}</span>
@@ -752,7 +752,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                         regles no backfillades → fallback above_xl editable (compat). */}
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      fontSize: 11,
+                      fontSize: 'var(--fs-body)',
                       color: (r.increment_base != null ? r.talla_break_label : aboveXl) ? 'var(--gold)' : '#c0c0c0',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
@@ -772,7 +772,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     </td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
-                      color: 'var(--text-muted)', fontSize: 11,
+                      color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>{r.talla_base_etiqueta || '—'}</td>
                     <td style={{
@@ -801,7 +801,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
       )}
 
       {expanded && visibleRules.length === 0 && (
-        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#bbb', fontSize: 12 }}>
+        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#bbb', fontSize: 'var(--fs-body)' }}>
           {localRules.length === 0
             ? t('grading.no_rules')
             : t('grading.no_relevant_rules', { group: garmentGroup, count: localRules.length })}
@@ -848,7 +848,7 @@ function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
         style={{
           width: 64, textAlign: 'right',
           border: '1px solid var(--gold)', borderRadius: 4,
-          padding: '1px 4px', fontSize: 11,
+          padding: '1px 4px', fontSize: 'var(--fs-body)',
         }}
       />
     )
@@ -872,7 +872,7 @@ function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
 function Pill({ bg, color, children }) {
   return (
     <span style={{
-      fontSize: 10, padding: '3px 7px', borderRadius: 4,
+      fontSize: 'var(--fs-label)', padding: '3px 7px', borderRadius: 4,
       background: bg, color,
       fontWeight: 600,
       letterSpacing: '.04em', whiteSpace: 'nowrap',
@@ -888,7 +888,7 @@ function ActionBtn({ onClick, label, danger = false }) {
     <button
       onClick={(e) => { e.stopPropagation(); onClick() }}
       style={{
-        fontSize: 10, padding: '4px 9px', borderRadius: 4, cursor: 'pointer',
+        fontSize: 'var(--fs-label)', padding: '4px 9px', borderRadius: 4, cursor: 'pointer',
         background: palette.bg, color: palette.fg,
         border: `0.5px solid ${palette.border}`,
       }}
@@ -966,7 +966,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
   const F = ({ label, field, options, disabled }) => (
     <div style={{ marginBottom: 12 }}>
       <label style={{
-        fontSize: 10, fontWeight: 600, color: 'var(--text-muted)',
+        fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)',
         display: 'block', marginBottom: 4,
       }}>{label}</label>
       {options ? (
@@ -1006,7 +1006,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
           boxShadow: '0 10px 40px rgba(0,0,0,0.18)',
         }}
       >
-        <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: 'var(--text-main)' }}>
+        <h2 style={{ margin: '0 0 16px', fontSize: 'var(--fs-h3)', fontWeight: 600, color: 'var(--text-main)' }}>
           {isEdit ? t('grading.modal_edit') : t('grading.modal_new')}
         </h2>
         <F label={t('grading.field_name')} field="nom" />
@@ -1014,7 +1014,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
         <F label={t('grading.field_target_ref')} field="target_codi_form" options={TARGETS} disabled />
         <F label={t('grading.field_construction_ref')} field="construction_codi_form" options={CONSTRUCTIONS} disabled />
         <F label={t('grading.field_fit_ref')} field="fit_type_codi_form" options={FITS} disabled />
-        <p style={{ fontSize: 10, color: 'var(--gold)', margin: '4px 0 12px' }}>
+        <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)', margin: '4px 0 12px' }}>
           {t('grading.modal_note')}
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
@@ -1024,7 +1024,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
               padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
               background: 'var(--white)', color: 'var(--text-muted)',
               border: '0.5px solid var(--border)',
-              fontSize: 11,
+              fontSize: 'var(--fs-body)',
             }}
           >{t('app.cancel')}</button>
           <button
@@ -1043,7 +1043,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
 const btnPrimary = {
   background: 'var(--gold)', color: 'var(--white)',
   border: 'none', borderRadius: 6,
-  padding: '8px 14px', fontSize: 11, fontWeight: 600,
+  padding: '8px 14px', fontSize: 'var(--fs-body)', fontWeight: 600,
   cursor: 'pointer', 
 }
 
@@ -1052,7 +1052,7 @@ const modalInput = {
   border: '0.5px solid var(--border)',
   borderRadius: 6,
   padding: '8px 10px',
-  fontSize: 12,
+  fontSize: 'var(--fs-body)',
   outline: 'none',
   boxSizing: 'border-box',
   background: 'var(--white)',

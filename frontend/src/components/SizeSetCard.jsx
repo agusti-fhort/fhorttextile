@@ -41,9 +41,9 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>{name}</div>
+          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: "var(--text-main)" }}>{name}</div>
           {!compact && (
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-muted)", marginTop: 2 }}>
               {name !== sysName && <>{sysName} · </>}
               {profile?.target?.codi ? t(`model_wizard.target_${profile.target.codi}`, profile.target.nom_en) : profile?.target?.nom_en} · {profile?.construction?.codi ? t(`model_wizard.construction_${profile.construction.codi}`, profile.construction.nom_en) : profile?.construction?.nom_en} · {profile?.fit_type_nom}
             </div>
@@ -52,12 +52,12 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
         <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
           {!isCanonicalISO ? (
             <span style={{
-              padding: "2px 8px", borderRadius: 3, fontSize: 10,
+              padding: "2px 8px", borderRadius: 3, fontSize: 'var(--fs-label)',
               background: "#f5e6d0", color: "var(--gold)", border: "1px solid #e0c8a0",
             }}>{t("size_library.custom")}</span>
           ) : (
             <span style={{
-              padding: "2px 8px", borderRadius: 3, fontSize: 10,
+              padding: "2px 8px", borderRadius: 3, fontSize: 'var(--fs-label)',
               background: "#f0f9f0", color: "#3b6d11", border: "1px solid #c0dd97",
             }}>{t("size_library.standard_iso")}</span>
           )}
@@ -71,7 +71,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
             const isBase = s.size_label === baseSize
             return (
               <span key={i} style={{
-                padding: "3px 9px", borderRadius: 4, fontSize: 11,
+                padding: "3px 9px", borderRadius: 4, fontSize: 'var(--fs-body)',
                 background: isBase ? "#f5e6d0" : "#f5f0ea",
                 color: isBase ? "var(--gold)" : "var(--text-main)",
                 border: `1px solid ${isBase ? "var(--gold)" : "var(--border)"}`,
@@ -87,7 +87,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
       {/* Preview grading */}
       {!compact && rules.length > 0 && (
         <div style={{
-          fontSize: 10, color: "var(--text-muted)", marginBottom: 12,
+          fontSize: 'var(--fs-label)', color: "var(--text-muted)", marginBottom: 12,
           padding: "6px 8px", background: "#fdf9f5", borderRadius: 4,
           border: "1px solid #f0e8d8", lineHeight: 1.8,
         }}>
@@ -104,7 +104,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
       <div style={{ display: "flex", gap: 6 }}>
         {onUse && (
           <button onClick={() => onUse(profile)} style={{
-            flex: 1, padding: "6px 10px", borderRadius: 4, fontSize: 11,
+            flex: 1, padding: "6px 10px", borderRadius: 4, fontSize: 'var(--fs-body)',
             background: "#f5e6d0", color: "var(--gold)", border: "1px solid var(--gold)",
             cursor: "pointer", fontFamily: "IBM Plex Mono, monospace",
           }}>
@@ -113,7 +113,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
         )}
         {onDetail && (
           <button onClick={() => onDetail(profile)} style={{
-            padding: "6px 10px", borderRadius: 4, fontSize: 11,
+            padding: "6px 10px", borderRadius: 4, fontSize: 'var(--fs-body)',
             background: "var(--white)", color: "var(--text-muted)", border: "1px solid var(--border)",
             cursor: "pointer", fontFamily: "IBM Plex Mono, monospace",
           }}>
@@ -122,7 +122,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
         )}
         {onClone && !isCustom && (
           <button onClick={handleClone} disabled={cloning} style={{
-            padding: "6px 10px", borderRadius: 4, fontSize: 11,
+            padding: "6px 10px", borderRadius: 4, fontSize: 'var(--fs-body)',
             background: "var(--white)", color: "var(--text-muted)", border: "1px solid var(--border)",
             cursor: "pointer", fontFamily: "IBM Plex Mono, monospace",
           }}>

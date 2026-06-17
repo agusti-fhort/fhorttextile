@@ -46,7 +46,7 @@ export function ExportButton({ url, filename, label, type = "csv" }) {
         onClick={handleExport}
         disabled={loading}
         style={{
-          padding: '5px 12px', borderRadius: 4, fontSize: 11,
+          padding: '5px 12px', borderRadius: 4, fontSize: 'var(--fs-body)',
           background: 'var(--white)', color: 'var(--text-muted)',
           border: '1px solid var(--border)',
           cursor: loading ? 'not-allowed' : 'pointer',
@@ -57,7 +57,7 @@ export function ExportButton({ url, filename, label, type = "csv" }) {
         <span>{loading ? t('export_button.generating') : `${label || t('export_button.export')} ${ext}`}</span>
       </button>
       {error && (
-        <div style={{ fontSize: 10, color: '#a32d2d', marginTop: 3 }}>{error}</div>
+        <div style={{ fontSize: 'var(--fs-label)', color: '#a32d2d', marginTop: 3 }}>{error}</div>
       )}
     </div>
   )

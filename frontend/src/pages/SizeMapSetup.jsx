@@ -36,9 +36,9 @@ const ghostBtn = { ...selS, cursor: 'pointer', display: 'inline-flex', alignItem
 function Field({ label, children, hint }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
+      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
       {children}
-      {hint && <div style={{ fontSize: 10, color: 'var(--gray)', marginTop: 4 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginTop: 4 }}>{hint}</div>}
     </div>
   )
 }
@@ -142,13 +142,13 @@ export default function SizeMapSetup() {
       render: r => <span style={{ fontFamily: MONO }}>{r.codi}</span> },
     { key: 'target_nom', label: t('size_map_col_target'), render: r => r.target_nom || '—' },
     { key: 'base_unit', label: t('size_map_col_unit'),
-      render: r => <span style={{ fontFamily: MONO, fontSize: 11 }}>{r.base_unit || '—'}</span> },
+      render: r => <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{r.base_unit || '—'}</span> },
     { key: 'customer_codi', label: t('size_map_col_client'),
       render: r => r.customer_codi
         ? <Badge variant="gold">{r.customer_codi}</Badge>
         : <span style={{ color: 'var(--gray)' }}>{t('size_map_canonical')}</span> },
     { key: 'parent_codi', label: t('size_map_col_parent'),
-      render: r => r.parent_codi ? <span style={{ fontFamily: MONO, fontSize: 11 }}>{r.parent_codi}</span> : '—' },
+      render: r => r.parent_codi ? <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{r.parent_codi}</span> : '—' },
     { key: 'num_talles', label: t('size_map_col_talles'), align: 'right',
       render: r => <span style={{ fontFamily: MONO }}>{r.num_talles}</span> },
     { key: 'num_rule_sets', label: t('size_map_col_rules'), align: 'right',
@@ -159,8 +159,8 @@ export default function SizeMapSetup() {
     <div style={{ minWidth: 0, maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('size_map_title')}</h1>
-          <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('size_map_subtitle')}</p>
+          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('size_map_title')}</h1>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('size_map_subtitle')}</p>
         </div>
         <button onClick={() => setWizardOpen(true)} style={{ ...primaryBtn, marginLeft: 0 }}>
           <i className="ti ti-plus" style={{ fontSize: 14 }} />{t('size_map_new_run')}
@@ -193,11 +193,11 @@ function Stepper({ screen, t }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px' }}>
               <span style={{
                 width: 22, height: 22, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontFamily: MONO, fontWeight: 600,
+                fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600,
                 background: active ? 'var(--gold)' : done ? 'var(--gold-pale)' : 'var(--gray-l)',
                 color: active ? 'var(--white)' : done ? 'var(--gold)' : 'var(--gray)',
               }}>{s.n}</span>
-              <span style={{ fontSize: 11.5, fontFamily: MONO, color: active ? 'var(--text-main)' : 'var(--gray)', fontWeight: active ? 600 : 400 }}>
+              <span style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: active ? 'var(--text-main)' : 'var(--gray)', fontWeight: active ? 600 : 400 }}>
                 {t(s.key, s.label)}
               </span>
             </div>
@@ -412,13 +412,13 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   return (
     <div style={{ minWidth: 0, maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 500, fontFamily: MONO }}>{t('size_map_new_run')}</h1>
+        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO }}>{t('size_map_new_run')}</h1>
         <button onClick={onClose} style={ghostBtn}><i className="ti ti-x" style={{ fontSize: 13 }} />{t('size_map_cancel')}</button>
       </div>
 
       {showReturnBanner && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--gold-pale)', color: 'var(--gold)',
-                      border: '0.5px solid var(--gold)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 12 }}>
+                      border: '0.5px solid var(--gold)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
           <i className="ti ti-link" style={{ fontSize: 14 }} />
           {t('size_map_from_w1')}
         </div>
@@ -480,11 +480,11 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       {/* ---- P2 ---- */}
       {step === 2 && (
         <div style={card}>
-          <div style={{ marginBottom: 12, fontSize: 12 }}>
+          <div style={{ marginBottom: 12, fontSize: 'var(--fs-body)' }}>
             {t('size_map_reco')}: <Badge variant={REC_VARIANT[wiz.recomanacio] || 'gray'}>{wiz.recomanacio}</Badge>
           </div>
           {wiz.candidates.length === 0 && (
-            <div style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 12 }}>{t('size_map_no_candidates')}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 12 }}>{t('size_map_no_candidates')}</div>
           )}
           {wiz.candidates.map(c => (
             <label key={c.size_system_id} style={{ display: 'block', border: '0.5px solid var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 8, cursor: 'pointer' }}>
@@ -492,7 +492,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                 <input type="radio" name="cand" checked={wiz.decision !== 'CREAR' && String(wiz.size_system_id) === String(c.size_system_id)}
                   onChange={() => set({ size_system_id: c.size_system_id, decision: c.recomanacio === 'CREAR' ? 'CLONAR' : c.recomanacio })} />
                 <span style={{ fontWeight: 600 }}>{c.nom}</span>
-                <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--gray)' }}>{c.codi}</span>
+                <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{c.codi}</span>
                 <Badge variant={c.score >= 1 ? 'ok' : 'warn'}>{Math.round((c.score || 0) * 100)}%</Badge>
                 <Badge variant={REC_VARIANT[c.recomanacio] || 'gray'}>{c.recomanacio}</Badge>
               </div>
@@ -501,8 +501,8 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                 <div style={{ height: 6, width: `${Math.round((c.score || 0) * 100)}%`, background: 'var(--gold)', borderRadius: 999 }} />
               </div>
               {c.unmatched_labels?.length > 0 &&
-                <div style={{ fontSize: 11, color: 'var(--warn)', marginTop: 6 }}>{t('size_map_unmatched')}: {c.unmatched_labels.join(', ')}</div>}
-              {c.warning && <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 4 }}>{c.warning}</div>}
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--warn)', marginTop: 6 }}>{t('size_map_unmatched')}: {c.unmatched_labels.join(', ')}</div>}
+              {c.warning && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginTop: 4 }}>{c.warning}</div>}
             </label>
           ))}
           {/* opció crear nou */}
@@ -521,9 +521,9 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       {step === 3 && (
         <div style={card}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
               <thead>
-                <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 10 }}>
+                <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 'var(--fs-label)' }}>
                   <th style={{ padding: 6 }}>{t('size_map_t_label')}</th>
                   <th style={{ padding: 6 }}>{t('size_map_t_order')}</th>
                   <th style={{ padding: 6 }}>{t('size_map_t_numeric')}</th>
@@ -581,7 +581,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
               onDrop={e => { e.preventDefault(); calcGradingFromFile(e.dataTransfer.files[0]) }}
               style={{ display: 'block', border: '1px dashed var(--gray-l)', borderRadius: 8,
                        padding: 14, textAlign: 'center', cursor: busy ? 'wait' : 'pointer',
-                       color: 'var(--gray)', fontSize: 13 }}>
+                       color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>
               <i className="ti ti-upload" style={{ fontSize: 18, marginRight: 6 }} />
               {busy ? t('size_map_g_file_busy') : t('size_map_g_file_drop')}
               <input id="size-map-grading-file" type="file" accept=".xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp"
@@ -592,16 +592,16 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
 
           {gradingAvisos.length > 0 && (
             <ul style={{ margin: '0 0 14px', padding: '8px 12px 8px 26px', background: 'var(--warn-bg)',
-                         borderRadius: 8, fontSize: 11, color: 'var(--warn)' }}>
+                         borderRadius: 8, fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>
               {gradingAvisos.map((a, k) => <li key={k}>{a}</li>)}
             </ul>
           )}
 
           {wiz.gradingResults.length > 0 && (
             <div style={{ overflowX: 'auto', marginBottom: 14 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
                 <thead>
-                  <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 10 }}>
+                  <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 'var(--fs-label)' }}>
                     <th style={{ padding: 6 }}>POM</th>
                     <th style={{ padding: 6 }}>{t('size_map_g_logica')}</th>
                     <th style={{ padding: 6 }}>{t('size_map_g_value')}</th>
@@ -617,19 +617,19 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                           {/* codi de client (nomenclatura seva, ex 'B') + descripció del fitxer
                               com a referència; badge de confiança; si no resol, select de catàleg. */}
                           <div style={{ fontFamily: MONO }}>{g.pom_codi_client}</div>
-                          {g.pom_descripcio && <div style={{ fontSize: 10, color: 'var(--gray)' }}>{g.pom_descripcio}</div>}
+                          {g.pom_descripcio && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>{g.pom_descripcio}</div>}
                           {(() => {
                             const cb = CONF_BADGE[(g.confidence || '').toUpperCase()]
                             return cb ? (
-                              <span style={{ display: 'inline-block', marginTop: 2, fontSize: 10, fontWeight: 600,
+                              <span style={{ display: 'inline-block', marginTop: 2, fontSize: 'var(--fs-label)', fontWeight: 600,
                                              padding: '1px 6px', borderRadius: 8, background: cb.bg, color: cb.color }}>
                                 {cb.label}</span>
                             ) : null
                           })()}
                           {g.pom_id
-                            ? (g.pom_nom && <div style={{ fontSize: 10, color: 'var(--gray)' }}>→ {g.pom_nom}</div>)
+                            ? (g.pom_nom && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>→ {g.pom_nom}</div>)
                             : (
-                              <select value={g.pom_id || ''} style={{ ...selS, padding: '3px 6px', fontSize: 11, marginTop: 2, maxWidth: 260 }}
+                              <select value={g.pom_id || ''} style={{ ...selS, padding: '3px 6px', fontSize: 'var(--fs-body)', marginTop: 2, maxWidth: 260 }}
                                 onChange={e => {
                                   const id = Number(e.target.value) || null
                                   const picked = catalegPoms.find(p => p.pom_id === id)
@@ -648,13 +648,13 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                         <td style={{ padding: 6 }}>
                           {g.increment_base == null
                             ? (g.valors_step_text
-                                ? <span style={{ fontFamily: MONO, fontSize: 11 }}>{g.valors_step_text}</span>
+                                ? <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{g.valors_step_text}</span>
                                 : <span style={{ color: 'var(--gray)' }}>—</span>)
                             : (g.increment_break != null
                                 ? <span>+{g.increment_base} · +{g.increment_break} {t('size_map_g_break_from')} {g.talla_break_label}</span>
                                 : <span>+{g.increment_base}</span>)}
                         </td>
-                        <td style={{ padding: 6, color: 'var(--warn)', fontSize: 11 }}>{g.warning || ''}</td>
+                        <td style={{ padding: 6, color: 'var(--warn)', fontSize: 'var(--fs-body)' }}>{g.warning || ''}</td>
                       </tr>
                     )
                   })}
@@ -671,7 +671,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           {/* Destí (de la decisió resolta a la Pantalla 1). REUTILITZAR no modifica el sistema:
               només crea un GradingRuleSet nou lligat (confirmat al backend, pas 1-2 del create). */}
           <div style={{ background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
-                        padding: '8px 12px', marginBottom: 14, fontSize: 12 }}>
+                        padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
             {wiz.decision === 'CREAR'
               ? <span>{t('size_map_dest_new')}</span>
               : <span>{t('size_map_dest_reuse')}
@@ -705,7 +705,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           )}
 
           {/* Resum */}
-          <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12, fontFamily: MONO }}>
+          <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)', fontFamily: MONO }}>
             <div>{t('size_map_sum_action')}: <b>{wiz.decision}</b></div>
             <div>{t('size_map_sum_target')}: {wiz.target_codi ? t(`model_wizard.target_${wiz.target_codi}`, wiz.target_codi) : '—'} · {t('size_map_sum_unit')}: {wiz.base_unit} · {t('size_map_sum_client')}: {wiz.customer_codi || '—'}</div>
             <div>{t('size_map_sum_talles')}: {wiz.talles.length} · {t('size_map_sum_rules')}: {wiz.gradingResults.filter(g => g.pom_id).length} · {t('size_map_sum_perfils')}: {wiz.perfilTargets.length}</div>
@@ -714,7 +714,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
 
           {/* Panell d'avís-i-confirma (409): graduacions ja existents per a la combinació. */}
           {conflict && (
-            <div style={{ border: '1px solid var(--gold)', background: 'var(--gold-pale)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12 }}>
+            <div style={{ border: '1px solid var(--gold)', background: 'var(--gold-pale)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)' }}>
               <div style={{ fontWeight: 600, color: 'var(--gold)', marginBottom: 8 }}>
                 <i className="ti ti-alert-triangle" style={{ marginRight: 6 }} />
                 {conflict.message || t('size_map_conflict_title')}

@@ -13,8 +13,8 @@ export default function POMs() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 100px)' }}>
       <div style={{ marginBottom: '0.8rem' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>{t('poms.title')}</h1>
-        <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4 }}>{t('poms.title')}</h1>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>
           {t('poms.subtitle')}
         </p>
       </div>
@@ -28,7 +28,7 @@ export default function POMs() {
               padding: '6px 16px', borderRadius: 6, border: 'none',
               background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
               color: activeTab === tab ? 'var(--white)' : 'var(--text-muted)',
-              cursor: 'pointer', fontSize: 13,
+              cursor: 'pointer', fontSize: 'var(--fs-body)',
               fontWeight: activeTab === tab ? 500 : 400,
             }}>
             {t(labelKey)}

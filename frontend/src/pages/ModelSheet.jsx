@@ -66,7 +66,7 @@ function calcViabilitat(totalMinuts, dataObjectiu, predictedEnd) {
 const btnSecondary = {
   background: 'transparent',
   border: '0.5px solid var(--border)',
-  borderRadius: 6, padding: '6px 12px', fontSize: 12,
+  borderRadius: 6, padding: '6px 12px', fontSize: 'var(--fs-body)',
   cursor: 'pointer', color: 'var(--text-main)',
   display: 'flex', alignItems: 'center', gap: 4,
 }
@@ -128,7 +128,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
     return (
       <div style={{ padding: '2rem', textAlign: 'center',
                     color: 'var(--text-muted)',
-                    fontSize: 13 }}>
+                    fontSize: 'var(--fs-body)' }}>
         {t('model_sheet.loading')}
       </div>
     )
@@ -154,7 +154,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
               padding: '6px 16px', borderRadius: 6, border: 'none',
               background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
               color: activeTab === tab ? 'var(--white)' : 'var(--text-muted)',
-              cursor: 'pointer', fontSize: 13,
+              cursor: 'pointer', fontSize: 'var(--fs-body)',
               fontWeight: activeTab === tab ? 500 : 400,
             }}>
             {t(TAB_LABELS[tab])}
@@ -166,7 +166,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
         <div style={{
           margin: '1rem 1.5rem', padding: '0.75rem 1rem',
           background: '#fee', border: '1px solid #fcc', borderRadius: 8,
-          fontSize: 13, color: '#c00',
+          fontSize: 'var(--fs-body)', color: '#c00',
         }}>{error}</div>
       )}
 
@@ -183,7 +183,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           marginBottom: 10, gap: 12 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)',
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                              }}>
                 {t('model_sheet.measures_consult')}
               </span>
@@ -246,7 +246,7 @@ function TechSheetTab({ modelId, navigate }) {
 
   if (loading) return (
     <div style={{ padding: '24px', color: 'var(--text-muted)',
-      fontSize: '12px' }}>
+      fontSize: 'var(--fs-body)' }}>
       Carregant…
     </div>
   )
@@ -256,7 +256,7 @@ function TechSheetTab({ modelId, navigate }) {
     background: 'transparent',
     border: '1px solid var(--border)',
     color: 'var(--text-main)',
-    fontSize: '11px',
+    fontSize: 'var(--fs-body)',
     padding: '5px 12px',
     cursor: 'pointer',
   }
@@ -266,7 +266,7 @@ function TechSheetTab({ modelId, navigate }) {
     return (
       <div style={{ padding: '24px',
         }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: '12px',
+        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
           marginBottom: '16px' }}>
           Encara no hi ha fitxa tècnica per a aquest model.
         </p>
@@ -301,7 +301,7 @@ function TechSheetTab({ modelId, navigate }) {
         borderBottom: '1px solid var(--border)',
         background: 'var(--bg-muted)',
       }}>
-        <div style={{ fontSize: '11px', color: 'var(--text-muted)',
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
           display: 'flex', gap: '16px' }}>
           <span>v{sheet.versio}</span>
           <span>{sheet.estat}</span>
@@ -328,7 +328,7 @@ function TechSheetTab({ modelId, navigate }) {
       </div>
 
       {/* Cos: resum de l'estat */}
-      <div style={{ padding: '16px', fontSize: '12px',
+      <div style={{ padding: '16px', fontSize: 'var(--fs-body)',
         color: 'var(--text-muted)' }}>
         <p>
           La fitxa es pot editar des del Kanban (tasca
@@ -358,19 +358,19 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button type="button" onClick={() => navigate('/models')}
           style={{ background: 'none', border: 'none', cursor: 'pointer',
-                   fontSize: 13, color: 'var(--text-muted)',
+                   fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                    }}>
           ← {t('nav.models')}
         </button>
         <span style={{ color: 'var(--border)' }}>›</span>
-        <span style={{ fontSize: 13, color: 'var(--text-muted)',
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                        }}>
           {model.codi_intern}
         </span>
         {model.codi_client && model.codi_client !== model.codi_intern && (
           <>
             <span style={{ color: 'var(--border)' }}>·</span>
-            <span style={{ fontSize: 13, 
+            <span style={{ fontSize: 'var(--fs-body)', 
                            color: 'var(--text-main)', fontWeight: 500 }}>
               {model.codi_client}
             </span>
@@ -379,14 +379,14 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
         {model.nom_prenda && (
           <>
             <span style={{ color: 'var(--border)' }}>·</span>
-            <span style={{ fontSize: 15, fontWeight: 500,
+            <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500,
                            color: 'var(--text-main)' }}>
               {model.nom_prenda}
             </span>
           </>
         )}
         <span style={{
-          fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 500,
+          fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 20, fontWeight: 500,
           background: 'var(--bg-muted)',
           color: 'var(--text-muted)',
           border: '0.5px solid var(--border)',
@@ -394,7 +394,7 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
           {model.estat}
         </span>
         <span style={{
-          fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 600,
+          fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 20, fontWeight: 600,
           background: 'var(--gold)', color: 'var(--white)',
         }} title={t('model_sheet.phase')}>
           {model.fase_actual}
@@ -493,16 +493,16 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
   const deadlineCell = editingDeadline ? (
     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
       <input type="date" value={deadlineVal} onChange={e => setDeadlineVal(e.target.value)}
-        style={{ padding: '3px 6px', fontSize: 12, 
+        style={{ padding: '3px 6px', fontSize: 'var(--fs-body)', 
                  border: '1px solid var(--border)', borderRadius: 4 }} />
       <button type="button" onClick={saveDeadline} disabled={savingDeadline}
         style={{ padding: '3px 10px', background: 'var(--gold)', color: 'var(--white)', border: 'none',
-                 borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>
+                 borderRadius: 4, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
         {savingDeadline ? '…' : '✓'}
       </button>
       <button type="button" onClick={() => { setDeadlineVal(model.data_objectiu || ''); setEditingDeadline(false) }}
         style={{ padding: '3px 8px', background: 'transparent', border: '0.5px solid var(--border)',
-                 borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>
+                 borderRadius: 4, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
         ✕
       </button>
     </span>
@@ -513,7 +513,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
         : <span style={{ color: 'var(--text-muted)' }}>{t('model_sheet.no_deadline')}</span>}
       <button type="button" onClick={() => setEditingDeadline(true)} title={t('model_sheet.edit_deadline')}
         style={{ background: 'transparent', border: 'none', cursor: 'pointer',
-                 color: 'var(--text-muted)', fontSize: 12, padding: 0 }}>
+                 color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: 0 }}>
         <i className="ti ti-pencil" />
       </button>
     </span>
@@ -569,45 +569,45 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
       {editing ? (
         <div style={{ marginBottom: 16 }}>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)',
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                             display: 'block', marginBottom: 4 }}>
               {t('model_sheet.field_garment_name')}
             </label>
             <input value={form.nom_prenda}
               onChange={e => setForm(f => ({...f, nom_prenda: e.target.value}))}
-              style={{ width: '100%', padding: '6px 10px', fontSize: 13,
+              style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--fs-body)',
                        border: '1px solid var(--border)', borderRadius: 6 }} />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)',
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                             display: 'block', marginBottom: 4 }}>
               {t('model.fields.codi_client')}
             </label>
             <input value={form.codi_client}
               onChange={e => setForm(f => ({...f, codi_client: e.target.value}))}
-              style={{ width: '100%', padding: '6px 10px', fontSize: 13,
+              style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--fs-body)',
                        border: '1px solid var(--border)', borderRadius: 6 }} />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)',
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                             display: 'block', marginBottom: 4 }}>
               {t('model.fields.descripcio')}
             </label>
             <textarea value={form.descripcio}
               onChange={e => setForm(f => ({...f, descripcio: e.target.value}))}
               rows={3}
-              style={{ width: '100%', padding: '6px 10px', fontSize: 13,
+              style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--fs-body)',
                        border: '1px solid var(--border)', borderRadius: 6,
                        resize: 'vertical' }} />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={handleSave} disabled={saving}
               style={{ padding: '6px 16px', background: 'var(--gold)', color: 'var(--white)',
-                       border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
+                       border: 'none', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
               {saving ? t('model_sheet.saving') : t('model_sheet.save')}
             </button>
             <button type="button" onClick={() => setEditing(false)}
-              style={{ padding: '6px 14px', background: 'transparent', fontSize: 13,
+              style={{ padding: '6px 14px', background: 'transparent', fontSize: 'var(--fs-body)',
                        border: '0.5px solid var(--border)',
                        borderRadius: 6, cursor: 'pointer' }}>
               {t('common.cancel')}
@@ -619,17 +619,17 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           <div style={{ display: 'flex', justifyContent: 'space-between',
                         alignItems: 'flex-start', marginBottom: 12 }}>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 500 }}>
+              <div style={{ fontSize: 'var(--fs-h2)', fontWeight: 500 }}>
                 {model.nom_prenda || <span style={{color:'var(--text-muted)'}}>{t('model_sheet.no_name')}</span>}
               </div>
               {model.codi_client && model.codi_client !== model.codi_intern && (
-                <div style={{ fontSize: 13, color: 'var(--text-muted)',
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                               marginTop: 2 }}>
                   {model.codi_client}
                 </div>
               )}
               {model.descripcio && (
-                <div style={{ fontSize: 13, color: 'var(--text-muted)',
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                               marginTop: 6 }}>
                   {model.descripcio}
                 </div>
@@ -639,13 +639,13 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
         </div>
       )}
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
         <tbody>
           {readOnlyFields.map(({ label, value, mono, secondary }) => (
             <tr key={label}
               style={{ borderBottom: '0.5px solid var(--border)' }}>
               <td style={{ padding: '7px 0', color: 'var(--text-muted)',
-                           width: 180, fontSize: 12 }}>
+                           width: 180, fontSize: 'var(--fs-body)' }}>
                 {label}
               </td>
               <td style={{ padding: '7px 0',
@@ -674,14 +674,14 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
             display: 'flex', alignItems: 'center',
             justifyContent: 'space-between',
           }}>
-            <span style={{ fontSize: '11px', fontWeight: 600,
+            <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600,
               color: 'var(--gold)', textTransform: 'uppercase',
               letterSpacing: '0.05em' }}>
               {t('model_sheet.viability_title')}
             </span>
             {viab && (
               <span style={{
-                fontSize: '10px', padding: '2px 8px',
+                fontSize: 'var(--fs-label)', padding: '2px 8px',
                 background: viab.semafor === 'on_track' ? '#dcfce7'
                            : viab.semafor === 'at_risk'  ? '#fef9c3'
                            : '#fee2e2',
@@ -703,17 +703,17 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           {/* Cos del panel */}
           <div style={{ padding: '12px', background: 'var(--bg-muted)' }}>
             {loadingMinuts ? (
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                 {t('model_sheet.calculating')}
               </p>
             ) : !totalMinuts ? (
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                 {t('model_sheet.viab_no_tasks')}
               </p>
             ) : (
               <>
                 {/* Fila d'info base */}
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)',
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                   marginBottom: '12px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                   <span>
                     {t('model_sheet.hours_estimated', { h: Math.round(totalMinuts / 60 * 10) / 10 })}
@@ -736,14 +736,14 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                 {/* Calculadora interactiva */}
                 <div style={{ display: 'flex', gap: '8px',
                   alignItems: 'center', flexWrap: 'wrap',
-                  fontSize: '11px' }}>
+                  fontSize: 'var(--fs-body)' }}>
 
                   {/* Toggle mode */}
                   <select
                     value={modeCalc}
                     onChange={e => setModeCalc(e.target.value)}
                     style={{ 
-                      fontSize: '11px', padding: '4px 6px',
+                      fontSize: 'var(--fs-body)', padding: '4px 6px',
                       border: '1px solid var(--border)',
                       background: 'var(--bg-card)' }}>
                     <option value="fi">{t('model_sheet.calc_mode_start_to_end')}</option>
@@ -757,7 +757,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                     <input type="date" value={inputData}
                       onChange={e => setInputData(e.target.value)}
                       style={{ 
-                        fontSize: '11px', padding: '4px 6px',
+                        fontSize: 'var(--fs-body)', padding: '4px 6px',
                         border: '1px solid var(--border)',
                         background: 'var(--bg-card)' }}
                     />
@@ -768,7 +768,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                     {[1, 2, 3, 4].map(n => (
                       <button key={n} onClick={() => setNumTecnics(n)}
                         style={{
-                          fontSize: '11px', padding: '4px 10px',
+                          fontSize: 'var(--fs-body)', padding: '4px 10px',
                           cursor: 'pointer',
                           background: numTecnics === n
                             ? 'var(--gold)' : 'transparent',
@@ -793,7 +793,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                         {dataFiCalc}
                       </strong>
                       {model.data_objectiu && dataFiCalc > model.data_objectiu &&
-                        <span style={{ color: 'var(--err)', marginLeft: '6px', fontSize: '10px' }}>
+                        <span style={{ color: 'var(--err)', marginLeft: '6px', fontSize: 'var(--fs-label)' }}>
                           {t('model_sheet.out_of_deadline')}
                         </span>
                       }
@@ -809,7 +809,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                         {dataIniciCalc}
                       </strong>
                       {dataIniciCalc < avuiISO &&
-                        <span style={{ color: 'var(--err)', marginLeft: '6px', fontSize: '10px' }}>
+                        <span style={{ color: 'var(--err)', marginLeft: '6px', fontSize: 'var(--fs-label)' }}>
                           {t('model_sheet.past_date')}
                         </span>
                       }
@@ -817,7 +817,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                   )}
                 </div>
 
-                <p style={{ marginTop: '8px', fontSize: '10px', color: 'var(--text-muted)' }}>
+                <p style={{ marginTop: '8px', fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
                   {t('model_sheet.viab_disclaimer')}
                 </p>
               </>
@@ -907,7 +907,7 @@ function TabFiles({ modelId }) {
       {error && (
         <div style={{
           background: '#fee', border: '1px solid #fcc', borderRadius: 6,
-          padding: '8px 12px', marginBottom: 12, fontSize: 13, color: '#c00',
+          padding: '8px 12px', marginBottom: 12, fontSize: 'var(--fs-body)', color: '#c00',
         }}>{error}</div>
       )}
 
@@ -921,9 +921,9 @@ function TabFiles({ modelId }) {
             style={{ background: 'var(--white)', borderRadius: 8, padding: 16,
                      maxWidth: '90vw', maxHeight: '90vh' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 500 }}>{popup.nom}</span>
+              <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500 }}>{popup.nom}</span>
               <button type="button" onClick={() => setPopup(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>✕</button>
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-h2)' }}>✕</button>
             </div>
             {popup.url?.match(/\.(jpg|jpeg|png|svg)$/i) ? (
               <img src={popup.url} alt={popup.nom}
@@ -941,13 +941,13 @@ function TabFiles({ modelId }) {
           <div key={tipus}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <i className={`ti ${config.icon}`} aria-hidden="true"
-                style={{ fontSize: 18, color: config.color }} />
-              <span style={{ fontSize: 14, fontWeight: 500 }}>{t(`model_sheet.file_type.${tipus}`)}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                style={{ fontSize: 'var(--fs-h2)', color: config.color }} />
+              <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500 }}>{t(`model_sheet.file_type.${tipus}`)}</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                 ({(fitxers[tipus] || []).length})
               </span>
               <label style={{
-                marginLeft: 'auto', padding: '4px 12px', fontSize: 12,
+                marginLeft: 'auto', padding: '4px 12px', fontSize: 'var(--fs-body)',
                 border: '0.5px solid var(--border)', borderRadius: 6,
                 cursor: 'pointer', color: 'var(--text-muted)',
                 background: uploading === tipus ? 'var(--bg-muted)' : 'transparent',
@@ -961,7 +961,7 @@ function TabFiles({ modelId }) {
             </div>
 
             {(fitxers[tipus] || []).length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)',
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                             padding: '8px 0', fontStyle: 'italic' }}>
                 {t('model_sheet.no_files')}
               </div>
@@ -988,7 +988,7 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
   return (
     <div style={{
       width: 140, border: '0.5px solid var(--border)',
-      borderRadius: 8, overflow: 'hidden', fontSize: 12,
+      borderRadius: 8, overflow: 'hidden', fontSize: 'var(--fs-body)',
     }}>
       <div onClick={onPreview}
         style={{
@@ -1001,13 +1001,13 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
             style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <i className={`ti ${config.icon}`} aria-hidden="true"
-            style={{ fontSize: 32, color: config.color }} />
+            style={{ fontSize: 'var(--fs-display)', color: config.color }} />
         )}
         {fitxer.versio > 1 && (
           <span style={{
             position: 'absolute', top: 4, right: 4,
             background: 'rgba(0,0,0,0.6)', color: 'var(--white)',
-            fontSize: 10, padding: '1px 5px', borderRadius: 10,
+            fontSize: 'var(--fs-label)', padding: '1px 5px', borderRadius: 10,
           }}>
             v{fitxer.versio}
           </span>
@@ -1016,7 +1016,7 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
 
       <div style={{ padding: '6px 8px' }}>
         <div style={{
-          fontSize: 11, color: 'var(--text-main)',
+          fontSize: 'var(--fs-body)', color: 'var(--text-main)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           marginBottom: 4,
         }} title={fitxer.nom_fitxer}>
@@ -1024,14 +1024,14 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <button type="button" onClick={onPreview}
-            style={{ flex: 1, padding: '3px 0', fontSize: 11, border: 'none',
+            style={{ flex: 1, padding: '3px 0', fontSize: 'var(--fs-body)', border: 'none',
                      background: 'var(--bg-muted)',
                      borderRadius: 4, cursor: 'pointer',
                      }}>
             <i className="ti ti-eye" aria-hidden="true" /> {t('model_sheet.view')}
           </button>
           <button type="button" onClick={onDelete}
-            style={{ padding: '3px 6px', fontSize: 11, border: 'none',
+            style={{ padding: '3px 6px', fontSize: 'var(--fs-body)', border: 'none',
                      background: 'transparent', borderRadius: 4,
                      cursor: 'pointer', color: '#c5221f' }}>
             <i className="ti ti-trash" aria-hidden="true" />
@@ -1076,14 +1076,14 @@ function TabAIAnalysis({ modelId }) {
   return (
     <div style={{ maxWidth: 800 }}>
       <div style={{ marginBottom: 16 }}>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
           {t('model_sheet.ai_description')}
         </p>
         <button type="button" onClick={handleAnalyze} disabled={loading}
           style={{
             padding: '8px 20px', background: loading ? '#ccc' : 'var(--gold)',
             color: 'var(--white)', border: 'none', borderRadius: 6,
-            fontSize: 13, fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer',
+            fontSize: 'var(--fs-body)', fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer',
           }}>
           {loading ? (
             <><i className="ti ti-loader" aria-hidden="true" /> {t('model_sheet.analyzing')}</>
@@ -1095,21 +1095,21 @@ function TabAIAnalysis({ modelId }) {
 
       {error && (
         <div style={{ background: '#fee', border: '1px solid #fcc', borderRadius: 6,
-                      padding: '8px 12px', fontSize: 13, color: '#c00', marginBottom: 12 }}>
+                      padding: '8px 12px', fontSize: 'var(--fs-body)', color: '#c00', marginBottom: 12 }}>
           {error}
         </div>
       )}
 
       {analisi && (
         <div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)',
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                         marginBottom: 12 }}>
             {analisi.resum}
             {' · '}{t('model_sheet.files_analyzed', { count: analisi.fitxers_analitzats })}
           </div>
 
           {(analisi.alertes || []).length === 0 ? (
-            <div style={{ fontSize: 13, color: '#137333', padding: '12px 0' }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: '#137333', padding: '12px 0' }}>
               ✓ {t('model_sheet.no_discrepancies')}
             </div>
           ) : (
@@ -1123,31 +1123,31 @@ function TabAIAnalysis({ modelId }) {
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8,
                                   marginBottom: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: style.color,
+                      <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: style.color,
                                      padding: '1px 8px', background: 'rgba(255,255,255,0.6)',
                                      borderRadius: 20 }}>
                         {t(`alerts.gravetat.${alerta.gravetat}`, alerta.gravetat)}
                       </span>
-                      <span style={{ fontSize: 11, color: style.color }}>
+                      <span style={{ fontSize: 'var(--fs-body)', color: style.color }}>
                         {alerta.tipus?.replace(/_/g, ' ')}
                       </span>
                       {alerta.pom_afectat && (
-                        <span style={{ fontSize: 12,
+                        <span style={{ fontSize: 'var(--fs-body)',
                                        color: style.color, fontWeight: 500 }}>
                           {alerta.pom_afectat}
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-main)',
+                    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)',
                                   marginBottom: 6 }}>
                       {alerta.descripcio}
                     </div>
                     {(alerta.valor_taula || alerta.valor_patro) && (
-                      <div style={{ fontSize: 12, color: style.color, marginBottom: 4 }}>
+                      <div style={{ fontSize: 'var(--fs-body)', color: style.color, marginBottom: 4 }}>
                         {t('model_sheet.compare_values', { table: alerta.valor_taula || '—', pattern: alerta.valor_patro || '—' })}
                       </div>
                     )}
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)',
+                    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                                   fontStyle: 'italic' }}>
                       → {alerta.accio_suggerida}
                     </div>

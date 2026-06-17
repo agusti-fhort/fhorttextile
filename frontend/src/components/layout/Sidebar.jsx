@@ -91,7 +91,7 @@ function NavParent({ item, t, expanded, onToggle, activeRoute }) {
           background: hover ? C.hover : 'transparent',
           cursor: 'pointer',
           borderRadius: 8, color: C.text,
-          fontSize: 12, fontFamily: 'inherit', textAlign: 'left',
+          fontSize: 'var(--fs-body)', fontFamily: 'inherit', textAlign: 'left',
           transition: 'background 0.15s',
         }}
       >
@@ -99,7 +99,7 @@ function NavParent({ item, t, expanded, onToggle, activeRoute }) {
         <span style={{flex: 1, fontWeight: 500}}>{t(item.labelKey)}</span>
         <i
           className={`ti ${expanded ? 'ti-chevron-down' : 'ti-chevron-right'}`}
-          style={{fontSize: 13, color: C.textMuted}}
+          style={{fontSize: 'var(--fs-body)', color: C.textMuted}}
         />
       </button>
       {expanded && (
@@ -133,7 +133,7 @@ function NavChild({ child, t, isActive }) {
         color: isActive ? C.activeFg : C.text,
         background: isActive ? C.active : (hover ? C.hover : 'none'),
         textDecoration: 'none',
-        fontSize: 11.5,
+        fontSize: 'var(--fs-body)',
         fontWeight: isActive ? 500 : 400,
         transition: 'all 0.15s',
       }}
@@ -158,7 +158,7 @@ function NavLeaf({ item, badges, t, isActive }) {
         color: isActive ? C.activeFg : C.text,
         background: isActive ? C.active : (hover ? C.hover : 'none'),
         textDecoration: 'none',
-        fontSize: 12, fontWeight: isActive ? 500 : 400,
+        fontSize: 'var(--fs-body)', fontWeight: isActive ? 500 : 400,
         transition: 'all 0.15s',
       }}
     >
@@ -166,7 +166,7 @@ function NavLeaf({ item, badges, t, isActive }) {
       <span style={{flex: 1}}>{t(item.labelKey)}</span>
       {badge > 0 && (
         <span style={{
-          fontSize: 10, fontWeight: 600,
+          fontSize: 'var(--fs-label)', fontWeight: 600,
           padding: '1px 7px', borderRadius: 10,
           background: 'var(--err)', color: 'var(--white)',
           fontVariantNumeric: 'tabular-nums',
@@ -335,14 +335,14 @@ export default function Sidebar() {
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-                fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase',
+                fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase',
                 color: C.textMuted, padding: '12px 1.5rem 6px', fontFamily: 'inherit',
                 opacity: open ? 1 : 0.7,
               }}
             >
               <span>{t(g.sectionKey)}</span>
               <i className={`ti ${open ? 'ti-chevron-down' : 'ti-chevron-right'}`}
-                 style={{ fontSize: 12, color: C.textMuted }} />
+                 style={{ fontSize: 'var(--fs-body)', color: C.textMuted }} />
             </button>
             <div style={{
               overflow: 'hidden',
@@ -379,7 +379,7 @@ export default function Sidebar() {
             color: C.text,
             background: logoutHover ? C.hover : 'none',
             border: 'none',
-            cursor: 'pointer', fontSize: 12,
+            cursor: 'pointer', fontSize: 'var(--fs-body)',
             width: '100%', fontFamily: 'inherit',
             transition: 'background 0.15s',
           }}

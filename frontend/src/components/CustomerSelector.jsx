@@ -9,11 +9,11 @@ import CustomerModal from './CustomerModal'
 const MONO = 'IBM Plex Mono, monospace'
 const selectStyle = {
   width: '100%', padding: '8px 10px', borderRadius: 4, border: '0.5px solid var(--gray-l)',
-  fontFamily: MONO, fontSize: 13, background: 'var(--white)', boxSizing: 'border-box',
+  fontFamily: MONO, fontSize: 'var(--fs-body)', background: 'var(--white)', boxSizing: 'border-box',
 }
 const ghostBtn = {
   background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)',
-  borderRadius: 6, padding: '6px 14px', fontSize: 12, cursor: 'pointer', fontFamily: MONO,
+  borderRadius: 6, padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO,
 }
 
 export default function CustomerSelector({ value, onChange, allowCreate = false, onError }) {

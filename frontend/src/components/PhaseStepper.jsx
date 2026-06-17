@@ -48,7 +48,7 @@ export function PhaseStepper({ faseActual, onFaseClick }) {
               style={{
                 padding: '3px 10px',
                 borderRadius: 3,
-                fontSize: 11,
+                fontSize: 'var(--fs-body)',
                 fontWeight: active ? 700 : done ? 500 : 400,
                 background: active
                   ? 'var(--gold)'

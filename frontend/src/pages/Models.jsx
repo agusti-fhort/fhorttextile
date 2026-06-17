@@ -71,8 +71,8 @@ export default function Models() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 18, fontFamily: MONO, color: 'var(--text-main)', fontWeight: 500, margin: 0 }}>{t('models_list.title')}</h1>
-          <div style={{ fontSize: 11, color: 'var(--gray)', fontFamily: MONO, marginTop: 2 }}>
+          <h1 style={{ fontSize: 'var(--fs-h2)', fontFamily: MONO, color: 'var(--text-main)', fontWeight: 500, margin: 0 }}>{t('models_list.title')}</h1>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, marginTop: 2 }}>
             {selected.size > 0 ? t('models_list.selected', { n: selected.size }) : t('models_list.count', { n: count })}
           </div>
         </div>
@@ -103,7 +103,7 @@ export default function Models() {
 
       {/* Select all */}
       {items.length > 0 && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--gray)', fontFamily: MONO, margin: '0 0 8px 2px', cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: '0 0 8px 2px', cursor: 'pointer' }}>
           <input type="checkbox" checked={allOnPage} onChange={toggleAll} />
           {allOnPage ? '✓' : ''}
         </label>
@@ -111,9 +111,9 @@ export default function Models() {
 
       {/* Llistat */}
       {loading ? (
-        <div style={{ color: 'var(--gray)', fontSize: 12, fontFamily: MONO, padding: '20px 0' }}>{t('models_list.loading')}</div>
+        <div style={{ color: 'var(--gray)', fontSize: 'var(--fs-body)', fontFamily: MONO, padding: '20px 0' }}>{t('models_list.loading')}</div>
       ) : items.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--gray)', fontSize: 12, fontFamily: MONO }}>
+        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--gray)', fontSize: 'var(--fs-body)', fontFamily: MONO }}>
           {(search || fase || temporada) ? t('models_list.empty_filtered') : t('models_list.empty')}
         </div>
       ) : (
@@ -127,7 +127,7 @@ export default function Models() {
 
       {/* Paginació */}
       {pages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 18, fontFamily: MONO, fontSize: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 18, fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} style={{ ...inp, cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1 }}>← {t('models_list.prev')}</button>
           <span style={{ color: 'var(--gray)' }}>{t('models_list.page_info', { page, pages })}</span>
           <button onClick={() => setPage(p => Math.min(pages, p + 1))} disabled={page >= pages} style={{ ...inp, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? 0.4 : 1 }}>{t('models_list.next')} →</button>
@@ -152,16 +152,16 @@ function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale }) {
       <div onClick={onOpen} style={{ flex: 1, minWidth: 0, padding: '12px 16px 12px 0', cursor: 'pointer' }}>
         {/* Fila 1 — descriptiva */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>{m.codi_intern}</span>
-          {m.nom_prenda && <span style={{ fontSize: 13, color: 'var(--text-main)', fontWeight: 500 }}>{m.nom_prenda}</span>}
-          {m.codi_client && <span style={{ fontSize: 11, color: 'var(--gray)', fontFamily: MONO }}>· {m.codi_client}</span>}
-          {m.collection && <span style={{ fontSize: 11, color: 'var(--gray)' }}>· {m.collection}</span>}
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--gray)', fontFamily: MONO }}>{m.temporada}{m.any ? ` ${m.any}` : ''}</span>
+          <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--gold)' }}>{m.codi_intern}</span>
+          {m.nom_prenda && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontWeight: 500 }}>{m.nom_prenda}</span>}
+          {m.codi_client && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>· {m.codi_client}</span>}
+          {m.collection && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>· {m.collection}</span>}
+          <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{m.temporada}{m.any ? ` ${m.any}` : ''}</span>
           <EstatBadge estat={m.estat} size="xs" />
           <button onClick={onDelete} title={t('models_list.delete')} style={delBtn}><i className="ti ti-trash" /></button>
         </div>
         {/* Fila 2 — operativa */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr 1.4fr', gap: 12, alignItems: 'center', fontFamily: MONO, fontSize: 11 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr 1.4fr', gap: 12, alignItems: 'center', fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
           <span style={faseBadge}>{m.fase_actual}</span>
           <Cell label={t('models_list.col_entrada')} value={fmtDate(m.entrada_prod, locale)} />
           <Cell label={t('models_list.col_proto')} value={fmtDate(m.arribada_proto, locale)} />
@@ -176,7 +176,7 @@ function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale }) {
 function Cell({ label, value }) {
   return (
     <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gray)' }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-caption)', textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gray)' }}>{label}</div>
       <div style={{ color: value === '—' ? 'var(--gray-l)' : 'var(--text-main)' }}>{value}</div>
     </div>
   )
@@ -187,7 +187,7 @@ function Tecnic({ label, tecnics }) {
   const principal = list[0]
   return (
     <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gray)' }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-caption)', textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gray)' }}>{label}</div>
       {principal ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 9, height: 9, borderRadius: '50%', background: principal.color || 'var(--gray)', flex: 'none' }} />
@@ -202,7 +202,7 @@ function Tecnic({ label, tecnics }) {
 function NewModelMenu({ open, setOpen, navigate, t }) {
   return (
     <div style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)', borderRadius: 6, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: MONO }}>
+      <button onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)', borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', fontFamily: MONO }}>
         <i className="ti ti-plus" /> {t('models_list.new_model')} <i className="ti ti-chevron-down" />
       </button>
       {open && (
@@ -220,7 +220,7 @@ function NewModelMenu({ open, setOpen, navigate, t }) {
   )
 }
 
-const inp = { padding: '6px 10px', border: '0.5px solid var(--gray-l)', borderRadius: 6, fontSize: 12, fontFamily: MONO, background: 'var(--white)', color: 'var(--text-main)' }
-const faseBadge = { fontFamily: MONO, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: 'var(--gold)', color: 'var(--white)', justifySelf: 'start' }
-const delBtn = { fontSize: 12, color: '#C0392B', background: 'none', border: '0.5px solid #FADBD8', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', fontFamily: MONO }
-const menuItem = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 10px', borderRadius: 6, fontFamily: MONO, fontSize: 12, color: 'var(--text-main)', cursor: 'pointer' }
+const inp = { padding: '6px 10px', border: '0.5px solid var(--gray-l)', borderRadius: 6, fontSize: 'var(--fs-body)', fontFamily: MONO, background: 'var(--white)', color: 'var(--text-main)' }
+const faseBadge = { fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: 'var(--gold)', color: 'var(--white)', justifySelf: 'start' }
+const delBtn = { fontSize: 'var(--fs-body)', color: '#C0392B', background: 'none', border: '0.5px solid #FADBD8', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', fontFamily: MONO }
+const menuItem = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 10px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)', cursor: 'pointer' }

@@ -186,7 +186,7 @@ export default function MeasurementTable({
   }
 
   if (loading) {
-    return <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)' }}>{t('measurement_table.loading')}</div>
+    return <div style={{ padding: 16, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('measurement_table.loading')}</div>
   }
 
   return (
@@ -199,7 +199,7 @@ export default function MeasurementTable({
         <ViewToggle mode={mode} onChange={setMode} />
         {usingMock && (
           <span style={{
-            fontSize: 10, color: 'var(--gold)',
+            fontSize: 'var(--fs-label)', color: 'var(--gold)',
             background: '#fdf6ee', border: '0.5px solid #e0c8a0',
             padding: '3px 8px', borderRadius: 4,
           }}>
@@ -226,7 +226,7 @@ export default function MeasurementTable({
         }}>
           {alerts.map((a, i) => (
             <div key={i} style={{
-              fontSize: 11,
+              fontSize: 'var(--fs-body)',
               color: a.tipus === 'ERROR' ? '#a32d2d' : 'var(--gold)',
               padding: '2px 0',
             }}>
@@ -241,14 +241,14 @@ export default function MeasurementTable({
       {msg && (
         <div style={{
           margin: '4px 0 12px',
-          padding: '6px 10px', borderRadius: 6, fontSize: 11,
+          padding: '6px 10px', borderRadius: 6, fontSize: 'var(--fs-body)',
           background: msg.type === 'info' ? '#fdf6ee' : msg.type === 'warn' ? '#fdf6ee' : '#fff0f0',
           border: `0.5px solid ${msg.type === 'error' ? '#f09595' : '#e0c8a0'}`,
           color: msg.type === 'error' ? '#a32d2d' : 'var(--gold)',
           display: 'flex', justifyContent: 'space-between',
         }}>
           <span>{msg.text}</span>
-          <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14 }}>×</button>
+          <button onClick={() => setMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 'var(--fs-h3)' }}>×</button>
         </div>
       )}
 
@@ -276,7 +276,7 @@ export default function MeasurementTable({
       {measurements.length === 0 && !loading && (
         <div style={{
           padding: '14px',
-          fontSize: 11, color: 'var(--text-muted)',
+          fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
           textAlign: 'center',
         }}>
           {t('measurement_table.empty')}
@@ -324,7 +324,7 @@ function BaseView({ measurements, readOnly, editingCell, setEditingCell, onEdit,
                 </span>
                 {m.pom_is_key && (
                   <span style={{
-                    marginLeft: 6, fontSize: 9, padding: '1px 5px', borderRadius: 3,
+                    marginLeft: 6, fontSize: 'var(--fs-caption)', padding: '1px 5px', borderRadius: 3,
                     background: '#fdf6ee', color: 'var(--gold)',
                     border: '0.5px solid #e0c8a0', fontWeight: 600, letterSpacing: '.05em',
                   }}>KEY</span>
@@ -346,7 +346,7 @@ function BaseView({ measurements, readOnly, editingCell, setEditingCell, onEdit,
               </Td>
               <Td>
                 <span style={{
-                  fontSize: 9, padding: '2px 6px', borderRadius: 3,
+                  fontSize: 'var(--fs-caption)', padding: '2px 6px', borderRadius: 3,
                   background: origen.bg, color: origen.fg,
                   border: `0.5px solid ${origen.border}`,
                   fontWeight: 600, letterSpacing: '.05em',
@@ -360,7 +360,7 @@ function BaseView({ measurements, readOnly, editingCell, setEditingCell, onEdit,
                     title={t('app.delete')}
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer',
-                      color: '#c0c0c0', fontSize: 14, lineHeight: 1, padding: '2px 4px',
+                      color: '#c0c0c0', fontSize: 'var(--fs-h3)', lineHeight: 1, padding: '2px 4px',
                     }}
                     onMouseEnter={e => e.currentTarget.style.color = '#a32d2d'}
                     onMouseLeave={e => e.currentTarget.style.color = '#c0c0c0'}
@@ -380,7 +380,7 @@ function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
   const { t } = useTranslation()
   if (!sizeRun.length) {
     return (
-      <div style={{ padding: 16, fontSize: 11, color: 'var(--text-muted)' }}>
+      <div style={{ padding: 16, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
         {t('measurement_table.grading_empty')}
       </div>
     )
@@ -478,7 +478,7 @@ function EditableCell({ value, editing, readOnly, onStartEdit, onSave, onCancel,
           border: '0.5px solid var(--gold)',
           borderRadius: 3,
           padding: '2px 6px',
-          fontSize: 12,
+          fontSize: 'var(--fs-body)',
           textAlign: align,
           outline: 'none',
         }}
@@ -528,7 +528,7 @@ function ViewToggle({ mode, onChange }) {
               background: active ? 'var(--gold)' : 'var(--white)',
               color: active ? 'var(--white)' : 'var(--text-muted)',
               border: 'none', cursor: 'pointer',
-              fontSize: 11, 
+              fontSize: 'var(--fs-body)', 
               fontWeight: active ? 600 : 400,
             }}
           >
@@ -545,7 +545,7 @@ function Th({ children, width, align = 'left', style }) {
   return (
     <th style={{
       padding: '8px 10px',
-      fontSize: 10, letterSpacing: '0.08em',
+      fontSize: 'var(--fs-label)', letterSpacing: '0.08em',
       textTransform: 'uppercase',
       color: 'var(--text-muted)',
       fontWeight: 600, 
@@ -583,6 +583,6 @@ const btnPrimary = {
   color: 'var(--white)',
   border: 'none',
   cursor: 'pointer',
-  fontSize: 11, 
+  fontSize: 'var(--fs-body)', 
   fontWeight: 600,
 }

@@ -108,10 +108,10 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
         marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--border)",
       }}>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-main)" }}>
+          <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, color: "var(--text-main)" }}>
             {profile.size_system?.nom}
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-muted)", marginTop: 2 }}>
             {profile.target?.codi ? t(`model_wizard.target_${profile.target.codi}`, profile.target.nom_en) : profile.target?.nom_en} · {profile.construction?.codi ? t(`model_wizard.construction_${profile.construction.codi}`, profile.construction.nom_en) : profile.construction?.nom_en} · {profile.fit_type_nom}
           </div>
         </div>
@@ -130,7 +130,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
               onClick={() => setShowHistory(s => !s)}
               title={t('size_library.history_title')}
               style={{
-                padding: '2px 8px', borderRadius: 3, fontSize: 10,
+                padding: '2px 8px', borderRadius: 3, fontSize: 'var(--fs-label)',
                 background: showHistory ? '#f5e6d0' : 'var(--white)',
                 color: showHistory ? 'var(--gold)' : 'var(--text-muted)',
                 border: '1px solid var(--border)', cursor: 'pointer',
@@ -145,7 +145,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
               disabled={restoring}
               title={t('size_library.restore_title')}
               style={{
-                padding: '2px 8px', borderRadius: 3, fontSize: 10,
+                padding: '2px 8px', borderRadius: 3, fontSize: 'var(--fs-label)',
                 background: 'var(--white)', color: '#a32d2d',
                 border: '1px solid #f0c0c0',
                 cursor: restoring ? 'not-allowed' : 'pointer',
@@ -160,7 +160,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
               onClick={() => setEditTalles(true)}
               title={t('size_library.edit_sizes_title')}
               style={{
-                padding: '2px 8px', borderRadius: 3, fontSize: 10,
+                padding: '2px 8px', borderRadius: 3, fontSize: 'var(--fs-label)',
                 background: 'var(--white)', color: 'var(--gold)',
                 border: '1px solid #e0c8a0', cursor: 'pointer',
               }}
@@ -169,7 +169,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
             </button>
           )}
           {onClose && (
-            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 18 }}>×</button>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 'var(--fs-h2)' }}>×</button>
           )}
         </div>
       </div>
@@ -190,7 +190,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
       {/* Missatge */}
       {msg && (
         <div style={{
-          padding: "6px 10px", marginBottom: 12, borderRadius: 4, fontSize: 11,
+          padding: "6px 10px", marginBottom: 12, borderRadius: 4, fontSize: 'var(--fs-body)',
           background: msg.type === 'ok' ? "#f0f9f0" : msg.type === 'warn' ? "#fff8f0" : "#fff0f0",
           border: `1px solid ${msg.type === 'ok' ? "#c0dd97" : msg.type === 'warn' ? "#e0c8a0" : "#f09595"}`,
           color: msg.type === 'ok' ? "#3b6d11" : msg.type === 'warn' ? "var(--gold)" : "#a32d2d",
@@ -202,11 +202,11 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
       {/* Taula de grading */}
       {rules.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
+          <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
             {t('size_library.grading_rules')} — {profile.grading_rule_set?.nom}
           </div>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 'var(--fs-body)' }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid var(--border)" }}>
                   <th style={{ textAlign: "left", padding: "5px 8px", color: "var(--text-muted)", fontWeight: 600 }}>POM</th>
@@ -240,18 +240,18 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
                               type="number" step="0.1"
                               value={editing[rule.pom_codi]}
                               onChange={e => setEditing(prev => ({ ...prev, [rule.pom_codi]: e.target.value }))}
-                              style={{ width: 60, padding: "2px 4px", border: "1px solid var(--gold)", borderRadius: 3, fontSize: 11, textAlign: "right" }}
+                              style={{ width: 60, padding: "2px 4px", border: "1px solid var(--gold)", borderRadius: 3, fontSize: 'var(--fs-body)', textAlign: "right" }}
                             />
                             <button
                               onClick={() => handleSave(rule.pom_codi)}
                               disabled={saving === rule.pom_codi}
-                              style={{ padding: "2px 6px", borderRadius: 3, fontSize: 10, background: "#f5e6d0", color: "var(--gold)", border: "1px solid var(--gold)", cursor: "pointer" }}
+                              style={{ padding: "2px 6px", borderRadius: 3, fontSize: 'var(--fs-label)', background: "#f5e6d0", color: "var(--gold)", border: "1px solid var(--gold)", cursor: "pointer" }}
                             >
                               ✓
                             </button>
                             <button
                               onClick={() => setEditing(prev => { const n={...prev}; delete n[rule.pom_codi]; return n })}
-                              style={{ padding: "2px 6px", borderRadius: 3, fontSize: 10, background: "var(--white)", color: "var(--text-muted)", border: "1px solid var(--border)", cursor: "pointer" }}
+                              style={{ padding: "2px 6px", borderRadius: 3, fontSize: 'var(--fs-label)', background: "var(--white)", color: "var(--text-muted)", border: "1px solid var(--border)", cursor: "pointer" }}
                             >
                               ×
                             </button>
@@ -264,7 +264,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
                         <td style={{ padding: "5px 4px", textAlign: "center" }}>
                           <button
                             onClick={() => handleEdit(rule.pom_codi, rule.increment)}
-                            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 13, padding: "0 4px" }}
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 'var(--fs-body)', padding: "0 4px" }}
                             title={t('size_library.edit_increment_title')}
                           >
                             ✏
@@ -283,7 +283,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
       {/* Sizes */}
       {sizes.length > 0 && (
         <div>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
+          <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
             {t('size_library.size_run')} — {profile.size_system?.nom}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
@@ -291,14 +291,14 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
               <div key={i} style={{
                 padding: "5px 10px", borderRadius: 4,
                 background: "#fdf9f5", border: "1px solid var(--border)",
-                fontSize: 11, textAlign: "center", minWidth: 48,
+                fontSize: 'var(--fs-body)', textAlign: "center", minWidth: 48,
               }}>
                 <div style={{ fontWeight: 600, color: "var(--text-main)" }}>{s.size_label}</div>
                 {s.body_bust_cm && (
-                  <div style={{ fontSize: 9, color: "var(--text-muted)" }}>{s.body_bust_cm}cm</div>
+                  <div style={{ fontSize: 'var(--fs-caption)', color: "var(--text-muted)" }}>{s.body_bust_cm}cm</div>
                 )}
                 {s.body_height_cm && (
-                  <div style={{ fontSize: 9, color: "var(--text-muted)" }}>{s.body_height_cm}cm</div>
+                  <div style={{ fontSize: 'var(--fs-caption)', color: "var(--text-muted)" }}>{s.body_height_cm}cm</div>
                 )}
               </div>
             ))}
@@ -311,7 +311,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
         <div style={{
           marginTop: 16, padding: "8px 12px", borderRadius: 4,
           background: "#fdf9f5", border: "1px solid var(--border)",
-          fontSize: 11, color: "var(--text-muted)",
+          fontSize: 'var(--fs-body)', color: "var(--text-muted)",
         }}>
           ℹ {t('size_library.standard_iso_note')}
         </div>

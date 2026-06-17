@@ -99,7 +99,7 @@ export default function POMCatalogue() {
         display: 'flex', gap: 12, padding: '12px 16px', alignItems: 'center', flexWrap: 'wrap',
         borderBottom: '0.5px solid #e4e4e2', background: 'var(--white)',
       }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
           {t('poms.catalogue_readonly')}
         </span>
         <input
@@ -109,18 +109,18 @@ export default function POMCatalogue() {
           onChange={e => setSearch(e.target.value)}
           style={{
             background: 'var(--white)', border: '0.5px solid #e4e4e2', borderRadius: 8,
-            padding: '8px 12px', fontSize: 12, 
+            padding: '8px 12px', fontSize: 'var(--fs-body)', 
             outline: 'none', width: 280, marginLeft: 'auto',
           }}
         />
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('poms.count_poms', { count: filtered.length })}</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('poms.count_poms', { count: filtered.length })}</span>
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-          {loading && <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('poms.loading_catalogue')}</p>}
+          {loading && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('poms.loading_catalogue')}</p>}
           {!loading && filtered.length === 0 && (
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
               {items.length === 0 ? t('poms.catalogue_empty') : t('poms.no_match')}
             </p>
           )}
@@ -128,7 +128,7 @@ export default function POMCatalogue() {
           {!loading && groups.map(([cat, rows]) => (
             <div key={cat} style={{ marginBottom: 18 }}>
               <h3 style={{
-                fontSize: 9, fontWeight: 700, color: 'var(--gold)',
+                fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--gold)',
                 textTransform: 'uppercase', letterSpacing: '.1em',
                 margin: '0 0 8px', paddingBottom: 4, borderBottom: '0.5px solid #ece2d4',
               }}>
@@ -142,7 +142,7 @@ export default function POMCatalogue() {
                       onClick={() => setSelected(isSel ? null : pom)}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '7px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                        padding: '7px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 'var(--fs-body)',
                         border: `0.5px solid ${isSel ? 'var(--gold)' : '#e8e8e6'}`,
                         background: isSel ? '#fdf6ee' : 'var(--white)',
                       }}>
@@ -154,14 +154,14 @@ export default function POMCatalogue() {
                       </span>
                       {pom.abbreviation && (
                         <span style={{
-                          background: '#f5f0ea', color: 'var(--text-muted)', fontSize: 9, padding: '2px 6px',
+                          background: '#f5f0ea', color: 'var(--text-muted)', fontSize: 'var(--fs-caption)', padding: '2px 6px',
                           borderRadius: 3, 
                         }}>{pom.abbreviation}</span>
                       )}
                       {pom.is_tenant_only && (
                         <span title={t('poms.tenant_only_hint')}
                           style={{
-                            background: '#fff3e0', color: '#b25a00', fontSize: 9, padding: '2px 6px',
+                            background: '#fff3e0', color: '#b25a00', fontSize: 'var(--fs-caption)', padding: '2px 6px',
                             borderRadius: 3, fontWeight: 600, letterSpacing: '.06em', border: '0.5px solid #f0c040',
                           }}>{t('poms.incomplete')}</span>
                       )}

@@ -28,19 +28,19 @@ export default function FittingTab({ model }) {
   const columns = [
     { key: 'fase', label: t('model_sheet.phase') },
     { key: 'data', label: t('model_sheet.date'), render: r => fmtDate(r.data) },
-    { key: 'estat', label: t('model_sheet.status'), render: r => <span style={{ fontWeight: 600, fontFamily: MONO, fontSize: 11 }}>{r.estat}</span> },
+    { key: 'estat', label: t('model_sheet.status'), render: r => <span style={{ fontWeight: 600, fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{r.estat}</span> },
     { key: 'actions', label: '', align: 'right', render: r => <button style={miniBtn} onClick={() => navigate(`/fittings/${r.id}`)}>{t('model_sheet.view')} →</button> },
   ]
 
   return (
     <div>
-      <h2 style={{ fontSize: 15, fontWeight: 500, margin: '0 0 14px', fontFamily: MONO }}>{t('model_sheet.fitting_title')}</h2>
+      <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, margin: '0 0 14px', fontFamily: MONO }}>{t('model_sheet.fitting_title')}</h2>
       <Table columns={columns} data={list} loading={loading} empty={t('model_sheet.no_fittings')} onRowClick={r => navigate(`/fittings/${r.id}`)} />
     </div>
   )
 }
 
 const miniBtn = {
-  fontFamily: MONO, fontSize: 11, padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
+  fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
   background: 'var(--white)', color: 'var(--text-main)', border: '0.5px solid var(--gray-l)',
 }

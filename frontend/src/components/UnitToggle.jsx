@@ -47,13 +47,13 @@ export function UnitToggle() {
         background: unit === 'INCH' ? '#f5e6d0' : '#f5f0ea',
         color: unit === 'INCH' ? 'var(--gold)' : 'var(--text-muted)',
         border: `1px solid ${unit === 'INCH' ? 'var(--gold)' : 'var(--border)'}`,
-        fontSize: 11,
+        fontSize: 'var(--fs-body)',
         cursor: saving ? 'not-allowed' : 'pointer',
         transition: 'all .15s',
       }}
     >
       <span style={{ fontWeight: 600 }}>{unit === 'CM' ? 'cm' : 'inch'}</span>
-      <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+      <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
         {unit === 'CM' ? '→ inch' : '→ cm'}
       </span>
     </button>

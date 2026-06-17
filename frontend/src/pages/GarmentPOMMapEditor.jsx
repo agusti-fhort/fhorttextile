@@ -96,19 +96,19 @@ export default function GarmentPOMMapEditor() {
     <div style={{ padding: '24px', maxWidth: 1100, margin: '0 auto' }}>
       <button onClick={() => navigate(-1)} style={{
         background: 'none', border: 'none', cursor: 'pointer',
-        color: 'var(--text-muted)', fontSize: 12, marginBottom: 16,
+        color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginBottom: 16,
       }}>← Tornar</button>
 
-      <h1 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-main)', margin: '0 0 4px' }}>
+      <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, color: 'var(--text-main)', margin: '0 0 4px' }}>
         Garment POM Map
       </h1>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 24 }}>
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 24 }}>
         Defineix quins POMs s'apliquen a cada tipus de prenda.
       </div>
 
       {msg && (
         <div style={{
-          padding: '8px 12px', marginBottom: 16, borderRadius: 4, fontSize: 11,
+          padding: '8px 12px', marginBottom: 16, borderRadius: 4, fontSize: 'var(--fs-body)',
           background: msg.type === 'ok' ? '#f0f9f0' : '#fff0f0',
           border: `1px solid ${msg.type === 'ok' ? '#c0dd97' : '#f09595'}`,
           color: msg.type === 'ok' ? '#3b6d11' : '#a32d2d',
@@ -122,7 +122,7 @@ export default function GarmentPOMMapEditor() {
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 20 }}>
         {/* Selector de GarmentType */}
         <div>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
+          <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
             Tipus de prenda
           </div>
           <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -135,7 +135,7 @@ export default function GarmentPOMMapEditor() {
                   background: selGT === String(gt.id) ? '#f5e6d0' : 'var(--white)',
                   color: selGT === String(gt.id) ? 'var(--gold)' : 'var(--text-main)',
                   border: `1px solid ${selGT === String(gt.id) ? 'var(--gold)' : 'var(--border)'}`,
-                  fontSize: 11,
+                  fontSize: 'var(--fs-body)',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 }}
               >
@@ -143,7 +143,7 @@ export default function GarmentPOMMapEditor() {
                   {gt.nom_ca || gt.nom_en}
                 </span>
                 <span style={{
-                  fontSize: 9, padding: '1px 5px', borderRadius: 3,
+                  fontSize: 'var(--fs-caption)', padding: '1px 5px', borderRadius: 3,
                   background: gt.n_poms > 0 ? '#f0f9f0' : '#f5f0ea',
                   color: gt.n_poms > 0 ? '#3b6d11' : 'var(--text-muted)',
                 }}>
@@ -157,16 +157,16 @@ export default function GarmentPOMMapEditor() {
         {/* Editor del mapa */}
         <div>
           {!selGT ? (
-            <div style={{ padding: '40px', border: '1px dashed var(--border)', borderRadius: 8, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
+            <div style={{ padding: '40px', border: '1px dashed var(--border)', borderRadius: 8, textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
               Selecciona un tipus de prenda
             </div>
           ) : loading ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Carregant mapa...</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>Carregant mapa...</div>
           ) : (
             <>
               {/* Afegir POM */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
+                <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
                   Afegir POM
                 </div>
                 <div style={{ position: 'relative' }}>
@@ -177,7 +177,7 @@ export default function GarmentPOMMapEditor() {
                     style={{
                       width: '100%', padding: '7px 10px',
                       border: '1px solid var(--border)', borderRadius: 4,
-                      fontSize: 12, 
+                      fontSize: 'var(--fs-body)', 
                       boxSizing: 'border-box',
                     }}
                   />
@@ -193,7 +193,7 @@ export default function GarmentPOMMapEditor() {
                           key={p.id}
                           onClick={() => addPOM(p.id)}
                           style={{
-                            padding: '7px 10px', cursor: 'pointer', fontSize: 11,
+                            padding: '7px 10px', cursor: 'pointer', fontSize: 'var(--fs-body)',
                             display: 'flex', gap: 8, alignItems: 'center',
                             borderBottom: '1px solid #f5ede0',
                           }}
@@ -202,7 +202,7 @@ export default function GarmentPOMMapEditor() {
                         >
                           <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 60 }}>{p.codi_intern}</span>
                           <span style={{ color: 'var(--text-main)', flex: 1 }}>{p.nom_en}</span>
-                          <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>{p.categoria_nom}</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>{p.categoria_nom}</span>
                         </div>
                       ))}
                     </div>
@@ -213,14 +213,14 @@ export default function GarmentPOMMapEditor() {
               {/* POMs actuals */}
               {mapData && (
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
+                  <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
                     POMs del mapa — {mapData.total_poms} total
                   </div>
 
                   {mapData.categories?.map(cat => (
                     <div key={cat.nom} style={{ marginBottom: 16 }}>
                       <div style={{
-                        fontSize: 10, color: 'var(--text-muted)', fontWeight: 600,
+                        fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 600,
                         textTransform: 'uppercase', letterSpacing: '.06em',
                         padding: '4px 0', borderBottom: '1px solid var(--border)',
                         marginBottom: 6,
@@ -231,7 +231,7 @@ export default function GarmentPOMMapEditor() {
                         <div key={p.pom_id} style={{
                           display: 'flex', alignItems: 'center', gap: 8,
                           padding: '5px 4px', borderBottom: '1px solid #f5ede0',
-                          fontSize: 11,
+                          fontSize: 'var(--fs-body)',
                         }}>
                           <HTMTooltip pomId={p.pom_id}>
                             <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 70 }}>
@@ -240,14 +240,14 @@ export default function GarmentPOMMapEditor() {
                           </HTMTooltip>
                           <span style={{ color: 'var(--text-main)', flex: 1 }}>{p.nom_en}</span>
                           {p.is_key && (
-                            <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: '#f5e6d0', color: 'var(--gold)', border: '1px solid #e0c8a0' }}>KEY</span>
+                            <span style={{ fontSize: 'var(--fs-caption)', padding: '1px 5px', borderRadius: 3, background: '#f5e6d0', color: 'var(--gold)', border: '1px solid #e0c8a0' }}>KEY</span>
                           )}
                           {p.obligatori && (
-                            <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: '#f0f9f0', color: '#3b6d11', border: '1px solid #c0dd97' }}>OBL</span>
+                            <span style={{ fontSize: 'var(--fs-caption)', padding: '1px 5px', borderRadius: 3, background: '#f0f9f0', color: '#3b6d11', border: '1px solid #c0dd97' }}>OBL</span>
                           )}
                           <button
                             onClick={() => removePOM(p.pom_id)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cc4444', fontSize: 14, padding: '0 4px' }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cc4444', fontSize: 'var(--fs-h3)', padding: '0 4px' }}
                             title="Eliminar del mapa"
                           >
                             ×
@@ -258,7 +258,7 @@ export default function GarmentPOMMapEditor() {
                   ))}
 
                   {mapData.total_poms === 0 && (
-                    <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '16px 0' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>
                       Sense POMs al mapa. Afegeix-ne des de la cerca superior.
                     </div>
                   )}

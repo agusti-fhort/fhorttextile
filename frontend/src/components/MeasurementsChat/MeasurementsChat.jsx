@@ -70,12 +70,12 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
         padding: '10px 14px',
         borderBottom: '0.5px solid var(--border)',
         background: 'var(--bg-muted)',
-        fontSize: 13, fontWeight: 500,
+        fontSize: 'var(--fs-body)', fontWeight: 500,
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
         <i className="ti ti-message-circle" aria-hidden="true" style={{ color: 'var(--gold)' }} />
         {t('measurements_chat.title')}
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontWeight: 400 }}>
           · {t('measurements_chat.autosave_note')}
         </span>
       </div>
@@ -85,7 +85,7 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
         display: 'flex', flexDirection: 'column', gap: 10,
       }}>
         {historial.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)',
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                         fontStyle: 'italic', textAlign: 'center', marginTop: 20 }}>
             {t('measurements_chat.empty_hint')}
             <br />{t('measurements_chat.examples')}
@@ -97,7 +97,7 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
             justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
           }}>
             <div style={{
-              maxWidth: '80%', padding: '8px 12px', borderRadius: 8, fontSize: 13,
+              maxWidth: '80%', padding: '8px 12px', borderRadius: 8, fontSize: 'var(--fs-body)',
               background: msg.role === 'user'
                 ? 'var(--gold)' : 'var(--bg-muted)',
               color: msg.role === 'user' ? 'var(--white)' : 'var(--text-main)',
@@ -112,7 +112,7 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
         {loading && (
           <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
             <div style={{
-              padding: '8px 14px', borderRadius: 8, fontSize: 13,
+              padding: '8px 14px', borderRadius: 8, fontSize: 'var(--fs-body)',
               background: 'var(--bg-muted)',
               border: '0.5px solid var(--border)',
               color: 'var(--text-muted)',
@@ -136,7 +136,7 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
           placeholder={t('measurements_chat.input_placeholder')}
           disabled={loading}
           style={{
-            flex: 1, padding: '7px 10px', fontSize: 13,
+            flex: 1, padding: '7px 10px', fontSize: 'var(--fs-body)',
             border: '0.5px solid var(--border)',
             borderRadius: 6, background: 'var(--bg-main)',
           }}
@@ -145,7 +145,7 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
           style={{
             padding: '7px 14px', background: loading ? '#ccc' : 'var(--gold)',
             color: 'var(--white)', border: 'none', borderRadius: 6,
-            fontSize: 13, cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+            fontSize: 'var(--fs-body)', cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
           }}>
           <i className="ti ti-send" aria-hidden="true" />
         </button>

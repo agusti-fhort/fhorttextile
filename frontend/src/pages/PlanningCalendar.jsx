@@ -200,8 +200,8 @@ export default function PlanningCalendar() {
     <div style={{ minWidth: 0, maxWidth: '100%' }}>
       <style>{CSS}</style>
       <div style={{ marginBottom: '1rem' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('planning_calendar.title')}</h1>
-        <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('planning_calendar.subtitle')}</p>
+        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('planning_calendar.title')}</h1>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('planning_calendar.subtitle')}</p>
       </div>
 
       {/* Toolbar */}
@@ -211,7 +211,7 @@ export default function PlanningCalendar() {
           <button onClick={goToday} style={{ ...navBtn, fontWeight: 600 }}>{t('planning_calendar.today')}</button>
           <button onClick={() => navigate(1)} style={navBtn} title={t('app.next')}><i className="ti ti-chevron-right" /></button>
         </div>
-        <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 500, minWidth: 200 }}>{title}</span>
+        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-h3)', fontWeight: 500, minWidth: 200 }}>{title}</span>
         <div style={{ display: 'flex', border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden', marginLeft: 'auto' }}>
           {[['day', 'view_day'], ['week', 'view_week'], ['month', 'view_month'], ['list', 'view_list']].map(([v, key]) => (
             <button key={v} onClick={() => setView(v)} style={{
@@ -233,7 +233,7 @@ export default function PlanningCalendar() {
       )}
 
       {/* Llegenda dels estadis sense tècnic (color per tipus) */}
-      <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', fontFamily: MONO, fontSize: 11, color: 'var(--gray)' }}>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>
         <LegendDot color={COLOR_CONFECCIO} label={t('planning_calendar.type_confeccio')} />
         <LegendDot color={COLOR_FITTING} label={t('planning_calendar.type_fitting')} />
         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -440,7 +440,7 @@ function ListView({ events, onOpen, t }) {
 function Pill({ active, onClick, label, color }) {
   return (
     <button onClick={onClick} style={{
-      display: 'flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 11, cursor: 'pointer',
+      display: 'flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 'var(--fs-body)', cursor: 'pointer',
       padding: '5px 12px', borderRadius: 999, border: `0.5px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
       background: active ? 'var(--warn-bg)' : 'var(--white)', color: active ? 'var(--warn)' : 'var(--text-main)',
       fontWeight: active ? 600 : 400,
@@ -452,7 +452,7 @@ function Pill({ active, onClick, label, color }) {
 }
 
 const navBtn = {
-  fontFamily: MONO, fontSize: 12, padding: '7px 14px', border: 'none', cursor: 'pointer',
+  fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '7px 14px', border: 'none', cursor: 'pointer',
   background: 'var(--white)', color: 'var(--text-main)',
 }
 

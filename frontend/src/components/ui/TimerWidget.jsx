@@ -25,7 +25,7 @@ export default function TimerWidget({ tasca, model, inici, compact = false }) {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
-        fontSize: 11, color: 'var(--warn)',
+        fontSize: 'var(--fs-body)', color: 'var(--warn)',
         fontVariantNumeric: 'tabular-nums',
       }}>
         <i className="ti ti-player-play-filled" style={{fontSize: 11}} />
@@ -40,12 +40,12 @@ export default function TimerWidget({ tasca, model, inici, compact = false }) {
       padding: '1.5rem', gap: '0.5rem',
     }}>
       {model && (
-        <span style={{fontSize: 11, color: 'var(--gold)', fontWeight: 500}}>
+        <span style={{fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 500}}>
           {model}
         </span>
       )}
       {tasca && (
-        <span style={{fontSize: 13, fontWeight: 400}}>
+        <span style={{fontSize: 'var(--fs-body)', fontWeight: 400}}>
           {tasca}
         </span>
       )}

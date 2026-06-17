@@ -46,15 +46,15 @@ export function DesignFreezePanel({ model, token, onApproved }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: isApproved ? 'var(--ok)' : 'var(--gold)', marginBottom: 2 }}>
+          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: isApproved ? 'var(--ok)' : 'var(--gold)', marginBottom: 2 }}>
             {isApproved ? '✓ Design Freeze aprovat' : '○ Design Freeze pendent'}
           </div>
           {isApproved ? (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
               {approvedAt} · {approvedBy}
             </div>
           ) : (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
               El tècnic revisa el disseny i confirma que és correcte per iniciar el desenvolupament tècnic.
               No calen mesures en aquest punt.
             </div>
@@ -65,7 +65,7 @@ export function DesignFreezePanel({ model, token, onApproved }) {
             onClick={handleAprovar}
             disabled={loading}
             style={{
-              padding: '7px 16px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
+              padding: '7px 16px', borderRadius: 4, fontSize: 'var(--fs-body)', cursor: 'pointer',
               background: 'var(--gold-pale)', color: 'var(--gold)', border: '1px solid var(--gold)',
             }}
           >
@@ -75,7 +75,7 @@ export function DesignFreezePanel({ model, token, onApproved }) {
       </div>
       {msg && (
         <div style={{
-          marginTop: 8, fontSize: 11, padding: '4px 8px', borderRadius: 3,
+          marginTop: 8, fontSize: 'var(--fs-body)', padding: '4px 8px', borderRadius: 3,
           background: msg.type === 'ok' ? '#e8f5e8' : 'var(--err-bg)',
           color: msg.type === 'ok' ? 'var(--ok)' : 'var(--err)',
         }}>

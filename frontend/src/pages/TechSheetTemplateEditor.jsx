@@ -279,7 +279,7 @@ export default function TechSheetTemplateEditor() {
   // ── UI ───────────────────────────────────────────────────────────────────
   const saveLabel = saveState === 'saving' ? t('tech_sheet.saving') : saveState === 'saved' ? t('tech_sheet.saved') : saveState === 'error' ? t('tech_sheet.save_error') : null
   const headerBtn = {
-    display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '5px 10px',
+    display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '5px 10px',
     borderRadius: 6, border: `1px solid ${COL.border}`, background: 'transparent', cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
   const curObjs = objectsOf(currentPage)
@@ -299,10 +299,10 @@ export default function TechSheetTemplateEditor() {
         <button onClick={onExport} disabled={exporting} style={{ ...headerBtn, background: COL.gold, border: 'none', color: 'var(--white)', opacity: exporting ? 0.5 : 1 }}>
           <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? t('tech_sheet.exporting') : t('tech_sheet.export_pdf')}
         </button>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>{t('tech_sheet.tmpl_title')} · {customerData?.nom || `#${customerId}`}</span>
-        <span style={{ fontSize: 11, color: COL.textMuted }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
-        {saveLabel && <span style={{ fontSize: 11, color: COL.textMuted }}>{saveLabel}</span>}
-        {notice && <span style={{ fontSize: 11, color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
+        <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 600 }}>{t('tech_sheet.tmpl_title')} · {customerData?.nom || `#${customerId}`}</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
+        {saveLabel && <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{saveLabel}</span>}
+        {notice && <span style={{ fontSize: 'var(--fs-body)', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
         {canEdit && (
           <div style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
             {TOOLS.map(tl => (
@@ -316,7 +316,7 @@ export default function TechSheetTemplateEditor() {
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFile(f) }} />
           </div>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: COL.gold, color: 'var(--white)', whiteSpace: 'nowrap' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: COL.gold, color: 'var(--white)', whiteSpace: 'nowrap' }}>
           {t('tech_sheet.tmpl_badge')}
         </span>
       </header>
@@ -324,16 +324,16 @@ export default function TechSheetTemplateEditor() {
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* Pàgines */}
         <div style={{ width: 96, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', padding: '8px 5px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ color: COL.gold, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tech_sheet.pages')}</div>
-          {canEdit && <button onClick={addPage} style={{ fontSize: 9, padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>{t('tech_sheet.add_page')}</button>}
+          <div style={{ color: COL.gold, fontSize: 'var(--fs-caption)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tech_sheet.pages')}</div>
+          {canEdit && <button onClick={addPage} style={{ fontSize: 'var(--fs-caption)', padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>{t('tech_sheet.add_page')}</button>}
           {pages.map((p, i) => (
             <div key={p.id} onClick={() => { setCurrentPage(i); setSelectedId(null) }} style={{ position: 'relative', cursor: 'pointer' }}>
               <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
                 {thumbnails[i] && <img src={thumbnails[i]} alt={t('tech_sheet.page_n', { n: i + 1 })} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
               </div>
-              <div style={{ fontSize: 9, color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>{t('tech_sheet.page_n', { n: i + 1 })}</div>
+              <div style={{ fontSize: 'var(--fs-caption)', color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>{t('tech_sheet.page_n', { n: i + 1 })}</div>
               {canEdit && pages.length > 1 && (
-                <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title={t('tech_sheet.delete_page')} style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 9, lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
+                <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title={t('tech_sheet.delete_page')} style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 'var(--fs-caption)', lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
               )}
             </div>
           ))}
@@ -342,7 +342,7 @@ export default function TechSheetTemplateEditor() {
         {/* Stage */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COL.bg, minWidth: 0, overflow: 'auto', position: 'relative' }}>
           {!canEdit && (
-            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 11, color: COL.textMuted }}>
+            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-body)', color: COL.textMuted }}>
               <i className="ti ti-eye" style={{ marginRight: 6 }} />{t('tech_sheet.tmpl_readonly')}
             </div>
           )}
@@ -372,7 +372,7 @@ export default function TechSheetTemplateEditor() {
                 onChange={e => setEditingText(s => ({ ...s, value: e.target.value }))}
                 onBlur={commitTextEdit}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitTextEdit() } if (e.key === 'Escape') setEditingText(null) }}
-                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 11, color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: 'var(--white)', zIndex: 10 }} />
+                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 'var(--fs-body)', color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: 'var(--white)', zIndex: 10 }} />
             )}
           </div>
         </div>
@@ -381,10 +381,10 @@ export default function TechSheetTemplateEditor() {
         <aside style={{ width: 180, flexShrink: 0, borderLeft: `1px solid ${COL.border}`, background: COL.bg, display: 'flex', flexDirection: 'column', minHeight: 0, fontFamily: FONT }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
             <SectionTitle>{t('tech_sheet.insert_data_block')}</SectionTitle>
-            <button onClick={insertHeader} disabled={!canEdit} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: !canEdit ? 'default' : 'pointer', opacity: !canEdit ? 0.45 : 1 }}>
+            <button onClick={insertHeader} disabled={!canEdit} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: !canEdit ? 'default' : 'pointer', opacity: !canEdit ? 0.45 : 1 }}>
               <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> {t('tech_sheet.model_header')}
             </button>
-            <p style={{ fontSize: 10, color: COL.textMuted, margin: '0 0 8px' }}>
+            <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>
               {t('tech_sheet.tmpl_header_help')}
             </p>
 
@@ -407,7 +407,7 @@ export default function TechSheetTemplateEditor() {
                   </label>
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
-                  <button onClick={() => deleteObject(selObj.id)} style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 6, border: '1px solid #e74c3c', borderRadius: 5, background: 'transparent', color: '#e74c3c', fontFamily: FONT, cursor: 'pointer' }}>
+                  <button onClick={() => deleteObject(selObj.id)} style={{ width: '100%', fontSize: 'var(--fs-body)', padding: '5px 8px', marginTop: 6, border: '1px solid #e74c3c', borderRadius: 5, background: 'transparent', color: '#e74c3c', fontFamily: FONT, cursor: 'pointer' }}>
                     <i className="ti ti-trash" style={{ fontSize: 12, marginRight: 5 }} />{t('app.delete')}
                   </button>
                 )}
@@ -418,7 +418,7 @@ export default function TechSheetTemplateEditor() {
       </main>
 
       {loading && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, color: COL.textMuted, fontSize: 13 }}>{t('tech_sheet.tmpl_loading')}</div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, color: COL.textMuted, fontSize: 'var(--fs-body)' }}>{t('tech_sheet.tmpl_loading')}</div>
       )}
     </div>
   )

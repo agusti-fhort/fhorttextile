@@ -7,7 +7,7 @@ export default function StatCard({ icon, label, value, sub, subColor }) {
       padding: '1.2rem 1.4rem',
     }}>
       <div style={{
-        fontSize: 11, color: 'var(--gray)',
+        fontSize: 'var(--fs-body)', color: 'var(--gray)',
         marginBottom: '0.5rem',
         display: 'flex', alignItems: 'center', gap: 6,
       }}>
@@ -22,7 +22,7 @@ export default function StatCard({ icon, label, value, sub, subColor }) {
         {value}
       </div>
       {sub && (
-        <div style={{fontSize: 11, color: subColor || 'var(--gray)', fontWeight: 300}}>
+        <div style={{fontSize: 'var(--fs-body)', color: subColor || 'var(--gray)', fontWeight: 300}}>
           {sub}
         </div>
       )}

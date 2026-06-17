@@ -74,8 +74,8 @@ export default function Alerts() {
         justifyContent: 'space-between', marginBottom: '1.5rem',
       }}>
         <div>
-          <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>{t('dashboard.pom_alerts')}</h1>
-          <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
+          <h1 style={{fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4}}>{t('dashboard.pom_alerts')}</h1>
+          <p style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300}}>
             {t(SUBTITLE_KEY[estat] || 'alerts.subtitle_all', { count: data.length })}
           </p>
         </div>
@@ -88,7 +88,7 @@ export default function Alerts() {
                 background: estat === e ? 'var(--charcoal)' : 'var(--white)',
                 color:      estat === e ? 'var(--white)' : 'var(--gray)',
                 border: '0.5px solid #e4e4e2', borderRadius: 8,
-                padding: '6px 14px', fontSize: 12,
+                padding: '6px 14px', fontSize: 'var(--fs-body)',
                 cursor: 'pointer', 
               }}
             >
@@ -100,11 +100,11 @@ export default function Alerts() {
 
       <Card padding={0}>
         {loading ? (
-          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
+          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
             {t('common.loading')}
           </div>
         ) : data.length === 0 ? (
-          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
+          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
             <i className="ti ti-circle-check" style={{fontSize: 32, color: 'var(--ok)', display: 'block', marginBottom: 12}} />
             {t('alerts.empty', { status: t('alerts.status.' + estat, estat).toLowerCase() })}
           </div>
@@ -128,10 +128,10 @@ export default function Alerts() {
                   <tr key={a.id} style={{
                     borderBottom: i < data.length - 1 ? '0.5px solid var(--gray-l)' : 'none',
                   }}>
-                    <td style={{padding: '0.7rem 1rem', fontSize: 11, color: 'var(--gold)', fontWeight: 500}}>
+                    <td style={{padding: '0.7rem 1rem', fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 500}}>
                       {a.model_codi || a.model}
                     </td>
-                    <td style={{padding: '0.7rem 1rem', fontSize: 12, fontVariantNumeric: 'tabular-nums'}}>
+                    <td style={{padding: '0.7rem 1rem', fontSize: 'var(--fs-body)', fontVariantNumeric: 'tabular-nums'}}>
                       {a.pom_codi || a.pom}
                     </td>
                     <td style={{padding: '0.7rem 1rem'}}>
@@ -139,19 +139,19 @@ export default function Alerts() {
                         {t('alerts.type.' + tipusId)}
                       </Badge>
                     </td>
-                    <td style={{padding: '0.7rem 1rem', fontSize: 12, fontVariantNumeric: 'tabular-nums'}}>
+                    <td style={{padding: '0.7rem 1rem', fontSize: 'var(--fs-body)', fontVariantNumeric: 'tabular-nums'}}>
                       {a.valor_detectat ?? '—'}
                     </td>
-                    <td style={{padding: '0.7rem 1rem', fontSize: 12, color: 'var(--gray)', fontVariantNumeric: 'tabular-nums'}}>
+                    <td style={{padding: '0.7rem 1rem', fontSize: 'var(--fs-body)', color: 'var(--gray)', fontVariantNumeric: 'tabular-nums'}}>
                       {a.valor_esperat ?? '—'}
                     </td>
-                    <td style={{padding: '0.7rem 1rem', fontSize: 12, fontVariantNumeric: 'tabular-nums'}}>
+                    <td style={{padding: '0.7rem 1rem', fontSize: 'var(--fs-body)', fontVariantNumeric: 'tabular-nums'}}>
                       {a.z_score != null ? Number(a.z_score).toFixed(2) : '—'}
                     </td>
                     <td style={{padding: '0.7rem 1rem'}}>
                       <Badge variant={statusVariant[a.estat] || 'gray'}>{t('alerts.status.' + a.estat, a.estat)}</Badge>
                     </td>
-                    <td style={{padding: '0.7rem 1rem', fontSize: 11, color: 'var(--gray)'}}>
+                    <td style={{padding: '0.7rem 1rem', fontSize: 'var(--fs-body)', color: 'var(--gray)'}}>
                       {(a.data_creacio || a.created_at || '').slice(0, 10)}
                     </td>
                     <td style={{padding: '0.5rem 1rem', textAlign: 'right'}}>
@@ -189,7 +189,7 @@ export default function Alerts() {
 
 const hStyle = {
   padding: '0.7rem 1rem',
-  fontSize: 10, letterSpacing: '0.1em',
+  fontSize: 'var(--fs-label)', letterSpacing: '0.1em',
   textTransform: 'uppercase',
   color: 'var(--gray)', fontWeight: 400,
   borderBottom: '0.5px solid #e4e4e2',
@@ -202,7 +202,7 @@ const btnStyle = (color) => ({
   border: `0.5px solid ${color}`,
   borderRadius: 6,
   padding: '4px 10px',
-  fontSize: 11,
+  fontSize: 'var(--fs-body)',
   cursor: 'pointer',
   fontWeight: 500,
 })

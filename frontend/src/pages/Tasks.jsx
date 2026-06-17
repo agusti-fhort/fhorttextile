@@ -44,29 +44,29 @@ function ActiveTasks({ token }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {["Pendent", "En curs", "Bloquejada", "Feta"].map(e => (
           <button key={e} onClick={() => setFiltre(e)} style={{
-            padding: "4px 12px", borderRadius: 4, fontSize: 11,
+            padding: "4px 12px", borderRadius: 4, fontSize: 'var(--fs-body)',
             fontFamily: "IBM Plex Mono, monospace", cursor: "pointer",
             background: filtre === e ? "#f5e6d0" : "var(--white)",
             color: filtre === e ? "var(--gold)" : "var(--text-muted)",
             border: `1px solid ${filtre === e ? "var(--gold)" : "var(--border)"}`,
           }}>{t(ESTAT_FILTER_KEY[e], e)}</button>
         ))}
-        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-muted)", alignSelf: "center" }}>
+        <span style={{ marginLeft: "auto", fontSize: 'var(--fs-body)', color: "var(--text-muted)", alignSelf: "center" }}>
           {t("kanban.tasks_n", { n: tasques.length })}
         </span>
       </div>
 
       {loading ? (
-        <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>{t("common.loading")}</div>
+        <div style={{ color: "var(--text-muted)", fontSize: 'var(--fs-body)', fontFamily: "IBM Plex Mono, monospace" }}>{t("common.loading")}</div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 'var(--fs-body)', fontFamily: "IBM Plex Mono, monospace" }}>
           <thead>
             <tr style={{ borderBottom: "2px solid var(--border)" }}>
               {[
                 [t("tasks.col_task"), "task"], [t("tasks.col_model"), "model"], [t("tasks.col_phase"), "phase"],
                 [t("tasks.col_status"), "status"], ["Gate", "gate"], ["Slots", "slots"],
               ].map(([h, k]) => (
-                <th key={k} style={{ textAlign: "left", padding: "6px 8px", color: "var(--text-muted)", fontWeight: 600, fontSize: 11 }}>{h}</th>
+                <th key={k} style={{ textAlign: "left", padding: "6px 8px", color: "var(--text-muted)", fontWeight: 600, fontSize: 'var(--fs-body)' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -77,14 +77,14 @@ function ActiveTasks({ token }) {
                 <td style={{ padding: "7px 8px", color: "var(--gold)" }}>{task.model_codi || task.model}</td>
                 <td style={{ padding: "7px 8px" }}>
                   <span style={{
-                    padding: "2px 7px", borderRadius: 3, fontSize: 10,
+                    padding: "2px 7px", borderRadius: 3, fontSize: 'var(--fs-label)',
                     background: FASE_COLORS[task.fase] || "#f0ede8",
                     color: "var(--text-main)",
                   }}>{task.fase ? t(`model_phases.${task.fase}`, task.fase) : "—"}</span>
                 </td>
                 <td style={{ padding: "7px 8px" }}><EstatBadge estat={task.estat} size="xs" /></td>
                 <td style={{ padding: "7px 8px", textAlign: "center" }}>
-                  {task.es_gate && <span style={{ color: "var(--gold)", fontSize: 13 }}>◆</span>}
+                  {task.es_gate && <span style={{ color: "var(--gold)", fontSize: 'var(--fs-body)' }}>◆</span>}
                 </td>
                 <td style={{ padding: "7px 8px", color: "var(--text-muted)" }}>
                   {task.slots_reals > 0 ? `${task.slots_reals}/${task.slots_base}` : task.slots_base || "—"}
@@ -110,7 +110,7 @@ export default function Tasks() {
 
   return (
     <div style={{ padding: "24px", maxWidth: 960, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 18, fontFamily: "IBM Plex Mono, monospace", color: "var(--text-main)", marginBottom: 20, fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-h2)', fontFamily: "IBM Plex Mono, monospace", color: "var(--text-main)", marginBottom: 20, fontWeight: 500 }}>
         {t("tasks.title")}
       </h1>
       <ActiveTasks token={token} />

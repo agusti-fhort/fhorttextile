@@ -33,13 +33,13 @@ function SaveStatus({ state }) {
     error:  { txt: '!', color: 'var(--err)' },
   }
   const s = map[state]
-  return <span style={{ position: 'absolute', bottom: 1, right: 4, fontSize: 8, pointerEvents: 'none', color: s.color }}>{s.txt}</span>
+  return <span style={{ position: 'absolute', bottom: 1, right: 4, fontSize: 'var(--fs-caption)', pointerEvents: 'none', color: s.color }}>{s.txt}</span>
 }
 
 // Tokens idèntics a la taula Mesures (EditableTable): td 4px 10px / fontSize 12, inputs fontSize 12.
-const td = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 12, borderBottom: `0.5px solid ${BORDER}` }
+const td = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 'var(--fs-body)', borderBottom: `0.5px solid ${BORDER}` }
 const inputBase = (disabled) => ({
-  font: 'inherit', fontFamily: MONO, fontSize: 12, padding: '2px 4px',
+  font: 'inherit', fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '2px 4px',
   border: `1px solid ${BORDER}`, borderRadius: 3,
   background: disabled ? 'var(--bg-muted)' : 'var(--white)',
   boxSizing: 'border-box',

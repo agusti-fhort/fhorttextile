@@ -10,11 +10,11 @@ const fmtDate = (v) => v ? new Date(v).toLocaleString('ca-ES', { dateStyle: 'med
 // Tokens idèntics a la taula Mesures (EditableTable).
 const TEXT_2 = 'var(--text-muted)'
 const BORDER = 'var(--border)'
-const th = { padding: '6px 10px', borderBottom: `1px solid ${BORDER}`, fontFamily: MONO, fontSize: 11, fontWeight: 600, color: TEXT_2, textAlign: 'left', whiteSpace: 'nowrap' }
-const tdRO = { padding: '4px 10px', borderBottom: `0.5px solid ${BORDER}`, fontFamily: MONO, fontSize: 12 }
+const th = { padding: '6px 10px', borderBottom: `1px solid ${BORDER}`, fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: TEXT_2, textAlign: 'left', whiteSpace: 'nowrap' }
+const tdRO = { padding: '4px 10px', borderBottom: `0.5px solid ${BORDER}`, fontFamily: MONO, fontSize: 'var(--fs-body)' }
 
 const btn = (variant) => ({
-  fontFamily: MONO, fontSize: 12, padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
+  fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
   border: '0.5px solid var(--gray-l)',
   background: variant === 'err' ? 'var(--err)' : variant === 'plain' ? 'var(--white)' : 'var(--gold)',
   color: variant === 'plain' ? 'var(--text-main)' : 'var(--white)', fontWeight: 500,
@@ -138,7 +138,7 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
   const renderHistory = (clickable) => (
     history.length > 0 && (
       <div style={{ marginTop: 28 }}>
-        <h3 style={{ fontSize: 13, fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>{t('sizecheck.history')}</h3>
+        <h3 style={{ fontSize: 'var(--fs-body)', fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>{t('sizecheck.history')}</h3>
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead>
             <tr>
@@ -166,18 +166,18 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
     )
   )
 
-  if (loading) return <div style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
+  if (loading) return <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('common.loading')}</div>
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 500, margin: 0, fontFamily: MONO }}>
+        <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, margin: 0, fontFamily: MONO }}>
           Size Check · talla base {model.base_size_label ? `(${model.base_size_label})` : ''}
         </h2>
       </div>
 
       {!check && (
-        <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>
+        <p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
           {editable
             ? t('sizecheck.open_error')
             : t('sizecheck.consult_empty')}
@@ -202,7 +202,7 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
           {renderHistory(true)}
           {check && (
             <div style={{ marginTop: 20 }}>
-              <h3 style={{ fontSize: 13, fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>
+              <h3 style={{ fontSize: 'var(--fs-body)', fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>
                 {t('sizecheck.validated_table')} · <span style={{ color: estatColor(check.estat) }}>{check.estat}</span>
               </h3>
               {renderGrid(check)}
@@ -215,8 +215,8 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
       {confirm && (
         <div style={overlay} onClick={() => setConfirm(null)}>
           <div onClick={e => e.stopPropagation()} style={modal}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>{t('sizecheck.propagate_title')}</h3>
-            <p style={{ margin: '0 0 18px', fontSize: 12, lineHeight: 1.5, color: 'var(--text-main)' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 'var(--fs-h3)', fontWeight: 600 }}>{t('sizecheck.propagate_title')}</h3>
+            <p style={{ margin: '0 0 18px', fontSize: 'var(--fs-body)', lineHeight: 1.5, color: 'var(--text-main)' }}>
               {t('sizecheck.propagate_warning')}
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
@@ -231,17 +231,17 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
       {reschedule && (
         <div style={overlay} onClick={() => setReschedule(null)}>
           <div onClick={e => e.stopPropagation()} style={modal}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>{t('sizecheck.reschedule_title')}</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: 'var(--fs-h3)', fontWeight: 600 }}>{t('sizecheck.reschedule_title')}</h3>
             {reschedule.descartades && (
-              <p style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.5, color: 'var(--err)' }}>
+              <p style={{ margin: '0 0 12px', fontSize: 'var(--fs-body)', lineHeight: 1.5, color: 'var(--err)' }}>
                 {t('sizecheck.reschedule_rejected')}
               </p>
             )}
-            <p style={{ margin: '0 0 8px', fontSize: 12, lineHeight: 1.5, color: 'var(--text-main)' }}>
+            <p style={{ margin: '0 0 8px', fontSize: 'var(--fs-body)', lineHeight: 1.5, color: 'var(--text-main)' }}>
               {t('sizecheck.reschedule_help')}
             </p>
             <input type="date" value={reDate} onChange={e => setReDate(e.target.value)}
-                   style={{ fontFamily: MONO, fontSize: 13, padding: '6px 8px', borderRadius: 4, border: `1px solid ${BORDER}`, marginBottom: 18, width: '100%', boxSizing: 'border-box' }} />
+                   style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 8px', borderRadius: 4, border: `1px solid ${BORDER}`, marginBottom: 18, width: '100%', boxSizing: 'border-box' }} />
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button style={btn('plain')} disabled={busy} onClick={() => setReschedule(null)}>{t('common.cancel')}</button>
               <button style={btn(reschedule.estat === 'Descartat' ? 'err' : 'gold')} disabled={busy || !reDate}

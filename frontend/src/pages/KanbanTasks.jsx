@@ -263,8 +263,8 @@ export default function KanbanTasks() {
   return (
     <div style={{ minWidth: 0, maxWidth: '100%' }}>
       <div style={{ marginBottom: '1.2rem' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>{t('kanban.title')}</h1>
-        <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('kanban.subtitle')}</p>
+        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4 }}>{t('kanban.title')}</h1>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('kanban.subtitle')}</p>
       </div>
 
       {/* Barra SOBRE el grid: cerca + ordenació + filtres ràpids (tot va al backend). */}
@@ -310,11 +310,11 @@ export default function KanbanTasks() {
             const techSelected = !!fResponsable && fResponsable !== 'me'
             return (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={t('kanban.resp_hint')}>
-                <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--gray)' }}>{t('kanban.filter_responsable')}</span>
+                <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('kanban.filter_responsable')}</span>
                 <div style={{ display: 'flex', border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
                   {[['', 'resp_all'], ['me', 'resp_me']].map(([val, key]) => (
                     <button key={key} onClick={() => setFResponsable(val)} style={{
-                      fontFamily: MONO, fontSize: 11, padding: '6px 10px', border: 'none', cursor: 'pointer',
+                      fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 10px', border: 'none', cursor: 'pointer',
                       background: fResponsable === val ? CREMA : 'var(--white)',
                       color: fResponsable === val ? AMBER_TEXT : 'var(--gray)',
                       fontWeight: fResponsable === val ? 600 : 400,
@@ -349,12 +349,12 @@ export default function KanbanTasks() {
             {t('kanban.more_filters')}
           </button>
           <button onClick={clearFilters} style={{
-            fontFamily: MONO, fontSize: 11, padding: '6px 10px', borderRadius: 8,
+            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 10px', borderRadius: 8,
             border: '0.5px solid var(--gray-l)', background: 'var(--white)', color: 'var(--gray)', cursor: 'pointer',
           }}>
             <i className="ti ti-x" style={{ fontSize: 12 }} /> {t('kanban.clear_filters')}
           </button>
-          <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 11, color: 'var(--gray)' }}>
+          <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>
             {t('kanban.results_n', { n: modelsCount })}
           </span>
         </div>
@@ -391,9 +391,9 @@ export default function KanbanTasks() {
             display: 'flex', alignItems: 'center', gap: 8, background: COL1_BG,
           }}>
             <i className="ti ti-shirt" style={{ fontSize: 14, color: AMBER_TEXT }} />
-            <span style={{ fontSize: 12, fontWeight: 500 }}>{t('kanban.col_models')}</span>
+            <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500 }}>{t('kanban.col_models')}</span>
             <span style={{
-              marginLeft: 'auto', fontSize: 11, color: AMBER_TEXT,
+              marginLeft: 'auto', fontSize: 'var(--fs-body)', color: AMBER_TEXT,
               padding: '2px 8px', borderRadius: 10, background: 'var(--white)',
             }}>{modelsCount}</span>
           </div>
@@ -452,9 +452,9 @@ export default function KanbanTasks() {
                 display: 'flex', alignItems: 'center', gap: 8, background: 'var(--gray-l)',
               }}>
                 <i className={`ti ${col.icon}`} style={{ fontSize: 14, color: col.color }} />
-                <span style={{ fontSize: 12, fontWeight: 500 }}>{t(`kanban.status.${col.key}`)}</span>
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500 }}>{t(`kanban.status.${col.key}`)}</span>
                 <span style={{
-                  marginLeft: 'auto', fontSize: 11, color: 'var(--gray)',
+                  marginLeft: 'auto', fontSize: 'var(--fs-body)', color: 'var(--gray)',
                   padding: '2px 8px', borderRadius: 10, background: 'var(--white)',
                 }}>{items.length}</span>
               </div>
@@ -475,7 +475,7 @@ export default function KanbanTasks() {
       {toast && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 60,
-          fontSize: 12, padding: '10px 16px', borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+          fontSize: 'var(--fs-body)', padding: '10px 16px', borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
           background: toast.type === 'err' ? 'var(--err-bg)' : toast.type === 'warn' ? 'var(--warn-bg)' : 'var(--ok-bg)',
           color: toast.type === 'err' ? 'var(--err)' : toast.type === 'warn' ? 'var(--warn)' : 'var(--ok)',
         }}>{toast.text}</div>
@@ -484,9 +484,9 @@ export default function KanbanTasks() {
   )
 }
 
-const ph = { fontSize: 11, color: 'var(--gray)', textAlign: 'center', padding: '1.2rem', fontWeight: 300 }
+const ph = { fontSize: 'var(--fs-body)', color: 'var(--gray)', textAlign: 'center', padding: '1.2rem', fontWeight: 300 }
 const selS = {
-  fontFamily: MONO, fontSize: 12, padding: '6px 9px', border: '0.5px solid var(--gray-l)',
+  fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 9px', border: '0.5px solid var(--gray-l)',
   borderRadius: 8, background: 'var(--white)', color: 'var(--text-main)',
 }
 
@@ -504,7 +504,7 @@ function ColTitle({ icon, text, amber }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
-      fontFamily: MONO, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em',
+      fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em',
       color: amber ? AMBER_TEXT : 'var(--text-muted)',
     }}>
       <i className={`ti ${icon}`} style={{ fontSize: 13 }} />
@@ -518,7 +518,7 @@ function Count({ n, color }) {
   if (!n) return null
   return (
     <span style={{
-      fontSize: 10, fontVariantNumeric: 'tabular-nums', color,
+      fontSize: 'var(--fs-label)', fontVariantNumeric: 'tabular-nums', color,
       padding: '0 5px', borderRadius: 6, background: 'var(--gray-l)',
     }}>{n}</span>
   )
@@ -534,14 +534,14 @@ function ModelRow({ model, selected, onClick, t }) {
       background: selected ? CREMA : 'var(--white)', borderRadius: 8, padding: '8px 10px',
       cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4,
     }}>
-      <div style={{ fontFamily: MONO, fontSize: 12, fontWeight: 600, color: 'var(--gold)' }}>
+      <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gold)' }}>
         {model.model_codi || `#${model.model_id}`}
       </div>
       {model.model_nom && (
-        <div style={{ fontSize: 11, color: 'var(--text-main)', lineHeight: 1.3 }}>{model.model_nom}</div>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', lineHeight: 1.3 }}>{model.model_nom}</div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, color: 'var(--gray)' }}>{t('kanban.tasks_n', { n: total })}</span>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>{t('kanban.tasks_n', { n: total })}</span>
         <Count n={c.pending} color="var(--gray)" />
         <Count n={c.in_progress} color="var(--gold)" />
         <Count n={c.done} color="var(--ok)" />
@@ -554,7 +554,7 @@ function GateRow({ gate, selected, onClick, onValidate, t }) {
   const [confirming, setConfirming] = useState(false)
   const to = nextPhase(gate.fase_actual)
   const miniBtn = {
-    fontFamily: MONO, fontSize: 10, padding: '4px 8px', borderRadius: 6, cursor: 'pointer',
+    fontFamily: MONO, fontSize: 'var(--fs-label)', padding: '4px 8px', borderRadius: 6, cursor: 'pointer',
   }
   return (
     <div style={{
@@ -565,10 +565,10 @@ function GateRow({ gate, selected, onClick, onValidate, t }) {
         textAlign: 'left', width: '100%', border: 'none', background: 'transparent',
         padding: '8px 10px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4,
       }}>
-        <div style={{ fontFamily: MONO, fontSize: 12, fontWeight: 600, color: AMBER_TEXT }}>
+        <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: AMBER_TEXT }}>
           {gate.codi_intern || `#${gate.model_id}`}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--gray)' }}>
+        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>
           {t('kanban.phase')}: {gate.fase_actual} · {t('kanban.tasks_n', { n: gate.task_count })}
         </div>
       </button>
@@ -576,7 +576,7 @@ function GateRow({ gate, selected, onClick, onValidate, t }) {
         <div style={{ padding: '0 10px 10px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {confirming ? (
             <>
-              <span style={{ fontSize: 10, color: AMBER_TEXT, flex: '1 1 100%' }}>
+              <span style={{ fontSize: 'var(--fs-label)', color: AMBER_TEXT, flex: '1 1 100%' }}>
                 {t('kanban.gate_confirm', { phase: to })}
               </span>
               <button onClick={() => { setConfirming(false); onValidate(gate, to) }}
@@ -616,19 +616,19 @@ function TaskCard({ task, canExecute, onTransition, t }) {
       padding: '0.7rem 0.8rem', background: 'var(--white)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
-        <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 500 }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 500 }}>
           {task.model_codi || `#${task.model}`}
         </span>
         {task.rectifications > 0 && (
           <span title={t('kanban.rect', { n: task.rectifications })} style={{
-            fontSize: 10, color: 'var(--warn)', background: 'var(--warn-bg)',
+            fontSize: 'var(--fs-label)', color: 'var(--warn)', background: 'var(--warn-bg)',
             padding: '1px 6px', borderRadius: 8, whiteSpace: 'nowrap',
           }}>
             <i className="ti ti-rotate-clockwise" style={{ fontSize: 10 }} /> {task.rectifications}
           </span>
         )}
       </div>
-      <div style={{ fontSize: 12, lineHeight: 1.4 }}>
+      <div style={{ fontSize: 'var(--fs-body)', lineHeight: 1.4 }}>
         {task.task_type_name || task.task_type_code}
       </div>
       {task.status === 'InProgress' && task.started_at && (
@@ -648,7 +648,7 @@ function TaskCard({ task, canExecute, onTransition, t }) {
             }
             navigate(`/models/${task.model}/mesures`)
           }} style={{
-            display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px',
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-body)', padding: '4px 8px',
             borderRadius: 6, border: '0.5px solid var(--gold)', background: 'var(--white)',
             cursor: 'pointer', color: 'var(--gold)', fontWeight: 500,
           }}>
@@ -666,7 +666,7 @@ function TaskCard({ task, canExecute, onTransition, t }) {
             }
             navigate(`/models/${task.model}/fitxa?task_id=${task.id}`)
           }} style={{
-            display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px',
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-body)', padding: '4px 8px',
             borderRadius: 6, border: '0.5px solid var(--gold)', background: 'var(--white)',
             cursor: 'pointer', color: 'var(--gold)', fontWeight: 500,
           }}>
@@ -686,7 +686,7 @@ function TaskCard({ task, canExecute, onTransition, t }) {
             }
             navigate(`/models/${task.model}/size-check`)
           }} style={{
-            display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px',
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-body)', padding: '4px 8px',
             borderRadius: 6, border: '0.5px solid var(--gold)', background: 'var(--white)',
             cursor: 'pointer', color: 'var(--gold)', fontWeight: 500,
           }}>
@@ -699,7 +699,7 @@ function TaskCard({ task, canExecute, onTransition, t }) {
         <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
           {actions.map(a => (
             <button key={a.key} onClick={() => onTransition(task, a.to)} style={{
-              display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px',
+              display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-body)', padding: '4px 8px',
               borderRadius: 6, border: '0.5px solid var(--gray-l)', background: 'var(--white)',
               cursor: 'pointer', color: 'var(--text-main)',
             }}>

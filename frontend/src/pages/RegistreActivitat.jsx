@@ -20,7 +20,7 @@ const MiniStat = ({ label, value }) => (
   <div style={{ display:'flex', flexDirection:'column', gap:2,
                 padding:'10px 16px', background:'var(--bg-card)',
                 border:'0.5px solid var(--border)', borderRadius:8, minWidth:140 }}>
-    <span style={{ fontSize:11, color:'var(--text-muted)', textTransform:'uppercase',
+    <span style={{ fontSize: 'var(--fs-body)', color:'var(--text-muted)', textTransform:'uppercase',
                    letterSpacing:'0.04em' }}>{label}</span>
     <span style={{ fontSize:'1.05rem', color:'var(--text-main)', fontWeight:600 }}>{value}</span>
   </div>
@@ -67,10 +67,10 @@ export default function RegistreActivitat() {
   useEffect(() => { setPage(1); }, [period, tecnicId, taskTypeId]);
   useEffect(() => { const id = setTimeout(load, 200); return () => clearTimeout(id); }, [load]);
 
-  const thStyle = { padding:'8px 12px', fontSize:11, color:'var(--text-muted)',
+  const thStyle = { padding:'8px 12px', fontSize: 'var(--fs-body)', color:'var(--text-muted)',
                     textTransform:'uppercase', letterSpacing:'0.04em',
                     borderBottom:'1px solid var(--border)', textAlign:'left', fontWeight:400 };
-  const tdStyle = { padding:'10px 12px', fontSize:13, color:'var(--text-main)',
+  const tdStyle = { padding:'10px 12px', fontSize: 'var(--fs-body)', color:'var(--text-main)',
                     borderBottom:'0.5px solid var(--border)' };
 
   return (
@@ -78,10 +78,10 @@ export default function RegistreActivitat() {
                   fontFamily:'IBM Plex Mono, monospace' }}>
       {/* Header */}
       <div style={{ marginBottom:20 }}>
-        <h1 style={{ fontSize:20, fontWeight:600, color:'var(--text-main)', margin:0 }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight:600, color:'var(--text-main)', margin:0 }}>
           {t('registre.title', "Registre d'activitat")}
         </h1>
-        <span style={{ fontSize:12, color:'var(--text-muted)' }}>
+        <span style={{ fontSize: 'var(--fs-body)', color:'var(--text-muted)' }}>
           {count} {t('registre.models', 'models')}
         </span>
       </div>
@@ -100,19 +100,19 @@ export default function RegistreActivitat() {
         <div style={{ display:'flex', alignItems:'center', gap:4, border:'1px solid var(--border)',
                       borderRadius:6, background:'var(--bg-card)', padding:'2px' }}>
           <button onClick={() => setPeriod(prevMonth(period))}
-            style={{ padding:'4px 8px', fontSize:12, border:'none', background:'none',
+            style={{ padding:'4px 8px', fontSize: 'var(--fs-body)', border:'none', background:'none',
                      cursor:'pointer', color:'var(--text-main)',
                      fontFamily:'IBM Plex Mono, monospace' }}>←</button>
-          <span style={{ fontSize:12, minWidth:120, textAlign:'center', color:'var(--text-main)' }}>
+          <span style={{ fontSize: 'var(--fs-body)', minWidth:120, textAlign:'center', color:'var(--text-main)' }}>
             {fmtPeriod(period)}
           </span>
           <button onClick={() => setPeriod(nextMonth(period))}
-            style={{ padding:'4px 8px', fontSize:12, border:'none', background:'none',
+            style={{ padding:'4px 8px', fontSize: 'var(--fs-body)', border:'none', background:'none',
                      cursor:'pointer', color:'var(--text-main)',
                      fontFamily:'IBM Plex Mono, monospace' }}>→</button>
           {period && (
             <button onClick={() => setPeriod('')}
-              style={{ padding:'4px 8px', fontSize:11, border:'none', background:'none',
+              style={{ padding:'4px 8px', fontSize: 'var(--fs-body)', border:'none', background:'none',
                        cursor:'pointer', color:'var(--text-muted)',
                        fontFamily:'IBM Plex Mono, monospace' }}>
               {t('registre.all_months', 'Tots')}
@@ -121,7 +121,7 @@ export default function RegistreActivitat() {
         </div>
 
         <select value={tecnicId} onChange={e => setTecnicId(e.target.value)}
-          style={{ padding:'6px 10px', fontSize:12, border:'1px solid var(--border)',
+          style={{ padding:'6px 10px', fontSize: 'var(--fs-body)', border:'1px solid var(--border)',
                    borderRadius:6, fontFamily:'IBM Plex Mono, monospace',
                    background:'var(--bg-card)', color:'var(--text-main)' }}>
           <option value="">{t('registre.all_tecnics', 'Tots els tècnics')}</option>
@@ -131,7 +131,7 @@ export default function RegistreActivitat() {
         </select>
 
         <select value={taskTypeId} onChange={e => setTaskTypeId(e.target.value)}
-          style={{ padding:'6px 10px', fontSize:12, border:'1px solid var(--border)',
+          style={{ padding:'6px 10px', fontSize: 'var(--fs-body)', border:'1px solid var(--border)',
                    borderRadius:6, fontFamily:'IBM Plex Mono, monospace',
                    background:'var(--bg-card)', color:'var(--text-main)' }}>
           <option value="">{t('registre.all_tasks', 'Totes les tasques')}</option>
@@ -142,7 +142,7 @@ export default function RegistreActivitat() {
 
         {(period || tecnicId || taskTypeId) && (
           <button onClick={() => { setPeriod(''); setTecnicId(''); setTaskTypeId(''); }}
-            style={{ padding:'6px 10px', fontSize:12, border:'1px solid var(--border)',
+            style={{ padding:'6px 10px', fontSize: 'var(--fs-body)', border:'1px solid var(--border)',
                      borderRadius:6, background:'none', cursor:'pointer',
                      color:'var(--text-muted)', fontFamily:'IBM Plex Mono, monospace' }}>
             {t('registre.reset', 'Netejar')}
@@ -152,7 +152,7 @@ export default function RegistreActivitat() {
 
       {/* Taula */}
       {loading ? (
-        <div style={{ color:'var(--text-muted)', fontSize:13 }}>…</div>
+        <div style={{ color:'var(--text-muted)', fontSize: 'var(--fs-body)' }}>…</div>
       ) : (
         <table style={{ width:'100%', borderCollapse:'collapse' }}>
           <thead>
@@ -193,14 +193,14 @@ export default function RegistreActivitat() {
       {count > PAGE_SIZE && (
         <div style={{ display:'flex', gap:8, marginTop:16, justifyContent:'flex-end' }}>
           <button disabled={page===1} onClick={() => setPage(p => p-1)}
-            style={{ padding:'4px 10px', fontSize:12, border:'1px solid var(--border)',
+            style={{ padding:'4px 10px', fontSize: 'var(--fs-body)', border:'1px solid var(--border)',
                      borderRadius:6, cursor:'pointer', background:'var(--bg-card)',
                      fontFamily:'IBM Plex Mono, monospace' }}>←</button>
-          <span style={{ fontSize:12, color:'var(--text-muted)', padding:'4px 6px' }}>
+          <span style={{ fontSize: 'var(--fs-body)', color:'var(--text-muted)', padding:'4px 6px' }}>
             {page} / {Math.ceil(count/PAGE_SIZE)}
           </span>
           <button disabled={page>=Math.ceil(count/PAGE_SIZE)} onClick={() => setPage(p => p+1)}
-            style={{ padding:'4px 10px', fontSize:12, border:'1px solid var(--border)',
+            style={{ padding:'4px 10px', fontSize: 'var(--fs-body)', border:'1px solid var(--border)',
                      borderRadius:6, cursor:'pointer', background:'var(--bg-card)',
                      fontFamily:'IBM Plex Mono, monospace' }}>→</button>
         </div>

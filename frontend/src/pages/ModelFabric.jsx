@@ -5,17 +5,17 @@ import { useTranslation } from 'react-i18next'
 const API = import.meta.env.VITE_API_URL || ''
 
 const labelStyle = {
-  display: 'block', fontSize: 12,
+  display: 'block', fontSize: 'var(--fs-body)',
   color: 'var(--text-muted)', marginBottom: 4,
 }
 const inputStyle = {
-  width: '100%', padding: '7px 10px', fontSize: 13,
+  width: '100%', padding: '7px 10px', fontSize: 'var(--fs-body)',
   border: '0.5px solid var(--border)',
   borderRadius: 6, background: 'var(--bg-main)',
   boxSizing: 'border-box',
 }
 const btnSecondary = {
-  padding: '8px 16px', background: 'transparent', fontSize: 13,
+  padding: '8px 16px', background: 'transparent', fontSize: 'var(--fs-body)',
   border: '0.5px solid var(--border)',
   borderRadius: 6, cursor: 'pointer',
 }
@@ -136,7 +136,7 @@ export default function ModelFabric() {
         marginBottom: '1.5rem',
         padding: '8px 14px',
         background: 'var(--bg-muted)',
-        borderRadius: 8, fontSize: 13,
+        borderRadius: 8, fontSize: 'var(--fs-body)',
       }}>
         <span style={{ color: 'var(--text-muted)' }}>
           {model.codi_intern}
@@ -149,16 +149,16 @@ export default function ModelFabric() {
         )}
       </div>
 
-      <h2 style={{ fontSize: 18, fontWeight: 500, marginBottom: '0.25rem' }}>
+      <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: '0.25rem' }}>
         {t('model_fabric.title')}
       </h2>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
         {t('model_fabric.subtitle')}
       </p>
 
       {error && (
         <div style={{ background: '#fee', border: '1px solid #fcc', borderRadius: 6,
-                      padding: '8px 12px', marginBottom: 12, fontSize: 13, color: '#c00' }}>
+                      padding: '8px 12px', marginBottom: 12, fontSize: 'var(--fs-body)', color: '#c00' }}>
           {error}
         </div>
       )}
@@ -183,7 +183,7 @@ export default function ModelFabric() {
         <label style={labelStyle}>{t('model_sheet.field_shrinkage')}</label>
 
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 6 }}>
             {t('model_fabric.iso_hint')}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -196,7 +196,7 @@ export default function ModelFabric() {
                 <button key={entry.id} type="button"
                   onClick={() => handleISOSelect(entry)}
                   style={{
-                    padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                    padding: '4px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
                     border: active
                       ? '1.5px solid var(--gold)'
                       : '0.5px solid var(--border)',
@@ -204,7 +204,7 @@ export default function ModelFabric() {
                     color: 'var(--text-muted)',
                   }}>
                   {entry.nom}
-                  <span style={{ marginLeft: 6, fontSize: 11 }}>
+                  <span style={{ marginLeft: 6, fontSize: 'var(--fs-body)' }}>
                     {entry.warp}%/{entry.weft}%
                   </span>
                 </button>
@@ -216,7 +216,7 @@ export default function ModelFabric() {
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <button type="button" onClick={() => setBiaxial(true)}
             style={{
-              padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+              padding: '4px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
               border: 'none',
               background: biaxial ? 'var(--gold)' : 'var(--bg-muted)',
               color: biaxial ? 'var(--white)' : 'var(--text-muted)',
@@ -225,7 +225,7 @@ export default function ModelFabric() {
           </button>
           <button type="button" onClick={() => setBiaxial(false)}
             style={{
-              padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+              padding: '4px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
               border: 'none',
               background: !biaxial ? 'var(--gold)' : 'var(--bg-muted)',
               color: !biaxial ? 'var(--white)' : 'var(--text-muted)',
@@ -237,7 +237,7 @@ export default function ModelFabric() {
         {biaxial ? (
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <label style={{ ...labelStyle, fontSize: 11 }}>{t('model_fabric.warp_pct')}</label>
+              <label style={{ ...labelStyle, fontSize: 'var(--fs-body)' }}>{t('model_fabric.warp_pct')}</label>
               <input type="number" step="0.5" min="0" max="30"
                 value={form.shrinkage_warp}
                 onChange={e => setForm(f => ({
@@ -248,7 +248,7 @@ export default function ModelFabric() {
                 style={{ ...inputStyle, width: 80 }} />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ ...labelStyle, fontSize: 11 }}>{t('model_fabric.weft_pct')}</label>
+              <label style={{ ...labelStyle, fontSize: 'var(--fs-body)' }}>{t('model_fabric.weft_pct')}</label>
               <input type="number" step="0.5" min="0" max="30"
                 value={form.shrinkage_weft}
                 onChange={e => setForm(f => ({
@@ -261,7 +261,7 @@ export default function ModelFabric() {
           </div>
         ) : (
           <div>
-            <label style={{ ...labelStyle, fontSize: 11 }}>{t('model_fabric.shrinkage_pct_label')}</label>
+            <label style={{ ...labelStyle, fontSize: 'var(--fs-body)' }}>{t('model_fabric.shrinkage_pct_label')}</label>
             <input type="number" step="0.5" min="0" max="30"
               value={form.shrinkage_pct}
               onChange={e => setForm(f => ({
@@ -297,7 +297,7 @@ export default function ModelFabric() {
             style={{
               padding: '8px 20px', background: saving ? '#ccc' : 'var(--gold)',
               color: 'var(--white)', border: 'none', borderRadius: 6,
-              fontSize: 14, fontWeight: 500,
+              fontSize: 'var(--fs-h3)', fontWeight: 500,
               cursor: saving ? 'not-allowed' : 'pointer',
             }}>
             {saving ? t('model_fabric.closing') : t('model_fabric.close_finish')}

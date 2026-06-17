@@ -219,7 +219,7 @@ export default function ModelWizard() {
   return (
     <div style={{ maxWidth: 820, margin: '0 auto', padding: '2rem 1rem' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
-        <h1 style={{ fontFamily: MONO, fontSize: 22, fontWeight: 500, margin: 0 }}>
+        <h1 style={{ fontFamily: MONO, fontSize: 'var(--fs-h1)', fontWeight: 500, margin: 0 }}>
           {isEditMode ? t('model_wizard.title_edit') : t('model_wizard.title_new')}
         </h1>
         <button type="button" onClick={() => navigate('/models')} style={linkBtn}>✕ {t('model_wizard.cancel')}</button>
@@ -233,7 +233,7 @@ export default function ModelWizard() {
           return (
             <button key={n} disabled={locked} onClick={() => { if (!locked) setBlock(n) }} style={{
               flex: 1, minWidth: 120, padding: '8px 12px', borderRadius: 8, cursor: locked ? 'not-allowed' : 'pointer', fontFamily: MONO,
-              fontSize: 12, fontWeight: active ? 600 : 400, textAlign: 'left',
+              fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 400, textAlign: 'left',
               background: active ? 'var(--warn-bg)' : 'var(--white)',
               color: active ? 'var(--warn)' : 'var(--gray)',
               border: `0.5px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
@@ -264,7 +264,7 @@ export default function ModelWizard() {
                   {SEASONS.map(s => (
                     <Chip key={s} active={season === s} onClick={() => setSeason(s)} disabled={isEditMode}>
                       <span style={{ fontWeight: 500 }}>{s}</span>
-                      <span style={{ fontSize: 9, display: 'block', opacity: 0.8 }}>{t(`model_wizard.season_${s}`)}</span>
+                      <span style={{ fontSize: 'var(--fs-caption)', display: 'block', opacity: 0.8 }}>{t(`model_wizard.season_${s}`)}</span>
                     </Chip>
                   ))}
                 </div>
@@ -301,8 +301,8 @@ export default function ModelWizard() {
                 {item && !picking ? (
                   <div style={summaryBox}>
                     <div>
-                      <div style={{ ...labelStyle, fontSize: 9 }}>{t('model_wizard.selected_item')}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      <div style={{ ...labelStyle, fontSize: 'var(--fs-caption)' }}>{t('model_wizard.selected_item')}</div>
+                      <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>
                         {(family?.nom_en || '—')} · {item.name}
                       </div>
                     </div>
@@ -334,13 +334,13 @@ export default function ModelWizard() {
         {block === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {(!target || !construction) ? (
-              <p style={{ fontSize: 12, color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>
             ) : (
               <>
-                <p style={{ fontSize: 12, color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>
+                <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>
                   {t('model_wizard.sizes_for')} {t(`model_wizard.target_${target}`)} · {t(`model_wizard.construction_${construction}`)}
                 </p>
-                {profiles.length === 0 && <p style={{ fontSize: 12, color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>}
+                {profiles.length === 0 && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>}
                 {profiles.map(p => {
                   const active = selProfile?.id === p.id
                   const sub = [
@@ -360,20 +360,20 @@ export default function ModelWizard() {
                       background: active ? 'var(--warn-bg)' : 'var(--white)',
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 500, fontSize: 14 }}>{p.size_system?.nom || t('model_wizard.profile_n', { id: p.id })}</span>
+                        <span style={{ fontWeight: 500, fontSize: 'var(--fs-h3)' }}>{p.size_system?.nom || t('model_wizard.profile_n', { id: p.id })}</span>
                         {p.size_system_customer_codi
-                          ? <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
+                          ? <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '1px 6px', borderRadius: 999,
                                            background: 'var(--gold-pale)', color: 'var(--gold)' }}>
                               {t('model_wizard.client_run')}: {p.size_system_customer_codi}
                             </span>
-                          : <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
+                          : <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '1px 6px', borderRadius: 999,
                                            background: 'var(--gray-l)', color: 'var(--gray)' }}>
                               {t('model_wizard.canonical')}
                             </span>}
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--gray)' }}>{sub}</div>
+                      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{sub}</div>
                       {ageMin != null && ageMax != null && ageMax > 0 && (
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
                           {t('model_wizard.age_months_range', { min: ageMin, max: ageMax })}
                         </div>
                       )}
@@ -397,7 +397,7 @@ export default function ModelWizard() {
                       {selectedSizes.map(s => <Chip key={s} active={baseSize === s} onClick={() => setBaseSize(s)}>{s} {baseSize === s && '★'}</Chip>)}
                     </div>
                     {baseSizeInvalid && (
-                      <div style={{ color: 'var(--warn)', fontSize: 11, marginTop: 6 }}>
+                      <div style={{ color: 'var(--warn)', fontSize: 'var(--fs-body)', marginTop: 6 }}>
                         {t('wizard_base_size_required')}
                       </div>
                     )}
@@ -437,14 +437,14 @@ export default function ModelWizard() {
 }
 
 // ── UI atoms (tokens) ─────────────────────────────────────────────────────────
-const labelStyle = { fontSize: 11, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: MONO }
-const inputStyle = { width: '100%', padding: '8px 10px', borderRadius: 4, border: '0.5px solid var(--gray-l)', fontFamily: MONO, fontSize: 13, background: 'var(--white)', boxSizing: 'border-box' }
-const refBox = { background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8, padding: '8px 14px', fontFamily: MONO, fontSize: 15, color: 'var(--warn)', fontWeight: 500, minHeight: 36, display: 'flex', alignItems: 'center' }
-const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, padding: '0.6rem 1rem', margin: '12px 0 0', fontSize: 13, color: '#c00', fontFamily: MONO }
+const labelStyle = { fontSize: 'var(--fs-body)', color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: MONO }
+const inputStyle = { width: '100%', padding: '8px 10px', borderRadius: 4, border: '0.5px solid var(--gray-l)', fontFamily: MONO, fontSize: 'var(--fs-body)', background: 'var(--white)', boxSizing: 'border-box' }
+const refBox = { background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8, padding: '8px 14px', fontFamily: MONO, fontSize: 'var(--fs-h3)', color: 'var(--warn)', fontWeight: 500, minHeight: 36, display: 'flex', alignItems: 'center' }
+const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, padding: '0.6rem 1rem', margin: '12px 0 0', fontSize: 'var(--fs-body)', color: '#c00', fontFamily: MONO }
 const summaryBox = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 16px', borderRadius: 8, border: '0.5px solid var(--gray-l)', background: 'var(--warn-bg)' }
-const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 12, cursor: 'pointer', fontFamily: MONO }
-const ghostBtn = { background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)', borderRadius: 6, padding: '6px 14px', fontSize: 12, cursor: 'pointer', fontFamily: MONO }
-const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : 'var(--warn)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 14, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
+const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
+const ghostBtn = { background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)', borderRadius: 6, padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
+const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : 'var(--warn)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-h3)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
 
 function Field({ label, children }) {
   return (
@@ -464,7 +464,7 @@ function TextInput({ label, value, onChange, placeholder }) {
 function Chip({ active, onClick, disabled, children }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled} style={{
-      padding: '6px 14px', borderRadius: 6, fontFamily: MONO, fontSize: 13,
+      padding: '6px 14px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)',
       border: active ? '1.5px solid var(--warn)' : '0.5px solid var(--gray-l)',
       background: active ? 'var(--warn)' : 'transparent', color: active ? 'var(--white)' : 'var(--text-main)',
       cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled && !active ? 0.5 : 1, fontWeight: active ? 500 : 400,

@@ -16,12 +16,12 @@ export default function UserProfilePage() {
   }, [])
 
   if (loading) return (
-    <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
+    <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
       Carregant…
     </div>
   )
   if (!profile) return (
-    <div style={{padding: '3rem', textAlign: 'center', color: 'var(--err)', fontSize: 13}}>
+    <div style={{padding: '3rem', textAlign: 'center', color: 'var(--err)', fontSize: 'var(--fs-body)'}}>
       No s'ha pogut carregar el perfil.
     </div>
   )
@@ -36,8 +36,8 @@ export default function UserProfilePage() {
   return (
     <div style={{maxWidth: 640}}>
       <div style={{marginBottom: '1.5rem'}}>
-        <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>El meu perfil</h1>
-        <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
+        <h1 style={{fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4}}>El meu perfil</h1>
+        <p style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300}}>
           Informació de l'usuari autenticat
         </p>
       </div>
@@ -53,16 +53,16 @@ export default function UserProfilePage() {
             width: 72, height: 72, borderRadius: '50%',
             background: profile.color_avatar || 'var(--gold)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'white', fontSize: 24, fontWeight: 500,
+            color: 'white', fontSize: 'var(--fs-h1)', fontWeight: 500,
             flexShrink: 0,
           }}>
             {initials}
           </div>
           <div>
-            <h2 style={{fontSize: 18, fontWeight: 500, marginBottom: 4}}>
+            <h2 style={{fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4}}>
               {profile.nom_complet || profile.username}
             </h2>
-            <div style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
+            <div style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300}}>
               {profile.rol_nom || 'Sense rol'}
             </div>
           </div>
@@ -79,7 +79,7 @@ export default function UserProfilePage() {
           <div key={k} style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             padding: '0.6rem 0', borderBottom: '0.5px solid var(--gray-l)',
-            fontSize: 12,
+            fontSize: 'var(--fs-body)',
           }}>
             <span style={{color: 'var(--gray)', fontWeight: 300}}>{k}</span>
             <span style={{display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400}}>
@@ -100,7 +100,7 @@ export default function UserProfilePage() {
             marginTop: '1.5rem', width: '100%',
             background: 'var(--gold)', color: 'white',
             border: 'none', borderRadius: 8,
-            padding: '10px 16px', fontSize: 12, fontWeight: 500,
+            padding: '10px 16px', fontSize: 'var(--fs-body)', fontWeight: 500,
             cursor: 'pointer', 
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}

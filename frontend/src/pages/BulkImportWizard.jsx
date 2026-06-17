@@ -130,8 +130,8 @@ export default function BulkImportWizard() {
     <div style={{ maxWidth: 920, margin: '0 auto', padding: '2rem 1rem' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
         <div>
-          <h1 style={{ fontFamily: MONO, fontSize: 22, fontWeight: 500, margin: 0 }}>{t('bulk_import.title')}</h1>
-          <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300, margin: '4px 0 0' }}>{t('bulk_import.subtitle')}</p>
+          <h1 style={{ fontFamily: MONO, fontSize: 'var(--fs-h1)', fontWeight: 500, margin: 0 }}>{t('bulk_import.title')}</h1>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, margin: '4px 0 0' }}>{t('bulk_import.subtitle')}</p>
         </div>
         <button type="button" onClick={() => navigate('/models')} style={linkBtn}>✕ {t('bulk_import.cancel')}</button>
       </div>
@@ -152,7 +152,7 @@ export default function BulkImportWizard() {
               <button type="button" onClick={downloadTemplate} disabled={!customerId} style={ghostBtn(!customerId)}>
                 <i className="ti ti-download" /> {t('bulk_import.download_template')}
               </button>
-              <span style={{ fontSize: 11, color: 'var(--gray)' }}>{t('bulk_import.download_template_hint')}</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('bulk_import.download_template_hint')}</span>
             </div>
 
             <div
@@ -166,10 +166,10 @@ export default function BulkImportWizard() {
               <input id="bulk-file" type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
                 onChange={e => setFile(e.target.files[0])} />
               <i className="ti ti-file-spreadsheet" style={{ fontSize: 30, color: GOLD }} />
-              <div style={{ fontSize: 14, fontWeight: 500, marginTop: 8 }}>
+              <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginTop: 8 }}>
                 {file ? file.name : t('bulk_import.drop_zone')}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--gray)', marginTop: 4 }}>{t('bulk_import.drop_hint')}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginTop: 4 }}>{t('bulk_import.drop_hint')}</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -201,7 +201,7 @@ export default function BulkImportWizard() {
             </div>
 
             <div style={{ border: `0.5px solid ${BORDER}`, borderRadius: 10, maxHeight: 360, overflowY: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: MONO, fontSize: 12 }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
                 <thead>
                   <tr>
                     <th style={th}>{t('bulk_import.col_row')}</th>
@@ -241,7 +241,7 @@ export default function BulkImportWizard() {
         {/* ───── PAS 3 — Confirmació ───── */}
         {step === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <p style={{ fontFamily: MONO, fontSize: 14 }}>
+            <p style={{ fontFamily: MONO, fontSize: 'var(--fs-h3)' }}>
               {t('bulk_import.confirm_text', { ok: okCount, conjunts: resum?.conjunts ?? 0, errors: errCount })}
             </p>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -256,11 +256,11 @@ export default function BulkImportWizard() {
         {/* ───── PAS 4 — Resultat ───── */}
         {step === 4 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ fontFamily: MONO, fontSize: 15, fontWeight: 600, color: 'var(--ok)' }}>
+            <div style={{ fontFamily: MONO, fontSize: 'var(--fs-h3)', fontWeight: 600, color: 'var(--ok)' }}>
               ✓ {t('bulk_import.result_created', { n: commitStats?.models ?? 0 })}
             </div>
             {errCount > 0 && (
-              <div style={{ fontSize: 13, color: GOLD }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: GOLD }}>
                 {t('bulk_import.result_errors_pending', { errors: errCount })}
                 <button type="button" onClick={downloadErrors} style={{ ...ghostBtn(false), marginLeft: 10 }}>
                   <i className="ti ti-download" /> {t('bulk_import.download_errors')}
@@ -294,12 +294,12 @@ function Stepper({ step, t }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{
                 width: 26, height: 26, borderRadius: '50%', flexShrink: 0, display: 'flex',
-                alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600,
+                alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-body)', fontWeight: 600,
                 background: active ? GOLD : done ? 'var(--ok)' : 'transparent',
                 color: active || done ? 'var(--white)' : 'var(--gray)',
                 border: active || done ? 'none' : `1px solid ${BORDER}`,
               }}>{done ? '✓' : n}</div>
-              <span style={{ fontSize: 12, fontWeight: active ? 600 : 400, color: active ? 'var(--text-main)' : 'var(--gray)', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 400, color: active ? 'var(--text-main)' : 'var(--gray)', whiteSpace: 'nowrap' }}>
                 {t(`bulk_import.${key}`)}
               </span>
             </div>
@@ -316,8 +316,8 @@ function Stepper({ step, t }) {
 function Counter({ n, label, color }) {
   return (
     <div style={{ border: `0.5px solid ${BORDER}`, borderRadius: 10, padding: '8px 16px', minWidth: 90, textAlign: 'center' }}>
-      <div style={{ fontFamily: MONO, fontSize: 20, fontWeight: 600, color }}>{n}</div>
-      <div style={{ fontSize: 10, color: 'var(--gray)', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontFamily: MONO, fontSize: 'var(--fs-h1)', fontWeight: 600, color }}>{n}</div>
+      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', textTransform: 'uppercase' }}>{label}</div>
     </div>
   )
 }
@@ -329,7 +329,7 @@ function EstatBadge({ estat, t }) {
   }
   const [bg, fg] = colors[estat] || ['var(--gray-l)', 'var(--gray)']
   return (
-    <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: bg, color: fg }}>
+    <span style={{ fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: bg, color: fg }}>
       {t(`bulk_import.estat_${estat}`)}
     </span>
   )
@@ -338,17 +338,17 @@ function EstatBadge({ estat, t }) {
 function Field({ label, children }) {
   return (
     <div>
-      <div style={{ fontSize: 11, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: MONO, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: MONO, marginBottom: 6 }}>{label}</div>
       {children}
     </div>
   )
 }
 
 const card = { border: `0.5px solid ${BORDER}`, borderRadius: 12, background: 'var(--white)', padding: 22 }
-const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, padding: '0.6rem 1rem', margin: '0 0 12px', fontSize: 13, color: '#c00', fontFamily: MONO }
-const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 12, cursor: 'pointer', fontFamily: MONO }
-const th = { textAlign: 'left', padding: '8px 10px', borderBottom: `0.5px solid ${BORDER}`, position: 'sticky', top: 0, background: 'var(--white)', fontSize: 11, color: 'var(--gray)' }
+const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, padding: '0.6rem 1rem', margin: '0 0 12px', fontSize: 'var(--fs-body)', color: '#c00', fontFamily: MONO }
+const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
+const th = { textAlign: 'left', padding: '8px 10px', borderBottom: `0.5px solid ${BORDER}`, position: 'sticky', top: 0, background: 'var(--white)', fontSize: 'var(--fs-body)', color: 'var(--gray)' }
 const td = { padding: '7px 10px', borderBottom: `0.5px solid ${BORDER}`, verticalAlign: 'top' }
-const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : GOLD, color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 14, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
-const ghostBtn = (disabled) => ({ background: 'var(--white)', color: GOLD, border: `0.5px solid ${GOLD}`, borderRadius: 6, padding: '7px 14px', fontSize: 12, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, fontFamily: MONO })
-const chip = (active) => ({ padding: '5px 12px', borderRadius: 6, fontFamily: MONO, fontSize: 12, cursor: 'pointer', border: active ? `1.5px solid ${GOLD}` : `0.5px solid ${BORDER}`, background: active ? GOLD : 'transparent', color: active ? 'var(--white)' : 'var(--text-main)' })
+const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : GOLD, color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-h3)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
+const ghostBtn = (disabled) => ({ background: 'var(--white)', color: GOLD, border: `0.5px solid ${GOLD}`, borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, fontFamily: MONO })
+const chip = (active) => ({ padding: '5px 12px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)', cursor: 'pointer', border: active ? `1.5px solid ${GOLD}` : `0.5px solid ${BORDER}`, background: active ? GOLD : 'transparent', color: active ? 'var(--white)' : 'var(--text-main)' })

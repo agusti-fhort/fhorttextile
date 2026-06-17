@@ -251,7 +251,7 @@ export default function POMBrowser({
               padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
               background: 'var(--white)', color: 'var(--text-muted)',
               border: '0.5px solid var(--border)',
-              fontSize: 11,
+              fontSize: 'var(--fs-body)',
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = 'var(--gold)' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)' }}
@@ -263,21 +263,21 @@ export default function POMBrowser({
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
           {selectedFamily?.grup && (
             <>
-              <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+              <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
                 {grupLabel(selectedFamily.grup, lang)}
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>›</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>›</span>
             </>
           )}
           {selectedFamily && (
             <>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                 {gtName(selectedFamily, lang) || selectedFamily.codi_client}
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>›</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>›</span>
             </>
           )}
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
+          <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-main)' }}>
             {selectedItem.name || selectedItem.code || '—'}
           </span>
         </div>
@@ -290,7 +290,7 @@ export default function POMBrowser({
           style={{ ...selectStyle, width: 280, flex: '0 1 auto', marginLeft: 'auto' }}
         />
         {mode === 'assign' && (
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             {t('poms.assigned_count', { count: poms.length })}
           </span>
         )}
@@ -319,7 +319,7 @@ export default function POMBrowser({
                     <div key={res.id}
                       onClick={() => !already && assignAdd(res)}
                       style={{
-                        padding: '7px 10px', fontSize: 12, cursor: already ? 'default' : 'pointer',
+                        padding: '7px 10px', fontSize: 'var(--fs-body)', cursor: already ? 'default' : 'pointer',
                         display: 'flex', gap: 8, alignItems: 'center',
                         borderBottom: '0.5px solid #f5ede0', opacity: already ? 0.45 : 1,
                       }}
@@ -328,7 +328,7 @@ export default function POMBrowser({
                     >
                       <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 70 }}>{res.codi_client}</span>
                       <span style={{ flex: 1, color: 'var(--text-main)' }}>{res.nom_ca || res.nom_client || res.nom_en}</span>
-                      {already && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t('poms.already_assigned_short')}</span>}
+                      {already && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{t('poms.already_assigned_short')}</span>}
                     </div>
                   )
                 })}
@@ -337,7 +337,7 @@ export default function POMBrowser({
           </div>
           {notice && (
             <div style={{
-              marginTop: 8, fontSize: 11, padding: '5px 10px', borderRadius: 4,
+              marginTop: 8, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 4,
               background: notice.type === 'err' ? '#fff0f0' : '#fff9e6',
               border: `0.5px solid ${notice.type === 'err' ? '#f0a0a0' : '#f0c040'}`,
               color: notice.type === 'err' ? '#a32d2d' : '#7a5a00',
@@ -421,12 +421,12 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
     opacity: isDragging ? 0.6 : 1,
     display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6,
     border: `0.5px solid ${isSelected ? 'var(--gold)' : '#e8e8e6'}`,
-    background: isSelected ? '#fdf6ee' : 'var(--white)', fontSize: 12,
+    background: isSelected ? '#fdf6ee' : 'var(--white)', fontSize: 'var(--fs-body)',
   }
   return (
     <div ref={setNodeRef} style={style}>
       <span {...attributes} {...listeners} title={t('planning.drag_hint')}
-        style={{ cursor: 'grab', color: '#b0b0ad', fontSize: 14, userSelect: 'none', lineHeight: 1 }}>⠿</span>
+        style={{ cursor: 'grab', color: '#b0b0ad', fontSize: 'var(--fs-h3)', userSelect: 'none', lineHeight: 1 }}>⠿</span>
       <input type="checkbox" checked readOnly
         onClick={(e) => { e.stopPropagation(); onRemove() }}
         title={t('poms.uncheck_remove_hint')} style={{ cursor: 'pointer' }} />
@@ -442,13 +442,13 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
       </div>
       {pom.pendent_revisio && (
         <span title={t('poms.clone_revisar_hint')} style={{
-          background: '#fff3e0', color: '#b25a00', fontSize: 9, padding: '2px 6px', borderRadius: 3,
+          background: '#fff3e0', color: '#b25a00', fontSize: 'var(--fs-caption)', padding: '2px 6px', borderRadius: 3,
           fontWeight: 600, letterSpacing: '.06em', border: '0.5px solid #f0c040',
         }}>{t('poms.revisar')}</span>
       )}
       <button type="button" onClick={(e) => { e.stopPropagation(); onToggleKey() }}
         title={t('poms.toggle_key_hint')} style={{
-          cursor: 'pointer', fontSize: 9, padding: '2px 7px', borderRadius: 3, fontWeight: 600,
+          cursor: 'pointer', fontSize: 'var(--fs-caption)', padding: '2px 7px', borderRadius: 3, fontWeight: 600,
           letterSpacing: '.06em', border: `0.5px solid ${pom.is_key ? '#e0c8a0' : 'var(--border)'}`,
           background: pom.is_key ? '#fdf6ee' : 'var(--white)', color: pom.is_key ? 'var(--gold)' : '#b0b0ad',
         }}>KEY</button>
@@ -476,12 +476,12 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>{pom.pom_code}</span>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500 }}>{pom.pom_code}</span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {pom.pendent_revisio && (
             <span title={t('poms.clone_revisar_hint')} style={{
               background: '#fff3e0', color: '#b25a00',
-              fontSize: 9, padding: '2px 6px', borderRadius: 3,
+              fontSize: 'var(--fs-caption)', padding: '2px 6px', borderRadius: 3,
               fontWeight: 600, letterSpacing: '.06em',
               border: '0.5px solid #f0c040',
             }}>{t('poms.revisar')}</span>
@@ -489,7 +489,7 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
           {pom.is_key && (
             <span style={{
               background: '#fdf6ee', color: 'var(--gold)',
-              fontSize: 9, padding: '2px 6px', borderRadius: 3,
+              fontSize: 'var(--fs-caption)', padding: '2px 6px', borderRadius: 3,
               fontWeight: 600, letterSpacing: '.08em',
               border: '0.5px solid #e0c8a0',
             }}>KEY</span>
@@ -507,11 +507,11 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
         </div>
       </div>
       {/* Convenció sector: anglès primari (negre) + nom localitzat (cursiva gris). */}
-      <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-main)', margin: 0, lineHeight: 1.3 }}>
+      <p style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)', margin: 0, lineHeight: 1.3 }}>
         {pom.name_en || pom.name_cat}
       </p>
       {pom.name_en && pom.name_cat && pom.name_cat !== pom.name_en && (
-        <p style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', margin: '2px 0 0', lineHeight: 1.3 }}>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic', margin: '2px 0 0', lineHeight: 1.3 }}>
           {pom.name_cat}
         </p>
       )}
@@ -549,7 +549,7 @@ function Pill({ bg, color, mono, children }) {
   return (
     <span style={{
       background: bg, color,
-      fontSize: 9, padding: '2px 6px', borderRadius: 3,
+      fontSize: 'var(--fs-caption)', padding: '2px 6px', borderRadius: 3,
       fontWeight: 500, letterSpacing: '.04em',
       fontFamily: mono ? 'IBM Plex Mono, monospace' : 'inherit',
     }}>{children}</span>
@@ -562,19 +562,19 @@ export function POMDetailPanel({ pom, onClose }) {
     <div style={{
       width: 340, borderLeft: '0.5px solid #e4e4e2',
       padding: '18px 20px', overflowY: 'auto',
-      background: '#fdf9f5', fontSize: 12,
+      background: '#fdf9f5', fontSize: 'var(--fs-body)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
         <div>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{pom.pom_code}</span>
-          <h2 style={{ fontSize: 14, fontWeight: 600, margin: '2px 0 0', color: 'var(--text-main)' }}>{pom.name_en}</h2>
+          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{pom.pom_code}</span>
+          <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, margin: '2px 0 0', color: 'var(--text-main)' }}>{pom.name_en}</h2>
           {pom.name_cat && (
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0' }}>{pom.name_cat}</p>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '2px 0 0' }}>{pom.name_cat}</p>
           )}
         </div>
         <button
           onClick={onClose}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, lineHeight: 1 }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 'var(--fs-h2)', lineHeight: 1 }}
           aria-label={t('app.close')}
         >×</button>
       </div>
@@ -648,7 +648,7 @@ function DetailSection({ title, children }) {
   return (
     <section style={{ marginBottom: 16 }}>
       <h3 style={{
-        fontSize: 9, fontWeight: 700, color: 'var(--gold)',
+        fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--gold)',
         textTransform: 'uppercase', letterSpacing: '.1em',
         margin: '0 0 8px', paddingBottom: 4, borderBottom: '0.5px solid #ece2d4',
       }}>{title}</h3>
@@ -664,7 +664,7 @@ function DetailRow({ label, value, multiline = false, mono = false }) {
   return (
     <div>
       <dt style={{
-        fontSize: 9, fontWeight: 600, color: 'var(--text-muted)',
+        fontSize: 'var(--fs-caption)', fontWeight: 600, color: 'var(--text-muted)',
         textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 2,
       }}>{label}</dt>
       <dd style={{
@@ -683,13 +683,13 @@ const selectStyle = {
   border: '0.5px solid #e4e4e2',
   borderRadius: 8,
   padding: '8px 12px',
-  fontSize: 12,
+  fontSize: 'var(--fs-body)',
   outline: 'none',
   minWidth: 220,
 }
 
 const hintStyle = {
-  fontSize: 12,
+  fontSize: 'var(--fs-body)',
   color: 'var(--text-muted)',
   margin: 0,
 }

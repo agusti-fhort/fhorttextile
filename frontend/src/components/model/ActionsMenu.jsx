@@ -196,7 +196,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
               <button key={it.key} type="button" disabled={!it.enabled} onClick={() => it.enabled && openModal(it.key)} title={it.hint || ''}
                 style={{ ...menuItem, opacity: it.enabled ? 1 : 0.45, cursor: it.enabled ? 'pointer' : 'not-allowed' }}>
                 <i className={`ti ${it.icon}`} aria-hidden="true" /> {it.label}
-                {it.hint && <span style={{ fontSize: 9, color: 'var(--gray)', marginLeft: 'auto' }}>ⓘ</span>}
+                {it.hint && <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--gray)', marginLeft: 'auto' }}>ⓘ</span>}
               </button>
             ))}
           </div>
@@ -247,7 +247,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
               onChange={e => setForm(f => ({ ...f, duracio_minuts: e.target.value }))} />
           </Row>
           <div style={{ marginBottom: 12, marginTop: -4 }}>
-            <small style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            <small style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
               {form.start_time
                 ? t('model_sheet.fitting_franja_note', { dur: form.duracio_minuts || '10', hora: form.start_time })
                 : t('model_sheet.fitting_nofranja_note')}
@@ -255,16 +255,16 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
           </div>
           <Row label={t('model_sheet.fitting_attendees')}>
             {loadingEleg
-              ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('model_sheet.loading')}</span>
+              ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_sheet.loading')}</span>
               : elegibles.length === 0
-                ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('model_sheet.fitting_no_attendees')}</span>
+                ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_sheet.fitting_no_attendees')}</span>
                 : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 120, overflowY: 'auto' }}>
                     {elegibles.map(e => {
                       const sel = (form.attendee_ids || []).includes(e.profile_id)
                       return (
                         <label key={e.profile_id} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-                          padding: '4px 6px', borderRadius: 6, fontSize: 12, fontFamily: MONO,
+                          padding: '4px 6px', borderRadius: 6, fontSize: 'var(--fs-body)', fontFamily: MONO,
                           background: sel ? 'var(--gold-pale)' : 'transparent' }}>
                           <input type="checkbox" checked={sel} style={{ accentColor: 'var(--gold)' }}
                             onChange={() => setForm(f => ({ ...f,
@@ -281,16 +281,16 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
           </Row>
           {!deliveredPhases.has(form.fase) && (
             <div style={{ marginTop: 8 }}>
-              <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                 {t('fitting_expected_at_label')}
               </label>
               <input
                 type="date"
                 value={form.expected_at || ''}
                 onChange={e => setForm(f => ({ ...f, expected_at: e.target.value }))}
-                style={{ width: '100%', marginTop: 4, fontSize: 12, border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px' }}
+                style={{ width: '100%', marginTop: 4, fontSize: 'var(--fs-body)', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px' }}
               />
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
                 {t('fitting_expected_at_hint')}
               </div>
             </div>
@@ -305,7 +305,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
           cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy}
           onConfirm={() => submitSchedule(confirmPending.payload, true)}
           onCancel={() => !busy && setConfirmPending(null)}>
-          <p style={{ fontSize: 13, lineHeight: 1.5 }}>
+          <p style={{ fontSize: 'var(--fs-body)', lineHeight: 1.5 }}>
             {confirmPending.text || t('model_sheet.fitting_dup_warn')}
           </p>
         </Modal>
@@ -322,7 +322,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
             confirmLabel={busy ? t('model_sheet.working') : t(isAdv ? 'model_sheet.advance_phase' : 'model_sheet.back_phase')}
             cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy}
             onConfirm={() => (isAdv ? runAdvance() : runBack())} onCancel={() => !busy && setModal(null)}>
-            <p style={{ fontSize: 13, lineHeight: 1.5 }}>{t(isAdv ? 'model_sheet.advance_help' : 'model_sheet.regress_help')}</p>
+            <p style={{ fontSize: 'var(--fs-body)', lineHeight: 1.5 }}>{t(isAdv ? 'model_sheet.advance_help' : 'model_sheet.regress_help')}</p>
           </Modal>
         )
       })()}
@@ -331,12 +331,12 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
 }
 
 function Row({ label, children }) {
-  return <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--gray)', marginBottom: 4, fontFamily: MONO }}>{label}</div>{children}</div>
+  return <div style={{ marginBottom: 12 }}><div style={{ fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--gray)', marginBottom: 4, fontFamily: MONO }}>{label}</div>{children}</div>
 }
 
-const triggerBtn = { display: 'flex', alignItems: 'center', gap: 6, background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '7px 14px', fontSize: 12, fontWeight: 600, fontFamily: MONO }
+const triggerBtn = { display: 'flex', alignItems: 'center', gap: 6, background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: MONO }
 const menuBox = { position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 41, background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 4, minWidth: 230 }
-const menuItem = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 10px', borderRadius: 6, fontFamily: MONO, fontSize: 12, color: 'var(--text-main)' }
+const menuItem = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 10px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }
 const fullSel = { ...selS, width: '100%' }
-const warnBox = { background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', color: 'var(--warn)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, lineHeight: 1.5, fontFamily: MONO }
-const infoBox = { background: 'var(--gray-l)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, fontFamily: MONO, color: 'var(--text-main)' }
+const warnBox = { background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', color: 'var(--warn)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 'var(--fs-body)', lineHeight: 1.5, fontFamily: MONO }
+const infoBox = { background: 'var(--gray-l)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-main)' }

@@ -15,7 +15,7 @@ function LoadError({ onRetry, label }) {
   return (
     <div style={{
       padding: "20px", border: "1px dashed #f0a0a0", borderRadius: 8,
-      textAlign: "center", color: "#a32d2d", fontSize: 12, background: "#fff8f8",
+      textAlign: "center", color: "#a32d2d", fontSize: 'var(--fs-body)', background: "#fff8f8",
     }}>
       {label || t("size_library.load_error")}
       <div style={{ marginTop: 10 }}>
@@ -24,7 +24,7 @@ function LoadError({ onRetry, label }) {
           style={{
             padding: "6px 14px", borderRadius: 4, cursor: "pointer",
             background: "var(--white)", color: "var(--gold)", border: "1px solid var(--gold)",
-            fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+            fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)',
           }}
         >
           ↺ {t("size_library.retry")}
@@ -36,7 +36,7 @@ function LoadError({ onRetry, label }) {
 
 const chipBase = {
   padding: "6px 14px", borderRadius: 4, cursor: "pointer",
-  fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+  fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)',
 }
 
 /**
@@ -160,7 +160,7 @@ export function SizingProfileSelector({
     <div>
       {/* NIVELL 1 — Target */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
+        <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
           1 · {t("size_library.step_target")}
         </div>
         {lookupsError ? (
@@ -172,7 +172,7 @@ export function SizingProfileSelector({
                 key={tg.codi}
                 onClick={() => pickTarget(tg.codi)}
                 style={{
-                  ...chipBase, padding: "10px 14px", borderRadius: 6, fontSize: 12,
+                  ...chipBase, padding: "10px 14px", borderRadius: 6, fontSize: 'var(--fs-body)',
                   background: selectedTarget === tg.codi ? "#f5e6d0" : "var(--white)",
                   color: selectedTarget === tg.codi ? "var(--gold)" : "var(--text-main)",
                   border: `1px solid ${selectedTarget === tg.codi ? "var(--gold)" : "var(--border)"}`,
@@ -190,7 +190,7 @@ export function SizingProfileSelector({
       {/* NIVELL 2 — Construction */}
       {selectedTarget && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
+          <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
             2 · {t("size_library.step_construction")}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -226,7 +226,7 @@ export function SizingProfileSelector({
       {/* NIVELL 3 — Fit: catàleg complet; fade (no clicable) els sense perfils per a la combinació */}
       {selectedTarget && allFitTypes.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
+          <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
             3 · {t("size_library.step_fit")}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -269,7 +269,7 @@ export function SizingProfileSelector({
       {selectedTarget && (
         <div>
           <div style={{
-            fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
+            fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em",
             textTransform: "uppercase", color: "var(--gold)",
             marginBottom: 10, display: "flex", justifyContent: "space-between",
           }}>
@@ -282,13 +282,13 @@ export function SizingProfileSelector({
           {profilesError ? (
             <LoadError onRetry={loadProfiles} label={t("size_library.load_error_sizesets")} />
           ) : loadingProfiles ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 12, padding: "20px 0" }}>
+            <div style={{ color: "var(--text-muted)", fontSize: 'var(--fs-body)', padding: "20px 0" }}>
               {t("size_library.loading_sizesets")}
             </div>
           ) : visibleProfiles.length === 0 ? (
             <div style={{
               padding: "20px", border: "1px dashed var(--border)", borderRadius: 8,
-              textAlign: "center", color: "var(--text-muted)", fontSize: 12,
+              textAlign: "center", color: "var(--text-muted)", fontSize: 'var(--fs-body)',
             }}>
               {t("size_library.empty_combination")}
             </div>
@@ -312,7 +312,7 @@ export function SizingProfileSelector({
       {!selectedTarget && (
         <div style={{
           padding: "40px 24px", border: "1px dashed var(--border)", borderRadius: 8,
-          textAlign: "center", color: "var(--text-muted)", fontSize: 12,
+          textAlign: "center", color: "var(--text-muted)", fontSize: 'var(--fs-body)',
         }}>
           {t("size_library.select_target_hint")}
         </div>

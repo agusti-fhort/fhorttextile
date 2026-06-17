@@ -20,9 +20,9 @@ function KPICard({ label, value, sub, color = "var(--gold)", onClick }) {
       onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = color)}
       onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = "var(--border)")}
     >
-      <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "IBM Plex Mono, monospace", marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 32, fontWeight: 600, color, fontFamily: "IBM Plex Mono, monospace", lineHeight: 1 }}>{value ?? "—"}</div>
-      {sub && <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "IBM Plex Mono, monospace", marginTop: 6 }}>{sub}</div>}
+      <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-muted)", fontFamily: "IBM Plex Mono, monospace", marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-display)', fontWeight: 600, color, fontFamily: "IBM Plex Mono, monospace", lineHeight: 1 }}>{value ?? "—"}</div>
+      {sub && <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-muted)", fontFamily: "IBM Plex Mono, monospace", marginTop: 6 }}>{sub}</div>}
     </div>
   )
 }
@@ -107,22 +107,22 @@ export default function Dashboard() {
             width: 36, height: 36, borderRadius: '50%',
             background: '#f5e6d0', color: 'var(--gold)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 600,
+            fontSize: 'var(--fs-body)', fontWeight: 600,
           }}>
             {onboarding.percentatge}%
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-main)' }}>
+            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)' }}>
               {t('dashboard.onboarding_incomplete')}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>
               {onboarding.passos_pendents
                 ? t('dashboard.onboarding_steps_left', { count: onboarding.passos_pendents })
                 : t('dashboard.onboarding_complete_setup')}
             </div>
           </div>
           <span style={{
-            padding: '6px 12px', borderRadius: 6, fontSize: 11,
+            padding: '6px 12px', borderRadius: 6, fontSize: 'var(--fs-body)',
             background: 'var(--gold)', color: 'var(--white)', fontWeight: 500,
           }}>
             {t('dashboard.complete_setup')} →
@@ -132,10 +132,10 @@ export default function Dashboard() {
 
       {/* Greeting */}
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 500, color: "var(--text-main)", margin: "0 0 4px" }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, color: "var(--text-main)", margin: "0 0 4px" }}>
           {salutacio}{me ? `, ${me.full_name?.split(" ")[0] || me.username}` : ""}.
         </h1>
-        <div style={{ fontSize: 13, color: "var(--text-muted)", fontFamily: "IBM Plex Mono, monospace" }}>
+        <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-muted)", fontFamily: "IBM Plex Mono, monospace" }}>
           {new Date().toLocaleDateString(i18n.language || "ca", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </div>
       </div>
@@ -174,18 +174,18 @@ export default function Dashboard() {
         {/* Models recents */}
         <div>
           <div style={{
-            fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
+            fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em",
             textTransform: "uppercase", color: "var(--gold)",
             fontFamily: "IBM Plex Mono, monospace", marginBottom: 12,
           }}>
             {t("dashboard.recent_active_models")}
           </div>
           {loading ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>{t("common.loading")}</div>
+            <div style={{ color: "var(--text-muted)", fontSize: 'var(--fs-body)', fontFamily: "IBM Plex Mono, monospace" }}>{t("common.loading")}</div>
           ) : recents.length === 0 ? (
             <div style={{
               padding: "20px", border: "1px dashed var(--border)", borderRadius: 8,
-              textAlign: "center", color: "var(--text-muted)", fontSize: 12,
+              textAlign: "center", color: "var(--text-muted)", fontSize: 'var(--fs-body)',
               fontFamily: "IBM Plex Mono, monospace",
             }}>
               {t("dashboard.no_models_in_progress")}{" "}
@@ -211,10 +211,10 @@ export default function Dashboard() {
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                     <div>
-                      <span style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: 12, fontWeight: 700, color: "var(--gold)", marginRight: 10 }}>
+                      <span style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)', fontWeight: 700, color: "var(--gold)", marginRight: 10 }}>
                         {m.codi_intern || m.codi_client}
                       </span>
-                      <span style={{ fontSize: 13, color: "var(--text-main)" }}>{m.nom_prenda}</span>
+                      <span style={{ fontSize: 'var(--fs-body)', color: "var(--text-main)" }}>{m.nom_prenda}</span>
                     </div>
                     <EstatBadge estat={m.estat} size="xs" />
                   </div>
@@ -230,7 +230,7 @@ export default function Dashboard() {
                 style={{
                   padding: "8px", border: "1px dashed var(--border)", borderRadius: 8,
                   background: "none", color: "var(--gold)", cursor: "pointer",
-                  fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+                  fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)',
                 }}
               >
                 {t("dashboard.see_all_models")} →
@@ -242,7 +242,7 @@ export default function Dashboard() {
         {/* Avisos */}
         <div>
           <div style={{
-            fontSize: 10, fontWeight: 600, letterSpacing: ".08em",
+            fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em",
             textTransform: "uppercase", color: "var(--gold)",
             fontFamily: "IBM Plex Mono, monospace", marginBottom: 12,
           }}>
@@ -252,7 +252,7 @@ export default function Dashboard() {
             <div style={{
               marginBottom: 10, padding: "8px 10px",
               border: "1px solid var(--border)", borderRadius: 6,
-              background: "var(--white)", fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+              background: "var(--white)", fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)',
             }}>
               <div style={{ display: "flex", gap: 12, marginBottom: 6 }}>
                 <span style={{ color: "#a32d2d" }}>● {t("dashboard.summary_open", { count: avisosSummary.oberts ?? 0 })}</span>
@@ -260,7 +260,7 @@ export default function Dashboard() {
                 <span style={{ color: "var(--text-muted)" }}>· {t("dashboard.summary_days", { days: avisosSummary.dies ?? 30 })}</span>
               </div>
               {avisosSummary.top_poms?.length > 0 && (
-                <div style={{ color: "var(--text-muted)", fontSize: 10 }}>
+                <div style={{ color: "var(--text-muted)", fontSize: 'var(--fs-label)' }}>
                   {t("dashboard.summary_top")}: {avisosSummary.top_poms.slice(0, 3).map(p =>
                     `${p.pom_codi || p.pom} (${p.count})`
                   ).join(" · ")}
@@ -269,11 +269,11 @@ export default function Dashboard() {
             </div>
           )}
           {loading ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>{t("common.loading")}</div>
+            <div style={{ color: "var(--text-muted)", fontSize: 'var(--fs-body)', fontFamily: "IBM Plex Mono, monospace" }}>{t("common.loading")}</div>
           ) : avisos.length === 0 ? (
             <div style={{
               padding: "16px", border: "1px solid var(--border)", borderRadius: 8,
-              textAlign: "center", color: "#3b6d11", fontSize: 12,
+              textAlign: "center", color: "#3b6d11", fontSize: 'var(--fs-body)',
               fontFamily: "IBM Plex Mono, monospace", background: "#f0f9f0",
             }}>
               ✓ {t("dashboard.no_open_alerts")}
@@ -287,7 +287,7 @@ export default function Dashboard() {
                   style={{
                     padding: "8px 12px", border: "1px solid #f09595", borderRadius: 6,
                     background: "#fff5f5", cursor: "pointer",
-                    fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+                    fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)',
                   }}
                 >
                   <div style={{ color: "#a32d2d", fontWeight: 500, marginBottom: 2 }}>
@@ -302,7 +302,7 @@ export default function Dashboard() {
                   style={{
                     padding: "6px", border: "1px dashed #f09595", borderRadius: 6,
                     background: "none", color: "#a32d2d", cursor: "pointer",
-                    fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
+                    fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)',
                   }}
                 >
                   +{t("dashboard.more_alerts", { count: avisos.length - 6 })} →

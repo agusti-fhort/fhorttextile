@@ -62,7 +62,7 @@ class AppErrorBoundary extends React.Component {
           alignItems: 'center', justifyContent: 'center',
           height: '100vh', gap: 16, fontFamily: 'IBM Plex Mono, monospace'
         }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
             S'ha produït un error inesperat.
           </div>
           <button
@@ -74,7 +74,7 @@ class AppErrorBoundary extends React.Component {
               background: 'var(--gold)', color: '#fff',
               border: 'none', borderRadius: 4,
               padding: '8px 20px', cursor: 'pointer',
-              fontFamily: 'IBM Plex Mono, monospace', fontSize: 12
+              fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)'
             }}
           >
             Recarregar

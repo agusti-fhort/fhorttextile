@@ -64,7 +64,7 @@ export default function Topbar() {
       top: import.meta.env.VITE_STAGING === 'true' ? '28px' : '0',
       zIndex: 10,
     }}>
-      <div style={{display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray)'}}>
+      <div style={{display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: 'var(--gray)'}}>
         <i className="ti ti-layout-dashboard" style={{fontSize: 14}} />
         <span>{t('app.title')}</span>
         <i className="ti ti-chevron-right" style={{fontSize: 14}} />
@@ -73,7 +73,7 @@ export default function Topbar() {
       <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.8rem'}}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          fontSize: 12, color: 'var(--gray)', whiteSpace: 'nowrap',
+          fontSize: 'var(--fs-body)', color: 'var(--gray)', whiteSpace: 'nowrap',
         }}>
           {nom && <span style={{color: 'var(--charcoal)', fontWeight: 500}}>{nom}</span>}
           {nom && <span style={{opacity: 0.45}}>·</span>}
@@ -124,7 +124,7 @@ export default function Topbar() {
               borderRadius: 8,
               padding: '0 0.9rem',
               height: 32,
-              fontSize: 12,
+              fontSize: 'var(--fs-body)',
               fontWeight: 500,
               cursor: 'pointer',
             }}

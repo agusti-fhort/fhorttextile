@@ -15,7 +15,7 @@ const MONO = 'IBM Plex Mono, monospace'
 
 const actBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)',
+  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
 }
 
 export default function TaskTypes() {
@@ -76,7 +76,7 @@ export default function TaskTypes() {
     { key: 'active', label: t('task_types.col_active'),
       render: r => (
         <span style={{
-          fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, fontFamily: MONO,
+          fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px', borderRadius: 999, fontFamily: MONO,
           background: r.active ? 'var(--ok-bg)' : 'var(--gray-l)',
           color: r.active ? 'var(--ok)' : 'var(--gray)',
         }}>{r.active ? t('task_types.active') : t('task_types.inactive')}</span>
@@ -99,8 +99,8 @@ export default function TaskTypes() {
     <div style={{ minWidth: 0, maxWidth: 1000 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('task_types.title')}</h1>
-          <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('task_types.subtitle')}</p>
+          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('task_types.title')}</h1>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('task_types.subtitle')}</p>
         </div>
         {canEdit && (
           <button onClick={() => setModal({ mode: 'create' })} style={{ ...primaryBtn, marginLeft: 0 }}>
@@ -172,7 +172,7 @@ function TaskTypeModal({ mode, tt, t, saving, setSaving, onCancel, onSaved, onEr
         <Hint>{t('task_types.order_hint')}</Hint>
       </Field>
       {!isEdit && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginTop: 4 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginTop: 4 }}>
           <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} />
           <span>{t('task_types.active')}</span>
         </label>
@@ -184,11 +184,11 @@ function TaskTypeModal({ mode, tt, t, saving, setSaving, onCancel, onSaved, onEr
 function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ fontSize: 11, fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
+      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   )
 }
 function Hint({ children }) {
-  return <div style={{ fontSize: 10, color: 'var(--gray)', marginTop: 4 }}>{children}</div>
+  return <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginTop: 4 }}>{children}</div>
 }

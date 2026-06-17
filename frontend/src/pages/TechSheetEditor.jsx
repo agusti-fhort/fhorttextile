@@ -88,7 +88,7 @@ function useImage(src) {
 // "primitives" {t:'r'|'t'|'l', ...}. Així no hi ha drift entre canvas i PDF.
 // Cos de text coherent amb el document: 9pt (= 3.175mm a 72dpi) ≈ 8px.
 const T_FONT = Math.round(3.175 * MM_TO_PX)   // ~8px (9pt)
-const T_FONT_CA = Math.round(2.5 * MM_TO_PX)  // ~6px (7pt) — subtítol nom_ca
+const T_FONT_CA = Math.round(2.8222 * MM_TO_PX)  // ~7px (8pt) — subtítol nom_ca (terra de domini 8pt)
 // TS-4c: alçada de fila derivada del contingut (2 línies + padding), no fixa.
 const T_ROW_PAD = 3   // px de padding vertical per línia
 const T_ROW_H = T_FONT + T_FONT_CA + T_ROW_PAD * 3   // dalt nom_en + entre + baix nom_ca
@@ -926,7 +926,7 @@ export default function TechSheetEditor() {
   const saveLabel = saveState === 'saving' ? t('tech_sheet.saving') : saveState === 'saved' ? t('tech_sheet.saved') : saveState === 'error' ? t('tech_sheet.save_error') : null
 
   const headerBtn = {
-    display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '5px 10px',
+    display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '5px 10px',
     borderRadius: 6, border: `1px solid ${COL.border}`, background: 'transparent',
     cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
@@ -966,12 +966,12 @@ export default function TechSheetEditor() {
           style={{ ...headerBtn, background: COL.gold, border: 'none', color: 'var(--white)', opacity: exporting ? 0.5 : 1 }}>
           <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? t('tech_sheet.exporting') : t('tech_sheet.export_pdf')}
         </button>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>
+        <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 600 }}>
           {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
         </span>
-        <span style={{ fontSize: 11, color: COL.textMuted }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
-        {saveLabel && <span style={{ fontSize: 11, color: COL.textMuted }}>{saveLabel}</span>}
-        {notice && <span style={{ fontSize: 11, color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
+        <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
+        {saveLabel && <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{saveLabel}</span>}
+        {notice && <span style={{ fontSize: 'var(--fs-body)', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
 
         {/* Eines (només en edició): select + grups desplegables + imatge */}
         {locked && (
@@ -993,7 +993,7 @@ export default function TechSheetEditor() {
                     <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, zIndex: 50, minWidth: 160, boxShadow: '0 2px 8px rgba(0,0,0,.08)', overflow: 'hidden' }}>
                       {grp.tools.map(tl => (
                         <button key={tl.k} onClick={() => { setTool(tl.k); setOpenGroup(null) }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: tool === tl.k ? COL.goldPale : 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: FONT, color: COL.textMain }}>
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: tool === tl.k ? COL.goldPale : 'transparent', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-body)', fontFamily: FONT, color: COL.textMain }}>
                           <i className={`ti ${tl.icon}`} style={{ fontSize: 14 }} />{tl.label}
                         </button>
                       ))}
@@ -1016,7 +1016,7 @@ export default function TechSheetEditor() {
           {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
 
-        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>
           v{sheet?.versio ?? 1} · {badge.text}
         </span>
       </header>
@@ -1024,19 +1024,19 @@ export default function TechSheetEditor() {
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* ── Esquerra: pàgines ── */}
         <div style={{ width: 96, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', padding: '8px 5px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ color: COL.gold, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tech_sheet.pages')}</div>
+          <div style={{ color: COL.gold, fontSize: 'var(--fs-caption)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tech_sheet.pages')}</div>
           {locked && (
-            <button onClick={addPage} style={{ fontSize: 9, padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>{t('tech_sheet.add_page')}</button>
+            <button onClick={addPage} style={{ fontSize: 'var(--fs-caption)', padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>{t('tech_sheet.add_page')}</button>
           )}
           {pages.map((p, i) => (
             <div key={p.id} onClick={() => { setCurrentPage(i); setSelectedId(null) }} style={{ position: 'relative', cursor: 'pointer' }}>
               <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
                 {thumbnails[i] && <img src={thumbnails[i]} alt={t('tech_sheet.page_n', { n: i + 1 })} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
               </div>
-              <div style={{ fontSize: 9, color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>{t('tech_sheet.page_n', { n: i + 1 })}</div>
+              <div style={{ fontSize: 'var(--fs-caption)', color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>{t('tech_sheet.page_n', { n: i + 1 })}</div>
               {locked && pages.length > 1 && (
                 <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title={t('tech_sheet.delete_page')}
-                  style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 9, lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
+                  style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 'var(--fs-caption)', lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
               )}
             </div>
           ))}
@@ -1045,7 +1045,7 @@ export default function TechSheetEditor() {
         {/* ── Centre: Stage Konva ── */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COL.bg, minWidth: 0, overflow: 'auto', position: 'relative' }}>
           {lockState === 'readonly' && (
-            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 11, color: COL.textMuted }}>
+            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-body)', color: COL.textMuted }}>
               <i className="ti ti-eye" style={{ marginRight: 6 }} />{t('tech_sheet.readonly_overlay')}
             </div>
           )}
@@ -1085,7 +1085,7 @@ export default function TechSheetEditor() {
                 onChange={e => setEditingText(s => ({ ...s, value: e.target.value }))}
                 onBlur={commitTextEdit}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitTextEdit() } if (e.key === 'Escape') setEditingText(null) }}
-                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 11, color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: 'var(--white)', zIndex: 10 }}
+                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 'var(--fs-body)', color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: 'var(--white)', zIndex: 10 }}
               />
             )}
           </div>
@@ -1097,30 +1097,30 @@ export default function TechSheetEditor() {
             {/* Inserir blocs de dades */}
             <SectionTitle>{t('tech_sheet.insert_data_block')}</SectionTitle>
             <button onClick={insertHeader} disabled={!locked}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
               <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> {t('tech_sheet.model_header')}
             </button>
             <button onClick={insertLogo} disabled={!locked}
               title={customerLogoUrl ? t('tech_sheet.insert_logo_title') : t('tech_sheet.no_logo_title')}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
               <i className="ti ti-photo" style={{ fontSize: 13 }} /> {t('tech_sheet.client_logo')}
             </button>
             <button onClick={onAddTableClick} disabled={!locked || addingTable || !sizeFittings.length}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>
               <i className="ti ti-table" style={{ fontSize: 13 }} /> {addingTable ? t('tech_sheet.adding') : t('tech_sheet.graded_table')}
             </button>
-            {!sizeFittings.length && <p style={{ fontSize: 10, color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.no_size_fitting')}</p>}
+            {!sizeFittings.length && <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.no_size_fitting')}</p>}
 
             {/* Fitxers del model */}
             <SectionTitle>{t('tech_sheet.model_files', { n: fitxers.length })}</SectionTitle>
             {fitxers.length === 0 ? (
-              <p style={{ fontSize: 10, color: COL.textMuted }}>{t('tech_sheet.no_files')}</p>
+              <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>{t('tech_sheet.no_files')}</p>
             ) : fitxers.map(f => {
               const hasUrl = !!(f.url_extern || f.fitxer)
               return (
                 <button key={f.id} onClick={() => addModelFitxer(f)} disabled={!hasUrl || !locked}
                   title={f.nom_fitxer}
-                  style={{ width: '100%', textAlign: 'left', fontSize: 10, padding: '5px 6px', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 4, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: (!hasUrl || !locked) ? 'default' : 'pointer', opacity: (!hasUrl || !locked) ? 0.5 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  style={{ width: '100%', textAlign: 'left', fontSize: 'var(--fs-label)', padding: '5px 6px', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 4, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: (!hasUrl || !locked) ? 'default' : 'pointer', opacity: (!hasUrl || !locked) ? 0.5 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   <i className="ti ti-photo-plus" style={{ fontSize: 11, marginRight: 5 }} />{f.nom_fitxer}
                 </button>
               )
@@ -1183,7 +1183,7 @@ export default function TechSheetEditor() {
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
                   <button onClick={() => deleteObject(selObj.id)}
-                    style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 6, border: `1px solid #e74c3c`, borderRadius: 5, background: 'transparent', color: '#e74c3c', fontFamily: FONT, cursor: 'pointer' }}>
+                    style={{ width: '100%', fontSize: 'var(--fs-body)', padding: '5px 8px', marginTop: 6, border: `1px solid #e74c3c`, borderRadius: 5, background: 'transparent', color: '#e74c3c', fontFamily: FONT, cursor: 'pointer' }}>
                     <i className="ti ti-trash" style={{ fontSize: 12, marginRight: 5 }} />{t('app.delete')}
                   </button>
                 )}
@@ -1197,11 +1197,11 @@ export default function TechSheetEditor() {
       {pickFitting && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setPickFitting(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: 'var(--white)', borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.pick_size_fitting')}</h2>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.pick_size_fitting')}</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {sizeFittings.map(sf => (
                 <button key={sf.id} onClick={() => { setPickFitting(false); insertGradedTable(sf.id) }}
-                  style={{ textAlign: 'left', fontSize: 12, padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
                   {sf.codi}{sf.tipus ? ` · ${sf.tipus}` : ''}
                 </button>
               ))}
@@ -1230,7 +1230,7 @@ export function ColorPicker({ value, onChange }) {
 }
 
 export function SectionTitle({ children }) {
-  return <div style={{ fontSize: 10, fontWeight: 600, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
+  return <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
 }
-export const propLabel = { display: 'block', fontSize: 10, color: COL.textMuted, marginBottom: 8 }
-export const propInput = { width: '100%', fontFamily: FONT, fontSize: 12, padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: 'var(--white)', color: COL.textMain, boxSizing: 'border-box' }
+export const propLabel = { display: 'block', fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 8 }
+export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: 'var(--white)', color: COL.textMain, boxSizing: 'border-box' }

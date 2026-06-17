@@ -89,7 +89,7 @@ export default function RegistreActivitatTab({ modelId }) {
           <span style={{ color: 'var(--gold)', fontWeight: 600 }}>{header?.code}</span>
           {header?.name && <span style={{ marginLeft: 8 }}>{header.name}</span>}
         </div>
-        <div style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: 13 }}>
+        <div style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
           <div>{t('albara.period')}: {header?.period || '—'}</div>
           <div>{t('albara.meritedAt')}: {fmtDateTime(header?.merited_at)}</div>
         </div>
@@ -114,7 +114,7 @@ export default function RegistreActivitatTab({ modelId }) {
           onClick={() => setShowHistory(v => !v)}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--gold)', fontFamily: MONO, fontSize: 13,
+            color: 'var(--gold)', fontFamily: MONO, fontSize: 'var(--fs-body)',
             display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 0',
           }}>
           <i className={`ti ti-chevron-${showHistory ? 'up' : 'down'}`} />

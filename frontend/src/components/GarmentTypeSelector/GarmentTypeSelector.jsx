@@ -71,7 +71,7 @@ export default function GarmentTypeSelector({ onSelect, selectedItemId = null })
               return (
                 <button key={g.codi} onClick={() => setGrupActiu(g.codi)} style={{
                   padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: MONO,
-                  fontSize: 11, fontWeight: active ? 600 : 400,
+                  fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 400,
                   background: active ? 'var(--warn-bg)' : 'var(--white)',
                   color: active ? 'var(--warn)' : 'var(--text-main)',
                   border: `1px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
@@ -81,17 +81,17 @@ export default function GarmentTypeSelector({ onSelect, selectedItemId = null })
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-            {loadingFam && <p style={{ fontSize: 12, color: 'var(--gray)', margin: 0 }}>{t('garment_selector.loading_families')}</p>}
-            {err && !loadingFam && <p style={{ fontSize: 12, color: 'var(--err)', margin: 0 }}>{t('garment_selector.error')}</p>}
+            {loadingFam && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: 0 }}>{t('garment_selector.loading_families')}</p>}
+            {err && !loadingFam && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--err)', margin: 0 }}>{t('garment_selector.error')}</p>}
             {!loadingFam && !err && families.length === 0 && (
-              <p style={{ fontSize: 12, color: 'var(--gray)', margin: 0 }}>{t('garment_selector.no_families')}</p>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: 0 }}>{t('garment_selector.no_families')}</p>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
               {families.map(f => (
                 <button key={f.id} onClick={() => openFamily(f)} style={cardStyle(false)}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-main)' }}>{famName(f, lang)}</span>
-                  {f.codi_client && <span style={{ fontSize: 10, color: 'var(--gray)' }}>{f.codi_client}</span>}
-                  <span style={{ fontSize: 10, color: 'var(--warn)', marginTop: 4 }}>{t('garment_selector.choose_item')} →</span>
+                  <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)' }}>{famName(f, lang)}</span>
+                  {f.codi_client && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>{f.codi_client}</span>}
+                  <span style={{ fontSize: 'var(--fs-label)', color: 'var(--warn)', marginTop: 4 }}>{t('garment_selector.choose_item')} →</span>
                 </button>
               ))}
             </div>
@@ -103,26 +103,26 @@ export default function GarmentTypeSelector({ onSelect, selectedItemId = null })
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
             borderBottom: '0.5px solid var(--gray-l)', background: 'var(--white)' }}>
             <button onClick={backToFamilies} style={{
-              fontFamily: MONO, fontSize: 11, padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
+              fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
               background: 'var(--white)', color: 'var(--gray)', border: '0.5px solid var(--gray-l)',
             }}>← {t('garment_selector.back')}</button>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>{famName(family, lang)}</span>
+            <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-main)' }}>{famName(family, lang)}</span>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-            {loadingItems && <p style={{ fontSize: 12, color: 'var(--gray)', margin: 0 }}>{t('garment_selector.loading_items')}</p>}
-            {err && !loadingItems && <p style={{ fontSize: 12, color: 'var(--err)', margin: 0 }}>{t('garment_selector.error')}</p>}
+            {loadingItems && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: 0 }}>{t('garment_selector.loading_items')}</p>}
+            {err && !loadingItems && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--err)', margin: 0 }}>{t('garment_selector.error')}</p>}
             {!loadingItems && !err && items.length === 0 && (
-              <p style={{ fontSize: 12, color: 'var(--warn)', margin: 0 }}>{t('garment_selector.no_items')}</p>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--warn)', margin: 0 }}>{t('garment_selector.no_items')}</p>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
               {items.map(it => {
                 const sel = selectedItemId === it.id
                 return (
                   <button key={it.id} onClick={() => onSelect && onSelect({ family, item: it })} style={cardStyle(sel)}>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-main)' }}>{it.name}</span>
-                    <span style={{ fontSize: 10, color: 'var(--gray)' }}>{it.code}</span>
-                    <span style={{ fontSize: 9, color: 'var(--gray)', marginTop: 4 }}>
+                    <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)' }}>{it.name}</span>
+                    <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>{it.code}</span>
+                    <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--gray)', marginTop: 4 }}>
                       {t('garment_selector.complexity')}: {it.complexity_order}
                     </span>
                   </button>

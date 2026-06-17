@@ -24,13 +24,13 @@ export default function TaskLog({ modelId }) {
   const columns = [
     { key: 'at', label: t('model_sheet.log_when'), render: r => fmt(r.at) },
     { key: 'task_type', label: t('model_sheet.log_task'), render: r => <span style={{ fontFamily: MONO }}>{r.task_type}</span> },
-    { key: 'to_status', label: t('model_sheet.log_to'), render: r => <span style={{ fontWeight: 600, color: COLORS[r.to_status] || 'var(--text-main)', fontFamily: MONO, fontSize: 11 }}>{r.to_status}</span> },
+    { key: 'to_status', label: t('model_sheet.log_to'), render: r => <span style={{ fontWeight: 600, color: COLORS[r.to_status] || 'var(--text-main)', fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{r.to_status}</span> },
     { key: 'by', label: t('model_sheet.log_who'), render: r => r.by || '—' },
   ]
 
   return (
     <div>
-      <h3 style={{ fontSize: 13, fontWeight: 500, margin: '0 0 10px', fontFamily: MONO, color: 'var(--text-main)' }}>
+      <h3 style={{ fontSize: 'var(--fs-body)', fontWeight: 500, margin: '0 0 10px', fontFamily: MONO, color: 'var(--text-main)' }}>
         {t('model_sheet.task_log')}
       </h3>
       <Table columns={columns} data={log} loading={loading} empty={t('model_sheet.log_empty')} />

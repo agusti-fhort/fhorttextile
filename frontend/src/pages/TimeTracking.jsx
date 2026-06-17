@@ -72,8 +72,8 @@ export default function TimeTracking() {
   return (
     <div>
       <div style={{marginBottom: '1.5rem'}}>
-        <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>{t('time_tracking.title')}</h1>
-        <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
+        <h1 style={{fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4}}>{t('time_tracking.title')}</h1>
+        <p style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300}}>
           {t('time_tracking.subtitle')}
         </p>
       </div>
@@ -84,13 +84,13 @@ export default function TimeTracking() {
       }}>
         <Card title={t('time_tracking.active_timer')} icon="ti-player-play" padding={0}>
           {loading ? (
-            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
+            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
               {t('time_tracking.loading')}
             </div>
           ) : !actiu ? (
             <div style={{
               padding: '3rem 1rem', textAlign: 'center',
-              color: 'var(--gray)', fontSize: 13,
+              color: 'var(--gray)', fontSize: 'var(--fs-body)',
             }}>
               <i className="ti ti-clock-off" style={{fontSize: 32, display: 'block', marginBottom: 12, color: 'var(--gray-l)'}} />
               {t('time_tracking.no_active_task')}
@@ -109,7 +109,7 @@ export default function TimeTracking() {
                 <button disabled style={{
                   background: 'var(--white)', color: 'var(--gray)',
                   border: '0.5px solid #e4e4e2', borderRadius: 8,
-                  padding: '8px 18px', fontSize: 12,
+                  padding: '8px 18px', fontSize: 'var(--fs-body)',
                   cursor: 'not-allowed', 
                   display: 'flex', alignItems: 'center', gap: 6,
                 }}>
@@ -122,7 +122,7 @@ export default function TimeTracking() {
                   style={{
                     background: submitting ? 'rgba(163,45,45,0.5)' : 'var(--err)',
                     color: 'white', border: 'none', borderRadius: 8,
-                    padding: '8px 18px', fontSize: 12,
+                    padding: '8px 18px', fontSize: 'var(--fs-body)',
                     cursor: submitting ? 'not-allowed' : 'pointer',
                     display: 'flex', alignItems: 'center', gap: 6,
                   }}
@@ -137,7 +137,7 @@ export default function TimeTracking() {
 
         <Card title={t('time_tracking.today_entries', { count: dayTimers.length })} icon="ti-calendar-event" padding={0}>
           {dayTimers.length === 0 ? (
-            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
+            <div style={{padding: '2rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
               {t('time_tracking.no_entries_today')}
             </div>
           ) : (
@@ -147,7 +147,7 @@ export default function TimeTracking() {
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: '0.7rem 1.2rem',
                   borderBottom: '0.5px solid var(--gray-l)',
-                  fontSize: 12,
+                  fontSize: 'var(--fs-body)',
                 }}>
                   <div>
                     <div style={{marginBottom: 2}}>
@@ -156,12 +156,12 @@ export default function TimeTracking() {
                       </span>
                       {entry.tasca_nom || entry.nom_tasca || t('time_tracking.task_n', { n: entry.tasca })}
                     </div>
-                    <div style={{fontSize: 10, color: 'var(--gray)'}}>
+                    <div style={{fontSize: 'var(--fs-label)', color: 'var(--gray)'}}>
                       {(entry.data_inici || '').slice(11, 16)} – {(entry.data_fi || '').slice(11, 16)}
                     </div>
                   </div>
                   <span style={{
-                    fontSize: 12, fontWeight: 500,
+                    fontSize: 'var(--fs-body)', fontWeight: 500,
                     fontVariantNumeric: 'tabular-nums',
                   }}>
                     {t('time_tracking.min_value', { n: entry.minuts ?? diffMins(entry.data_inici || entry.created_at, entry.data_fi) })}
@@ -185,7 +185,7 @@ export default function TimeTracking() {
               alignItems: 'center', gap: 6,
             }}>
               <div style={{
-                fontSize: 10, color: 'var(--gray)',
+                fontSize: 'var(--fs-label)', color: 'var(--gray)',
                 fontVariantNumeric: 'tabular-nums',
               }}>
                 {d.mins > 0 ? format(d.mins * 60) : '—'}
@@ -198,7 +198,7 @@ export default function TimeTracking() {
                 borderRadius: '4px 4px 0 0',
                 transition: 'height 0.3s',
               }} />
-              <div style={{fontSize: 10, color: 'var(--gray)', textTransform: 'capitalize'}}>
+              <div style={{fontSize: 'var(--fs-label)', color: 'var(--gray)', textTransform: 'capitalize'}}>
                 {d.label}
               </div>
             </div>
@@ -209,9 +209,9 @@ export default function TimeTracking() {
           paddingTop: '0.8rem',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <span style={{fontSize: 11, color: 'var(--gray)'}}>{t('time_tracking.weekly_total')}</span>
+          <span style={{fontSize: 'var(--fs-body)', color: 'var(--gray)'}}>{t('time_tracking.weekly_total')}</span>
           <span style={{
-            fontSize: 22, fontWeight: 500, color: 'var(--gold)',
+            fontSize: 'var(--fs-h1)', fontWeight: 500, color: 'var(--gold)',
             fontVariantNumeric: 'tabular-nums',
           }}>
             {format(totalSetmana * 60)}
