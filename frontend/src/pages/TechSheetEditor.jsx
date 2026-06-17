@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
@@ -440,6 +441,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
 
 // ════════════════════════════════ Component ═════════════════════════════════
 export default function TechSheetEditor() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -809,7 +811,7 @@ export default function TechSheetEditor() {
   // Insereix el logo del client com a imatge lliure (redimensionable). TS-4c.
   const insertLogo = () => {
     if (!locked) return
-    if (!customerLogoUrl) { flash('Aquest client no té logo. Puja\'l des de Clients.'); return }
+    if (!customerLogoUrl) { flash(t('tech_sheet.flash_no_logo')); return }
     addObject({ id: uid(), type: 'image', kind: 'logo', layer: 'free', x: 10, y: 8, width: 40, height: 20, src: customerLogoUrl })
   }
   const addModelFitxer = async (f) => {
@@ -836,9 +838,9 @@ export default function TechSheetEditor() {
     setAddingTable(true)
     try {
       const r = await fetch(`${API}/api/v1/fitting/${sfId}/graded-table/`, { headers: authHeaders })
-      if (!r.ok) { flash('Aquest size fitting no té grading actiu.'); return }
+      if (!r.ok) { flash(t('tech_sheet.flash_no_grading')); return }
       const data = await r.json()
-      if (!data.rows || !data.rows.length) { flash('Taula buida.'); return }
+      if (!data.rows || !data.rows.length) { flash(t('tech_sheet.flash_empty_table')); return }
       const { totalW, totalH } = buildTablePrimitives(data)
       // Auto-fit a l'àrea útil del format actual (marge 10mm per costat); el factor es
       // persisteix com a obj.scale (i és reajustable manualment via el panell).
@@ -865,7 +867,7 @@ export default function TechSheetEditor() {
   const insertHeader = () => {
     if (!locked) return
     if (objectsOf(currentPage).some(o => o.type === 'data_block' && o.kind === 'header')) {
-      flash('Ja hi ha una capçalera en aquesta pàgina.'); return
+      flash(t('tech_sheet.flash_header_exists')); return
     }
     const { totalW, totalH } = buildHeaderPrimitives(model, sheet?.versio)
     addObject({
@@ -882,7 +884,7 @@ export default function TechSheetEditor() {
   }
   const removePage = (index) => {
     if (!locked || pages.length <= 1) return
-    if (!window.confirm('Esborrar aquesta pàgina?')) return
+    if (!window.confirm(t('tech_sheet.confirm_delete_page'))) return
     setPages(ps => ps.filter((_, i) => i !== index))
     setCurrentPage(ci => Math.min(ci, pages.length - 2))
     setSelectedId(null)
@@ -915,13 +917,13 @@ export default function TechSheetEditor() {
 
   // ── UI ───────────────────────────────────────────────────────────────────
   const badge = (() => {
-    if (lockState === 'loading') return { text: 'Carregant…', bg: COL.bg, fg: COL.textMuted }
-    if (lockState === 'readonly') return { text: 'Mode consulta', bg: COL.bg, fg: COL.textMuted }
-    if (lockState === 'owned') return { text: 'Editant', bg: COL.gold, fg: 'var(--white)' }
-    if (lockState === 'conflict') return { text: `Bloquejada per ${conflict?.locked_by || 'un altre usuari'}`, bg: COL.bg, fg: COL.textMuted }
+    if (lockState === 'loading') return { text: t('model_sheet.loading'), bg: COL.bg, fg: COL.textMuted }
+    if (lockState === 'readonly') return { text: t('tech_sheet.badge_readonly'), bg: COL.bg, fg: COL.textMuted }
+    if (lockState === 'owned') return { text: t('tech_sheet.badge_editing'), bg: COL.gold, fg: 'var(--white)' }
+    if (lockState === 'conflict') return { text: t('tech_sheet.badge_locked_by', { user: conflict?.locked_by || t('tech_sheet.another_user') }), bg: COL.bg, fg: COL.textMuted }
     return { text: 'Error de bloqueig', bg: COL.bg, fg: COL.textMuted }
   })()
-  const saveLabel = saveState === 'saving' ? 'Desant…' : saveState === 'saved' ? 'Desat ✓' : saveState === 'error' ? 'Error desant' : null
+  const saveLabel = saveState === 'saving' ? t('tech_sheet.saving') : saveState === 'saved' ? t('tech_sheet.saved') : saveState === 'error' ? t('tech_sheet.save_error') : null
 
   const headerBtn = {
     display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '5px 10px',
@@ -934,47 +936,47 @@ export default function TechSheetEditor() {
 
   // Eines agrupades en desplegables (TS-4c). 'select' és standalone.
   const TOOL_GROUPS = [
-    { g: 'shapes', icon: 'ti-shape', label: 'Formes', tools: [
-      { k: 'rect', icon: 'ti-square', label: 'Rectangle' },
-      { k: 'rect_round', icon: 'ti-square-rounded', label: 'Rectangle arrodonit' },
-      { k: 'ellipse', icon: 'ti-circle', label: 'El·lipse' },
+    { g: 'shapes', icon: 'ti-shape', label: t('tech_sheet.tool_group_shapes'), tools: [
+      { k: 'rect', icon: 'ti-square', label: t('tech_sheet.tool_rect') },
+      { k: 'rect_round', icon: 'ti-square-rounded', label: t('tech_sheet.tool_rect_round') },
+      { k: 'ellipse', icon: 'ti-circle', label: t('tech_sheet.tool_ellipse') },
     ] },
-    { g: 'draw', icon: 'ti-pencil', label: 'Dibuix', tools: [
-      { k: 'line', icon: 'ti-minus', label: 'Línia' },
-      { k: 'line_dot', icon: 'ti-line-dashed', label: 'Línia de punts' },
-      { k: 'arrow', icon: 'ti-arrow-right', label: 'Fletxa →' },
-      { k: 'arrow2', icon: 'ti-arrows-horizontal', label: 'Fletxa ↔' },
-      { k: 'draw', icon: 'ti-scribble', label: 'Lliure' },
+    { g: 'draw', icon: 'ti-pencil', label: t('tech_sheet.tool_group_draw'), tools: [
+      { k: 'line', icon: 'ti-minus', label: t('tech_sheet.tool_line') },
+      { k: 'line_dot', icon: 'ti-line-dashed', label: t('tech_sheet.tool_line_dot') },
+      { k: 'arrow', icon: 'ti-arrow-right', label: t('tech_sheet.tool_arrow') },
+      { k: 'arrow2', icon: 'ti-arrows-horizontal', label: t('tech_sheet.tool_arrow2') },
+      { k: 'draw', icon: 'ti-scribble', label: t('tech_sheet.tool_draw') },
     ] },
-    { g: 'text', icon: 'ti-typography', label: 'Text', tools: [
-      { k: 'text', icon: 'ti-cursor-text', label: 'Text' },
-      { k: 'text_box', icon: 'ti-text-caption', label: 'Text amb fons' },
+    { g: 'text', icon: 'ti-typography', label: t('tech_sheet.tool_group_text'), tools: [
+      { k: 'text', icon: 'ti-cursor-text', label: t('tech_sheet.tool_text') },
+      { k: 'text_box', icon: 'ti-text-caption', label: t('tech_sheet.tool_text_box') },
     ] },
   ]
-  const activeTool = (grp) => grp.tools.some(t => t.k === tool)
+  const activeTool = (grp) => grp.tools.some(tl => tl.k === tool)
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: '#faf7f2', fontFamily: FONT }}>
       {/* ── Topbar ── */}
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.7rem 1.2rem', borderBottom: `1px solid #e3cfa3`, background: COL.sidebar, color: COL.textMain }}>
         <button onClick={() => navigate(`/models/${id}`)} style={headerBtn}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> Tornar al model
+          <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('tech_sheet.back_to_model')}
         </button>
         <button onClick={onExport} disabled={exporting}
           style={{ ...headerBtn, background: COL.gold, border: 'none', color: 'var(--white)', opacity: exporting ? 0.5 : 1 }}>
-          <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? 'Exportant…' : 'Exportar PDF'}
+          <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? t('tech_sheet.exporting') : t('tech_sheet.export_pdf')}
         </button>
         <span style={{ fontSize: 14, fontWeight: 600 }}>
           {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
         </span>
-        <span style={{ fontSize: 11, color: COL.textMuted }}>Pàgina {currentPage + 1} de {pages.length}</span>
+        <span style={{ fontSize: 11, color: COL.textMuted }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
         {saveLabel && <span style={{ fontSize: 11, color: COL.textMuted }}>{saveLabel}</span>}
         {notice && <span style={{ fontSize: 11, color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
 
         {/* Eines (només en edició): select + grups desplegables + imatge */}
         {locked && (
           <div ref={toolbarRef} style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
-            <button onClick={() => { setTool('select'); setOpenGroup(null) }} title="Seleccionar"
+            <button onClick={() => { setTool('select'); setOpenGroup(null) }} title={t('tech_sheet.tool_select')}
               style={{ ...headerBtn, padding: '5px 8px', borderColor: tool === 'select' ? COL.gold : COL.border, background: tool === 'select' ? COL.goldPale : 'transparent', color: tool === 'select' ? COL.gold : COL.textMain }}>
               <i className="ti ti-pointer" style={{ fontSize: 15 }} />
             </button>
@@ -989,10 +991,10 @@ export default function TechSheetEditor() {
                   </button>
                   {openGroup === grp.g && (
                     <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, zIndex: 50, minWidth: 160, boxShadow: '0 2px 8px rgba(0,0,0,.08)', overflow: 'hidden' }}>
-                      {grp.tools.map(t => (
-                        <button key={t.k} onClick={() => { setTool(t.k); setOpenGroup(null) }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: tool === t.k ? COL.goldPale : 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: FONT, color: COL.textMain }}>
-                          <i className={`ti ${t.icon}`} style={{ fontSize: 14 }} />{t.label}
+                      {grp.tools.map(tl => (
+                        <button key={tl.k} onClick={() => { setTool(tl.k); setOpenGroup(null) }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: tool === tl.k ? COL.goldPale : 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: FONT, color: COL.textMain }}>
+                          <i className={`ti ${tl.icon}`} style={{ fontSize: 14 }} />{tl.label}
                         </button>
                       ))}
                     </div>
@@ -1000,7 +1002,7 @@ export default function TechSheetEditor() {
                 </div>
               )
             })}
-            <button onClick={() => fileRef.current?.click()} title="Imatge" style={{ ...headerBtn, padding: '5px 8px' }}>
+            <button onClick={() => fileRef.current?.click()} title={t('tech_sheet.tool_image')} style={{ ...headerBtn, padding: '5px 8px' }}>
               <i className="ti ti-photo" style={{ fontSize: 15 }} />
             </button>
             <input ref={fileRef} type="file" accept="image/*" hidden
@@ -1010,7 +1012,7 @@ export default function TechSheetEditor() {
 
         {/* Format de pàgina (tot el document) */}
         <select value={pageFormat} onChange={e => setPageFormat(e.target.value)} disabled={!locked}
-          title="Format de pàgina" style={{ ...headerBtn, padding: '5px 8px', marginLeft: locked ? 0 : 16, cursor: locked ? 'pointer' : 'default' }}>
+          title={t('tech_sheet.page_format')} style={{ ...headerBtn, padding: '5px 8px', marginLeft: locked ? 0 : 16, cursor: locked ? 'pointer' : 'default' }}>
           {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
 
@@ -1022,18 +1024,18 @@ export default function TechSheetEditor() {
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* ── Esquerra: pàgines ── */}
         <div style={{ width: 96, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', padding: '8px 5px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ color: COL.gold, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pàgines</div>
+          <div style={{ color: COL.gold, fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tech_sheet.pages')}</div>
           {locked && (
-            <button onClick={addPage} style={{ fontSize: 9, padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>+ Pàgina</button>
+            <button onClick={addPage} style={{ fontSize: 9, padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>{t('tech_sheet.add_page')}</button>
           )}
           {pages.map((p, i) => (
             <div key={p.id} onClick={() => { setCurrentPage(i); setSelectedId(null) }} style={{ position: 'relative', cursor: 'pointer' }}>
               <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
-                {thumbnails[i] && <img src={thumbnails[i]} alt={`Pàg ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
+                {thumbnails[i] && <img src={thumbnails[i]} alt={t('tech_sheet.page_n', { n: i + 1 })} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
               </div>
-              <div style={{ fontSize: 9, color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>Pàg. {i + 1}</div>
+              <div style={{ fontSize: 9, color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>{t('tech_sheet.page_n', { n: i + 1 })}</div>
               {locked && pages.length > 1 && (
-                <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title="Eliminar pàgina"
+                <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title={t('tech_sheet.delete_page')}
                   style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 9, lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
               )}
             </div>
@@ -1044,7 +1046,7 @@ export default function TechSheetEditor() {
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COL.bg, minWidth: 0, overflow: 'auto', position: 'relative' }}>
           {lockState === 'readonly' && (
             <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 11, color: COL.textMuted }}>
-              <i className="ti ti-eye" style={{ marginRight: 6 }} />Mode consulta — només lectura
+              <i className="ti ti-eye" style={{ marginRight: 6 }} />{t('tech_sheet.readonly_overlay')}
             </div>
           )}
           <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()}
@@ -1093,26 +1095,26 @@ export default function TechSheetEditor() {
         <aside style={{ width: 180, flexShrink: 0, borderLeft: `1px solid ${COL.border}`, background: COL.bg, display: 'flex', flexDirection: 'column', minHeight: 0, fontFamily: FONT }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
             {/* Inserir blocs de dades */}
-            <SectionTitle>Inserir bloc de dades</SectionTitle>
+            <SectionTitle>{t('tech_sheet.insert_data_block')}</SectionTitle>
             <button onClick={insertHeader} disabled={!locked}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
-              <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> Capçalera del model
+              <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> {t('tech_sheet.model_header')}
             </button>
             <button onClick={insertLogo} disabled={!locked}
-              title={customerLogoUrl ? 'Insereix el logo del client' : 'Aquest client no té logo'}
+              title={customerLogoUrl ? t('tech_sheet.insert_logo_title') : t('tech_sheet.no_logo_title')}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
-              <i className="ti ti-photo" style={{ fontSize: 13 }} /> Logo client
+              <i className="ti ti-photo" style={{ fontSize: 13 }} /> {t('tech_sheet.client_logo')}
             </button>
             <button onClick={onAddTableClick} disabled={!locked || addingTable || !sizeFittings.length}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>
-              <i className="ti ti-table" style={{ fontSize: 13 }} /> {addingTable ? 'Afegint…' : 'Taula graduada'}
+              <i className="ti ti-table" style={{ fontSize: 13 }} /> {addingTable ? t('tech_sheet.adding') : t('tech_sheet.graded_table')}
             </button>
-            {!sizeFittings.length && <p style={{ fontSize: 10, color: COL.textMuted, margin: '0 0 8px' }}>Cap size fitting.</p>}
+            {!sizeFittings.length && <p style={{ fontSize: 10, color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.no_size_fitting')}</p>}
 
             {/* Fitxers del model */}
-            <SectionTitle>Fitxers del model ({fitxers.length})</SectionTitle>
+            <SectionTitle>{t('tech_sheet.model_files', { n: fitxers.length })}</SectionTitle>
             {fitxers.length === 0 ? (
-              <p style={{ fontSize: 10, color: COL.textMuted }}>Cap fitxer.</p>
+              <p style={{ fontSize: 10, color: COL.textMuted }}>{t('tech_sheet.no_files')}</p>
             ) : fitxers.map(f => {
               const hasUrl = !!(f.url_extern || f.fitxer)
               return (
@@ -1127,41 +1129,41 @@ export default function TechSheetEditor() {
             {/* Propietats de l'objecte seleccionat (TS-4b) */}
             {selObj && locked && (
               <>
-                <SectionTitle>Element · {selObj.type}</SectionTitle>
+                <SectionTitle>{t('tech_sheet.element')} · {selObj.type}</SectionTitle>
                 {selObj.type === 'text' && (
                   <>
-                    <label style={propLabel}>Mida font
+                    <label style={propLabel}>{t('tech_sheet.font_size')}
                       <input type="number" min={6} max={48} value={selObj.fontSize || 11}
                         onChange={e => updateObject(selObj.id, { fontSize: Number(e.target.value) || 11 })} style={propInput} />
                     </label>
                     <label style={{ ...propLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <input type="checkbox" checked={selObj.fontStyle === 'bold'}
                         onChange={e => updateObject(selObj.id, { fontStyle: e.target.checked ? 'bold' : 'normal' })} />
-                      Negreta
+                      {t('tech_sheet.bold')}
                     </label>
-                    <div style={propLabel}>Color text
+                    <div style={propLabel}>{t('tech_sheet.text_color')}
                       <ColorPicker value={selObj.fill || 'var(--text-main)'} onChange={c => updateObject(selObj.id, { fill: c })} />
                     </div>
                   </>
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'line' || selObj.type === 'arrow') && (
                   <>
-                    <div style={propLabel}>Color traç
+                    <div style={propLabel}>{t('tech_sheet.stroke_color')}
                       <ColorPicker value={selObj.stroke || 'var(--text-main)'} onChange={c => updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
                     </div>
-                    <label style={propLabel}>Gruix traç
+                    <label style={propLabel}>{t('tech_sheet.stroke_width')}
                       <input type="number" min={0.5} max={5} step={0.5} value={selObj.strokeWidth || (selObj.type === 'arrow' ? 1.5 : 1)}
                         onChange={e => updateObject(selObj.id, { strokeWidth: Number(e.target.value) || 1 })} style={propInput} />
                     </label>
                   </>
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse') && (
-                  <div style={propLabel}>Emplenat
+                  <div style={propLabel}>{t('tech_sheet.fill')}
                     <ColorPicker value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : 'var(--white)'} onChange={c => updateObject(selObj.id, { fill: c })} />
                   </div>
                 )}
                 {selObj.type === 'data_block' && (
-                  <label style={propLabel}>Escala (%)
+                  <label style={propLabel}>{t('tech_sheet.scale_pct')}
                     <input type="number" min={10} max={200} step={5} value={Math.round((selObj.scale || 1) * 100)}
                       onChange={e => updateObject(selObj.id, { scale: Math.max(0.1, (Number(e.target.value) || 100) / 100) })} style={propInput} />
                   </label>
@@ -1169,11 +1171,11 @@ export default function TechSheetEditor() {
                 {/* Posició X/Y (mm) per a objectes posicionats (no línia/fletxa). */}
                 {selObj.type !== 'line' && selObj.type !== 'arrow' && (
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <label style={{ ...propLabel, flex: 1 }}>X (mm)
+                    <label style={{ ...propLabel, flex: 1 }}>{t('tech_sheet.pos_x')}
                       <input type="number" step={1} value={Math.round((selObj.x || 0) * 10) / 10}
                         onChange={e => updateObject(selObj.id, { x: Number(e.target.value) || 0 })} style={propInput} />
                     </label>
-                    <label style={{ ...propLabel, flex: 1 }}>Y (mm)
+                    <label style={{ ...propLabel, flex: 1 }}>{t('tech_sheet.pos_y')}
                       <input type="number" step={1} value={Math.round((selObj.y || 0) * 10) / 10}
                         onChange={e => updateObject(selObj.id, { y: Number(e.target.value) || 0 })} style={propInput} />
                     </label>
@@ -1182,7 +1184,7 @@ export default function TechSheetEditor() {
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
                   <button onClick={() => deleteObject(selObj.id)}
                     style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 6, border: `1px solid #e74c3c`, borderRadius: 5, background: 'transparent', color: '#e74c3c', fontFamily: FONT, cursor: 'pointer' }}>
-                    <i className="ti ti-trash" style={{ fontSize: 12, marginRight: 5 }} />Eliminar
+                    <i className="ti ti-trash" style={{ fontSize: 12, marginRight: 5 }} />{t('app.delete')}
                   </button>
                 )}
               </>
@@ -1195,7 +1197,7 @@ export default function TechSheetEditor() {
       {pickFitting && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setPickFitting(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: 'var(--white)', borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Tria un size fitting</h2>
+            <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.pick_size_fitting')}</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {sizeFittings.map(sf => (
                 <button key={sf.id} onClick={() => { setPickFitting(false); insertGradedTable(sf.id) }}
