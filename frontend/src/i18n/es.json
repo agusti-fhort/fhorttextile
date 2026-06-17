@@ -1050,5 +1050,22 @@
     "resolve_error": "No se pudo resolver",
     "save": "Guardar size check",
     "validated_table": "Tabla validada"
+  },
+
+  "time_tracking": {
+    "title": "Tiempos",
+    "subtitle": "Control de timers del técnico",
+    "active_timer": "Timer activo",
+    "loading": "Cargando…",
+    "no_active_task": "Ninguna tarea en curso",
+    "task_n": "Tarea #{{n}}",
+    "pause": "Pausar",
+    "stop": "Detener",
+    "stopping": "Deteniendo…",
+    "today_entries": "Hoy ({{count}} entradas)",
+    "no_entries_today": "Sin entradas hoy",
+    "weekly_summary": "Resumen semanal",
+    "weekly_total": "Total semanal",
+    "min_value": "{{n}}min"
   }
 }

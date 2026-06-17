@@ -1050,5 +1050,22 @@
     "resolve_error": "Could not be resolved",
     "save": "Save size check",
     "validated_table": "Validated table"
+  },
+
+  "time_tracking": {
+    "title": "Time tracking",
+    "subtitle": "Technician timer tracking",
+    "active_timer": "Active timer",
+    "loading": "Loading…",
+    "no_active_task": "No task in progress",
+    "task_n": "Task #{{n}}",
+    "pause": "Pause",
+    "stop": "Stop",
+    "stopping": "Stopping…",
+    "today_entries": "Today ({{count}} entries)",
+    "no_entries_today": "No entries today",
+    "weekly_summary": "Weekly summary",
+    "weekly_total": "Weekly total",
+    "min_value": "{{n}}min"
   }
 }

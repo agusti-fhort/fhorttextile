@@ -1050,5 +1050,22 @@
     "resolve_error": "No s'ha pogut resoldre",
     "save": "Gravar size check",
     "validated_table": "Taula validada"
+  },
+
+  "time_tracking": {
+    "title": "Temps",
+    "subtitle": "Control de timers del tècnic",
+    "active_timer": "Timer actiu",
+    "loading": "Carregant…",
+    "no_active_task": "Cap tasca en curs",
+    "task_n": "Tasca #{{n}}",
+    "pause": "Pausar",
+    "stop": "Aturar",
+    "stopping": "Aturant…",
+    "today_entries": "Avui ({{count}} entrades)",
+    "no_entries_today": "Sense entrades avui",
+    "weekly_summary": "Resum setmanal",
+    "weekly_total": "Total setmanal",
+    "min_value": "{{n}}min"
   }
 }
