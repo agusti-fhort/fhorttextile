@@ -220,6 +220,10 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
         ):
             spec_map[(s['grading_version_id'], s['pom_id'], s['size_label'])] = s['graded_value_cm']
 
+        # PG-4b-3a — règim per POM (resident→fallback) per al desplegable + etiqueta de regla.
+        from fhort.pom.services import _load_grading_rules
+        rules = _load_grading_rules(obj.model)
+
         out = []
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
             evolucio = []
@@ -235,6 +239,7 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                     'valor_cm': val,
                 })
             pom = line.pom
+            r = rules.get(line.pom_id)
             out.append({
                 'id': line.id,
                 'pom_id': line.pom_id,
@@ -246,6 +251,11 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 'valor_real': line.valor_real,
                 'nota': line.nota,
                 'evolucio': evolucio,
+                # Règim per POM (mateix valor a cada talla; el front el llegeix per pom_id).
+                'logica': getattr(r, 'logica', None) if r else None,
+                'increment_base': float(r.increment_base) if r and r.increment_base is not None else None,
+                'increment_break': float(r.increment_break) if r and r.increment_break is not None else None,
+                'talla_break_label': getattr(r, 'talla_break_label', None) if r else None,
             })
         # FIX 4B — ordena les files per l'ordre de la fitxa (BaseMeasurement.ordre del model);
         # POMMaster no té 'ordre', així que es resol en Python via el mapa pom_id→ordre del model.

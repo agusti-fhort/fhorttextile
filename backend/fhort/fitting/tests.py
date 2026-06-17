@@ -137,3 +137,54 @@ class PropagarActionTest(TenantTestCase):
         self.assertEqual(reals['S'], TEORICS['S'])       # germanes intactes
         self.assertEqual(reals['M'], TEORICS['M'])
         self.assertEqual(reals['XL'], TEORICS['XL'])
+
+    # ── PG-4b-3a règim per-POM: helper de POST a l'endpoint set_pom_regim_view.
+    def _regim(self, model_id, pom_id, logica):
+        from fhort.models_app.views import set_pom_regim_view
+        req = self.factory.post('/regim/', {'logica': logica}, format='json')
+        force_authenticate(req, user=self.user)
+        return set_pom_regim_view(req, model_id=model_id, pom_id=pom_id)
+
+    def test_regim_crea_resident_step_conserva_increment_base(self):
+        from fhort.models_app.models import ModelGradingRule
+        pom2 = POMMaster.objects.create(codi_client='P2', nom_client='POM 2')
+        GradingRule.objects.create(rule_set=self.rs, pom=pom2, talla_base=self.talla_base,
+                                   logica='LINEAR', increment_base=3)
+        mv0 = self.model.measurements_version
+        resp = self._regim(self.model.id, self.pom.id, 'STEP')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['logica'], 'STEP')
+        self.assertEqual(resp.data['origen'], 'MANUAL')
+        self.assertEqual(resp.data['increment_base'], 2)        # conservat (latent)
+        r = ModelGradingRule.objects.get(model=self.model, pom=self.pom)
+        self.assertEqual(r.logica, 'STEP')
+        self.assertEqual(r.origen, 'MANUAL')
+        self.assertEqual(float(r.increment_base), 2)
+        # POM #2 NO té resident (no s'ha tocat).
+        self.assertFalse(ModelGradingRule.objects.filter(model=self.model, pom=pom2).exists())
+        # Innocu sobre el grading persistent.
+        self.model.refresh_from_db()
+        self.assertEqual(self.model.measurements_version, mv0)
+
+    def test_regim_update_no_duplica(self):
+        from fhort.models_app.models import ModelGradingRule
+        self._regim(self.model.id, self.pom.id, 'STEP')
+        resp = self._regim(self.model.id, self.pom.id, 'LINEAR')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['logica'], 'LINEAR')
+        self.assertEqual(
+            ModelGradingRule.objects.filter(model=self.model, pom=self.pom).count(), 1)
+
+    def test_regim_sense_fallback_400(self):
+        from fhort.models_app.models import ModelGradingRule
+        pom3 = POMMaster.objects.create(codi_client='P3', nom_client='POM 3')  # sense GradingRule
+        resp = self._regim(self.model.id, pom3.id, 'STEP')
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(ModelGradingRule.objects.filter(model=self.model, pom=pom3).exists())
+
+    def test_grid_exposa_regim_per_pom(self):
+        from fhort.fitting.serializers import PieceFittingGridSerializer
+        data = PieceFittingGridSerializer(self.pf).data
+        line = next(l for l in data['lines'] if l['pom_id'] == self.pom.id)
+        self.assertEqual(line['logica'], 'LINEAR')   # fallback (resident buida)
+        self.assertEqual(line['increment_base'], 2)

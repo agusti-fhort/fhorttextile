@@ -22,6 +22,7 @@ from .views import (
     update_model_step2,
     upload_file_view,
     measurements_chat_view,
+    set_pom_regim_view,
 )
 
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
@@ -170,6 +171,7 @@ urlpatterns = (
         path('models/<int:model_id>/analisi-ia/', ai_analysis_view),
         path('models/<int:model_id>/xat-mesures/', measurements_chat_view),
         path('models/<int:model_id>/generar-grading/', generate_grading_view),
+        path('models/<int:model_id>/pom/<int:pom_id>/regim/', set_pom_regim_view),
         path('models/iso-shrinkage/', iso_shrinkage_view),
         path('models/<int:model_id>/update-fabric/', update_fabric_view),
         path('models/<int:model_id>/albara/', consumption_delivery_view),
