@@ -1633,5 +1633,24 @@
     "col_phase": "Phase",
     "col_status": "Status",
     "empty": "No tasks with status \"{{status}}\""
+  },
+  "size_system": {
+    "code": "Code",
+    "sizes_defined": "{{count}} sizes defined",
+    "confirm_delete_size": "Delete this size?",
+    "confirm_delete_system": "Delete size system {{name}}? This action is irreversible.",
+    "err_delete_system": "Could not delete the system",
+    "empty": "No sizes defined",
+    "add_size": "+ Add size",
+    "delete_system": "Delete system",
+    "col": {
+      "size": "Size",
+      "height": "Height",
+      "bust": "Bust",
+      "waist": "Waist",
+      "hip": "Hip",
+      "age_min": "Age min",
+      "age_max": "Age max"
+    }
   }
 }

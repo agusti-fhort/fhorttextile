@@ -1633,5 +1633,24 @@
     "col_phase": "Fase",
     "col_status": "Estat",
     "empty": "Sense tasques en estat \"{{status}}\""
+  },
+  "size_system": {
+    "code": "Codi",
+    "sizes_defined": "{{count}} talles definides",
+    "confirm_delete_size": "Esborrar aquesta talla?",
+    "confirm_delete_system": "Esborrar el sistema de talles {{name}}? Aquesta acció és irreversible.",
+    "err_delete_system": "No s'ha pogut esborrar el sistema",
+    "empty": "Sense talles definides",
+    "add_size": "+ Afegir talla",
+    "delete_system": "Esborrar sistema",
+    "col": {
+      "size": "Talla",
+      "height": "Alçada",
+      "bust": "Pit",
+      "waist": "Cintura",
+      "hip": "Maluc",
+      "age_min": "Edat min",
+      "age_max": "Edat max"
+    }
   }
 }

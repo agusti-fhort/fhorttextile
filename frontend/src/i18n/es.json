@@ -1633,5 +1633,24 @@
     "col_phase": "Fase",
     "col_status": "Estado",
     "empty": "Sin tareas en estado \"{{status}}\""
+  },
+  "size_system": {
+    "code": "Código",
+    "sizes_defined": "{{count}} tallas definidas",
+    "confirm_delete_size": "¿Eliminar esta talla?",
+    "confirm_delete_system": "¿Eliminar el sistema de tallas {{name}}? Esta acción es irreversible.",
+    "err_delete_system": "No se ha podido eliminar el sistema",
+    "empty": "Sin tallas definidas",
+    "add_size": "+ Añadir talla",
+    "delete_system": "Eliminar sistema",
+    "col": {
+      "size": "Talla",
+      "height": "Altura",
+      "bust": "Pecho",
+      "waist": "Cintura",
+      "hip": "Cadera",
+      "age_min": "Edad mín",
+      "age_max": "Edad máx"
+    }
   }
 }
