@@ -1409,7 +1409,12 @@
       "date": "Date"
     },
     "accept": "Accept",
-    "resolve": "Resolve"
+    "resolve": "Resolve",
+    "gravetat": {
+      "CRITICA": "Critical",
+      "IMPORTANT": "Important",
+      "INFORMATIVA": "Informative"
+    }
   },
   "poms": {
     "title": "POM Systems",

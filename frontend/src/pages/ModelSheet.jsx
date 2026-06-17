@@ -1126,7 +1126,7 @@ function TabAIAnalysis({ modelId }) {
                       <span style={{ fontSize: 11, fontWeight: 500, color: style.color,
                                      padding: '1px 8px', background: 'rgba(255,255,255,0.6)',
                                      borderRadius: 20 }}>
-                        {alerta.gravetat}
+                        {t(`alerts.gravetat.${alerta.gravetat}`, alerta.gravetat)}
                       </span>
                       <span style={{ fontSize: 11, color: style.color }}>
                         {alerta.tipus?.replace(/_/g, ' ')}
