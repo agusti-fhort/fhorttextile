@@ -40,15 +40,6 @@ function useDebouncedSave(persist) {
   return [state, schedule]
 }
 
-// Autosave d'una cel·la de línia (valor_real / nota). Debounce PER (line.id, field).
-function useCellAutosave(lineId, field, isNumber) {
-  const persist = useCallback((raw) => {
-    const value = isNumber ? (raw === '' ? null : Number(raw)) : raw
-    return pieceFittingLines.update(lineId, { [field]: value })
-  }, [lineId, field, isNumber])
-  return useDebouncedSave(persist)
-}
-
 // Autosave d'un camp de context de la sessió (model_persona / lloc...). PATCH sessió.
 function useSessionField(sessionId, field) {
   const persist = useCallback((raw) => fittingSessions.update(sessionId, { [field]: raw }), [sessionId, field])
@@ -93,8 +84,20 @@ function VersionCell({ value, isBase, baseSize, groupStart }) {
 // Fit actual (valor_real): única cel·la editable. Vermell+negreta si difereix de Base.
 // Stepper natiu (fletxes); amplada suficient per "104,75" + fletxes. Sense nota per cel·la
 // (el comentari és global del fitting, viu a Observacions).
-function CurrentFitCell({ line, baseSize, baseValue, value, onValue }) {
-  const [realState, saveReal] = useCellAutosave(line?.id, 'valor_real', true)
+function CurrentFitCell({ line, baseSize, baseValue, value, edited, onValue, onAnchor, onPropagated, focusRef }) {
+  // Persist segons règim del POM (ve a la línia): STEP → PATCH pur, només aquesta cel·la.
+  // LINEAR/canònic → propaga el delta i repinta les germanes amb el valor_real propagat.
+  const lineId = line?.id
+  const isStep = line?.logica === 'STEP'
+  const persist = useCallback((raw) => {
+    const v = raw === '' ? null : Number(raw)
+    if (isStep) return pieceFittingLines.update(lineId, { valor_real: v })
+    return pieceFittingLines.propagar(lineId, v).then(res => {
+      onPropagated(res.data?.linies || [])
+      return res
+    })
+  }, [lineId, isStep, onPropagated])
+  const [realState, saveReal] = useDebouncedSave(persist)
 
   if (!line) return <td style={cellTd(baseSize, false, baseSize)} />
 
@@ -105,12 +108,15 @@ function CurrentFitCell({ line, baseSize, baseValue, value, onValue }) {
     <td style={{ ...cellTd(baseSize, false, baseSize), position: 'relative' }}>
       <input
         type="number" step="0.1" value={value}
-        onChange={e => { onValue(line.id, e.target.value); saveReal(e.target.value) }}
+        onFocus={() => { focusRef.current = line.id }}
+        onBlur={() => { if (focusRef.current === line.id) focusRef.current = null }}
+        onChange={e => { onValue(line.id, e.target.value); onAnchor(line.id); saveReal(e.target.value) }}
         style={{
           font: 'inherit', width: 88, padding: '2px 4px', textAlign: 'right',
           border: '1px solid var(--border)', borderRadius: 4, background: 'var(--white)',
           color: modified ? 'var(--err)' : 'var(--text-main)',
-          fontWeight: modified ? 700 : 400,
+          // Ancoratge editat a mà → negreta; germana modificada però propagada → vermell normal.
+          fontWeight: modified && edited ? 700 : 400,
           fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
         }}
       />
@@ -570,6 +576,11 @@ export default function FittingDetail() {
   const [reviewMode, setReviewMode] = useState(true)
   // Valors editables lligats al parent → modificat reactiu i remuntatge net per peça.
   const [reals, setReals] = useState({})
+  // Ancoratge únic mòbil (PG-4b-3b): conté NOMÉS la id de l'última cel·la editada a mà → negreta.
+  // Les germanes propagades hi queden fora → vermell normal.
+  const [editedIds, setEditedIds] = useState(() => new Set())
+  // Race guard: id de la cel·la amb focus ara mateix; el repintat de propagar no l'ha de sobreescriure.
+  const focusedIdRef = useRef(null)
 
   const loadSession = useCallback((selectFirst = false) => {
     return fittingSessions.get(id).then(res => {
@@ -601,6 +612,8 @@ export default function FittingDetail() {
         const r = {}
         for (const l of res.data.lines || []) { r[l.id] = l.valor_real ?? '' }
         setReals(r)
+        setEditedIds(new Set())   // canvi de peça → cap ancoratge actiu
+        focusedIdRef.current = null
       })
       .finally(() => setGridLoading(false))
   }, [activePieceId])
@@ -637,10 +650,27 @@ export default function FittingDetail() {
   const sizeLabels = orderedSizes(model.size_run_model, present)
   const pomMap = new Map()
   for (const l of lines) {
-    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, { pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key, cells: {} })
+    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, {
+      pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key,
+      // Règim per POM (mateix valor a cada talla) → etiqueta de regla a la capçalera de fila.
+      logica: l.logica, increment_base: l.increment_base,
+      increment_break: l.increment_break, talla_break_label: l.talla_break_label,
+      cells: {},
+    })
     pomMap.get(l.pom_id).cells[l.size_label] = l
   }
   const pomRows = [...pomMap.values()]
+
+  // Etiqueta de regla compacta (delta·break) per a la capçalera de fila POM.
+  // LINEAR amb break: "+2 · break XXL +2.5" · LINEAR uniforme: "+2" · STEP: "lliure" · sense regla: res.
+  const regleLabel = (row) => {
+    if (row.logica == null) return ''
+    if (row.logica === 'STEP') return 'lliure'
+    if (row.increment_base == null) return ''
+    if (row.increment_break != null && row.talla_break_label)
+      return `+${row.increment_base} · break ${row.talla_break_label} +${row.increment_break}`
+    return `+${row.increment_base}`
+  }
 
   // Columnes d'evolució: unió de version_number entre totes les línies (ascendent).
   // El primer (v1) és Base; els següents (v2..vM) són Fit 1..Fit (M-1); després el fit
@@ -652,7 +682,19 @@ export default function FittingDetail() {
     idx === 0 ? t('fitting.grid.base') : t('fitting.grid.fit', { n: vn - 1 })
   const groupSpan = versionNumbers.length + 1  // versions read-only + fit actual
 
+  // Funcions planes (NO hooks): es declaren després dels early-returns, com onValue.
   const onValue = (lineId, v) => setReals(r => ({ ...r, [lineId]: v }))
+  // Tocar una cel·la la converteix en l'ancoratge únic (les anteriors passen a propagades/normal).
+  const onAnchor = (lineId) => setEditedIds(new Set([lineId]))
+  // Aplica les línies que torna propagar; omet la cel·la amb focus (l'usuari pot estar-hi teclejant).
+  const applyPropagar = (linies) => setReals(r => {
+    const next = { ...r }
+    for (const ln of linies) {
+      if (ln.id === focusedIdRef.current) continue
+      next[ln.id] = ln.valor_real ?? ''
+    }
+    return next
+  })
 
   const stickyHd = (left, w) => ({
     ...thStyle, position: 'sticky', left, zIndex: 3, minWidth: w, width: w,
@@ -817,6 +859,11 @@ export default function FittingDetail() {
                           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--gold)' }}>
                             {row.codi}{row.is_key && <i className="ti ti-star-filled" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title={t('fitting.key_measure')} />}
                           </span>
+                          {regleLabel(row) && (
+                            <div style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-muted)', whiteSpace: 'nowrap', marginTop: 1 }}>
+                              {regleLabel(row)}
+                            </div>
+                          )}
                         </td>
                         <td style={{ ...stickyTd(COL_POM_W, COL_NOM_W, rowBg), fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'normal' }}>{row.nom}</td>
                         {sizeLabels.flatMap(s => {
@@ -831,7 +878,9 @@ export default function FittingDetail() {
                           ))
                           cells.push(
                             <CurrentFitCell key={`${s}-cur`} line={line} baseSize={base} baseValue={baseValue}
-                              value={line ? reals[line.id] ?? '' : ''} onValue={onValue} />
+                              value={line ? reals[line.id] ?? '' : ''}
+                              edited={line ? editedIds.has(line.id) : false}
+                              onValue={onValue} onAnchor={onAnchor} onPropagated={applyPropagar} focusRef={focusedIdRef} />
                           )
                           return cells
                         })}

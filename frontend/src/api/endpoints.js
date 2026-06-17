@@ -24,6 +24,8 @@ export const models = {
   // sencera; unassign treu tècnic + buida planned_*. Done sempre intactes.
   assign: (id, body) => client.post(`/api/v1/models/${id}/assign/`, body),   // {assignee_id, task_ids?}
   unassign: (id) => client.post(`/api/v1/models/${id}/unassign/`),
+  // PG-4b-3b — fixa el règim de grading d'un POM del model (l'usarà 3c). {logica}
+  setPomRegim: (modelId, pomId, logica) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, { logica }),
 }
 
 // Fitxers del model (read-only) — panell info de fitting (5B.6-B1).
@@ -301,6 +303,9 @@ export const pieceFittings = {
 // Autosave de cel·la: només PATCH de valor_real / nota.
 export const pieceFittingLines = {
   update: (id, data) => client.patch(`/api/v1/piece-fitting-lines/${id}/`, data),
+  // PG-4b-3b — ancoratge en règim LINEAR/canònic: desa la cel·la i propaga el delta a les
+  // germanes del POM (retorna {propagat, motiu, warnings, linies:[...]}). STEP → només desa.
+  propagar: (id, valorReal) => client.post(`/api/v1/piece-fitting-lines/${id}/propagar/`, { valor_real: valorReal }),
 }
 
 // 5B.6-B3 — Fotos de la sessió (llistar; pujada ajornada a B2).
