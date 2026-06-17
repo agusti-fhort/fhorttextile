@@ -8,7 +8,7 @@ const API = import.meta.env.VITE_API_URL || ''
 
 const thStyle = {
   padding: '8px 12px', textAlign: 'left', fontSize: 12,
-  fontWeight: 500, borderBottom: '1px solid var(--color-border-tertiary, #e0d5c5)',
+  fontWeight: 500, borderBottom: '1px solid var(--border)',
 }
 const tdStyle = { padding: '6px 12px', verticalAlign: 'middle' }
 
@@ -142,22 +142,22 @@ export default function ModelMeasurements() {
           <h2 style={{ fontSize: 18, fontWeight: 500, margin: '1.5rem 0 0.5rem' }}>
             {t('model_measurements.title')}
           </h2>
-          <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)', marginBottom: '1.5rem' }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
             {t('model_measurements.intro')}
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div onClick={() => setMode('manual')}
               style={{
-                background: 'var(--color-background-primary, #fff)',
-                border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+                background: 'var(--bg-main)',
+                border: '0.5px solid var(--border)',
                 borderRadius: 12, padding: '1.5rem', cursor: 'pointer',
               }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>
                 <i className="ti ti-pencil" style={{ color: 'var(--gold)' }} />
               </div>
               <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.manual_title')}</div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)' }}>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                 {t('model_measurements.manual_desc', { type: model?.garment_type_nom || t('model_measurements.this_garment') })}
               </div>
               {pomsSuggerits.length > 0 && (
@@ -169,15 +169,15 @@ export default function ModelMeasurements() {
 
             <div onClick={() => setMode('import')}
               style={{
-                background: 'var(--color-background-primary, #fff)',
-                border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+                background: 'var(--bg-main)',
+                border: '0.5px solid var(--border)',
                 borderRadius: 12, padding: '1.5rem', cursor: 'pointer',
               }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>
                 <i className="ti ti-bolt" style={{ color: 'var(--gold)' }} />
               </div>
               <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.import_title')}</div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)' }}>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                 {t('model_measurements.import_desc')}
               </div>
             </div>
@@ -191,7 +191,7 @@ export default function ModelMeasurements() {
 
           {taulaRows.length === 0 && pomsSuggerits.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)', marginBottom: 8 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
                 {t('model_measurements.suggested_poms')}
               </div>
               {pomsSuggerits.filter(p => p.is_key).length > 0 && (
@@ -240,7 +240,7 @@ export default function ModelMeasurements() {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 24 }}>
             <button type="button" onClick={() => setMode('selector')}
-              style={{ padding: '8px 16px', border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+              style={{ padding: '8px 16px', border: '0.5px solid var(--border)',
                        borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
               ← {t('app.back')}
             </button>
@@ -297,7 +297,7 @@ export default function ModelMeasurements() {
               {t('model_measurements.table_title')}
             </h2>
             <button type="button" onClick={() => setMode('manual')}
-              style={{ padding: '6px 14px', border: '0.5px solid var(--color-border-tertiary)',
+              style={{ padding: '6px 14px', border: '0.5px solid var(--border)',
                        borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 13 }}>
               {t('model_measurements.edit_measures')}
             </button>
@@ -350,9 +350,9 @@ function POMChipSuggerit({ pom, selected, onToggle }) {
       style={{
         padding: '3px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
         border: selected
-          ? '1.5px solid var(--gold)' : '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+          ? '1.5px solid var(--gold)' : '0.5px solid var(--border)',
         background: selected ? '#fdf6ee' : 'transparent',
-        color: selected ? '#7a4a10' : 'var(--color-text-secondary, #868685)',
+        color: selected ? '#7a4a10' : 'var(--text-muted)',
       }}>
       <span style={{ marginRight: 4 }}>{pom.pom_code}</span>
       {pom.nom_ca || pom.nom_en}
@@ -366,19 +366,19 @@ function ModelSummaryBar({ model }) {
   return (
     <div style={{
       display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap',
-      background: 'var(--color-background-secondary, #f5f0ea)',
-      border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+      background: 'var(--bg-muted)',
+      border: '0.5px solid var(--border)',
       borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13,
     }}>
       <span><strong>{model.codi_intern}</strong></span>
       {model.nom_prenda && <span>{model.nom_prenda}</span>}
-      {model.target && <span style={{ color: 'var(--color-text-secondary, #868685)' }}>{t(`model_wizard.target_${model.target}`, model.target)}</span>}
-      {model.construction && <span style={{ color: 'var(--color-text-secondary, #868685)' }}>{t(`model_wizard.construction_${model.construction}`, model.construction)}</span>}
+      {model.target && <span style={{ color: 'var(--text-muted)' }}>{t(`model_wizard.target_${model.target}`, model.target)}</span>}
+      {model.construction && <span style={{ color: 'var(--text-muted)' }}>{t(`model_wizard.construction_${model.construction}`, model.construction)}</span>}
       {model.base_size_label && (
         <span style={{ color: 'var(--gold)' }}>{t('model_measurements.base_prefix')} {model.base_size_label}</span>
       )}
       {model.size_run_model && (
-        <span style={{ color: 'var(--color-text-secondary, #868685)' }}>
+        <span style={{ color: 'var(--text-muted)' }}>
           {model.size_run_model}
         </span>
       )}

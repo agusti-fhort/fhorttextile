@@ -8,8 +8,8 @@ const MONO = 'IBM Plex Mono, monospace'
 const fmtDate = (v) => v ? new Date(v).toLocaleString('ca-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 
 // Tokens idèntics a la taula Mesures (EditableTable).
-const TEXT_2 = 'var(--color-text-secondary, #868685)'
-const BORDER = 'var(--color-border-tertiary, #e0d5c5)'
+const TEXT_2 = 'var(--text-muted)'
+const BORDER = 'var(--border)'
 const th = { padding: '6px 10px', borderBottom: `1px solid ${BORDER}`, fontFamily: MONO, fontSize: 11, fontWeight: 600, color: TEXT_2, textAlign: 'left', whiteSpace: 'nowrap' }
 const tdRO = { padding: '4px 10px', borderBottom: `0.5px solid ${BORDER}`, fontFamily: MONO, fontSize: 12 }
 
@@ -153,7 +153,7 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
                   onClick={clickable ? () => selectCheck(h.id) : undefined}
                   style={{
                     cursor: clickable ? 'pointer' : 'default',
-                    background: clickable && h.id === selectedId ? 'var(--color-background-secondary, #f5f0ea)' : undefined,
+                    background: clickable && h.id === selectedId ? 'var(--bg-muted)' : undefined,
                   }}>
                 <td style={tdRO}>{fmtDate(h.resolt_at || h.created_at)}</td>
                 <td style={{ ...tdRO, fontWeight: 600, color: estatColor(h.estat) }}>{h.estat}</td>

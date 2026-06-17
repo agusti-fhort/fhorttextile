@@ -26,8 +26,8 @@ export default function POMs() {
             onClick={() => setActiveTab(tab)}
             style={{
               padding: '6px 16px', borderRadius: 6, border: 'none',
-              background: activeTab === tab ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
-              color: activeTab === tab ? 'var(--white)' : 'var(--color-text-secondary, #868685)',
+              background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
+              color: activeTab === tab ? 'var(--white)' : 'var(--text-muted)',
               cursor: 'pointer', fontSize: 13,
               fontWeight: activeTab === tab ? 500 : 400,
             }}>

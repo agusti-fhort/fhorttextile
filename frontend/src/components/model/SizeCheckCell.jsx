@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { sizeCheckLines } from '../../api/endpoints'
 
 const MONO = 'IBM Plex Mono, monospace'
-const TEXT_2 = 'var(--color-text-secondary, #868685)'
-const BORDER = 'var(--color-border-tertiary, #e0d5c5)'
+const TEXT_2 = 'var(--text-muted)'
+const BORDER = 'var(--border)'
 
 // Debounce d'autosave (800ms), mateix patró que la graella de fitting.
 function useDebouncedSave(persist) {
@@ -41,7 +41,7 @@ const td = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 12, borderB
 const inputBase = (disabled) => ({
   font: 'inherit', fontFamily: MONO, fontSize: 12, padding: '2px 4px',
   border: `1px solid ${BORDER}`, borderRadius: 3,
-  background: disabled ? 'var(--color-background-secondary, #f5f0ea)' : 'var(--white)',
+  background: disabled ? 'var(--bg-muted)' : 'var(--white)',
   boxSizing: 'border-box',
 })
 

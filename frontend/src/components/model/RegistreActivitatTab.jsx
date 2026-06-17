@@ -38,7 +38,7 @@ export default function RegistreActivitatTab({ modelId }) {
   }, [modelId])
 
   if (loading) {
-    return <div style={{ padding: 24, color: 'var(--color-text-secondary, #868685)', fontFamily: MONO }}>{t('common.loading')}</div>
+    return <div style={{ padding: 24, color: 'var(--text-muted)', fontFamily: MONO }}>{t('common.loading')}</div>
   }
   if (error) {
     return <div style={{ padding: 24, color: 'var(--err, #c0392b)', fontFamily: MONO }}>{t('common.error')}: {error}</div>
@@ -47,7 +47,7 @@ export default function RegistreActivitatTab({ modelId }) {
   // Estat NO meritat — encara no ha iniciat activitat.
   if (data && data.merited === false) {
     return (
-      <div style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-secondary, #868685)', fontFamily: MONO }}>
+      <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontFamily: MONO }}>
         <i className="ti ti-clock-off" style={{ fontSize: 32, display: 'block', marginBottom: 8 }} />
         {t('albara.notMerited')}
       </div>
@@ -81,7 +81,7 @@ export default function RegistreActivitatTab({ modelId }) {
       {/* 1. Capçalera immutable */}
       <div style={{
         background: 'var(--bg-card, #fafafa)',
-        border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+        border: '0.5px solid var(--border)',
         borderRadius: 8, padding: 16,
         display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16,
       }}>
@@ -89,7 +89,7 @@ export default function RegistreActivitatTab({ modelId }) {
           <span style={{ color: 'var(--gold)', fontWeight: 600 }}>{header?.code}</span>
           {header?.name && <span style={{ marginLeft: 8 }}>{header.name}</span>}
         </div>
-        <div style={{ textAlign: 'right', color: 'var(--color-text-secondary, #868685)', fontSize: 13 }}>
+        <div style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: 13 }}>
           <div>{t('albara.period')}: {header?.period || '—'}</div>
           <div>{t('albara.meritedAt')}: {fmtDateTime(header?.merited_at)}</div>
         </div>

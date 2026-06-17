@@ -18,7 +18,7 @@ const STEPS = [
 
 const norm = (s) => (s || '').trim().toUpperCase()
 const GOLD = 'var(--gold, #c79a3a)'
-const BORDER = 'var(--color-border-tertiary, #e0d5c5)'
+const BORDER = 'var(--border)'
 
 // ───────────────────────────── Stepper header ─────────────────────────────
 function Stepper({ step }) {
@@ -477,7 +477,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             style={{
               border: `2px dashed ${BORDER}`, borderRadius: 12, padding: '3rem 2rem',
               textAlign: 'center', cursor: 'pointer', marginBottom: 16,
-              background: file ? '#f0f9f0' : 'var(--color-background-secondary, #f5f0ea)',
+              background: file ? '#f0f9f0' : 'var(--bg-muted)',
             }}>
             <input id="import-wizard-file" type="file" accept=".pdf,.xlsx,.xls,image/*"
               style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />

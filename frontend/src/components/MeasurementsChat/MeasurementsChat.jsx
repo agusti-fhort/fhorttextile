@@ -63,19 +63,19 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
     <div style={{
       display: 'flex', flexDirection: 'column',
       height: '100%', minHeight: 400,
-      border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+      border: '0.5px solid var(--border)',
       borderRadius: 8, overflow: 'hidden',
     }}>
       <div style={{
         padding: '10px 14px',
-        borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-        background: 'var(--color-background-secondary, #f5f0ea)',
+        borderBottom: '0.5px solid var(--border)',
+        background: 'var(--bg-muted)',
         fontSize: 13, fontWeight: 500,
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
         <i className="ti ti-message-circle" aria-hidden="true" style={{ color: 'var(--gold)' }} />
         {t('measurements_chat.title')}
-        <span style={{ fontSize: 11, color: 'var(--color-text-secondary, #868685)', fontWeight: 400 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
           · {t('measurements_chat.autosave_note')}
         </span>
       </div>
@@ -85,7 +85,7 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
         display: 'flex', flexDirection: 'column', gap: 10,
       }}>
         {historial.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+          <div style={{ fontSize: 12, color: 'var(--text-muted)',
                         fontStyle: 'italic', textAlign: 'center', marginTop: 20 }}>
             {t('measurements_chat.empty_hint')}
             <br />{t('measurements_chat.examples')}
@@ -99,10 +99,10 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
             <div style={{
               maxWidth: '80%', padding: '8px 12px', borderRadius: 8, fontSize: 13,
               background: msg.role === 'user'
-                ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
-              color: msg.role === 'user' ? 'var(--white)' : 'var(--color-text-primary, #1d1d1b)',
+                ? 'var(--gold)' : 'var(--bg-muted)',
+              color: msg.role === 'user' ? 'var(--white)' : 'var(--text-main)',
               border: msg.role === 'assistant'
-                ? '0.5px solid var(--color-border-tertiary, #e0d5c5)' : 'none',
+                ? '0.5px solid var(--border)' : 'none',
               whiteSpace: 'pre-wrap',
             }}>
               {msg.content}
@@ -113,9 +113,9 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
           <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
             <div style={{
               padding: '8px 14px', borderRadius: 8, fontSize: 13,
-              background: 'var(--color-background-secondary, #f5f0ea)',
-              border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-              color: 'var(--color-text-secondary, #868685)',
+              background: 'var(--bg-muted)',
+              border: '0.5px solid var(--border)',
+              color: 'var(--text-muted)',
             }}>
               <span style={{ }}>···</span>
             </div>
@@ -126,7 +126,7 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
 
       <div style={{
         padding: '10px 12px',
-        borderTop: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+        borderTop: '0.5px solid var(--border)',
         display: 'flex', gap: 8,
       }}>
         <input
@@ -137,8 +137,8 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
           disabled={loading}
           style={{
             flex: 1, padding: '7px 10px', fontSize: 13,
-            border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-            borderRadius: 6, background: 'var(--color-background-primary, #fff)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 6, background: 'var(--bg-main)',
           }}
         />
         <button type="button" onClick={handleSend} disabled={loading || !input.trim()}

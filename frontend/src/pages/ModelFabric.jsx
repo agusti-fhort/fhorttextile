@@ -6,17 +6,17 @@ const API = import.meta.env.VITE_API_URL || ''
 
 const labelStyle = {
   display: 'block', fontSize: 12,
-  color: 'var(--color-text-secondary, #868685)', marginBottom: 4,
+  color: 'var(--text-muted)', marginBottom: 4,
 }
 const inputStyle = {
   width: '100%', padding: '7px 10px', fontSize: 13,
-  border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-  borderRadius: 6, background: 'var(--color-background-primary, #fff)',
+  border: '0.5px solid var(--border)',
+  borderRadius: 6, background: 'var(--bg-main)',
   boxSizing: 'border-box',
 }
 const btnSecondary = {
   padding: '8px 16px', background: 'transparent', fontSize: 13,
-  border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+  border: '0.5px solid var(--border)',
   borderRadius: 6, cursor: 'pointer',
 }
 
@@ -135,24 +135,24 @@ export default function ModelFabric() {
         display: 'flex', alignItems: 'center', gap: 10,
         marginBottom: '1.5rem',
         padding: '8px 14px',
-        background: 'var(--color-background-secondary, #f5f0ea)',
+        background: 'var(--bg-muted)',
         borderRadius: 8, fontSize: 13,
       }}>
-        <span style={{ color: 'var(--color-text-secondary, #868685)' }}>
+        <span style={{ color: 'var(--text-muted)' }}>
           {model.codi_intern}
         </span>
         {model.nom_prenda && (
           <span style={{ fontWeight: 500 }}>{model.nom_prenda}</span>
         )}
         {model.construction && (
-          <span style={{ color: 'var(--color-text-secondary, #868685)' }}>{t(`model_wizard.construction_${model.construction}`, model.construction)}</span>
+          <span style={{ color: 'var(--text-muted)' }}>{t(`model_wizard.construction_${model.construction}`, model.construction)}</span>
         )}
       </div>
 
       <h2 style={{ fontSize: 18, fontWeight: 500, marginBottom: '0.25rem' }}>
         {t('model_fabric.title')}
       </h2>
-      <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)', marginBottom: '1.5rem' }}>
+      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
         {t('model_fabric.subtitle')}
       </p>
 
@@ -183,7 +183,7 @@ export default function ModelFabric() {
         <label style={labelStyle}>{t('model_sheet.field_shrinkage')}</label>
 
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)', marginBottom: 6 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
             {t('model_fabric.iso_hint')}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -199,9 +199,9 @@ export default function ModelFabric() {
                     padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
                     border: active
                       ? '1.5px solid var(--gold)'
-                      : '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+                      : '0.5px solid var(--border)',
                     background: active ? '#fdf6ee' : 'transparent',
-                    color: 'var(--color-text-secondary, #868685)',
+                    color: 'var(--text-muted)',
                   }}>
                   {entry.nom}
                   <span style={{ marginLeft: 6, fontSize: 11 }}>
@@ -218,8 +218,8 @@ export default function ModelFabric() {
             style={{
               padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
               border: 'none',
-              background: biaxial ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
-              color: biaxial ? 'var(--white)' : 'var(--color-text-secondary, #868685)',
+              background: biaxial ? 'var(--gold)' : 'var(--bg-muted)',
+              color: biaxial ? 'var(--white)' : 'var(--text-muted)',
             }}>
             {t('model_fabric.mode_biaxial')}
           </button>
@@ -227,8 +227,8 @@ export default function ModelFabric() {
             style={{
               padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
               border: 'none',
-              background: !biaxial ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
-              color: !biaxial ? 'var(--white)' : 'var(--color-text-secondary, #868685)',
+              background: !biaxial ? 'var(--gold)' : 'var(--bg-muted)',
+              color: !biaxial ? 'var(--white)' : 'var(--text-muted)',
             }}>
             {t('model_fabric.mode_single')}
           </button>

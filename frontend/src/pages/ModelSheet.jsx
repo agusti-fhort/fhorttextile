@@ -65,9 +65,9 @@ function calcViabilitat(totalMinuts, dataObjectiu, predictedEnd) {
 
 const btnSecondary = {
   background: 'transparent',
-  border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+  border: '0.5px solid var(--border)',
   borderRadius: 6, padding: '6px 12px', fontSize: 12,
-  cursor: 'pointer', color: 'var(--color-text-primary, #1d1d1b)',
+  cursor: 'pointer', color: 'var(--text-main)',
   display: 'flex', alignItems: 'center', gap: 4,
 }
 
@@ -127,7 +127,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
   if (loading) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center',
-                    color: 'var(--color-text-secondary, #868685)',
+                    color: 'var(--text-muted)',
                     fontSize: 13 }}>
         {t('model_sheet.loading')}
       </div>
@@ -144,16 +144,16 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
 
       <div style={{
         display: 'flex', gap: 8, padding: '0.75rem 1.5rem',
-        borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
-        background: 'var(--color-background-primary)',
+        borderBottom: '0.5px solid var(--border)',
+        background: 'var(--bg-main)',
       }}>
         {TABS.map(tab => (
           <button key={tab} type="button"
             onClick={() => setActiveTab(tab)}
             style={{
               padding: '6px 16px', borderRadius: 6, border: 'none',
-              background: activeTab === tab ? 'var(--gold)' : 'var(--color-background-secondary, #f5f0ea)',
-              color: activeTab === tab ? 'var(--white)' : 'var(--color-text-secondary, #868685)',
+              background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
+              color: activeTab === tab ? 'var(--white)' : 'var(--text-muted)',
               cursor: 'pointer', fontSize: 13,
               fontWeight: activeTab === tab ? 500 : 400,
             }}>
@@ -183,7 +183,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           marginBottom: 10, gap: 12 }}>
-              <span style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+              <span style={{ fontSize: 12, color: 'var(--text-muted)',
                              }}>
                 {t('model_sheet.measures_consult')}
               </span>
@@ -350,7 +350,7 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
   if (!model) return null
 
   return (
-    <div style={{ borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)' }}>
+    <div style={{ borderBottom: '0.5px solid var(--border)' }}>
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '0.75rem 1.5rem',
@@ -358,38 +358,38 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button type="button" onClick={() => navigate('/models')}
           style={{ background: 'none', border: 'none', cursor: 'pointer',
-                   fontSize: 13, color: 'var(--color-text-secondary, #868685)',
+                   fontSize: 13, color: 'var(--text-muted)',
                    }}>
           ← {t('nav.models')}
         </button>
-        <span style={{ color: 'var(--color-border-tertiary, #e0d5c5)' }}>›</span>
-        <span style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
+        <span style={{ color: 'var(--border)' }}>›</span>
+        <span style={{ fontSize: 13, color: 'var(--text-muted)',
                        }}>
           {model.codi_intern}
         </span>
         {model.codi_client && model.codi_client !== model.codi_intern && (
           <>
-            <span style={{ color: 'var(--color-border-tertiary, #e0d5c5)' }}>·</span>
+            <span style={{ color: 'var(--border)' }}>·</span>
             <span style={{ fontSize: 13, 
-                           color: 'var(--color-text-primary, #1d1d1b)', fontWeight: 500 }}>
+                           color: 'var(--text-main)', fontWeight: 500 }}>
               {model.codi_client}
             </span>
           </>
         )}
         {model.nom_prenda && (
           <>
-            <span style={{ color: 'var(--color-border-tertiary, #e0d5c5)' }}>·</span>
+            <span style={{ color: 'var(--border)' }}>·</span>
             <span style={{ fontSize: 15, fontWeight: 500,
-                           color: 'var(--color-text-primary, #1d1d1b)' }}>
+                           color: 'var(--text-main)' }}>
               {model.nom_prenda}
             </span>
           </>
         )}
         <span style={{
           fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 500,
-          background: 'var(--color-background-secondary, #f5f0ea)',
-          color: 'var(--color-text-secondary, #868685)',
-          border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+          background: 'var(--bg-muted)',
+          color: 'var(--text-muted)',
+          border: '0.5px solid var(--border)',
         }}>
           {model.estat}
         </span>
@@ -569,27 +569,27 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
       {editing ? (
         <div style={{ marginBottom: 16 }}>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+            <label style={{ fontSize: 12, color: 'var(--text-muted)',
                             display: 'block', marginBottom: 4 }}>
               {t('model_sheet.field_garment_name')}
             </label>
             <input value={form.nom_prenda}
               onChange={e => setForm(f => ({...f, nom_prenda: e.target.value}))}
               style={{ width: '100%', padding: '6px 10px', fontSize: 13,
-                       border: '1px solid var(--color-border-tertiary, #e0d5c5)', borderRadius: 6 }} />
+                       border: '1px solid var(--border)', borderRadius: 6 }} />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+            <label style={{ fontSize: 12, color: 'var(--text-muted)',
                             display: 'block', marginBottom: 4 }}>
               {t('model.fields.codi_client')}
             </label>
             <input value={form.codi_client}
               onChange={e => setForm(f => ({...f, codi_client: e.target.value}))}
               style={{ width: '100%', padding: '6px 10px', fontSize: 13,
-                       border: '1px solid var(--color-border-tertiary, #e0d5c5)', borderRadius: 6 }} />
+                       border: '1px solid var(--border)', borderRadius: 6 }} />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+            <label style={{ fontSize: 12, color: 'var(--text-muted)',
                             display: 'block', marginBottom: 4 }}>
               {t('model.fields.descripcio')}
             </label>
@@ -597,7 +597,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
               onChange={e => setForm(f => ({...f, descripcio: e.target.value}))}
               rows={3}
               style={{ width: '100%', padding: '6px 10px', fontSize: 13,
-                       border: '1px solid var(--color-border-tertiary, #e0d5c5)', borderRadius: 6,
+                       border: '1px solid var(--border)', borderRadius: 6,
                        resize: 'vertical' }} />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -608,7 +608,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
             </button>
             <button type="button" onClick={() => setEditing(false)}
               style={{ padding: '6px 14px', background: 'transparent', fontSize: 13,
-                       border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+                       border: '0.5px solid var(--border)',
                        borderRadius: 6, cursor: 'pointer' }}>
               {t('common.cancel')}
             </button>
@@ -620,16 +620,16 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                         alignItems: 'flex-start', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 18, fontWeight: 500 }}>
-                {model.nom_prenda || <span style={{color:'var(--color-text-secondary, #868685)'}}>{t('model_sheet.no_name')}</span>}
+                {model.nom_prenda || <span style={{color:'var(--text-muted)'}}>{t('model_sheet.no_name')}</span>}
               </div>
               {model.codi_client && model.codi_client !== model.codi_intern && (
-                <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
+                <div style={{ fontSize: 13, color: 'var(--text-muted)',
                               marginTop: 2 }}>
                   {model.codi_client}
                 </div>
               )}
               {model.descripcio && (
-                <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
+                <div style={{ fontSize: 13, color: 'var(--text-muted)',
                               marginTop: 6 }}>
                   {model.descripcio}
                 </div>
@@ -643,15 +643,15 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
         <tbody>
           {readOnlyFields.map(({ label, value, mono, secondary }) => (
             <tr key={label}
-              style={{ borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)' }}>
-              <td style={{ padding: '7px 0', color: 'var(--color-text-secondary, #868685)',
+              style={{ borderBottom: '0.5px solid var(--border)' }}>
+              <td style={{ padding: '7px 0', color: 'var(--text-muted)',
                            width: 180, fontSize: 12 }}>
                 {label}
               </td>
               <td style={{ padding: '7px 0',
                            fontFamily: mono ? 'monospace' : undefined,
                            color: secondary
-                             ? 'var(--color-text-secondary, #868685)' : 'var(--color-text-primary, #1d1d1b)' }}>
+                             ? 'var(--text-muted)' : 'var(--text-main)' }}>
                 {value}
               </td>
             </tr>
@@ -943,14 +943,14 @@ function TabFiles({ modelId }) {
               <i className={`ti ${config.icon}`} aria-hidden="true"
                 style={{ fontSize: 18, color: config.color }} />
               <span style={{ fontSize: 14, fontWeight: 500 }}>{t(`model_sheet.file_type.${tipus}`)}</span>
-              <span style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 ({(fitxers[tipus] || []).length})
               </span>
               <label style={{
                 marginLeft: 'auto', padding: '4px 12px', fontSize: 12,
-                border: '0.5px solid var(--color-border-tertiary, #e0d5c5)', borderRadius: 6,
-                cursor: 'pointer', color: 'var(--color-text-secondary, #868685)',
-                background: uploading === tipus ? 'var(--color-background-secondary, #f5f0ea)' : 'transparent',
+                border: '0.5px solid var(--border)', borderRadius: 6,
+                cursor: 'pointer', color: 'var(--text-muted)',
+                background: uploading === tipus ? 'var(--bg-muted)' : 'transparent',
               }}>
                 {uploading === tipus ? t('model_sheet.uploading') : t('model_sheet.upload')}
                 <input type="file" style={{ display: 'none' }}
@@ -961,7 +961,7 @@ function TabFiles({ modelId }) {
             </div>
 
             {(fitxers[tipus] || []).length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+              <div style={{ fontSize: 12, color: 'var(--text-muted)',
                             padding: '8px 0', fontStyle: 'italic' }}>
                 {t('model_sheet.no_files')}
               </div>
@@ -987,12 +987,12 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
 
   return (
     <div style={{
-      width: 140, border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
+      width: 140, border: '0.5px solid var(--border)',
       borderRadius: 8, overflow: 'hidden', fontSize: 12,
     }}>
       <div onClick={onPreview}
         style={{
-          height: 90, background: 'var(--color-background-secondary, #f5f0ea)',
+          height: 90, background: 'var(--bg-muted)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', position: 'relative',
         }}>
@@ -1016,7 +1016,7 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
 
       <div style={{ padding: '6px 8px' }}>
         <div style={{
-          fontSize: 11, color: 'var(--color-text-primary, #1d1d1b)',
+          fontSize: 11, color: 'var(--text-main)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           marginBottom: 4,
         }} title={fitxer.nom_fitxer}>
@@ -1025,7 +1025,7 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
         <div style={{ display: 'flex', gap: 6 }}>
           <button type="button" onClick={onPreview}
             style={{ flex: 1, padding: '3px 0', fontSize: 11, border: 'none',
-                     background: 'var(--color-background-secondary, #f5f0ea)',
+                     background: 'var(--bg-muted)',
                      borderRadius: 4, cursor: 'pointer',
                      }}>
             <i className="ti ti-eye" aria-hidden="true" /> {t('model_sheet.view')}
@@ -1076,7 +1076,7 @@ function TabAIAnalysis({ modelId }) {
   return (
     <div style={{ maxWidth: 800 }}>
       <div style={{ marginBottom: 16 }}>
-        <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)', marginBottom: 12 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
           {t('model_sheet.ai_description')}
         </p>
         <button type="button" onClick={handleAnalyze} disabled={loading}
@@ -1102,7 +1102,7 @@ function TabAIAnalysis({ modelId }) {
 
       {analisi && (
         <div>
-          <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
+          <div style={{ fontSize: 13, color: 'var(--text-muted)',
                         marginBottom: 12 }}>
             {analisi.resum}
             {' · '}{t('model_sheet.files_analyzed', { count: analisi.fitxers_analitzats })}
@@ -1138,7 +1138,7 @@ function TabAIAnalysis({ modelId }) {
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: 13, color: 'var(--color-text-primary, #1d1d1b)',
+                    <div style={{ fontSize: 13, color: 'var(--text-main)',
                                   marginBottom: 6 }}>
                       {alerta.descripcio}
                     </div>
@@ -1147,7 +1147,7 @@ function TabAIAnalysis({ modelId }) {
                         {t('model_sheet.compare_values', { table: alerta.valor_taula || '—', pattern: alerta.valor_patro || '—' })}
                       </div>
                     )}
-                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)',
                                   fontStyle: 'italic' }}>
                       → {alerta.accio_suggerida}
                     </div>
