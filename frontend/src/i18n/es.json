@@ -1625,5 +1625,13 @@
       "designer": "Diseñador",
       "patternmaker": "Patronista"
     }
+  },
+  "tasks": {
+    "title": "Tareas",
+    "col_task": "Tarea",
+    "col_model": "Modelo",
+    "col_phase": "Fase",
+    "col_status": "Estado",
+    "empty": "Sin tareas en estado \"{{status}}\""
   }
 }

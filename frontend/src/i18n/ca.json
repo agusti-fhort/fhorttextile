@@ -1625,5 +1625,13 @@
       "designer": "Dissenyador",
       "patternmaker": "Patronista"
     }
+  },
+  "tasks": {
+    "title": "Tasques",
+    "col_task": "Tasca",
+    "col_model": "Model",
+    "col_phase": "Fase",
+    "col_status": "Estat",
+    "empty": "Sense tasques en estat \"{{status}}\""
   }
 }

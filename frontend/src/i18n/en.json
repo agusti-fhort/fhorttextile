@@ -1625,5 +1625,13 @@
       "designer": "Designer",
       "patternmaker": "Patternmaker"
     }
+  },
+  "tasks": {
+    "title": "Tasks",
+    "col_task": "Task",
+    "col_model": "Model",
+    "col_phase": "Phase",
+    "col_status": "Status",
+    "empty": "No tasks with status \"{{status}}\""
   }
 }
