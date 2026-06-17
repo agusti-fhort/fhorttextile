@@ -1,4 +1,11 @@
 """
+OBSOLET (2026-06-17) — NO EXECUTAR sense refactoritzar.
+Aquest command usa l'eix `garment_type` a GarmentPOMMap, ELIMINAT a la migració pom 0016.
+La línia de creació de GarmentPOMMap (cap a L284) PETA amb l'eix actual (cal `garment_type_item`).
+Es conserva per la lògica de sembra (valor latent), no com a eina viva.
+Per refer-lo: export des de BD viva per item_code (1.527 maps canònics, filtres: excloure
+pom_global=None i garment_type_item NULL). Veure diagnosi "reseed Excel" / ESTAT_PROJECTE.
+
 S14-A · Full reseed of the 'fhort' tenant after cleanup.
 
 Step A — POMMaster (106, one per POMGlobal)
