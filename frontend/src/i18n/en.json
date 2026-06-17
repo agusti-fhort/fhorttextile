@@ -1600,5 +1600,30 @@
     "empty_hint": "Ask a question or request a change to the measurements.",
     "examples": "Examples: \"POM D is 35.5cm\" · \"Add the waist POM\" · \"Delete Y5\"",
     "input_placeholder": "Type a message… (Enter to send)"
+  },
+  "design_freeze": {
+    "returned": "RETURNED",
+    "blockers": "Blocking fields ({{count}})",
+    "warnings": "Warnings ({{count}})",
+    "extracted_data": "Extracted data",
+    "poms_detected": "POMs detected ({{count}})",
+    "grading_included": "· grading table included",
+    "poms_no_base": "POMs without base size value — they will be generated from the client's Grading Rules",
+    "visual_description": "Visual description: ",
+    "continue": "Continue",
+    "field": {
+      "brand": "Brand",
+      "style": "Style",
+      "code": "Code",
+      "season": "Season",
+      "year": "Year",
+      "garment": "Garment",
+      "material": "Material",
+      "composition": "Composition",
+      "base_size": "Base size",
+      "size_run": "Size run",
+      "designer": "Designer",
+      "patternmaker": "Patternmaker"
+    }
   }
 }

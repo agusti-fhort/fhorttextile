@@ -1600,5 +1600,30 @@
     "empty_hint": "Fes una pregunta o demana un canvi a les mesures.",
     "examples": "Exemples: \"El POM D és 35.5cm\" · \"Afegeix el POM de cintura\" · \"Elimina Y5\"",
     "input_placeholder": "Escriu un missatge… (Enter per enviar)"
+  },
+  "design_freeze": {
+    "returned": "RETORNAT",
+    "blockers": "Camps bloquejants ({{count}})",
+    "warnings": "Avisos ({{count}})",
+    "extracted_data": "Dades extretes",
+    "poms_detected": "POMs detectats ({{count}})",
+    "grading_included": "· taula de grading inclosa",
+    "poms_no_base": "POMs sense valor de talla base — es generaran des de les Grading Rules del client",
+    "visual_description": "Descripció visual: ",
+    "continue": "Continuar",
+    "field": {
+      "brand": "Marca",
+      "style": "Estil",
+      "code": "Codi",
+      "season": "Temporada",
+      "year": "Any",
+      "garment": "Prenda",
+      "material": "Material",
+      "composition": "Composició",
+      "base_size": "Talla base",
+      "size_run": "Run talles",
+      "designer": "Dissenyador",
+      "patternmaker": "Patronista"
+    }
   }
 }

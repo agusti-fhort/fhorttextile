@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 
 const GARMENT_ICONS = {
   'dress': '👗', 'top': '👚', 'trousers': '👖', 'skirt': '🩱',
@@ -5,6 +6,7 @@ const GARMENT_ICONS = {
 }
 
 export function DesignFreezeReport({ result, onConfirm, onReject }) {
+  const { t } = useTranslation()
   if (!result) return null
   const { extracted, design_freeze, filename } = result
   const pass = design_freeze?.pass
@@ -41,7 +43,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
         <span style={{ fontSize: 18, color: pass ? 'var(--gold)' : 'var(--white)' }}>{pass ? '✓' : '✗'}</span>
         <div>
           <div style={{ fontWeight: 600, color: 'var(--white)', fontSize: 13 }}>
-            Design Freeze — <span style={{ color: pass ? 'var(--gold)' : 'var(--white)' }}>{pass ? 'PASS' : 'RETORNAT'}</span>
+            Design Freeze — <span style={{ color: pass ? 'var(--gold)' : 'var(--white)' }}>{pass ? 'PASS' : t('design_freeze.returned')}</span>
           </div>
           <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{filename}</div>
         </div>
@@ -54,7 +56,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
       {design_freeze?.blockers?.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ color: '#cc4444', fontSize: 11, marginBottom: 6, letterSpacing: '.05em', textTransform: 'uppercase' }}>
-            Camps bloquejants ({design_freeze.blockers.length})
+            {t('design_freeze.blockers', { count: design_freeze.blockers.length })}
           </div>
           {design_freeze.blockers.map((b, i) => (
             <div key={i} style={{
@@ -73,7 +75,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
       {design_freeze?.warnings?.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ color: 'var(--gold)', fontSize: 11, marginBottom: 6, letterSpacing: '.05em', textTransform: 'uppercase' }}>
-            Avisos ({design_freeze.warnings.length})
+            {t('design_freeze.warnings', { count: design_freeze.warnings.length })}
           </div>
           {design_freeze.warnings.map((w, i) => (
             <div key={i} style={{
@@ -91,23 +93,23 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
       {/* Camps extrets */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 8, letterSpacing: '.05em', textTransform: 'uppercase' }}>
-          Dades extretes
+          {t('design_freeze.extracted_data')}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
           {[
-            ['Marca', 'brand'],
-            ['Estil', 'style_name'],
-            ['Codi', 'style_code'],
-            ['Temporada', 'season'],
-            ['Any', 'year'],
-            ['Prenda', 'garment_type'],
-            ['Material', 'main_fabric'],
-            ['Composició', 'fabric_composition'],
-            ['Talla base', 'base_size'],
-            ['Run talles', 'size_run'],
-            ['Dissenyador', 'designer'],
-            ['Patronista', 'patternmaker'],
-          ].map(([label, field]) => {
+            ['brand', 'brand'],
+            ['style', 'style_name'],
+            ['code', 'style_code'],
+            ['season', 'season'],
+            ['year', 'year'],
+            ['garment', 'garment_type'],
+            ['material', 'main_fabric'],
+            ['composition', 'fabric_composition'],
+            ['base_size', 'base_size'],
+            ['size_run', 'size_run'],
+            ['designer', 'designer'],
+            ['patternmaker', 'patternmaker'],
+          ].map(([labelKey, field]) => {
             const v = val(field)
             const c = conf(field)
             return (
@@ -117,7 +119,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
                 borderRadius: 3,
                 display: 'flex', justifyContent: 'space-between', gap: 8,
               }}>
-                <span style={{ color: 'var(--text-main)' }}>{label}</span>
+                <span style={{ color: 'var(--text-main)' }}>{t(`design_freeze.field.${labelKey}`)}</span>
                 <span style={{ color: v ? '#aaa' : 'var(--border)', textAlign: 'right', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {v || '—'}
                   {v && <span style={{ marginLeft: 4, fontSize: 9, color: confColor(c) }}>●</span>}
@@ -132,7 +134,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
       {poms.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 8, letterSpacing: '.05em', textTransform: 'uppercase' }}>
-            POMs detectats ({poms.length}) {hasGrading && '· taula de grading inclosa'}
+            {t('design_freeze.poms_detected', { count: poms.length })} {hasGrading && t('design_freeze.grading_included')}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {poms.map((p, i) => (
@@ -151,7 +153,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
           </div>
           {poms.some(p => !p.base_value_cm) && (
             <div style={{ fontSize: 10, color: 'var(--text-main)', marginTop: 4 }}>
-              POMs sense valor de talla base — es generaran des de les Grading Rules del client
+              {t('design_freeze.poms_no_base')}
             </div>
           )}
         </div>
@@ -164,7 +166,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
           background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4,
           fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5,
         }}>
-          <span style={{ color: 'var(--text-main)', fontStyle: 'normal' }}>Descripció visual: </span>
+          <span style={{ color: 'var(--text-main)', fontStyle: 'normal' }}>{t('design_freeze.visual_description')}</span>
           {thumbnail}
         </div>
       )}
@@ -176,7 +178,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
           color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 4,
           fontSize: 11, cursor: 'pointer',
         }}>
-          ← Tornar
+          ← {t('app.back')}
         </button>
         {pass && (
           <button onClick={() => onConfirm(extracted)} style={{
@@ -184,7 +186,7 @@ export function DesignFreezeReport({ result, onConfirm, onReject }) {
             color: '#4a9a4a', border: '1px solid #2a4a2a', borderRadius: 4,
             fontSize: 11, cursor: 'pointer', 
           }}>
-            Continuar →
+            {t('design_freeze.continue')} →
           </button>
         )}
       </div>
