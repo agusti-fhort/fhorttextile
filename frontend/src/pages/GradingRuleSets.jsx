@@ -1,54 +1,63 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 
 const API = import.meta.env.VITE_API_URL || ''
 
 // ── Constants ────────────────────────────────────────────────────────────────
+// Enums de referència (vocabulari controlat). codi = id (mai traduït); nom_en/nom_ca/nom_es =
+// display bilingüe (anglès primari + nom localitzat per i18n.language). Convenció de sector.
 const TARGETS = [
-  { codi: 'WOMAN',         nom_en: 'Woman',         nom_ca: 'Dona' },
-  { codi: 'MAN',           nom_en: 'Man',           nom_ca: 'Home' },
-  { codi: 'UNISEX_ADULT',  nom_en: 'Unisex Adult',  nom_ca: 'Unisex adult' },
-  { codi: 'BABY_GIRL',     nom_en: 'Baby Girl',     nom_ca: 'Nadó nena' },
-  { codi: 'BABY_BOY',      nom_en: 'Baby Boy',      nom_ca: 'Nadó nen' },
-  { codi: 'BABY_UNISEX',   nom_en: 'Baby Unisex',   nom_ca: 'Nadó unisex' },
-  { codi: 'TODDLER_GIRL',  nom_en: 'Toddler Girl',  nom_ca: 'Nena toddler' },
-  { codi: 'TODDLER_BOY',   nom_en: 'Toddler Boy',   nom_ca: 'Nen toddler' },
-  { codi: 'GIRL',          nom_en: 'Girl',          nom_ca: 'Nena' },
-  { codi: 'BOY',           nom_en: 'Boy',           nom_ca: 'Nen' },
-  { codi: 'TEEN_GIRL',     nom_en: 'Teen Girl',     nom_ca: 'Adolescent nena' },
-  { codi: 'TEEN_BOY',      nom_en: 'Teen Boy',      nom_ca: 'Adolescent nen' },
-  { codi: 'MATERNITY',     nom_en: 'Maternity',     nom_ca: 'Maternitat' },
+  { codi: 'WOMAN',         nom_en: 'Woman',         nom_ca: 'Dona',            nom_es: 'Mujer' },
+  { codi: 'MAN',           nom_en: 'Man',           nom_ca: 'Home',            nom_es: 'Hombre' },
+  { codi: 'UNISEX_ADULT',  nom_en: 'Unisex Adult',  nom_ca: 'Unisex adult',    nom_es: 'Unisex adulto' },
+  { codi: 'BABY_GIRL',     nom_en: 'Baby Girl',     nom_ca: 'Nadó nena',       nom_es: 'Bebé niña' },
+  { codi: 'BABY_BOY',      nom_en: 'Baby Boy',      nom_ca: 'Nadó nen',        nom_es: 'Bebé niño' },
+  { codi: 'BABY_UNISEX',   nom_en: 'Baby Unisex',   nom_ca: 'Nadó unisex',     nom_es: 'Bebé unisex' },
+  { codi: 'TODDLER_GIRL',  nom_en: 'Toddler Girl',  nom_ca: 'Nena toddler',    nom_es: 'Niña toddler' },
+  { codi: 'TODDLER_BOY',   nom_en: 'Toddler Boy',   nom_ca: 'Nen toddler',     nom_es: 'Niño toddler' },
+  { codi: 'GIRL',          nom_en: 'Girl',          nom_ca: 'Nena',            nom_es: 'Niña' },
+  { codi: 'BOY',           nom_en: 'Boy',           nom_ca: 'Nen',             nom_es: 'Niño' },
+  { codi: 'TEEN_GIRL',     nom_en: 'Teen Girl',     nom_ca: 'Adolescent nena', nom_es: 'Adolescente niña' },
+  { codi: 'TEEN_BOY',      nom_en: 'Teen Boy',      nom_ca: 'Adolescent nen',  nom_es: 'Adolescente niño' },
+  { codi: 'MATERNITY',     nom_en: 'Maternity',     nom_ca: 'Maternitat',      nom_es: 'Maternidad' },
 ]
 
 const CONSTRUCTIONS = [
-  { codi: 'WOVEN',        nom_en: 'Woven',        nom_ca: 'Teixit pla' },
-  { codi: 'KNIT',         nom_en: 'Knit',         nom_ca: 'Punt jersey' },
-  { codi: 'STRETCH_KNIT', nom_en: 'Stretch Knit', nom_ca: 'Punt elàstic' },
-  { codi: 'TECHNICAL',    nom_en: 'Technical',    nom_ca: 'Tècnic' },
+  { codi: 'WOVEN',        nom_en: 'Woven',        nom_ca: 'Teixit pla',   nom_es: 'Tejido plano' },
+  { codi: 'KNIT',         nom_en: 'Knit',         nom_ca: 'Punt jersey',  nom_es: 'Punto jersey' },
+  { codi: 'STRETCH_KNIT', nom_en: 'Stretch Knit', nom_ca: 'Punt elàstic', nom_es: 'Punto elástico' },
+  { codi: 'TECHNICAL',    nom_en: 'Technical',    nom_ca: 'Tècnic',       nom_es: 'Técnico' },
 ]
 
 const FITS = [
-  { codi: 'REGULAR',   nom_en: 'Regular',   nom_ca: 'Regular' },
-  { codi: 'SLIM',      nom_en: 'Slim',      nom_ca: 'Ajustat' },
-  { codi: 'RELAXED',   nom_en: 'Relaxed',   nom_ca: 'Relaxat' },
-  { codi: 'OVERSIZED', nom_en: 'Oversized', nom_ca: 'Oversize' },
-  { codi: 'FLARED',    nom_en: 'Flared',    nom_ca: 'Evasé' },
-  { codi: 'BODYCON',   nom_en: 'Bodycon',   nom_ca: 'Bodycon' },
-  { codi: 'ATHLETIC',  nom_en: 'Athletic',  nom_ca: 'Esportiu' },
-  { codi: 'STRAIGHT',  nom_en: 'Straight',  nom_ca: 'Recte' },
-  { codi: 'TAPERED',   nom_en: 'Tapered',   nom_ca: 'Cònic' },
-  { codi: 'CUSTOM',    nom_en: 'Custom',    nom_ca: 'Personalitzat' },
+  { codi: 'REGULAR',   nom_en: 'Regular',   nom_ca: 'Regular',         nom_es: 'Regular' },
+  { codi: 'SLIM',      nom_en: 'Slim',      nom_ca: 'Ajustat',         nom_es: 'Ajustado' },
+  { codi: 'RELAXED',   nom_en: 'Relaxed',   nom_ca: 'Relaxat',         nom_es: 'Relajado' },
+  { codi: 'OVERSIZED', nom_en: 'Oversized', nom_ca: 'Oversize',        nom_es: 'Oversize' },
+  { codi: 'FLARED',    nom_en: 'Flared',    nom_ca: 'Evasé',           nom_es: 'Evasé' },
+  { codi: 'BODYCON',   nom_en: 'Bodycon',   nom_ca: 'Bodycon',         nom_es: 'Bodycon' },
+  { codi: 'ATHLETIC',  nom_en: 'Athletic',  nom_ca: 'Esportiu',        nom_es: 'Deportivo' },
+  { codi: 'STRAIGHT',  nom_en: 'Straight',  nom_ca: 'Recte',           nom_es: 'Recto' },
+  { codi: 'TAPERED',   nom_en: 'Tapered',   nom_ca: 'Cònic',           nom_es: 'Cónico' },
+  { codi: 'CUSTOM',    nom_en: 'Custom',    nom_ca: 'Personalitzat',   nom_es: 'Personalizado' },
 ]
 
 const GARMENT_GROUPS = [
-  { codi: 'TOPS',        nom_en: 'Tops',        nom_ca: 'Parts superiors' },
-  { codi: 'BOTTOMS',     nom_en: 'Bottoms',     nom_ca: 'Parts inferiors' },
-  { codi: 'DRESSES',     nom_en: 'Dresses',     nom_ca: 'Vestits' },
-  { codi: 'OUTERWEAR',   nom_en: 'Outerwear',   nom_ca: 'Abrics' },
-  { codi: 'UNDERWEAR',   nom_en: 'Underwear',   nom_ca: 'Interior' },
-  { codi: 'SWIMWEAR',    nom_en: 'Swimwear',    nom_ca: 'Bany' },
-  { codi: 'ACCESSORIES', nom_en: 'Accessories', nom_ca: 'Complements' },
+  { codi: 'TOPS',        nom_en: 'Tops',        nom_ca: 'Parts superiors', nom_es: 'Partes superiores' },
+  { codi: 'BOTTOMS',     nom_en: 'Bottoms',     nom_ca: 'Parts inferiors', nom_es: 'Partes inferiores' },
+  { codi: 'DRESSES',     nom_en: 'Dresses',     nom_ca: 'Vestits',         nom_es: 'Vestidos' },
+  { codi: 'OUTERWEAR',   nom_en: 'Outerwear',   nom_ca: 'Abrics',          nom_es: 'Abrigos' },
+  { codi: 'UNDERWEAR',   nom_en: 'Underwear',   nom_ca: 'Interior',        nom_es: 'Interior' },
+  { codi: 'SWIMWEAR',    nom_en: 'Swimwear',    nom_ca: 'Bany',            nom_es: 'Baño' },
+  { codi: 'ACCESSORIES', nom_en: 'Accessories', nom_ca: 'Complements',     nom_es: 'Complementos' },
 ]
+
+// Nom localitzat secundari segons i18n.language (anglès es mostra com a primari a part).
+function nomLocal(obj, lang) {
+  if (!obj) return ''
+  return lang === 'es' ? (obj.nom_es || obj.nom_en) : lang === 'ca' ? (obj.nom_ca || obj.nom_en) : obj.nom_en
+}
 
 // S16-B fix: mapping grup → categories POM rellevants. La taula de regles
 // filters POMs by the selected group, showing only those belonging to
@@ -70,6 +79,7 @@ const LOGICA_COLORS = {
 }
 
 export default function GradingRuleSets() {
+  const { t, i18n } = useTranslation()
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
 
   const [allRuleSets, setAllRuleSets] = useState([])
@@ -85,7 +95,7 @@ export default function GradingRuleSets() {
   // del FK id que retorna el RuleSet (`rs.garment_group`). El serializer no
   // exposes `garment_group_codi`, only the translated name (not usable as a key).
   const [garmentGroupCodiById, setGarmentGroupCodiById] = useState({})
-  const lang = 'ca'
+  const lang = (i18n.language || 'ca').slice(0, 2)
 
   const authHeaders = () => token ? { Authorization: `Bearer ${token}` } : {}
 
@@ -191,10 +201,10 @@ export default function GradingRuleSets() {
 
   const handleDelete = async (rs, force = false) => {
     if (rs.is_system_default) {
-      setMsg({ type: 'error', text: 'No es pot esborrar un RuleSet de sistema.' })
+      setMsg({ type: 'error', text: t('grading.err_system_delete') })
       return
     }
-    if (!force && !confirm(`Esborrar "${rs.nom}"?`)) return
+    if (!force && !confirm(t('grading.confirm_delete', { name: rs.nom }))) return
     try {
       const r = await fetch(
         `${API}/api/v1/grading-rule-sets/${rs.id}/${force ? '?force=1' : ''}`,
@@ -202,16 +212,16 @@ export default function GradingRuleSets() {
       )
       if (r.ok || r.status === 204) {
         setAllRuleSets(prev => prev.filter(x => x.id !== rs.id))
-        setMsg({ type: 'ok', text: 'RuleSet esborrat.' })
+        setMsg({ type: 'ok', text: t('grading.deleted') })
       } else if (r.status === 409) {
         // Té perfils i/o models dependents → avís clar (missatge del backend, font única) +
         // cascada controlada si es confirma.
         const d = await r.json().catch(() => ({}))
-        if (confirm(d.message || 'Aquest RuleSet té dependències. Esborrar-lo igualment?')) {
+        if (confirm(d.message || t('grading.confirm_delete_deps'))) {
           return handleDelete(rs, true)
         }
       } else {
-        setMsg({ type: 'error', text: `Error ${r.status} esborrant.` })
+        setMsg({ type: 'error', text: t('grading.delete_error', { status: r.status }) })
       }
     } catch (e) {
       setMsg({ type: 'error', text: String(e) })
@@ -225,12 +235,12 @@ export default function GradingRuleSets() {
       return [...prev, saved]
     })
     setShowModal(false)
-    setMsg({ type: 'ok', text: editTarget?.id ? 'RuleSet actualitzat.' : 'RuleSet creat.' })
+    setMsg({ type: 'ok', text: editTarget?.id ? t('grading.updated') : t('grading.created') })
   }
 
   if (loading) return (
     <div style={{ padding: '2rem', fontSize: 12, color: 'var(--text-muted, #868685)' }}>
-      Carregant regles de grading...
+      {t('grading.loading')}
     </div>
   )
 
@@ -243,9 +253,9 @@ export default function GradingRuleSets() {
         marginBottom: '1.5rem', gap: 12,
       }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>Grading Rules</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>{t('nav.grading')}</h1>
           <p style={{ fontSize: 12, color: 'var(--gray, #868685)', fontWeight: 300 }}>
-            {allRuleSets.length} conjunts de regles · {totalRegles} regles totals
+            {t('grading.summary', { sets: allRuleSets.length, rules: totalRegles })}
           </p>
         </div>
         {/* Creació centralitzada a la Size Library; aquí només consulta/edita/esborra. */}
@@ -266,7 +276,7 @@ export default function GradingRuleSets() {
       )}
 
       {/* Pas 1: Target */}
-      <StepSection number={1} title="TARGET — PER A QUI ÉS LA PEÇA?">
+      <StepSection number={1} title={t('grading.step_target')}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {TARGETS.map(t => (
             <TargetCard
@@ -287,20 +297,20 @@ export default function GradingRuleSets() {
 
       {/* Pas 2: Construction + Fit al mateix nivell */}
       {selectedTarget && (availableConstructions.length > 0 || availableFits.length > 0) && (
-        <StepSection number={2} title="CONSTRUCCIÓ I FIT">
+        <StepSection number={2} title={t('grading.step_construction_fit')}>
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
             <div>
               <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6,
                 textTransform: 'uppercase', letterSpacing: '.06em',
                 }}>
-                Tipus de construcció
+                {t('grading.construction_type')}
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {availableConstructions.map(c => (
                   <SelectionButton
                     key={c.codi}
                     label={c.nom_en}
-                    sublabel={lang !== 'en' ? c.nom_ca : null}
+                    sublabel={lang !== 'en' ? nomLocal(c, lang) : null}
                     selected={selectedConstruction === c.codi}
                     onClick={() => {
                       setSelectedConstruction(c.codi)
@@ -316,14 +326,14 @@ export default function GradingRuleSets() {
                 <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6,
                   textTransform: 'uppercase', letterSpacing: '.06em',
                   }}>
-                  Fit type
+                  {t('grading.fit_type_label')}
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {availableFits.map(f => (
                     <SelectionButton
                       key={f.codi}
                       label={f.nom_en}
-                      sublabel={lang !== 'en' ? f.nom_ca : null}
+                      sublabel={lang !== 'en' ? nomLocal(f, lang) : null}
                       selected={selectedFit === f.codi}
                       onClick={() => {
                         setSelectedFit(f.codi)
@@ -340,13 +350,13 @@ export default function GradingRuleSets() {
 
       {/* Pas 3: Garment Group */}
       {selectedFit && (
-        <StepSection number={3} title="GRUP DE PEÇA">
+        <StepSection number={3} title={t('grading.step_group')}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {GARMENT_GROUPS.map(g => (
               <SelectionButton
                 key={g.codi}
                 label={g.nom_en}
-                sublabel={lang !== 'en' ? g.nom_ca : null}
+                sublabel={lang !== 'en' ? nomLocal(g, lang) : null}
                 selected={selectedGarmentGroup === g.codi}
                 onClick={() => setSelectedGarmentGroup(g.codi)}
               />
@@ -387,9 +397,9 @@ export default function GradingRuleSets() {
           marginTop: 24, padding: '2rem', border: '1px dashed var(--border)',
           borderRadius: 8, textAlign: 'center', color: 'var(--gray, #868685)', fontSize: 12,
         }}>
-          No hi ha cap RuleSet per a aquesta combinació.
+          {t('grading.no_match')}
           <div style={{ marginTop: 8, fontSize: 11 }}>
-            Crea'n un des de la Size Library.
+            {t('grading.create_from_library')}
           </div>
         </div>
       )}
@@ -495,6 +505,7 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
 
 // ── RuleSetCard ─────────────────────────────────────────────────────────────
 function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEdit, onDelete }) {
+  const { t } = useTranslation()
   // S16-B: collapsed by default (the user already arrives here with 4 filters applied
   // and the card is a focal point, not the previous navigational list).
   const [expanded, setExpanded] = useState(false)
@@ -546,7 +557,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
   }
 
   const handleDeactivateRule = async (ruleId) => {
-    if (!confirm('Marcar aquesta regla com a inactiva?')) return
+    if (!confirm(t('grading.confirm_deactivate'))) return
     try {
       const res = await fetch(`${API}/api/v1/grading-rules/${ruleId}/`, {
         method: 'DELETE',
@@ -564,14 +575,14 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
   // Table headers (translation only if lang ≠ en).
   const showTrad = lang !== 'en'
   const headers = [
-    { label: 'Codi',       align: 'left'  },
-    { label: 'Nom POM',    align: 'left'  },
-    ...(showTrad ? [{ label: 'Traducció', align: 'left' }] : []),
-    { label: 'Lògica',     align: 'left'  },
-    { label: 'Δ/talla',    align: 'right' },
-    { label: 'Δ break',    align: 'right' },
-    { label: 'Talla base', align: 'right' },
-    { label: 'Valor base', align: 'right' },
+    { label: t('grading.col.code'),       align: 'left'  },
+    { label: t('grading.col.pom_name'),    align: 'left'  },
+    ...(showTrad ? [{ label: t('grading.col.translation'), align: 'left' }] : []),
+    { label: t('grading.col.logic'),     align: 'left'  },
+    { label: t('grading.col.delta_size'),    align: 'right' },
+    { label: t('grading.col.delta_break'),    align: 'right' },
+    { label: t('grading.col.base_size'), align: 'right' },
+    { label: t('grading.col.base_value'), align: 'right' },
     ...(editable ? [{ label: '', align: 'center' }] : []),
   ]
 
@@ -594,7 +605,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
               background: 'none', border: 'none', cursor: 'pointer',
               fontSize: 12, color: 'var(--text-muted)', padding: 0, lineHeight: 1,
             }}
-            aria-label={expanded ? 'Replegar' : 'Desplegar'}
+            aria-label={expanded ? t('grading.collapse') : t('grading.expand')}
           >
             {expanded ? '▾' : '▸'}
           </button>
@@ -612,18 +623,18 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
               {/* S16-B: targets array (M2M) — a RuleSet can apply to multiple targets */}
               {rs.targets_codis?.length > 0 && (
                 <span>
-                  {rs.targets_codis.length > 1 ? 'Targets: ' : 'Target: '}
-                  {rs.targets_codis.map((t, i) => (
-                    <span key={t}>
+                  {rs.targets_codis.length > 1 ? t('grading.targets_label') : t('grading.target_label')}
+                  {rs.targets_codis.map((tc, i) => (
+                    <span key={tc}>
                       {i > 0 && <span style={{ color: '#bbb' }}> · </span>}
-                      <strong>{t}</strong>
+                      <strong>{tc}</strong>
                     </span>
                   ))}
                 </span>
               )}
-              {rs.construction_codi && <span>Construction: <strong>{rs.construction_codi}</strong></span>}
-              {rs.fit_type_codi && <span>Fit: <strong>{rs.fit_type_codi}</strong></span>}
-              {rs.size_system_nom && <span>Size System: <strong>{rs.size_system_nom}</strong></span>}
+              {rs.construction_codi && <span>{t('grading.construction_label')}<strong>{rs.construction_codi}</strong></span>}
+              {rs.fit_type_codi && <span>{t('grading.fit_label')}<strong>{rs.fit_type_codi}</strong></span>}
+              {rs.size_system_nom && <span>{t('grading.size_system_label')}<strong>{rs.size_system_nom}</strong></span>}
               {rs.codi_sistema && <span style={{ }}>{rs.codi_sistema}</span>}
             </div>
           </div>
@@ -632,20 +643,20 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Pill bg="#eef4fc" color="#2a5a8a">
             {relevantCategories && reglesCount !== totalRulesCount
-              ? `${reglesCount}/${totalRulesCount} regles`
-              : `${reglesCount} regles`}
+              ? t('grading.rules_count_filtered', { count: reglesCount, total: totalRulesCount })
+              : t('grading.rules_count', { count: reglesCount })}
           </Pill>
-          {breakCount > 0 && <Pill bg="#fdf6ee" color="var(--gold)">{breakCount} amb break</Pill>}
+          {breakCount > 0 && <Pill bg="#fdf6ee" color="var(--gold)">{t('grading.with_break', { count: breakCount })}</Pill>}
           <Pill
             bg={rs.is_system_default ? '#f5f0ea' : '#f0f9f0'}
             color={rs.is_system_default ? 'var(--text-muted)' : '#3b6d11'}
-          >{rs.is_system_default ? 'Sistema' : 'Personalitzat'}</Pill>
-          {rs.actiu && <Pill bg="#f0f9f0" color="#3b6d11">Actiu</Pill>}
-          <ActionBtn onClick={onClone} label="Clonar" />
+          >{rs.is_system_default ? t('grading.system') : t('grading.custom')}</Pill>
+          {rs.actiu && <Pill bg="#f0f9f0" color="#3b6d11">{t('grading.active')}</Pill>}
+          <ActionBtn onClick={onClone} label={t('grading.clone')} />
           {!rs.is_system_default && (
             <>
-              <ActionBtn onClick={onEdit} label="Editar" />
-              <ActionBtn onClick={onDelete} label="Esborrar" danger />
+              <ActionBtn onClick={onEdit} label={t('app.edit')} />
+              <ActionBtn onClick={onDelete} label={t('app.delete')} danger />
             </>
           )}
         </div>
@@ -749,7 +760,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     }}>
                       {r.increment_base != null
                         ? (r.talla_break_label
-                            ? `+${Number(r.increment_break)} des de ${r.talla_break_label}`
+                            ? t('grading.break_from', { value: Number(r.increment_break), size: r.talla_break_label })
                             : '—')
                         : (
                           <EditableIncrement
@@ -778,7 +789,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                       }}>
                         <ActionBtn
                           onClick={() => handleDeactivateRule(r.id)}
-                          label="Inactivar"
+                          label={t('grading.deactivate')}
                           danger
                         />
                       </td>
@@ -794,8 +805,8 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
       {expanded && visibleRules.length === 0 && (
         <div style={{ padding: '1.5rem', textAlign: 'center', color: '#bbb', fontSize: 12 }}>
           {localRules.length === 0
-            ? 'Cap regla definida per a aquest RuleSet.'
-            : `Cap regla rellevant per a ${garmentGroup} (${localRules.length} amagades).`}
+            ? t('grading.no_rules')
+            : t('grading.no_relevant_rules', { group: garmentGroup, count: localRules.length })}
         </div>
       )}
     </div>
@@ -806,6 +817,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
 // Show a numeric value. If readOnly, render as static text.
 // If editable, click → inline numeric input. Enter saves, Escape cancels.
 function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
+  const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   useEffect(() => { setDraft(value) }, [value])
@@ -847,7 +859,7 @@ function EditableIncrement({ value, ruleId, field, readOnly, onSave }) {
   return (
     <span
       onClick={() => setEditing(true)}
-      title="Click per editar"
+      title={t('measurement_table.click_to_edit')}
       style={{
         cursor: 'pointer',
         borderBottom: '1px dashed #c0c0c0',
@@ -892,6 +904,7 @@ function ActionBtn({ onClick, label, danger = false }) {
 
 // ── RuleSetModal ────────────────────────────────────────────────────────────
 function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, authHeaders, onSave, onError, onClose }) {
+  const { t } = useTranslation()
   const isEdit = !!rs?.id
   const [form, setForm] = useState({
     nom:          rs?.nom          || '',
@@ -911,7 +924,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
   const [saving, setSaving] = useState(false)
 
   const handleSubmit = async () => {
-    if (!form.nom.trim()) { onError('Nom obligatori'); return }
+    if (!form.nom.trim()) { onError(t('grading.name_required')); return }
     setSaving(true)
 
     const url = isEdit
@@ -965,7 +978,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
           onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
           style={modalInput}
         >
-          <option value="">— Selecciona —</option>
+          <option value="">{t('grading.select_placeholder')}</option>
           {options.map(o => <option key={o.codi} value={o.codi}>{o.nom_en}</option>)}
         </select>
       ) : (
@@ -996,15 +1009,15 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
         }}
       >
         <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: 'var(--text-main)' }}>
-          {isEdit ? 'Editar RuleSet' : 'Nou RuleSet de Grading'}
+          {isEdit ? t('grading.modal_edit') : t('grading.modal_new')}
         </h2>
-        <F label="Nom" field="nom" />
-        <F label="Codi sistema" field="codi_sistema" />
-        <F label="Target (només referència)" field="target_codi_form" options={TARGETS} disabled />
-        <F label="Construction (només referència)" field="construction_codi_form" options={CONSTRUCTIONS} disabled />
-        <F label="Fit Type (només referència)" field="fit_type_codi_form" options={FITS} disabled />
+        <F label={t('grading.field_name')} field="nom" />
+        <F label={t('grading.field_codi')} field="codi_sistema" />
+        <F label={t('grading.field_target_ref')} field="target_codi_form" options={TARGETS} disabled />
+        <F label={t('grading.field_construction_ref')} field="construction_codi_form" options={CONSTRUCTIONS} disabled />
+        <F label={t('grading.field_fit_ref')} field="fit_type_codi_form" options={FITS} disabled />
         <p style={{ fontSize: 10, color: 'var(--gold)', margin: '4px 0 12px' }}>
-          Nota: Target/Construction/Fit no es poden modificar des d'aquí — backend espera IDs i no hi ha endpoint per resoldre codi→id.
+          {t('grading.modal_note')}
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
           <button
@@ -1015,13 +1028,13 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
               border: '0.5px solid var(--border)',
               fontSize: 11,
             }}
-          >Cancel·lar</button>
+          >{t('app.cancel')}</button>
           <button
             onClick={handleSubmit}
             disabled={saving}
             style={{ ...btnPrimary, opacity: saving ? 0.6 : 1, cursor: saving ? 'not-allowed' : 'pointer' }}
           >
-            {saving ? 'Guardant...' : (isEdit ? 'Guardar' : 'Crear')}
+            {saving ? t('common.saving') : (isEdit ? t('app.save') : t('app.create'))}
           </button>
         </div>
       </div>
