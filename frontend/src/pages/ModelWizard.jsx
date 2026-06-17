@@ -343,7 +343,11 @@ export default function ModelWizard() {
                 {profiles.length === 0 && <p style={{ fontSize: 12, color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>}
                 {profiles.map(p => {
                   const active = selProfile?.id === p.id
-                  const sub = [p.target?.nom_en || p.target?.codi, p.construction?.nom_en || p.construction?.codi, p.fit_type_nom].filter(Boolean).join(' · ')
+                  const sub = [
+                    p.target?.codi ? t(`model_wizard.target_${p.target.codi}`, p.target.nom_en || p.target.codi) : p.target?.nom_en,
+                    p.construction?.codi ? t(`model_wizard.construction_${p.construction.codi}`, p.construction.nom_en || p.construction.codi) : p.construction?.nom_en,
+                    p.fit_type_nom,
+                  ].filter(Boolean).join(' · ')
                   // Peça 3 — rang d'edat (mesos) derivat de les size_definitions del perfil.
                   const ageMins = (p.size_definitions || []).map(d => d.age_months_min).filter(v => v != null)
                   const ageMaxs = (p.size_definitions || []).map(d => d.age_months_max).filter(v => v != null)

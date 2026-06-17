@@ -524,7 +524,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
     { label: t('model_sheet.field_internal_ref'), value: model.codi_intern, mono: true, secondary: true },
     { label: t('model.fields.temporada'), value: `${model.temporada} ${model.any}` },
     { label: t('model_sheet.field_collection'), value: model.collection || '—' },
-    { label: t('model_sheet.field_target'), value: model.target || '—' },
+    { label: t('model_sheet.field_target'), value: model.target ? t(`model_wizard.target_${model.target}`, model.target) : '—' },
     { label: t('model_sheet.field_garment_type'), value: model.garment_type_nom || '—' },
     { label: t('model_sheet.field_garment_item'), value: model.garment_type_item_nom || '—' },
     { label: t('model_sheet.field_construction'), value: model.construction || '—' },

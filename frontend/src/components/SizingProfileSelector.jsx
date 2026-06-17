@@ -167,21 +167,20 @@ export function SizingProfileSelector({
           <LoadError onRetry={loadLookups} />
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {targets.map(t => (
+            {targets.map(tg => (
               <button
-                key={t.codi}
-                onClick={() => pickTarget(t.codi)}
+                key={tg.codi}
+                onClick={() => pickTarget(tg.codi)}
                 style={{
                   ...chipBase, padding: "10px 14px", borderRadius: 6, fontSize: 12,
-                  background: selectedTarget === t.codi ? "#f5e6d0" : "var(--white)",
-                  color: selectedTarget === t.codi ? "var(--gold)" : "var(--text-main)",
-                  border: `1px solid ${selectedTarget === t.codi ? "var(--gold)" : "var(--border)"}`,
+                  background: selectedTarget === tg.codi ? "#f5e6d0" : "var(--white)",
+                  color: selectedTarget === tg.codi ? "var(--gold)" : "var(--text-main)",
+                  border: `1px solid ${selectedTarget === tg.codi ? "var(--gold)" : "var(--border)"}`,
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                   minWidth: 90,
                 }}
               >
-                <span style={{ fontWeight: selectedTarget === t.codi ? 600 : 400 }}>{t.nom_en}</span>
-                <span style={{ fontSize: 9, color: selectedTarget === t.codi ? "var(--gold)" : "var(--text-muted)" }}>{t.nom_cat}</span>
+                <span style={{ fontWeight: selectedTarget === tg.codi ? 600 : 400 }}>{t(`model_wizard.target_${tg.codi}`, tg.nom_en)}</span>
               </button>
             ))}
           </div>

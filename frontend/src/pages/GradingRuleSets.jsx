@@ -440,6 +440,7 @@ function StepSection({ number, title, children }) {
 // ── TargetCard ──────────────────────────────────────────────────────────────
 // Same pattern as Size Library: nom_en primary (large), nom_ca secondary (small grey).
 function TargetCard({ target, selected, available, onClick }) {
+  const { t } = useTranslation()
   return (
     <div
       onClick={available ? onClick : undefined}
@@ -459,9 +460,8 @@ function TargetCard({ target, selected, available, onClick }) {
         fontWeight: selected ? 600 : 400,
         color: selected ? 'var(--gold)' : 'var(--text-main)',
       }}>
-        {target.nom_en}
+        {t(`model_wizard.target_${target.codi}`, target.nom_en)}
       </div>
-      <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{target.nom_ca}</div>
     </div>
   )
 }
@@ -627,7 +627,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                   {rs.targets_codis.map((tc, i) => (
                     <span key={tc}>
                       {i > 0 && <span style={{ color: '#bbb' }}> · </span>}
-                      <strong>{tc}</strong>
+                      <strong>{t(`model_wizard.target_${tc}`, tc)}</strong>
                     </span>
                   ))}
                 </span>

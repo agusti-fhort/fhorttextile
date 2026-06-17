@@ -433,7 +433,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           <Field label={t('size_map_f_target')}>
             <select value={wiz.target_codi} onChange={e => set({ target_codi: e.target.value })} style={{ ...selS, width: '100%' }}>
               <option value="">—</option>
-              {lookups.targets.map(o => <option key={o.codi} value={o.codi}>{o.nom} ({o.codi})</option>)}
+              {lookups.targets.map(o => <option key={o.codi} value={o.codi}>{t(`model_wizard.target_${o.codi}`, o.nom)} ({o.codi})</option>)}
             </select>
           </Field>
           <Field label={t('size_map_f_unit')}>
@@ -707,7 +707,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           {/* Resum */}
           <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12, fontFamily: MONO }}>
             <div>{t('size_map_sum_action')}: <b>{wiz.decision}</b></div>
-            <div>{t('size_map_sum_target')}: {wiz.target_codi} · {t('size_map_sum_unit')}: {wiz.base_unit} · {t('size_map_sum_client')}: {wiz.customer_codi || '—'}</div>
+            <div>{t('size_map_sum_target')}: {wiz.target_codi ? t(`model_wizard.target_${wiz.target_codi}`, wiz.target_codi) : '—'} · {t('size_map_sum_unit')}: {wiz.base_unit} · {t('size_map_sum_client')}: {wiz.customer_codi || '—'}</div>
             <div>{t('size_map_sum_talles')}: {wiz.talles.length} · {t('size_map_sum_rules')}: {wiz.gradingResults.filter(g => g.pom_id).length} · {t('size_map_sum_perfils')}: {wiz.perfilTargets.length}</div>
             {wiz.construction_id && <div>{t('size_map_sum_constr')}: {nomById(lookups.constructions, wiz.construction_id)}</div>}
           </div>
