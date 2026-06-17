@@ -15,24 +15,16 @@ const currentYear = new Date().getFullYear()
 const YEARS = [currentYear, currentYear + 1, currentYear + 2, currentYear + 3]
 
 // Temporades ALINEADES amb Model.TEMPORADA_CHOICES (SS/FW/CO/SP). Corregeix el mismatch RE/PRE.
-const SEASONS = [
-  { codi: 'SS', nom: 'Spring/Summer' },
-  { codi: 'FW', nom: 'Fall/Winter' },
-  { codi: 'CO', nom: 'Cruise' },
-  { codi: 'SP', nom: 'Special' },
-]
-
+// Només l'identificador (codi); l'etiqueta visible es resol amb t('model_wizard.<tipus>_<codi>').
+const SEASONS = ['SS', 'FW', 'CO', 'SP']
 const TARGETS = [
-  { codi: 'WOMAN', nom: 'Woman' }, { codi: 'MAN', nom: 'Man' }, { codi: 'UNISEX_ADULT', nom: 'Unisex Adult' },
-  { codi: 'BABY_GIRL', nom: 'Baby Girl' }, { codi: 'BABY_BOY', nom: 'Baby Boy' }, { codi: 'BABY_UNISEX', nom: 'Baby Unisex' },
-  { codi: 'TODDLER_GIRL', nom: 'Toddler Girl' }, { codi: 'TODDLER_BOY', nom: 'Toddler Boy' },
-  { codi: 'GIRL', nom: 'Girl' }, { codi: 'BOY', nom: 'Boy' },
-  { codi: 'TEEN_GIRL', nom: 'Teen Girl' }, { codi: 'TEEN_BOY', nom: 'Teen Boy' }, { codi: 'MATERNITY', nom: 'Maternity' },
+  'WOMAN', 'MAN', 'UNISEX_ADULT',
+  'BABY_GIRL', 'BABY_BOY', 'BABY_UNISEX',
+  'TODDLER_GIRL', 'TODDLER_BOY',
+  'GIRL', 'BOY',
+  'TEEN_GIRL', 'TEEN_BOY', 'MATERNITY',
 ]
-const CONSTRUCTIONS = [
-  { codi: 'WOVEN', nom: 'Woven (Plana)' }, { codi: 'KNIT', nom: 'Knit (Punt)' },
-  { codi: 'STRETCH_KNIT', nom: 'Stretch Knit' }, { codi: 'TECHNICAL', nom: 'Technical' },
-]
+const CONSTRUCTIONS = ['WOVEN', 'KNIT', 'STRETCH_KNIT', 'TECHNICAL']
 
 export default function ModelWizard() {
   const { id } = useParams()
@@ -270,9 +262,9 @@ export default function ModelWizard() {
               <Field label={t('model_wizard.season')}>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {SEASONS.map(s => (
-                    <Chip key={s.codi} active={season === s.codi} onClick={() => setSeason(s.codi)} disabled={isEditMode}>
-                      <span style={{ fontWeight: 500 }}>{s.codi}</span>
-                      <span style={{ fontSize: 9, display: 'block', opacity: 0.8 }}>{s.nom}</span>
+                    <Chip key={s} active={season === s} onClick={() => setSeason(s)} disabled={isEditMode}>
+                      <span style={{ fontWeight: 500 }}>{s}</span>
+                      <span style={{ fontSize: 9, display: 'block', opacity: 0.8 }}>{t(`model_wizard.season_${s}`)}</span>
                     </Chip>
                   ))}
                 </div>
@@ -282,13 +274,13 @@ export default function ModelWizard() {
                 <div style={{ ...labelStyle, marginTop: 4, textTransform: 'none' }}>{t('model_wizard.auto_ref')}</div>
               </Field>
             </div>
-            <TextInput label={t('model_wizard.ref_client')} value={refClient} onChange={setRefClient} placeholder="ex: AB-1234" />
-            <TextInput label={t('model_wizard.collection')} value={collection} onChange={setCollection} placeholder="ex: SS26 Capsule" />
+            <TextInput label={t('model_wizard.ref_client')} value={refClient} onChange={setRefClient} placeholder={t('model_wizard.ph_ref_client')} />
+            <TextInput label={t('model_wizard.collection')} value={collection} onChange={setCollection} placeholder={t('model_wizard.ph_collection')} />
             <TextInput label={t('model_wizard.nom_prenda')} value={nomPrenda} onChange={setNomPrenda} />
             <Field label={t('model_wizard.descripcio')}>
               <textarea value={descripcio} onChange={e => setDescripcio(e.target.value)} style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }} />
             </Field>
-            <Field label="Deadline (opcional)">
+            <Field label={t('model_wizard.deadline_optional')}>
               <input type="date" value={dataObjectiu} onChange={e => setDataObjectiu(e.target.value)} style={inputStyle} />
             </Field>
           </div>
@@ -299,7 +291,7 @@ export default function ModelWizard() {
             <Field label={t('model_wizard.target')}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {TARGETS.map(tg => (
-                  <Chip key={tg.codi} active={target === tg.codi} onClick={() => setTarget(tg.codi)}>{tg.nom}</Chip>
+                  <Chip key={tg} active={target === tg} onClick={() => setTarget(tg)}>{t(`model_wizard.target_${tg}`)}</Chip>
                 ))}
               </div>
             </Field>
@@ -331,7 +323,7 @@ export default function ModelWizard() {
               <Field label={t('model_wizard.construction')}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {CONSTRUCTIONS.map(c => (
-                    <Chip key={c.codi} active={construction === c.codi} onClick={() => { if (construction !== c.codi) resetSizing(); setConstruction(c.codi) }}>{c.nom}</Chip>
+                    <Chip key={c} active={construction === c} onClick={() => { if (construction !== c) resetSizing(); setConstruction(c) }}>{t(`model_wizard.construction_${c}`)}</Chip>
                   ))}
                 </div>
               </Field>
@@ -346,7 +338,7 @@ export default function ModelWizard() {
             ) : (
               <>
                 <p style={{ fontSize: 12, color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>
-                  {t('model_wizard.sizes_for')} {target} · {construction}
+                  {t('model_wizard.sizes_for')} {t(`model_wizard.target_${target}`)} · {t(`model_wizard.construction_${construction}`)}
                 </p>
                 {profiles.length === 0 && <p style={{ fontSize: 12, color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>}
                 {profiles.map(p => {
@@ -364,21 +356,21 @@ export default function ModelWizard() {
                       background: active ? 'var(--warn-bg)' : 'var(--white)',
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 500, fontSize: 14 }}>{p.size_system?.nom || `Profile #${p.id}`}</span>
+                        <span style={{ fontWeight: 500, fontSize: 14 }}>{p.size_system?.nom || t('model_wizard.profile_n', { id: p.id })}</span>
                         {p.size_system_customer_codi
                           ? <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
                                            background: 'var(--gold-pale)', color: 'var(--gold)' }}>
-                              {t('model_wizard.client_run', 'Run de client')}: {p.size_system_customer_codi}
+                              {t('model_wizard.client_run')}: {p.size_system_customer_codi}
                             </span>
                           : <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
                                            background: 'var(--gray-l)', color: 'var(--gray)' }}>
-                              {t('model_wizard.canonical', 'Canònic')}
+                              {t('model_wizard.canonical')}
                             </span>}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--gray)' }}>{sub}</div>
                       {ageMin != null && ageMax != null && ageMax > 0 && (
                         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                          {ageMin === 0 ? `0–${ageMax} mesos` : `${ageMin}–${ageMax} mesos`}
+                          {t('model_wizard.age_months_range', { min: ageMin, max: ageMax })}
                         </div>
                       )}
                     </div>
@@ -402,7 +394,7 @@ export default function ModelWizard() {
                     </div>
                     {baseSizeInvalid && (
                       <div style={{ color: 'var(--warn)', fontSize: 11, marginTop: 6 }}>
-                        {t('wizard_base_size_required', 'El sistema de talles ha canviat. Selecciona la talla base.')}
+                        {t('wizard_base_size_required')}
                       </div>
                     )}
                   </Field>
