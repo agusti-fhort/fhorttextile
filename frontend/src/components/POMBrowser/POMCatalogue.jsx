@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
 import { PomNamePair, POMDetailPanel } from './POMBrowser'
+
+// Sentinel id for the synthetic "uncategorized" group (kept as id for grouping/sort; label translated).
+const UNCAT = 'Sense categoria'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -41,6 +45,7 @@ function normalizeMaster(r) {
 }
 
 export default function POMCatalogue() {
+  const { t } = useTranslation()
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
@@ -76,13 +81,13 @@ export default function POMCatalogue() {
   const groups = useMemo(() => {
     const map = new Map()
     for (const p of filtered) {
-      const key = p.category || 'Sense categoria'
+      const key = p.category || UNCAT
       if (!map.has(key)) map.set(key, [])
       map.get(key).push(p)
     }
     return [...map.entries()].sort((a, b) => {
-      if (a[0] === 'Sense categoria') return 1
-      if (b[0] === 'Sense categoria') return -1
+      if (a[0] === UNCAT) return 1
+      if (b[0] === UNCAT) return -1
       return a[0].localeCompare(b[0])
     })
   }, [filtered])
@@ -95,11 +100,11 @@ export default function POMCatalogue() {
         borderBottom: '0.5px solid #e4e4e2', background: 'var(--white)',
       }}>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          Catàleg de POMs · només consulta
+          {t('poms.catalogue_readonly')}
         </span>
         <input
           type="text"
-          placeholder="Cerca POM (codi, nom, categoria)..."
+          placeholder={t('poms.search_ph_catalogue')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{
@@ -108,15 +113,15 @@ export default function POMCatalogue() {
             outline: 'none', width: 280, marginLeft: 'auto',
           }}
         />
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{filtered.length} POMs</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('poms.count_poms', { count: filtered.length })}</span>
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-          {loading && <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Carregant catàleg...</p>}
+          {loading && <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('poms.loading_catalogue')}</p>}
           {!loading && filtered.length === 0 && (
             <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
-              {items.length === 0 ? 'Catàleg buit.' : 'Cap POM coincideix amb la cerca.'}
+              {items.length === 0 ? t('poms.catalogue_empty') : t('poms.no_match')}
             </p>
           )}
 
@@ -127,7 +132,7 @@ export default function POMCatalogue() {
                 textTransform: 'uppercase', letterSpacing: '.1em',
                 margin: '0 0 8px', paddingBottom: 4, borderBottom: '0.5px solid #ece2d4',
               }}>
-                {cat} <span style={{ color: '#b0b0ad', fontWeight: 500 }}>· {rows.length}</span>
+                {cat === UNCAT ? t('poms.uncategorized') : cat} <span style={{ color: '#b0b0ad', fontWeight: 500 }}>· {rows.length}</span>
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {rows.map(pom => {
@@ -154,11 +159,11 @@ export default function POMCatalogue() {
                         }}>{pom.abbreviation}</span>
                       )}
                       {pom.is_tenant_only && (
-                        <span title="POM tenant-only importat — sense definició global completa"
+                        <span title={t('poms.tenant_only_hint')}
                           style={{
                             background: '#fff3e0', color: '#b25a00', fontSize: 9, padding: '2px 6px',
                             borderRadius: 3, fontWeight: 600, letterSpacing: '.06em', border: '0.5px solid #f0c040',
-                          }}>INCOMPLET</span>
+                          }}>{t('poms.incomplete')}</span>
                       )}
                     </div>
                   )

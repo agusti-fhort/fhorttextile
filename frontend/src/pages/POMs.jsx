@@ -1,24 +1,27 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import POMBrowser from '../components/POMBrowser/POMBrowser'
 import POMCatalogue from '../components/POMBrowser/POMCatalogue'
 
-const TABS = ['Browser', 'Catalogue']
+// `activeTab` value is the id (Browser/Catalogue) → kept; label resolved from poms.tab_* at render.
+const TABS = [['Browser', 'poms.tab_browser'], ['Catalogue', 'poms.tab_catalogue']]
 
 export default function POMs() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('Browser')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 100px)' }}>
       <div style={{ marginBottom: '0.8rem' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>POM Systems</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>{t('poms.title')}</h1>
         <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>
-          Catàleg de Points of Measure per tipus de prenda
+          {t('poms.subtitle')}
         </p>
       </div>
 
       {/* Tira de pestanyes — Browser (assign, validat a B3-ter) i Catalogue (placeholder, B5). */}
       <div style={{ display: 'flex', gap: 8, marginBottom: '0.8rem' }}>
-        {TABS.map(tab => (
+        {TABS.map(([tab, labelKey]) => (
           <button key={tab} type="button"
             onClick={() => setActiveTab(tab)}
             style={{
@@ -28,7 +31,7 @@ export default function POMs() {
               cursor: 'pointer', fontSize: 13,
               fontWeight: activeTab === tab ? 500 : 400,
             }}>
-            {tab}
+            {t(labelKey)}
           </button>
         ))}
       </div>

@@ -7,7 +7,9 @@ import {
   useSortable, arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
+import i18n from '../../i18n'
 import GarmentTypeSelector from '../GarmentTypeSelector/GarmentTypeSelector'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -86,8 +88,10 @@ export default function POMBrowser({
   garmentTypeCode = '',
   activePoms = [],
   onTogglePom = () => {},
-  lang = 'ca',
+  lang: langProp = 'ca',
 }) {
+  const { t, i18n } = useTranslation()
+  const lang = (i18n.language || langProp || 'ca').slice(0, 2)
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
 
   // Migració família→item: la pertinença viu a l'ITEM. selectedFamily = només per al breadcrumb;
@@ -159,11 +163,11 @@ export default function POMBrowser({
         method: 'POST', headers: authHeaders,
         body: JSON.stringify({ garment_type_item: selectedItem.id, pom: master.id, is_key: false, ordre: nextOrdre }),
       })
-      if (r.status === 403) return setNotice({ type: 'err', text: 'Sense permís per editar la pertinença (cal CONFIGURE).' })
-      if (r.status === 400) return setNotice({ type: 'warn', text: `«${master.codi_client}» ja està assignat a aquest ítem.` })
-      if (!r.ok) return setNotice({ type: 'err', text: 'No s\'ha pogut afegir el POM.' })
+      if (r.status === 403) return setNotice({ type: 'err', text: t('poms.err_perm_membership') })
+      if (r.status === 400) return setNotice({ type: 'warn', text: t('poms.already_assigned', { code: master.codi_client }) })
+      if (!r.ok) return setNotice({ type: 'err', text: t('poms.err_add') })
       setCatalogQuery(''); setCatalogResults([]); setReloadKey(k => k + 1)
-    } catch { setNotice({ type: 'err', text: 'Error de connexió.' }) }
+    } catch { setNotice({ type: 'err', text: t('poms.err_connection') }) }
   }
 
   const assignRemove = async (pom) => {
@@ -171,10 +175,10 @@ export default function POMBrowser({
     setNotice(null)
     try {
       const r = await fetch(`${API}/api/v1/garment-pom-maps/${pom.map_id}/`, { method: 'DELETE', headers: authHeaders })
-      if (r.status === 403) return setNotice({ type: 'err', text: 'Sense permís per editar la pertinença (cal CONFIGURE).' })
-      if (!r.ok && r.status !== 204) return setNotice({ type: 'err', text: 'No s\'ha pogut treure el POM.' })
+      if (r.status === 403) return setNotice({ type: 'err', text: t('poms.err_perm_membership') })
+      if (!r.ok && r.status !== 204) return setNotice({ type: 'err', text: t('poms.err_remove') })
       setReloadKey(k => k + 1)
-    } catch { setNotice({ type: 'err', text: 'Error de connexió.' }) }
+    } catch { setNotice({ type: 'err', text: t('poms.err_connection') }) }
   }
 
   // Toggle KEY (is_key editable) → PATCH; gate CONFIGURE al backend.
@@ -185,10 +189,10 @@ export default function POMBrowser({
       const r = await fetch(`${API}/api/v1/garment-pom-maps/${pom.map_id}/`, {
         method: 'PATCH', headers: authHeaders, body: JSON.stringify({ is_key: !pom.is_key }),
       })
-      if (r.status === 403) return setNotice({ type: 'err', text: 'Sense permís per editar (cal CONFIGURE).' })
-      if (!r.ok) return setNotice({ type: 'err', text: 'No s\'ha pogut canviar KEY.' })
+      if (r.status === 403) return setNotice({ type: 'err', text: t('poms.err_perm_edit') })
+      if (!r.ok) return setNotice({ type: 'err', text: t('poms.err_toggle_key') })
       setReloadKey(k => k + 1)
-    } catch { setNotice({ type: 'err', text: 'Error de connexió.' }) }
+    } catch { setNotice({ type: 'err', text: t('poms.err_connection') }) }
   }
 
   // Reordenar (drag) — ordre que veurà el tècnic a la taula de mides. Persisteix ordre via PATCH.
@@ -211,10 +215,10 @@ export default function POMBrowser({
         fetch(`${API}/api/v1/garment-pom-maps/${p.map_id}/`, {
           method: 'PATCH', headers: authHeaders, body: JSON.stringify({ ordre: i + 1 }),
         })))
-      if (results.some(r => r.status === 403)) setNotice({ type: 'err', text: 'Sense permís per reordenar (cal CONFIGURE).' })
-      else if (results.some(r => !r.ok)) setNotice({ type: 'err', text: 'No s\'ha pogut desar l\'ordre.' })
+      if (results.some(r => r.status === 403)) setNotice({ type: 'err', text: t('poms.err_perm_reorder') })
+      else if (results.some(r => !r.ok)) setNotice({ type: 'err', text: t('poms.err_save_order') })
       setReloadKey(k => k + 1)   // reconcilia amb la BD
-    } catch { setNotice({ type: 'err', text: 'Error de connexió.' }); setReloadKey(k => k + 1) }
+    } catch { setNotice({ type: 'err', text: t('poms.err_connection') }); setReloadKey(k => k + 1) }
   }
 
   // ── Step 'select-type' (família → ITEM, dos nivells) ──────────────────────
@@ -241,7 +245,7 @@ export default function POMBrowser({
         {(
           <button
             onClick={() => { setSelectedItem(null); setSelectedFamily(null); setNotice(null) }}
-            title="Canviar tipus de prenda"
+            title={t('poms.change_type_title')}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
@@ -252,7 +256,7 @@ export default function POMBrowser({
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = 'var(--gold)' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)' }}
           >
-            ← Canviar tipus
+            ← {t('poms.change_type')}
           </button>
         )}
 
@@ -280,14 +284,14 @@ export default function POMBrowser({
 
         <input
           type="text"
-          placeholder="Cerca POM (codi, nom, abreviatura)..."
+          placeholder={t('poms.search_ph_pom')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ ...selectStyle, width: 280, flex: '0 1 auto', marginLeft: 'auto' }}
         />
         {mode === 'assign' && (
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {poms.length} POMs assignats
+            {t('poms.assigned_count', { count: poms.length })}
           </span>
         )}
       </div>
@@ -298,7 +302,7 @@ export default function POMBrowser({
           <div style={{ position: 'relative', maxWidth: 480 }}>
             <input
               type="text"
-              placeholder="+ Afegir POM del catàleg (codi, nom)…"
+              placeholder={t('poms.add_from_catalog_ph')}
               value={catalogQuery}
               onChange={e => setCatalogQuery(e.target.value)}
               style={{ ...selectStyle, width: '100%', boxSizing: 'border-box' }}
@@ -324,7 +328,7 @@ export default function POMBrowser({
                     >
                       <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 70 }}>{res.codi_client}</span>
                       <span style={{ flex: 1, color: 'var(--text-main)' }}>{res.nom_ca || res.nom_client || res.nom_en}</span>
-                      {already && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>ja assignat</span>}
+                      {already && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t('poms.already_assigned_short')}</span>}
                     </div>
                   )
                 })}
@@ -348,15 +352,15 @@ export default function POMBrowser({
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-          {loading && <p style={hintStyle}>Carregant POMs...</p>}
+          {loading && <p style={hintStyle}>{t('poms.loading_poms')}</p>}
           {!loading && poms.length === 0 && (
             <p style={{ ...hintStyle, textAlign: 'center', marginTop: 40 }}>
-              Cap POM assignat a aquest ítem — afegeix-ne del catàleg.
+              {t('poms.empty_item')}
             </p>
           )}
           {!loading && poms.length > 0 && filtered.length === 0 && (
             <p style={{ ...hintStyle, textAlign: 'center', marginTop: 40 }}>
-              Cap POM coincideix amb la cerca
+              {t('poms.no_match')}
             </p>
           )}
 
@@ -409,6 +413,7 @@ export default function POMBrowser({
 }
 
 function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
+  const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: String(pom.map_id) })
   const style = {
@@ -420,11 +425,11 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
   }
   return (
     <div ref={setNodeRef} style={style}>
-      <span {...attributes} {...listeners} title="Arrossega per reordenar"
+      <span {...attributes} {...listeners} title={t('planning.drag_hint')}
         style={{ cursor: 'grab', color: '#b0b0ad', fontSize: 14, userSelect: 'none', lineHeight: 1 }}>⠿</span>
       <input type="checkbox" checked readOnly
         onClick={(e) => { e.stopPropagation(); onRemove() }}
-        title="Desmarca per treure el POM de l'ítem" style={{ cursor: 'pointer' }} />
+        title={t('poms.uncheck_remove_hint')} style={{ cursor: 'pointer' }} />
       <div onClick={onRowClick} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minWidth: 0 }}>
         <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 64 }}>{pom.pom_code}</span>
         <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -436,13 +441,13 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
         {pom.applies_swim && <Pill bg="#e8f5f5" color="#2a7a7a">S</Pill>}
       </div>
       {pom.pendent_revisio && (
-        <span title="Clon de plantilla — cal revisar el delta" style={{
+        <span title={t('poms.clone_revisar_hint')} style={{
           background: '#fff3e0', color: '#b25a00', fontSize: 9, padding: '2px 6px', borderRadius: 3,
           fontWeight: 600, letterSpacing: '.06em', border: '0.5px solid #f0c040',
-        }}>REVISAR</span>
+        }}>{t('poms.revisar')}</span>
       )}
       <button type="button" onClick={(e) => { e.stopPropagation(); onToggleKey() }}
-        title="Marca/desmarca KEY" style={{
+        title={t('poms.toggle_key_hint')} style={{
           cursor: 'pointer', fontSize: 9, padding: '2px 7px', borderRadius: 3, fontWeight: 600,
           letterSpacing: '.06em', border: `0.5px solid ${pom.is_key ? '#e0c8a0' : 'var(--border)'}`,
           background: pom.is_key ? '#fdf6ee' : 'var(--white)', color: pom.is_key ? 'var(--gold)' : '#b0b0ad',
@@ -452,6 +457,7 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
 }
 
 function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
+  const { t } = useTranslation()
   const borderColor = mode === 'assign' && isActive
     ? '#3b6d11'
     : isSelected ? 'var(--gold)' : 'var(--border)'
@@ -473,12 +479,12 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>{pom.pom_code}</span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {pom.pendent_revisio && (
-            <span title="Clon de plantilla — cal revisar el delta" style={{
+            <span title={t('poms.clone_revisar_hint')} style={{
               background: '#fff3e0', color: '#b25a00',
               fontSize: 9, padding: '2px 6px', borderRadius: 3,
               fontWeight: 600, letterSpacing: '.06em',
               border: '0.5px solid #f0c040',
-            }}>REVISAR</span>
+            }}>{t('poms.revisar')}</span>
           )}
           {pom.is_key && (
             <span style={{
@@ -494,7 +500,7 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
               checked={isActive}
               onChange={onSelect}
               onClick={e => e.stopPropagation()}
-              title="Desmarca per treure el POM de l'ítem"
+              title={t('poms.uncheck_remove_hint')}
               style={{ cursor: 'pointer' }}
             />
           )}
@@ -551,6 +557,7 @@ function Pill({ bg, color, mono, children }) {
 }
 
 export function POMDetailPanel({ pom, onClose }) {
+  const { t } = useTranslation()
   return (
     <div style={{
       width: 340, borderLeft: '0.5px solid #e4e4e2',
@@ -568,53 +575,53 @@ export function POMDetailPanel({ pom, onClose }) {
         <button
           onClick={onClose}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, lineHeight: 1 }}
-          aria-label="Tancar"
+          aria-label={t('app.close')}
         >×</button>
       </div>
 
       {/* Bloc complet "com mesurar". Els buits es mostren com "—" perquè es vegi
           què falta definir (típic en POMs tenant-only sense pom_global). */}
-      <DetailSection title="Identificació">
-        <DetailRow label="Codi" value={pom.pom_code} mono />
-        <DetailRow label="Nom EN" value={pom.name_en} />
-        <DetailRow label="Nom local" value={pom.name_cat} />
-        <DetailRow label="Abreviatura" value={pom.abbreviation} mono />
-        <DetailRow label="Categoria" value={pom.category} />
-        <DetailRow label="Unitat" value={pom.unitat} />
+      <DetailSection title={t('poms.detail.section_id')}>
+        <DetailRow label={t('poms.detail.code')} value={pom.pom_code} mono />
+        <DetailRow label={t('poms.detail.name_en')} value={pom.name_en} />
+        <DetailRow label={t('poms.detail.name_local')} value={pom.name_cat} />
+        <DetailRow label={t('poms.detail.abbreviation')} value={pom.abbreviation} mono />
+        <DetailRow label={t('poms.detail.category')} value={pom.category} />
+        <DetailRow label={t('poms.detail.unit')} value={pom.unitat} />
       </DetailSection>
 
-      <DetailSection title="Com mesurar">
-        <DetailRow label="Des d'on (start point)" value={pom.start_point} />
-        <DetailRow label="Fins on (end point)" value={pom.end_point} />
-        <DetailRow label="Punt de referència" value={pom.reference_point} />
-        <DetailRow label="Scope" value={pom.scope} />
-        <DetailRow label="Orientation" value={pom.orientation} />
-        <DetailRow label="State" value={pom.state} />
-        <DetailRow label="Line" value={pom.line} />
-        <DetailRow label="Body Section" value={pom.body_section} />
+      <DetailSection title={t('poms.detail.section_measure')}>
+        <DetailRow label={t('poms.detail.start_point')} value={pom.start_point} />
+        <DetailRow label={t('poms.detail.end_point')} value={pom.end_point} />
+        <DetailRow label={t('poms.detail.reference_point')} value={pom.reference_point} />
+        <DetailRow label={t('poms.detail.scope')} value={pom.scope} />
+        <DetailRow label={t('poms.detail.orientation')} value={pom.orientation} />
+        <DetailRow label={t('poms.detail.state')} value={pom.state} />
+        <DetailRow label={t('poms.detail.line')} value={pom.line} />
+        <DetailRow label={t('poms.detail.body_section')} value={pom.body_section} />
       </DetailSection>
 
-      <DetailSection title="Toleràncies">
+      <DetailSection title={t('poms.detail.section_tol')}>
         <DetailRow
-          label="Tol. Producció"
+          label={t('poms.detail.tol_prod')}
           value={pom.tol_prod_cm != null && pom.tol_prod_cm !== '' ? `±${pom.tol_prod_cm} cm` : null}
         />
         <DetailRow
-          label="Tol. Mostra"
+          label={t('poms.detail.tol_samp')}
           value={pom.tol_samp_cm != null && pom.tol_samp_cm !== '' ? `±${pom.tol_samp_cm} cm` : null}
         />
       </DetailSection>
 
-      <DetailSection title="Aplica a">
-        <DetailRow label="Teixit pla (woven)" value={boolLabel(pom.applies_woven)} />
-        <DetailRow label="Punt (knit)" value={boolLabel(pom.applies_knit)} />
-        <DetailRow label="Bany (swim)" value={boolLabel(pom.applies_swim)} />
+      <DetailSection title={t('poms.detail.section_applies')}>
+        <DetailRow label={t('poms.detail.applies_woven')} value={boolLabel(pom.applies_woven)} />
+        <DetailRow label={t('poms.detail.applies_knit')} value={boolLabel(pom.applies_knit)} />
+        <DetailRow label={t('poms.detail.applies_swim')} value={boolLabel(pom.applies_swim)} />
       </DetailSection>
 
-      <DetailSection title="Referències">
-        <DetailRow label="ISO Ref." value={pom.iso_ref} />
+      <DetailSection title={t('poms.detail.section_refs')}>
+        <DetailRow label={t('poms.detail.iso_ref')} value={pom.iso_ref} />
         <DetailRow
-          label="Mesura corporal ISO"
+          label={t('poms.detail.body_measure_iso')}
           value={
             pom.body_measure_iso_codi || pom.body_measure_iso_nom
               ? [pom.body_measure_iso_codi, pom.body_measure_iso_nom].filter(Boolean).join(' · ')
@@ -623,17 +630,17 @@ export function POMDetailPanel({ pom, onClose }) {
         />
       </DetailSection>
 
-      <DetailSection title="Descripcions">
-        <DetailRow label="Descripció EN" value={pom.description_en} multiline />
-        <DetailRow label="Descripció local" value={pom.description_ca} multiline />
+      <DetailSection title={t('poms.detail.section_desc')}>
+        <DetailRow label={t('poms.detail.desc_en')} value={pom.description_en} multiline />
+        <DetailRow label={t('poms.detail.desc_local')} value={pom.description_ca} multiline />
       </DetailSection>
     </div>
   )
 }
 
 function boolLabel(v) {
-  if (v === true) return 'Sí'
-  if (v === false) return 'No'
+  if (v === true) return i18n.t('app.yes')
+  if (v === false) return i18n.t('app.no')
   return null   // undefined/null → "—" (camp sense definir)
 }
 
