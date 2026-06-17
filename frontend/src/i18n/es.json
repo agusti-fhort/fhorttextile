@@ -1250,5 +1250,16 @@
     "flash_empty_table": "Tabla vacía.",
     "flash_header_exists": "Ya hay una cabecera en esta página.",
     "confirm_delete_page": "¿Eliminar esta página?"
+  },
+  "estat_badge": {
+    "pendent_inputs": "Pendiente de inputs",
+    "preparat": "Preparado",
+    "bloquejat": "Bloqueado",
+    "pendent": "Pendiente",
+    "base_oberta": "Base abierta",
+    "base_tancada": "Base cerrada",
+    "talles_generades": "Tallas generadas",
+    "feta": "Hecha",
+    "bloquejada": "Bloqueada"
   }
 }

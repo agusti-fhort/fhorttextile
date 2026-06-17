@@ -1250,5 +1250,16 @@
     "flash_empty_table": "Taula buida.",
     "flash_header_exists": "Ja hi ha una capçalera en aquesta pàgina.",
     "confirm_delete_page": "Esborrar aquesta pàgina?"
+  },
+  "estat_badge": {
+    "pendent_inputs": "Pendent d'inputs",
+    "preparat": "Preparat",
+    "bloquejat": "Bloquejat",
+    "pendent": "Pendent",
+    "base_oberta": "Base oberta",
+    "base_tancada": "Base tancada",
+    "talles_generades": "Talles generades",
+    "feta": "Feta",
+    "bloquejada": "Bloquejada"
   }
 }

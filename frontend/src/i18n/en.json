@@ -1250,5 +1250,16 @@
     "flash_empty_table": "Empty table.",
     "flash_header_exists": "There is already a header on this page.",
     "confirm_delete_page": "Delete this page?"
+  },
+  "estat_badge": {
+    "pendent_inputs": "Pending inputs",
+    "preparat": "Ready",
+    "bloquejat": "Blocked",
+    "pendent": "Pending",
+    "base_oberta": "Open base",
+    "base_tancada": "Closed base",
+    "talles_generades": "Sizes generated",
+    "feta": "Done",
+    "bloquejada": "Blocked"
   }
 }

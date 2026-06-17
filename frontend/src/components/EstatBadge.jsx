@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 
 // Light theme palette with high contrast (text readable over background)
 const ESTAT_CONFIG = {
@@ -24,9 +25,34 @@ const ESTAT_CONFIG = {
   'Bloquejada':         { bg: '#f0f0f0', text: 'var(--text-muted)', border: 'var(--border)' },
 }
 
+// i18n: the `estat` prop is the canonical CA display string (matches get_estat_display())
+// and is kept as the style id (ESTAT_CONFIG lookup). Only the DISPLAYED label is translated.
+// Reuses existing model.estats.* / model.prioritats.* keys; the rest live under estat_badge.*.
+const ESTAT_KEY = {
+  'Nou':                'model.estats.Nou',
+  "Pendent d'inputs":   'estat_badge.pendent_inputs',
+  'Preparat':           'estat_badge.preparat',
+  'En curs':            'model.estats.EnCurs',
+  'En revisió':         'model.estats.EnRevisio',
+  'Bloquejat':          'estat_badge.bloquejat',
+  'Tancat':             'model.estats.Tancat',
+  'Baixa':              'model.prioritats.1',
+  'Normal':             'model.prioritats.3',
+  'Alta':               'model.prioritats.4',
+  'Urgent':             'model.prioritats.5',
+  'Pendent':            'estat_badge.pendent',
+  'Base oberta':        'estat_badge.base_oberta',
+  'Base tancada':       'estat_badge.base_tancada',
+  'Talles generades':   'estat_badge.talles_generades',
+  'Feta':               'estat_badge.feta',
+  'Bloquejada':         'estat_badge.bloquejada',
+}
+
 export function EstatBadge({ estat, size = 'sm' }) {
+  const { t } = useTranslation()
   if (!estat) return null
   const config = ESTAT_CONFIG[estat] || { bg: '#f0f0f0', text: 'var(--text-muted)', border: 'var(--border)' }
+  const label = ESTAT_KEY[estat] ? t(ESTAT_KEY[estat]) : estat
   const fontSize = size === 'xs' ? 10 : size === 'sm' ? 11 : 12
 
   return (
@@ -42,7 +68,7 @@ export function EstatBadge({ estat, size = 'sm' }) {
       whiteSpace: 'nowrap',
       letterSpacing: '0.02em',
     }}>
-      {estat}
+      {label}
     </span>
   )
 }
