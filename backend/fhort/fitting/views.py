@@ -464,7 +464,66 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
     permission_classes = [IsAuthenticated]
     serializer_class = PieceFittingLineSerializer
     queryset = PieceFittingLine.objects.select_related('pom').all()
-    http_method_names = ['get', 'patch', 'head', 'options']
+    http_method_names = ['get', 'patch', 'post', 'head', 'options']
+
+    @action(detail=True, methods=['post'], url_path='propagar')
+    def propagar(self, request, pk=None):
+        """Ancoratge en temps d'edició. Desa el valor_real de la cel·la editada i, si el
+        règim és LINEAR/canònic, propaga el delta a les germanes del mateix POM (escrivint
+        el seu valor_real). `valor_teoric` NO es toca mai. Retorna les línies del POM.
+
+        STEP/FIXED/ZERO/EXCEPTION o sense regla → només desa la cel·la (germanes intactes).
+        Permís = el del viewset (IsAuthenticated), igual que l'autosave."""
+        from django.db import transaction
+        from fhort.pom.services import _load_grading_rules
+        from fhort.pom.grading_utils import propaga_ancoratges
+
+        line = self.get_object()
+        pf = line.piece_fitting
+
+        def _resp(propagat, motiu, warnings=None):
+            linies = (PieceFittingLine.objects
+                      .filter(piece_fitting=pf, pom=line.pom)
+                      .select_related('pom').order_by('size_label'))
+            return Response({
+                'propagat': propagat,
+                'motiu': motiu,
+                'warnings': warnings or [],
+                'linies': PieceFittingLineSerializer(linies, many=True).data,
+            })
+
+        # 1-2. Desa SEMPRE la cel·la ancorada (valor_real | null).
+        raw = request.data.get('valor_real', None)
+        anchor_val = None if raw in (None, '') else float(raw)
+        line.valor_real = anchor_val
+        line.save(update_fields=['valor_real'])
+        if anchor_val is None:                       # treure ancoratge → no propaga
+            return _resp(False, 'sense_ancoratge')
+
+        # 3. Regla resident → fallback (cadena de _load_grading_rules).
+        rule = _load_grading_rules(pf.model).get(line.pom_id)
+        if rule is None:
+            return _resp(False, 'sense_regla')
+
+        # 4. Propaga NOMÉS si LINEAR o canònic (increment_base poblat).
+        logica = getattr(rule, 'logica', None)
+        canonic = getattr(rule, 'increment_base', None) is not None
+        if not (canonic or logica == 'LINEAR'):
+            return _resp(False, logica or 'desconegut')
+
+        # 5. Propaga el delta des de l'ancoratge → valor_real de les germanes (valor_teoric intacte).
+        size_run = [s.strip() for s in (pf.model.size_run_model or '')
+                    .replace(';', '·').split('·') if s.strip()]
+        warnings = []
+        teorics = propaga_ancoratges(rule, line.size_label, anchor_val, size_run, warnings=warnings)
+        with transaction.atomic():
+            for sl, val in teorics.items():
+                if val is None:
+                    continue
+                (PieceFittingLine.objects
+                 .filter(piece_fitting=pf, pom=line.pom, size_label=sl)
+                 .update(valor_real=val))
+        return _resp(True, logica or 'CANONIC', warnings)
 
 
 class FittingPhotoViewSet(mixins.ListModelMixin,
