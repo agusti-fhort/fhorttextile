@@ -1589,5 +1589,9 @@
     "Preproducció": "Pre-production",
     "Producció": "Production",
     "Tancat": "Closed"
+  },
+  "export_button": {
+    "export": "Export",
+    "generating": "Generating…"
   }
 }

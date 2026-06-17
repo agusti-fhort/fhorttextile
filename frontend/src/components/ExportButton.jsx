@@ -1,10 +1,12 @@
 
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import useAuthStore from "../store/auth"
 
 const API = import.meta.env.VITE_API_URL || ""
 
-export function ExportButton({ url, filename, label = "Exportar", type = "csv" }) {
+export function ExportButton({ url, filename, label, type = "csv" }) {
+  const { t } = useTranslation()
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -52,7 +54,7 @@ export function ExportButton({ url, filename, label = "Exportar", type = "csv" }
         }}
       >
         <span>{loading ? '...' : icon}</span>
-        <span>{loading ? 'Generant...' : `${label} ${ext}`}</span>
+        <span>{loading ? t('export_button.generating') : `${label || t('export_button.export')} ${ext}`}</span>
       </button>
       {error && (
         <div style={{ fontSize: 10, color: '#a32d2d', marginTop: 3 }}>{error}</div>
@@ -96,11 +98,12 @@ export function ExportFittingCSV({ fittingId }) {
 }
 
 export function ExportModelPDF({ modelId, nomModel }) {
+  const { t } = useTranslation()
   return (
     <ExportButton
       url={`/api/v1/models/${modelId}/export/pdf/`}
       filename={`spec_${nomModel || modelId}.pdf`}
-      label="Fitxa tècnica"
+      label={t('model_sheet.tab_tech_sheet')}
       type="pdf"
     />
   )
