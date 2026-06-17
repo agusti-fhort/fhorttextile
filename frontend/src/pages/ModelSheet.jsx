@@ -11,6 +11,18 @@ import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 
 const API = import.meta.env.VITE_API_URL || ''
 const TABS = ['Resum', 'Mesures', 'Size Check', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
+// L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
+const TAB_LABELS = {
+  'Resum': 'model_sheet.tab_summary',
+  'Mesures': 'model.tabs.mesures',
+  'Size Check': 'model_sheet.tab_size_check',
+  'Producció': 'model_sheet.tab_production',
+  'Fitting': 'model_sheet.tab_fitting',
+  'Fitxa tècnica': 'model_sheet.tab_tech_sheet',
+  'Fitxers': 'model.tabs.fitxers',
+  "Registre d'activitat": 'model_sheet.tab_activity_log',
+  'Anàlisi IA': 'model_sheet.tab_ai_analysis',
+}
 
 // ── Helpers de viabilitat (purs) ──────────────────────────────────────────
 // Aproximació estàndard: dl-dv laborables, sense festius. Jornada 420 min/dia.
@@ -95,20 +107,20 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
       setDeltes(taulaData.deltes || null)
       const tasks = tasksData.results || tasksData || []
       setHasPomTask(Array.isArray(tasks) && tasks.some(tk => tk.task_type_code === 'pom'))
-    }).catch(() => setError('Error carregant el model'))
+    }).catch(() => setError(t('model_sheet.err_load')))
     .finally(() => setLoading(false))
   }, [id])
 
   const handleDelete = async () => {
-    if (!window.confirm(`Esborrar ${model?.codi_intern}? Aquesta acció no es pot desfer.`)) return
+    if (!window.confirm(t('model_sheet.confirm_delete', { codi: model?.codi_intern }))) return
     try {
       const r = await fetch(`${API}/api/v1/models/${id}/`, {
         method: 'DELETE', headers: authHeaders,
       })
       if (r.ok || r.status === 204) navigate('/models')
-      else setError('Error esborrant el model')
+      else setError(t('model_sheet.err_delete'))
     } catch {
-      setError('Error de connexió')
+      setError(t('model_sheet.err_connection'))
     }
   }
 
@@ -117,7 +129,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
       <div style={{ padding: '2rem', textAlign: 'center',
                     color: 'var(--color-text-secondary, #868685)',
                     fontSize: 13 }}>
-        Carregant…
+        {t('model_sheet.loading')}
       </div>
     )
   }
@@ -145,7 +157,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
               cursor: 'pointer', fontSize: 13,
               fontWeight: activeTab === tab ? 500 : 400,
             }}>
-            {tab}
+            {t(TAB_LABELS[tab])}
           </button>
         ))}
       </div>
@@ -348,7 +360,7 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
           style={{ background: 'none', border: 'none', cursor: 'pointer',
                    fontSize: 13, color: 'var(--color-text-secondary, #868685)',
                    }}>
-          ← Models
+          ← {t('nav.models')}
         </button>
         <span style={{ color: 'var(--color-border-tertiary, #e0d5c5)' }}>›</span>
         <span style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
@@ -394,11 +406,11 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
         <button type="button"
           onClick={() => navigate(`/models/${model.id}/editar`)}
           style={btnSecondary}>
-          <i className="ti ti-edit" aria-hidden="true" /> Editar
+          <i className="ti ti-edit" aria-hidden="true" /> {t('app.edit')}
         </button>
         <button type="button" onClick={onDelete}
           style={{ ...btnSecondary, color: '#c5221f', borderColor: '#f5c6c6' }}>
-          <i className="ti ti-trash" aria-hidden="true" /> Esborrar
+          <i className="ti ti-trash" aria-hidden="true" /> {t('app.delete')}
         </button>
       </div>
     </div>
@@ -407,6 +419,8 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
 }
 
 function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
+  const { t, i18n } = useTranslation()
+  const dateLocale = i18n.language === 'es' ? 'es-ES' : i18n.language === 'en' ? 'en-GB' : 'ca-ES'
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
     nom_prenda: model?.nom_prenda || '',
@@ -496,8 +510,8 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
     <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
       {model.data_objectiu
         ? <strong style={{ color: 'var(--gold)' }}>{model.data_objectiu}</strong>
-        : <span style={{ color: 'var(--text-muted)' }}>— Sense deadline</span>}
-      <button type="button" onClick={() => setEditingDeadline(true)} title="Editar deadline"
+        : <span style={{ color: 'var(--text-muted)' }}>{t('model_sheet.no_deadline')}</span>}
+      <button type="button" onClick={() => setEditingDeadline(true)} title={t('model_sheet.edit_deadline')}
         style={{ background: 'transparent', border: 'none', cursor: 'pointer',
                  color: 'var(--text-muted)', fontSize: 12, padding: 0 }}>
         <i className="ti ti-pencil" />
@@ -505,35 +519,35 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
     </span>
   )
 
-  const fmtDateTime = (v) => v ? new Date(v).toLocaleString('ca-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+  const fmtDateTime = (v) => v ? new Date(v).toLocaleString(dateLocale, { dateStyle: 'medium', timeStyle: 'short' }) : '—'
   const readOnlyFields = [
-    ['Referència interna', model.codi_intern],
-    ['Temporada', `${model.temporada} ${model.any}`],
-    ['Col·lecció', model.collection || '—'],
-    ['Target', model.target || '—'],
-    ['Tipus de peça', model.garment_type_nom || '—'],
-    ['Model (peça)', model.garment_type_item_nom || '—'],
-    ['Construcció', model.construction || '—'],
-    ['Fit type', model.fit_type || '—'],
-    ['Sistema de talles', model.size_system_nom || '—'],
-    ['Talla base', model.base_size_label || '—'],
-    ['Run de talles', (sizesAmbDades && sizesAmbDades.length
+    { label: t('model_sheet.field_internal_ref'), value: model.codi_intern, mono: true, secondary: true },
+    { label: t('model.fields.temporada'), value: `${model.temporada} ${model.any}` },
+    { label: t('model_sheet.field_collection'), value: model.collection || '—' },
+    { label: t('model_sheet.field_target'), value: model.target || '—' },
+    { label: t('model_sheet.field_garment_type'), value: model.garment_type_nom || '—' },
+    { label: t('model_sheet.field_garment_item'), value: model.garment_type_item_nom || '—' },
+    { label: t('model_sheet.field_construction'), value: model.construction || '—' },
+    { label: t('model.fields.fit_type'), value: model.fit_type || '—' },
+    { label: t('model_sheet.field_size_system'), value: model.size_system_nom || '—' },
+    { label: t('model.fields.base_size_label'), value: model.base_size_label || '—' },
+    { label: t('model_sheet.field_size_run'), value: (sizesAmbDades && sizesAmbDades.length
       ? sizesAmbDades.join('·')
-      : model.size_run_model) || '—'],
-    ['Grading', model.grading_rule_set ? '✓ Configurat' : '—'],
-    ['Estat', model.estat],
-    ['Creat per', model.created_by_nom || '—'],
-    ['Creat el', fmtDateTime(model.created_at)],
+      : model.size_run_model) || '—', mono: true },
+    { label: t('model.sections.grading'), value: model.grading_rule_set ? t('model_sheet.grading_configured') : '—' },
+    { label: t('model.fields.estat'), value: model.estat },
+    { label: t('model_sheet.field_created_by'), value: model.created_by_nom || '—' },
+    { label: t('model_sheet.field_created_at'), value: fmtDateTime(model.created_at) },
     ...(model.fabric_main ? [
-      ['Main Fabric', model.fabric_main],
-      ['Composition', model.fabric_composition || '—'],
-      ['Shrinkage', model.shrinkage_warp != null
-        ? `Warp ${model.shrinkage_warp}% / Weft ${model.shrinkage_weft}% (${model.shrinkage_type})`
+      { label: t('model_sheet.field_main_fabric'), value: model.fabric_main },
+      { label: t('model_sheet.field_composition'), value: model.fabric_composition || '—' },
+      { label: t('model_sheet.field_shrinkage'), value: model.shrinkage_warp != null
+        ? t('model_sheet.shrinkage_value', { warp: model.shrinkage_warp, weft: model.shrinkage_weft, type: model.shrinkage_type })
         : model.shrinkage_pct != null
-          ? `${model.shrinkage_pct}% (${model.shrinkage_type})`
-          : '—'],
+          ? t('model_sheet.shrinkage_value_simple', { pct: model.shrinkage_pct, type: model.shrinkage_type })
+          : '—' },
     ] : []),
-    ['Deadline', deadlineCell],
+    { label: t('model_sheet.field_deadline'), value: deadlineCell },
   ]
 
   // ── Viabilitat: càlculs derivats (render) ─────────────────────────────────
@@ -557,7 +571,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
                             display: 'block', marginBottom: 4 }}>
-              Nom de la peça
+              {t('model_sheet.field_garment_name')}
             </label>
             <input value={form.nom_prenda}
               onChange={e => setForm(f => ({...f, nom_prenda: e.target.value}))}
@@ -567,7 +581,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
                             display: 'block', marginBottom: 4 }}>
-              Referència client
+              {t('model.fields.codi_client')}
             </label>
             <input value={form.codi_client}
               onChange={e => setForm(f => ({...f, codi_client: e.target.value}))}
@@ -577,7 +591,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
                             display: 'block', marginBottom: 4 }}>
-              Descripció
+              {t('model.fields.descripcio')}
             </label>
             <textarea value={form.descripcio}
               onChange={e => setForm(f => ({...f, descripcio: e.target.value}))}
@@ -590,13 +604,13 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
             <button type="button" onClick={handleSave} disabled={saving}
               style={{ padding: '6px 16px', background: 'var(--gold)', color: 'var(--white)',
                        border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
-              {saving ? 'Guardant...' : '✓ Guardar'}
+              {saving ? t('model_sheet.saving') : t('model_sheet.save')}
             </button>
             <button type="button" onClick={() => setEditing(false)}
               style={{ padding: '6px 14px', background: 'transparent', fontSize: 13,
                        border: '0.5px solid var(--color-border-tertiary, #e0d5c5)',
                        borderRadius: 6, cursor: 'pointer' }}>
-              Cancel·lar
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -606,7 +620,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                         alignItems: 'flex-start', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 18, fontWeight: 500 }}>
-                {model.nom_prenda || <span style={{color:'var(--color-text-secondary, #868685)'}}>Sense nom</span>}
+                {model.nom_prenda || <span style={{color:'var(--color-text-secondary, #868685)'}}>{t('model_sheet.no_name')}</span>}
               </div>
               {model.codi_client && model.codi_client !== model.codi_intern && (
                 <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
@@ -627,7 +641,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <tbody>
-          {readOnlyFields.map(([label, value]) => (
+          {readOnlyFields.map(({ label, value, mono, secondary }) => (
             <tr key={label}
               style={{ borderBottom: '0.5px solid var(--color-border-tertiary, #e0d5c5)' }}>
               <td style={{ padding: '7px 0', color: 'var(--color-text-secondary, #868685)',
@@ -635,9 +649,8 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                 {label}
               </td>
               <td style={{ padding: '7px 0',
-                           fontFamily: label === 'Referència interna' || label === 'Run de talles'
-                             ? 'monospace' : undefined,
-                           color: label === 'Referència interna'
+                           fontFamily: mono ? 'monospace' : undefined,
+                           color: secondary
                              ? 'var(--color-text-secondary, #868685)' : 'var(--color-text-primary, #1d1d1b)' }}>
                 {value}
               </td>
@@ -664,7 +677,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
             <span style={{ fontSize: '11px', fontWeight: 600,
               color: 'var(--gold)', textTransform: 'uppercase',
               letterSpacing: '0.05em' }}>
-              Viabilitat del model
+              {t('model_sheet.viability_title')}
             </span>
             {viab && (
               <span style={{
@@ -680,9 +693,9 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                 : viab.semafor === 'at_risk'  ? '#fde047'
                 : '#fca5a5'}`,
               }}>
-                {viab.semafor === 'on_track' ? 'En termini'
-               : viab.semafor === 'at_risk'  ? 'En risc'
-               : 'Crític'}
+                {viab.semafor === 'on_track' ? t('model_sheet.viab_on_track')
+               : viab.semafor === 'at_risk'  ? t('model_sheet.viab_at_risk')
+               : t('model_sheet.viab_critical')}
               </span>
             )}
           </div>
@@ -691,12 +704,11 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           <div style={{ padding: '12px', background: 'var(--bg-muted)' }}>
             {loadingMinuts ? (
               <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                Calculant...
+                {t('model_sheet.calculating')}
               </p>
             ) : !totalMinuts ? (
               <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                Sense tasques estimades. Assigna temps a les tasques
-                per calcular la viabilitat.
+                {t('model_sheet.viab_no_tasks')}
               </p>
             ) : (
               <>
@@ -704,11 +716,11 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)',
                   marginBottom: '12px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                   <span>
-                    {Math.round(totalMinuts / 60 * 10) / 10} h estimades
+                    {t('model_sheet.hours_estimated', { h: Math.round(totalMinuts / 60 * 10) / 10 })}
                   </span>
                   {viab?.latestStart && (
                     <span>
-                      Inici màxim:
+                      {t('model_sheet.latest_start')}
                       <strong style={{ color: viab.semafor === 'critical'
                         ? 'var(--err)' : 'var(--text-main)',
                         marginLeft: '4px' }}>
@@ -717,7 +729,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                     </span>
                   )}
                   {model.data_objectiu && (
-                    <span>Deadline: {model.data_objectiu}</span>
+                    <span>{t('model_sheet.deadline_inline')} {model.data_objectiu}</span>
                   )}
                 </div>
 
@@ -734,9 +746,9 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                       fontSize: '11px', padding: '4px 6px',
                       border: '1px solid var(--border)',
                       background: 'var(--bg-card)' }}>
-                    <option value="fi">Data inici → calcula fi</option>
+                    <option value="fi">{t('model_sheet.calc_mode_start_to_end')}</option>
                     <option value="inici">
-                      Data fi (deadline) → calcula inici
+                      {t('model_sheet.calc_mode_end_to_start')}
                     </option>
                   </select>
 
@@ -772,7 +784,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                   {/* Resultat */}
                   {modeCalc === 'fi' && dataFiCalc && (
                     <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>
-                      → Fi estimada:
+                      {t('model_sheet.estimated_end')}
                       <strong style={{
                         color: model.data_objectiu && dataFiCalc > model.data_objectiu
                           ? 'var(--err)' : 'var(--ok)',
@@ -782,14 +794,14 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                       </strong>
                       {model.data_objectiu && dataFiCalc > model.data_objectiu &&
                         <span style={{ color: 'var(--err)', marginLeft: '6px', fontSize: '10px' }}>
-                          ⚠ fora de deadline
+                          {t('model_sheet.out_of_deadline')}
                         </span>
                       }
                     </span>
                   )}
                   {modeCalc === 'inici' && dataIniciCalc && (
                     <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>
-                      → Inici necessari:
+                      {t('model_sheet.needed_start')}
                       <strong style={{
                         color: dataIniciCalc < avuiISO ? 'var(--err)' : 'var(--ok)',
                         marginLeft: '4px'
@@ -798,7 +810,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                       </strong>
                       {dataIniciCalc < avuiISO &&
                         <span style={{ color: 'var(--err)', marginLeft: '6px', fontSize: '10px' }}>
-                          ⚠ data passada
+                          {t('model_sheet.past_date')}
                         </span>
                       }
                     </span>
@@ -806,8 +818,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                 </div>
 
                 <p style={{ marginTop: '8px', fontSize: '10px', color: 'var(--text-muted)' }}>
-                  Estimació orientativa · jornada 420 min/dia ·
-                  dies laborables (dl-dv) · sense festius
+                  {t('model_sheet.viab_disclaimer')}
                 </p>
               </>
             )}
