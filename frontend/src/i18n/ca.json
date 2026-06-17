@@ -386,7 +386,8 @@
     "page_info": "{{page}} / {{pages}}",
     "loading": "Carregant models…",
     "empty": "Sense models. Crea el primer!",
-    "empty_filtered": "Sense resultats amb aquest filtre."
+    "empty_filtered": "Sense resultats amb aquest filtre.",
+    "delete_error": "No s'ha pogut esborrar el model."
   },
   "garment_selector": {
     "loading_families": "Carregant famílies…",

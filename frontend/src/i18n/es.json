@@ -386,7 +386,8 @@
     "page_info": "{{page}} / {{pages}}",
     "loading": "Cargando modelos…",
     "empty": "Sin modelos. ¡Crea el primero!",
-    "empty_filtered": "Sin resultados con este filtro."
+    "empty_filtered": "Sin resultados con este filtro.",
+    "delete_error": "No se ha podido eliminar el modelo."
   },
   "garment_selector": {
     "loading_families": "Cargando familias…",

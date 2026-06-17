@@ -9,11 +9,12 @@ import { EstatBadge } from '../components/EstatBadge'
 const MONO = 'IBM Plex Mono, monospace'
 const SEASONS = ['SS', 'FW', 'CO', 'SP']
 const PAGE_SIZE = 25
-const fmtDate = (v) => v ? new Date(v).toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'
+const fmtDate = (v, locale) => v ? new Date(v).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'
 
 export default function Models() {
   const navigate = useNavigate()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const dateLocale = i18n.language === 'es' ? 'es-ES' : i18n.language === 'en' ? 'en-GB' : 'ca-ES'
 
   const [items, setItems] = useState([])
   const [count, setCount] = useState(0)
@@ -62,7 +63,7 @@ export default function Models() {
     e.stopPropagation()
     if (!window.confirm(t('models_list.confirm_delete', { codi: m.codi_intern }))) return
     try { await modelsApi.destroy(m.id); setFeedback({ type: 'ok', text: '✓' }); load() }
-    catch { setFeedback({ type: 'err', text: `HTTP` }) }
+    catch { setFeedback({ type: 'err', text: t('models_list.delete_error') }) }
   }
 
   return (
@@ -119,7 +120,7 @@ export default function Models() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {items.map(m => (
             <ModelRow key={m.id} m={m} selected={selected.has(m.id)} onToggle={() => toggle(m.id)}
-              onOpen={() => navigate(`/models/${m.id}`)} onDelete={(e) => remove(m, e)} t={t} />
+              onOpen={() => navigate(`/models/${m.id}`)} onDelete={(e) => remove(m, e)} t={t} locale={dateLocale} />
           ))}
         </div>
       )}
@@ -136,7 +137,7 @@ export default function Models() {
   )
 }
 
-function ModelRow({ m, selected, onToggle, onOpen, onDelete, t }) {
+function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'stretch', gap: 12, borderRadius: 8, background: 'var(--white)',
@@ -162,9 +163,9 @@ function ModelRow({ m, selected, onToggle, onOpen, onDelete, t }) {
         {/* Fila 2 — operativa */}
         <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr 1.4fr', gap: 12, alignItems: 'center', fontFamily: MONO, fontSize: 11 }}>
           <span style={faseBadge}>{m.fase_actual}</span>
-          <Cell label={t('models_list.col_entrada')} value={fmtDate(m.entrada_prod)} />
-          <Cell label={t('models_list.col_proto')} value={fmtDate(m.arribada_proto)} />
-          <Cell label={t('models_list.col_fitting')} value={fmtDate(m.fitting_prev)} />
+          <Cell label={t('models_list.col_entrada')} value={fmtDate(m.entrada_prod, locale)} />
+          <Cell label={t('models_list.col_proto')} value={fmtDate(m.arribada_proto, locale)} />
+          <Cell label={t('models_list.col_fitting')} value={fmtDate(m.fitting_prev, locale)} />
           <Tecnic label={t('models_list.col_tecnic')} tecnics={m.tecnics} />
         </div>
       </div>
