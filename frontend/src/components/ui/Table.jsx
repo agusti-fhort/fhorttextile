@@ -1,15 +1,18 @@
+import { useTranslation } from 'react-i18next'
+
 export default function Table({ columns, data, onRowClick, loading, empty, loadingText }) {
+  const { t } = useTranslation()
   if (loading) {
     return (
       <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-        {loadingText || 'Carregant…'}
+        {loadingText || t('common.loading')}
       </div>
     )
   }
   if (!data || data.length === 0) {
     return (
       <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-        {empty || 'No hi ha dades per mostrar.'}
+        {empty || t('app.empty')}
       </div>
     )
   }
