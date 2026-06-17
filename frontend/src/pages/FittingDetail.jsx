@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, pieceFittings, pieceFittingLines, fittingPhotos, modelFitxers } from '../api/endpoints'
+import { fittingSessions, pieceFittings, pieceFittingLines, fittingPhotos, modelFitxers, models } from '../api/endpoints'
 import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
@@ -10,6 +10,7 @@ const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
 
 const COL_POM_W = 78
 const COL_NOM_W = 150
+const COL_REG_W = 118   // PG-4b-3c — columna de règim (select LINEAR/STEP + etiqueta de regla)
 
 // Ordre de talles segons el size run del model: split per '·' (U+00B7) o ';' + trim
 // (mateixa normalització que el backend, que desa amb '·' però admet ';').
@@ -581,6 +582,8 @@ export default function FittingDetail() {
   const [editedIds, setEditedIds] = useState(() => new Set())
   // Race guard: id de la cel·la amb focus ara mateix; el repintat de propagar no l'ha de sobreescriure.
   const focusedIdRef = useRef(null)
+  // Avís discret si setPomRegim falla (p.ex. 400 sense fallback); no trenca la graella.
+  const [regimErr, setRegimErr] = useState(null)
 
   const loadSession = useCallback((selectFirst = false) => {
     return fittingSessions.get(id).then(res => {
@@ -696,6 +699,24 @@ export default function FittingDetail() {
     return next
   })
 
+  // PG-4b-3c — canvi de règim del POM des de la capçalera de fila. Materialitza NOMÉS si difereix
+  // (mirar no materialitza). Èxit → actualitza in-place les línies del POM (logica + deltas) perquè
+  // la propagació posterior obeeixi el nou règim, sense reload sencer. Error (400 sense fallback) →
+  // avís discret; el select revé sol al valor anterior (és controlat per row.logica, inalterat).
+  const onRegimChange = (row, nova) => {
+    if (!nova || nova === (row.logica ?? '')) return
+    setRegimErr(null)
+    models.setPomRegim(session.model, row.pom_id, nova)
+      .then(res => {
+        const d = res.data
+        setGrid(g => g ? { ...g, lines: (g.lines || []).map(l => l.pom_id === row.pom_id
+          ? { ...l, logica: d.logica, increment_base: d.increment_base,
+              increment_break: d.increment_break, talla_break_label: d.talla_break_label }
+          : l) } : g)
+      })
+      .catch(err => setRegimErr(err?.response?.data?.detail || 'No s\'ha pogut canviar el règim.'))
+  }
+
   const stickyHd = (left, w) => ({
     ...thStyle, position: 'sticky', left, zIndex: 3, minWidth: w, width: w,
     background: 'var(--bg-muted)', textAlign: 'left',
@@ -804,6 +825,9 @@ export default function FittingDetail() {
       {/* Graella matricial */}
       {activePieceId && (
         <Card padding={0} style={{ marginBottom: '1.5rem' }}>
+          {regimErr && (
+            <div style={{ color: 'var(--err)', fontSize: 11, padding: '6px 10px' }}>{regimErr}</div>
+          )}
           {gridLoading ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('app.loading')}</div>
           ) : lines.length === 0 ? (
@@ -816,6 +840,7 @@ export default function FittingDetail() {
                   <tr>
                     <th rowSpan={2} style={stickyHd(0, COL_POM_W)}>{t('fitting.grid.pom')}</th>
                     <th rowSpan={2} style={stickyHd(COL_POM_W, COL_NOM_W)}>{t('fitting.grid.name')}</th>
+                    <th rowSpan={2} style={stickyHd(COL_POM_W + COL_NOM_W, COL_REG_W)}>Règim</th>
                     {sizeLabels.map(s => {
                       const base = s === baseLabel
                       return (
@@ -859,13 +884,29 @@ export default function FittingDetail() {
                           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--gold)' }}>
                             {row.codi}{row.is_key && <i className="ti ti-star-filled" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title={t('fitting.key_measure')} />}
                           </span>
+                        </td>
+                        <td style={{ ...stickyTd(COL_POM_W, COL_NOM_W, rowBg), fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'normal' }}>{row.nom}</td>
+                        <td style={stickyTd(COL_POM_W + COL_NOM_W, COL_REG_W, rowBg)}>
+                          {/* PG-4b-3c — règim del POM: select (dalt) + etiqueta de regla (sota, moguda des de la capçalera). */}
+                          <select
+                            value={row.logica ?? ''}
+                            onChange={e => onRegimChange(row, e.target.value)}
+                            style={{
+                              font: 'inherit', fontSize: 10, width: '100%', padding: '1px 2px',
+                              border: '1px solid var(--border)', borderRadius: 4,
+                              background: 'var(--white)', color: 'var(--text-main)', boxSizing: 'border-box',
+                            }}
+                          >
+                            {row.logica == null && <option value="">—</option>}
+                            <option value="LINEAR">LINEAR</option>
+                            <option value="STEP">STEP</option>
+                          </select>
                           {regleLabel(row) && (
                             <div style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-muted)', whiteSpace: 'nowrap', marginTop: 1 }}>
                               {regleLabel(row)}
                             </div>
                           )}
                         </td>
-                        <td style={{ ...stickyTd(COL_POM_W, COL_NOM_W, rowBg), fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'normal' }}>{row.nom}</td>
                         {sizeLabels.flatMap(s => {
                           const base = s === baseLabel
                           const line = row.cells[s]
