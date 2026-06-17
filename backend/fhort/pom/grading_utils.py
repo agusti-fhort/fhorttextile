@@ -547,3 +547,70 @@ def deltes_a_absoluts(valors, base_label, run_ordenat):
         # original (degradació amb gràcia, mai KeyError).
         out[pid] = {k: abs_by_norm.get(_norm(k), v) for k, v in pom_vals.items()}
     return out
+
+
+def propaga_ancoratges(rule, anchor_label, anchor_val, size_run, warnings=None):
+    """Propaga el delta CANÒNIC/LINEAR de la regla des d'UNA talla ancorada.
+
+    Funció PURA (cap I/O, cap ORM). Règim LINEAR/canònic NOMÉS: el cridador NO la crida
+    en règim STEP/FIXED/ZERO (allà els valors són lliures i no es propaguen).
+
+    rule: forma canònica (`increment_base` [+ `talla_break_label` + `increment_break`])
+          o LINEAR pur legacy (`increment` uniforme quan `increment_base` és None).
+    anchor_label / anchor_val: la talla editada i el seu valor real — origen únic de la
+          propagació.
+    size_run: list d'etiquetes ordenades.
+    warnings: acceptat per compatibilitat de signatura; canònic/LINEAR no genera avisos.
+
+    Retorna {size_label: valor_teoric} per CADA talla del run (claus = etiquetes ORIGINALS),
+    caminant el delta des de l'ancoratge.
+    """
+    run = [str(s).strip() for s in (size_run or [])]
+    if not run:
+        return {}
+    norm_run = [_norm(s) for s in run]
+    na = _norm(anchor_label)
+    if na not in norm_run:                      # ancoratge fora del run (defensiu)
+        return {lab: None for lab in run}
+    anchor_idx = norm_run.index(na)
+    anchor_val = float(anchor_val)
+
+    # Delta de la regla: increment_base (+ break per ETIQUETA) o, si és None, increment uniforme.
+    ib_raw = getattr(rule, 'increment_base', None)
+    if ib_raw is not None:
+        ib = float(ib_raw)
+        brk_raw = getattr(rule, 'increment_break', None)
+        brk = float(brk_raw) if brk_raw is not None else ib
+        break_idx = None
+        tbl = getattr(rule, 'talla_break_label', None)
+        if tbl:
+            tn = _norm(tbl)
+            if tn in norm_run:
+                break_idx = norm_run.index(tn)
+    else:                                       # LINEAR pur legacy
+        inc_raw = getattr(rule, 'increment', None)
+        if inc_raw is None and warnings is not None:
+            warnings.append(
+                f"Regla sense delta definit (pom={getattr(rule, 'pom_id', None)}): "
+                f"propagació plana (delta 0) des de l'ancoratge {anchor_label}.")
+        ib = brk = float(inc_raw) if inc_raw is not None else 0.0
+        break_idx = None
+
+    out = {}
+    for t_idx, label in enumerate(run):
+        if t_idx == anchor_idx:
+            out[label] = anchor_val
+            continue
+        # Camí d'acumulació des de l'ancoratge (mecànica canònica de _apply_rule, origen
+        # = anchor_idx). Cada aresta s'indexa per la seva etiqueta SUPERIOR; el break és
+        # posicional absolut → simètric amunt/avall, sense ambigüitat.
+        if t_idx > anchor_idx:
+            path, sign = range(anchor_idx + 1, t_idx + 1), 1.0
+        else:
+            path, sign = range(t_idx + 1, anchor_idx + 1), -1.0
+        total = 0.0
+        for j in path:
+            total += brk if (break_idx is not None and j >= break_idx) else ib
+        out[label] = anchor_val + sign * total
+
+    return out
