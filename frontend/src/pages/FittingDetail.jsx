@@ -289,7 +289,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
       try {
         await fittingSessions.seal(session.id)   // D4: segellat independent (no toca fase)
       } catch (e) {
-        setError(t('fitting.save.seal_error', 'Error segellant la sessió.'))
+        setError(t('fitting.save.seal_error'))
         setBusy(false); return
       }
       setBusy(false); onSaved()
@@ -318,7 +318,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
     setBusy(true); setError(null)
     fittingSessions.discardSession(session.id, discardMotiu)
       .then(() => { setBusy(false); onSaved() })
-      .catch(() => { setBusy(false); setError(t('fitting.save.discard_session_error', 'Error descartant la sessió.')) })
+      .catch(() => { setBusy(false); setError(t('fitting.save.discard_session_error')) })
   }
 
   // D3 — registrar mesures (crea la peça i mostra la graella). Si no hi ha taula de talles → avís.
@@ -329,8 +329,8 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
       .catch(e => {
         const msg = e?.response?.data?.error || ''
         setPieceErr(/SizeFitting|talles|GradingVersion/i.test(msg)
-          ? t('fitting.save.no_sizes', 'Aquest model no té taula de talles generada. Pots gravar la revisió sense mesures.')
-          : (msg || t('fitting.save.piece_error', 'Error registrant mesures.')))
+          ? t('fitting.save.no_sizes')
+          : (msg || t('fitting.save.piece_error')))
       })
   }
 
@@ -354,7 +354,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
       return client.post('/api/v1/fitting-photos/', fd)
     }))
       .then(reloadPhotos)
-      .catch(() => setError(t('fitting.save.image_error', 'Error pujant la imatge.')))
+      .catch(() => setError(t('fitting.save.image_error')))
       .finally(() => { setUploading(false); e.target.value = '' })
   }
 
@@ -380,21 +380,21 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
         <>
           {/* D3 — TAULA DE MESURES (opcional): registrar/veure mesures. No bloqueja la revisió. */}
           {!readOnly && (
-            <Card title={t('fitting.save.measures', 'Taula de mesures')} style={{ marginBottom: '1.25rem' }}>
+            <Card title={t('fitting.save.measures')} style={{ marginBottom: '1.25rem' }}>
               {hasPieces ? (
                 <button onClick={onShowGrid} style={{
                   background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
                   borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer',
-                }}>{t('fitting.save.view_measures', 'Veure / editar taula')}</button>
+                }}>{t('fitting.save.view_measures')}</button>
               ) : (
                 <>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-                    {t('fitting.save.no_measures', 'Encara no hi ha mesures registrades (opcional).')}
+                    {t('fitting.save.no_measures')}
                   </div>
                   <button onClick={registrarMesures} disabled={creatingPiece} style={{
                     background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
                     borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: creatingPiece ? 'default' : 'pointer',
-                  }}>{creatingPiece ? t('fitting.piece.creating') : t('fitting.save.register_measures', 'Registrar mesures')}</button>
+                  }}>{creatingPiece ? t('fitting.piece.creating') : t('fitting.save.register_measures')}</button>
                   {pieceErr && <div style={{ color: 'var(--err)', fontSize: 12, marginTop: 8 }}>{pieceErr}</div>}
                 </>
               )}
@@ -479,7 +479,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
             }}>
               <input type="file" accept="image/*" multiple onChange={onUpload} disabled={uploading} style={{ display: 'none' }} />
               <i className="ti ti-upload" style={{ fontSize: 14 }} />
-              {uploading ? t('fitting.save.uploading', 'Pujant…') : t('fitting.save.add_images', 'Afegir imatges')}
+              {uploading ? t('fitting.save.uploading') : t('fitting.save.add_images')}
             </label>
             {photos.length === 0 ? (
               <div style={muted}>{t('fitting.save.no_images')}</div>
@@ -512,39 +512,39 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
           {/* ACCIONS */}
           {readOnly ? (
             <div style={{ fontSize: 12, color: 'var(--text-muted)', paddingTop: 4 }}>
-              {t('fitting.save.read_only', 'Sessió tancada o anul·lada (només lectura).')}
+              {t('fitting.save.read_only')}
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, flexWrap: 'wrap' }}>
               <button onClick={doSave} disabled={busy} style={{
                 background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 8,
                 padding: '8px 18px', fontSize: 13, fontWeight: 500, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
-              }}>{t('fitting.save.save_and_back', 'Gravar i tornar')}</button>
+              }}>{t('fitting.save.save_and_back')}</button>
               {hasPieces && (
                 <button onClick={doDiscard} disabled={busy} style={{
                   background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
                   padding: '8px 18px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
-                }}>{t('fitting.save.discard_changes', 'Descartar canvis')}</button>
+                }}>{t('fitting.save.discard_changes')}</button>
               )}
               {/* D5 — Descartar sessió (anul·lar) amb motiu inline */}
               {!discardOpen ? (
                 <button onClick={() => setDiscardOpen(true)} disabled={busy} style={{
                   marginLeft: 'auto', background: 'var(--white)', color: 'var(--err)', border: '0.5px solid var(--err)', borderRadius: 8,
                   padding: '8px 18px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
-                }}>{t('fitting.save.discard_session', 'Descartar sessió')}</button>
+                }}>{t('fitting.save.discard_session')}</button>
               ) : (
                 <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                   <input type="text" value={discardMotiu} onChange={e => setDiscardMotiu(e.target.value)}
-                    placeholder={t('fitting.save.discard_motiu_ph', 'Motiu (opcional)')}
+                    placeholder={t('fitting.save.discard_motiu_ph')}
                     style={{ fontSize: 12, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, minWidth: 200 }} />
                   <button onClick={doDiscardSession} disabled={busy} style={{
                     background: 'var(--err)', color: 'var(--white)', border: 'none', borderRadius: 8,
                     padding: '8px 14px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
-                  }}>{t('common.confirm', 'Confirmar')}</button>
+                  }}>{t('common.confirm')}</button>
                   <button onClick={() => { setDiscardOpen(false); setDiscardMotiu('') }} disabled={busy} style={{
                     background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
                     padding: '8px 14px', fontSize: 13, cursor: busy ? 'default' : 'pointer',
-                  }}>{t('common.cancel', 'Cancel·lar')}</button>
+                  }}>{t('common.cancel')}</button>
                 </span>
               )}
             </div>
@@ -752,7 +752,7 @@ export default function FittingDetail() {
         <button onClick={() => setReviewMode(true)} style={{
           marginLeft: 'auto', background: 'var(--gold)', color: 'var(--white)', border: 'none',
           borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-        }}>← {t('fitting.save.back_to_review', 'Tornar a revisió')}</button>
+        }}>← {t('fitting.save.back_to_review')}</button>
       </div>
 
       {pieces.length === 0 && (
@@ -815,7 +815,7 @@ export default function FittingDetail() {
                       <tr key={row.pom_id} style={{ background: rowBg }}>
                         <td style={stickyTd(0, COL_POM_W, rowBg)}>
                           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--gold)' }}>
-                            {row.codi}{row.is_key && <i className="ti ti-star-filled" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title="key measure" />}
+                            {row.codi}{row.is_key && <i className="ti ti-star-filled" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title={t('fitting.key_measure')} />}
                           </span>
                         </td>
                         <td style={{ ...stickyTd(COL_POM_W, COL_NOM_W, rowBg), fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'normal' }}>{row.nom}</td>
