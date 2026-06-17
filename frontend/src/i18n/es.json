@@ -1304,5 +1304,20 @@
       "back_front_rise": "Tiro posterior ({{back}}) debería ser > Tiro delantero ({{front}}).",
       "sleeve_cb": "Largo manga CB ({{cb}}) debería ser > Largo manga ({{base}})."
     }
+  },
+  "editable_table": {
+    "import_title": "Tabla importada por IA.",
+    "import_hint": "Revisa cada fila antes de confirmar — la IA puede cometer errores. Edita, añade o elimina filas si hace falta.",
+    "discard": "Descartar cambios",
+    "confirm_table": "Confirmar tabla",
+    "delete_row": "Eliminar fila",
+    "add_pom": "Añadir POM",
+    "search_placeholder": "Busca por nombre o código…",
+    "no_pom_found": "Ningún POM encontrado para \"{{query}}\".",
+    "create_pom": "Crear POM nuevo \"{{query}}\"",
+    "col": {
+      "sheet_name": "Nombre ficha",
+      "description": "Descripción"
+    }
   }
 }

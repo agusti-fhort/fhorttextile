@@ -1304,5 +1304,20 @@
       "back_front_rise": "Back rise ({{back}}) should be > front rise ({{front}}).",
       "sleeve_cb": "Sleeve length CB ({{cb}}) should be > sleeve length ({{base}})."
     }
+  },
+  "editable_table": {
+    "import_title": "AI-imported table.",
+    "import_hint": "Review each row before confirming — AI can make mistakes. Edit, add or remove rows if needed.",
+    "discard": "Discard changes",
+    "confirm_table": "Confirm table",
+    "delete_row": "Delete row",
+    "add_pom": "Add POM",
+    "search_placeholder": "Search by name or code…",
+    "no_pom_found": "No POM found for \"{{query}}\".",
+    "create_pom": "Create new POM \"{{query}}\"",
+    "col": {
+      "sheet_name": "Sheet name",
+      "description": "Description"
+    }
   }
 }

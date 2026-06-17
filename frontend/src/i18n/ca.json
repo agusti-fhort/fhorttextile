@@ -1304,5 +1304,20 @@
       "back_front_rise": "Tiro posterior ({{back}}) hauria de ser > Tiro davanter ({{front}}).",
       "sleeve_cb": "Llarg màniga CB ({{cb}}) hauria de ser > Llarg màniga ({{base}})."
     }
+  },
+  "editable_table": {
+    "import_title": "Taula importada per IA.",
+    "import_hint": "Revisa cada fila abans de confirmar — la IA pot cometre errors. Edita, afegeix o elimina files si cal.",
+    "discard": "Descartar canvis",
+    "confirm_table": "Confirmar taula",
+    "delete_row": "Eliminar fila",
+    "add_pom": "Afegir POM",
+    "search_placeholder": "Cerca per nom o codi…",
+    "no_pom_found": "Cap POM trobat per \"{{query}}\".",
+    "create_pom": "Crear POM nou \"{{query}}\"",
+    "col": {
+      "sheet_name": "Nom fitxa",
+      "description": "Descripció"
+    }
   }
 }
