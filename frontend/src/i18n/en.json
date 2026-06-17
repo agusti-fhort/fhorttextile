@@ -1593,5 +1593,12 @@
   "export_button": {
     "export": "Export",
     "generating": "Generating…"
+  },
+  "measurements_chat": {
+    "title": "Technical assistant",
+    "autosave_note": "Changes are saved automatically",
+    "empty_hint": "Ask a question or request a change to the measurements.",
+    "examples": "Examples: \"POM D is 35.5cm\" · \"Add the waist POM\" · \"Delete Y5\"",
+    "input_placeholder": "Type a message… (Enter to send)"
   }
 }

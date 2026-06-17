@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
+  const { t } = useTranslation()
   const API = import.meta.env.VITE_API_URL || ''
   const token = localStorage.getItem('access_token')
 
@@ -44,13 +46,13 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
       } else {
         setHistorial(prev => [
           ...prev,
-          { role: 'assistant', content: `Error: ${d.error || 'Error desconegut'}` }
+          { role: 'assistant', content: `${t('common.error')}: ${d.error || t('model_sheet.err_unknown')}` }
         ])
       }
     } catch {
       setHistorial(prev => [
         ...prev,
-        { role: 'assistant', content: 'Error de connexió.' }
+        { role: 'assistant', content: t('model_sheet.err_connection') }
       ])
     } finally {
       setLoading(false)
@@ -72,9 +74,9 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
         <i className="ti ti-message-circle" aria-hidden="true" style={{ color: 'var(--gold)' }} />
-        Assistent tècnic
+        {t('measurements_chat.title')}
         <span style={{ fontSize: 11, color: 'var(--color-text-secondary, #868685)', fontWeight: 400 }}>
-          · Els canvis es guarden automàticament
+          · {t('measurements_chat.autosave_note')}
         </span>
       </div>
 
@@ -85,8 +87,8 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
         {historial.length === 0 && (
           <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
                         fontStyle: 'italic', textAlign: 'center', marginTop: 20 }}>
-            Fes una pregunta o demana un canvi a les mesures.
-            <br />Exemples: "El POM D és 35.5cm" · "Afegeix el POM de cintura" · "Elimina Y5"
+            {t('measurements_chat.empty_hint')}
+            <br />{t('measurements_chat.examples')}
           </div>
         )}
         {historial.map((msg, i) => (
@@ -131,7 +133,7 @@ export default function MeasurementsChat({ modelId, onMesuresUpdated }) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-          placeholder="Escriu un missatge... (Enter per enviar)"
+          placeholder={t('measurements_chat.input_placeholder')}
           disabled={loading}
           style={{
             flex: 1, padding: '7px 10px', fontSize: 13,

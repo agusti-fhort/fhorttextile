@@ -1593,5 +1593,12 @@
   "export_button": {
     "export": "Exportar",
     "generating": "Generando…"
+  },
+  "measurements_chat": {
+    "title": "Asistente técnico",
+    "autosave_note": "Los cambios se guardan automáticamente",
+    "empty_hint": "Haz una pregunta o pide un cambio en las medidas.",
+    "examples": "Ejemplos: \"El POM D es 35.5cm\" · \"Añade el POM de cintura\" · \"Elimina Y5\"",
+    "input_placeholder": "Escribe un mensaje… (Enter para enviar)"
   }
 }
