@@ -505,10 +505,12 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
         if rule is None:
             return _resp(False, 'sense_regla')
 
-        # 4. Propaga NOMÉS si LINEAR o canònic (increment_base poblat).
+        # 4. Propaga NOMÉS si LINEAR o canònic. PG-4b-3a: STEP MAI propaga, encara que
+        # increment_base estigui poblat (logica és la veritat del règim).
         logica = getattr(rule, 'logica', None)
         canonic = getattr(rule, 'increment_base', None) is not None
-        if not (canonic or logica == 'LINEAR'):
+        propaga = (logica != 'STEP') and (canonic or logica == 'LINEAR')
+        if not propaga:
             return _resp(False, logica or 'desconegut')
 
         # 5. Propaga el delta des de l'ancoratge → valor_real de les germanes (valor_teoric intacte).

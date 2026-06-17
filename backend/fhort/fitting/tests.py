@@ -122,3 +122,18 @@ class PropagarActionTest(TenantTestCase):
         self.assertEqual(reals['L'], 50)
         self.assertEqual(reals['S'], TEORICS['S'])
         self.assertEqual(reals['XL'], TEORICS['XL'])
+
+    # ── R4 (PG-4b-3a): STEP amb increment_base poblat → el gate per `logica` bloqueja la
+    # propagació igualment (motiu 'STEP', germanes intactes). Demostra que logica guanya.
+    def test_step_amb_increment_base_no_propaga(self):
+        self.rule.logica = 'STEP'        # increment_base=2 ES CONSERVA (latent)
+        self.rule.save()
+        resp = self._propagar(self.lines['L'], 50)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data['propagat'])
+        self.assertEqual(resp.data['motiu'], 'STEP')
+        reals = self._reals()
+        self.assertEqual(reals['L'], 50)                 # cel·la editada desada
+        self.assertEqual(reals['S'], TEORICS['S'])       # germanes intactes
+        self.assertEqual(reals['M'], TEORICS['M'])
+        self.assertEqual(reals['XL'], TEORICS['XL'])
