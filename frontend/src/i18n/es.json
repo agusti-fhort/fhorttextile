@@ -1261,5 +1261,48 @@
     "talles_generades": "Tallas generadas",
     "feta": "Hecha",
     "bloquejada": "Bloqueada"
+  },
+  "measurement_table": {
+    "loading": "Cargando medidas…",
+    "mock_badge": "mock data · el backend devuelve error",
+    "add_pom": "+ Añadir POM",
+    "todo_add_pom": "TODO: integrar POMBrowser para añadir POMs al modelo (endpoint POST pendiente en el backend).",
+    "empty": "Ninguna medida definida. Añade POMs para empezar.",
+    "click_to_edit": "Clic para editar",
+    "grading_empty": "Configura el size run del modelo para ver el grading.",
+    "confirm_delete": "¿Eliminar esta medida?",
+    "col": {
+      "sheet_name": "Nombre ficha",
+      "code": "Código",
+      "base_value": "Valor base",
+      "origin": "Origen",
+      "notes": "Notas",
+      "name": "Nombre",
+      "delta_per_size": "Δ/talla"
+    },
+    "view": {
+      "base": "Talla base",
+      "grading": "Grading"
+    },
+    "origen": {
+      "STANDARD": "Estándar",
+      "IMPORTED": "Importado",
+      "MANUAL": "Manual",
+      "FITTED": "Fitting",
+      "CALCULATED": "Calculado"
+    },
+    "msg": {
+      "edit_not_persisted": "Edición no persistida — endpoint PATCH pendiente en el backend.",
+      "save_error": "Error {{status}} guardando.",
+      "edit_local": "Edición local — backend no disponible.",
+      "delete_not_persisted": "Eliminación no persistida — endpoint DELETE pendiente en el backend.",
+      "delete_error": "Error {{status}} eliminando.",
+      "delete_local": "Eliminación local — backend no disponible."
+    },
+    "coherence": {
+      "chest_waist": "Pecho ({{chest}}) casi igual a Cintura ({{waist}}). Diferencia: {{diff}} cm.",
+      "back_front_rise": "Tiro posterior ({{back}}) debería ser > Tiro delantero ({{front}}).",
+      "sleeve_cb": "Largo manga CB ({{cb}}) debería ser > Largo manga ({{base}})."
+    }
   }
 }

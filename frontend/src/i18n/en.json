@@ -1261,5 +1261,48 @@
     "talles_generades": "Sizes generated",
     "feta": "Done",
     "bloquejada": "Blocked"
+  },
+  "measurement_table": {
+    "loading": "Loading measurements…",
+    "mock_badge": "mock data · backend returned an error",
+    "add_pom": "+ Add POM",
+    "todo_add_pom": "TODO: integrate POMBrowser to add POMs to the model (POST endpoint pending on the backend).",
+    "empty": "No measurement defined. Add POMs to get started.",
+    "click_to_edit": "Click to edit",
+    "grading_empty": "Configure the model's size run to see the grading.",
+    "confirm_delete": "Delete this measurement?",
+    "col": {
+      "sheet_name": "Sheet name",
+      "code": "Code",
+      "base_value": "Base value",
+      "origin": "Origin",
+      "notes": "Notes",
+      "name": "Name",
+      "delta_per_size": "Δ/size"
+    },
+    "view": {
+      "base": "Base size",
+      "grading": "Grading"
+    },
+    "origen": {
+      "STANDARD": "Standard",
+      "IMPORTED": "Imported",
+      "MANUAL": "Manual",
+      "FITTED": "Fitting",
+      "CALCULATED": "Calculated"
+    },
+    "msg": {
+      "edit_not_persisted": "Edit not persisted — PATCH endpoint pending on the backend.",
+      "save_error": "Error {{status}} saving.",
+      "edit_local": "Local edit — backend unavailable.",
+      "delete_not_persisted": "Deletion not persisted — DELETE endpoint pending on the backend.",
+      "delete_error": "Error {{status}} deleting.",
+      "delete_local": "Local deletion — backend unavailable."
+    },
+    "coherence": {
+      "chest_waist": "Chest ({{chest}}) almost equal to waist ({{waist}}). Difference: {{diff}} cm.",
+      "back_front_rise": "Back rise ({{back}}) should be > front rise ({{front}}).",
+      "sleeve_cb": "Sleeve length CB ({{cb}}) should be > sleeve length ({{base}})."
+    }
   }
 }

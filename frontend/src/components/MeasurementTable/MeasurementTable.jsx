@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
+import i18n from '../../i18n'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -54,7 +56,7 @@ function checkCoherence(measurements) {
     if (diff < 2) {
       alerts.push({
         tipus: 'WARN',
-        missatge: `Pit (${byCode['POM-001']}) gairebé igual a Cintura (${byCode['POM-003']}). Diferència: ${diff.toFixed(1)} cm.`,
+        missatge: i18n.t('measurement_table.coherence.chest_waist', { chest: byCode['POM-001'], waist: byCode['POM-003'], diff: diff.toFixed(1) }),
       })
     }
   }
@@ -62,7 +64,7 @@ function checkCoherence(measurements) {
     if (byCode['POM-056'] <= byCode['POM-055']) {
       alerts.push({
         tipus: 'ERROR',
-        missatge: `Tiro posterior (${byCode['POM-056']}) hauria de ser > Tiro davanter (${byCode['POM-055']}).`,
+        missatge: i18n.t('measurement_table.coherence.back_front_rise', { back: byCode['POM-056'], front: byCode['POM-055'] }),
       })
     }
   }
@@ -70,7 +72,7 @@ function checkCoherence(measurements) {
     if (byCode['POM-022'] <= byCode['POM-020']) {
       alerts.push({
         tipus: 'WARN',
-        missatge: `Llarg màniga CB (${byCode['POM-022']}) hauria de ser > Llarg màniga (${byCode['POM-020']}).`,
+        missatge: i18n.t('measurement_table.coherence.sleeve_cb', { cb: byCode['POM-022'], base: byCode['POM-020'] }),
       })
     }
   }
@@ -85,6 +87,7 @@ export default function MeasurementTable({
   readOnly = false,
   onAlert = () => {},
 }) {
+  const { t } = useTranslation()
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
 
   const [mode, setMode] = useState(initialMode)
@@ -152,18 +155,18 @@ export default function MeasurementTable({
         body: JSON.stringify({ [field]: value }),
       })
       if (!res.ok && (res.status === 404 || res.status === 405)) {
-        setMsg({ type: 'warn', text: 'Edició no persistida — endpoint PATCH pendent al backend.' })
+        setMsg({ type: 'warn', text: t('measurement_table.msg.edit_not_persisted') })
       } else if (!res.ok) {
-        setMsg({ type: 'error', text: `Error ${res.status} guardant.` })
+        setMsg({ type: 'error', text: t('measurement_table.msg.save_error', { status: res.status }) })
       }
     } catch {
-      setMsg({ type: 'warn', text: 'Edició local — backend no disponible.' })
+      setMsg({ type: 'warn', text: t('measurement_table.msg.edit_local') })
     }
   }
 
   const handleDelete = async (id) => {
     if (readOnly) return
-    if (!confirm('Eliminar aquesta mesura?')) return
+    if (!confirm(t('measurement_table.confirm_delete'))) return
     setMeasurements(prev => prev.filter(m => m.id !== id))
 
     if (String(id).startsWith('mock-')) return
@@ -173,17 +176,17 @@ export default function MeasurementTable({
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok && (res.status === 404 || res.status === 405)) {
-        setMsg({ type: 'warn', text: 'Eliminació no persistida — endpoint DELETE pendent al backend.' })
+        setMsg({ type: 'warn', text: t('measurement_table.msg.delete_not_persisted') })
       } else if (!res.ok) {
-        setMsg({ type: 'error', text: `Error ${res.status} eliminant.` })
+        setMsg({ type: 'error', text: t('measurement_table.msg.delete_error', { status: res.status }) })
       }
     } catch {
-      setMsg({ type: 'warn', text: 'Eliminació local — backend no disponible.' })
+      setMsg({ type: 'warn', text: t('measurement_table.msg.delete_local') })
     }
   }
 
   if (loading) {
-    return <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)' }}>Carregant mesures...</div>
+    return <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)' }}>{t('measurement_table.loading')}</div>
   }
 
   return (
@@ -200,14 +203,14 @@ export default function MeasurementTable({
             background: '#fdf6ee', border: '0.5px solid #e0c8a0',
             padding: '3px 8px', borderRadius: 4,
           }}>
-            mock data · backend retorna error
+            {t('measurement_table.mock_badge')}
           </span>
         )}
         {!readOnly && (
           <button
-            onClick={() => setMsg({ type: 'info', text: 'TODO: integrar POMBrowser per afegir POMs al model (endpoint POST pendent al backend).' })}
+            onClick={() => setMsg({ type: 'info', text: t('measurement_table.todo_add_pom') })}
             style={btnPrimary}
-          >+ Afegir POM</button>
+          >{t('measurement_table.add_pom')}</button>
         )}
       </div>
 
@@ -276,7 +279,7 @@ export default function MeasurementTable({
           fontSize: 11, color: 'var(--text-muted)',
           textAlign: 'center',
         }}>
-          Cap mesura definida. Afegeix POMs per començar.
+          {t('measurement_table.empty')}
         </div>
       )}
     </div>
@@ -285,16 +288,17 @@ export default function MeasurementTable({
 
 // ── Vista BASE ──────────────────────────────────────────────────────────────
 function BaseView({ measurements, readOnly, editingCell, setEditingCell, onEdit, onDelete }) {
+  const { t } = useTranslation()
   return (
     <table style={tableStyle}>
       <thead>
         <tr>
-          <Th width={70}>Nom fitxa</Th>
+          <Th width={70}>{t('measurement_table.col.sheet_name')}</Th>
           <Th>POM</Th>
-          <Th width={80}>Codi</Th>
-          <Th width={100} align="right">Valor base</Th>
-          <Th width={90}>Origen</Th>
-          <Th>Notes</Th>
+          <Th width={80}>{t('measurement_table.col.code')}</Th>
+          <Th width={100} align="right">{t('measurement_table.col.base_value')}</Th>
+          <Th width={90}>{t('measurement_table.col.origin')}</Th>
+          <Th>{t('measurement_table.col.notes')}</Th>
           {!readOnly && <Th width={28} />}
         </tr>
       </thead>
@@ -346,14 +350,14 @@ function BaseView({ measurements, readOnly, editingCell, setEditingCell, onEdit,
                   background: origen.bg, color: origen.fg,
                   border: `0.5px solid ${origen.border}`,
                   fontWeight: 600, letterSpacing: '.05em',
-                }}>{origen.label}</span>
+                }}>{t(`measurement_table.origen.${m.origen}`, origen.label)}</span>
               </Td>
               <Td><span style={{ color: 'var(--text-muted)' }}>{m.notes || '—'}</span></Td>
               {!readOnly && (
                 <Td align="center">
                   <button
                     onClick={() => onDelete(m.id)}
-                    title="Eliminar"
+                    title={t('app.delete')}
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer',
                       color: '#c0c0c0', fontSize: 14, lineHeight: 1, padding: '2px 4px',
@@ -373,10 +377,11 @@ function BaseView({ measurements, readOnly, editingCell, setEditingCell, onEdit,
 
 // ── Vista GRADING ───────────────────────────────────────────────────────────
 function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
+  const { t } = useTranslation()
   if (!sizeRun.length) {
     return (
       <div style={{ padding: 16, fontSize: 11, color: 'var(--text-muted)' }}>
-        Configura el size run del model per veure el grading.
+        {t('measurement_table.grading_empty')}
       </div>
     )
   }
@@ -400,7 +405,7 @@ function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
     <table style={tableStyle}>
       <thead>
         <tr>
-          <Th width={70}>Nom</Th>
+          <Th width={70}>{t('measurement_table.col.name')}</Th>
           <Th>POM</Th>
           {sizeRun.map(s => {
             const isBase = s === baseSize
@@ -414,7 +419,7 @@ function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
               </Th>
             )
           })}
-          <Th align="right" width={80}>Δ/talla</Th>
+          <Th align="right" width={80}>{t('measurement_table.col.delta_per_size')}</Th>
         </tr>
       </thead>
       <tbody>
@@ -450,6 +455,7 @@ function GradingView({ measurements, gradedSpecs, sizeRun, baseSize }) {
 
 // ── EditableCell ────────────────────────────────────────────────────────────
 function EditableCell({ value, editing, readOnly, onStartEdit, onSave, onCancel, suffix = '', type = 'text', align = 'left', mono }) {
+  const { t } = useTranslation()
   const [draft, setDraft] = useState(value)
   useEffect(() => { setDraft(value) }, [value])
 
@@ -484,7 +490,7 @@ function EditableCell({ value, editing, readOnly, onStartEdit, onSave, onCancel,
   return (
     <span
       onClick={readOnly ? undefined : onStartEdit}
-      title={readOnly ? '' : 'Click per editar'}
+      title={readOnly ? '' : t('measurement_table.click_to_edit')}
       style={{
         display: 'inline-block',
         padding: '2px 6px',
@@ -505,11 +511,12 @@ function EditableCell({ value, editing, readOnly, onStartEdit, onSave, onCancel,
 
 // ── ViewToggle ──────────────────────────────────────────────────────────────
 function ViewToggle({ mode, onChange }) {
+  const { t } = useTranslation()
   return (
     <div style={{ display: 'inline-flex', border: '0.5px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
       {[
-        { v: 'base',    label: 'Talla base' },
-        { v: 'grading', label: 'Grading' },
+        { v: 'base',    label: t('measurement_table.view.base') },
+        { v: 'grading', label: t('measurement_table.view.grading') },
       ].map(({ v, label }) => {
         const active = mode === v
         return (

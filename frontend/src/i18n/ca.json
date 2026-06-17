@@ -1261,5 +1261,48 @@
     "talles_generades": "Talles generades",
     "feta": "Feta",
     "bloquejada": "Bloquejada"
+  },
+  "measurement_table": {
+    "loading": "Carregant mesures…",
+    "mock_badge": "mock data · backend retorna error",
+    "add_pom": "+ Afegir POM",
+    "todo_add_pom": "TODO: integrar POMBrowser per afegir POMs al model (endpoint POST pendent al backend).",
+    "empty": "Cap mesura definida. Afegeix POMs per començar.",
+    "click_to_edit": "Click per editar",
+    "grading_empty": "Configura el size run del model per veure el grading.",
+    "confirm_delete": "Eliminar aquesta mesura?",
+    "col": {
+      "sheet_name": "Nom fitxa",
+      "code": "Codi",
+      "base_value": "Valor base",
+      "origin": "Origen",
+      "notes": "Notes",
+      "name": "Nom",
+      "delta_per_size": "Δ/talla"
+    },
+    "view": {
+      "base": "Talla base",
+      "grading": "Grading"
+    },
+    "origen": {
+      "STANDARD": "Estàndard",
+      "IMPORTED": "Importat",
+      "MANUAL": "Manual",
+      "FITTED": "Fitting",
+      "CALCULATED": "Calculat"
+    },
+    "msg": {
+      "edit_not_persisted": "Edició no persistida — endpoint PATCH pendent al backend.",
+      "save_error": "Error {{status}} guardant.",
+      "edit_local": "Edició local — backend no disponible.",
+      "delete_not_persisted": "Eliminació no persistida — endpoint DELETE pendent al backend.",
+      "delete_error": "Error {{status}} eliminant.",
+      "delete_local": "Eliminació local — backend no disponible."
+    },
+    "coherence": {
+      "chest_waist": "Pit ({{chest}}) gairebé igual a Cintura ({{waist}}). Diferència: {{diff}} cm.",
+      "back_front_rise": "Tiro posterior ({{back}}) hauria de ser > Tiro davanter ({{front}}).",
+      "sleeve_cb": "Llarg màniga CB ({{cb}}) hauria de ser > Llarg màniga ({{base}})."
+    }
   }
 }
