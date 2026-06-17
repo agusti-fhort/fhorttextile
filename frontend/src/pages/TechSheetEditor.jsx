@@ -921,7 +921,7 @@ export default function TechSheetEditor() {
     if (lockState === 'readonly') return { text: t('tech_sheet.badge_readonly'), bg: COL.bg, fg: COL.textMuted }
     if (lockState === 'owned') return { text: t('tech_sheet.badge_editing'), bg: COL.gold, fg: 'var(--white)' }
     if (lockState === 'conflict') return { text: t('tech_sheet.badge_locked_by', { user: conflict?.locked_by || t('tech_sheet.another_user') }), bg: COL.bg, fg: COL.textMuted }
-    return { text: 'Error de bloqueig', bg: COL.bg, fg: COL.textMuted }
+    return { text: t('tech_sheet.badge_lock_error'), bg: COL.bg, fg: COL.textMuted }
   })()
   const saveLabel = saveState === 'saving' ? t('tech_sheet.saving') : saveState === 'saved' ? t('tech_sheet.saved') : saveState === 'error' ? t('tech_sheet.save_error') : null
 
@@ -1216,13 +1216,14 @@ export default function TechSheetEditor() {
 // Selector de color ràpid (TS-4c): swatches de marca + color natiu ("Més colors").
 const QUICK_COLORS = ['var(--text-main)', '#185fa5', '#1d9e75', '#dc2626', 'var(--gold)', '#ca8a04']
 export function ColorPicker({ value, onChange }) {
+  const { t } = useTranslation()
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginTop: 3 }}>
       {QUICK_COLORS.map(c => (
         <button key={c} type="button" onClick={() => onChange(c)} title={c}
           style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: value === c ? '2px solid var(--text-main)' : '1px solid var(--border)', cursor: 'pointer', padding: 0 }} />
       ))}
-      <input type="color" value={value || 'var(--text-main)'} onChange={e => onChange(e.target.value)} title="Més colors"
+      <input type="color" value={value || 'var(--text-main)'} onChange={e => onChange(e.target.value)} title={t('tech_sheet.more_colors')}
         style={{ width: 22, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} />
     </div>
   )

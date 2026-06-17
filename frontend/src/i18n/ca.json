@@ -1294,7 +1294,9 @@
     "tmpl_badge": "mode plantilla",
     "tmpl_readonly": "Només lectura (cal configure)",
     "tmpl_header_help": "La capçalera mostra placeholders ({model.codi}…) que es resoldran a cada model que usi aquesta plantilla.",
-    "tmpl_loading": "Carregant plantilla…"
+    "tmpl_loading": "Carregant plantilla…",
+    "badge_lock_error": "Error de bloqueig",
+    "more_colors": "Més colors"
   },
   "estat_badge": {
     "pendent_inputs": "Pendent d'inputs",

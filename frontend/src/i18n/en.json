@@ -1294,7 +1294,9 @@
     "tmpl_badge": "template mode",
     "tmpl_readonly": "Read only (requires configure)",
     "tmpl_header_help": "The header shows placeholders ({model.codi}…) that resolve for each model using this template.",
-    "tmpl_loading": "Loading template…"
+    "tmpl_loading": "Loading template…",
+    "badge_lock_error": "Lock error",
+    "more_colors": "More colors"
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",

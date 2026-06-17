@@ -1294,7 +1294,9 @@
     "tmpl_badge": "modo plantilla",
     "tmpl_readonly": "Solo lectura (requiere configure)",
     "tmpl_header_help": "La cabecera muestra placeholders ({model.codi}…) que se resolverán en cada modelo que use esta plantilla.",
-    "tmpl_loading": "Cargando plantilla…"
+    "tmpl_loading": "Cargando plantilla…",
+    "badge_lock_error": "Error de bloqueo",
+    "more_colors": "Más colores"
   },
   "estat_badge": {
     "pendent_inputs": "Pendiente de inputs",
