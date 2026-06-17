@@ -1289,7 +1289,12 @@
     "flash_no_grading": "Aquest size fitting no té grading actiu.",
     "flash_empty_table": "Taula buida.",
     "flash_header_exists": "Ja hi ha una capçalera en aquesta pàgina.",
-    "confirm_delete_page": "Esborrar aquesta pàgina?"
+    "confirm_delete_page": "Esborrar aquesta pàgina?",
+    "tmpl_title": "Plantilla",
+    "tmpl_badge": "mode plantilla",
+    "tmpl_readonly": "Només lectura (cal configure)",
+    "tmpl_header_help": "La capçalera mostra placeholders ({model.codi}…) que es resoldran a cada model que usi aquesta plantilla.",
+    "tmpl_loading": "Carregant plantilla…"
   },
   "estat_badge": {
     "pendent_inputs": "Pendent d'inputs",

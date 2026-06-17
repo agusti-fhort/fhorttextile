@@ -1289,7 +1289,12 @@
     "flash_no_grading": "Este size fitting no tiene grading activo.",
     "flash_empty_table": "Tabla vacía.",
     "flash_header_exists": "Ya hay una cabecera en esta página.",
-    "confirm_delete_page": "¿Eliminar esta página?"
+    "confirm_delete_page": "¿Eliminar esta página?",
+    "tmpl_title": "Plantilla",
+    "tmpl_badge": "modo plantilla",
+    "tmpl_readonly": "Solo lectura (requiere configure)",
+    "tmpl_header_help": "La cabecera muestra placeholders ({model.codi}…) que se resolverán en cada modelo que use esta plantilla.",
+    "tmpl_loading": "Cargando plantilla…"
   },
   "estat_badge": {
     "pendent_inputs": "Pendiente de inputs",

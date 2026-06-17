@@ -1289,7 +1289,12 @@
     "flash_no_grading": "This size fitting has no active grading.",
     "flash_empty_table": "Empty table.",
     "flash_header_exists": "There is already a header on this page.",
-    "confirm_delete_page": "Delete this page?"
+    "confirm_delete_page": "Delete this page?",
+    "tmpl_title": "Template",
+    "tmpl_badge": "template mode",
+    "tmpl_readonly": "Read only (requires configure)",
+    "tmpl_header_help": "The header shows placeholders ({model.codi}…) that resolve for each model using this template.",
+    "tmpl_loading": "Loading template…"
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",
