@@ -111,7 +111,7 @@ export default function SizeMapSetup() {
   }, [])
 
   if (!canConfigure) {
-    return <Center>{t('size_map_no_access', 'No tens permís per configurar sistemes de talles.')}</Center>
+    return <Center>{t('size_map_no_access')}</Center>
   }
 
   if (wizardOpen) {
@@ -128,30 +128,30 @@ export default function SizeMapSetup() {
           }
           setWizardOpen(false)
           const w = data?.warnings || []
-          const base = t('size_map_created', 'Sistema creat') + `: ${data?.codi} — ${data?.nom}`
-          loadSystems().then(() => setFeedback({ type: 'ok', text: w.length ? `${base} (${w.length} ${t('size_map_warnings', 'avisos')})` : base }))
+          const base = t('size_map_created') + `: ${data?.codi} — ${data?.nom}`
+          loadSystems().then(() => setFeedback({ type: 'ok', text: w.length ? `${base} (${w.length} ${t('size_map_warnings')})` : base }))
         }}
       />
     )
   }
 
   const columns = [
-    { key: 'nom', label: t('size_map_col_nom', 'Nom'),
+    { key: 'nom', label: t('size_map_col_nom'),
       render: r => <span style={{ fontWeight: 500 }}>{r.nom}</span> },
-    { key: 'codi', label: t('size_map_col_codi', 'Codi'),
+    { key: 'codi', label: t('size_map_col_codi'),
       render: r => <span style={{ fontFamily: MONO }}>{r.codi}</span> },
-    { key: 'target_nom', label: t('size_map_col_target', 'Target'), render: r => r.target_nom || '—' },
-    { key: 'base_unit', label: t('size_map_col_unit', 'Unitat'),
+    { key: 'target_nom', label: t('size_map_col_target'), render: r => r.target_nom || '—' },
+    { key: 'base_unit', label: t('size_map_col_unit'),
       render: r => <span style={{ fontFamily: MONO, fontSize: 11 }}>{r.base_unit || '—'}</span> },
-    { key: 'customer_codi', label: t('size_map_col_client', 'Client'),
+    { key: 'customer_codi', label: t('size_map_col_client'),
       render: r => r.customer_codi
         ? <Badge variant="gold">{r.customer_codi}</Badge>
-        : <span style={{ color: 'var(--gray)' }}>{t('size_map_canonical', 'Canònic')}</span> },
-    { key: 'parent_codi', label: t('size_map_col_parent', 'Pare'),
+        : <span style={{ color: 'var(--gray)' }}>{t('size_map_canonical')}</span> },
+    { key: 'parent_codi', label: t('size_map_col_parent'),
       render: r => r.parent_codi ? <span style={{ fontFamily: MONO, fontSize: 11 }}>{r.parent_codi}</span> : '—' },
-    { key: 'num_talles', label: t('size_map_col_talles', 'Talles'), align: 'right',
+    { key: 'num_talles', label: t('size_map_col_talles'), align: 'right',
       render: r => <span style={{ fontFamily: MONO }}>{r.num_talles}</span> },
-    { key: 'num_rule_sets', label: t('size_map_col_rules', 'Rule sets'), align: 'right',
+    { key: 'num_rule_sets', label: t('size_map_col_rules'), align: 'right',
       render: r => <span style={{ fontFamily: MONO }}>{r.num_rule_sets}</span> },
   ]
 
@@ -159,21 +159,21 @@ export default function SizeMapSetup() {
     <div style={{ minWidth: 0, maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('size_map_title', 'Sistemes de talles')}</h1>
-          <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('size_map_subtitle', 'Runs de client derivats i sistemes canònics')}</p>
+          <h1 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('size_map_title')}</h1>
+          <p style={{ fontSize: 12, color: 'var(--gray)', fontWeight: 300 }}>{t('size_map_subtitle')}</p>
         </div>
         <button onClick={() => setWizardOpen(true)} style={{ ...primaryBtn, marginLeft: 0 }}>
-          <i className="ti ti-plus" style={{ fontSize: 14 }} />{t('size_map_new_run', 'Nou run de client')}
+          <i className="ti ti-plus" style={{ fontSize: 14 }} />{t('size_map_new_run')}
         </button>
       </div>
 
       <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
-      {loading ? <Center>{t('size_map_loading', 'Carregant…')}</Center>
-        : error ? <Center>{t('size_map_error', 'Error en carregar els sistemes.')}</Center>
+      {loading ? <Center>{t('size_map_loading')}</Center>
+        : error ? <Center>{t('size_map_error')}</Center>
           : (
             <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
-              <Table columns={columns} data={systems} loading={false} empty={t('size_map_empty', 'Cap sistema de talles encara.')} />
+              <Table columns={columns} data={systems} loading={false} empty={t('size_map_empty')} />
             </div>
           )}
     </div>
@@ -289,7 +289,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         })
         setStep(2)
       })
-      .catch(e => setErr(e?.response?.data?.error || t('size_map_match_err', 'Error en el matching.')))
+      .catch(e => setErr(e?.response?.data?.error || t('size_map_match_err')))
       .finally(() => setBusy(false))
   }
 
@@ -307,7 +307,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         set({ talles: defs })
         setStep(3)
       })
-      .catch(e => setErr(e?.response?.data?.error || t('size_map_preview_err', 'Error en la previsualització.')))
+      .catch(e => setErr(e?.response?.data?.error || t('size_map_preview_err')))
       .finally(() => setBusy(false))
   }
 
@@ -328,7 +328,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
     const { taula } = parseTable(wiz.gradingText)
     sizeMap.gradingPreview({ size_system_id: wiz.size_system_id, base_size: wiz.base_size, taula })
       .then(r => applyGradingData(r.data))
-      .catch(e => setErr(e?.response?.data?.error || t('size_map_grading_err', 'Error en el càlcul de grading.')))
+      .catch(e => setErr(e?.response?.data?.error || t('size_map_grading_err')))
       .finally(() => setBusy(false))
   }
 
@@ -342,7 +342,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
     fd.append('base_size', wiz.base_size || '')
     sizeMap.gradingPreviewFile(fd)
       .then(r => applyGradingData(r.data))
-      .catch(e => setErr(e?.response?.data?.error || t('size_map_file_err', 'Error processant el fitxer.')))
+      .catch(e => setErr(e?.response?.data?.error || t('size_map_file_err')))
       .finally(() => setBusy(false))
   }
 
@@ -400,7 +400,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       .catch(e => {
         // 409 = avís-i-confirma (no és error): obre el panell amb les graduacions existents.
         if (e?.response?.status === 409) { setConflict(e.response.data); return }
-        setErr(e?.response?.data?.error || t('size_map_create_err', 'Error en crear el sistema.'))
+        setErr(e?.response?.data?.error || t('size_map_create_err'))
       })
       .finally(() => setBusy(false))
   }
@@ -412,15 +412,15 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   return (
     <div style={{ minWidth: 0, maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 500, fontFamily: MONO }}>{t('size_map_new_run', 'Nou run de client')}</h1>
-        <button onClick={onClose} style={ghostBtn}><i className="ti ti-x" style={{ fontSize: 13 }} />{t('size_map_cancel', 'Cancel·lar')}</button>
+        <h1 style={{ fontSize: 20, fontWeight: 500, fontFamily: MONO }}>{t('size_map_new_run')}</h1>
+        <button onClick={onClose} style={ghostBtn}><i className="ti ti-x" style={{ fontSize: 13 }} />{t('size_map_cancel')}</button>
       </div>
 
       {showReturnBanner && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--gold-pale)', color: 'var(--gold)',
                       border: '0.5px solid var(--gold)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 12 }}>
           <i className="ti ti-link" style={{ fontSize: 14 }} />
-          {t('size_map_from_w1', 'Configures un run per a una fitxa en curs. En acabar tornaràs a la importació.')}
+          {t('size_map_from_w1')}
         </div>
       )}
 
@@ -430,50 +430,50 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       {/* ---- P1 ---- */}
       {step === 1 && (
         <div style={card}>
-          <Field label={t('size_map_f_target', 'Target')}>
+          <Field label={t('size_map_f_target')}>
             <select value={wiz.target_codi} onChange={e => set({ target_codi: e.target.value })} style={{ ...selS, width: '100%' }}>
               <option value="">—</option>
               {lookups.targets.map(o => <option key={o.codi} value={o.codi}>{o.nom} ({o.codi})</option>)}
             </select>
           </Field>
-          <Field label={t('size_map_f_unit', 'Unitat base')}>
+          <Field label={t('size_map_f_unit')}>
             <select value={wiz.base_unit} onChange={e => set({ base_unit: e.target.value })} style={{ ...selS, width: '100%' }}>
               {(lookups.base_units?.length ? lookups.base_units.map(o => o.codi) : BASE_UNITS).map(u =>
                 <option key={u} value={u}>{u}</option>)}
             </select>
           </Field>
-          <Field label={t('size_map_f_customer', 'Codi client')} hint={t('size_map_f_customer_hint', '3 caràcters (Customer.codi)')}>
+          <Field label={t('size_map_f_customer')} hint={t('size_map_f_customer_hint')}>
             <input value={wiz.customer_codi} maxLength={3} onChange={e => set({ customer_codi: e.target.value.toUpperCase() })}
               placeholder="ABC" style={{ ...selS, width: 120 }} />
           </Field>
-          <Field label={t('size_map_f_labels', 'Etiquetes del run')} hint={t('size_map_f_labels_hint', 'Una per línia (XS, S, M, L, XL…)')}>
+          <Field label={t('size_map_f_labels')} hint={t('size_map_f_labels_hint')}>
             <textarea value={wiz.labelsText} onChange={e => set({ labelsText: e.target.value })} rows={5}
               style={{ ...selS, width: '100%', resize: 'vertical' }} placeholder={'XS\nS\nM\nL\nXL'} />
           </Field>
-          <Field label={t('size_map_f_base', 'Talla base')}>
+          <Field label={t('size_map_f_base')}>
             <input value={wiz.base_size} onChange={e => set({ base_size: e.target.value })} placeholder="M" style={{ ...selS, width: 120 }} />
           </Field>
           {/* Classificació (moguda de l'antic P5): defineix el destí del grading rule + perfils. */}
-          <Field label={t('size_map_p_construction', 'Construcció')}>
+          <Field label={t('size_map_p_construction')}>
             <select value={wiz.construction_id} onChange={e => set({ construction_id: e.target.value })} style={{ ...selS, width: '100%' }}>
               <option value="">—</option>
               {lookups.constructions.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
             </select>
           </Field>
-          <Field label={t('size_map_p_fit', 'Fit type')}>
+          <Field label={t('size_map_p_fit')}>
             <select value={wiz.fit_type_id} onChange={e => set({ fit_type_id: e.target.value })} style={{ ...selS, width: '100%' }}>
               <option value="">—</option>
               {lookups.fit_types.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
             </select>
           </Field>
-          <Field label={t('size_map_p_garment', 'Garment type')}>
+          <Field label={t('size_map_p_garment')}>
             <select value={wiz.garment_type_id} onChange={e => set({ garment_type_id: e.target.value })} style={{ ...selS, width: '100%' }}>
               <option value="">—</option>
               {lookups.garment_types.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
             </select>
           </Field>
           <button onClick={goMatch} disabled={busy || !wiz.target_codi || labels().length === 0 || !wiz.base_size}
-            style={{ ...primaryBtn }}>{t('size_map_next', 'Següent')}</button>
+            style={{ ...primaryBtn }}>{t('size_map_next')}</button>
         </div>
       )}
 
@@ -481,10 +481,10 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       {step === 2 && (
         <div style={card}>
           <div style={{ marginBottom: 12, fontSize: 12 }}>
-            {t('size_map_reco', 'Recomanació')}: <Badge variant={REC_VARIANT[wiz.recomanacio] || 'gray'}>{wiz.recomanacio}</Badge>
+            {t('size_map_reco')}: <Badge variant={REC_VARIANT[wiz.recomanacio] || 'gray'}>{wiz.recomanacio}</Badge>
           </div>
           {wiz.candidates.length === 0 && (
-            <div style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 12 }}>{t('size_map_no_candidates', 'Cap sistema existent encaixa. Es crearà un de nou.')}</div>
+            <div style={{ fontSize: 12, color: 'var(--gray)', marginBottom: 12 }}>{t('size_map_no_candidates')}</div>
           )}
           {wiz.candidates.map(c => (
             <label key={c.size_system_id} style={{ display: 'block', border: '0.5px solid var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 8, cursor: 'pointer' }}>
@@ -501,18 +501,18 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                 <div style={{ height: 6, width: `${Math.round((c.score || 0) * 100)}%`, background: 'var(--gold)', borderRadius: 999 }} />
               </div>
               {c.unmatched_labels?.length > 0 &&
-                <div style={{ fontSize: 11, color: 'var(--warn)', marginTop: 6 }}>{t('size_map_unmatched', 'No reconegudes')}: {c.unmatched_labels.join(', ')}</div>}
+                <div style={{ fontSize: 11, color: 'var(--warn)', marginTop: 6 }}>{t('size_map_unmatched')}: {c.unmatched_labels.join(', ')}</div>}
               {c.warning && <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 4 }}>{c.warning}</div>}
             </label>
           ))}
           {/* opció crear nou */}
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, border: '0.5px dashed var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, cursor: 'pointer' }}>
             <input type="radio" name="cand" checked={wiz.decision === 'CREAR'} onChange={() => set({ decision: 'CREAR', size_system_id: null })} />
-            <span>{t('size_map_create_new', 'Crear sistema nou')}</span>
+            <span>{t('size_map_create_new')}</span>
           </label>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setStep(1)} style={ghostBtn}>{t('size_map_back', 'Enrere')}</button>
-            <button onClick={goPreview} disabled={busy || (wiz.decision !== 'CREAR' && !wiz.size_system_id)} style={primaryBtn}>{t('size_map_next', 'Següent')}</button>
+            <button onClick={() => setStep(1)} style={ghostBtn}>{t('size_map_back')}</button>
+            <button onClick={goPreview} disabled={busy || (wiz.decision !== 'CREAR' && !wiz.size_system_id)} style={primaryBtn}>{t('size_map_next')}</button>
           </div>
         </div>
       )}
@@ -524,12 +524,12 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 10 }}>
-                  <th style={{ padding: 6 }}>{t('size_map_t_label', 'Etiqueta')}</th>
-                  <th style={{ padding: 6 }}>{t('size_map_t_order', 'Ordre')}</th>
-                  <th style={{ padding: 6 }}>{t('size_map_t_numeric', 'Valor num.')}</th>
-                  <th style={{ padding: 6 }}>{t('size_map_t_mmin', 'Mesos mín')}</th>
-                  <th style={{ padding: 6 }}>{t('size_map_t_mmax', 'Mesos màx')}</th>
-                  <th style={{ padding: 6 }}>{t('size_map_t_height', 'Alçada cm')}</th>
+                  <th style={{ padding: 6 }}>{t('size_map_t_label')}</th>
+                  <th style={{ padding: 6 }}>{t('size_map_t_order')}</th>
+                  <th style={{ padding: 6 }}>{t('size_map_t_numeric')}</th>
+                  <th style={{ padding: 6 }}>{t('size_map_t_mmin')}</th>
+                  <th style={{ padding: 6 }}>{t('size_map_t_mmax')}</th>
+                  <th style={{ padding: 6 }}>{t('size_map_t_height')}</th>
                   <th />
                 </tr>
               </thead>
@@ -560,11 +560,11 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 14 }}>
             <button onClick={() => set({ talles: [...wiz.talles, { etiqueta: '', ordre: wiz.talles.length + 1, valor_numeric: '', age_months_min: '', age_months_max: '', body_height_cm: '' }] })}
-              style={ghostBtn}><i className="ti ti-plus" />{t('size_map_add_size', 'Afegir talla')}</button>
+              style={ghostBtn}><i className="ti ti-plus" />{t('size_map_add_size')}</button>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setStep(2)} style={ghostBtn}>{t('size_map_back', 'Enrere')}</button>
-            <button onClick={() => setStep(4)} disabled={wiz.talles.length === 0} style={primaryBtn}>{t('size_map_next', 'Següent')}</button>
+            <button onClick={() => setStep(2)} style={ghostBtn}>{t('size_map_back')}</button>
+            <button onClick={() => setStep(4)} disabled={wiz.talles.length === 0} style={primaryBtn}>{t('size_map_next')}</button>
           </div>
         </div>
       )}
@@ -574,8 +574,8 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         <div style={card}>
           {/* Pujada de fitxer ric (Excel/PDF/imatge): reusa el motor d'extracció del model
               → match per codi+nom + grading derivat sobre les talles definides a la Pantalla 1. */}
-          <Field label={t('size_map_g_file', 'Puja la fitxa (Excel, PDF o imatge)')}
-            hint={t('size_map_g_file_hint', 'Extracció automàtica de POMs i valors. Els codis no resolts es poden vincular manualment a sota.')}>
+          <Field label={t('size_map_g_file')}
+            hint={t('size_map_g_file_hint')}>
             <label htmlFor="size-map-grading-file"
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); calcGradingFromFile(e.dataTransfer.files[0]) }}
@@ -583,7 +583,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                        padding: 14, textAlign: 'center', cursor: busy ? 'wait' : 'pointer',
                        color: 'var(--gray)', fontSize: 13 }}>
               <i className="ti ti-upload" style={{ fontSize: 18, marginRight: 6 }} />
-              {busy ? t('size_map_g_file_busy', 'Analitzant fitxer…') : t('size_map_g_file_drop', 'Arrossega o selecciona un fitxer')}
+              {busy ? t('size_map_g_file_busy') : t('size_map_g_file_drop')}
               <input id="size-map-grading-file" type="file" accept=".xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp"
                 style={{ display: 'none' }} disabled={busy}
                 onChange={e => { calcGradingFromFile(e.target.files[0]); e.target.value = '' }} />
@@ -603,9 +603,9 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                 <thead>
                   <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 10 }}>
                     <th style={{ padding: 6 }}>POM</th>
-                    <th style={{ padding: 6 }}>{t('size_map_g_logica', 'Lògica')}</th>
-                    <th style={{ padding: 6 }}>{t('size_map_g_value', 'Increment / deltes')}</th>
-                    <th style={{ padding: 6 }}>{t('size_map_g_warn', 'Avís')}</th>
+                    <th style={{ padding: 6 }}>{t('size_map_g_logica')}</th>
+                    <th style={{ padding: 6 }}>{t('size_map_g_value')}</th>
+                    <th style={{ padding: 6 }}>{t('size_map_g_warn')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -635,7 +635,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                                   const picked = catalegPoms.find(p => p.pom_id === id)
                                   set({ gradingResults: wiz.gradingResults.map((r, j) => j === i ? { ...r, pom_id: id, pom_nom: picked ? picked.nom : null } : r) })
                                 }}>
-                                <option value="">{t('size_map_link_pom', 'Vincular a POM del catàleg…')}</option>
+                                <option value="">{t('size_map_link_pom')}</option>
                                 {catalegPoms.map(p => <option key={p.pom_id} value={p.pom_id}>{p.codi_client} — {p.nom}</option>)}
                               </select>
                             )}
@@ -651,7 +651,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                                 ? <span style={{ fontFamily: MONO, fontSize: 11 }}>{g.valors_step_text}</span>
                                 : <span style={{ color: 'var(--gray)' }}>—</span>)
                             : (g.increment_break != null
-                                ? <span>+{g.increment_base} · +{g.increment_break} {t('size_map_g_break_from', 'des de')} {g.talla_break_label}</span>
+                                ? <span>+{g.increment_base} · +{g.increment_break} {t('size_map_g_break_from')} {g.talla_break_label}</span>
                                 : <span>+{g.increment_base}</span>)}
                         </td>
                         <td style={{ padding: 6, color: 'var(--warn)', fontSize: 11 }}>{g.warning || ''}</td>
@@ -673,12 +673,12 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           <div style={{ background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
                         padding: '8px 12px', marginBottom: 14, fontSize: 12 }}>
             {wiz.decision === 'CREAR'
-              ? <span>{t('size_map_dest_new', 'Es crearà un sistema de talles NOU amb la seva graduació.')}</span>
-              : <span>{t('size_map_dest_reuse', "S'associarà al sistema existent")}
+              ? <span>{t('size_map_dest_new')}</span>
+              : <span>{t('size_map_dest_reuse')}
                   {' '}<b>{(wiz.candidates.find(c => String(c.size_system_id) === String(wiz.size_system_id)) || {}).nom || ''}</b>.
-                  {' '}{t('size_map_dest_reuse2', 'Es crea un grading rule NOU; el sistema NO es modifica.')}</span>}
+                  {' '}{t('size_map_dest_reuse2')}</span>}
           </div>
-          <Field label={t('size_map_p_targets', 'Targets dels perfils')} hint={t('size_map_p_targets_hint', 'Es crea un perfil per cada target seleccionat')}>
+          <Field label={t('size_map_p_targets')} hint={t('size_map_p_targets_hint')}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {lookups.targets.map(o => {
                 const on = wiz.perfilTargets.includes(o.codi)
@@ -692,13 +692,13 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             </div>
           </Field>
           {wiz.decision === 'CREAR' && (
-            <Field label={t('size_map_p_nom', 'Nom del sistema (opcional)')}>
+            <Field label={t('size_map_p_nom')}>
               <input value={wiz.nom_custom} onChange={e => set({ nom_custom: e.target.value })} style={{ ...selS, width: '100%' }} />
             </Field>
           )}
           {wiz.decision === 'CREAR' && (
-            <Field label={t('size_map_p_nom_variant', 'Nom de la graduació')}
-              hint={t('size_map_p_nom_variant_hint', 'Ex: EU Knit Woman Slim — el nom que distingirà aquesta graduació')}>
+            <Field label={t('size_map_p_nom_variant')}
+              hint={t('size_map_p_nom_variant_hint')}>
               <input value={wiz.nom_variant} onChange={e => set({ nom_variant: e.target.value })}
                 placeholder="EU Knit Woman Slim" style={{ ...selS, width: '100%' }} />
             </Field>
@@ -706,10 +706,10 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
 
           {/* Resum */}
           <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12, fontFamily: MONO }}>
-            <div>{t('size_map_sum_action', 'Acció')}: <b>{wiz.decision}</b></div>
-            <div>{t('size_map_sum_target', 'Target')}: {wiz.target_codi} · {t('size_map_sum_unit', 'Unitat')}: {wiz.base_unit} · {t('size_map_sum_client', 'Client')}: {wiz.customer_codi || '—'}</div>
-            <div>{t('size_map_sum_talles', 'Talles')}: {wiz.talles.length} · {t('size_map_sum_rules', 'Regles')}: {wiz.gradingResults.filter(g => g.pom_id).length} · {t('size_map_sum_perfils', 'Perfils')}: {wiz.perfilTargets.length}</div>
-            {wiz.construction_id && <div>{t('size_map_sum_constr', 'Construcció')}: {nomById(lookups.constructions, wiz.construction_id)}</div>}
+            <div>{t('size_map_sum_action')}: <b>{wiz.decision}</b></div>
+            <div>{t('size_map_sum_target')}: {wiz.target_codi} · {t('size_map_sum_unit')}: {wiz.base_unit} · {t('size_map_sum_client')}: {wiz.customer_codi || '—'}</div>
+            <div>{t('size_map_sum_talles')}: {wiz.talles.length} · {t('size_map_sum_rules')}: {wiz.gradingResults.filter(g => g.pom_id).length} · {t('size_map_sum_perfils')}: {wiz.perfilTargets.length}</div>
+            {wiz.construction_id && <div>{t('size_map_sum_constr')}: {nomById(lookups.constructions, wiz.construction_id)}</div>}
           </div>
 
           {/* Panell d'avís-i-confirma (409): graduacions ja existents per a la combinació. */}
@@ -717,7 +717,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             <div style={{ border: '1px solid var(--gold)', background: 'var(--gold-pale)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12 }}>
               <div style={{ fontWeight: 600, color: 'var(--gold)', marginBottom: 8 }}>
                 <i className="ti ti-alert-triangle" style={{ marginRight: 6 }} />
-                {conflict.message || t('size_map_conflict_title', 'Ja existeix una graduació per a aquesta combinació.')}
+                {conflict.message || t('size_map_conflict_title')}
               </div>
               <ul style={{ margin: '0 0 10px', paddingLeft: 18 }}>
                 {(conflict.existing || []).map((ex, i) => (
@@ -729,31 +729,31 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                 {[...new Set((conflict.existing || []).map(ex => ex.nom))].map(nom => (
                   <button key={nom} onClick={() => submitCreate({ on_conflict: 'update', nom_variant: nom })}
                     disabled={busy} style={ghostBtn}>
-                    {t('size_map_conflict_update', 'Actualitzar')} «{nom}»
+                    {t('size_map_conflict_update')} «{nom}»
                   </button>
                 ))}
               </div>
               {/* (b) Crear-ne una de nova: exigeix nom_variant */}
-              <Field label={t('size_map_conflict_new_name', 'Nom de la nova graduació')}>
+              <Field label={t('size_map_conflict_new_name')}>
                 <input value={wiz.nom_variant} onChange={e => set({ nom_variant: e.target.value })}
                   placeholder="EU Knit Woman Slim" style={{ ...selS, width: '100%' }} />
               </Field>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => {
-                    if (!wiz.nom_variant.trim()) { setErr(t('size_map_conflict_need_name', 'Posa un nom per a la nova graduació')); return }
+                    if (!wiz.nom_variant.trim()) { setErr(t('size_map_conflict_need_name')); return }
                     submitCreate({ on_conflict: 'new', nom_variant: wiz.nom_variant.trim() })
                   }} disabled={busy} style={primaryBtn}>
-                  <i className="ti ti-plus" />{t('size_map_conflict_new', 'Crear-ne una de nova')}
+                  <i className="ti ti-plus" />{t('size_map_conflict_new')}
                 </button>
-                <button onClick={() => setConflict(null)} style={ghostBtn}>{t('size_map_cancel', 'Cancel·lar')}</button>
+                <button onClick={() => setConflict(null)} style={ghostBtn}>{t('size_map_cancel')}</button>
               </div>
             </div>
           )}
 
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => { setConflict(null); setStep(3) }} style={ghostBtn}>{t('size_map_back', 'Enrere')}</button>
+            <button onClick={() => { setConflict(null); setStep(3) }} style={ghostBtn}>{t('size_map_back')}</button>
             <button onClick={doCreate} disabled={busy} style={primaryBtn}>
-              <i className="ti ti-check" />{t('size_map_create_btn', 'Crear')}
+              <i className="ti ti-check" />{t('size_map_create_btn')}
             </button>
           </div>
         </div>

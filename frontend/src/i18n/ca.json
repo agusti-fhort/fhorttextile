@@ -1455,5 +1455,13 @@
       "desc_en": "Descripció EN",
       "desc_local": "Descripció local"
     }
+  },
+  "size_map_screen_config": "Configuració",
+  "size_map_screen_import": "Importació i confirmació",
+  "size_library": {
+    "subtitle": "Sistemes de talles, runs i grading disponibles per al teu catàleg.",
+    "create_import": "Crear / Importar",
+    "clone_error": "Error clonant el perfil",
+    "created": "Sistema de talles creat"
   }
 }

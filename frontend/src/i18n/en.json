@@ -1455,5 +1455,13 @@
       "desc_en": "Description EN",
       "desc_local": "Local description"
     }
+  },
+  "size_map_screen_config": "Configuration",
+  "size_map_screen_import": "Import and confirmation",
+  "size_library": {
+    "subtitle": "Size systems, runs and grading available for your catalogue.",
+    "create_import": "Create / Import",
+    "clone_error": "Error cloning the profile",
+    "created": "Size system created"
   }
 }

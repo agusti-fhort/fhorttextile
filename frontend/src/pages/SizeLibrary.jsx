@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useSearchParams } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { SizeSetDetail } from "../components/SizeSetDetail"
 import { SizingProfileSelector } from "../components/SizingProfileSelector"
 import SizeAuthoringDrawer from "../components/SizeAuthoringDrawer"
@@ -13,6 +14,7 @@ function readPrefill(p) {
 }
 
 export default function SizeLibrary() {
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const canConfigure = !!useAuthStore(s => s.user)?.capabilities?.includes('configure')
 
@@ -37,7 +39,7 @@ export default function SizeLibrary() {
       setMsg({ type: 'ok', text: d?.missatge })
     } catch (e) {
       if (e.response) {
-        setMsg({ type: 'error', text: e.response.data?.error || 'Error clonant el perfil' })
+        setMsg({ type: 'error', text: e.response.data?.error || t('size_library.clone_error') })
       } else {
         setMsg({ type: 'error', text: String(e) })
       }
@@ -50,10 +52,10 @@ export default function SizeLibrary() {
       <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 18, fontWeight: 500, color: "var(--text-main)", margin: "0 0 4px" }}>
-            Size Library
+            {t('nav.size_library')}
           </h1>
           <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            Sistemes de talles, runs i grading disponibles per al teu catàleg.
+            {t('size_library.subtitle')}
           </div>
         </div>
         {canConfigure && (
@@ -66,7 +68,7 @@ export default function SizeLibrary() {
               display: "inline-flex", alignItems: "center", gap: 6,
             }}
           >
-            <i className="ti ti-plus" style={{ fontSize: 13 }} /> Crear / Importar
+            <i className="ti ti-plus" style={{ fontSize: 13 }} /> {t('size_library.create_import')}
           </button>
         )}
       </div>
@@ -122,7 +124,7 @@ export default function SizeLibrary() {
           setDrawerPrefill(null)
           clearPrefillParam()
           setSelectorKey(k => k + 1)
-          setMsg({ type: 'ok', text: 'Sistema de talles creat' })
+          setMsg({ type: 'ok', text: t('size_library.created') })
         }}
       />
     </div>

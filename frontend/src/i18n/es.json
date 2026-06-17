@@ -1455,5 +1455,13 @@
       "desc_en": "Descripción EN",
       "desc_local": "Descripción local"
     }
+  },
+  "size_map_screen_config": "Configuración",
+  "size_map_screen_import": "Importación y confirmación",
+  "size_library": {
+    "subtitle": "Sistemas de tallas, runs y grading disponibles para tu catálogo.",
+    "create_import": "Crear / Importar",
+    "clone_error": "Error al clonar el perfil",
+    "created": "Sistema de tallas creado"
   }
 }
