@@ -15,6 +15,18 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+# ── Guard d'edició — sessió segellada ────────────────────────────────────────
+# Estats en què una FittingSession queda segellada: cap escriptura de línia
+# (valor_real / nota) ni propagació. La UI ho amaga; AQUÍ és la guarda real.
+SEALED_SESSION_ESTATS = ('Tancada', 'Anullada')
+
+
+def fitting_line_is_locked(line) -> bool:
+    """True si la sessió (FittingSession) del fitting de la línia està segellada
+    (estat ∈ SEALED_SESSION_ESTATS) → escriptura prohibida. Predicat pur, sense DRF."""
+    return line.piece_fitting.session.estat in SEALED_SESSION_ESTATS
+
+
 # ── Peça 1 — guard de solapament ─────────────────────────────────────────────
 class SessionOverlapError(Exception):
     """Conflicte DUR: ja hi ha una sessió viva del mateix model que solapa la franja

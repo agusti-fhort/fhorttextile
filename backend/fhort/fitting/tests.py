@@ -61,6 +61,7 @@ class PropagarActionTest(TenantTestCase):
         session = FittingSession.objects.create(
             model=self.model, fase='Dev', data=datetime.date(2026, 6, 17),
         )
+        self.session = session   # Oberta per defecte; els tests de guard la segellen.
         self.pf = PieceFitting.objects.create(
             session=session, model=self.model, grading_version=gv,
         )
@@ -73,11 +74,21 @@ class PropagarActionTest(TenantTestCase):
 
         self.factory = APIRequestFactory()
         self.view = PieceFittingLineViewSet.as_view({'post': 'propagar'})
+        self.patch_view = PieceFittingLineViewSet.as_view({'patch': 'partial_update'})
 
     def _propagar(self, line, valor_real):
         req = self.factory.post('/propagar/', {'valor_real': valor_real}, format='json')
         force_authenticate(req, user=self.user)
         return self.view(req, pk=line.pk)
+
+    def _patch(self, line, valor_real):
+        req = self.factory.patch('/', {'valor_real': valor_real}, format='json')
+        force_authenticate(req, user=self.user)
+        return self.patch_view(req, pk=line.pk)
+
+    def _seal(self, estat):
+        self.session.estat = estat
+        self.session.save(update_fields=['estat'])
 
     def _reals(self):
         return {sl: PieceFittingLine.objects.get(pk=self.lines[sl].pk).valor_real
@@ -188,3 +199,55 @@ class PropagarActionTest(TenantTestCase):
         line = next(l for l in data['lines'] if l['pom_id'] == self.pom.id)
         self.assertEqual(line['logica'], 'LINEAR')   # fallback (resident buida)
         self.assertEqual(line['increment_base'], 2)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # GUARD — escriptura sobre fitting segellat (Tancada/Anullada) → 409, res es desa.
+    # La sessió queda Oberta per defecte; _seal() la passa a l'estat segellat.
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # ── No-regressió: sessió Oberta → propagar i PATCH funcionen.
+    def test_oberta_propagar_i_patch_ok(self):
+        resp = self._propagar(self.lines['L'], 50)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['propagat'])
+        # PATCH d'una cel·la concreta (autosave) sobre sessió Oberta.
+        resp2 = self._patch(self.lines['M'], 99)
+        self.assertEqual(resp2.status_code, 200)
+        self.assertEqual(
+            PieceFittingLine.objects.get(pk=self.lines['M'].pk).valor_real, 99)
+
+    # ── Tancada: propagar → 409 i CAP valor_real canvia a BD (no n'hi ha prou amb el codi).
+    def test_tancada_propagar_409_no_desa(self):
+        self._seal('Tancada')
+        resp = self._propagar(self.lines['L'], 50)
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data['detail'], 'Sessió de fitting tancada; no es pot modificar.')
+        self.assertEqual(self._reals(), TEORICS)          # res s'ha desat
+        self.assertEqual(self._teorics(), TEORICS)
+
+    # ── Tancada: PATCH valor_real → 409 i la cel·la NO canvia a BD.
+    def test_tancada_patch_409_no_desa(self):
+        self._seal('Tancada')
+        original = PieceFittingLine.objects.get(pk=self.lines['L'].pk).valor_real
+        resp = self._patch(self.lines['L'], 50)
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data['detail'], 'Sessió de fitting tancada; no es pot modificar.')
+        self.assertEqual(
+            PieceFittingLine.objects.get(pk=self.lines['L'].pk).valor_real, original)
+
+    # ── Anullada: propagar → 409 (cobreix els DOS estats segellats), res es desa.
+    def test_anullada_propagar_409_no_desa(self):
+        self._seal('Anullada')
+        resp = self._propagar(self.lines['L'], 50)
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data['detail'], 'Sessió de fitting tancada; no es pot modificar.')
+        self.assertEqual(self._reals(), TEORICS)
+
+    # ── Anullada: PATCH → 409 (simetria amb propagar per a l'estat Anullada).
+    def test_anullada_patch_409_no_desa(self):
+        self._seal('Anullada')
+        original = PieceFittingLine.objects.get(pk=self.lines['L'].pk).valor_real
+        resp = self._patch(self.lines['L'], 50)
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(
+            PieceFittingLine.objects.get(pk=self.lines['L'].pk).valor_real, original)

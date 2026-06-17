@@ -36,6 +36,11 @@ from fhort.accounts.capabilities import HasCapability, SCHEDULE_FITTINGS
 
 logger = logging.getLogger(__name__)
 
+# Guard d'escriptura sobre fitting segellat (Tancada/Anullada). Missatge i codi IDÈNTICS
+# als dos punts (propagar + partial_update) perquè el front els distingeixi amb una sola
+# comprovació. Vegeu services.fitting_line_is_locked.
+SEALED_SESSION_DETAIL = 'Sessió de fitting tancada; no es pot modificar.'
+
 
 class _ScheduleFittingsPerm(HasCapability):
     required_capability = SCHEDULE_FITTINGS
@@ -463,8 +468,17 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
     """Autosave only: PATCH a cell's valor_real / nota. No list/create/destroy/PUT."""
     permission_classes = [IsAuthenticated]
     serializer_class = PieceFittingLineSerializer
-    queryset = PieceFittingLine.objects.select_related('pom').all()
+    # select_related fins a la sessió: el guard d'estat (fitting_line_is_locked) la consulta
+    # sense queries extra a partial_update/propagar.
+    queryset = PieceFittingLine.objects.select_related('pom', 'piece_fitting__session').all()
     http_method_names = ['get', 'patch', 'post', 'head', 'options']
+
+    def partial_update(self, request, *args, **kwargs):
+        # Guard: sessió segellada (Tancada/Anullada) → rebutja ABANS de desar; delega si editable.
+        line = self.get_object()
+        if services.fitting_line_is_locked(line):
+            return Response({'detail': SEALED_SESSION_DETAIL}, status=status.HTTP_409_CONFLICT)
+        return super().partial_update(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'], url_path='propagar')
     def propagar(self, request, pk=None):
@@ -480,6 +494,10 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
 
         line = self.get_object()
         pf = line.piece_fitting
+
+        # Guard: sessió segellada (Tancada/Anullada) → cap escriptura, abans de qualsevol save.
+        if services.fitting_line_is_locked(line):
+            return Response({'detail': SEALED_SESSION_DETAIL}, status=status.HTTP_409_CONFLICT)
 
         def _resp(propagat, motiu, warnings=None):
             linies = (PieceFittingLine.objects
