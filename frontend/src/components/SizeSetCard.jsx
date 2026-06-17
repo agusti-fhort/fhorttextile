@@ -1,10 +1,12 @@
 
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import useAuthStore from "../store/auth"
 
 const API = import.meta.env.VITE_API_URL || ""
 
 export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false }) {
+  const { t } = useTranslation()
   const [cloning, setCloning] = useState(false)
 
   const sysName = profile?.size_system?.nom || "—"
@@ -52,12 +54,12 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
             <span style={{
               padding: "2px 8px", borderRadius: 3, fontSize: 10,
               background: "#f5e6d0", color: "var(--gold)", border: "1px solid #e0c8a0",
-            }}>Personalitzat</span>
+            }}>{t("size_library.custom")}</span>
           ) : (
             <span style={{
               padding: "2px 8px", borderRadius: 3, fontSize: 10,
               background: "#f0f9f0", color: "#3b6d11", border: "1px solid #c0dd97",
-            }}>Estàndard ISO</span>
+            }}>{t("size_library.standard_iso")}</span>
           )}
         </div>
       </div>
@@ -106,7 +108,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
             background: "#f5e6d0", color: "var(--gold)", border: "1px solid var(--gold)",
             cursor: "pointer", fontFamily: "IBM Plex Mono, monospace",
           }}>
-            Usar
+            {t("size_library.use")}
           </button>
         )}
         {onDetail && (
@@ -115,7 +117,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
             background: "var(--white)", color: "var(--text-muted)", border: "1px solid var(--border)",
             cursor: "pointer", fontFamily: "IBM Plex Mono, monospace",
           }}>
-            Detall
+            {t("size_library.detail")}
           </button>
         )}
         {onClone && !isCustom && (
@@ -124,7 +126,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
             background: "var(--white)", color: "var(--text-muted)", border: "1px solid var(--border)",
             cursor: "pointer", fontFamily: "IBM Plex Mono, monospace",
           }}>
-            {cloning ? "..." : "Clonar"}
+            {cloning ? "..." : t("grading.clone")}
           </button>
         )}
       </div>

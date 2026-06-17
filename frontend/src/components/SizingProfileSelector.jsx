@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
 import { SizeSetCard } from "./SizeSetCard"
 import { targets as targetsApi, constructionTypes, fitTypes, sizingProfiles } from "../api/endpoints"
 
@@ -9,13 +10,14 @@ const TARGET_ORDER = [
   "GIRL","BOY","TEEN_GIRL","TEEN_BOY","MATERNITY"
 ]
 
-function LoadError({ onRetry, label = "No s'han pogut carregar les dades" }) {
+function LoadError({ onRetry, label }) {
+  const { t } = useTranslation()
   return (
     <div style={{
       padding: "20px", border: "1px dashed #f0a0a0", borderRadius: 8,
       textAlign: "center", color: "#a32d2d", fontSize: 12, background: "#fff8f8",
     }}>
-      {label}
+      {label || t("size_library.load_error")}
       <div style={{ marginTop: 10 }}>
         <button
           onClick={onRetry}
@@ -25,7 +27,7 @@ function LoadError({ onRetry, label = "No s'han pogut carregar les dades" }) {
             fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
           }}
         >
-          ↺ Reintentar
+          ↺ {t("size_library.retry")}
         </button>
       </div>
     </div>
@@ -62,6 +64,7 @@ export function SizingProfileSelector({
   onClone,
   onSelectionChange,
 }) {
+  const { t } = useTranslation()
   const [targets, setTargets] = useState([])
   const [constructions, setConstructions] = useState([])
   const [allFitTypes, setAllFitTypes] = useState([])
@@ -158,7 +161,7 @@ export function SizingProfileSelector({
       {/* NIVELL 1 — Target */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
-          1 · Target — per a qui és la peça?
+          1 · {t("size_library.step_target")}
         </div>
         {lookupsError ? (
           <LoadError onRetry={loadLookups} />
@@ -189,7 +192,7 @@ export function SizingProfileSelector({
       {selectedTarget && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
-            2 · Construcció — tipus de teixit
+            2 · {t("size_library.step_construction")}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
@@ -201,7 +204,7 @@ export function SizingProfileSelector({
                 border: `1px solid ${!selectedConstruction ? "var(--gold)" : "var(--border)"}`,
               }}
             >
-              Tots
+              {t("size_library.all")}
             </button>
             {constructions.map(c => (
               <button
@@ -226,7 +229,7 @@ export function SizingProfileSelector({
       {selectedTarget && allFitTypes.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
-            3 · Fit — caiguda de la peça
+            3 · {t("size_library.step_fit")}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
@@ -238,7 +241,7 @@ export function SizingProfileSelector({
                 border: `1px solid ${!selectedFit ? "var(--gold)" : "var(--border)"}`,
               }}
             >
-              Tots
+              {t("size_library.all")}
             </button>
             {allFitTypes.map(ft => {
               const isActive = activeFitCodis.has(ft.codi)
@@ -247,7 +250,7 @@ export function SizingProfileSelector({
                 <button
                   key={ft.codi}
                   onClick={isActive ? () => setSelectedFit(isSel ? null : ft.codi) : undefined}
-                  title={isActive ? undefined : "Sense perfils per a aquesta combinació"}
+                  title={isActive ? undefined : t("size_library.fit_no_profiles")}
                   style={{
                     ...chipBase,
                     background: isSel ? "#f5e6d0" : "var(--white)",
@@ -272,24 +275,24 @@ export function SizingProfileSelector({
             textTransform: "uppercase", color: "var(--gold)",
             marginBottom: 10, display: "flex", justifyContent: "space-between",
           }}>
-            <span>Size Sets disponibles</span>
+            <span>{t("size_library.sizesets_available")}</span>
             <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>
-              {loadingProfiles ? "Carregant…" : `${visibleProfiles.length} sistemes`}
+              {loadingProfiles ? t("common.loading") : t("size_library.systems_count", { count: visibleProfiles.length })}
             </span>
           </div>
 
           {profilesError ? (
-            <LoadError onRetry={loadProfiles} label="No s'han pogut carregar els size sets" />
+            <LoadError onRetry={loadProfiles} label={t("size_library.load_error_sizesets")} />
           ) : loadingProfiles ? (
             <div style={{ color: "var(--text-muted)", fontSize: 12, padding: "20px 0" }}>
-              Carregant size sets...
+              {t("size_library.loading_sizesets")}
             </div>
           ) : visibleProfiles.length === 0 ? (
             <div style={{
               padding: "20px", border: "1px dashed var(--border)", borderRadius: 8,
               textAlign: "center", color: "var(--text-muted)", fontSize: 12,
             }}>
-              Sense size sets per a aquesta combinació.
+              {t("size_library.empty_combination")}
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
@@ -313,7 +316,7 @@ export function SizingProfileSelector({
           padding: "40px 24px", border: "1px dashed var(--border)", borderRadius: 8,
           textAlign: "center", color: "var(--text-muted)", fontSize: 12,
         }}>
-          Selecciona un target per veure els size sets disponibles
+          {t("size_library.select_target_hint")}
         </div>
       )}
     </div>

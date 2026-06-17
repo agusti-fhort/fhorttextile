@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
 import { VersionBadge } from "./VersionBadge"
 import { GradingHistoryPanel } from "./GradingHistoryPanel"
 import { useUnit } from "./UnitToggle"
@@ -9,6 +10,7 @@ import useAuthStore from "../store/auth"
 import { sizingProfiles, gradingRuleSets } from "../api/endpoints"
 
 export function SizeSetDetail({ profileId, onClose, onRefresh }) {
+  const { t } = useTranslation()
   const { unit, format } = useUnit()
   const canConfigure = !!useAuthStore(s => s.user)?.capabilities?.includes('configure')
   const [profile, setProfile] = useState(null)
@@ -49,12 +51,12 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
       // Editar via endpoint versionat (S4)
       try {
         await gradingRuleSets.editRule(profile.grading_rule_set.id, pomCodi, { increment: parseFloat(newVal) })
-        setMsg({ type: 'ok', text: `${pomCodi} actualitzat a +${newVal}${unit === 'INCH' ? '"' : 'cm'}` })
+        setMsg({ type: 'ok', text: t('size_library.rule_updated', { pom: pomCodi, value: newVal, unit: unit === 'INCH' ? '"' : 'cm' }) })
         setEditing(prev => { const n = {...prev}; delete n[pomCodi]; return n })
         reloadProfile()
       } catch (e) {
         if (e.response) {
-          setMsg({ type: 'error', text: e.response.data?.error || 'Error guardant l\'edició' })
+          setMsg({ type: 'error', text: e.response.data?.error || t('size_library.err_save_edit') })
         } else {
           setMsg({ type: 'error', text: String(e) })
         }
@@ -62,7 +64,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
     } else {
       setMsg({
         type: 'warn',
-        text: 'Aquest és un perfil estàndard. Clona\'l primer per poder editar-lo.',
+        text: t('size_library.standard_clone_first'),
         pomCodi
       })
     }
@@ -71,16 +73,16 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
 
   const handleRestore = async () => {
     if (!profile?.id) return
-    if (!confirm('Restaurar a estàndard?\n\nEs perdran totes les personalitzacions d\'aquest perfil.')) return
+    if (!confirm(t('size_library.confirm_restore'))) return
     setRestoring(true)
     try {
       const { data: d } = await sizingProfiles.restore(profile.id)
-      setMsg({ type: 'ok', text: d?.missatge || 'Perfil restaurat a l\'estàndard ISO' })
+      setMsg({ type: 'ok', text: d?.missatge || t('size_library.restored_ok') })
       reloadProfile()
       onRefresh && onRefresh()
     } catch (e) {
       if (e.response) {
-        setMsg({ type: 'error', text: e.response.data?.error || 'Error restaurant el perfil' })
+        setMsg({ type: 'error', text: e.response.data?.error || t('size_library.err_restore') })
       } else {
         setMsg({ type: 'error', text: String(e) })
       }
@@ -90,7 +92,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
 
   if (loading) return (
     <div style={{ padding: 24, fontFamily: "IBM Plex Mono, monospace", color: "var(--text-muted)" }}>
-      Carregant detall...
+      {t('size_library.loading_detail')}
     </div>
   )
   if (!profile) return null
@@ -126,7 +128,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
           {profile.is_custom && profile.grading_rule_set?.id && (
             <button
               onClick={() => setShowHistory(s => !s)}
-              title="Historial de canvis"
+              title={t('size_library.history_title')}
               style={{
                 padding: '2px 8px', borderRadius: 3, fontSize: 10,
                 background: showHistory ? '#f5e6d0' : 'var(--white)',
@@ -134,14 +136,14 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
                 border: '1px solid var(--border)', cursor: 'pointer',
               }}
             >
-              ⟳ Historial
+              ⟳ {t('size_library.history')}
             </button>
           )}
           {profile.is_custom && (
             <button
               onClick={handleRestore}
               disabled={restoring}
-              title="Restaurar a estàndard ISO"
+              title={t('size_library.restore_title')}
               style={{
                 padding: '2px 8px', borderRadius: 3, fontSize: 10,
                 background: 'var(--white)', color: '#a32d2d',
@@ -150,20 +152,20 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
                 opacity: restoring ? 0.6 : 1,
               }}
             >
-              {restoring ? '...' : '↺ Restaurar'}
+              {restoring ? '...' : `↺ ${t('size_library.restore')}`}
             </button>
           )}
           {canConfigure && profile.size_system?.id && (
             <button
               onClick={() => setEditTalles(true)}
-              title="Editar les talles del sistema"
+              title={t('size_library.edit_sizes_title')}
               style={{
                 padding: '2px 8px', borderRadius: 3, fontSize: 10,
                 background: 'var(--white)', color: 'var(--gold)',
                 border: '1px solid #e0c8a0', cursor: 'pointer',
               }}
             >
-              ✎ Editar talles
+              ✎ {t('size_library.edit_sizes')}
             </button>
           )}
           {onClose && (
@@ -201,16 +203,16 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
       {rules.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
-            Regles de grading — {profile.grading_rule_set?.nom}
+            {t('size_library.grading_rules')} — {profile.grading_rule_set?.nom}
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid var(--border)" }}>
                   <th style={{ textAlign: "left", padding: "5px 8px", color: "var(--text-muted)", fontWeight: 600 }}>POM</th>
-                  <th style={{ textAlign: "left", padding: "5px 8px", color: "var(--text-muted)", fontWeight: 600 }}>Nom</th>
-                  <th style={{ textAlign: "center", padding: "5px 8px", color: "var(--text-muted)", fontWeight: 600 }}>Lògica</th>
-                  <th style={{ textAlign: "right", padding: "5px 8px", color: "var(--gold)", fontWeight: 600 }}>Δ/talla ({unit === 'INCH' ? 'inch' : 'cm'})</th>
+                  <th style={{ textAlign: "left", padding: "5px 8px", color: "var(--text-muted)", fontWeight: 600 }}>{t('size_library.col_name')}</th>
+                  <th style={{ textAlign: "center", padding: "5px 8px", color: "var(--text-muted)", fontWeight: 600 }}>{t('size_library.col_logic')}</th>
+                  <th style={{ textAlign: "right", padding: "5px 8px", color: "var(--gold)", fontWeight: 600 }}>{t('size_library.col_delta', { unit: unit === 'INCH' ? 'inch' : 'cm' })}</th>
                   {profile.is_custom && <th style={{ width: 40 }}></th>}
                 </tr>
               </thead>
@@ -263,7 +265,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
                           <button
                             onClick={() => handleEdit(rule.pom_codi, rule.increment)}
                             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 13, padding: "0 4px" }}
-                            title="Editar increment"
+                            title={t('size_library.edit_increment_title')}
                           >
                             ✏
                           </button>
@@ -282,7 +284,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
       {sizes.length > 0 && (
         <div>
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 8 }}>
-            Run de talles — {profile.size_system?.nom}
+            {t('size_library.size_run')} — {profile.size_system?.nom}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
             {sizes.map((s, i) => (
@@ -311,8 +313,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
           background: "#fdf9f5", border: "1px solid var(--border)",
           fontSize: 11, color: "var(--text-muted)",
         }}>
-          ℹ Aquest és un perfil estàndard ISO. Per personalitzar els increments,
-          clona\'l i crea la teva versió pròpia.
+          ℹ {t('size_library.standard_iso_note')}
         </div>
       )}
 
