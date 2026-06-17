@@ -238,7 +238,11 @@
     "type_confeccio": "Confecció",
     "type_fitting": "Fitting",
     "warn_before_production": "Fitting programat abans de l'arribada de la confecció",
-    "warn_short": "Avís"
+    "warn_short": "Avís",
+    "open_day": "Obrir el dia",
+    "date_day": "{{weekday}} {{day}} de {{month}} {{year}}",
+    "date_range_same": "{{d1}}–{{d2}} de {{month}} {{year}}",
+    "date_range": "{{d1}} de {{m1}} – {{d2}} de {{m2}} {{year}}"
   },
   "model_sheet": {
     "generate_tasks": "Generar tasques",
@@ -636,7 +640,10 @@
     "saved_reorder": "Cua reordenada i recalculada.",
     "drag_hint": "Arrossega per reordenar",
     "models_word": "models",
-    "error": "Hi ha hagut un error."
+    "error": "Hi ha hagut un error.",
+    "col_max_start": "Inici màxim",
+    "critical": "Crític",
+    "on_track": "En termini"
   },
   "companyCalendar": {
     "title": "Calendari d'empresa",

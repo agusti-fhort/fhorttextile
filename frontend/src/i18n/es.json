@@ -238,7 +238,11 @@
     "type_confeccio": "Confección",
     "type_fitting": "Fitting",
     "warn_before_production": "Fitting programado antes de la llegada de la confección",
-    "warn_short": "Aviso"
+    "warn_short": "Aviso",
+    "open_day": "Abrir el día",
+    "date_day": "{{weekday}} {{day}} de {{month}} {{year}}",
+    "date_range_same": "{{d1}}–{{d2}} de {{month}} {{year}}",
+    "date_range": "{{d1}} de {{m1}} – {{d2}} de {{m2}} {{year}}"
   },
   "model_sheet": {
     "generate_tasks": "Generar tareas",
@@ -636,7 +640,10 @@
     "saved_reorder": "Cola reordenada y recalculada.",
     "drag_hint": "Arrastra para reordenar",
     "models_word": "modelos",
-    "error": "Ha ocurrido un error."
+    "error": "Ha ocurrido un error.",
+    "col_max_start": "Inicio máximo",
+    "critical": "Crítico",
+    "on_track": "En plazo"
   },
   "companyCalendar": {
     "title": "Calendario de empresa",

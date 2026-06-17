@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import i18n from '../i18n'
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
 } from '@dnd-kit/core'
@@ -34,12 +35,12 @@ const tdS = { padding: '8px 10px', fontSize: 12, borderBottom: '0.5px solid var(
 
 function localDateTime(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('ca-ES',
+  return new Date(iso).toLocaleString(i18n.language || 'ca',
     { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 function localDate(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('ca-ES', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' })
+  return new Date(iso).toLocaleDateString(i18n.language || 'ca', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 function localISODate(iso) {   // 'YYYY-MM-DD' en hora local (per comparar amb data_objectiu)
   if (!iso) return null
@@ -284,7 +285,7 @@ export default function Planning() {
                       <th style={thS}>{t('planning.col_name')}</th>
                       <th style={thS}>{t('planning.col_priority')}</th>
                       <th style={thS}>{t('planning.col_deadline')}</th>
-                      <th style={thS}>Inici màxim</th>
+                      <th style={thS}>{t('planning.col_max_start')}</th>
                       <th style={thS}>{t('planning.col_pending_count')}</th>
                     </tr></thead>
                     <tbody>
@@ -386,9 +387,9 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
         </td>
         <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600, cursor: 'pointer' }} onClick={onToggle}>
           {r.codi}
-          {r.viab?.semafor === 'critical' && <span style={{ marginLeft: 8, color: 'var(--err)', fontSize: 11, fontWeight: 600 }}>Crític</span>}
-          {r.viab?.semafor === 'at_risk' && <span style={{ marginLeft: 8, color: 'var(--warn)', fontSize: 11, fontWeight: 600 }}>En risc</span>}
-          {r.viab?.semafor === 'on_track' && <span style={{ marginLeft: 8, color: 'var(--ok)', fontSize: 11 }}>En termini</span>}
+          {r.viab?.semafor === 'critical' && <span style={{ marginLeft: 8, color: 'var(--err)', fontSize: 11, fontWeight: 600 }}>{t('planning.critical')}</span>}
+          {r.viab?.semafor === 'at_risk' && <span style={{ marginLeft: 8, color: 'var(--warn)', fontSize: 11, fontWeight: 600 }}>{t('planning.at_risk')}</span>}
+          {r.viab?.semafor === 'on_track' && <span style={{ marginLeft: 8, color: 'var(--ok)', fontSize: 11 }}>{t('planning.on_track')}</span>}
           <div style={{ fontFamily: 'inherit', fontWeight: 400, color: 'var(--gray)', fontSize: 11 }}>{r.nom}</div>
         </td>
         <td style={tdS}>{localDate(r.predStart)}</td>

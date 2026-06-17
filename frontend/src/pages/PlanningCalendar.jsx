@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import i18n from '../i18n'
 import { companyCalendar, calendar } from '../api/endpoints'
 import Center from '../components/ui/Center'
 
@@ -25,7 +26,6 @@ const COLOR_CONFECCIO = '#7c6f64'   // taupe (confecció/taller extern)
 const COLOR_FITTING = '#3a7ca5'     // blau (sessió de fitting)
 const WARN_YELLOW = '#d9a300'       // avís TOVA (fitting abans de la confecció) — groc, NO vermell
 const DOW = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']   // alineat amb weekday() (0=dilluns)
-const DAY_LABELS = ['Dl', 'Dt', 'Dc', 'Dj', 'Dv', 'Ds', 'Dg']
 const HOUR_PX = 60   // 1px = 1min exacte (tasca 90min = 90px). Coherent amb l'alçada de fila.
 
 // ── helpers de data (tot en LOCAL del navegador) ─────────────────────────────
@@ -39,8 +39,12 @@ const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() ==
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 const startOfWeek = (d) => { const x = startOfDay(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x }
-const monthName = (d) => cap(new Intl.DateTimeFormat('ca-ES', { month: 'long' }).format(d))
-const weekdayLong = (d) => cap(new Intl.DateTimeFormat('ca-ES', { weekday: 'long' }).format(d))
+const lang = () => i18n.language || 'ca'
+const monthName = (d) => cap(new Intl.DateTimeFormat(lang(), { month: 'long' }).format(d))
+const weekdayLong = (d) => cap(new Intl.DateTimeFormat(lang(), { weekday: 'long' }).format(d))
+const weekdayShort = (d) => cap(new Intl.DateTimeFormat(lang(), { weekday: 'short' }).format(d).replace(/\.$/, ''))
+// Short weekday headers Mon→Sun (2024-01-01 is a Monday), localised via i18n.language.
+const monthDowLabels = () => { const mon = new Date(2024, 0, 1); return Array.from({ length: 7 }, (_, i) => weekdayShort(addDays(mon, i))) }
 
 // Parseja 'YYYY-MM-DD' com a data LOCAL (mitjanit local), SENSE passar per new Date(iso) — que
 // interpretaria el date-only com a mitjanit UTC i a Europe/Madrid el desplaçaria al dia anterior.
@@ -184,13 +188,13 @@ export default function PlanningCalendar() {
   const goToday = () => setDate(startOfDay(new Date()))
 
   const title = useMemo(() => {
-    if (view === 'day') return `${weekdayLong(date)} ${date.getDate()} de ${monthName(date)} ${date.getFullYear()}`
+    if (view === 'day') return t('planning_calendar.date_day', { weekday: weekdayLong(date), day: date.getDate(), month: monthName(date), year: date.getFullYear() })
     if (view === 'month') return `${monthName(date)} ${date.getFullYear()}`
     const a = startOfWeek(date), b = addDays(a, 6)
     return a.getMonth() === b.getMonth()
-      ? `${a.getDate()}–${b.getDate()} de ${monthName(a)} ${a.getFullYear()}`
-      : `${a.getDate()} de ${monthName(a)} – ${b.getDate()} de ${monthName(b)} ${b.getFullYear()}`
-  }, [view, date])
+      ? t('planning_calendar.date_range_same', { d1: a.getDate(), d2: b.getDate(), month: monthName(a), year: a.getFullYear() })
+      : t('planning_calendar.date_range', { d1: a.getDate(), m1: monthName(a), d2: b.getDate(), m2: monthName(b), year: b.getFullYear() })
+  }, [view, date, t, i18n.language])
 
   return (
     <div style={{ minWidth: 0, maxWidth: '100%' }}>
@@ -203,9 +207,9 @@ export default function PlanningCalendar() {
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
-          <button onClick={() => navigate(-1)} style={navBtn} title="Anterior"><i className="ti ti-chevron-left" /></button>
+          <button onClick={() => navigate(-1)} style={navBtn} title={t('app.previous')}><i className="ti ti-chevron-left" /></button>
           <button onClick={goToday} style={{ ...navBtn, fontWeight: 600 }}>{t('planning_calendar.today')}</button>
-          <button onClick={() => navigate(1)} style={navBtn} title="Següent"><i className="ti ti-chevron-right" /></button>
+          <button onClick={() => navigate(1)} style={navBtn} title={t('app.next')}><i className="ti ti-chevron-right" /></button>
         </div>
         <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 500, minWidth: 200 }}>{title}</span>
         <div style={{ display: 'flex', border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden', marginLeft: 'auto' }}>
@@ -268,7 +272,7 @@ function TimeGrid({ days, hours, minHour, today, isWorkingHour, offKind, timedBy
         <div className="pcal-corner" />
         {days.map((d, i) => (
           <div key={i} className={`pcal-dayhead${sameDay(d, today) ? ' pcal-today' : ''}`}>
-            <span className="pcal-dow">{DAY_LABELS[(d.getDay() + 6) % 7]}</span>
+            <span className="pcal-dow">{weekdayShort(d)}</span>
             <span className="pcal-num">{d.getDate()}</span>
           </div>
         ))}
@@ -364,7 +368,7 @@ function MonthGrid({ date, today, isDayOff, eventsByDay, onOpen, onOpenDay, t })
   const sortKey = (e) => e._allDay ? -1 : e._sMin
   return (
     <div className="pcal-month">
-      {DAY_LABELS.map((l, i) => <div key={i} className="pcal-mhead">{l}</div>)}
+      {monthDowLabels().map((l, i) => <div key={i} className="pcal-mhead">{l}</div>)}
       {cells.map((d, i) => {
         const out = d.getMonth() !== month
         const off = isDayOff(d)
@@ -372,7 +376,7 @@ function MonthGrid({ date, today, isDayOff, eventsByDay, onOpen, onOpenDay, t })
         const evs = eventsByDay(d).sort((a, b) => sortKey(a) - sortKey(b))
         return (
           <div key={i} className={`pcal-mcell${off ? ' pcal-off' : ''}${out ? ' pcal-dim' : ''}${isToday ? ' pcal-today' : ''}`}
-            onClick={() => onOpenDay(d)} title="Obrir el dia">
+            onClick={() => onOpenDay(d)} title={t('planning_calendar.open_day')}>
             <span className="pcal-mnum">{d.getDate()}</span>
             <div className="pcal-mevs">
               {evs.slice(0, 3).map(ev => {
@@ -412,7 +416,7 @@ function ListView({ events, onOpen, t }) {
     <div className="pcal-list">
       {groups.map(g => (
         <div key={g.key}>
-          <div className="pcal-list-day">{weekdayLong(g.date)} {g.date.getDate()} de {monthName(g.date)} {g.date.getFullYear()}</div>
+          <div className="pcal-list-day">{t('planning_calendar.date_day', { weekday: weekdayLong(g.date), day: g.date.getDate(), month: monthName(g.date), year: g.date.getFullYear() })}</div>
           {g.items.map(ev => (
             <div key={ev.id} className="pcal-list-item" onClick={() => onOpen(ev)}>
               <span className="pcal-list-time">{ev._allDay ? t('planning_calendar.all_day') : `${fmtHM(ev._start)}–${fmtHM(ev._end)}`}</span>

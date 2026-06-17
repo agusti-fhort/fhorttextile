@@ -238,7 +238,11 @@
     "type_confeccio": "Production",
     "type_fitting": "Fitting",
     "warn_before_production": "Fitting scheduled before production delivery",
-    "warn_short": "Warning"
+    "warn_short": "Warning",
+    "open_day": "Open day",
+    "date_day": "{{weekday}}, {{month}} {{day}}, {{year}}",
+    "date_range_same": "{{month}} {{d1}}–{{d2}}, {{year}}",
+    "date_range": "{{m1}} {{d1}} – {{m2}} {{d2}}, {{year}}"
   },
   "model_sheet": {
     "generate_tasks": "Generate tasks",
@@ -636,7 +640,10 @@
     "saved_reorder": "Queue reordered and recomputed.",
     "drag_hint": "Drag to reorder",
     "models_word": "models",
-    "error": "Something went wrong."
+    "error": "Something went wrong.",
+    "col_max_start": "Max start",
+    "critical": "Critical",
+    "on_track": "On track"
   },
   "companyCalendar": {
     "title": "Company calendar",
