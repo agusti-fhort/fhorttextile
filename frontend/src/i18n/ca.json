@@ -1351,5 +1351,34 @@
     "no_open_alerts": "Sense avisos oberts",
     "deviation_detected": "Desviació detectada",
     "more_alerts": "{{count}} avisos més"
+  },
+  "alerts": {
+    "status": {
+      "Pendent": "Pendent",
+      "Acceptat": "Acceptat",
+      "Corregit": "Corregit",
+      "Tots": "Tots"
+    },
+    "type": {
+      "desviacio": "Desviació",
+      "fora_rang": "Fora de rang",
+      "manca_mesura": "Manca mesura",
+      "conflicte": "Conflicte"
+    },
+    "subtitle_all": "{{count}} avisos en total",
+    "subtitle_pending": "{{count}} avisos pendents",
+    "subtitle_accepted": "{{count}} avisos acceptats",
+    "subtitle_corrected": "{{count}} avisos corregits",
+    "empty": "Cap avís en estat {{status}}.",
+    "col": {
+      "model": "Model",
+      "type": "Tipus",
+      "detected": "Detectat",
+      "expected": "Esperat",
+      "status": "Estat",
+      "date": "Data"
+    },
+    "accept": "Acceptar",
+    "resolve": "Resoldre"
   }
 }

@@ -1,16 +1,25 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { pomAlerts } from '../api/endpoints'
 import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 
+// `estat` filter values double as the backend query/PATCH id → kept as id; only the label is translated.
 const ESTATS = ['Pendent', 'Acceptat', 'Corregit', 'Tots']
+const SUBTITLE_KEY = {
+  Tots: 'alerts.subtitle_all',
+  Pendent: 'alerts.subtitle_pending',
+  Acceptat: 'alerts.subtitle_accepted',
+  Corregit: 'alerts.subtitle_corrected',
+}
 
+// `tipus` is the id (drives variant/icon style); label resolved from alerts.type.* at render.
 const typeMeta = {
-  desviacio:    { variant: 'warn', icon: 'ti-ruler-2',        label: 'Desviació' },
-  fora_rang:    { variant: 'err',  icon: 'ti-alert-triangle', label: 'Fora de rang' },
-  manca_mesura: { variant: 'gate', icon: 'ti-question-mark',  label: 'Manca mesura' },
-  conflicte:    { variant: 'gray', icon: 'ti-git-merge',      label: 'Conflicte' },
+  desviacio:    { variant: 'warn', icon: 'ti-ruler-2' },
+  fora_rang:    { variant: 'err',  icon: 'ti-alert-triangle' },
+  manca_mesura: { variant: 'gate', icon: 'ti-question-mark' },
+  conflicte:    { variant: 'gray', icon: 'ti-git-merge' },
 }
 
 const statusVariant = {
@@ -20,6 +29,7 @@ const statusVariant = {
 }
 
 export default function Alerts() {
+  const { t } = useTranslation()
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [estat, setEstat] = useState('Pendent')
@@ -64,9 +74,9 @@ export default function Alerts() {
         justifyContent: 'space-between', marginBottom: '1.5rem',
       }}>
         <div>
-          <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>Avisos POM</h1>
+          <h1 style={{fontSize: 20, fontWeight: 500, marginBottom: 4}}>{t('dashboard.pom_alerts')}</h1>
           <p style={{fontSize: 12, color: 'var(--gray)', fontWeight: 300}}>
-            {data.length} avisos {estat === 'Tots' ? 'en total' : estat.toLowerCase() + 's'}
+            {t(SUBTITLE_KEY[estat] || 'alerts.subtitle_all', { count: data.length })}
           </p>
         </div>
         <div style={{display: 'flex', gap: '0.5rem'}}>
@@ -82,7 +92,7 @@ export default function Alerts() {
                 cursor: 'pointer', 
               }}
             >
-              {e}
+              {t('alerts.status.' + e, e)}
             </button>
           ))}
         </div>
@@ -91,25 +101,29 @@ export default function Alerts() {
       <Card padding={0}>
         {loading ? (
           <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
-            Carregant…
+            {t('common.loading')}
           </div>
         ) : data.length === 0 ? (
           <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 13}}>
             <i className="ti ti-circle-check" style={{fontSize: 32, color: 'var(--ok)', display: 'block', marginBottom: 12}} />
-            Cap avís en estat {estat.toLowerCase()}.
+            {t('alerts.empty', { status: t('alerts.status.' + estat, estat).toLowerCase() })}
           </div>
         ) : (
           <table style={{width: '100%', borderCollapse: 'collapse'}}>
             <thead>
               <tr>
-                {['Model', 'POM', 'Tipus', 'Detectat', 'Esperat', 'Z', 'Estat', 'Data', ''].map(h => (
-                  <th key={h} style={hStyle}>{h}</th>
+                {[
+                  t('alerts.col.model'), 'POM', t('alerts.col.type'), t('alerts.col.detected'),
+                  t('alerts.col.expected'), 'Z', t('alerts.col.status'), t('alerts.col.date'), '',
+                ].map((h, hi) => (
+                  <th key={hi} style={hStyle}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {data.map((a, i) => {
                 const meta = typeMeta[a.tipus] || typeMeta.desviacio
+                const tipusId = typeMeta[a.tipus] ? a.tipus : 'desviacio'
                 return (
                   <tr key={a.id} style={{
                     borderBottom: i < data.length - 1 ? '0.5px solid var(--gray-l)' : 'none',
@@ -122,7 +136,7 @@ export default function Alerts() {
                     </td>
                     <td style={{padding: '0.7rem 1rem'}}>
                       <Badge variant={meta.variant} icon={meta.icon}>
-                        {meta.label}
+                        {t('alerts.type.' + tipusId)}
                       </Badge>
                     </td>
                     <td style={{padding: '0.7rem 1rem', fontSize: 12, fontVariantNumeric: 'tabular-nums'}}>
@@ -135,7 +149,7 @@ export default function Alerts() {
                       {a.z_score != null ? Number(a.z_score).toFixed(2) : '—'}
                     </td>
                     <td style={{padding: '0.7rem 1rem'}}>
-                      <Badge variant={statusVariant[a.estat] || 'gray'}>{a.estat}</Badge>
+                      <Badge variant={statusVariant[a.estat] || 'gray'}>{t('alerts.status.' + a.estat, a.estat)}</Badge>
                     </td>
                     <td style={{padding: '0.7rem 1rem', fontSize: 11, color: 'var(--gray)'}}>
                       {(a.data_creacio || a.created_at || '').slice(0, 10)}
@@ -149,7 +163,7 @@ export default function Alerts() {
                               onClick={() => updateStatus(a.id, 'Acceptat')}
                               style={btnStyle('var(--gate)')}
                             >
-                              Acceptar
+                              {t('alerts.accept')}
                             </button>
                           )}
                           <button
@@ -157,7 +171,7 @@ export default function Alerts() {
                             onClick={() => resolve(a.id)}
                             style={btnStyle('var(--ok)')}
                           >
-                            Resoldre
+                            {t('alerts.resolve')}
                           </button>
                         </div>
                       )}

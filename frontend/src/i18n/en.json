@@ -1351,5 +1351,34 @@
     "no_open_alerts": "No open alerts",
     "deviation_detected": "Deviation detected",
     "more_alerts": "{{count}} more alerts"
+  },
+  "alerts": {
+    "status": {
+      "Pendent": "Pending",
+      "Acceptat": "Accepted",
+      "Corregit": "Corrected",
+      "Tots": "All"
+    },
+    "type": {
+      "desviacio": "Deviation",
+      "fora_rang": "Out of range",
+      "manca_mesura": "Missing measurement",
+      "conflicte": "Conflict"
+    },
+    "subtitle_all": "{{count}} alerts in total",
+    "subtitle_pending": "{{count}} pending alerts",
+    "subtitle_accepted": "{{count}} accepted alerts",
+    "subtitle_corrected": "{{count}} corrected alerts",
+    "empty": "No alerts with status {{status}}.",
+    "col": {
+      "model": "Model",
+      "type": "Type",
+      "detected": "Detected",
+      "expected": "Expected",
+      "status": "Status",
+      "date": "Date"
+    },
+    "accept": "Accept",
+    "resolve": "Resolve"
   }
 }

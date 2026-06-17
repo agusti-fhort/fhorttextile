@@ -1351,5 +1351,34 @@
     "no_open_alerts": "Sin avisos abiertos",
     "deviation_detected": "Desviación detectada",
     "more_alerts": "{{count}} avisos más"
+  },
+  "alerts": {
+    "status": {
+      "Pendent": "Pendiente",
+      "Acceptat": "Aceptado",
+      "Corregit": "Corregido",
+      "Tots": "Todos"
+    },
+    "type": {
+      "desviacio": "Desviación",
+      "fora_rang": "Fuera de rango",
+      "manca_mesura": "Falta medida",
+      "conflicte": "Conflicto"
+    },
+    "subtitle_all": "{{count}} avisos en total",
+    "subtitle_pending": "{{count}} avisos pendientes",
+    "subtitle_accepted": "{{count}} avisos aceptados",
+    "subtitle_corrected": "{{count}} avisos corregidos",
+    "empty": "Ningún aviso en estado {{status}}.",
+    "col": {
+      "model": "Modelo",
+      "type": "Tipo",
+      "detected": "Detectado",
+      "expected": "Esperado",
+      "status": "Estado",
+      "date": "Fecha"
+    },
+    "accept": "Aceptar",
+    "resolve": "Resolver"
   }
 }
