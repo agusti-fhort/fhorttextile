@@ -103,13 +103,12 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
         return
       }
       setBusy(false); setModal(null); setConfirmPending(null)
-      onFeedback({ type: 'ok', text: t('model_sheet.fitting_scheduled', 'Fitting programat') })
+      onFeedback({ type: 'ok', text: t('model_sheet.fitting_scheduled') })
       onChanged && onChanged()
     } catch (e) {
       setBusy(false)
       if (e.response?.status === 409) {   // conflicte DUR: no es pot forçar
-        onFeedback({ type: 'err', text: t('model_sheet.fitting_overlap',
-          'Ja existeix una sessió en aquesta franja per aquest model.') })
+        onFeedback({ type: 'err', text: t('model_sheet.fitting_overlap') })
       } else {
         onFeedback({ type: 'err', text: e.response?.data?.error || 'error' })
       }
@@ -155,9 +154,9 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
         const created = results.reduce((a, r) => a + (r.data?.created?.length ?? 0), 0)
         const skipped = results.reduce((a, r) => a + (r.data?.skipped?.length ?? 0), 0)
         const warnings = results.flatMap(r => r.data?.warnings ?? [])
-        let txt = t('model_sheet.fitting_bulk_scheduled', { n: created, defaultValue: '{{n}} sessions creades' })
-        if (skipped > 0) txt += ' · ' + t('model_sheet.fitting_bulk_skipped', { n: skipped, defaultValue: '{{n}} omeses' })
-        if (warnings.length > 0) txt += ' · ' + t('model_sheet.fitting_bulk_warnings', { n: warnings.length, defaultValue: '{{n}} amb avís' })
+        let txt = t('model_sheet.fitting_bulk_scheduled', { n: created })
+        if (skipped > 0) txt += ' · ' + t('model_sheet.fitting_bulk_skipped', { n: skipped })
+        if (warnings.length > 0) txt += ' · ' + t('model_sheet.fitting_bulk_warnings', { n: warnings.length })
         onFeedback({ type: (skipped > 0 || warnings.length > 0) ? 'err' : 'ok', text: txt })
         onChanged && onChanged()
       })
@@ -170,7 +169,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
   const runBack = () => runBulk(m => { const pv = prevPhase(m.fase_actual); if (!pv) throw { response: { data: { error: t('model_sheet.phase_first') } } }; return modelsApi.regress(m.id, { to_phase: pv }) })
 
   const items = [
-    { key: 'assign', label: t('model_sheet.assign_tasks', 'Assignar tasques'), icon: 'ti-users-plus', enabled: list.length > 0 },
+    { key: 'assign', label: t('model_sheet.assign_tasks'), icon: 'ti-users-plus', enabled: list.length > 0 },
     { key: 'production', label: t('model_sheet.send_to_production'), icon: 'ti-send', enabled: list.length > 0 },
     { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: list.length > 0 },
     { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: someNext },
@@ -238,28 +237,27 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
             </select>
           </Row>
           <Row label={t('model_sheet.date')}><input type="date" style={fullSel} value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} /></Row>
-          <Row label={t('model_sheet.fitting_start_time', "Hora d'inici")}>
+          <Row label={t('model_sheet.fitting_start_time')}>
             <input type="time" style={fullSel} value={form.start_time || ''}
               onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
           </Row>
-          <Row label={t('model_sheet.fitting_duration', 'Durada (min)')}>
+          <Row label={t('model_sheet.fitting_duration')}>
             <input type="number" min={5} step={5} style={fullSel} value={form.duracio_minuts || ''}
-              placeholder={t('model_sheet.fitting_duration_ph', 'Default: 10 min per model')}
+              placeholder={t('model_sheet.fitting_duration_ph')}
               onChange={e => setForm(f => ({ ...f, duracio_minuts: e.target.value }))} />
           </Row>
           <div style={{ marginBottom: 12, marginTop: -4 }}>
             <small style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               {form.start_time
-                ? t('model_sheet.fitting_franja_note', { dur: form.duracio_minuts || '10', hora: form.start_time,
-                    defaultValue: `El fitting ocuparà ${form.duracio_minuts || '10'} min a les ${form.start_time} a la cua dels assistents.` })
-                : t('model_sheet.fitting_nofranja_note', "Sense hora, no s'assignarà franja al calendari.")}
+                ? t('model_sheet.fitting_franja_note', { dur: form.duracio_minuts || '10', hora: form.start_time })
+                : t('model_sheet.fitting_nofranja_note')}
             </small>
           </div>
-          <Row label={t('model_sheet.fitting_attendees', 'Assistents')}>
+          <Row label={t('model_sheet.fitting_attendees')}>
             {loadingEleg
-              ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('model_sheet.loading', 'Carregant…')}</span>
+              ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('model_sheet.loading')}</span>
               : elegibles.length === 0
-                ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('model_sheet.fitting_no_attendees', 'Cap assistent elegible.')}</span>
+                ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('model_sheet.fitting_no_attendees')}</span>
                 : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 120, overflowY: 'auto' }}>
                     {elegibles.map(e => {
@@ -284,7 +282,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
           {!deliveredPhases.has(form.fase) && (
             <div style={{ marginTop: 8 }}>
               <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {t('fitting_expected_at_label', 'Data prevista de recepció de la mostra')}
+                {t('fitting_expected_at_label')}
               </label>
               <input
                 type="date"
@@ -293,7 +291,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
                 style={{ width: '100%', marginTop: 4, fontSize: 12, border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px' }}
               />
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                {t('fitting_expected_at_hint', 'Si no has rebut la mostra, informa quan l\'esperes.')}
+                {t('fitting_expected_at_hint')}
               </div>
             </div>
           )}
@@ -302,14 +300,13 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
 
       {/* Conflicte SUAU (P1): el model ja té fitting d'aquesta fase en una altra franja. */}
       {confirmPending && (
-        <Modal title={t('model_sheet.fitting_dup_title', 'Fitting duplicat?')}
-          confirmLabel={busy ? t('model_sheet.working') : t('model_sheet.fitting_create_anyway', 'Crear igualment')}
+        <Modal title={t('model_sheet.fitting_dup_title')}
+          confirmLabel={busy ? t('model_sheet.working') : t('model_sheet.fitting_create_anyway')}
           cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy}
           onConfirm={() => submitSchedule(confirmPending.payload, true)}
           onCancel={() => !busy && setConfirmPending(null)}>
           <p style={{ fontSize: 13, lineHeight: 1.5 }}>
-            {confirmPending.text || t('model_sheet.fitting_dup_warn',
-              'Aquest model ja té un fitting programat en aquesta fase. Vols crear-ne un altre igualment?')}
+            {confirmPending.text || t('model_sheet.fitting_dup_warn')}
           </p>
         </Modal>
       )}

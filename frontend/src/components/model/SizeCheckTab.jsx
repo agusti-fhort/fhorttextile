@@ -95,17 +95,17 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
         let text
         if (d.estat === 'Acceptat') {
           const extra = d.regradat ? ` · grading regradat (v${d.nova_version})` : ''
-          text = t('sizecheck.fb_saved', 'Gravat i propagat · {{n}} mesures', { n: d.written || 0 }) + extra
+          text = t('sizecheck.fb_saved', { n: d.written || 0 }) + extra
         } else if (d.estat === 'Rebutjat') {
-          text = t('sizecheck.fb_rejected', 'Proto no acceptat · reagendat a {{d}} · tasca pendent', { d: dr || '—' })
+          text = t('sizecheck.fb_rejected', { d: dr || '—' })
         } else {
-          text = t('sizecheck.fb_discarded', 'Descartat · reagendat a {{d}} · tasca pendent', { d: dr || '—' })
+          text = t('sizecheck.fb_discarded', { d: dr || '—' })
         }
         onFeedback?.({ type: 'ok', text })
         if (editable) navigate('/tasques/kanban')   // feina acabada a la superfície de treball
         else load()
       })
-      .catch(e => onFeedback?.({ type: 'err', text: e.response?.data?.error || t('sizecheck.resolve_error', 'No s\'ha pogut resoldre') }))
+      .catch(e => onFeedback?.({ type: 'err', text: e.response?.data?.error || t('sizecheck.resolve_error') }))
       .finally(() => setBusy(false))
   }
 
@@ -114,12 +114,12 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
       <thead>
         <tr>
           <th style={th}>POM</th>
-          <th style={th}>{t('sizecheck.col_measure', 'Mesura')}</th>
-          <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_theoretical', 'Teòric')}</th>
-          <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_tolerance', 'Tolerància')}</th>
-          <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_real', 'Real (proto)')}</th>
-          <th style={{ ...th, textAlign: 'center' }}>{t('sizecheck.col_decision', 'Decisió')}</th>
-          <th style={th}>{t('sizecheck.col_note', 'Nota')}</th>
+          <th style={th}>{t('sizecheck.col_measure')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_theoretical')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_tolerance')}</th>
+          <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_real')}</th>
+          <th style={{ ...th, textAlign: 'center' }}>{t('sizecheck.col_decision')}</th>
+          <th style={th}>{t('sizecheck.col_note')}</th>
         </tr>
       </thead>
       <tbody>
@@ -138,13 +138,13 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
   const renderHistory = (clickable) => (
     history.length > 0 && (
       <div style={{ marginTop: 28 }}>
-        <h3 style={{ fontSize: 13, fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>{t('sizecheck.history', 'Històric')}</h3>
+        <h3 style={{ fontSize: 13, fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>{t('sizecheck.history')}</h3>
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead>
             <tr>
-              <th style={th}>{t('sizecheck.col_date', 'Data')}</th>
-              <th style={th}>{t('sizecheck.col_status', 'Estat')}</th>
-              <th style={th}>{t('sizecheck.col_resolved_by', 'Resolt per')}</th>
+              <th style={th}>{t('sizecheck.col_date')}</th>
+              <th style={th}>{t('sizecheck.col_status')}</th>
+              <th style={th}>{t('sizecheck.col_resolved_by')}</th>
             </tr>
           </thead>
           <tbody>
@@ -166,7 +166,7 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
     )
   )
 
-  if (loading) return <div style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading', 'Carregant…')}</div>
+  if (loading) return <div style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
 
   return (
     <div>
@@ -179,8 +179,8 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
       {!check && (
         <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>
           {editable
-            ? t('sizecheck.open_error', 'No s\'ha pogut obrir el size check.')
-            : t('sizecheck.consult_empty', 'No hi ha cap size check per a aquest model. Inicia\'l des del Kanban (tasca Size Check).')}
+            ? t('sizecheck.open_error')
+            : t('sizecheck.consult_empty')}
         </p>
       )}
 
@@ -189,8 +189,8 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
         <>
           {renderGrid(check)}
           <div style={{ display: 'flex', gap: 10 }}>
-            <button style={btn('gold')} disabled={busy} onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.save', 'Gravar size check')}</button>
-            <button style={btn('err')} disabled={busy} onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard', 'Descartar')}</button>
+            <button style={btn('gold')} disabled={busy} onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.save')}</button>
+            <button style={btn('err')} disabled={busy} onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard')}</button>
           </div>
         </>
       )}
@@ -203,7 +203,7 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
           {check && (
             <div style={{ marginTop: 20 }}>
               <h3 style={{ fontSize: 13, fontWeight: 500, fontFamily: MONO, color: 'var(--text-muted)', margin: '0 0 8px' }}>
-                {t('sizecheck.validated_table', 'Taula validada')} · <span style={{ color: estatColor(check.estat) }}>{check.estat}</span>
+                {t('sizecheck.validated_table')} · <span style={{ color: estatColor(check.estat) }}>{check.estat}</span>
               </h3>
               {renderGrid(check)}
             </div>
@@ -215,13 +215,13 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
       {confirm && (
         <div style={overlay} onClick={() => setConfirm(null)}>
           <div onClick={e => e.stopPropagation()} style={modal}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>{t('sizecheck.propagate_title', 'Propagar correccions al grading?')}</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>{t('sizecheck.propagate_title')}</h3>
             <p style={{ margin: '0 0 18px', fontSize: 12, lineHeight: 1.5, color: 'var(--text-main)' }}>
-              {t('sizecheck.propagate_warning', 'Les correccions acceptades s\'escriuran a la talla base i es propagaran al grading segons els deltes informats.')}
+              {t('sizecheck.propagate_warning')}
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button style={btn('plain')} disabled={busy} onClick={() => setConfirm(null)}>{t('common.cancel', 'Cancel·lar')}</button>
-              <button style={btn('gold')} disabled={busy} onClick={() => doResolve('Acceptat')}>{t('sizecheck.confirm_propagate', 'Gravar i propagar')}</button>
+              <button style={btn('plain')} disabled={busy} onClick={() => setConfirm(null)}>{t('common.cancel')}</button>
+              <button style={btn('gold')} disabled={busy} onClick={() => doResolve('Acceptat')}>{t('sizecheck.confirm_propagate')}</button>
             </div>
           </div>
         </div>
@@ -231,22 +231,22 @@ export default function SizeCheckTab({ model, onFeedback, editable = false }) {
       {reschedule && (
         <div style={overlay} onClick={() => setReschedule(null)}>
           <div onClick={e => e.stopPropagation()} style={modal}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>{t('sizecheck.reschedule_title', 'Reagendar el size check')}</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>{t('sizecheck.reschedule_title')}</h3>
             {reschedule.descartades && (
               <p style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.5, color: 'var(--err)' }}>
-                {t('sizecheck.reschedule_rejected', 'No es propaga al grading: hi ha mesures descartades, el proto s\'ha de refer.')}
+                {t('sizecheck.reschedule_rejected')}
               </p>
             )}
             <p style={{ margin: '0 0 8px', fontSize: 12, lineHeight: 1.5, color: 'var(--text-main)' }}>
-              {t('sizecheck.reschedule_help', 'Data prevista de represa (la tasca queda pendent al calendari):')}
+              {t('sizecheck.reschedule_help')}
             </p>
             <input type="date" value={reDate} onChange={e => setReDate(e.target.value)}
                    style={{ fontFamily: MONO, fontSize: 13, padding: '6px 8px', borderRadius: 4, border: `1px solid ${BORDER}`, marginBottom: 18, width: '100%', boxSizing: 'border-box' }} />
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button style={btn('plain')} disabled={busy} onClick={() => setReschedule(null)}>{t('common.cancel', 'Cancel·lar')}</button>
+              <button style={btn('plain')} disabled={busy} onClick={() => setReschedule(null)}>{t('common.cancel')}</button>
               <button style={btn(reschedule.estat === 'Descartat' ? 'err' : 'gold')} disabled={busy || !reDate}
                       onClick={() => doResolve(reschedule.estat, { data_represa: reDate })}>
-                {t('sizecheck.reschedule_confirm', 'Reagendar')}
+                {t('sizecheck.reschedule_confirm')}
               </button>
             </div>
           </div>
