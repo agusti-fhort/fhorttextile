@@ -325,7 +325,7 @@ export default function ModelMeasurements() {
                     borderRadius: 6, background: 'transparent',
                     color: 'var(--gold)', fontSize: 13, cursor: 'pointer',
                   }}>
-                  {generatingGrading ? '⏳ Generant...' : '⚡ Generar grading automàtic'}
+                  {generatingGrading ? t('model_measurements.generating') : t('model_measurements.generate_grading')}
                 </button>
               )}
             </div>

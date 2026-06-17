@@ -840,6 +840,7 @@ const TIPUS_CONFIG = {
 }
 
 function TabFiles({ modelId }) {
+  const { t } = useTranslation()
   const token = localStorage.getItem('access_token')
   const authHeaders = { Authorization: `Bearer ${token}` }
 
@@ -859,7 +860,7 @@ function TabFiles({ modelId }) {
       const byType = {}
       results.forEach(([tipus, items]) => { byType[tipus] = items })
       setFitxers(byType)
-    }).catch(() => setError('Error carregant fitxers'))
+    }).catch(() => setError(t('model_sheet.err_load_files')))
   }, [modelId])
 
   const handleUpload = async (tipus, file) => {
@@ -884,14 +885,14 @@ function TabFiles({ modelId }) {
         setError(JSON.stringify(d))
       }
     } catch {
-      setError('Error pujant el fitxer')
+      setError(t('model_sheet.err_upload'))
     } finally {
       setUploading(null)
     }
   }
 
   const handleDelete = async (fitxerId, tipus) => {
-    if (!window.confirm('Eliminar aquest fitxer?')) return
+    if (!window.confirm(t('model_sheet.confirm_delete_file'))) return
     await fetch(`${API}/api/v1/model-fitxers/${fitxerId}/`, {
       method: 'DELETE', headers: authHeaders,
     })
@@ -941,7 +942,7 @@ function TabFiles({ modelId }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <i className={`ti ${config.icon}`} aria-hidden="true"
                 style={{ fontSize: 18, color: config.color }} />
-              <span style={{ fontSize: 14, fontWeight: 500 }}>{config.label}</span>
+              <span style={{ fontSize: 14, fontWeight: 500 }}>{t(`model_sheet.file_type.${tipus}`)}</span>
               <span style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)' }}>
                 ({(fitxers[tipus] || []).length})
               </span>
@@ -951,7 +952,7 @@ function TabFiles({ modelId }) {
                 cursor: 'pointer', color: 'var(--color-text-secondary, #868685)',
                 background: uploading === tipus ? 'var(--color-background-secondary, #f5f0ea)' : 'transparent',
               }}>
-                {uploading === tipus ? 'Pujant...' : '+ Pujar'}
+                {uploading === tipus ? t('model_sheet.uploading') : t('model_sheet.upload')}
                 <input type="file" style={{ display: 'none' }}
                   accept=".pdf,.png,.jpg,.jpeg,.svg,.dxf"
                   disabled={uploading === tipus}
@@ -962,7 +963,7 @@ function TabFiles({ modelId }) {
             {(fitxers[tipus] || []).length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',
                             padding: '8px 0', fontStyle: 'italic' }}>
-                Cap fitxer pujat.
+                {t('model_sheet.no_files')}
               </div>
             ) : (
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -981,6 +982,7 @@ function TabFiles({ modelId }) {
 }
 
 function FileCard({ fitxer, config, onPreview, onDelete }) {
+  const { t } = useTranslation()
   const isImage = fitxer.nom_fitxer?.match(/\.(jpg|jpeg|png|svg)$/i)
 
   return (
@@ -1026,7 +1028,7 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
                      background: 'var(--color-background-secondary, #f5f0ea)',
                      borderRadius: 4, cursor: 'pointer',
                      }}>
-            <i className="ti ti-eye" aria-hidden="true" /> Veure
+            <i className="ti ti-eye" aria-hidden="true" /> {t('model_sheet.view')}
           </button>
           <button type="button" onClick={onDelete}
             style={{ padding: '3px 6px', fontSize: 11, border: 'none',
@@ -1047,6 +1049,7 @@ const GRAVETAT_STYLE = {
 }
 
 function TabAIAnalysis({ modelId }) {
+  const { t } = useTranslation()
   const token = localStorage.getItem('access_token')
   const [analisi, setAnalisi] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -1062,9 +1065,9 @@ function TabAIAnalysis({ modelId }) {
       })
       const d = await r.json()
       if (r.ok) setAnalisi(d.analisi)
-      else setError(d.error || 'Error desconegut')
+      else setError(d.error || t('model_sheet.err_unknown'))
     } catch {
-      setError('Error de connexió')
+      setError(t('model_sheet.err_connection'))
     } finally {
       setLoading(false)
     }
@@ -1074,9 +1077,7 @@ function TabAIAnalysis({ modelId }) {
     <div style={{ maxWidth: 800 }}>
       <div style={{ marginBottom: 16 }}>
         <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)', marginBottom: 12 }}>
-          Analitza els fitxers pujats (patrons, escalats, sketches) i detecta
-          discrepàncies amb les mesures registrades.
-          Disponible quan hi ha patrons o escalats pujats.
+          {t('model_sheet.ai_description')}
         </p>
         <button type="button" onClick={handleAnalyze} disabled={loading}
           style={{
@@ -1085,9 +1086,9 @@ function TabAIAnalysis({ modelId }) {
             fontSize: 13, fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer',
           }}>
           {loading ? (
-            <><i className="ti ti-loader" aria-hidden="true" /> Analitzant...</>
+            <><i className="ti ti-loader" aria-hidden="true" /> {t('model_sheet.analyzing')}</>
           ) : (
-            <><i className="ti ti-cpu" aria-hidden="true" /> Llançar anàlisi IA</>
+            <><i className="ti ti-cpu" aria-hidden="true" /> {t('model_sheet.launch_ai')}</>
           )}
         </button>
       </div>
@@ -1104,12 +1105,12 @@ function TabAIAnalysis({ modelId }) {
           <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #868685)',
                         marginBottom: 12 }}>
             {analisi.resum}
-            {' · '}{analisi.fitxers_analitzats} fitxer(s) analitzat(s)
+            {' · '}{t('model_sheet.files_analyzed', { count: analisi.fitxers_analitzats })}
           </div>
 
           {(analisi.alertes || []).length === 0 ? (
             <div style={{ fontSize: 13, color: '#137333', padding: '12px 0' }}>
-              ✓ Cap discrepància detectada.
+              ✓ {t('model_sheet.no_discrepancies')}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1143,7 +1144,7 @@ function TabAIAnalysis({ modelId }) {
                     </div>
                     {(alerta.valor_taula || alerta.valor_patro) && (
                       <div style={{ fontSize: 12, color: style.color, marginBottom: 4 }}>
-                        Taula: {alerta.valor_taula || '—'} → Patró: {alerta.valor_patro || '—'}
+                        {t('model_sheet.compare_values', { table: alerta.valor_taula || '—', pattern: alerta.valor_patro || '—' })}
                       </div>
                     )}
                     <div style={{ fontSize: 12, color: 'var(--color-text-secondary, #868685)',

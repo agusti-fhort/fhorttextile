@@ -376,7 +376,29 @@
     "measures_consult": "Consultation — measurement editing is done in the POM task.",
     "edit_in_pom": "Edit in the POM task",
     "no_pom_task": "No POM task",
-    "no_pom_task_title": "This model has no POM task defined"
+    "no_pom_task_title": "This model has no POM task defined",
+    "file_type": {
+      "SKETCH_FLETXES": "Sketch with arrows",
+      "SKETCH_NET": "Clean sketch",
+      "PATRO": "Base pattern",
+      "MARCADA": "Marker",
+      "ESCALAT": "Graded",
+      "FITXA": "Tech sheet",
+      "ALTRES": "Other"
+    },
+    "err_upload": "Error uploading the file",
+    "err_load_files": "Error loading files",
+    "confirm_delete_file": "Delete this file?",
+    "uploading": "Uploading…",
+    "upload": "+ Upload",
+    "no_files": "No file uploaded.",
+    "err_unknown": "Unknown error",
+    "ai_description": "Analyzes the uploaded files (patterns, gradings, sketches) and detects discrepancies with the recorded measurements. Available when there are patterns or gradings uploaded.",
+    "analyzing": "Analyzing…",
+    "launch_ai": "Launch AI analysis",
+    "files_analyzed": "{{count}} file(s) analyzed",
+    "no_discrepancies": "No discrepancy detected.",
+    "compare_values": "Table: {{table}} → Pattern: {{pattern}}"
   },
   "model_wizard": {
     "customer": "Customer",
