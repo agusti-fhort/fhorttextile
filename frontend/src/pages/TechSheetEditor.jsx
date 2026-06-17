@@ -42,6 +42,11 @@ export const COL = {
   sidebar: '#f0dfc0', gold: 'var(--gold)', goldPale: '#f5e6d0',
   border: 'var(--border)', textMain: 'var(--text-main)', textMuted: 'var(--text-muted)', bg: '#f5f0e8',
 }
+// Paleta LITERAL del canvas: Konva pinta sobre <canvas> via ctx.fillStyle i NO resol
+// CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
+// build*Primitives, Rects de fons/selecció, text_box, previews) DEUEN usar aquests literals,
+// no COL (que és per al DOM, on var() sí resol). Valors = mateixos hex que els tokens de :root.
+const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685' }
 
 const LAYER_ORDER = { template: 0, data: 1, free: 2 }
 // TS-4c — eines per "família" de creació (mateixa mecànica de drag).
@@ -99,8 +104,8 @@ const T_VAL_W = 18 * MM_TO_PX     // valor per talla
 const T_DELTA_W = 16 * MM_TO_PX   // delta (Δ) — UNA sola columna (valor de GradingRule)
 const T_PAD = 2 * MM_TO_PX
 const TBL = {
-  HDR_BG: '#111827', HDR_TEXT: 'var(--white)', ROW_EVEN: 'var(--white)', ROW_ODD: '#f7f7f7',
-  ROW_BORDER: 'var(--border)', OUTER: 'var(--gold)', REF: '#dc2626', NOM: '#6b7280', VAL: 'var(--text-main)',
+  HDR_BG: '#111827', HDR_TEXT: KONVA_COL.white, ROW_EVEN: KONVA_COL.white, ROW_ODD: '#f7f7f7',
+  ROW_BORDER: KONVA_COL.border, OUTER: KONVA_COL.gold, REF: '#dc2626', NOM: '#6b7280', VAL: KONVA_COL.textMain,
   BASE_BG: '#fdf6ee', DELTA: '#185fa5',
 }
 
@@ -137,7 +142,7 @@ function buildTablePrimitives(d) {
     const isBase = sl === baseSize
     // Cel·la de capçalera de la talla base: fons gold + text blanc.
     if (isBase) prims.push({ t: 'r', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, fill: TBL.OUTER })
-    prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: isBase ? `${sl}*` : sl, fill: isBase ? 'var(--white)' : TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
+    prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: isBase ? `${sl}*` : sl, fill: isBase ? KONVA_COL.white : TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
   })
   prims.push({ t: 't', x: deltaX0, y: 0, w: T_DELTA_W, h: T_HDR_H, text: 'Δ', fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
 
@@ -184,7 +189,7 @@ export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLog
   const B1 = 20 * MM_TO_PX, B2 = 12 * MM_TO_PX
   const totalH = B1 + B2
   const PAD = 2 * MM_TO_PX
-  const PH = 'var(--text-muted)'   // color dels placeholders (--text-muted)
+  const PH = KONVA_COL.textMuted   // color dels placeholders (literal: Konva no fa CSS)
   // En mode plantilla cada camp és un placeholder en cursiva i gris.
   const f = {
     codi: placeholderMode ? '{model.codi}' : (m?.codi_intern || ''),
@@ -196,14 +201,14 @@ export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLog
     resp: placeholderMode ? '{responsable}' : (m?.responsable_nom || ''),
     versio: placeholderMode ? '{versió}' : `v${versio ?? 1}`,
   }
-  const main = 'var(--text-main)'
+  const main = KONVA_COL.textMain
   const prims = []
-  prims.push({ t: 'r', x: 0, y: 0, w: W, h: B1, fill: '#f5e6d0', stroke: 'var(--gold)', sw: 1 })
+  prims.push({ t: 'r', x: 0, y: 0, w: W, h: B1, fill: '#f5e6d0', stroke: KONVA_COL.gold, sw: 1 })
   prims.push({ t: 't', x: PAD, y: 0, w: W * 0.4 - PAD, h: B1, text: [f.codi, f.nom].filter(Boolean).join(' · '), fill: placeholderMode ? PH : main, size: Math.round(9 * MM_TO_PX), bold: !placeholderMode, italic: placeholderMode, mid: true })
-  prims.push({ t: 't', x: W * 0.4, y: 0, w: W * 0.42, h: B1, text: [m?.customer_nom, f.temporada, f.collection].filter(Boolean).join(' · '), fill: placeholderMode ? PH : 'var(--text-main)', italic: placeholderMode, size: Math.round(7 * MM_TO_PX), align: 'center', mid: true })
+  prims.push({ t: 't', x: W * 0.4, y: 0, w: W * 0.42, h: B1, text: [m?.customer_nom, f.temporada, f.collection].filter(Boolean).join(' · '), fill: placeholderMode ? PH : KONVA_COL.textMain, italic: placeholderMode, size: Math.round(7 * MM_TO_PX), align: 'center', mid: true })
   // Placeholder "(logo)" només si NO hi ha logo real (es pinta a sobre com a imatge).
-  if (!hasLogo) prims.push({ t: 't', x: W * 0.82, y: 0, w: W * 0.18 - PAD, h: B1, text: '(logo)', fill: 'var(--text-muted)', size: Math.round(7 * MM_TO_PX), align: 'right', mid: true })
-  prims.push({ t: 'r', x: 0, y: B1, w: W, h: B2, fill: '#fafafa', stroke: 'var(--border)', sw: 1 })
+  if (!hasLogo) prims.push({ t: 't', x: W * 0.82, y: 0, w: W * 0.18 - PAD, h: B1, text: '(logo)', fill: KONVA_COL.textMuted, size: Math.round(7 * MM_TO_PX), align: 'right', mid: true })
+  prims.push({ t: 'r', x: 0, y: B1, w: W, h: B2, fill: '#fafafa', stroke: KONVA_COL.border, sw: 1 })
   const line2 = [f.tipus, f.sizesys, f.resp, f.versio].filter(Boolean).join(' · ')
   prims.push({ t: 't', x: PAD, y: B1, w: W - 2 * PAD, h: B2, text: line2, fill: placeholderMode ? PH : '#6b7280', italic: placeholderMode, size: Math.round(6.5 * MM_TO_PX), mid: true })
   return { prims, totalW: W, totalH }
@@ -257,7 +262,7 @@ function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, groupProps, 
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
       {hasLogo && <KonvaImage image={logoImg} x={totalW - 45 * MM_TO_PX} y={2 * MM_TO_PX} width={40 * MM_TO_PX} height={16 * MM_TO_PX} listening={false} />}
-      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke="var(--gold)" strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
+      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={KONVA_COL.gold} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
   )
 }
@@ -272,7 +277,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
   const stage = new Konva.Stage({ container, width: pageW, height: pageH })
   const layer = new Konva.Layer()
   stage.add(layer)
-  layer.add(new Konva.Rect({ x: 0, y: 0, width: pageW, height: pageH, fill: 'var(--white)' }))
+  layer.add(new Konva.Rect({ x: 0, y: 0, width: pageW, height: pageH, fill: KONVA_COL.white }))
   const ordered = [...(page.objects || [])].sort(
     (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   for (const o of ordered) {
@@ -285,29 +290,29 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
       layer.add(new Konva.Text({
         x: toPx(o.x), y: toPx(o.y), width: o.width ? toPx(o.width) : undefined,
         text: o.text || '', fontSize: o.fontSize || 11, fontFamily: o.fontFamily || FONT,
-        fontStyle: o.fontStyle || 'normal', fill: o.fill || COL.textMain,
+        fontStyle: o.fontStyle || 'normal', fill: o.fill || KONVA_COL.textMain,
       }))
     } else if (o.type === 'rect') {
       layer.add(new Konva.Rect({
         x: toPx(o.x), y: toPx(o.y), width: toPx(o.width), height: toPx(o.height),
         fill: o.fill && o.fill !== 'transparent' ? o.fill : undefined,
-        stroke: o.stroke || COL.gold, strokeWidth: o.strokeWidth || 1, cornerRadius: o.cornerRadius || 0,
+        stroke: o.stroke || KONVA_COL.gold, strokeWidth: o.strokeWidth || 1, cornerRadius: o.cornerRadius || 0,
       }))
     } else if (o.type === 'ellipse') {
       layer.add(new Konva.Ellipse({
         x: toPx(o.x), y: toPx(o.y), radiusX: toPx(o.rx), radiusY: toPx(o.ry),
         fill: o.fill && o.fill !== 'transparent' ? o.fill : undefined,
-        stroke: o.stroke || COL.textMain, strokeWidth: o.strokeWidth || 1.5,
+        stroke: o.stroke || KONVA_COL.textMain, strokeWidth: o.strokeWidth || 1.5,
       }))
     } else if (o.type === 'line') {
       layer.add(new Konva.Line({
-        points: (o.points || []).map(toPx), stroke: o.stroke || COL.textMain,
+        points: (o.points || []).map(toPx), stroke: o.stroke || KONVA_COL.textMain,
         strokeWidth: o.strokeWidth || 1, dash: o.dash || undefined, lineCap: 'round', lineJoin: 'round',
       }))
     } else if (o.type === 'arrow') {
       layer.add(new Konva.Arrow({
         points: [toPx(o.x), toPx(o.y), toPx(o.x2), toPx(o.y2)],
-        stroke: o.stroke || COL.textMain, fill: o.fill || o.stroke || COL.textMain,
+        stroke: o.stroke || KONVA_COL.textMain, fill: o.fill || o.stroke || KONVA_COL.textMain,
         strokeWidth: o.strokeWidth || 1.5, pointerLength: 8, pointerWidth: 6, pointerAtBeginning: !!o.arrow2,
       }))
     } else if (o.type === 'data_block') {
@@ -363,7 +368,7 @@ function ImageObj({ obj, src, common }) {
   if (!img) {
     // Placeholder mentre carrega / si falla.
     return <Rect {...common} width={toPx(obj.width)} height={toPx(obj.height || obj.width)}
-      fill={COL.goldPale} stroke={COL.border} dash={[4, 4]} />
+      fill={COL.goldPale} stroke={KONVA_COL.border} dash={[4, 4]} />
   }
   return <KonvaImage {...common} image={img}
     width={toPx(obj.width)} height={toPx(obj.height || obj.width)} />
@@ -387,8 +392,8 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     if (!data) {
       return (
         <Group {...common}>
-          <Rect width={toPx(obj.width || 120)} height={toPx(obj.height || 40)} fill={COL.goldPale} stroke={COL.border} dash={[4, 4]} />
-          <Text x={6} y={6} text={data === null ? 'Sense grading actiu' : 'Carregant taula…'} fontSize={12} fontFamily={FONT} fill={COL.textMuted} listening={false} />
+          <Rect width={toPx(obj.width || 120)} height={toPx(obj.height || 40)} fill={COL.goldPale} stroke={KONVA_COL.border} dash={[4, 4]} />
+          <Text x={6} y={6} text={data === null ? 'Sense grading actiu' : 'Carregant taula…'} fontSize={12} fontFamily={FONT} fill={KONVA_COL.textMuted} listening={false} />
         </Group>
       )
     }
@@ -402,34 +407,34 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
         <Group {...common} onDblClick={onDblText} onDblTap={onDblText}>
           <Rect x={-pad} y={-pad} width={w + pad * 2} height={fs * 1.6 + pad * 2} fill={obj.bgFill} cornerRadius={3} />
           <Text text={obj.text || ''} width={w} fontSize={fs} fontFamily={obj.fontFamily || FONT}
-            fontStyle={obj.fontStyle || 'normal'} fill={obj.fill || COL.textMain} listening={false} />
+            fontStyle={obj.fontStyle || 'normal'} fill={obj.fill || KONVA_COL.textMain} listening={false} />
         </Group>
       )
     }
     return <Text {...common} text={obj.text || ''} width={obj.width ? toPx(obj.width) : undefined}
       fontSize={obj.fontSize || 11} fontFamily={obj.fontFamily || FONT} fontStyle={obj.fontStyle || 'normal'}
-      fill={obj.fill || COL.textMain}
+      fill={obj.fill || KONVA_COL.textMain}
       onDblClick={onDblText} onDblTap={onDblText} />
   }
   if (obj.type === 'rect') {
     return <Rect {...common} width={toPx(obj.width)} height={toPx(obj.height)}
       fill={obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined}
-      stroke={obj.stroke || COL.gold} strokeWidth={obj.strokeWidth || 1} cornerRadius={obj.cornerRadius || 0} />
+      stroke={obj.stroke || KONVA_COL.gold} strokeWidth={obj.strokeWidth || 1} cornerRadius={obj.cornerRadius || 0} />
   }
   if (obj.type === 'ellipse') {
     return <Ellipse {...common} radiusX={toPx(obj.rx)} radiusY={toPx(obj.ry)}
       fill={obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined}
-      stroke={obj.stroke || COL.textMain} strokeWidth={obj.strokeWidth || 1.5} />
+      stroke={obj.stroke || KONVA_COL.textMain} strokeWidth={obj.strokeWidth || 1.5} />
   }
   if (obj.type === 'line') {
     return <Line {...common} x={0} y={0} points={(obj.points || []).map(toPx)}
-      stroke={obj.stroke || COL.textMain} strokeWidth={obj.strokeWidth || 1} dash={obj.dash || undefined}
+      stroke={obj.stroke || KONVA_COL.textMain} strokeWidth={obj.strokeWidth || 1} dash={obj.dash || undefined}
       lineCap="round" lineJoin="round" hitStrokeWidth={10} />
   }
   if (obj.type === 'arrow') {
     return <Arrow {...common} x={0} y={0}
       points={[toPx(obj.x), toPx(obj.y), toPx(obj.x2), toPx(obj.y2)]}
-      stroke={obj.stroke || COL.textMain} fill={obj.fill || obj.stroke || COL.textMain}
+      stroke={obj.stroke || KONVA_COL.textMain} fill={obj.fill || obj.stroke || KONVA_COL.textMain}
       strokeWidth={obj.strokeWidth || 1.5} pointerLength={8} pointerWidth={6}
       pointerAtBeginning={!!obj.arrow2} hitStrokeWidth={10} />
   }
@@ -729,8 +734,8 @@ export default function TechSheetEditor() {
       const obj = {
         id: uid(), type: 'text', layer: 'free', x: toMm(pos.x), y: toMm(pos.y),
         width: 120, height: 30, text: 'Doble clic per editar', fontSize: 11,
-        fontFamily: FONT, fill: COL.textMain,
-        ...(tool === 'text_box' ? { bgFill: 'var(--white)', bgPadding: 4 } : {}),
+        fontFamily: FONT, fill: KONVA_COL.textMain,
+        ...(tool === 'text_box' ? { bgFill: KONVA_COL.white, bgPadding: 4 } : {}),
       }
       addObject(obj); setTool('select'); return
     }
@@ -763,17 +768,17 @@ export default function TechSheetEditor() {
     if (d.type === 'rect' || d.type === 'rect_round') {
       const x = Math.min(d.startX, pos.x), y = Math.min(d.startY, pos.y)
       const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
-      if (w > 3 && h > 3) obj = { ...base, type: 'rect', x: toMm(x), y: toMm(y), width: toMm(w), height: toMm(h), fill: 'transparent', stroke: COL.gold, strokeWidth: 1, ...(d.type === 'rect_round' ? { cornerRadius: 8 } : {}) }
+      if (w > 3 && h > 3) obj = { ...base, type: 'rect', x: toMm(x), y: toMm(y), width: toMm(w), height: toMm(h), fill: 'transparent', stroke: KONVA_COL.gold, strokeWidth: 1, ...(d.type === 'rect_round' ? { cornerRadius: 8 } : {}) }
     } else if (d.type === 'ellipse') {
       const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
-      if (w > 3 && h > 3) obj = { ...base, type: 'ellipse', x: toMm((d.startX + pos.x) / 2), y: toMm((d.startY + pos.y) / 2), rx: toMm(w / 2), ry: toMm(h / 2), stroke: COL.textMain, strokeWidth: 1.5, fill: 'transparent' }
+      if (w > 3 && h > 3) obj = { ...base, type: 'ellipse', x: toMm((d.startX + pos.x) / 2), y: toMm((d.startY + pos.y) / 2), rx: toMm(w / 2), ry: toMm(h / 2), stroke: KONVA_COL.textMain, strokeWidth: 1.5, fill: 'transparent' }
     } else if (d.type === 'line' || d.type === 'line_dot') {
-      obj = { ...base, type: 'line', x: 0, y: 0, points: [toMm(d.startX), toMm(d.startY), toMm(pos.x), toMm(pos.y)], stroke: COL.textMain, strokeWidth: 1, ...(d.type === 'line_dot' ? { dash: [4, 4] } : {}) }
+      obj = { ...base, type: 'line', x: 0, y: 0, points: [toMm(d.startX), toMm(d.startY), toMm(pos.x), toMm(pos.y)], stroke: KONVA_COL.textMain, strokeWidth: 1, ...(d.type === 'line_dot' ? { dash: [4, 4] } : {}) }
     } else if (d.type === 'arrow' || d.type === 'arrow2') {
       const dist = Math.hypot(pos.x - d.startX, pos.y - d.startY)
-      if (dist > 5) obj = { ...base, type: 'arrow', x: toMm(d.startX), y: toMm(d.startY), x2: toMm(pos.x), y2: toMm(pos.y), stroke: COL.textMain, fill: COL.textMain, strokeWidth: 1.5, ...(d.type === 'arrow2' ? { arrow2: true } : {}) }
+      if (dist > 5) obj = { ...base, type: 'arrow', x: toMm(d.startX), y: toMm(d.startY), x2: toMm(pos.x), y2: toMm(pos.y), stroke: KONVA_COL.textMain, fill: KONVA_COL.textMain, strokeWidth: 1.5, ...(d.type === 'arrow2' ? { arrow2: true } : {}) }
     } else if (d.type === 'draw') {
-      if (d.points.length >= 4) obj = { ...base, type: 'line', x: 0, y: 0, points: d.points.map(toMm), stroke: COL.textMain, strokeWidth: 1 }
+      if (d.points.length >= 4) obj = { ...base, type: 'line', x: 0, y: 0, points: d.points.map(toMm), stroke: KONVA_COL.textMain, strokeWidth: 1 }
     }
     setDrawTemp(null)
     if (obj) { addObject(obj); setTool('select') }
@@ -1056,7 +1061,7 @@ export default function TechSheetEditor() {
               {/* Fons blanc + 3 capes en ordre z. Konva no agrupa per `layer`:
                   ordenem els objectes i pintem en una sola Layer (z per ordre d'array). */}
               <Layer>
-                <Rect x={0} y={0} width={pageW} height={pageH} fill="var(--white)" listening={false} />
+                <Rect x={0} y={0} width={pageW} height={pageH} fill={KONVA_COL.white} listening={false} />
                 {ordered.map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
@@ -1069,10 +1074,10 @@ export default function TechSheetEditor() {
                     onDblText={() => startTextEdit(o)} />
                 ))}
                 {/* Forma temporal mentre es dibuixa */}
-                {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}
-                {drawTemp?.type === 'ellipse' && <Ellipse x={drawTemp.x + drawTemp.w / 2} y={drawTemp.y + drawTemp.h / 2} radiusX={drawTemp.w / 2} radiusY={drawTemp.h / 2} stroke={COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
-                {(drawTemp?.type === 'line' || drawTemp?.type === 'line_dot' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
-                {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={COL.textMain} fill={COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
+                {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}
+                {drawTemp?.type === 'ellipse' && <Ellipse x={drawTemp.x + drawTemp.w / 2} y={drawTemp.y + drawTemp.h / 2} radiusX={drawTemp.w / 2} radiusY={drawTemp.h / 2} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
+                {(drawTemp?.type === 'line' || drawTemp?.type === 'line_dot' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
+                {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={KONVA_COL.textMain} fill={KONVA_COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
                 <Transformer ref={trRef} rotateEnabled={false} ignoreStroke keepRatio={selObj?.type === 'data_block'}
                   boundBoxFunc={(oldB, newB) => (newB.width < 10 || newB.height < 10 ? oldB : newB)} />
               </Layer>
@@ -1142,14 +1147,14 @@ export default function TechSheetEditor() {
                       {t('tech_sheet.bold')}
                     </label>
                     <div style={propLabel}>{t('tech_sheet.text_color')}
-                      <ColorPicker value={selObj.fill || 'var(--text-main)'} onChange={c => updateObject(selObj.id, { fill: c })} />
+                      <ColorPicker value={selObj.fill || KONVA_COL.textMain} onChange={c => updateObject(selObj.id, { fill: c })} />
                     </div>
                   </>
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'line' || selObj.type === 'arrow') && (
                   <>
                     <div style={propLabel}>{t('tech_sheet.stroke_color')}
-                      <ColorPicker value={selObj.stroke || 'var(--text-main)'} onChange={c => updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
+                      <ColorPicker value={selObj.stroke || KONVA_COL.textMain} onChange={c => updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
                     </div>
                     <label style={propLabel}>{t('tech_sheet.stroke_width')}
                       <input type="number" min={0.5} max={5} step={0.5} value={selObj.strokeWidth || (selObj.type === 'arrow' ? 1.5 : 1)}
@@ -1159,7 +1164,7 @@ export default function TechSheetEditor() {
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse') && (
                   <div style={propLabel}>{t('tech_sheet.fill')}
-                    <ColorPicker value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : 'var(--white)'} onChange={c => updateObject(selObj.id, { fill: c })} />
+                    <ColorPicker value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : KONVA_COL.white} onChange={c => updateObject(selObj.id, { fill: c })} />
                   </div>
                 )}
                 {selObj.type === 'data_block' && (
@@ -1214,7 +1219,8 @@ export default function TechSheetEditor() {
 }
 
 // Selector de color ràpid (TS-4c): swatches de marca + color natiu ("Més colors").
-const QUICK_COLORS = ['var(--text-main)', '#185fa5', '#1d9e75', '#dc2626', 'var(--gold)', '#ca8a04']
+// Literals: el color triat s'escriu a obj.fill/stroke i el pinta Konva (no resol var()).
+const QUICK_COLORS = [KONVA_COL.textMain, '#185fa5', '#1d9e75', '#dc2626', KONVA_COL.gold, '#ca8a04']
 export function ColorPicker({ value, onChange }) {
   const { t } = useTranslation()
   return (
@@ -1223,7 +1229,7 @@ export function ColorPicker({ value, onChange }) {
         <button key={c} type="button" onClick={() => onChange(c)} title={c}
           style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: value === c ? '2px solid var(--text-main)' : '1px solid var(--border)', cursor: 'pointer', padding: 0 }} />
       ))}
-      <input type="color" value={value || 'var(--text-main)'} onChange={e => onChange(e.target.value)} title={t('tech_sheet.more_colors')}
+      <input type="color" value={value || KONVA_COL.textMain} onChange={e => onChange(e.target.value)} title={t('tech_sheet.more_colors')}
         style={{ width: 22, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} />
     </div>
   )
