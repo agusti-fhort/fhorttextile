@@ -31,7 +31,8 @@
     "col_steps": "Pasos",
     "empty": "Ningún modelo con estos filtros.",
     "all_months": "Todos",
-    "all_tasks": "Todas las tareas"
+    "all_tasks": "Todas las tareas",
+    "all_months_long": "Todos los meses"
   },
   "albara": {
     "tab": "Registro de actividad",

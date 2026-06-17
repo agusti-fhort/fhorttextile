@@ -31,7 +31,8 @@
     "col_steps": "Passos",
     "empty": "Cap model meritat amb aquests filtres.",
     "all_months": "Tots",
-    "all_tasks": "Totes les tasques"
+    "all_tasks": "Totes les tasques",
+    "all_months_long": "Tots els mesos"
   },
   "albara": {
     "tab": "Registre d'activitat",

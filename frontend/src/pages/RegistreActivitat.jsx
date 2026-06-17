@@ -2,15 +2,16 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { taskTypes } from '../api/endpoints';
+import i18n from '../i18n';
 
 const API = import.meta.env.VITE_API_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('access_token')}` });
 const toHours = (m) => m == null ? '—' : (Math.round(m / 60 * 10) / 10) + ' h';
-const fmtDate = (v) => v ? new Date(v).toLocaleDateString('ca-ES', { dateStyle: 'medium' }) : '—';
+const fmtDate = (v) => v ? new Date(v).toLocaleDateString(i18n.language || 'ca', { dateStyle: 'medium' }) : '—';
 const PAGE_SIZE = 25;
 
 // Navegador de mesos: period = '' (tots) o 'YYYY-MM'
-const fmtPeriod = (p) => p ? new Date(p + '-01').toLocaleDateString('ca-ES', { month: 'long', year: 'numeric' }) : 'Tots els mesos';
+const fmtPeriod = (p) => p ? new Date(p + '-01').toLocaleDateString(i18n.language || 'ca', { month: 'long', year: 'numeric' }) : i18n.t('registre.all_months_long');
 const prevMonth = (p) => { const d = p ? new Date(p + '-01') : new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7); };
 const nextMonth = (p) => { const d = p ? new Date(p + '-01') : new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().slice(0, 7); };
 

@@ -31,7 +31,8 @@
     "col_steps": "Steps",
     "empty": "No merited models with these filters.",
     "all_months": "All",
-    "all_tasks": "All tasks"
+    "all_tasks": "All tasks",
+    "all_months_long": "All months"
   },
   "albara": {
     "tab": "Activity log",
