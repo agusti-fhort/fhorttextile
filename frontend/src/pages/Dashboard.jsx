@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import useAuthStore from "../store/auth"
 import { EstatBadge } from "../components/EstatBadge"
 import { PhaseStepper } from "../components/PhaseStepper"
@@ -28,6 +29,7 @@ function KPICard({ label, value, sub, color = "var(--gold)", onClick }) {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
   const token = useAuthStore.getState().token || localStorage.getItem('access_token')
 
   // Auth guard: redirect if there is no token (no fetch will run without auth)
@@ -85,7 +87,7 @@ export default function Dashboard() {
   }, [token])
 
   const hora = new Date().getHours()
-  const salutacio = hora < 13 ? "Bon dia" : hora < 20 ? "Bona tarda" : "Bona nit"
+  const salutacio = hora < 13 ? t("dashboard.greeting_morning") : hora < 20 ? t("dashboard.greeting_afternoon") : t("dashboard.greeting_evening")
 
   return (
     <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
@@ -111,19 +113,19 @@ export default function Dashboard() {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-main)' }}>
-              Configuració incompleta
+              {t('dashboard.onboarding_incomplete')}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
               {onboarding.passos_pendents
-                ? `Falten ${onboarding.passos_pendents} passos per completar el setup`
-                : 'Completa el setup inicial per desbloquejar totes les funcionalitats'}
+                ? t('dashboard.onboarding_steps_left', { count: onboarding.passos_pendents })
+                : t('dashboard.onboarding_complete_setup')}
             </div>
           </div>
           <span style={{
             padding: '6px 12px', borderRadius: 6, fontSize: 11,
             background: 'var(--gold)', color: 'var(--white)', fontWeight: 500,
           }}>
-            Completar setup →
+            {t('dashboard.complete_setup')} →
           </span>
         </div>
       )}
@@ -134,36 +136,36 @@ export default function Dashboard() {
           {salutacio}{me ? `, ${me.full_name?.split(" ")[0] || me.username}` : ""}.
         </h1>
         <div style={{ fontSize: 13, color: "var(--text-muted)", fontFamily: "IBM Plex Mono, monospace" }}>
-          {new Date().toLocaleDateString("ca-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          {new Date().toLocaleDateString(i18n.language || "ca", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </div>
       </div>
 
       {/* KPIs */}
       <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
         <KPICard
-          label="Total models"
+          label={t("dashboard.kpi.total_models")}
           value={loading ? "…" : stats.total}
-          sub="al sistema"
+          sub={t("dashboard.kpi_sub.in_system")}
           onClick={() => navigate("/models")}
         />
         <KPICard
-          label="En curs"
+          label={t("model.estats.EnCurs")}
           value={loading ? "…" : stats.enCurs}
-          sub="models actius"
+          sub={t("dashboard.kpi_sub.active_models")}
           color="#3b7a9a"
           onClick={() => navigate("/models?estat=EnCurs")}
         />
         <KPICard
-          label="Avisos oberts"
+          label={t("dashboard.kpi.open_alerts")}
           value={loading ? "…" : avisos.length}
-          sub="desviacions POM"
+          sub={t("dashboard.kpi_sub.pom_deviations")}
           color={avisos.length > 0 ? "#a32d2d" : "var(--text-muted)"}
           onClick={() => navigate("/avisos")}
         />
         <KPICard
-          label="En prototip/mostres"
+          label={t("dashboard.kpi.prototype_samples")}
           value={loading ? "…" : stats.tallesGen}
-          sub="models en fase crítica"
+          sub={t("dashboard.kpi_sub.critical_phase")}
           color="#854f0b"
         />
       </div>
@@ -176,22 +178,22 @@ export default function Dashboard() {
             textTransform: "uppercase", color: "var(--gold)",
             fontFamily: "IBM Plex Mono, monospace", marginBottom: 12,
           }}>
-            Models actius recents
+            {t("dashboard.recent_active_models")}
           </div>
           {loading ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant…</div>
+            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>{t("common.loading")}</div>
           ) : recents.length === 0 ? (
             <div style={{
               padding: "20px", border: "1px dashed var(--border)", borderRadius: 8,
               textAlign: "center", color: "var(--text-muted)", fontSize: 12,
               fontFamily: "IBM Plex Mono, monospace",
             }}>
-              Sense models en curs.{" "}
+              {t("dashboard.no_models_in_progress")}{" "}
               <span
                 onClick={() => navigate("/models/nou")}
                 style={{ color: "var(--gold)", cursor: "pointer", textDecoration: "underline" }}
               >
-                Crea el primer
+                {t("dashboard.create_first")}
               </span>
             </div>
           ) : (
@@ -231,7 +233,7 @@ export default function Dashboard() {
                   fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
                 }}
               >
-                Veure tots els models →
+                {t("dashboard.see_all_models")} →
               </button>
             </div>
           )}
@@ -244,7 +246,7 @@ export default function Dashboard() {
             textTransform: "uppercase", color: "var(--gold)",
             fontFamily: "IBM Plex Mono, monospace", marginBottom: 12,
           }}>
-            Avisos POM
+            {t("dashboard.pom_alerts")}
           </div>
           {avisosSummary && (
             <div style={{
@@ -253,13 +255,13 @@ export default function Dashboard() {
               background: "var(--white)", fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
             }}>
               <div style={{ display: "flex", gap: 12, marginBottom: 6 }}>
-                <span style={{ color: "#a32d2d" }}>● {avisosSummary.oberts ?? 0} oberts</span>
-                <span style={{ color: "#3b6d11" }}>● {avisosSummary.resolts ?? 0} resolts</span>
-                <span style={{ color: "var(--text-muted)" }}>· {avisosSummary.dies ?? 30}d</span>
+                <span style={{ color: "#a32d2d" }}>● {t("dashboard.summary_open", { count: avisosSummary.oberts ?? 0 })}</span>
+                <span style={{ color: "#3b6d11" }}>● {t("dashboard.summary_resolved", { count: avisosSummary.resolts ?? 0 })}</span>
+                <span style={{ color: "var(--text-muted)" }}>· {t("dashboard.summary_days", { days: avisosSummary.dies ?? 30 })}</span>
               </div>
               {avisosSummary.top_poms?.length > 0 && (
                 <div style={{ color: "var(--text-muted)", fontSize: 10 }}>
-                  Top: {avisosSummary.top_poms.slice(0, 3).map(p =>
+                  {t("dashboard.summary_top")}: {avisosSummary.top_poms.slice(0, 3).map(p =>
                     `${p.pom_codi || p.pom} (${p.count})`
                   ).join(" · ")}
                 </div>
@@ -267,14 +269,14 @@ export default function Dashboard() {
             </div>
           )}
           {loading ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>Carregant…</div>
+            <div style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "IBM Plex Mono, monospace" }}>{t("common.loading")}</div>
           ) : avisos.length === 0 ? (
             <div style={{
               padding: "16px", border: "1px solid var(--border)", borderRadius: 8,
               textAlign: "center", color: "#3b6d11", fontSize: 12,
               fontFamily: "IBM Plex Mono, monospace", background: "#f0f9f0",
             }}>
-              ✓ Sense avisos oberts
+              ✓ {t("dashboard.no_open_alerts")}
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -291,7 +293,7 @@ export default function Dashboard() {
                   <div style={{ color: "#a32d2d", fontWeight: 500, marginBottom: 2 }}>
                     {a.pom_codi || a.pom} — {a.model_codi || a.model}
                   </div>
-                  <div style={{ color: "var(--text-muted)" }}>{a.missatge || a.message || "Desviació detectada"}</div>
+                  <div style={{ color: "var(--text-muted)" }}>{a.missatge || a.message || t("dashboard.deviation_detected")}</div>
                 </div>
               ))}
               {avisos.length > 6 && (
@@ -303,7 +305,7 @@ export default function Dashboard() {
                     fontFamily: "IBM Plex Mono, monospace", fontSize: 11,
                   }}
                 >
-                  +{avisos.length - 6} avisos més →
+                  +{t("dashboard.more_alerts", { count: avisos.length - 6 })} →
                 </button>
               )}
             </div>

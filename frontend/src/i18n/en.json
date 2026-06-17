@@ -1319,5 +1319,37 @@
       "sheet_name": "Sheet name",
       "description": "Description"
     }
+  },
+  "dashboard": {
+    "greeting_morning": "Good morning",
+    "greeting_afternoon": "Good afternoon",
+    "greeting_evening": "Good evening",
+    "onboarding_incomplete": "Incomplete setup",
+    "onboarding_steps_left": "{{count}} steps left to complete the setup",
+    "onboarding_complete_setup": "Complete the initial setup to unlock all features",
+    "complete_setup": "Complete setup",
+    "kpi": {
+      "total_models": "Total models",
+      "open_alerts": "Open alerts",
+      "prototype_samples": "In prototype/samples"
+    },
+    "kpi_sub": {
+      "in_system": "in the system",
+      "active_models": "active models",
+      "pom_deviations": "POM deviations",
+      "critical_phase": "models in critical phase"
+    },
+    "recent_active_models": "Recent active models",
+    "no_models_in_progress": "No models in progress.",
+    "create_first": "Create the first one",
+    "see_all_models": "See all models",
+    "pom_alerts": "POM alerts",
+    "summary_open": "{{count}} open",
+    "summary_resolved": "{{count}} resolved",
+    "summary_days": "{{days}}d",
+    "summary_top": "Top",
+    "no_open_alerts": "No open alerts",
+    "deviation_detected": "Deviation detected",
+    "more_alerts": "{{count}} more alerts"
   }
 }

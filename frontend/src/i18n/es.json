@@ -1319,5 +1319,37 @@
       "sheet_name": "Nombre ficha",
       "description": "Descripción"
     }
+  },
+  "dashboard": {
+    "greeting_morning": "Buenos días",
+    "greeting_afternoon": "Buenas tardes",
+    "greeting_evening": "Buenas noches",
+    "onboarding_incomplete": "Configuración incompleta",
+    "onboarding_steps_left": "Faltan {{count}} pasos para completar el setup",
+    "onboarding_complete_setup": "Completa el setup inicial para desbloquear todas las funcionalidades",
+    "complete_setup": "Completar setup",
+    "kpi": {
+      "total_models": "Total modelos",
+      "open_alerts": "Avisos abiertos",
+      "prototype_samples": "En prototipo/muestras"
+    },
+    "kpi_sub": {
+      "in_system": "en el sistema",
+      "active_models": "modelos activos",
+      "pom_deviations": "desviaciones POM",
+      "critical_phase": "modelos en fase crítica"
+    },
+    "recent_active_models": "Modelos activos recientes",
+    "no_models_in_progress": "Sin modelos en curso.",
+    "create_first": "Crea el primero",
+    "see_all_models": "Ver todos los modelos",
+    "pom_alerts": "Avisos POM",
+    "summary_open": "{{count}} abiertos",
+    "summary_resolved": "{{count}} resueltos",
+    "summary_days": "{{days}}d",
+    "summary_top": "Top",
+    "no_open_alerts": "Sin avisos abiertos",
+    "deviation_detected": "Desviación detectada",
+    "more_alerts": "{{count}} avisos más"
   }
 }
