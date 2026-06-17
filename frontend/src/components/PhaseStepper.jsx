@@ -1,4 +1,7 @@
+import { useTranslation } from 'react-i18next'
 
+// Enum de FASES del cicle de vida del model (id intacte: indexOf amb faseActual + lookup de
+// FASE_COLORS). El LABEL mostrat es tradueix via model_phases.<id>; l'id NO es tradueix.
 const FASES = [
   'Nou', 'Disseny', 'Tècnic', 'Prototip',
   'Mostres', 'Preproducció', 'Producció', 'Tancat'
@@ -19,6 +22,7 @@ const FASE_COLORS = {
 }
 
 export function PhaseStepper({ faseActual, onFaseClick }) {
+  const { t } = useTranslation()
   const idx = FASES.indexOf(faseActual)
 
   return (
@@ -40,7 +44,7 @@ export function PhaseStepper({ faseActual, onFaseClick }) {
           <div key={fase} style={{ display: 'flex', alignItems: 'center' }}>
             <div
               onClick={() => onFaseClick && onFaseClick(fase)}
-              title={fase}
+              title={t(`model_phases.${fase}`, fase)}
               style={{
                 padding: '3px 10px',
                 borderRadius: 3,
@@ -65,7 +69,7 @@ export function PhaseStepper({ faseActual, onFaseClick }) {
             >
               {active && <span style={{ marginRight: 4, opacity: 0.8 }}>▶</span>}
               {done && <span style={{ marginRight: 4, opacity: 0.5 }}>✓</span>}
-              {fase}
+              {t(`model_phases.${fase}`, fase)}
             </div>
             {i < FASES.length - 1 && (
               <div style={{

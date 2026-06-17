@@ -1579,5 +1579,15 @@
       "base_size": "Talla base",
       "base_value": "Valor base"
     }
+  },
+  "model_phases": {
+    "Nou": "Nuevo",
+    "Disseny": "Diseño",
+    "Tècnic": "Técnico",
+    "Prototip": "Prototipo",
+    "Mostres": "Muestras",
+    "Preproducció": "Preproducción",
+    "Producció": "Producción",
+    "Tancat": "Cerrado"
   }
 }
