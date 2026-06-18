@@ -340,8 +340,6 @@ export const pomAlerts = {
   update: (id, data) => client.patch(`/api/v1/pom-alerts/${id}/`, data),
 }
 
-export const alerts = pomAlerts
-
 export const timers = {
   list: (params) => client.get('/api/v1/timers/', { params }),
   create: (data) => client.post('/api/v1/timers/', data),

@@ -207,7 +207,6 @@
     "garment_pom_map": "Garment POM Map",
     "onboarding": "Configuración inicial",
     "ia": "IA",
-    "avisos": "Avisos",
     "configuracio": "Configuración",
     "perfil": "Mi perfil",
     "logout": "Cerrar sesión",
@@ -1380,56 +1379,19 @@
     "complete_setup": "Completar setup",
     "kpi": {
       "total_models": "Total modelos",
-      "open_alerts": "Avisos abiertos",
       "prototype_samples": "En prototipo/muestras"
     },
     "kpi_sub": {
       "in_system": "en el sistema",
       "active_models": "modelos activos",
-      "pom_deviations": "desviaciones POM",
       "critical_phase": "modelos en fase crítica"
     },
     "recent_active_models": "Modelos activos recientes",
     "no_models_in_progress": "Sin modelos en curso.",
     "create_first": "Crea el primero",
-    "see_all_models": "Ver todos los modelos",
-    "pom_alerts": "Avisos POM",
-    "summary_open": "{{count}} abiertos",
-    "summary_resolved": "{{count}} resueltos",
-    "summary_days": "{{days}}d",
-    "summary_top": "Top",
-    "no_open_alerts": "Sin avisos abiertos",
-    "deviation_detected": "Desviación detectada",
-    "more_alerts": "{{count}} avisos más"
+    "see_all_models": "Ver todos los modelos"
   },
   "alerts": {
-    "status": {
-      "Pendent": "Pendiente",
-      "Acceptat": "Aceptado",
-      "Corregit": "Corregido",
-      "Tots": "Todos"
-    },
-    "type": {
-      "desviacio": "Desviación",
-      "fora_rang": "Fuera de rango",
-      "manca_mesura": "Falta medida",
-      "conflicte": "Conflicto"
-    },
-    "subtitle_all": "{{count}} avisos en total",
-    "subtitle_pending": "{{count}} avisos pendientes",
-    "subtitle_accepted": "{{count}} avisos aceptados",
-    "subtitle_corrected": "{{count}} avisos corregidos",
-    "empty": "Ningún aviso en estado {{status}}.",
-    "col": {
-      "model": "Modelo",
-      "type": "Tipo",
-      "detected": "Detectado",
-      "expected": "Esperado",
-      "status": "Estado",
-      "date": "Fecha"
-    },
-    "accept": "Aceptar",
-    "resolve": "Resolver",
     "gravetat": {
       "CRITICA": "Crítica",
       "IMPORTANT": "Importante",

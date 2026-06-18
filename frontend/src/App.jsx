@@ -30,7 +30,6 @@ const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
 const TechSheetTemplateEditor = lazy(() => import('./pages/TechSheetTemplateEditor'))
 const KanbanTasks = lazy(() => import('./pages/KanbanTasks'))
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
-const Alerts = lazy(() => import('./pages/Alerts'))
 const UsersRoles = lazy(() => import('./pages/UsersRoles'))
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
 const CompanyCalendar = lazy(() => import('./pages/CompanyCalendar'))
@@ -149,7 +148,6 @@ export default function App() {
           <Route path="onboarding" element={<OnboardingWizard />} />
           <Route path="configuracio/usuaris" element={<UsersRoles />} />
           <Route path="configuracio/calendari" element={<CompanyCalendar />} />
-          <Route path="avisos" element={<Alerts />} />
           <Route path="registre-activitat" element={<RegistreActivitat />} />
           <Route path="perfil" element={<UserProfilePage />} />
         </Route>

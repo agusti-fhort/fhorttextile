@@ -207,7 +207,6 @@
     "garment_pom_map": "Garment POM Map",
     "onboarding": "Initial setup",
     "ia": "AI",
-    "avisos": "Alerts",
     "configuracio": "Configuration",
     "perfil": "My profile",
     "logout": "Sign out",
@@ -1380,56 +1379,19 @@
     "complete_setup": "Complete setup",
     "kpi": {
       "total_models": "Total models",
-      "open_alerts": "Open alerts",
       "prototype_samples": "In prototype/samples"
     },
     "kpi_sub": {
       "in_system": "in the system",
       "active_models": "active models",
-      "pom_deviations": "POM deviations",
       "critical_phase": "models in critical phase"
     },
     "recent_active_models": "Recent active models",
     "no_models_in_progress": "No models in progress.",
     "create_first": "Create the first one",
-    "see_all_models": "See all models",
-    "pom_alerts": "POM alerts",
-    "summary_open": "{{count}} open",
-    "summary_resolved": "{{count}} resolved",
-    "summary_days": "{{days}}d",
-    "summary_top": "Top",
-    "no_open_alerts": "No open alerts",
-    "deviation_detected": "Deviation detected",
-    "more_alerts": "{{count}} more alerts"
+    "see_all_models": "See all models"
   },
   "alerts": {
-    "status": {
-      "Pendent": "Pending",
-      "Acceptat": "Accepted",
-      "Corregit": "Corrected",
-      "Tots": "All"
-    },
-    "type": {
-      "desviacio": "Deviation",
-      "fora_rang": "Out of range",
-      "manca_mesura": "Missing measurement",
-      "conflicte": "Conflict"
-    },
-    "subtitle_all": "{{count}} alerts in total",
-    "subtitle_pending": "{{count}} pending alerts",
-    "subtitle_accepted": "{{count}} accepted alerts",
-    "subtitle_corrected": "{{count}} corrected alerts",
-    "empty": "No alerts with status {{status}}.",
-    "col": {
-      "model": "Model",
-      "type": "Type",
-      "detected": "Detected",
-      "expected": "Expected",
-      "status": "Status",
-      "date": "Date"
-    },
-    "accept": "Accept",
-    "resolve": "Resolve",
     "gravetat": {
       "CRITICA": "Critical",
       "IMPORTANT": "Important",

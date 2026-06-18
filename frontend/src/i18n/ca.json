@@ -207,7 +207,6 @@
     "garment_pom_map": "Garment POM Map",
     "onboarding": "Configuració inicial",
     "ia": "IA",
-    "avisos": "Avisos",
     "configuracio": "Configuració",
     "perfil": "El meu perfil",
     "logout": "Tancar sessió",
@@ -1380,56 +1379,19 @@
     "complete_setup": "Completar setup",
     "kpi": {
       "total_models": "Total models",
-      "open_alerts": "Avisos oberts",
       "prototype_samples": "En prototip/mostres"
     },
     "kpi_sub": {
       "in_system": "al sistema",
       "active_models": "models actius",
-      "pom_deviations": "desviacions POM",
       "critical_phase": "models en fase crítica"
     },
     "recent_active_models": "Models actius recents",
     "no_models_in_progress": "Sense models en curs.",
     "create_first": "Crea el primer",
-    "see_all_models": "Veure tots els models",
-    "pom_alerts": "Avisos POM",
-    "summary_open": "{{count}} oberts",
-    "summary_resolved": "{{count}} resolts",
-    "summary_days": "{{days}}d",
-    "summary_top": "Top",
-    "no_open_alerts": "Sense avisos oberts",
-    "deviation_detected": "Desviació detectada",
-    "more_alerts": "{{count}} avisos més"
+    "see_all_models": "Veure tots els models"
   },
   "alerts": {
-    "status": {
-      "Pendent": "Pendent",
-      "Acceptat": "Acceptat",
-      "Corregit": "Corregit",
-      "Tots": "Tots"
-    },
-    "type": {
-      "desviacio": "Desviació",
-      "fora_rang": "Fora de rang",
-      "manca_mesura": "Manca mesura",
-      "conflicte": "Conflicte"
-    },
-    "subtitle_all": "{{count}} avisos en total",
-    "subtitle_pending": "{{count}} avisos pendents",
-    "subtitle_accepted": "{{count}} avisos acceptats",
-    "subtitle_corrected": "{{count}} avisos corregits",
-    "empty": "Cap avís en estat {{status}}.",
-    "col": {
-      "model": "Model",
-      "type": "Tipus",
-      "detected": "Detectat",
-      "expected": "Esperat",
-      "status": "Estat",
-      "date": "Data"
-    },
-    "accept": "Acceptar",
-    "resolve": "Resoldre",
     "gravetat": {
       "CRITICA": "Crítica",
       "IMPORTANT": "Important",
