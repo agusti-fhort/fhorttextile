@@ -44,6 +44,26 @@ def me_view(request):
     return Response(MeSerializer(request.user).data)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def me_change_password(request):
+    """POST /api/v1/me/change-password/  {new_password, new_password_confirm} — canvi autoservei.
+    NO s'exigeix la contrasenya actual: la sessió JWT ja autentica. El JWT és stateless, així que
+    la sessió actual segueix vàlida després del canvi (no es blacklisteja res)."""
+    new_password = request.data.get('new_password') or ''
+    confirm = request.data.get('new_password_confirm') or ''
+    if new_password != confirm:
+        return Response({'error': 'Les contrasenyes no coincideixen.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        validate_password(new_password, request.user)
+    except DjangoValidationError as e:
+        return Response({'error': ' '.join(e.messages)}, status=http_status.HTTP_400_BAD_REQUEST)
+    request.user.set_password(new_password)
+    request.user.save(update_fields=['password'])
+    return Response({'ok': True}, status=http_status.HTTP_200_OK)
+
+
 class UserViewSet(mixins.ListModelMixin,
                   mixins.RetrieveModelMixin,
                   mixins.CreateModelMixin,

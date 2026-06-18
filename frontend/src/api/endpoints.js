@@ -361,6 +361,7 @@ export const timers = {
 // Usuari autenticat (capabilities + rol_nom). El backend SÍ exposa /api/v1/me/.
 export const me = {
   get: () => client.get('/api/v1/me/'),
+  changePassword: (data) => client.post('/api/v1/me/change-password/', data),   // {new_password, new_password_confirm}
 }
 
 // Gestió d'usuaris (gated manage_users a l'escriptura). Tram 3: pantalla "Usuaris i rols".

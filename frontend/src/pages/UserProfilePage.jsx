@@ -8,6 +8,26 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true)
   const logout = useAuthStore(s => s.logout)
 
+  // Canvi de contrasenya autoservei (la sessió JWT segueix vàlida després).
+  const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwMsg, setPwMsg] = useState(null)   // { type: 'ok'|'err', text }
+
+  function changePassword(e) {
+    e.preventDefault()
+    setPwMsg(null)
+    if (pw !== pw2) { setPwMsg({ type: 'err', text: 'Les contrasenyes no coincideixen.' }); return }
+    setPwSaving(true)
+    me.changePassword({ new_password: pw, new_password_confirm: pw2 })
+      .then(() => { setPwMsg({ type: 'ok', text: 'Contrasenya actualitzada.' }); setPw(''); setPw2('') })
+      .catch(err => {
+        const data = err?.response?.data
+        setPwMsg({ type: 'err', text: data?.error || data?.detail || 'No s\'ha pogut actualitzar la contrasenya.' })
+      })
+      .finally(() => setPwSaving(false))
+  }
+
   useEffect(() => {
     me.get()
       .then(res => setProfile(res.data))
@@ -109,6 +129,47 @@ export default function UserProfilePage() {
           Tancar sessió
         </button>
       </Card>
+
+      <Card style={{marginTop: '1.5rem'}}>
+        <h2 style={{fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4}}>Canviar contrasenya</h2>
+        <p style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginBottom: '1.2rem'}}>
+          Introdueix la teva nova contrasenya. La sessió actual continua activa.
+        </p>
+        <form onSubmit={changePassword} style={{display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 360}}>
+          <div>
+            <label style={pwLabelS}>Nova contrasenya</label>
+            <input type="password" autoComplete="new-password" value={pw}
+                   onChange={e => setPw(e.target.value)} style={pwInputS} />
+          </div>
+          <div>
+            <label style={pwLabelS}>Confirma la contrasenya</label>
+            <input type="password" autoComplete="new-password" value={pw2}
+                   onChange={e => setPw2(e.target.value)} style={pwInputS} />
+          </div>
+          {pwMsg && (
+            <div style={{
+              fontSize: 'var(--fs-body)', padding: '8px 10px', borderRadius: 6,
+              background: pwMsg.type === 'ok' ? 'var(--ok-bg)' : 'var(--err-bg)',
+              color: pwMsg.type === 'ok' ? 'var(--ok)' : 'var(--err)',
+            }}>{pwMsg.text}</div>
+          )}
+          <button type="submit" disabled={pwSaving || !pw || !pw2} style={{
+            background: 'var(--gold)', color: 'white', border: 'none', borderRadius: 8,
+            padding: '10px 16px', fontSize: 'var(--fs-body)', fontWeight: 500,
+            cursor: pwSaving ? 'default' : 'pointer', opacity: (pwSaving || !pw || !pw2) ? 0.6 : 1,
+            alignSelf: 'flex-start',
+          }}>{pwSaving ? 'Desant…' : 'Actualitzar contrasenya'}</button>
+        </form>
+      </Card>
     </div>
   )
+}
+
+const pwInputS = {
+  width: '100%', boxSizing: 'border-box', fontFamily: 'IBM Plex Mono, monospace',
+  fontSize: 'var(--fs-body)', padding: '9px 11px', marginTop: 4,
+  border: '0.5px solid var(--gray-l)', borderRadius: 8, background: 'var(--white)', color: 'var(--text-main)',
+}
+const pwLabelS = {
+  fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em',
 }
