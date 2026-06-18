@@ -668,10 +668,10 @@ export default function FittingDetail() {
   // LINEAR amb break: "+2 · break XXL +2.5" · LINEAR uniforme: "+2" · STEP: "lliure" · sense regla: res.
   const regleLabel = (row) => {
     if (row.logica == null) return ''
-    if (row.logica === 'STEP') return 'lliure'
+    if (row.logica === 'STEP') return t('fitting.grid.rule_free')
     if (row.increment_base == null) return ''
     if (row.increment_break != null && row.talla_break_label)
-      return `+${row.increment_base} · break ${row.talla_break_label} +${row.increment_break}`
+      return `+${row.increment_base} · ${t('fitting.grid.break')} ${row.talla_break_label} +${row.increment_break}`
     return `+${row.increment_base}`
   }
 
@@ -840,7 +840,7 @@ export default function FittingDetail() {
                   <tr>
                     <th rowSpan={2} style={stickyHd(0, COL_POM_W)}>{t('fitting.grid.pom')}</th>
                     <th rowSpan={2} style={stickyHd(COL_POM_W, COL_NOM_W)}>{t('fitting.grid.name')}</th>
-                    <th rowSpan={2} style={stickyHd(COL_POM_W + COL_NOM_W, COL_REG_W)}>Règim</th>
+                    <th rowSpan={2} style={stickyHd(COL_POM_W + COL_NOM_W, COL_REG_W)}>{t('fitting.grid.regime')}</th>
                     {sizeLabels.map(s => {
                       const base = s === baseLabel
                       return (

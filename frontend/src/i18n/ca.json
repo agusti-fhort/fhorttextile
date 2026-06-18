@@ -958,6 +958,9 @@
       "evolution": "Evolució",
       "empty": "Aquesta peça no té línies.",
       "name": "Nom",
+      "regime": "Règim",
+      "rule_free": "lliure",
+      "break": "trencament",
       "note": "Nota",
       "no_value": "—"
     },

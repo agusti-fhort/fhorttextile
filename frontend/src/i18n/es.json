@@ -958,6 +958,9 @@
       "evolution": "Evolución",
       "empty": "Esta pieza no tiene líneas.",
       "name": "Nombre",
+      "regime": "Régimen",
+      "rule_free": "libre",
+      "break": "ruptura",
       "note": "Nota",
       "no_value": "—"
     },
