@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { me } from '../api/endpoints'
 import useAuthStore from '../store/auth'
 import Card from '../components/ui/Card'
 
 export default function UserProfilePage() {
+  const { t } = useTranslation()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const logout = useAuthStore(s => s.logout)
@@ -14,20 +16,6 @@ export default function UserProfilePage() {
   const [pwSaving, setPwSaving] = useState(false)
   const [pwMsg, setPwMsg] = useState(null)   // { type: 'ok'|'err', text }
 
-  function changePassword(e) {
-    e.preventDefault()
-    setPwMsg(null)
-    if (pw !== pw2) { setPwMsg({ type: 'err', text: 'Les contrasenyes no coincideixen.' }); return }
-    setPwSaving(true)
-    me.changePassword({ new_password: pw, new_password_confirm: pw2 })
-      .then(() => { setPwMsg({ type: 'ok', text: 'Contrasenya actualitzada.' }); setPw(''); setPw2('') })
-      .catch(err => {
-        const data = err?.response?.data
-        setPwMsg({ type: 'err', text: data?.error || data?.detail || 'No s\'ha pogut actualitzar la contrasenya.' })
-      })
-      .finally(() => setPwSaving(false))
-  }
-
   useEffect(() => {
     me.get()
       .then(res => setProfile(res.data))
@@ -35,14 +23,29 @@ export default function UserProfilePage() {
       .finally(() => setLoading(false))
   }, [])
 
+  function changePassword(e) {
+    e.preventDefault()
+    setPwMsg(null)
+    if (pw !== pw2) { setPwMsg({ type: 'err', text: t('userProfile.pw_mismatch') }); return }
+    setPwSaving(true)
+    me.changePassword({ new_password: pw, new_password_confirm: pw2 })
+      .then(() => { setPwMsg({ type: 'ok', text: t('userProfile.pw_ok') }); setPw(''); setPw2('') })
+      .catch(err => {
+        // Errors del backend (validadors de password): literal del servidor via firstError.
+        const data = err?.response?.data
+        setPwMsg({ type: 'err', text: data?.error || data?.detail || t('userProfile.pw_error') })
+      })
+      .finally(() => setPwSaving(false))
+  }
+
   if (loading) return (
     <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
-      Carregant…
+      {t('userProfile.st_loading')}
     </div>
   )
   if (!profile) return (
     <div style={{padding: '3rem', textAlign: 'center', color: 'var(--err)', fontSize: 'var(--fs-body)'}}>
-      No s'ha pogut carregar el perfil.
+      {t('userProfile.st_error')}
     </div>
   )
 
@@ -53,12 +56,22 @@ export default function UserProfilePage() {
     .slice(0, 2)
     .toUpperCase()
 
+  // [clau i18n, valor]; 'pf_color' té tractament especial (mostra el cercle de color).
+  const fields = [
+    ['pf_nom_complet', profile.nom_complet],
+    ['pf_username',    profile.username],
+    ['pf_email',       profile.email],
+    ['pf_rol',         profile.rol_nom],
+    ['pf_cost_hora',   profile.cost_hora != null ? `${profile.cost_hora} €` : null],
+    ['pf_color',       profile.color_avatar],
+  ]
+
   return (
     <div style={{maxWidth: 640}}>
       <div style={{marginBottom: '1.5rem'}}>
-        <h1 style={{fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4}}>El meu perfil</h1>
+        <h1 style={{fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4}}>{t('userProfile.hd_title')}</h1>
         <p style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300}}>
-          Informació de l'usuari autenticat
+          {t('userProfile.hd_subtitle')}
         </p>
       </div>
 
@@ -83,27 +96,20 @@ export default function UserProfilePage() {
               {profile.nom_complet || profile.username}
             </h2>
             <div style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300}}>
-              {profile.rol_nom || 'Sense rol'}
+              {profile.rol_nom || t('userProfile.pf_no_role')}
             </div>
           </div>
         </div>
 
-        {[
-          ['Nom complet', profile.nom_complet],
-          ['Usuari',      profile.username],
-          ['Email',       profile.email],
-          ['Rol',         profile.rol_nom],
-          ['Cost/hora',   profile.cost_hora != null ? `${profile.cost_hora} €` : null],
-          ['Color avatar', profile.color_avatar],
-        ].map(([k, v]) => (
-          <div key={k} style={{
+        {fields.map(([key, v]) => (
+          <div key={key} style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             padding: '0.6rem 0', borderBottom: '0.5px solid var(--gray-l)',
             fontSize: 'var(--fs-body)',
           }}>
-            <span style={{color: 'var(--gray)', fontWeight: 300}}>{k}</span>
+            <span style={{color: 'var(--gray)', fontWeight: 300}}>{t(`userProfile.${key}`)}</span>
             <span style={{display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400}}>
-              {k === 'Color avatar' && v && (
+              {key === 'pf_color' && v && (
                 <span style={{
                   width: 16, height: 16, borderRadius: '50%',
                   background: v, border: '0.5px solid var(--gray-l)',
@@ -121,28 +127,28 @@ export default function UserProfilePage() {
             background: 'var(--gold)', color: 'white',
             border: 'none', borderRadius: 8,
             padding: '10px 16px', fontSize: 'var(--fs-body)', fontWeight: 500,
-            cursor: 'pointer', 
+            cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}
         >
           <i className="ti ti-logout" style={{fontSize: 14}} />
-          Tancar sessió
+          {t('userProfile.pf_logout')}
         </button>
       </Card>
 
       <Card style={{marginTop: '1.5rem'}}>
-        <h2 style={{fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4}}>Canviar contrasenya</h2>
+        <h2 style={{fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4}}>{t('userProfile.pw_title')}</h2>
         <p style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginBottom: '1.2rem'}}>
-          Introdueix la teva nova contrasenya. La sessió actual continua activa.
+          {t('userProfile.pw_subtitle')}
         </p>
         <form onSubmit={changePassword} style={{display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 360}}>
           <div>
-            <label style={pwLabelS}>Nova contrasenya</label>
+            <label style={pwLabelS}>{t('userProfile.pw_new')}</label>
             <input type="password" autoComplete="new-password" value={pw}
                    onChange={e => setPw(e.target.value)} style={pwInputS} />
           </div>
           <div>
-            <label style={pwLabelS}>Confirma la contrasenya</label>
+            <label style={pwLabelS}>{t('userProfile.pw_confirm')}</label>
             <input type="password" autoComplete="new-password" value={pw2}
                    onChange={e => setPw2(e.target.value)} style={pwInputS} />
           </div>
@@ -158,7 +164,7 @@ export default function UserProfilePage() {
             padding: '10px 16px', fontSize: 'var(--fs-body)', fontWeight: 500,
             cursor: pwSaving ? 'default' : 'pointer', opacity: (pwSaving || !pw || !pw2) ? 0.6 : 1,
             alignSelf: 'flex-start',
-          }}>{pwSaving ? 'Desant…' : 'Actualitzar contrasenya'}</button>
+          }}>{pwSaving ? t('userProfile.pw_saving') : t('userProfile.pw_submit')}</button>
         </form>
       </Card>
     </div>
