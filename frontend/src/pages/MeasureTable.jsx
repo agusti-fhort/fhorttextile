@@ -26,10 +26,16 @@ function VersionCell({ value, isBase, baseSize, groupStart }) {
   )
 }
 
-// Fit actual (valor_real): única cel·la editable. Vermell+negreta si difereix de Base.
+// Càlcul compartit: la cel·la és "modificada" (vermell) si el seu valor difereix de la Base.
+// Mateixa condició a Editable i ReadOnly perquè el color coincideixi exactament en les dues vistes.
+const isModified = (value, baseValue) => value !== '' && value != null && baseValue != null
+  && Number(value) !== Number(baseValue)
+
+// Fit actual (valor_real) EDITABLE: única cel·la amb input. Vermell+negreta si difereix de Base.
 // Stepper natiu (fletxes); amplada suficient per "104,75" + fletxes. Sense nota per cel·la
 // (el comentari és global del fitting, viu a Observacions).
-function CurrentFitCell({ line, baseSize, baseValue, value, edited, onValue, onAnchor, onPropagated, focusRef }) {
+// Els hooks d'autosave viuen NOMÉS aquí → en lectura no es munten (es renderitza ReadOnlyCell).
+function EditableCell({ line, baseSize, baseValue, value, edited, onValue, onAnchor, onPropagated, focusRef }) {
   // Persist segons règim del POM (ve a la línia): STEP → PATCH pur, només aquesta cel·la.
   // LINEAR/canònic → propaga el delta i repinta les germanes amb el valor_real propagat.
   const lineId = line?.id
@@ -44,10 +50,7 @@ function CurrentFitCell({ line, baseSize, baseValue, value, edited, onValue, onA
   }, [lineId, isStep, onPropagated])
   const [realState, saveReal] = useDebouncedSave(persist)
 
-  if (!line) return <td style={cellTd(baseSize, false, baseSize)} />
-
-  const modified = value !== '' && value != null && baseValue != null
-    && Number(value) !== Number(baseValue)
+  const modified = isModified(value, baseValue)
 
   return (
     <td style={{ ...cellTd(baseSize, false, baseSize), position: 'relative' }}>
@@ -70,11 +73,35 @@ function CurrentFitCell({ line, baseSize, baseValue, value, edited, onValue, onA
   )
 }
 
+// Fit actual en LECTURA: text pla, mateix color 'modified' que EditableCell, SENSE negreta
+// d'ancoratge i SENSE cap hook d'autosave (no hereta res de l'edició).
+function ReadOnlyCell({ baseSize, baseValue, value }) {
+  const modified = isModified(value, baseValue)
+  return (
+    <td style={{
+      ...cellTd(baseSize, false, baseSize),
+      color: modified ? 'var(--err)' : 'var(--text-main)', fontWeight: 400,
+    }}>
+      {value === '' || value == null ? '—' : value}
+    </td>
+  )
+}
+
+// Selector prim de cel·la de fit actual: buida si no hi ha línia; lectura o edició segons readOnly.
+// Com que la tria es fa aquí, els hooks d'EditableCell només es munten en mode edició.
+function CurrentFitCell({ readOnly, line, baseSize, baseValue, value, edited, onValue, onAnchor, onPropagated, focusRef }) {
+  if (!line) return <td style={cellTd(baseSize, false, baseSize)} />
+  return readOnly
+    ? <ReadOnlyCell baseSize={baseSize} baseValue={baseValue} value={value} />
+    : <EditableCell line={line} baseSize={baseSize} baseValue={baseValue} value={value} edited={edited}
+        onValue={onValue} onAnchor={onAnchor} onPropagated={onPropagated} focusRef={focusRef} />
+}
+
 // Graella matricial editable d'un fitting (files = POM, columnes = talles × versions + fit actual).
 // Tota la lògica d'estat (reals, ancoratge, propagació, règim) viu al pare i arriba per props.
 export default function MeasureTable({
   pomRows, sizeLabels, baseLabel, versionNumbers,
-  reals, editedIds, focusedIdRef,
+  reals, editedIds, focusedIdRef = null, readOnly = false,
   onValue, onAnchor, onPropagated, onRegimChange,
 }) {
   const { t } = useTranslation()
@@ -158,20 +185,27 @@ export default function MeasureTable({
               </td>
               <td style={{ ...stickyTd(COL_POM_W, COL_NOM_W, rowBg), fontSize: 'var(--fs-body)', color: 'var(--text-muted)', whiteSpace: 'normal' }}>{row.nom}</td>
               <td style={stickyTd(COL_POM_W + COL_NOM_W, COL_REG_W, rowBg)}>
-                {/* PG-4b-3c — règim del POM: select (dalt) + etiqueta de regla (sota, moguda des de la capçalera). */}
-                <select
-                  value={row.logica ?? ''}
-                  onChange={e => onRegimChange(row, e.target.value)}
-                  style={{
-                    font: 'inherit', fontSize: 'var(--fs-label)', width: '100%', padding: '1px 2px',
-                    border: '1px solid var(--border)', borderRadius: 4,
-                    background: 'var(--white)', color: 'var(--text-main)', boxSizing: 'border-box',
-                  }}
-                >
-                  {row.logica == null && <option value="">—</option>}
-                  <option value="LINEAR">LINEAR</option>
-                  <option value="STEP">STEP</option>
-                </select>
+                {/* PG-4b-3c — règim del POM: select (dalt) + etiqueta de regla (sota). En lectura, text pla.
+                    LINEAR/STEP són valors de DADA (row.logica), no es tradueixen. */}
+                {readOnly ? (
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-main)' }}>
+                    {row.logica ?? '—'}
+                  </div>
+                ) : (
+                  <select
+                    value={row.logica ?? ''}
+                    onChange={e => onRegimChange(row, e.target.value)}
+                    style={{
+                      font: 'inherit', fontSize: 'var(--fs-label)', width: '100%', padding: '1px 2px',
+                      border: '1px solid var(--border)', borderRadius: 4,
+                      background: 'var(--white)', color: 'var(--text-main)', boxSizing: 'border-box',
+                    }}
+                  >
+                    {row.logica == null && <option value="">—</option>}
+                    <option value="LINEAR">LINEAR</option>
+                    <option value="STEP">STEP</option>
+                  </select>
+                )}
                 {regleLabel(row) && (
                   <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: 'var(--text-muted)', whiteSpace: 'nowrap', marginTop: 1 }}>
                     {regleLabel(row)}
@@ -189,7 +223,7 @@ export default function MeasureTable({
                     isBase={idx === 0} baseSize={base} groupStart={idx === 0} />
                 ))
                 cells.push(
-                  <CurrentFitCell key={`${s}-cur`} line={line} baseSize={base} baseValue={baseValue}
+                  <CurrentFitCell key={`${s}-cur`} readOnly={readOnly} line={line} baseSize={base} baseValue={baseValue}
                     value={line ? reals[line.id] ?? '' : ''}
                     edited={line ? editedIds.has(line.id) : false}
                     onValue={onValue} onAnchor={onAnchor} onPropagated={onPropagated} focusRef={focusedIdRef} />

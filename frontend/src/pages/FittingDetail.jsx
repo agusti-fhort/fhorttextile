@@ -537,6 +537,8 @@ export default function FittingDetail() {
   if (!session) return null
 
   const pieces = session.piece_fittings || []
+  // Sessió tancada/anul·lada → tota la revisió és de lectura (split 40/60 amb taula en lectura).
+  const readOnly = session.estat === 'Tancada' || session.estat === 'Anullada'
   const lines = grid?.lines || []
   const model = grid?.model || {}
   // Trim perquè base_size_label coincideixi amb les etiquetes de talla (poden venir amb espais).
@@ -651,7 +653,8 @@ export default function FittingDetail() {
       {infoOpen && session.model && <ModelFilesPanel modelId={session.model} />}
 
       {/* Pantalla de revisió "Gravar el fitting" (substitueix la taula de treball) */}
-      {reviewMode && (
+      {/* Revisió OBERTA (sessió no segellada, "Tornar a revisió"): ReviewScreen sol, sense split. */}
+      {reviewMode && !readOnly && (
         <ReviewScreen
           session={session}
           pieces={pieces}
@@ -661,8 +664,40 @@ export default function FittingDetail() {
           onShowGrid={() => setReviewMode(false)}
           onCreatePiece={createPiece}
           creatingPiece={creatingPiece}
-          readOnly={session.estat === 'Tancada' || session.estat === 'Anullada'}
+          readOnly={false}
         />
+      )}
+
+      {/* Revisió TANCADA: split 40/60 — esquerra revisió, dreta taula en lectura (peça activa). */}
+      {reviewMode && readOnly && (
+        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start' }}>
+          <div style={{ flex: '0 0 40%', minWidth: 0, overflowY: 'auto', maxHeight: 'calc(100vh - 180px)' }}>
+            <ReviewScreen
+              session={session}
+              pieces={pieces}
+              onBack={() => setReviewMode(false)}
+              onSaved={() => navigate(-1)}
+              onDone={() => { loadSession().then(reloadGrid) }}
+              onShowGrid={() => setReviewMode(false)}
+              onCreatePiece={createPiece}
+              creatingPiece={creatingPiece}
+              readOnly
+            />
+          </div>
+          <div style={{ flex: '1 1 60%', minWidth: 0, overflow: 'auto', maxHeight: 'calc(100vh - 180px)' }}>
+            {!activePieceId ? null
+              : lines.length === 0
+                ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
+                : (
+                  <MeasureTable
+                    readOnly
+                    key={activePieceId}
+                    pomRows={pomRows} sizeLabels={sizeLabels} baseLabel={baseLabel} versionNumbers={versionNumbers}
+                    reals={reals} editedIds={editedIds}
+                  />
+                )}
+          </div>
+        </div>
       )}
 
       {!reviewMode && (<>
