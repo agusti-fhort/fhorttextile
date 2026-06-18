@@ -175,7 +175,22 @@
     "email": "Email",
     "email_placeholder": "name@company.com",
     "send_link": "SEND LINK",
-    "back_login": "← Back to login"
+    "back_login": "← Back to login",
+    "forgot_admin_msg": "Ask your administrator to generate a recovery link for you.",
+    "reset_ok": "Password updated. You can now sign in with the new one."
+  },
+  "reset": {
+    "title": "New password",
+    "subtitle": "Enter your new password.",
+    "checking": "Verifying the link…",
+    "invalid": "This recovery link is invalid or has expired. Ask your administrator for a new one.",
+    "back_login": "Back to login",
+    "new_password": "New password",
+    "confirm_password": "Confirm password",
+    "mismatch": "Passwords do not match.",
+    "submit": "Save password",
+    "saving": "Saving…",
+    "error_generic": "Could not update the password."
   },
   "nav": {
     "import_collection": "Import collection",
@@ -765,6 +780,12 @@
     "ue_save": "Save",
     "ue_saving": "Saving…",
     "ue_updated": "User updated.",
+    "reset_link": "Reset link",
+    "rl_title": "Recovery link",
+    "rl_copy": "Copy",
+    "rl_copied": "Copied!",
+    "rl_note": "Expires in 24h. Pass this link to the person through any channel you prefer.",
+    "rl_error": "Could not generate the link.",
     "roles": {
       "technician": "Technician",
       "product_manager": "Product manager",

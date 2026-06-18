@@ -36,6 +36,7 @@ const CompanyCalendar = lazy(() => import('./pages/CompanyCalendar'))
 const Planning = lazy(() => import('./pages/Planning'))
 const PlanningCalendar = lazy(() => import('./pages/PlanningCalendar'))
 const RegistreActivitat = lazy(() => import('./pages/RegistreActivitat'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -98,6 +99,8 @@ export default function App() {
       <Suspense fallback={<div className="p-8 text-gray-500">Carregant…</div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        {/* Recuperació de contrasenya: pública, fora del guard (la persona no està autenticada). */}
+        <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
         {/* Fitxa tècnica: editor full-screen FORA del Shell (sense sidebar), però protegit. */}
         <Route path="/models/:id/fitxa" element={
           <ProtectedRoute>

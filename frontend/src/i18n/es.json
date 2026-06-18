@@ -175,7 +175,22 @@
     "email": "Correo electrónico",
     "email_placeholder": "nombre@empresa.com",
     "send_link": "ENVIAR ENLACE",
-    "back_login": "← Volver al acceso"
+    "back_login": "← Volver al acceso",
+    "forgot_admin_msg": "Pide al administrador que te genere un enlace de recuperación.",
+    "reset_ok": "Contraseña actualizada. Ya puedes acceder con la nueva."
+  },
+  "reset": {
+    "title": "Nueva contraseña",
+    "subtitle": "Introduce tu nueva contraseña.",
+    "checking": "Verificando el enlace…",
+    "invalid": "Este enlace de recuperación no es válido o ha caducado. Pide uno nuevo al administrador.",
+    "back_login": "Volver al acceso",
+    "new_password": "Nueva contraseña",
+    "confirm_password": "Confirma la contraseña",
+    "mismatch": "Las contraseñas no coinciden.",
+    "submit": "Guardar contraseña",
+    "saving": "Guardando…",
+    "error_generic": "No se ha podido actualizar la contraseña."
   },
   "nav": {
     "import_collection": "Importar colección",
@@ -765,6 +780,12 @@
     "ue_save": "Guardar",
     "ue_saving": "Guardando…",
     "ue_updated": "Usuario actualizado.",
+    "reset_link": "Enlace de reset",
+    "rl_title": "Enlace de recuperación",
+    "rl_copy": "Copiar",
+    "rl_copied": "¡Copiado!",
+    "rl_note": "Caduca en 24h. Pasa este enlace a la persona por el canal que quieras.",
+    "rl_error": "No se ha podido generar el enlace.",
     "roles": {
       "technician": "Técnico",
       "product_manager": "Product manager",

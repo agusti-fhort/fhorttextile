@@ -175,7 +175,22 @@
     "email": "Correu electrònic",
     "email_placeholder": "nom@empresa.com",
     "send_link": "ENVIAR ENLLAÇ",
-    "back_login": "← Torna a l'accés"
+    "back_login": "← Torna a l'accés",
+    "forgot_admin_msg": "Demana a l'administrador que et generi un enllaç de recuperació.",
+    "reset_ok": "Contrasenya actualitzada. Ja pots accedir amb la nova."
+  },
+  "reset": {
+    "title": "Nova contrasenya",
+    "subtitle": "Introdueix la teva nova contrasenya.",
+    "checking": "Verificant l'enllaç…",
+    "invalid": "Aquest enllaç de recuperació és invàlid o ha caducat. Demana'n un de nou a l'administrador.",
+    "back_login": "Torna a l'accés",
+    "new_password": "Nova contrasenya",
+    "confirm_password": "Confirma la contrasenya",
+    "mismatch": "Les contrasenyes no coincideixen.",
+    "submit": "Desar contrasenya",
+    "saving": "Desant…",
+    "error_generic": "No s'ha pogut actualitzar la contrasenya."
   },
   "nav": {
     "import_collection": "Importar col·lecció",
@@ -765,6 +780,12 @@
     "ue_save": "Desar",
     "ue_saving": "Desant…",
     "ue_updated": "Usuari actualitzat.",
+    "reset_link": "Enllaç de reset",
+    "rl_title": "Enllaç de recuperació",
+    "rl_copy": "Copiar",
+    "rl_copied": "Copiat!",
+    "rl_note": "Caduca en 24h. Passa aquest enllaç a la persona pel canal que vulguis.",
+    "rl_error": "No s'ha pogut generar l'enllaç.",
     "roles": {
       "technician": "Tècnic",
       "product_manager": "Product manager",
