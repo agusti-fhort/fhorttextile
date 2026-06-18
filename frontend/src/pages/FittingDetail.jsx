@@ -1,16 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, pieceFittings, pieceFittingLines, fittingPhotos, modelFitxers, models } from '../api/endpoints'
+import { fittingSessions, pieceFittings, fittingPhotos, modelFitxers, models } from '../api/endpoints'
 import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
+import MeasureTable from './MeasureTable'
+import { thStyle, SaveStatus, useDebouncedSave } from './fittingShared'
 
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
-
-const COL_POM_W = 78
-const COL_NOM_W = 150
-const COL_REG_W = 118   // PG-4b-3c — columna de règim (select LINEAR/STEP + etiqueta de regla)
 
 // Ordre de talles segons el size run del model: split per '·' (U+00B7) o ';' + trim
 // (mateixa normalització que el backend, que desa amb '·' però admet ';').
@@ -22,108 +20,10 @@ function orderedSizes(sizeRun, present) {
   return [...ordered, ...extras]
 }
 
-// Debounce genèric d'autosave (800ms). Cada instància té el seu propi timer.
-function useDebouncedSave(persist) {
-  const [state, setState] = useState('idle') // idle | saving | saved | error
-  const timerRef = useRef(null)
-  const savedRef = useRef(null)
-  useEffect(() => () => { clearTimeout(timerRef.current); clearTimeout(savedRef.current) }, [])
-  const schedule = useCallback((value) => {
-    setState('saving')
-    clearTimeout(timerRef.current)
-    clearTimeout(savedRef.current)
-    timerRef.current = setTimeout(() => {
-      persist(value)
-        .then(() => { setState('saved'); savedRef.current = setTimeout(() => setState('idle'), 2000) })
-        .catch(() => setState('error')) // NO toquem el valor local: es preserva
-    }, 800)
-  }, [persist])
-  return [state, schedule]
-}
-
 // Autosave d'un camp de context de la sessió (model_persona / lloc...). PATCH sessió.
 function useSessionField(sessionId, field) {
   const persist = useCallback((raw) => fittingSessions.update(sessionId, { [field]: raw }), [sessionId, field])
   return useDebouncedSave(persist)
-}
-
-function SaveStatus({ state, inline, absolute }) {
-  const { t } = useTranslation()
-  if (state === 'idle') return null
-  const map = {
-    saving: { txt: t('fitting.grid.saving'), color: 'var(--text-muted)' },
-    saved:  { txt: t('fitting.grid.saved'),  color: 'var(--ok)' },
-    error:  { txt: t('fitting.grid.save_error'), color: 'var(--err)' },
-  }
-  const s = map[state]
-  // absolute = no ocupa espai (no altera l'alçada de la fila de la graella).
-  const pos = absolute
-    ? { position: 'absolute', bottom: 1, left: 4, fontSize: 'var(--fs-caption)', pointerEvents: 'none' }
-    : { display: inline ? 'inline-block' : 'block', marginLeft: inline ? 6 : 0, marginTop: inline ? 0 : 1, fontSize: 'var(--fs-caption)' }
-  return <span style={{ color: s.color, ...pos }}>{s.txt}</span>
-}
-
-// Estil base d'una cel·la de valor. baseSize = columna d'una talla base (fons daurat).
-// groupStart = primera columna del grup d'una talla (filet esquerre). groupEnd = última.
-const cellTd = (baseSize, groupStart, groupEnd) => ({
-  padding: '5px 8px', borderBottom: '0.5px solid var(--border)', verticalAlign: 'middle',
-  textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
-  background: baseSize ? 'var(--gold-pale)' : undefined,
-  borderLeft: groupStart && baseSize ? '1px solid var(--gold)' : '0.5px solid var(--border)',
-  borderRight: groupEnd && baseSize ? '1px solid var(--gold)' : undefined,
-})
-
-// Valor d'una versió (read-only). isBase = columna Base (v1) → text atenuat.
-function VersionCell({ value, isBase, baseSize, groupStart }) {
-  return (
-    <td style={{ ...cellTd(baseSize, groupStart, false), color: isBase ? 'var(--text-muted)' : 'var(--text-main)' }}>
-      {value == null ? '—' : value}
-    </td>
-  )
-}
-
-// Fit actual (valor_real): única cel·la editable. Vermell+negreta si difereix de Base.
-// Stepper natiu (fletxes); amplada suficient per "104,75" + fletxes. Sense nota per cel·la
-// (el comentari és global del fitting, viu a Observacions).
-function CurrentFitCell({ line, baseSize, baseValue, value, edited, onValue, onAnchor, onPropagated, focusRef }) {
-  // Persist segons règim del POM (ve a la línia): STEP → PATCH pur, només aquesta cel·la.
-  // LINEAR/canònic → propaga el delta i repinta les germanes amb el valor_real propagat.
-  const lineId = line?.id
-  const isStep = line?.logica === 'STEP'
-  const persist = useCallback((raw) => {
-    const v = raw === '' ? null : Number(raw)
-    if (isStep) return pieceFittingLines.update(lineId, { valor_real: v })
-    return pieceFittingLines.propagar(lineId, v).then(res => {
-      onPropagated(res.data?.linies || [])
-      return res
-    })
-  }, [lineId, isStep, onPropagated])
-  const [realState, saveReal] = useDebouncedSave(persist)
-
-  if (!line) return <td style={cellTd(baseSize, false, baseSize)} />
-
-  const modified = value !== '' && value != null && baseValue != null
-    && Number(value) !== Number(baseValue)
-
-  return (
-    <td style={{ ...cellTd(baseSize, false, baseSize), position: 'relative' }}>
-      <input
-        type="number" step="0.1" value={value}
-        onFocus={() => { focusRef.current = line.id }}
-        onBlur={() => { if (focusRef.current === line.id) focusRef.current = null }}
-        onChange={e => { onValue(line.id, e.target.value); onAnchor(line.id); saveReal(e.target.value) }}
-        style={{
-          font: 'inherit', width: 88, padding: '2px 4px', textAlign: 'right',
-          border: '1px solid var(--border)', borderRadius: 4, background: 'var(--white)',
-          color: modified ? 'var(--err)' : 'var(--text-main)',
-          // Ancoratge editat a mà → negreta; germana modificada però propagada → vermell normal.
-          fontWeight: modified && edited ? 700 : 400,
-          fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
-        }}
-      />
-      <SaveStatus state={realState} absolute />
-    </td>
-  )
 }
 
 function EditableContextField({ sessionId, field, label, value }) {
@@ -637,6 +537,8 @@ export default function FittingDetail() {
   if (!session) return null
 
   const pieces = session.piece_fittings || []
+  // Sessió tancada/anul·lada → tota la revisió és de lectura (split 40/60 amb taula en lectura).
+  const readOnly = session.estat === 'Tancada' || session.estat === 'Anullada'
   const lines = grid?.lines || []
   const model = grid?.model || {}
   // Trim perquè base_size_label coincideixi amb les etiquetes de talla (poden venir amb espais).
@@ -664,26 +566,12 @@ export default function FittingDetail() {
   }
   const pomRows = [...pomMap.values()]
 
-  // Etiqueta de regla compacta (delta·break) per a la capçalera de fila POM.
-  // LINEAR amb break: "+2 · break XXL +2.5" · LINEAR uniforme: "+2" · STEP: "lliure" · sense regla: res.
-  const regleLabel = (row) => {
-    if (row.logica == null) return ''
-    if (row.logica === 'STEP') return 'lliure'
-    if (row.increment_base == null) return ''
-    if (row.increment_break != null && row.talla_break_label)
-      return `+${row.increment_base} · break ${row.talla_break_label} +${row.increment_break}`
-    return `+${row.increment_base}`
-  }
-
   // Columnes d'evolució: unió de version_number entre totes les línies (ascendent).
   // El primer (v1) és Base; els següents (v2..vM) són Fit 1..Fit (M-1); després el fit
   // actual editable (valor_real). Etiqueta Fit N amb N = version_number - 1.
   const versionNumbers = [...new Set(
     lines.flatMap(l => (l.evolucio || []).map(e => e.version_number))
   )].sort((a, b) => a - b)
-  const versionLabel = (vn, idx) =>
-    idx === 0 ? t('fitting.grid.base') : t('fitting.grid.fit', { n: vn - 1 })
-  const groupSpan = versionNumbers.length + 1  // versions read-only + fit actual
 
   // Funcions planes (NO hooks): es declaren després dels early-returns, com onValue.
   const onValue = (lineId, v) => setReals(r => ({ ...r, [lineId]: v }))
@@ -716,15 +604,6 @@ export default function FittingDetail() {
       })
       .catch(err => setRegimErr(err?.response?.data?.detail || 'No s\'ha pogut canviar el règim.'))
   }
-
-  const stickyHd = (left, w) => ({
-    ...thStyle, position: 'sticky', left, zIndex: 3, minWidth: w, width: w,
-    background: 'var(--bg-muted)', textAlign: 'left',
-  })
-  const stickyTd = (left, w, bg) => ({
-    position: 'sticky', left, zIndex: 1, minWidth: w, width: w, background: bg,
-    padding: '5px 10px', borderBottom: '0.5px solid var(--border)', verticalAlign: 'middle', whiteSpace: 'nowrap',
-  })
 
   return (
     <div>
@@ -774,7 +653,8 @@ export default function FittingDetail() {
       {infoOpen && session.model && <ModelFilesPanel modelId={session.model} />}
 
       {/* Pantalla de revisió "Gravar el fitting" (substitueix la taula de treball) */}
-      {reviewMode && (
+      {/* Revisió OBERTA (sessió no segellada, "Tornar a revisió"): ReviewScreen sol, sense split. */}
+      {reviewMode && !readOnly && (
         <ReviewScreen
           session={session}
           pieces={pieces}
@@ -784,8 +664,40 @@ export default function FittingDetail() {
           onShowGrid={() => setReviewMode(false)}
           onCreatePiece={createPiece}
           creatingPiece={creatingPiece}
-          readOnly={session.estat === 'Tancada' || session.estat === 'Anullada'}
+          readOnly={false}
         />
+      )}
+
+      {/* Revisió TANCADA: split 40/60 — esquerra revisió, dreta taula en lectura (peça activa). */}
+      {reviewMode && readOnly && (
+        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start' }}>
+          <div style={{ flex: '0 0 40%', minWidth: 0, overflowY: 'auto', maxHeight: 'calc(100vh - 180px)' }}>
+            <ReviewScreen
+              session={session}
+              pieces={pieces}
+              onBack={() => setReviewMode(false)}
+              onSaved={() => navigate(-1)}
+              onDone={() => { loadSession().then(reloadGrid) }}
+              onShowGrid={() => setReviewMode(false)}
+              onCreatePiece={createPiece}
+              creatingPiece={creatingPiece}
+              readOnly
+            />
+          </div>
+          <div style={{ flex: '1 1 60%', minWidth: 0, overflow: 'auto', maxHeight: 'calc(100vh - 180px)' }}>
+            {!activePieceId ? null
+              : lines.length === 0
+                ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
+                : (
+                  <MeasureTable
+                    readOnly
+                    key={activePieceId}
+                    pomRows={pomRows} sizeLabels={sizeLabels} baseLabel={baseLabel} versionNumbers={versionNumbers}
+                    reals={reals} editedIds={editedIds}
+                  />
+                )}
+          </div>
+        </div>
       )}
 
       {!reviewMode && (<>
@@ -834,102 +746,12 @@ export default function FittingDetail() {
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
-              <table key={activePieceId} style={{ borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
-                <thead>
-                  {/* Pis 1: talla (colspan = versions + fit actual) */}
-                  <tr>
-                    <th rowSpan={2} style={stickyHd(0, COL_POM_W)}>{t('fitting.grid.pom')}</th>
-                    <th rowSpan={2} style={stickyHd(COL_POM_W, COL_NOM_W)}>{t('fitting.grid.name')}</th>
-                    <th rowSpan={2} style={stickyHd(COL_POM_W + COL_NOM_W, COL_REG_W)}>Règim</th>
-                    {sizeLabels.map(s => {
-                      const base = s === baseLabel
-                      return (
-                        <th key={s} colSpan={groupSpan} style={{
-                          ...thStyle, textAlign: 'center',
-                          background: base ? 'var(--gold-pale)' : 'var(--bg-muted)',
-                          borderLeft: base ? '1px solid var(--gold)' : '0.5px solid var(--border)',
-                          borderRight: base ? '1px solid var(--gold)' : undefined,
-                        }}>
-                          {s}{base && <i className="ti ti-star-filled" style={{ fontSize: 10, marginLeft: 4, color: 'var(--gold)' }} />}
-                        </th>
-                      )
-                    })}
-                  </tr>
-                  {/* Pis 2: Base · Fit1..Fit(M-1) · Fit actual */}
-                  <tr>
-                    {sizeLabels.flatMap(s => {
-                      const base = s === baseLabel
-                      const sub = (groupStart, groupEnd) => ({
-                        ...thStyle, textAlign: 'right', fontSize: 'var(--fs-caption)', padding: '3px 8px',
-                        background: base ? 'var(--gold-pale)' : 'var(--bg-muted)',
-                        borderLeft: groupStart && base ? '1px solid var(--gold)' : '0.5px solid var(--border)',
-                        borderRight: groupEnd && base ? '1px solid var(--gold)' : undefined,
-                      })
-                      const cols = versionNumbers.map((vn, idx) => (
-                        <th key={`${s}-v${vn}`} style={sub(idx === 0, false)}>{versionLabel(vn, idx)}</th>
-                      ))
-                      cols.push(
-                        <th key={`${s}-cur`} style={sub(false, true)}>{t('fitting.grid.fit_current')}</th>
-                      )
-                      return cols
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {pomRows.map((row, i) => {
-                    const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-card)'
-                    return (
-                      <tr key={row.pom_id} style={{ background: rowBg }}>
-                        <td style={stickyTd(0, COL_POM_W, rowBg)}>
-                          <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--gold)' }}>
-                            {row.codi}{row.is_key && <i className="ti ti-star-filled" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title={t('fitting.key_measure')} />}
-                          </span>
-                        </td>
-                        <td style={{ ...stickyTd(COL_POM_W, COL_NOM_W, rowBg), fontSize: 'var(--fs-body)', color: 'var(--text-muted)', whiteSpace: 'normal' }}>{row.nom}</td>
-                        <td style={stickyTd(COL_POM_W + COL_NOM_W, COL_REG_W, rowBg)}>
-                          {/* PG-4b-3c — règim del POM: select (dalt) + etiqueta de regla (sota, moguda des de la capçalera). */}
-                          <select
-                            value={row.logica ?? ''}
-                            onChange={e => onRegimChange(row, e.target.value)}
-                            style={{
-                              font: 'inherit', fontSize: 'var(--fs-label)', width: '100%', padding: '1px 2px',
-                              border: '1px solid var(--border)', borderRadius: 4,
-                              background: 'var(--white)', color: 'var(--text-main)', boxSizing: 'border-box',
-                            }}
-                          >
-                            {row.logica == null && <option value="">—</option>}
-                            <option value="LINEAR">LINEAR</option>
-                            <option value="STEP">STEP</option>
-                          </select>
-                          {regleLabel(row) && (
-                            <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: 'var(--text-muted)', whiteSpace: 'nowrap', marginTop: 1 }}>
-                              {regleLabel(row)}
-                            </div>
-                          )}
-                        </td>
-                        {sizeLabels.flatMap(s => {
-                          const base = s === baseLabel
-                          const line = row.cells[s]
-                          const evoMap = new Map((line?.evolucio || []).map(e => [e.version_number, e.valor_cm]))
-                          const baseValue = line?.evolucio?.[0]?.valor_cm ?? null
-                          const cells = versionNumbers.map((vn, idx) => (
-                            <VersionCell key={`${s}-v${vn}`}
-                              value={evoMap.has(vn) ? evoMap.get(vn) : null}
-                              isBase={idx === 0} baseSize={base} groupStart={idx === 0} />
-                          ))
-                          cells.push(
-                            <CurrentFitCell key={`${s}-cur`} line={line} baseSize={base} baseValue={baseValue}
-                              value={line ? reals[line.id] ?? '' : ''}
-                              edited={line ? editedIds.has(line.id) : false}
-                              onValue={onValue} onAnchor={onAnchor} onPropagated={applyPropagar} focusRef={focusedIdRef} />
-                          )
-                          return cells
-                        })}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+              <MeasureTable
+                key={activePieceId}
+                pomRows={pomRows} sizeLabels={sizeLabels} baseLabel={baseLabel} versionNumbers={versionNumbers}
+                reals={reals} editedIds={editedIds} focusedIdRef={focusedIdRef}
+                onValue={onValue} onAnchor={onAnchor} onPropagated={applyPropagar} onRegimChange={onRegimChange}
+              />
             </div>
           )}
         </Card>
@@ -938,10 +760,4 @@ export default function FittingDetail() {
 
     </div>
   )
-}
-
-const thStyle = {
-  padding: '0.5rem 0.8rem', fontSize: 'var(--fs-label)', letterSpacing: '0.08em',
-  textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500,
-  borderBottom: '0.5px solid var(--border)', whiteSpace: 'nowrap',
 }

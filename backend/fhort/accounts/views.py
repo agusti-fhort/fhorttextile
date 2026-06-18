@@ -1,11 +1,16 @@
 import django_filters
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connection
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, mixins, status as http_status
 from rest_framework.decorators import api_view, action, permission_classes
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import UserProfile
@@ -37,6 +42,26 @@ class UserFilter(django_filters.FilterSet):
 def me_view(request):
     """GET /api/v1/me/ — profile of the authenticated user in the current tenant."""
     return Response(MeSerializer(request.user).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def me_change_password(request):
+    """POST /api/v1/me/change-password/  {new_password, new_password_confirm} — canvi autoservei.
+    NO s'exigeix la contrasenya actual: la sessió JWT ja autentica. El JWT és stateless, així que
+    la sessió actual segueix vàlida després del canvi (no es blacklisteja res)."""
+    new_password = request.data.get('new_password') or ''
+    confirm = request.data.get('new_password_confirm') or ''
+    if new_password != confirm:
+        return Response({'error': 'Les contrasenyes no coincideixen.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        validate_password(new_password, request.user)
+    except DjangoValidationError as e:
+        return Response({'error': ' '.join(e.messages)}, status=http_status.HTTP_400_BAD_REQUEST)
+    request.user.set_password(new_password)
+    request.user.save(update_fields=['password'])
+    return Response({'ok': True}, status=http_status.HTTP_200_OK)
 
 
 class UserViewSet(mixins.ListModelMixin,
@@ -150,3 +175,59 @@ class UserViewSet(mixins.ListModelMixin,
             prof.save()
             updated += 1
         return Response({'updated': updated}, status=http_status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='reset-link')
+    def reset_link(self, request, pk=None):
+        """POST /api/v1/users/<pk>/reset-link/ — genera un enllaç de recuperació (gated manage_users).
+        NO envia correu: retorna la URL perquè l'admin la passi a la persona pel canal que vulgui.
+        L'enllaç porta el domini de la request (= schema del tenant, resolt per django-tenants) i
+        caduca segons PASSWORD_RESET_TIMEOUT (24h). get_object() ja limita l'abast al tenant."""
+        user = self.get_object()
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        url = f"{request.scheme}://{request.get_host()}/reset-password/{uid}/{token}"
+        return Response({'url': url}, status=http_status.HTTP_200_OK)
+
+
+def _user_from_uid(uid):
+    """Decodifica uid (urlsafe base64) → User dins l'schema actual. None si falla o no existeix.
+    Schema resolt pel domini de la request (django-tenants); no cal tenant explícit."""
+    if not uid:
+        return None
+    try:
+        pk = urlsafe_base64_decode(uid).decode()
+        return User.objects.get(pk=pk)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        return None
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def password_reset_validate(request):
+    """GET /api/v1/password-reset/validate/?uid=&token= — pre-check de la pàgina pública.
+    No revela res més enllà del necessari: {'valid': bool}."""
+    user = _user_from_uid(request.query_params.get('uid'))
+    token = request.query_params.get('token') or ''
+    valid = bool(user and default_token_generator.check_token(user, token))
+    return Response({'valid': valid})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_confirm(request):
+    """POST /api/v1/password-reset/confirm/  {uid, token, new_password} — fixa la nova contrasenya.
+    Missatges genèrics (no exposa si l'usuari existeix). En desar el nou hash, el token queda
+    invalidat sol (default_token_generator depèn del hash) → no es pot reutilitzar."""
+    user = _user_from_uid(request.data.get('uid'))
+    token = request.data.get('token') or ''
+    new_password = request.data.get('new_password') or ''
+    if user is None or not default_token_generator.check_token(user, token):
+        return Response({'error': 'Enllaç de recuperació invàlid o caducat.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        validate_password(new_password, user)
+    except DjangoValidationError as e:
+        return Response({'error': ' '.join(e.messages)}, status=http_status.HTTP_400_BAD_REQUEST)
+    user.set_password(new_password)
+    user.save(update_fields=['password'])
+    return Response({'ok': True}, status=http_status.HTTP_200_OK)

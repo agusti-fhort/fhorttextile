@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { taskTypes } from '../api/endpoints';
 import i18n from '../i18n';
+import { formatMinutes } from '../utils/format';
 
 const API = import.meta.env.VITE_API_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('access_token')}` });
-const toHours = (m) => m == null ? '—' : (Math.round(m / 60 * 10) / 10) + ' h';
 const fmtDate = (v) => v ? new Date(v).toLocaleDateString(i18n.language || 'ca', { dateStyle: 'medium' }) : '—';
 const PAGE_SIZE = 25;
 
@@ -89,9 +89,9 @@ export default function RegistreActivitat() {
       {/* KPIs discrets */}
       <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap' }}>
         <MiniStat label={t('registre.kpi_models', 'Models')} value={totals.models ?? '—'} />
-        <MiniStat label={t('registre.kpi_total', 'Temps total')} value={toHours(totals.total_minutes)} />
-        <MiniStat label={t('registre.kpi_avg_model', 'Mitjana/model')} value={toHours(totals.avg_per_model)} />
-        <MiniStat label={t('registre.kpi_avg_step', 'Mitjana/tasca')} value={toHours(totals.avg_per_step)} />
+        <MiniStat label={t('registre.kpi_total', 'Temps total')} value={formatMinutes(totals.total_minutes)} />
+        <MiniStat label={t('registre.kpi_avg_model', 'Mitjana/model')} value={formatMinutes(totals.avg_per_model)} />
+        <MiniStat label={t('registre.kpi_avg_step', 'Mitjana/tasca')} value={formatMinutes(totals.avg_per_step)} />
       </div>
 
       {/* Filtres */}
@@ -175,7 +175,7 @@ export default function RegistreActivitat() {
                 <td style={tdStyle}>{row.name || '—'}</td>
                 <td style={tdStyle}>{row.period}</td>
                 <td style={tdStyle}>{fmtDate(row.merited_at)}</td>
-                <td style={tdStyle}>{toHours(row.total_minutes)}</td>
+                <td style={tdStyle}>{formatMinutes(row.total_minutes)}</td>
                 <td style={tdStyle}>{row.steps}</td>
               </tr>
             ))}

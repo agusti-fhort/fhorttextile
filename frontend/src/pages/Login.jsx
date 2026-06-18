@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { SUPPORTED_LANGUAGES } from '../i18n'
@@ -47,9 +47,12 @@ const EyeIcon = ({ off }) => (
 export default function Login() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const login = useAuthStore(s => s.login)   // flux JWT existent — NO es toca
 
+  const resetOk = !!location.state?.resetOk   // ve de ResetPassword en èxit
   const [view, setView] = useState('login')  // 'login' | 'forgot'
+  const [forgotMsg, setForgotMsg] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
@@ -77,7 +80,8 @@ export default function Login() {
 
   const handleForgot = (e) => {
     e.preventDefault()
-    // TODO: password reset endpoint — botó inert de moment (no hi ha flux de backend).
+    // No hi ha SMTP: la recuperació és mediada per admin (genera un enllaç a Usuaris i rols).
+    setForgotMsg(t('login.forgot_admin_msg'))
   }
 
   return (
@@ -117,6 +121,13 @@ export default function Login() {
             <form onSubmit={handleSubmit}>
               <h2 className="welcome">{t('login.welcome')}</h2>
               <p className="welcome-sub">{t('login.welcome_sub')}</p>
+
+              {resetOk && (
+                <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 12, color: '#3b6d11',
+                            background: '#eaf3de', borderRadius: 8, padding: '10px 12px', marginBottom: 16 }}>
+                  {t('login.reset_ok')}
+                </p>
+              )}
 
               <div className="field">
                 <label htmlFor="login-user">{t('login.user')}</label>
@@ -202,7 +213,14 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Botó inert: no crida cap endpoint (vegeu handleForgot). */}
+              {forgotMsg && (
+                <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 12, color: '#5c5c5a',
+                            background: 'var(--gold-pale, #f7ede0)', borderRadius: 8, padding: '10px 12px', margin: '4px 0 8px' }}>
+                  {forgotMsg}
+                </p>
+              )}
+
+              {/* Sense SMTP: informa que la recuperació la genera l'administrador (vegeu handleForgot). */}
               <button className="btn" type="submit" style={{ marginTop: 8 }}>
                 {t('login.send_link')}
               </button>

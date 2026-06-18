@@ -68,6 +68,7 @@ export default function UsersRoles() {
   const [feedback, setFeedback] = useState(null)           // { type, text }
   const [newUserOpen, setNewUserOpen] = useState(false)    // modal "Nou usuari"
   const [editUser, setEditUser] = useState(null)           // fila en edició (null = modal tancat)
+  const [resetModal, setResetModal] = useState(null)       // { name, url } | { name, loading } | null
 
   // Filtres
   const [search, setSearch] = useState('')
@@ -122,6 +123,15 @@ export default function UsersRoles() {
   }
   function toggleSelect(id) {
     setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  // --- Generar enllaç de recuperació de contrasenya (gated manage_users, ja ho és la pàgina) ---
+  function genResetLink(u) {
+    const name = u.full_name || u.username
+    setResetModal({ name, loading: true })
+    usersApi.resetLink(u.id)
+      .then(res => setResetModal({ name, url: res.data?.url || '' }))
+      .catch(() => { setResetModal(null); setFeedback({ type: 'err', text: t('usersRoles.rl_error') }) })
   }
 
   // --- Bulk: prepara confirmació amb recompte ---
@@ -278,15 +288,26 @@ export default function UsersRoles() {
                     ))}
                     <td style={{ textAlign: 'center', padding: '7px 10px', borderBottom: '0.5px solid var(--gray-l)' }}>
                       {canManage && (
-                        <button onClick={() => setEditUser(u)} title={t('usersRoles.edit')} style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5,
-                          fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 6,
-                          border: '0.5px solid var(--gray-l)', background: 'var(--white)',
-                          color: 'var(--text-main)', cursor: 'pointer', whiteSpace: 'nowrap',
-                        }}>
-                          <i className="ti ti-pencil" style={{ fontSize: 13 }} />
-                          {t('usersRoles.edit')}
-                        </button>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <button onClick={() => setEditUser(u)} title={t('usersRoles.edit')} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 6,
+                            border: '0.5px solid var(--gray-l)', background: 'var(--white)',
+                            color: 'var(--text-main)', cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}>
+                            <i className="ti ti-pencil" style={{ fontSize: 13 }} />
+                            {t('usersRoles.edit')}
+                          </button>
+                          <button onClick={() => genResetLink(u)} title={t('usersRoles.reset_link')} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 6,
+                            border: '0.5px solid var(--gray-l)', background: 'var(--white)',
+                            color: 'var(--text-main)', cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}>
+                            <i className="ti ti-key" style={{ fontSize: 13 }} />
+                            {t('usersRoles.reset_link')}
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -348,6 +369,64 @@ export default function UsersRoles() {
           }}
         />
       )}
+
+      {/* Modal "Enllaç de recuperació" (URL copiable; no s'envia correu) */}
+      {resetModal && (
+        <ResetLinkModal t={t} data={resetModal} onClose={() => setResetModal(null)} />
+      )}
+    </div>
+  )
+}
+
+function ResetLinkModal({ t, data, onClose }) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    if (!data.url) return
+    navigator.clipboard?.writeText(data.url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => {})
+  }
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'var(--white)', borderRadius: 12, padding: '1.5rem',
+        maxWidth: 480, width: '92%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+      }}>
+        <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>
+          {t('usersRoles.rl_title')} — {data.name}
+        </h2>
+        {data.loading ? (
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('usersRoles.loading')}</p>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input readOnly value={data.url} onFocus={e => e.target.select()} style={{
+                flex: 1, fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 10px',
+                border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--gray-l)',
+                color: 'var(--text-main)',
+              }} />
+              <button onClick={copy} style={{
+                fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 6,
+                border: 'none', background: 'var(--gold)', color: 'var(--white)', fontWeight: 600,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>{copied ? t('usersRoles.rl_copied') : t('usersRoles.rl_copy')}</button>
+            </div>
+            <p style={{ marginTop: 12, fontSize: 'var(--fs-label)', color: 'var(--gray)', lineHeight: 1.5 }}>
+              {t('usersRoles.rl_note')}
+            </p>
+          </>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+          <button onClick={onClose} style={{
+            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 6,
+            cursor: 'pointer', border: '0.5px solid var(--gray-l)', background: 'var(--white)', color: 'var(--gray)',
+          }}>{t('usersRoles.cancel')}</button>
+        </div>
+      </div>
     </div>
   )
 }

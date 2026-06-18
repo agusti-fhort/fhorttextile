@@ -1,7 +1,19 @@
+import axios from 'axios'
 import client from './client'
 
 export const auth = {
   login: (username, password) => client.post('/api/token/', { username, password }),
+}
+
+// Client NET (sense interceptor Bearer) per a la recuperació de contrasenya pública:
+// la persona que recupera no està autenticada i no ha d'enviar cap token.
+const publicClient = axios.create({
+  baseURL: import.meta.env.VITE_API_URL,
+  headers: { 'Content-Type': 'application/json' },
+})
+export const passwordReset = {
+  validate: (uid, token) => publicClient.get('/api/v1/password-reset/validate/', { params: { uid, token } }),
+  confirm: (data) => publicClient.post('/api/v1/password-reset/confirm/', data),   // {uid, token, new_password}
 }
 
 export const models = {
@@ -340,8 +352,6 @@ export const pomAlerts = {
   update: (id, data) => client.patch(`/api/v1/pom-alerts/${id}/`, data),
 }
 
-export const alerts = pomAlerts
-
 export const timers = {
   list: (params) => client.get('/api/v1/timers/', { params }),
   create: (data) => client.post('/api/v1/timers/', data),
@@ -351,6 +361,7 @@ export const timers = {
 // Usuari autenticat (capabilities + rol_nom). El backend SÍ exposa /api/v1/me/.
 export const me = {
   get: () => client.get('/api/v1/me/'),
+  changePassword: (data) => client.post('/api/v1/me/change-password/', data),   // {new_password, new_password_confirm}
 }
 
 // Gestió d'usuaris (gated manage_users a l'escriptura). Tram 3: pantalla "Usuaris i rols".
@@ -360,4 +371,5 @@ export const users = {
   create: (data) => client.post('/api/v1/users/', data),   // {username, email, nom_complet, rol_nom, password, permisos?}
   patch: (id, data) => client.patch(`/api/v1/users/${id}/`, data),   // {rol_nom, actiu, permisos}
   bulk: (data) => client.post('/api/v1/users/bulk/', data),   // {user_ids, action, value} -> {updated}
+  resetLink: (id) => client.post(`/api/v1/users/${id}/reset-link/`),   // -> {url}
 }

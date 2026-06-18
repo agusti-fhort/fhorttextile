@@ -175,7 +175,22 @@
     "email": "Email",
     "email_placeholder": "name@company.com",
     "send_link": "SEND LINK",
-    "back_login": "← Back to login"
+    "back_login": "← Back to login",
+    "forgot_admin_msg": "Ask your administrator to generate a recovery link for you.",
+    "reset_ok": "Password updated. You can now sign in with the new one."
+  },
+  "reset": {
+    "title": "New password",
+    "subtitle": "Enter your new password.",
+    "checking": "Verifying the link…",
+    "invalid": "This recovery link is invalid or has expired. Ask your administrator for a new one.",
+    "back_login": "Back to login",
+    "new_password": "New password",
+    "confirm_password": "Confirm password",
+    "mismatch": "Passwords do not match.",
+    "submit": "Save password",
+    "saving": "Saving…",
+    "error_generic": "Could not update the password."
   },
   "nav": {
     "import_collection": "Import collection",
@@ -207,7 +222,6 @@
     "garment_pom_map": "Garment POM Map",
     "onboarding": "Initial setup",
     "ia": "AI",
-    "avisos": "Alerts",
     "configuracio": "Configuration",
     "perfil": "My profile",
     "logout": "Sign out",
@@ -766,6 +780,12 @@
     "ue_save": "Save",
     "ue_saving": "Saving…",
     "ue_updated": "User updated.",
+    "reset_link": "Reset link",
+    "rl_title": "Recovery link",
+    "rl_copy": "Copy",
+    "rl_copied": "Copied!",
+    "rl_note": "Expires in 24h. Pass this link to the person through any channel you prefer.",
+    "rl_error": "Could not generate the link.",
     "roles": {
       "technician": "Technician",
       "product_manager": "Product manager",
@@ -958,6 +978,9 @@
       "evolution": "Evolution",
       "empty": "This piece has no lines.",
       "name": "Name",
+      "regime": "Regime",
+      "rule_free": "free",
+      "break": "break",
       "note": "Note",
       "no_value": "—"
     },
@@ -1377,56 +1400,19 @@
     "complete_setup": "Complete setup",
     "kpi": {
       "total_models": "Total models",
-      "open_alerts": "Open alerts",
       "prototype_samples": "In prototype/samples"
     },
     "kpi_sub": {
       "in_system": "in the system",
       "active_models": "active models",
-      "pom_deviations": "POM deviations",
       "critical_phase": "models in critical phase"
     },
     "recent_active_models": "Recent active models",
     "no_models_in_progress": "No models in progress.",
     "create_first": "Create the first one",
-    "see_all_models": "See all models",
-    "pom_alerts": "POM alerts",
-    "summary_open": "{{count}} open",
-    "summary_resolved": "{{count}} resolved",
-    "summary_days": "{{days}}d",
-    "summary_top": "Top",
-    "no_open_alerts": "No open alerts",
-    "deviation_detected": "Deviation detected",
-    "more_alerts": "{{count}} more alerts"
+    "see_all_models": "See all models"
   },
   "alerts": {
-    "status": {
-      "Pendent": "Pending",
-      "Acceptat": "Accepted",
-      "Corregit": "Corrected",
-      "Tots": "All"
-    },
-    "type": {
-      "desviacio": "Deviation",
-      "fora_rang": "Out of range",
-      "manca_mesura": "Missing measurement",
-      "conflicte": "Conflict"
-    },
-    "subtitle_all": "{{count}} alerts in total",
-    "subtitle_pending": "{{count}} pending alerts",
-    "subtitle_accepted": "{{count}} accepted alerts",
-    "subtitle_corrected": "{{count}} corrected alerts",
-    "empty": "No alerts with status {{status}}.",
-    "col": {
-      "model": "Model",
-      "type": "Type",
-      "detected": "Detected",
-      "expected": "Expected",
-      "status": "Status",
-      "date": "Date"
-    },
-    "accept": "Accept",
-    "resolve": "Resolve",
     "gravetat": {
       "CRITICA": "Critical",
       "IMPORTANT": "Important",

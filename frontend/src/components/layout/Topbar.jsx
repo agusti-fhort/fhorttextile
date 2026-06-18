@@ -18,7 +18,6 @@ const PATH_TO_KEY = {
   '/fitxers':                   'nav.fitxers',
   '/poms':                      'nav.poms',
   '/poms/grading':              'nav.grading',
-  '/avisos':                    'nav.avisos',
   '/ia':                        'nav.ia',
   '/perfil':                    'nav.perfil',
 }
@@ -83,21 +82,6 @@ export default function Topbar() {
         </div>
         <UnitToggle />
         <LanguageSwitcher />
-        <button
-          onClick={() => navigate('/avisos')}
-          style={{
-            width: 32, height: 32,
-            border: '0.5px solid #e4e4e2',
-            borderRadius: 8,
-            background: 'none',
-            cursor: 'pointer',
-            color: 'var(--gray)',
-            fontSize: 17,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <i className="ti ti-bell" />
-        </button>
         <button
           onClick={() => navigate('/perfil')}
           style={{

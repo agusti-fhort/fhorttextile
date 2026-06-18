@@ -16,7 +16,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from fhort.accounts.models import UserProfile
 from fhort.accounts.capabilities import (HasCapability, CONFIGURE, MANAGE_USERS,
                                          VIEW_TEAM_TASKS, DEFINE_TASKS, SCHEDULE_FITTINGS,
-                                         get_capabilities)
+                                         get_capabilities, scope_model_task_queryset)
 from .models import CompanyCalendar, Absencia, TechnicianQueueOrder
 from .serializers import (CompanyCalendarSerializer, JornadaSerializer,
                           AbsenciaSerializer)
@@ -183,9 +183,7 @@ def plan_current_view(request):
           .filter(planned_start__isnull=False)
           .select_related('model', 'task_type', 'assignee__user'))
 
-    if VIEW_TEAM_TASKS not in get_capabilities(request.user):
-        profile = getattr(request.user, 'profile', None)
-        qs = qs.filter(assignee=profile) if profile is not None else qs.none()
+    qs = scope_model_task_queryset(qs, request.user)
 
     tasks = []
     for tk in qs:
@@ -240,9 +238,7 @@ def calendar_events_view(request):
           .filter(planned_start__isnull=False)
           .select_related('model', 'task_type', 'assignee__user'))
 
-    if VIEW_TEAM_TASKS not in get_capabilities(request.user):
-        profile = getattr(request.user, 'profile', None)
-        qs = qs.filter(assignee=profile) if profile is not None else qs.none()
+    qs = scope_model_task_queryset(qs, request.user)
 
     # Rang opcional sobre la data LOCAL de planned_start (inclusiu a banda i banda).
     start_raw, end_raw = request.query_params.get('start'), request.query_params.get('end')

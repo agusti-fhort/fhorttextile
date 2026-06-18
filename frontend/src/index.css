@@ -27,8 +27,8 @@
   --warn-bg:    #faeeda;
   --err:        #a32d2d;
   --err-bg:     #fcebeb;
-  --gate:       #534ab7;
-  --gate-bg:    #eeedfe;
+  --gate:       var(--ok);     /* gate llest = verd èxit canònic (abans #534ab7 lila) */
+  --gate-bg:    var(--ok-bg);  /* variant soft del mateix verd (abans #eeedfe) */
 
   /* Escala tipogràfica (Fase 2) — noms semàntics per rol, no per valor.
      8·10·12·14·18·22·32. El 8 és el terra (= mínim 8pt de la fitxa tècnica). */

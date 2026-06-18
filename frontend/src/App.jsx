@@ -30,13 +30,13 @@ const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
 const TechSheetTemplateEditor = lazy(() => import('./pages/TechSheetTemplateEditor'))
 const KanbanTasks = lazy(() => import('./pages/KanbanTasks'))
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
-const Alerts = lazy(() => import('./pages/Alerts'))
 const UsersRoles = lazy(() => import('./pages/UsersRoles'))
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
 const CompanyCalendar = lazy(() => import('./pages/CompanyCalendar'))
 const Planning = lazy(() => import('./pages/Planning'))
 const PlanningCalendar = lazy(() => import('./pages/PlanningCalendar'))
 const RegistreActivitat = lazy(() => import('./pages/RegistreActivitat'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -99,6 +99,8 @@ export default function App() {
       <Suspense fallback={<div className="p-8 text-gray-500">Carregant…</div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        {/* Recuperació de contrasenya: pública, fora del guard (la persona no està autenticada). */}
+        <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
         {/* Fitxa tècnica: editor full-screen FORA del Shell (sense sidebar), però protegit. */}
         <Route path="/models/:id/fitxa" element={
           <ProtectedRoute>
@@ -149,7 +151,6 @@ export default function App() {
           <Route path="onboarding" element={<OnboardingWizard />} />
           <Route path="configuracio/usuaris" element={<UsersRoles />} />
           <Route path="configuracio/calendari" element={<CompanyCalendar />} />
-          <Route path="avisos" element={<Alerts />} />
           <Route path="registre-activitat" element={<RegistreActivitat />} />
           <Route path="perfil" element={<UserProfilePage />} />
         </Route>

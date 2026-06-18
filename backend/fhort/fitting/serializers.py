@@ -224,6 +224,15 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
         from fhort.pom.services import _load_grading_rules
         rules = _load_grading_rules(obj.model)
 
+        # BaseMeasurement del model (unique per (model, pom)): aporta nom_fitxa (nomenclatura
+        # client, autoritativa) i l'ordre de fitxa. Una sola query, reutilitzada per al 'nom' de
+        # cada línia i per a l'ordenació final.
+        from fhort.models_app.models import BaseMeasurement
+        bm_data = list(BaseMeasurement.objects.filter(model_id=obj.model_id)
+                       .values_list('pom_id', 'ordre', 'nom_fitxa'))
+        ordre_map = {p: o for p, o, _ in bm_data}
+        nom_fitxa_map = {p: nf for p, _, nf in bm_data}
+
         out = []
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
             evolucio = []
@@ -244,7 +253,7 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 'id': line.id,
                 'pom_id': line.pom_id,
                 'codi': pom.pom_code if pom else '',
-                'nom': pom.name_cat if pom else '',
+                'nom': (nom_fitxa_map.get(line.pom_id) or (pom.pom_code if pom else '')),
                 'is_key': pom.is_key_measure if pom else False,
                 'size_label': line.size_label,
                 'valor_teoric': line.valor_teoric,
@@ -257,11 +266,7 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 'increment_break': float(r.increment_break) if r and r.increment_break is not None else None,
                 'talla_break_label': getattr(r, 'talla_break_label', None) if r else None,
             })
-        # FIX 4B — ordena les files per l'ordre de la fitxa (BaseMeasurement.ordre del model);
-        # POMMaster no té 'ordre', així que es resol en Python via el mapa pom_id→ordre del model.
-        from fhort.models_app.models import BaseMeasurement
-        ordre_map = dict(
-            BaseMeasurement.objects.filter(model_id=obj.model_id).values_list('pom_id', 'ordre')
-        )
+        # FIX 4B — ordena les files per l'ordre de la fitxa (BaseMeasurement.ordre del model;
+        # POMMaster no té 'ordre'). ordre_map ja s'ha construït a dalt amb la mateixa query.
         out.sort(key=lambda r: ordre_map.get(r['pom_id'], 10 ** 9))
         return out

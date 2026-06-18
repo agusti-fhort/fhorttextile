@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
-import { pomAlerts } from '../../api/endpoints'
 import client from '../../api/client'
 
 // Paleta del sidebar (locked spec):
@@ -40,13 +39,12 @@ const Logo = () => (
 )
 
 // Structure: a single main section with 5 top-level items + expandable submenus.
-// Dashboard i Avisos queden visibles sempre al top com a accessos directes.
+// Dashboard queda visible sempre al top com a accés directe.
 // 3 famílies amb capçalera de secció. `cap` = capability requerida (es filtra al component):
 //   'plan' (define_tasks/configure) · 'configure' · 'manage_users' · 'onboarding' (<100%).
 const navGroups = [
   { sectionKey: 'nav.section_projectes', items: [
     { to: '/', labelKey: 'nav.dashboard', icon: 'ti-layout-dashboard' },
-    { to: '/avisos', labelKey: 'nav.avisos', icon: 'ti-alert-triangle', badgeKey: 'alerts' },
     { to: '/models', labelKey: 'nav.models', icon: 'ti-shirt' },
     { to: '/registre-activitat', labelKey: 'nav.registre_activitat', icon: 'ti-clipboard-list' },
     { to: '/tasques/kanban', labelKey: 'nav.kanban', icon: 'ti-layout-kanban' },
@@ -197,7 +195,6 @@ export default function Sidebar() {
   const canManageUsers = !!user?.capabilities?.includes('manage_users')
   const canConfigure = !!user?.capabilities?.includes('configure')
   const canPlan = !!user?.capabilities?.some(c => c === 'define_tasks' || c === 'configure')
-  const [alertsPending, setAlertsPending] = useState(0)
   const [expanded, setExpanded] = useState({['nav.models']: true})
   const [logoutHover, setLogoutHover] = useState(false)
   const [onboardingPct, setOnboardingPct] = useState(100)
@@ -215,9 +212,6 @@ export default function Sidebar() {
   }
 
   useEffect(() => {
-    pomAlerts.list({ estat: 'Pendent', page_size: 1 })
-      .then(res => setAlertsPending(res.data.count || 0))
-      .catch(() => {})
     client.get('/api/v1/onboarding/status/')
       .then(res => {
         const pct = res.data?.percentatge
@@ -226,7 +220,7 @@ export default function Sidebar() {
       .catch(() => {})
   }, [])
 
-  const badges = { alerts: alertsPending }
+  const badges = {}
   const toggle = (key) => setExpanded(s => ({...s, [key]: !s[key]}))
 
   // Filtra cada secció pels gates (cap). Sense `cap` → sempre visible.

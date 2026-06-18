@@ -3,13 +3,13 @@ import { useTranslation } from 'react-i18next'
 import StatCard from '../ui/StatCard'
 import Table from '../ui/Table'
 import Badge from '../ui/Badge'
+import { formatMinutes } from '../../utils/format'
 
 const API = import.meta.env.VITE_API_URL || ''
 const MONO = 'IBM Plex Mono, monospace'
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('access_token')}` })
 
 const fmtDateTime = (v) => v ? new Date(v).toLocaleString('ca-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
-const toHours = (m) => (m == null ? '—' : Math.round((m / 60) * 10) / 10 + ' h')
 
 // Estat → variant de Badge (fallback gris).
 const STATUS_VARIANT = {
@@ -59,14 +59,14 @@ export default function RegistreActivitatTab({ modelId }) {
   const stepCols = [
     { key: 'task_type', label: t('albara.taskType'), render: r => r.task_type || '—' },
     { key: 'status', label: t('albara.status'), render: r => <Badge variant={STATUS_VARIANT[r.status] || 'gray'}>{r.status || '—'}</Badge> },
-    { key: 'minutes', label: t('albara.time'), align: 'right', render: r => toHours(r.minutes) },
+    { key: 'minutes', label: t('albara.time'), align: 'right', render: r => formatMinutes(r.minutes) },
     { key: 'started_at', label: t('albara.start'), render: r => fmtDateTime(r.started_at) },
     { key: 'finished_at', label: t('albara.end'), render: r => fmtDateTime(r.finished_at) },
   ]
 
   const techCols = [
     { key: 'label', label: t('albara.technician'), render: r => r.label || '—' },
-    { key: 'minutes', label: t('albara.time'), align: 'right', render: r => toHours(r.minutes) },
+    { key: 'minutes', label: t('albara.time'), align: 'right', render: r => formatMinutes(r.minutes) },
   ]
 
   const historyCols = [
@@ -97,7 +97,7 @@ export default function RegistreActivitatTab({ modelId }) {
 
       {/* 2. Resum — tres StatCard */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-        <StatCard icon="ti-clock" label={t('albara.totalTime')} value={toHours(totals.total_minutes)} />
+        <StatCard icon="ti-clock" label={t('albara.totalTime')} value={formatMinutes(totals.total_minutes)} />
         <StatCard icon="ti-list-check" label={t('albara.steps')} value={steps.length} />
         <StatCard icon="ti-rotate" label={t('albara.rectifications')} value={totals.rectifications ?? 0} />
       </div>

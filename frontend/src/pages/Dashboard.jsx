@@ -36,8 +36,6 @@ export default function Dashboard() {
   useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
   const [stats, setStats] = useState({})
   const [recents, setRecents] = useState([])
-  const [avisos, setAvisos] = useState([])
-  const [avisosSummary, setAvisosSummary] = useState(null)
   const [me, setMe] = useState(null)
   const [loading, setLoading] = useState(true)
   const [onboarding, setOnboarding] = useState(null)
@@ -47,12 +45,9 @@ export default function Dashboard() {
     Promise.allSettled([
       fetch(`${API}/api/v1/models/?limit=100`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/models/?estat=EnCurs&ordering=-darrera_activitat&limit=5`, { headers }).then(r => r.json()),
-      fetch(`${API}/api/v1/alerts/summary/?dies=30`, { headers })
-        .then(r => r.ok ? r.json() : Promise.reject(r))
-        .catch(() => fetch(`${API}/api/v1/pom-alerts/?estat=Obert&limit=100`, { headers }).then(r => r.json())),
       fetch(`${API}/api/v1/me/`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/onboarding-status/`, { headers }).then(r => r.ok ? r.json() : null),
-    ]).then(([allRes, recentsRes, avisosRes, meRes, onbRes]) => {
+    ]).then(([allRes, recentsRes, meRes, onbRes]) => {
       // Stats
       if (allRes.status === "fulfilled") {
         const all = allRes.value
@@ -66,16 +61,6 @@ export default function Dashboard() {
       if (recentsRes.status === "fulfilled") {
         const d = recentsRes.value
         setRecents(Array.isArray(d) ? d : (d.results || []))
-      }
-      // Avisos
-      if (avisosRes.status === "fulfilled") {
-        const d = avisosRes.value
-        const items = Array.isArray(d) ? d : (d.results || d.items || [])
-        setAvisos(items)
-        // New summary format (S11): { oberts, resolts, top_poms, ... }
-        if (d && typeof d === 'object' && !Array.isArray(d) && (d.oberts != null || d.top_poms)) {
-          setAvisosSummary(d)
-        }
       }
       // Me
       if (meRes.status === "fulfilled") setMe(meRes.value)
@@ -156,13 +141,6 @@ export default function Dashboard() {
           onClick={() => navigate("/models?estat=EnCurs")}
         />
         <KPICard
-          label={t("dashboard.kpi.open_alerts")}
-          value={loading ? "…" : avisos.length}
-          sub={t("dashboard.kpi_sub.pom_deviations")}
-          color={avisos.length > 0 ? "#a32d2d" : "var(--text-muted)"}
-          onClick={() => navigate("/avisos")}
-        />
-        <KPICard
           label={t("dashboard.kpi.prototype_samples")}
           value={loading ? "…" : stats.tallesGen}
           sub={t("dashboard.kpi_sub.critical_phase")}
@@ -170,7 +148,7 @@ export default function Dashboard() {
         />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20, alignItems: "start" }}>
         {/* Models recents */}
         <div>
           <div style={{
@@ -235,79 +213,6 @@ export default function Dashboard() {
               >
                 {t("dashboard.see_all_models")} →
               </button>
-            </div>
-          )}
-        </div>
-
-        {/* Avisos */}
-        <div>
-          <div style={{
-            fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em",
-            textTransform: "uppercase", color: "var(--gold)",
-            fontFamily: "IBM Plex Mono, monospace", marginBottom: 12,
-          }}>
-            {t("dashboard.pom_alerts")}
-          </div>
-          {avisosSummary && (
-            <div style={{
-              marginBottom: 10, padding: "8px 10px",
-              border: "1px solid var(--border)", borderRadius: 6,
-              background: "var(--white)", fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)',
-            }}>
-              <div style={{ display: "flex", gap: 12, marginBottom: 6 }}>
-                <span style={{ color: "#a32d2d" }}>● {t("dashboard.summary_open", { count: avisosSummary.oberts ?? 0 })}</span>
-                <span style={{ color: "#3b6d11" }}>● {t("dashboard.summary_resolved", { count: avisosSummary.resolts ?? 0 })}</span>
-                <span style={{ color: "var(--text-muted)" }}>· {t("dashboard.summary_days", { days: avisosSummary.dies ?? 30 })}</span>
-              </div>
-              {avisosSummary.top_poms?.length > 0 && (
-                <div style={{ color: "var(--text-muted)", fontSize: 'var(--fs-label)' }}>
-                  {t("dashboard.summary_top")}: {avisosSummary.top_poms.slice(0, 3).map(p =>
-                    `${p.pom_codi || p.pom} (${p.count})`
-                  ).join(" · ")}
-                </div>
-              )}
-            </div>
-          )}
-          {loading ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 'var(--fs-body)', fontFamily: "IBM Plex Mono, monospace" }}>{t("common.loading")}</div>
-          ) : avisos.length === 0 ? (
-            <div style={{
-              padding: "16px", border: "1px solid var(--border)", borderRadius: 8,
-              textAlign: "center", color: "#3b6d11", fontSize: 'var(--fs-body)',
-              fontFamily: "IBM Plex Mono, monospace", background: "#f0f9f0",
-            }}>
-              ✓ {t("dashboard.no_open_alerts")}
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {avisos.slice(0, 6).map(a => (
-                <div
-                  key={a.id}
-                  onClick={() => navigate("/avisos")}
-                  style={{
-                    padding: "8px 12px", border: "1px solid #f09595", borderRadius: 6,
-                    background: "#fff5f5", cursor: "pointer",
-                    fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)',
-                  }}
-                >
-                  <div style={{ color: "#a32d2d", fontWeight: 500, marginBottom: 2 }}>
-                    {a.pom_codi || a.pom} — {a.model_codi || a.model}
-                  </div>
-                  <div style={{ color: "var(--text-muted)" }}>{a.missatge || a.message || t("dashboard.deviation_detected")}</div>
-                </div>
-              ))}
-              {avisos.length > 6 && (
-                <button
-                  onClick={() => navigate("/avisos")}
-                  style={{
-                    padding: "6px", border: "1px dashed #f09595", borderRadius: 6,
-                    background: "none", color: "#a32d2d", cursor: "pointer",
-                    fontFamily: "IBM Plex Mono, monospace", fontSize: 'var(--fs-body)',
-                  }}
-                >
-                  +{t("dashboard.more_alerts", { count: avisos.length - 6 })} →
-                </button>
-              )}
             </div>
           )}
         </div>

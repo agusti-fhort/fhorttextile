@@ -175,7 +175,22 @@
     "email": "Correu electrònic",
     "email_placeholder": "nom@empresa.com",
     "send_link": "ENVIAR ENLLAÇ",
-    "back_login": "← Torna a l'accés"
+    "back_login": "← Torna a l'accés",
+    "forgot_admin_msg": "Demana a l'administrador que et generi un enllaç de recuperació.",
+    "reset_ok": "Contrasenya actualitzada. Ja pots accedir amb la nova."
+  },
+  "reset": {
+    "title": "Nova contrasenya",
+    "subtitle": "Introdueix la teva nova contrasenya.",
+    "checking": "Verificant l'enllaç…",
+    "invalid": "Aquest enllaç de recuperació és invàlid o ha caducat. Demana'n un de nou a l'administrador.",
+    "back_login": "Torna a l'accés",
+    "new_password": "Nova contrasenya",
+    "confirm_password": "Confirma la contrasenya",
+    "mismatch": "Les contrasenyes no coincideixen.",
+    "submit": "Desar contrasenya",
+    "saving": "Desant…",
+    "error_generic": "No s'ha pogut actualitzar la contrasenya."
   },
   "nav": {
     "import_collection": "Importar col·lecció",
@@ -207,7 +222,6 @@
     "garment_pom_map": "Garment POM Map",
     "onboarding": "Configuració inicial",
     "ia": "IA",
-    "avisos": "Avisos",
     "configuracio": "Configuració",
     "perfil": "El meu perfil",
     "logout": "Tancar sessió",
@@ -766,6 +780,12 @@
     "ue_save": "Desar",
     "ue_saving": "Desant…",
     "ue_updated": "Usuari actualitzat.",
+    "reset_link": "Enllaç de reset",
+    "rl_title": "Enllaç de recuperació",
+    "rl_copy": "Copiar",
+    "rl_copied": "Copiat!",
+    "rl_note": "Caduca en 24h. Passa aquest enllaç a la persona pel canal que vulguis.",
+    "rl_error": "No s'ha pogut generar l'enllaç.",
     "roles": {
       "technician": "Tècnic",
       "product_manager": "Product manager",
@@ -958,6 +978,9 @@
       "evolution": "Evolució",
       "empty": "Aquesta peça no té línies.",
       "name": "Nom",
+      "regime": "Règim",
+      "rule_free": "lliure",
+      "break": "trencament",
       "note": "Nota",
       "no_value": "—"
     },
@@ -1377,56 +1400,19 @@
     "complete_setup": "Completar setup",
     "kpi": {
       "total_models": "Total models",
-      "open_alerts": "Avisos oberts",
       "prototype_samples": "En prototip/mostres"
     },
     "kpi_sub": {
       "in_system": "al sistema",
       "active_models": "models actius",
-      "pom_deviations": "desviacions POM",
       "critical_phase": "models en fase crítica"
     },
     "recent_active_models": "Models actius recents",
     "no_models_in_progress": "Sense models en curs.",
     "create_first": "Crea el primer",
-    "see_all_models": "Veure tots els models",
-    "pom_alerts": "Avisos POM",
-    "summary_open": "{{count}} oberts",
-    "summary_resolved": "{{count}} resolts",
-    "summary_days": "{{days}}d",
-    "summary_top": "Top",
-    "no_open_alerts": "Sense avisos oberts",
-    "deviation_detected": "Desviació detectada",
-    "more_alerts": "{{count}} avisos més"
+    "see_all_models": "Veure tots els models"
   },
   "alerts": {
-    "status": {
-      "Pendent": "Pendent",
-      "Acceptat": "Acceptat",
-      "Corregit": "Corregit",
-      "Tots": "Tots"
-    },
-    "type": {
-      "desviacio": "Desviació",
-      "fora_rang": "Fora de rang",
-      "manca_mesura": "Manca mesura",
-      "conflicte": "Conflicte"
-    },
-    "subtitle_all": "{{count}} avisos en total",
-    "subtitle_pending": "{{count}} avisos pendents",
-    "subtitle_accepted": "{{count}} avisos acceptats",
-    "subtitle_corrected": "{{count}} avisos corregits",
-    "empty": "Cap avís en estat {{status}}.",
-    "col": {
-      "model": "Model",
-      "type": "Tipus",
-      "detected": "Detectat",
-      "expected": "Esperat",
-      "status": "Estat",
-      "date": "Data"
-    },
-    "accept": "Acceptar",
-    "resolve": "Resoldre",
     "gravetat": {
       "CRITICA": "Crítica",
       "IMPORTANT": "Important",

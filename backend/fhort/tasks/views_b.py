@@ -10,8 +10,7 @@ from django.db.models import Count, Q, ProtectedError
 from rest_framework.exceptions import ValidationError
 from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TASKS,
                                          CLOSE_GATES, SCHEDULE_FITTINGS, CONFIGURE,
-                                         VIEW_TEAM_TASKS, get_capabilities,
-                                         get_allowed_task_types)
+                                         get_allowed_task_types, scope_model_task_queryset)
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
                      GarmentTypeItem, TaskTimeEstimate, TaskTransition, Customer)
@@ -59,17 +58,14 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
     filterset_fields = ['model', 'status', 'task_type', 'assignee']
 
     def get_queryset(self):
-        """Row-level scope (Opció A): sense VIEW_TEAM_TASKS, l'usuari només veu les
-        tasques on n'és l'assignee. Els filterset_fields s'apliquen damunt d'aquest abast,
-        de manera que ?assignee=<altre> NO pot tornar tasques alienes. Sense perfil → res."""
-        qs = super().get_queryset()
-        user = self.request.user
-        if VIEW_TEAM_TASKS in get_capabilities(user):
-            return qs
-        profile = getattr(user, 'profile', None)
-        if profile is None:
-            return qs.none()
-        return qs.filter(assignee=profile)
+        """Row-level scope (Opció A): sense VIEW_TEAM_TASKS, l'usuari només veu les seves
+        tasques; si a més té DEFINE_TASKS, també les NO assignades (per poder assignar-les).
+        Mai veu les tasques ja assignades d'altri. Els filterset_fields s'apliquen damunt
+        d'aquest abast, de manera que ?assignee=<altre> NO pot tornar tasques alienes.
+
+        Aquest queryset el comparteixen update/partial_update/destroy (gate DEFINE_TASKS):
+        un product_manager pot assignar/editar les NO assignades, mai les d'altri."""
+        return scope_model_task_queryset(super().get_queryset(), self.request.user)
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve', 'by_model'):

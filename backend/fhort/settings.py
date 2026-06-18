@@ -138,6 +138,9 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
+# Caducitat dels tokens de recuperació de contrasenya (default_token_generator) — 24h.
+PASSWORD_RESET_TIMEOUT = 86400
+
 # Login per email O username (el camp del JWT segueix sent `username`). Fallback al ModelBackend.
 AUTHENTICATION_BACKENDS = [
     'fhort.accounts.backends.EmailOrUsernameBackend',
