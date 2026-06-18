@@ -1,4 +1,5 @@
 """Capacitats i resolució de permisos (Sprint A). Font de veritat única."""
+from django.db.models import Q
 from rest_framework.permissions import BasePermission
 
 # --- Capacitats (vocabulari controlat) ---
@@ -68,3 +69,27 @@ def get_allowed_task_types(user) -> set:
     if profile is None:
         return set()
     return set((profile.permisos or {}).get("tasks", []))
+
+
+def scope_model_task_queryset(qs, user):
+    """Scope de visibilitat/edició de ModelTask segons capacitats (font única).
+
+    Tres branques:
+      - view_team_tasks (manager/admin) → tot el queryset (sense filtre).
+      - sense view_team_tasks PERÒ define_tasks (product_manager) → les pròpies + les NO
+        assignades (assignee IS NULL), perquè qui defineix tasques pugui veure i assignar les
+        "pendents d'assignar" SENSE accedir a les tasques ja assignades d'altri.
+      - cap de les dues (technician) → només les pròpies. Sense perfil → res.
+
+    NOMÉS per a querysets de ModelTask. La semàntica de FittingSession ("on ets assistent")
+    és diferent i no fa servir aquest helper.
+    """
+    caps = get_capabilities(user)
+    if VIEW_TEAM_TASKS in caps:
+        return qs
+    profile = getattr(user, "profile", None)
+    if profile is None:
+        return qs.none()
+    if DEFINE_TASKS in caps:
+        return qs.filter(Q(assignee=profile) | Q(assignee__isnull=True))
+    return qs.filter(assignee=profile)
