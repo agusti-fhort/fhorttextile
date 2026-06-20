@@ -24,7 +24,8 @@ def _valid_phases():
 @transaction.atomic
 def advance_phase_gate(model, to_phase, by_profile, notes=None):
     """Gate del responsable: avança la fase d'un Model SENSE sessió de fitting.
-    Guard de TOP. Escriu fase_actual + GateEvent + segella el grading (D-3 peça 2)."""
+    Guard de TOP. Escriu fase_actual + GateEvent + segella el grading (D-3 peça 2).
+    Producció (TOP) és TERMINAL: marca estat → Tancat (D-3 peça 4)."""
     phases = _valid_phases()
     if to_phase not in phases:
         raise GateError(f'Fase no vàlida: {to_phase} (∈ {phases})')
@@ -34,7 +35,14 @@ def advance_phase_gate(model, to_phase, by_profile, notes=None):
     # 5B-fix v2: avançar fase NOMÉS canvia el marcador (fase_actual) + GateEvent. Les ModelTask
     # queden SEMPRE obertes (la fase va en paral·lel); cap anul·lació ni tancament de timers.
     model.fase_actual = to_phase
-    model.save(update_fields=['fase_actual'])
+    update_fields = ['fase_actual']
+    # D-3 peça 4: producció (TOP) és terminal — segella el patrimoni del model. En arribar
+    # a producció l'estat passa a Tancat (constant d'enum, MAI el label): el model no torna
+    # a desenvolupament. La reobertura per canvi tardà és explícita i guardada (D-1).
+    if to_phase == 'TOP':
+        model.estat = Model.ESTAT_TANCAT
+        update_fields.append('estat')
+    model.save(update_fields=update_fields)
     GateEvent.objects.create(model=model, from_phase=frm, to_phase=to_phase,
                              kind='advance', by=by_profile, notes=notes)
     # D-3 peça 2: el segellat del grading és conseqüència de l'avanç de gate (decisió
