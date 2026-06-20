@@ -8,11 +8,13 @@ import ProductionTab from '../components/model/ProductionTab'
 import FittingTab from '../components/model/FittingTab'
 import SizeCheckTab from '../components/model/SizeCheckTab'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
+import DashboardTab from '../components/model/DashboardTab'
 
 const API = import.meta.env.VITE_API_URL || ''
-const TABS = ['Resum', 'Mesures', 'Size Check', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
+const TABS = ['Dashboard', 'Resum', 'Mesures', 'Size Check', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
+  'Dashboard': 'model_sheet.tab_dashboard',
   'Resum': 'model_sheet.tab_summary',
   'Mesures': 'model.tabs.mesures',
   'Size Check': 'model_sheet.tab_size_check',
@@ -71,7 +73,7 @@ const btnSecondary = {
   display: 'flex', alignItems: 'center', gap: 4,
 }
 
-export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = false }) {
+export default function ModelSheet({ defaultTab = 'Dashboard', sizeCheckEditable = false }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -87,6 +89,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState(null)
   const [hasPomTask, setHasPomTask] = useState(false)
+  const [modelTasks, setModelTasks] = useState([])
 
   const reloadModel = useCallback(() => {
     fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
@@ -106,6 +109,7 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
       setSizesAmbDades(taulaData.sizes_amb_dades || null)
       setDeltes(taulaData.deltes || null)
       const tasks = tasksData.results || tasksData || []
+      setModelTasks(Array.isArray(tasks) ? tasks : [])
       setHasPomTask(Array.isArray(tasks) && tasks.some(tk => tk.task_type_code === 'pom'))
     }).catch(() => setError(t('model_sheet.err_load')))
     .finally(() => setLoading(false))
@@ -171,6 +175,14 @@ export default function ModelSheet({ defaultTab = 'Resum', sizeCheckEditable = f
       )}
 
       <div style={{ padding: '1.5rem' }}>
+        {activeTab === 'Dashboard' && (
+          <DashboardTab
+            modelId={parseInt(id)}
+            onOpenTab={setActiveTab}
+            navigate={navigate}
+            taskCodeById={Object.fromEntries(modelTasks.map(tk => [tk.id, tk.task_type_code]))}
+          />
+        )}
         {activeTab === 'Resum' && (
           <TabSummary
             model={model}
