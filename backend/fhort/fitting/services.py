@@ -727,6 +727,8 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
             f"No es pot avançar: cap confecció entregada per a la fase actual dels models {missing}."
         )
 
+    # D-3: 'sealed' i 'advanced' queden SEMPRE buits a posta (fitting ja no segella ni
+    # avança fase; vegeu peces 2 i 3). Es conserven al result per estabilitat de la forma.
     sealed = []
     advanced = []
     skipped_top = []
@@ -739,24 +741,11 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
 
         # D-3 peça 2: el segellat del grading (aprovada=True) ja NO es fa en tancar la
         # sessió de fitting; és conseqüència de l'avanç de gate
-        # (tasks.advance_phase_gate → fitting.seal_model_grading). Aquí la sessió només
-        # actua com a indicador de maduresa.
-
-        prev_phase = model.fase_actual
-        Model.objects.filter(pk=model.pk).update(fase_actual=nova_fase)
-        advanced.append(model.pk)
-
-        try:
-            from fhort.tasks.models import GateEvent
-            GateEvent.objects.create(
-                model_id=model.pk,
-                from_phase=prev_phase,
-                to_phase=nova_fase,
-                by_id=user_profile_id,
-                notes='(via fitting)',
-            )
-        except Exception:
-            pass  # no trencar el fitting si el log falla
+        # (tasks.advance_phase_gate → fitting.seal_model_grading).
+        # D-3 peça 3: fitting.advance_phase TAMPOC escriu Model.fase_actual ni crea
+        # GateEvent. L'avanç de fase és competència EXCLUSIVA de l'avanç de gate
+        # (tasks.advance_phase_gate, únic amo de fase_actual). La sessió de fitting és
+        # només indicador de maduresa i es tanca amb _seal_session.
 
     _seal_session(session)
 
