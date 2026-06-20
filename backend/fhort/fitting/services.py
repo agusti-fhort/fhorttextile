@@ -338,7 +338,8 @@ def create_piece_fitting(session_id: int, model_id: int, *, created_by_id: int |
     return pf, n
 
 
-def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = None) -> dict:
+def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = None,
+                        allow_reopen_sealed: bool = False) -> dict:
     """Close a PieceFitting, applying validated real values with FUNCTIONAL versioning.
 
     For each line where valor_real differs from valor_teoric:
@@ -428,6 +429,22 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
 
     new_version_number = None
     if changed:
+        # D-1 guard: no superar silenciosament una GradingVersion ja segellada a
+        # producció (aprovada=True). Un canvi tardà ha de ser una reobertura EXPLÍCITA
+        # i registrada (allow_reopen_sealed=True), per disseny §3.1.
+        sealed_active = (GradingVersion.objects
+                         .filter(size_fitting=sf, is_active=True, aprovada=True)
+                         .order_by('-version_number').first())
+        if sealed_active is not None and not allow_reopen_sealed:
+            raise ValueError(
+                f"GradingVersion v{sealed_active.version_number} està aprovada "
+                f"(segellada a producció); cal reobertura explícita per superar-la."
+            )
+        reopen_note = None
+        if sealed_active is not None:
+            reopen_note = (f'Reobertura explícita D-1: supera v{sealed_active.version_number} '
+                           f'aprovada (PieceFitting {pf.pk}).')
+            logger.warning(f"D-1: {reopen_note}")
         # Functional versioning: deactivate ALL active versions (handles the
         # legacy multi-active anomaly), then create the new active one.
         GradingVersion.objects.filter(size_fitting=sf, is_active=True).update(is_active=False)
@@ -440,6 +457,7 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
             is_active=True,
             creat_per=profile,
             nom=f'Fitting sessió {pf.session_id}',
+            notes=reopen_note,
         )
         new_version_number = new_version.version_number
 
@@ -519,6 +537,29 @@ def _active_grading_version(sf):
         .order_by('-version_number')
         .first()
     )
+
+
+def seal_model_grading(model, *, user_profile_id=None, now=None):
+    """Segella (aprovada=True) la GradingVersion activa del SizeFitting de treball del model.
+
+    D-3: el segellat és CONSEQÜÈNCIA de l'avanç de gate (decisió humana de maduresa),
+    no de tancar una sessió de fitting. Retorna el pk de la versió segellada, o None si
+    el model no té SizeFitting de treball ni versió activa.
+    """
+    from django.utils import timezone
+    if now is None:
+        now = timezone.now()
+    sf = _resolve_working_size_fitting(model)
+    if sf is None:
+        return None
+    version = _active_grading_version(sf)
+    if version is None:
+        return None
+    version.aprovada = True
+    version.aprovada_per_id = user_profile_id
+    version.data_aprovacio = now
+    version.save(update_fields=['aprovada', 'aprovada_per', 'data_aprovacio'])
+    return version.pk
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -655,7 +696,6 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
     Per-piece TOP guard: a piece already at 'TOP' asked to advance from TOP is a
     no-op (skipped, reported), not an error.
     """
-    from django.utils import timezone
     from fhort.fitting.models import FittingSession, PieceFitting
     from fhort.models_app.models import Model
 
@@ -687,7 +727,6 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
             f"No es pot avançar: cap confecció entregada per a la fase actual dels models {missing}."
         )
 
-    now = timezone.now()
     sealed = []
     advanced = []
     skipped_top = []
@@ -698,14 +737,10 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
             skipped_top.append(model.pk)
             continue
 
-        # Seal the vigent (active) GradingVersion of this piece's SizeFitting.
-        version = _active_grading_version(pf.grading_version.size_fitting)
-        if version is not None:
-            version.aprovada = True
-            version.aprovada_per_id = user_profile_id
-            version.data_aprovacio = now
-            version.save(update_fields=['aprovada', 'aprovada_per', 'data_aprovacio'])
-            sealed.append(version.pk)
+        # D-3 peça 2: el segellat del grading (aprovada=True) ja NO es fa en tancar la
+        # sessió de fitting; és conseqüència de l'avanç de gate
+        # (tasks.advance_phase_gate → fitting.seal_model_grading). Aquí la sessió només
+        # actua com a indicador de maduresa.
 
         prev_phase = model.fase_actual
         Model.objects.filter(pk=model.pk).update(fase_actual=nova_fase)

@@ -96,7 +96,8 @@ def model_te_deltes(model) -> bool:
 
 
 def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
-                       *, user_profile_id: int | None = None, data_represa=None) -> dict:
+                       *, user_profile_id: int | None = None, data_represa=None,
+                       allow_reopen_sealed: bool = False) -> dict:
     """Resol un SizeCheck Pendent. L'acció sol·licitada (`estat`) i les decisions de línia
     determinen l'estat FINAL i si es propaga al grading:
 
@@ -195,6 +196,21 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
 
             sf = _resolve_working_size_fitting(model)
             if sf is not None:
+                # D-1 guard (mirror de close_piece_fitting): no superar una GradingVersion
+                # aprovada (segellada a producció) sense reobertura explícita registrada.
+                sealed_active = (GradingVersion.objects
+                                 .filter(size_fitting=sf, is_active=True, aprovada=True)
+                                 .order_by('-version_number').first())
+                if sealed_active is not None and not allow_reopen_sealed:
+                    raise ValueError(
+                        f"GradingVersion v{sealed_active.version_number} està aprovada "
+                        f"(segellada a producció); cal reobertura explícita per superar-la."
+                    )
+                reopen_note = None
+                if sealed_active is not None:
+                    reopen_note = (f'Reobertura explícita D-1: supera v{sealed_active.version_number} '
+                                   f'aprovada (SizeCheck {sc.pk}).')
+                    logger.warning(f"D-1: {reopen_note}")
                 GradingVersion.objects.filter(size_fitting=sf, is_active=True).update(is_active=False)
                 max_num = GradingVersion.objects.filter(size_fitting=sf).aggregate(
                     m=Max('version_number')
@@ -205,6 +221,7 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
                     is_active=True,
                     creat_per=profile,
                     nom=f'Size check {sc.pk}',
+                    notes=reopen_note,
                 )
                 nova_version = nv.version_number
                 Model.objects.filter(pk=model.pk).update(
