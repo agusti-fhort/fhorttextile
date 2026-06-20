@@ -1240,6 +1240,85 @@ def consumption_delivery_view(request, model_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def model_dashboard_view(request, model_id):
+    """Dashboard del model — PEÇA B1 (versió mínima: Q1 + Q4).
+
+    Endpoint compositor read-only que agrega, per a UN model, l'estat de treball
+    (Q1: on sóc / què bloqueja / artefactes vigents) i les tasques (Q4: què puc fer).
+    NO inclou timeline (Q2), alertes/handoffs (Q3) ni esforç/cost (⑤ M, que ja serveix
+    consumption_delivery_view → no es duplica). Tot intra-tenant, cap escriptura a BD.
+
+    Degradació amb gràcia: un model nou (sense tasques/SF/fitxa/base) retorna 200 amb els
+    sub-blocs en null/buit/0, MAI un 500. Reusa els resolutors canònics ja existents."""
+    from django.shortcuts import get_object_or_404
+    from fhort.tasks.services_d import model_ready_for_gate
+    from fhort.fitting.services import _resolve_working_size_fitting, _active_grading_version
+
+    model = get_object_or_404(
+        Model.objects.prefetch_related('model_tasks__task_type'),
+        id=model_id,
+    )
+
+    # --- Q1: on sóc / què bloqueja ---
+    tasks = sorted(model.model_tasks.all(), key=lambda t: (t.order, t.id))
+    tasks_open = sum(1 for t in tasks if t.status != 'Done')
+
+    phases = [c[0] for c in Model.FASE_CHOICES]
+    try:
+        idx = phases.index(model.fase_actual)
+        next_phase = phases[idx + 1] if idx + 1 < len(phases) else None
+    except ValueError:
+        next_phase = None
+
+    on_soc = {
+        'fase': model.fase_actual,
+        'estat': model.estat,
+        'ready_for_gate': model_ready_for_gate(model.id),
+        'next_phase': next_phase,
+        'blockers': {'tasks_open': tasks_open},
+    }
+
+    # --- Q1: artefactes vigents (cada accés a una relació opcional tolera absència) ---
+    ts = getattr(model, 'tech_sheet', None)   # reverse O2O: None si no existeix (igual que consumption_record)
+    fitxa = {'versio': ts.versio, 'estat': ts.estat} if ts is not None else None
+
+    grading = None
+    sf = _resolve_working_size_fitting(model)   # resolutor canònic: grading és per SizeFitting, no per Model
+    if sf is not None:
+        gv = _active_grading_version(sf)
+        if gv is not None:
+            grading = {
+                'version_number': gv.version_number,
+                'aprovada': gv.aprovada,
+                'size_fitting_id': sf.id,
+            }
+
+    n_active = model.base_measurements.filter(
+        is_active=True, base_value_cm__isnull=False,
+    ).count()
+    base = {'base_size_label': model.base_size_label, 'n_active': n_active}
+
+    artefactes_vigents = {'fitxa': fitxa, 'grading': grading, 'base': base}
+
+    # --- Q4: tasques (llista saltable) ---
+    tasques = [{
+        'id': t.id,
+        'task_type': t.task_type.name if t.task_type_id else None,
+        'status': t.status,
+        'assignee_id': t.assignee_id,
+        'order': t.order,
+    } for t in tasks]
+
+    return Response({
+        'model_id': model.id,
+        'on_soc': on_soc,
+        'artefactes_vigents': artefactes_vigents,
+        'tasques': tasques,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def registre_activitat_view(request):
     """Sprint 4.5: llista global de ConsumptionRecord del tenant.
     Filtres: ?period=YYYY-MM &tecnic_id=<int> &page=<int> &page_size=<int>
