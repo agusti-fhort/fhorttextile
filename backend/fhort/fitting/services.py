@@ -693,9 +693,6 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
     skipped_top = []
 
     for pf in pieces:
-        # TODO(§3.3 — deute conscient): Model.fase_actual el deriva avui tasks
-        # (recalculate_current_phase via signal). Amb tasks=0 no hi ha conflicte;
-        # la reconciliació múscul↔tasques és posterior. Escriptura directa a posta.
         model = pf.model
         if model.fase_actual == 'TOP':
             skipped_top.append(model.pk)
