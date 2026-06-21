@@ -407,6 +407,28 @@
       },
       "task_status": {
         "Pending": "Pending", "Paused": "Paused", "InProgress": "In progress", "Done": "Done"
+      },
+      "timeline": {
+        "section": "What changed",
+        "err_load": "Error loading the activity",
+        "empty": "No changes recorded yet",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "by": "by {{label}}",
+        "now": "just now",
+        "ago_min": "{{n}} min ago",
+        "ago_hour": "{{n}} h ago",
+        "ago_day": "{{n}} days ago",
+        "measure_set": "POM {{pom}} · set to {{val}}",
+        "measure_change": "POM {{pom}} · {{prev}} → {{val}}",
+        "out_of_tolerance": "Out of tolerance",
+        "gate_advance": "Advanced to {{phase}}",
+        "gate_regress": "Reverted to {{phase}}",
+        "task_transition": "{{task}} · {{status}}",
+        "context": {
+          "import": "import", "manual": "manual", "fitting": "fitting",
+          "calculated": "calculated", "standard": "standard"
+        }
       }
     },
     "field_internal_ref": "Internal reference",

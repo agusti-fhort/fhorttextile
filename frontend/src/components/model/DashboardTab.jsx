@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
+import ModelTimeline from './ModelTimeline'
 
 // Dashboard del model — PEÇA F1 (Q1 "on sóc" + Q4 "què puc fer").
 // Consumeix GET /api/v1/models/<id>/dashboard/ (endpoint B1, read-only).
@@ -24,7 +25,10 @@ function taskRoute(code, modelId, taskId) {
 // status de tasca → variant del Badge del design system.
 const STATUS_VARIANT = { Done: 'ok', InProgress: 'gold', Paused: 'warn', Pending: 'gray' }
 
-const wrap = { display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: 760 }
+// Layout de dues columnes: esquerra Q1/artefactes/Q4 (F1), dreta timeline (F2).
+// flexWrap fa que en pantalla estreta la dreta caigui SOTA l'esquerra (apilat), no comprimida.
+const grid = { display: 'flex', flexWrap: 'wrap', gap: '2rem', alignItems: 'flex-start' }
+const wrap = { display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: '1 1 380px', maxWidth: 760 }
 const sectionTitle = {
   fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
   textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8,
@@ -107,7 +111,8 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
   const baseHasData = !!(base.base_size_label || (base.n_active ?? 0) > 0)
 
   return (
-    <div style={wrap}>
+    <div style={grid}>
+      <div style={wrap}>
 
       {/* ── Q1 · On sóc / què bloqueja ─────────────────────────────── */}
       <section>
@@ -260,6 +265,10 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
           </div>
         )}
       </section>
+      </div>
+
+      {/* ── Q2 · Memòria (timeline de passat) — columna dreta ──────── */}
+      <ModelTimeline modelId={modelId} />
     </div>
   )
 }

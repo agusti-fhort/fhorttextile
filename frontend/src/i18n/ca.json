@@ -407,6 +407,28 @@
       },
       "task_status": {
         "Pending": "Pendent", "Paused": "Pausada", "InProgress": "En curs", "Done": "Feta"
+      },
+      "timeline": {
+        "section": "Què ha canviat",
+        "err_load": "Error carregant l'activitat",
+        "empty": "Encara no hi ha canvis registrats",
+        "today": "Avui",
+        "yesterday": "Ahir",
+        "by": "per {{label}}",
+        "now": "ara mateix",
+        "ago_min": "fa {{n}} min",
+        "ago_hour": "fa {{n}} h",
+        "ago_day": "fa {{n}} dies",
+        "measure_set": "POM {{pom}} · definit a {{val}}",
+        "measure_change": "POM {{pom}} · {{prev}} → {{val}}",
+        "out_of_tolerance": "Fora de tolerància",
+        "gate_advance": "Avançat a {{phase}}",
+        "gate_regress": "Tornat a {{phase}}",
+        "task_transition": "{{task}} · {{status}}",
+        "context": {
+          "import": "importació", "manual": "manual", "fitting": "fitting",
+          "calculated": "calculat", "standard": "estàndard"
+        }
       }
     },
     "field_internal_ref": "Referència interna",

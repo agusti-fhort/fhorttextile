@@ -407,6 +407,28 @@
       },
       "task_status": {
         "Pending": "Pendiente", "Paused": "Pausada", "InProgress": "En curso", "Done": "Hecha"
+      },
+      "timeline": {
+        "section": "Qué ha cambiado",
+        "err_load": "Error al cargar la actividad",
+        "empty": "Aún no hay cambios registrados",
+        "today": "Hoy",
+        "yesterday": "Ayer",
+        "by": "por {{label}}",
+        "now": "ahora mismo",
+        "ago_min": "hace {{n}} min",
+        "ago_hour": "hace {{n}} h",
+        "ago_day": "hace {{n}} días",
+        "measure_set": "POM {{pom}} · definido a {{val}}",
+        "measure_change": "POM {{pom}} · {{prev}} → {{val}}",
+        "out_of_tolerance": "Fuera de tolerancia",
+        "gate_advance": "Avanzado a {{phase}}",
+        "gate_regress": "Vuelto a {{phase}}",
+        "task_transition": "{{task}} · {{status}}",
+        "context": {
+          "import": "importación", "manual": "manual", "fitting": "fitting",
+          "calculated": "calculado", "standard": "estándar"
+        }
       }
     },
     "field_internal_ref": "Referencia interna",
