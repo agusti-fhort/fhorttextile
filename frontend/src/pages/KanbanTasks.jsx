@@ -26,9 +26,9 @@ const COLUMNS = [
 
 // Transicions vàlides (mirall d'ALLOWED al backend services_c.py). Done→InProgress = rectificació.
 const ACTIONS = {
-  Pending:    [{ to: 'InProgress', key: 'start',  icon: 'ti-player-play-filled' }],
-  Paused:     [{ to: 'InProgress', key: 'resume', icon: 'ti-player-play-filled' }],
-  InProgress: [{ to: 'Paused', key: 'pause', icon: 'ti-player-pause-filled' },
+  Pending:    [{ to: 'InProgress', key: 'start',  icon: 'ti-player-play' }],
+  Paused:     [{ to: 'InProgress', key: 'resume', icon: 'ti-player-play' }],
+  InProgress: [{ to: 'Paused', key: 'pause', icon: 'ti-player-pause' },
                { to: 'Done', key: 'finish', icon: 'ti-check' }],
   Done:       [{ to: 'InProgress', key: 'reopen', icon: 'ti-rotate-clockwise' }],
 }
