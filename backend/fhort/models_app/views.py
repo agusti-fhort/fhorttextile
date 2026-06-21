@@ -1253,6 +1253,7 @@ def model_dashboard_view(request, model_id):
     from django.shortcuts import get_object_or_404
     from fhort.tasks.services_d import model_ready_for_gate
     from fhort.fitting.services import _resolve_working_size_fitting, _active_grading_version
+    from fhort.fitting.models import POMAlert
 
     model = get_object_or_404(
         Model.objects.prefetch_related('model_tasks__task_type'),
@@ -1310,11 +1311,37 @@ def model_dashboard_view(request, model_id):
         'order': t.order,
     } for t in tasks]
 
+    # --- Q3: atenció tècnica — alertes POM PENDENTS de resoldre ---
+    # Anomalia de dades coneguda (ANOTAR): els ESTAT_CHOICES del model són
+    # Pendent/Acceptat/Corregit, però els disparadors vius escriuen valors fora-de-choice
+    # ('Obert' a FITTING pom/s10_views.py:144 i MANUAL pom/s11_views.py:191; 'Resolt' al
+    # resoldre pom/s11_views.py:96). Per NO amagar alertes reals, "pendent" = NO resolt:
+    # excloem el conjunt de resolts → surten 'Pendent', 'Obert' i qualsevol valor inesperat
+    # (en un panell d'atenció és més segur surar que amagar). select_related(pom) evita N+1.
+    RESOLVED_ALERT_STATES = ('Acceptat', 'Corregit', 'Resolt')
+    alertes = [{
+        'id': a.id,
+        'tipus': a.tipus,
+        'pom_codi': a.pom.codi_client if a.pom_id else None,
+        'valor_detectat': str(a.valor_detectat) if a.valor_detectat is not None else None,
+        'valor_esperat': str(a.valor_esperat) if a.valor_esperat is not None else None,
+        'desviacio_cm': str(a.desviacio_cm) if a.desviacio_cm is not None else None,
+        'tolerancia_cm': str(a.tolerancia_cm) if a.tolerancia_cm is not None else None,
+        'missatge': a.missatge or '',
+        'data_creacio': a.data_creacio,
+    } for a in (POMAlert.objects
+                .filter(model_id=model.id)
+                .exclude(estat__in=RESOLVED_ALERT_STATES)
+                .select_related('pom')
+                .order_by('-data_creacio'))]
+    atencio = {'alertes': alertes, 'n_pendents': len(alertes)}
+
     return Response({
         'model_id': model.id,
         'on_soc': on_soc,
         'artefactes_vigents': artefactes_vigents,
         'tasques': tasques,
+        'atencio': atencio,
     })
 
 
