@@ -89,7 +89,6 @@ export default function ModelSheet({ defaultTab = 'Dashboard', sizeCheckEditable
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState(null)
   const [hasPomTask, setHasPomTask] = useState(false)
-  const [modelTasks, setModelTasks] = useState([])
 
   const reloadModel = useCallback(() => {
     fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
@@ -109,7 +108,6 @@ export default function ModelSheet({ defaultTab = 'Dashboard', sizeCheckEditable
       setSizesAmbDades(taulaData.sizes_amb_dades || null)
       setDeltes(taulaData.deltes || null)
       const tasks = tasksData.results || tasksData || []
-      setModelTasks(Array.isArray(tasks) ? tasks : [])
       setHasPomTask(Array.isArray(tasks) && tasks.some(tk => tk.task_type_code === 'pom'))
     }).catch(() => setError(t('model_sheet.err_load')))
     .finally(() => setLoading(false))
@@ -180,7 +178,6 @@ export default function ModelSheet({ defaultTab = 'Dashboard', sizeCheckEditable
             modelId={parseInt(id)}
             onOpenTab={setActiveTab}
             navigate={navigate}
-            taskCodeById={Object.fromEntries(modelTasks.map(tk => [tk.id, tk.task_type_code]))}
           />
         )}
         {activeTab === 'Resum' && (

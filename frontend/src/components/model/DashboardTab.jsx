@@ -44,7 +44,7 @@ const stateBox = {
   background: 'var(--bg-card)',
 }
 
-export default function DashboardTab({ modelId, onOpenTab, navigate, taskCodeById = {} }) {
+export default function DashboardTab({ modelId, onOpenTab, navigate }) {
   const { t } = useTranslation()
   const token = localStorage.getItem('access_token')
   const [data, setData] = useState(null)
@@ -94,7 +94,9 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, taskCodeByI
   const tasksOpen = onSoc.blockers?.tasks_open ?? 0
 
   const goTask = (task) => {
-    const route = taskRoute(taskCodeById[task.id], modelId, task.id)
+    // El codi ve directament de B1 (tasques[].task_type_code); el Dashboard és
+    // autònom de la seva font, sense dependre de cap segon fetch.
+    const route = taskRoute(task.task_type_code, modelId, task.id)
     navigate(route || '/tasques/kanban')   // fallback honest: tauler de tasques
   }
   const goKanban = () => navigate('/tasques/kanban')
