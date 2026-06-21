@@ -1320,6 +1320,109 @@ def model_dashboard_view(request, model_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def model_timeline_view(request, model_id):
+    """Timeline del model — PEÇA B2 (Q2 "què ha canviat").
+
+    Merge ordenat per temps (desc) de les TRES fonts append-only `a` del model:
+    canvis de mesura (MeasurementChangeLog), moviments de gate (GateEvent) i
+    transicions de tasca (TaskTransition). Es projecten a UNA forma comuna
+    {at, kind, actor, payload} discriminable per `kind`, i es retornen en UNA
+    sola llista. NO inclou fonts `b` (pujades d'artefacte) ni `c` (arribades/
+    handoffs) — v1 = només les 3 `a`. NO last-seen per-usuari (v1 = "últims canvis").
+    Tot intra-tenant, read-only, cap escriptura a BD.
+
+    Degradació amb gràcia: model nou sense events → 200 amb events:[]; cada
+    projecció tolera FK null (actor null si SET_NULL; pom/task_type → null al payload)."""
+    from django.shortcuts import get_object_or_404
+    from .models import MeasurementChangeLog
+    from fhort.tasks.models import GateEvent, TaskTransition
+
+    model = get_object_or_404(Model, id=model_id)
+
+    try:
+        limit = int(request.query_params.get('limit', 50))
+    except (TypeError, ValueError):
+        limit = 50
+    limit = max(1, min(limit, 200))   # sostre de seguretat: "últims canvis", no historial sencer
+
+    # actor unificat. measure_change → created_by és auth.User; gate/task → by és UserProfile.
+    def actor_user(u):
+        if u is None:
+            return None
+        return {'id': u.id, 'label': u.get_full_name() or u.get_username()}
+
+    def actor_profile(p):
+        if p is None:
+            return None
+        label = p.nom_complet or (p.user.get_username() if p.user_id else str(p.id))
+        return {'id': p.id, 'label': label}
+
+    events = []
+
+    # Font 1 — MeasurementChangeLog (FK directa `model`). select_related evita N+1 sobre pom/created_by.
+    for c in (MeasurementChangeLog.objects
+              .filter(model_id=model.id)
+              .select_related('pom', 'created_by')
+              .order_by('-created_at')[:limit]):
+        events.append({
+            'at': c.created_at,
+            'kind': 'measure_change',
+            'actor': actor_user(c.created_by),
+            'payload': {
+                'pom_id': c.pom_id,
+                'pom_codi': c.pom.codi_client if c.pom_id else None,
+                'valor_anterior': c.valor_anterior,
+                'valor_nou': c.valor_nou,
+                'context': c.context,
+                'fora_de_tolerancia': c.fora_de_tolerancia,
+                'motiu': c.motiu,
+            },
+        })
+
+    # Font 2 — GateEvent (FK directa `model`). kind discrimina gate_advance / gate_regress.
+    for g in (GateEvent.objects
+              .filter(model_id=model.id)
+              .select_related('by', 'by__user')
+              .order_by('-at')[:limit]):
+        events.append({
+            'at': g.at,
+            'kind': 'gate_advance' if g.kind == 'advance' else 'gate_regress',
+            'actor': actor_profile(g.by),
+            'payload': {
+                'from_phase': g.from_phase,
+                'to_phase': g.to_phase,
+                'notes': g.notes,
+            },
+        })
+
+    # Font 3 — TaskTransition (FK INDIRECTA: filtrar per model_task__model). select_related al type.
+    for tr in (TaskTransition.objects
+               .filter(model_task__model_id=model.id)
+               .select_related('by', 'by__user', 'model_task__task_type')
+               .order_by('-at')[:limit]):
+        tt = tr.model_task.task_type if tr.model_task.task_type_id else None
+        events.append({
+            'at': tr.at,
+            'kind': 'task_transition',
+            'actor': actor_profile(tr.by),
+            'payload': {
+                'task_type_code': tt.code if tt else None,
+                'task_type_name': tt.name if tt else None,
+                'from_status': tr.from_status,
+                'to_status': tr.to_status,
+            },
+        })
+
+    # Merge: cada font ja acotada a `limit` → ordenar per temps desc i retallar a `limit` global.
+    # Correcte: els `limit` events més recents en total no poden venir més de `limit` d'una font.
+    events.sort(key=lambda e: e['at'], reverse=True)
+    events = events[:limit]
+
+    return Response({'model_id': model.id, 'events': events})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def registre_activitat_view(request):
     """Sprint 4.5: llista global de ConsumptionRecord del tenant.
     Filtres: ?period=YYYY-MM &tecnic_id=<int> &page=<int> &page_size=<int>

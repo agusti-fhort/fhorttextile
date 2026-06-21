@@ -8,6 +8,7 @@ from .views import (
     ai_analysis_view,
     consumption_delivery_view,
     model_dashboard_view,
+    model_timeline_view,
     create_model_wizard,
     generate_grading_view,
     iso_shrinkage_view,
@@ -177,6 +178,7 @@ urlpatterns = (
         path('models/<int:model_id>/update-fabric/', update_fabric_view),
         path('models/<int:model_id>/albara/', consumption_delivery_view),
         path('models/<int:model_id>/dashboard/', model_dashboard_view),
+        path('models/<int:model_id>/timeline/', model_timeline_view),
         path('registre-activitat/', registre_activitat_view),
     ]
     + _sprint6_paths
