@@ -1304,6 +1304,7 @@ def model_dashboard_view(request, model_id):
     tasques = [{
         'id': t.id,
         'task_type': t.task_type.name if t.task_type_id else None,
+        'task_type_code': t.task_type.code if t.task_type_id else None,
         'status': t.status,
         'assignee_id': t.assignee_id,
         'order': t.order,
