@@ -379,6 +379,7 @@
       "blockers_open": "{{n}} tareas abiertas",
       "blockers_none": "Nada bloquea",
       "section_artefacts": "Artefactos vigentes",
+      "section_done": "Lo que tengo hecho",
       "artefact_fitxa": "Ficha técnica",
       "artefact_grading": "Tabla graduada",
       "artefact_base": "Medidas base",

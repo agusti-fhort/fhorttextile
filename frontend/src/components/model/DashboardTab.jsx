@@ -12,20 +12,6 @@ import WorkPlan from './WorkPlan'
 const API = import.meta.env.VITE_API_URL || ''
 const MONO = 'IBM Plex Mono, monospace'
 
-// task_type_code → ruta on es treballa la tasca (deep-link a l'eina canònica,
-// mateixes rutes que el Kanban). null → fallback honest al tauler de tasques.
-function taskRoute(code, modelId, taskId) {
-  switch (code) {
-    case 'pom':        return `/models/${modelId}/mesures`
-    case 'tech_sheet': return `/models/${modelId}/fitxa?task_id=${taskId}`
-    case 'size_check': return `/models/${modelId}/size-check`
-    default:           return null
-  }
-}
-
-// status de tasca → variant del Badge del design system.
-const STATUS_VARIANT = { Done: 'ok', InProgress: 'gold', Paused: 'warn', Pending: 'gray' }
-
 // Layout de dues columnes: esquerra Q1/artefactes/Q4 (F1), dreta timeline (F2).
 // flexWrap fa que en pantalla estreta la dreta caigui SOTA l'esquerra (apilat), no comprimida.
 const grid = { display: 'flex', flexWrap: 'wrap', gap: '2rem', alignItems: 'flex-start' }
@@ -98,12 +84,6 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
   const stateLabel = t(`kanban.estats.${onSoc.estat}`, { defaultValue: onSoc.estat || '—' })
   const tasksOpen = onSoc.blockers?.tasks_open ?? 0
 
-  const goTask = (task) => {
-    // El codi ve directament de B1 (tasques[].task_type_code); el Dashboard és
-    // autònom de la seva font, sense dependre de cap segon fetch.
-    const route = taskRoute(task.task_type_code, modelId, task.id)
-    navigate(route || '/tasques/kanban')   // fallback honest: tauler de tasques
-  }
   const goKanban = () => navigate('/tasques/kanban')
 
   const fitxa = art.fitxa
@@ -154,7 +134,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
 
       {/* ── Q1 · Artefactes vigents (accessos, no etiquetes) ───────── */}
       <section>
-        <div style={sectionTitle}>{t('model_sheet.dashboard.section_artefacts')}</div>
+        <div style={sectionTitle}>{t('model_sheet.dashboard.section_done')}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
           {/* Fitxa → pestanya Fitxa tècnica */}
@@ -220,30 +200,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
         </div>
       </section>
 
-      {/* ── Q4 · Què puc fer ara (tasques saltables) ───────────────── */}
-      <section>
-        <div style={sectionTitle}>{t('model_sheet.dashboard.section_tasks')}</div>
-        {tasques.length === 0 ? (
-          <div style={cardEmpty}>{t('model_sheet.dashboard.tasks_empty')}</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {tasques.map(task => (
-              <button key={task.id} type="button" style={card}
-                title={t('model_sheet.dashboard.open_task')} onClick={() => goTask(task)}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontFamily: MONO, color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>
-                    {task.order}
-                  </span>
-                  <span>{task.task_type}</span>
-                </span>
-                <Badge variant={STATUS_VARIANT[task.status] || 'gray'}>
-                  {t(`model_sheet.dashboard.task_status.${task.status}`, { defaultValue: task.status })}
-                </Badge>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
+      {/* Q4 (llista plana de F1) ABSORBIT pel contenidor Pla de treball (P2a/P2b). */}
 
       {/* ── Estat tècnic (plegat: per consultar, no per actuar) ─────── */}
       <section>

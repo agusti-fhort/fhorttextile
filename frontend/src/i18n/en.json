@@ -379,6 +379,7 @@
       "blockers_open": "{{n}} open tasks",
       "blockers_none": "Nothing is blocking",
       "section_artefacts": "Current artefacts",
+      "section_done": "What I've done",
       "artefact_fitxa": "Tech sheet",
       "artefact_grading": "Graded table",
       "artefact_base": "Base measurements",
