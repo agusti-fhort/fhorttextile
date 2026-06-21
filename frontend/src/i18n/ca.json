@@ -419,7 +419,15 @@
         "empty": "Aquest model encara no té tasques assignades",
         "toast_paused": "S'ha pausat «{{name}}»",
         "transition_error": "No s'ha pogut canviar l'estat de la tasca",
-        "not_allowed": "No tens permís per operar aquesta tasca"
+        "not_allowed": "No tens permís per operar aquesta tasca",
+        "handoff_play": "Reassignar i començar",
+        "handoff_title": "Reassignar tasca",
+        "handoff_body": "Aquesta tasca és de {{name}}. La reassignes a tu per treballar-la?",
+        "handoff_body_unassigned": "Aquesta tasca no té tècnic assignat. L'assignes a tu per treballar-la?",
+        "handoff_confirm": "Reassignar i començar",
+        "handoff_cancel": "Cancel·lar",
+        "claim_denied": "No pots agafar una tasca d'aquest tipus (no és a la teva llista d'execució)",
+        "claim_error": "No s'ha pogut reassignar la tasca"
       },
       "timeline": {
         "section": "Què ha canviat",

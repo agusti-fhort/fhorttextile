@@ -419,7 +419,15 @@
         "empty": "Este modelo aún no tiene tareas asignadas",
         "toast_paused": "Se ha pausado «{{name}}»",
         "transition_error": "No se ha podido cambiar el estado de la tarea",
-        "not_allowed": "No tienes permiso para operar esta tarea"
+        "not_allowed": "No tienes permiso para operar esta tarea",
+        "handoff_play": "Reasignar y empezar",
+        "handoff_title": "Reasignar tarea",
+        "handoff_body": "Esta tarea es de {{name}}. ¿La reasignas a ti para trabajarla?",
+        "handoff_body_unassigned": "Esta tarea no tiene técnico asignado. ¿La asignas a ti para trabajarla?",
+        "handoff_confirm": "Reasignar y empezar",
+        "handoff_cancel": "Cancelar",
+        "claim_denied": "No puedes coger una tarea de este tipo (no está en tu lista de ejecución)",
+        "claim_error": "No se ha podido reasignar la tarea"
       },
       "timeline": {
         "section": "Qué ha cambiado",

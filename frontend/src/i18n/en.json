@@ -419,7 +419,15 @@
         "empty": "This model has no tasks assigned yet",
         "toast_paused": "Paused «{{name}}»",
         "transition_error": "Could not change the task status",
-        "not_allowed": "You don't have permission to operate this task"
+        "not_allowed": "You don't have permission to operate this task",
+        "handoff_play": "Reassign and start",
+        "handoff_title": "Reassign task",
+        "handoff_body": "This task belongs to {{name}}. Reassign it to you to work on it?",
+        "handoff_body_unassigned": "This task has no assigned technician. Assign it to you to work on it?",
+        "handoff_confirm": "Reassign and start",
+        "handoff_cancel": "Cancel",
+        "claim_denied": "You can't take a task of this type (it's not in your execution list)",
+        "claim_error": "Could not reassign the task"
       },
       "timeline": {
         "section": "What changed",

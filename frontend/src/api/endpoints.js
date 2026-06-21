@@ -127,6 +127,8 @@ export const modelTasks = {
   remove: (id) => client.delete(`/api/v1/model-task-items/${id}/`),
   // Màquina d'estats (gated execute_tasks). La resposta pot dur paused_task_id (→ toast 3s).
   transition: (id, data) => client.post(`/api/v1/model-task-items/${id}/transition/`, data),  // {to_status}
+  // Self-claim entre tècnics (P4a-back, gated execute_tasks, self-only). Sense body: assignee = jo.
+  claim: (id) => client.post(`/api/v1/model-task-items/${id}/claim/`),
 }
 // Alias retrocompatible (KanbanTasks vell encara importa `tasks`; es reconstrueix al tram 4).
 export const tasks = modelTasks

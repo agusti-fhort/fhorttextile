@@ -2,15 +2,18 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
+import Modal from '../ui/Modal'
 import { modelTasks } from '../../api/endpoints'
 import { formatMinutes } from '../../utils/format'
 
-// Pla de treball — PEÇA P3 (Q4 crescut): l'encàrrec del model com a procés.
+// Pla de treball — PEÇA P3 + P4a (Q4 crescut): l'encàrrec del model com a procés.
 // Consumeix dashboard.tasques (compositor enriquit a P1, JA ordenat canònic) — NO reordena.
 // Transport (Play/Pause/Stop) CABLEJAT a modelTasks.transition (P3). "Play obre l'eina"
 // (decisió Agus): Play = anar a treballar → transition InProgress + navega a l'eina; si la
 // tasca no en té (pattern_*, bom, scaling, marking, Audit) → InProgress sense navegar (§4).
-// Tres rendings (§5) per scope viewer: meva / d'altri / fora d'encàrrec.
+// P4a — handoff (§6): Play sobre tasca d'ALTRI obre un diàleg de reassignació; en confirmar fa
+// modelTasks.claim (self-only, gated execute_tasks) i després el mateix camí de Play de P3.
+// Pause/Stop segueixen apagats a d'altri. Tres rendings (§5): meva / d'altri / fora d'encàrrec.
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -120,8 +123,9 @@ function TaskCard({ task, mine, onPlay, onPause, onStop }) {
       {/* Peu: transport (placeholder) + badge d'estat */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: 4, opacity: mine ? 1 : 0.5 }}>
-          <TransportBtn icon="ti-player-play-filled"  active={mine && transport.play}  title={t('model_sheet.dashboard.workplan.play')}  onClick={() => onPlay(task)} />
+        <div style={{ display: 'flex', gap: 4 }}>
+          {/* P4a: Play disponible també a d'altri (obre diàleg de handoff). Pause/Stop només meves. */}
+          <TransportBtn icon="ti-player-play-filled"  active={mine ? transport.play : true} title={mine ? t('model_sheet.dashboard.workplan.play') : t('model_sheet.dashboard.workplan.handoff_play')} onClick={() => onPlay(task)} />
           <TransportBtn icon="ti-player-pause-filled" active={mine && transport.pause} title={t('model_sheet.dashboard.workplan.pause')} onClick={() => onPause(task)} />
           <TransportBtn icon="ti-player-stop-filled"  active={mine && transport.stop}  title={t('model_sheet.dashboard.workplan.stop')}  onClick={() => onStop(task)} />
         </div>
@@ -139,6 +143,8 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
   const token = localStorage.getItem('access_token')
   const [myProfileId, setMyProfileId] = useState(null)
   const [toast, setToast] = useState(null)        // { type, text }
+  const [handoff, setHandoff] = useState(null)     // task pendent de reassignar (diàleg §6)
+  const [claiming, setClaiming] = useState(false)  // guard anti-doble-clic del claim
   const toastTimer = useRef(null)
 
   useEffect(() => {
@@ -154,6 +160,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
 
   const list = Array.isArray(tasques) ? tasques : []
+  const isMine = (task) => task.assignee_id != null && task.assignee_id === myProfileId
 
   function showToast(type, text) {
     setToast({ type, text })
@@ -186,10 +193,10 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
       })
   }
 
-  // Play = anar a treballar (decisió Agus). Amb eina: transition InProgress + navega (idèntic al
-  // kanban; Done = reobertura §3.8). Fire-and-forget: navega igualment, no bloqueja per la xarxa.
-  // Sense eina: InProgress sense navegar (§4) — la targeta passa a "en curs" amb indicador viu.
-  function handlePlay(task) {
+  // Camí de Play de P3 (sobre tasca PRÒPIA): anar a treballar (decisió Agus). Amb eina: transition
+  // InProgress + navega (idèntic al kanban; Done = reobertura §3.8). Fire-and-forget: navega
+  // igualment. Sense eina: InProgress sense navegar (§4) — la targeta passa a "en curs".
+  function playMine(task) {
     const route = toolRoute(task, modelId)
     if (route) {
       if (task.status === 'Pending' || task.status === 'Paused' || task.status === 'Done') {
@@ -199,6 +206,35 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
     } else {
       doTransition(task, 'InProgress')
     }
+  }
+
+  // P4a — Play segons qui té la tasca. Meva → camí de P3 directe. D'altri → diàleg de handoff (§6).
+  function handlePlay(task) {
+    if (isMine(task)) { playMine(task); return }
+    setHandoff(task)
+  }
+
+  // Confirmar handoff: claim (self-only, gated execute_tasks) i, si OK, el camí de Play de P3 amb
+  // la tasca JA reassignada. El recompute es dispara sol al backend. 403 = allow-list (tipus que no
+  // executo) → toast clar, sense navegar. La tasca ja és meva → playMine aplica net (mine=true).
+  function confirmHandoff() {
+    if (!handoff || claiming) return
+    const task = handoff
+    setClaiming(true)
+    modelTasks.claim(task.id)
+      .then(() => {
+        setHandoff(null)
+        playMine({ ...task, assignee_id: myProfileId })
+        onRefresh?.()
+      })
+      .catch(err => {
+        setHandoff(null)
+        const denied = err?.response?.status === 403
+        showToast('err', denied
+          ? t('model_sheet.dashboard.workplan.claim_denied')
+          : t('model_sheet.dashboard.workplan.claim_error'))
+      })
+      .finally(() => setClaiming(false))
   }
 
   // Pause = pauso, no he acabat. Stop = gest humà explícit "feta, 100%" (MAI automàtic). Cap navega.
@@ -216,11 +252,23 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
       ) : (
         <div style={cardsGrid}>
           {list.map(task => (
-            <TaskCard key={task.id} task={task}
-              mine={task.assignee_id != null && task.assignee_id === myProfileId}
+            <TaskCard key={task.id} task={task} mine={isMine(task)}
               onPlay={handlePlay} onPause={handlePause} onStop={handleStop} />
           ))}
         </div>
+      )}
+      {handoff && (
+        <Modal
+          title={t('model_sheet.dashboard.workplan.handoff_title')}
+          subtitle={handoff.assignee_nom
+            ? t('model_sheet.dashboard.workplan.handoff_body', { name: handoff.assignee_nom })
+            : t('model_sheet.dashboard.workplan.handoff_body_unassigned')}
+          confirmLabel={t('model_sheet.dashboard.workplan.handoff_confirm')}
+          cancelLabel={t('model_sheet.dashboard.workplan.handoff_cancel')}
+          confirmDisabled={claiming}
+          onConfirm={confirmHandoff}
+          onCancel={() => { if (!claiming) setHandoff(null) }}
+        />
       )}
       {toast && (
         <div style={{
