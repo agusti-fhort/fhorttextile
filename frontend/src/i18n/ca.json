@@ -416,7 +416,10 @@
         "play": "Iniciar",
         "pause": "Pausar",
         "stop": "Finalitzar",
-        "empty": "Aquest model encara no té tasques assignades"
+        "empty": "Aquest model encara no té tasques assignades",
+        "toast_paused": "S'ha pausat «{{name}}»",
+        "transition_error": "No s'ha pogut canviar l'estat de la tasca",
+        "not_allowed": "No tens permís per operar aquesta tasca"
       },
       "timeline": {
         "section": "Què ha canviat",

@@ -416,7 +416,10 @@
         "play": "Iniciar",
         "pause": "Pausar",
         "stop": "Finalizar",
-        "empty": "Este modelo aún no tiene tareas asignadas"
+        "empty": "Este modelo aún no tiene tareas asignadas",
+        "toast_paused": "Se ha pausado «{{name}}»",
+        "transition_error": "No se ha podido cambiar el estado de la tarea",
+        "not_allowed": "No tienes permiso para operar esta tarea"
       },
       "timeline": {
         "section": "Qué ha cambiado",

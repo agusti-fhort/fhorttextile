@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
 import ModelTimeline from './ModelTimeline'
@@ -43,7 +43,10 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
   const [error, setError] = useState('')
   const [showTech, setShowTech] = useState(false)
 
-  useEffect(() => {
+  // Càrrega del compositor. Reutilitzable: el transport del Pla de treball (P3) la torna a
+  // cridar (onRefresh) després de cada transició que NO navega, perquè estat/temps/obertures
+  // de les targetes reflecteixin el canvi sense recarregar la pàgina.
+  const load = useCallback(() => {
     let alive = true
     setLoading(true); setError('')
     fetch(`${API}/api/v1/models/${modelId}/dashboard/`, {
@@ -54,7 +57,10 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
       .catch(() => { if (alive) setError(t('model_sheet.dashboard.err_load')) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelId])
+
+  useEffect(() => load(), [load])
 
   if (loading) {
     return (
@@ -95,7 +101,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
       {/* ── Pla de treball (Q4 crescut) — ample total dalt (P2a) ───── */}
-      <WorkPlan tasques={tasques} />
+      <WorkPlan tasques={tasques} modelId={modelId} onRefresh={load} />
 
       <div style={grid}>
       <div style={wrap}>

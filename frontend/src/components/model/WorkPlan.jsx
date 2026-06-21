@@ -1,14 +1,30 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
+import { modelTasks } from '../../api/endpoints'
 import { formatMinutes } from '../../utils/format'
 
-// Pla de treball — PEÇA P2a (Q4 crescut): l'encàrrec del model com a procés.
+// Pla de treball — PEÇA P3 (Q4 crescut): l'encàrrec del model com a procés.
 // Consumeix dashboard.tasques (compositor enriquit a P1, JA ordenat canònic) — NO reordena.
-// Transport (Play/Pause/Stop) en PLACEHOLDER: estat visual correcte, onClick no-op (TODO P3).
+// Transport (Play/Pause/Stop) CABLEJAT a modelTasks.transition (P3). "Play obre l'eina"
+// (decisió Agus): Play = anar a treballar → transition InProgress + navega a l'eina; si la
+// tasca no en té (pattern_*, bom, scaling, marking, Audit) → InProgress sense navegar (§4).
 // Tres rendings (§5) per scope viewer: meva / d'altri / fora d'encàrrec.
 
 const API = import.meta.env.VITE_API_URL || ''
+
+// task_type_code → ruta de l'eina al frontend. Mini-taula LOCAL (mirall del kanban
+// KanbanTasks.jsx pom/tech_sheet/size_check; duplicació mínima conscient, deute anotat a P0 §B —
+// NO importem ACTIONS del kanban). null = tipus sense eina → transport manual (§4).
+function toolRoute(task, modelId) {
+  switch (task.task_type_code) {
+    case 'pom':        return `/models/${modelId}/mesures`
+    case 'tech_sheet': return `/models/${modelId}/fitxa?task_id=${task.id}`
+    case 'size_check': return `/models/${modelId}/size-check`
+    default:           return null
+  }
+}
 
 // task_type.code → icona Tabler (no hi havia mapa compartit; design system).
 const TASK_ICON = {
@@ -40,10 +56,10 @@ const sectionTitle = {
   textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10,
 }
 
-function TransportBtn({ icon, active, title }) {
+function TransportBtn({ icon, active, title, onClick }) {
   return (
     <button type="button" title={title} disabled={!active}
-      onClick={() => { /* TODO P3: cablejar modelTasks.transition */ }}
+      onClick={() => { if (active) onClick?.() }}
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         width: 28, height: 28, borderRadius: 6,
@@ -57,7 +73,7 @@ function TransportBtn({ icon, active, title }) {
   )
 }
 
-function TaskCard({ task, mine }) {
+function TaskCard({ task, mine, onPlay, onPause, onStop }) {
   const { t } = useTranslation()
   const out = isOutOfCharge(task)
   const transport = TRANSPORT[task.status] || TRANSPORT.Pending
@@ -105,9 +121,9 @@ function TaskCard({ task, mine }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 4, opacity: mine ? 1 : 0.5 }}>
-          <TransportBtn icon="ti-player-play-filled"  active={mine && transport.play}  title={t('model_sheet.dashboard.workplan.play')} />
-          <TransportBtn icon="ti-player-pause-filled" active={mine && transport.pause} title={t('model_sheet.dashboard.workplan.pause')} />
-          <TransportBtn icon="ti-player-stop-filled"  active={mine && transport.stop}  title={t('model_sheet.dashboard.workplan.stop')} />
+          <TransportBtn icon="ti-player-play-filled"  active={mine && transport.play}  title={t('model_sheet.dashboard.workplan.play')}  onClick={() => onPlay(task)} />
+          <TransportBtn icon="ti-player-pause-filled" active={mine && transport.pause} title={t('model_sheet.dashboard.workplan.pause')} onClick={() => onPause(task)} />
+          <TransportBtn icon="ti-player-stop-filled"  active={mine && transport.stop}  title={t('model_sheet.dashboard.workplan.stop')}  onClick={() => onStop(task)} />
         </div>
         <Badge variant={STATUS_VARIANT[task.status] || 'gray'} style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {t(`model_sheet.dashboard.task_status.${task.status}`, { defaultValue: task.status })}
@@ -117,10 +133,13 @@ function TaskCard({ task, mine }) {
   )
 }
 
-export default function WorkPlan({ tasques }) {
+export default function WorkPlan({ tasques, modelId, onRefresh }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
   const [myProfileId, setMyProfileId] = useState(null)
+  const [toast, setToast] = useState(null)        // { type, text }
+  const toastTimer = useRef(null)
 
   useEffect(() => {
     let alive = true
@@ -132,7 +151,59 @@ export default function WorkPlan({ tasques }) {
     return () => { alive = false }
   }, [])
 
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
+
   const list = Array.isArray(tasques) ? tasques : []
+
+  function showToast(type, text) {
+    setToast({ type, text })
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 3000)
+  }
+
+  // Exclusió un-InProgress-per-tècnic: si la resposta porta paused_task_id, el servei n'ha
+  // pausat una altra del mateix tècnic → avisem amb el nom (la cerquem a la llista actual).
+  function notifyPaused(res) {
+    const pausedId = res?.data?.paused_task_id
+    if (!pausedId) return
+    const p = list.find(x => x.id === pausedId)
+    const name = p ? (p.task_type_name || p.task_type_code || `#${pausedId}`) : `#${pausedId}`
+    showToast('warn', t('model_sheet.dashboard.workplan.toast_paused', { name }))
+  }
+
+  // Transició que NO navega (Play sense eina §4, Pause, Stop): després refresca el dashboard
+  // perquè estat/temps/obertures de la targeta reflecteixin el canvi.
+  function doTransition(task, toStatus) {
+    modelTasks.transition(task.id, { to_status: toStatus })
+      .then(res => { notifyPaused(res); onRefresh?.() })
+      .catch(err => {
+        const msg = err?.response?.data?.error
+          || (err?.response?.status === 403
+            ? t('model_sheet.dashboard.workplan.not_allowed')
+            : t('model_sheet.dashboard.workplan.transition_error'))
+        showToast('err', msg)
+        onRefresh?.()   // re-sincronitza amb el backend (la targeta local podia ser obsoleta)
+      })
+  }
+
+  // Play = anar a treballar (decisió Agus). Amb eina: transition InProgress + navega (idèntic al
+  // kanban; Done = reobertura §3.8). Fire-and-forget: navega igualment, no bloqueja per la xarxa.
+  // Sense eina: InProgress sense navegar (§4) — la targeta passa a "en curs" amb indicador viu.
+  function handlePlay(task) {
+    const route = toolRoute(task, modelId)
+    if (route) {
+      if (task.status === 'Pending' || task.status === 'Paused' || task.status === 'Done') {
+        modelTasks.transition(task.id, { to_status: 'InProgress' }).catch(() => {})  // fire-and-forget
+      }
+      navigate(route)
+    } else {
+      doTransition(task, 'InProgress')
+    }
+  }
+
+  // Pause = pauso, no he acabat. Stop = gest humà explícit "feta, 100%" (MAI automàtic). Cap navega.
+  const handlePause = (task) => doTransition(task, 'Paused')
+  const handleStop  = (task) => doTransition(task, 'Done')
 
   return (
     <section style={containerStyle}>
@@ -146,9 +217,18 @@ export default function WorkPlan({ tasques }) {
         <div style={cardsGrid}>
           {list.map(task => (
             <TaskCard key={task.id} task={task}
-              mine={task.assignee_id != null && task.assignee_id === myProfileId} />
+              mine={task.assignee_id != null && task.assignee_id === myProfileId}
+              onPlay={handlePlay} onPause={handlePause} onStop={handleStop} />
           ))}
         </div>
+      )}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 60,
+          fontSize: 'var(--fs-body)', padding: '10px 16px', borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+          background: toast.type === 'err' ? 'var(--err-bg)' : toast.type === 'warn' ? 'var(--warn-bg)' : 'var(--ok-bg)',
+          color: toast.type === 'err' ? 'var(--err)' : toast.type === 'warn' ? 'var(--warn)' : 'var(--ok)',
+        }}>{toast.text}</div>
       )}
     </section>
   )

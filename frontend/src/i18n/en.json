@@ -416,7 +416,10 @@
         "play": "Start",
         "pause": "Pause",
         "stop": "Finish",
-        "empty": "This model has no tasks assigned yet"
+        "empty": "This model has no tasks assigned yet",
+        "toast_paused": "Paused «{{name}}»",
+        "transition_error": "Could not change the task status",
+        "not_allowed": "You don't have permission to operate this task"
       },
       "timeline": {
         "section": "What changed",
