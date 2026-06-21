@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
 import ModelTimeline from './ModelTimeline'
+import WorkPlan from './WorkPlan'
 
 // Dashboard del model — PEÇA F1 (Q1 "on sóc" + Q4 "què puc fer").
 // Consumeix GET /api/v1/models/<id>/dashboard/ (endpoint B1, read-only).
@@ -111,7 +112,12 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
   const baseHasData = !!(base.base_size_label || (base.n_active ?? 0) > 0)
 
   return (
-    <div style={grid}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+
+      {/* ── Pla de treball (Q4 crescut) — ample total dalt (P2a) ───── */}
+      <WorkPlan tasques={tasques} />
+
+      <div style={grid}>
       <div style={wrap}>
 
       {/* ── Q1 · On sóc / què bloqueja ─────────────────────────────── */}
@@ -269,6 +275,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
 
       {/* ── Q2 · Memòria (timeline de passat) — columna dreta ──────── */}
       <ModelTimeline modelId={modelId} />
+      </div>
     </div>
   )
 }

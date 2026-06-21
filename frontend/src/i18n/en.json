@@ -408,6 +408,15 @@
       "task_status": {
         "Pending": "Pending", "Paused": "Paused", "InProgress": "In progress", "Done": "Done"
       },
+      "workplan": {
+        "title": "Work plan",
+        "openings": "{{n}} openings",
+        "out_of_charge": "(out of scope)",
+        "play": "Start",
+        "pause": "Pause",
+        "stop": "Finish",
+        "empty": "This model has no tasks assigned yet"
+      },
       "timeline": {
         "section": "What changed",
         "err_load": "Error loading the activity",

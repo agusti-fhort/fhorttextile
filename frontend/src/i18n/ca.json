@@ -408,6 +408,15 @@
       "task_status": {
         "Pending": "Pendent", "Paused": "Pausada", "InProgress": "En curs", "Done": "Feta"
       },
+      "workplan": {
+        "title": "Pla de treball",
+        "openings": "{{n}} obertures",
+        "out_of_charge": "(fora d'encàrrec)",
+        "play": "Iniciar",
+        "pause": "Pausar",
+        "stop": "Finalitzar",
+        "empty": "Aquest model encara no té tasques assignades"
+      },
       "timeline": {
         "section": "Què ha canviat",
         "err_load": "Error carregant l'activitat",

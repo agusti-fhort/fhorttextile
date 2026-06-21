@@ -408,6 +408,15 @@
       "task_status": {
         "Pending": "Pendiente", "Paused": "Pausada", "InProgress": "En curso", "Done": "Hecha"
       },
+      "workplan": {
+        "title": "Plan de trabajo",
+        "openings": "{{n}} aperturas",
+        "out_of_charge": "(fuera de encargo)",
+        "play": "Iniciar",
+        "pause": "Pausar",
+        "stop": "Finalizar",
+        "empty": "Este modelo aún no tiene tareas asignadas"
+      },
       "timeline": {
         "section": "Qué ha cambiado",
         "err_load": "Error al cargar la actividad",
