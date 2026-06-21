@@ -1301,15 +1301,40 @@ def model_dashboard_view(request, model_id):
 
     artefactes_vigents = {'fitxa': fitxa, 'grading': grading, 'base': base}
 
-    # --- Q4: tasques (llista saltable) ---
+    # --- Q4: tasques (Pla de treball) — ordre CANÒNIC + temps consumit + obertures + assignee ---
+    # Additiu: es mantenen TOTS els camps antics (id, task_type, task_type_code, status,
+    # assignee_id, order). Ordre per task_type.default_order/code (clau canònica de l'scheduler,
+    # P0), NO per ModelTask.order. Temps i obertures es deriven sense camp nou (P0.1) amb consultes
+    # SEPARADES per evitar el join cartesià Timer×Transition (RISC confirmat a P0.1).
+    from django.db.models import Sum, Count
+    from fhort.tasks.models import ModelTask as _ModelTask, TimerEntrada, TaskTransition
+
+    pla_tasks = (_ModelTask.objects
+                 .filter(model_id=model.id)
+                 .select_related('task_type', 'assignee')
+                 .order_by('task_type__default_order', 'task_type__code'))
+    # Temps consumit: Sum(timers.minuts) per tasca (== helper canònic _real_minutes). 1 query.
+    temps_per_task = {r['model_task_id']: (r['s'] or 0) for r in (
+        TimerEntrada.objects.filter(model_task__model_id=model.id)
+        .values('model_task_id').annotate(s=Sum('minuts')))}
+    # Obertures: count de transicions a InProgress per tasca (cada Play hi deixa una fila). 1 query.
+    obertures_per_task = {r['model_task_id']: r['c'] for r in (
+        TaskTransition.objects.filter(model_task__model_id=model.id, to_status='InProgress')
+        .values('model_task_id').annotate(c=Count('id')))}
+
     tasques = [{
         'id': t.id,
         'task_type': t.task_type.name if t.task_type_id else None,
         'task_type_code': t.task_type.code if t.task_type_id else None,
+        'task_type_name': t.task_type.name if t.task_type_id else None,
+        'default_order': t.task_type.default_order if t.task_type_id else None,
         'status': t.status,
         'assignee_id': t.assignee_id,
+        'assignee_nom': (t.assignee.nom_complet if t.assignee_id else None),
+        'temps_consumit_min': int(temps_per_task.get(t.id, 0)),
+        'obertures': int(obertures_per_task.get(t.id, 0)),
         'order': t.order,
-    } for t in tasks]
+    } for t in pla_tasks]
 
     # --- Q3: atenció tècnica — alertes POM PENDENTS de resoldre ---
     # Anomalia de dades coneguda (ANOTAR): els ESTAT_CHOICES del model són
