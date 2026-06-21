@@ -427,7 +427,9 @@
         "handoff_confirm": "Reassign and start",
         "handoff_cancel": "Cancel",
         "claim_denied": "You can't take a task of this type (it's not in your execution list)",
-        "claim_error": "Could not reassign the task"
+        "claim_error": "Could not reassign the task",
+        "progress_label": "{{done}}/{{total}} tasks done",
+        "time_total": "Time accrued on the model"
       },
       "timeline": {
         "section": "What changed",

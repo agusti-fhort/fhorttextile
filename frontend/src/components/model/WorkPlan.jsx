@@ -58,6 +58,7 @@ const sectionTitle = {
   fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
   textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10,
 }
+const footerWrap = { width: '100%', marginTop: 14 }
 
 function TransportBtn({ icon, active, title, onClick }) {
   return (
@@ -162,6 +163,15 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
   const list = Array.isArray(tasques) ? tasques : []
   const isMine = (task) => task.assignee_id != null && task.assignee_id === myProfileId
 
+  // Peu (P5, §1): progrés (% Done sobre el total) + temps real acumulat sobre el MODEL. La suma
+  // frontend de temps_consumit_min quadra EXACTAMENT amb el rollup de l'albarà (ambdós sumen els
+  // minuts de timers consolidats de TOTES les tasques del model; el compositor no scopa) → suma
+  // local, zero crides noves (P5 PAS 0.2). Degradació amb gràcia: 0 tasques → 0% / 0h 00m.
+  const total = list.length
+  const done = list.filter(task => task.status === 'Done').length
+  const pct = total ? Math.round((100 * done) / total) : 0
+  const totalMin = list.reduce((s, task) => s + (task.temps_consumit_min || 0), 0)
+
   function showToast(type, text) {
     setToast({ type, text })
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -257,6 +267,23 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
           ))}
         </div>
       )}
+
+      {/* Peu (§1): barra de progrés (% Done) + temps acumulat sobre el model (ample total) */}
+      <div style={footerWrap}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                      gap: 12, flexWrap: 'wrap', marginBottom: 6, fontSize: 'var(--fs-label)',
+                      color: 'var(--text-muted)' }}>
+          <span>{t('model_sheet.dashboard.workplan.progress_label', { done, total })} · {pct}%</span>
+          <span>{t('model_sheet.dashboard.workplan.time_total')}:{' '}
+            <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-main)' }}>{formatMinutes(totalMin)}</span>
+          </span>
+        </div>
+        <div style={{ height: 8, borderRadius: 6, background: 'var(--bg-muted)',
+                      border: '0.5px solid var(--border)', overflow: 'hidden' }}>
+          <div style={{ width: `${pct}%`, height: '100%', background: 'var(--ok)',
+                        transition: 'width 200ms' }} />
+        </div>
+      </div>
       {handoff && (
         <Modal
           title={t('model_sheet.dashboard.workplan.handoff_title')}
