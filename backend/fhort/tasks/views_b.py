@@ -384,6 +384,59 @@ def transition_task_view(request, pk):
     return Response(result, status=http_status.HTTP_200_OK)
 
 
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def claim_task_view(request, pk):
+    """POST /api/v1/model-task-items/<pk>/claim/   (sense body rellevant)
+
+    Self-claim entre tècnics (handoff §6): qui pot EXECUTAR una tasca pot fer-se-la SEVA, encara
+    que avui sigui d'un altre tècnic. És una porta NOVA i acotada — NO afluixa el PATCH genèric
+    (segueix gated define_tasks per a la planificació massiva) ni l'scope de llista (les cues
+    personals segueixen scopades). Mirall de transition_task_view (mateix estil de la casa:
+    view de funció + _ExecuteTasks + profile de request.user).
+
+    - Obté la tasca per pk DIRECTAMENT (NO via get_queryset() scopat): el dashboard del model és
+      transparent (decisió Agus) i el claim opera sobre el model sencer; el scope de llista
+      amagaria la tasca d'altri i tornaria un 404 fals.
+    - GUARD allow-list: el task_type ha de ser executable per qui reclama (admin = bypass dins
+      get_allowed_task_types). Mateix patró que la validació InProgress de transition_task_view.
+    - SELF-ONLY: assignee = el profile de request.user SEMPRE; MAI llegeix cap assignee del body
+      (a diferència del PATCH genèric, no es pot assignar a un tercer).
+    - Idempotent: si ja és teva, no-op (retorna-la tal qual, sense recompute).
+    - NO toca status (claim = fer-la meva; el Play/transition el dispara el front DESPRÉS, P3).
+    - Reassignació real (old != new) → dispara la MATEIXA cascada que perform_update
+      (cleanup_queue_order + recompute_for_technicians dels dos tècnics); no es duplica lògica.
+    """
+    from .models import ModelTask
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        task = ModelTask.objects.select_related('task_type').get(pk=pk)
+    except ModelTask.DoesNotExist:
+        return Response({'error': 'ModelTask no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+    # GUARD allow-list: no pots agafar una tasca d'un tipus que no executes (admin = bypass).
+    if task.task_type.code not in get_allowed_task_types(request.user):
+        return Response(
+            {'error': f"No pots agafar una tasca del tipus '{task.task_type.code}' "
+                      f"(no és a la teva allow-list d'execució)."},
+            status=http_status.HTTP_403_FORBIDDEN)
+    old_assignee_id = task.assignee_id
+    # Idempotent: ja és teva → no-op (cap reassignació, cap recompute).
+    if old_assignee_id == profile.id:
+        return Response(ModelTaskSerializer(task).data, status=http_status.HTTP_200_OK)
+    # Self-claim: SEMPRE a mi mateix. Mai un tercer.
+    task.assignee = profile
+    task.save(update_fields=['assignee', 'updated_at'])
+    # Mateixa cascada que ModelTaskViewSet.perform_update: old != new → neteja l'ordre manual i
+    # recalcula la cua SENCERA dels DOS tècnics. Reusem el servei de planificació (no dupliquem).
+    from fhort.planning.plan_service import recompute_for_technicians, cleanup_queue_order
+    cleanup_queue_order([old_assignee_id, profile.id], [task.model_id])
+    recompute_for_technicians([old_assignee_id, profile.id])
+    return Response(ModelTaskSerializer(task).data, status=http_status.HTTP_200_OK)
+
+
 class _CloseGates(HasCapability):
     required_capability = CLOSE_GATES
 
