@@ -125,9 +125,9 @@ function TaskCard({ task, mine, onPlay, onPause, onStop }) {
                     gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 4 }}>
           {/* P4a: Play disponible també a d'altri (obre diàleg de handoff). Pause/Stop només meves. */}
-          <TransportBtn icon="ti-player-play-filled"  active={mine ? transport.play : true} title={mine ? t('model_sheet.dashboard.workplan.play') : t('model_sheet.dashboard.workplan.handoff_play')} onClick={() => onPlay(task)} />
-          <TransportBtn icon="ti-player-pause-filled" active={mine && transport.pause} title={t('model_sheet.dashboard.workplan.pause')} onClick={() => onPause(task)} />
-          <TransportBtn icon="ti-player-stop-filled"  active={mine && transport.stop}  title={t('model_sheet.dashboard.workplan.stop')}  onClick={() => onStop(task)} />
+          <TransportBtn icon="ti-player-play"  active={mine ? transport.play : true} title={mine ? t('model_sheet.dashboard.workplan.play') : t('model_sheet.dashboard.workplan.handoff_play')} onClick={() => onPlay(task)} />
+          <TransportBtn icon="ti-player-pause" active={mine && transport.pause} title={t('model_sheet.dashboard.workplan.pause')} onClick={() => onPause(task)} />
+          <TransportBtn icon="ti-player-stop"  active={mine && transport.stop}  title={t('model_sheet.dashboard.workplan.stop')}  onClick={() => onStop(task)} />
         </div>
         <Badge variant={STATUS_VARIANT[task.status] || 'gray'} style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {t(`model_sheet.dashboard.task_status.${task.status}`, { defaultValue: task.status })}
