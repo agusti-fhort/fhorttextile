@@ -1481,6 +1481,33 @@
       "sleeve_cb": "Largo manga CB ({{cb}}) debería ser > Largo manga ({{base}})."
     }
   },
+  "item_authoring": {
+    "title_new": "Nuevo item",
+    "title_edit": "Editar item · {{code}}",
+    "close": "Cerrar",
+    "step1_axes": "Contexto",
+    "step2_ruleset": "Grading",
+    "step3_basesize": "Talla base",
+    "step4_grid": "Medidas base",
+    "identity": "Identidad del item",
+    "f_code": "Código",
+    "f_name": "Nombre",
+    "f_order": "Orden",
+    "active": "Activo",
+    "pick_ruleset": "Elige el grading rule set",
+    "assign": "Asignar",
+    "create_ruleset": "Crear en Grading Rules",
+    "confirm_basesize": "Confirma la talla base",
+    "basesize_from": "Tallas del sistema {{system}}",
+    "basesize_none": "Este grading rule set no tiene tallas definidas.",
+    "measurements": "Medidas base del item",
+    "cancel": "Cancelar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "finish": "Finalizar",
+    "load_error": "No se ha podido cargar el item.",
+    "save_error": "No se ha podido guardar."
+  },
   "measurement_base_grid": {
     "col": {
       "sheet_name": "Nombre ficha",

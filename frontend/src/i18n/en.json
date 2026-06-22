@@ -1481,6 +1481,33 @@
       "sleeve_cb": "Sleeve length CB ({{cb}}) should be > sleeve length ({{base}})."
     }
   },
+  "item_authoring": {
+    "title_new": "New item",
+    "title_edit": "Edit item · {{code}}",
+    "close": "Close",
+    "step1_axes": "Context",
+    "step2_ruleset": "Grading",
+    "step3_basesize": "Base size",
+    "step4_grid": "Base measurements",
+    "identity": "Item identity",
+    "f_code": "Code",
+    "f_name": "Name",
+    "f_order": "Order",
+    "active": "Active",
+    "pick_ruleset": "Pick the grading rule set",
+    "assign": "Assign",
+    "create_ruleset": "Create in Grading Rules",
+    "confirm_basesize": "Confirm the base size",
+    "basesize_from": "Sizes of the {{system}} system",
+    "basesize_none": "This grading rule set has no defined sizes.",
+    "measurements": "Item base measurements",
+    "cancel": "Cancel",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Finish",
+    "load_error": "Could not load the item.",
+    "save_error": "Could not save."
+  },
   "measurement_base_grid": {
     "col": {
       "sheet_name": "Sheet name",

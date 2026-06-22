@@ -28,6 +28,7 @@ const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
 const TechSheetTemplateEditor = lazy(() => import('./pages/TechSheetTemplateEditor'))
+const ItemAuthoring = lazy(() => import('./pages/ItemAuthoring'))
 const KanbanTasks = lazy(() => import('./pages/KanbanTasks'))
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
 const UsersRoles = lazy(() => import('./pages/UsersRoles'))
@@ -111,6 +112,18 @@ export default function App() {
         <Route path="/clients/:id/plantilla" element={
           <ProtectedRoute>
             <TechSheetTemplateEditor />
+          </ProtectedRoute>
+        } />
+        {/* Autoria d'Item (Llibreria d'Items B3): wizard full-screen FORA del Shell, protegit.
+            Crear (des d'un garment type) i obrir-existent (un dels esquelets). */}
+        <Route path="/garment-type-items/nou/:typeId" element={
+          <ProtectedRoute>
+            <ItemAuthoring />
+          </ProtectedRoute>
+        } />
+        <Route path="/garment-type-items/:itemId/editar" element={
+          <ProtectedRoute>
+            <ItemAuthoring />
           </ProtectedRoute>
         } />
         <Route path="/" element={

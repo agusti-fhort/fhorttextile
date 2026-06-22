@@ -1481,6 +1481,33 @@
       "sleeve_cb": "Llarg màniga CB ({{cb}}) hauria de ser > Llarg màniga ({{base}})."
     }
   },
+  "item_authoring": {
+    "title_new": "Nou item",
+    "title_edit": "Editar item · {{code}}",
+    "close": "Tancar",
+    "step1_axes": "Context",
+    "step2_ruleset": "Grading",
+    "step3_basesize": "Talla base",
+    "step4_grid": "Mides base",
+    "identity": "Identitat de l'item",
+    "f_code": "Codi",
+    "f_name": "Nom",
+    "f_order": "Ordre",
+    "active": "Actiu",
+    "pick_ruleset": "Tria el grading rule set",
+    "assign": "Assignar",
+    "create_ruleset": "Crear a Grading Rules",
+    "confirm_basesize": "Confirma la talla base",
+    "basesize_from": "Talles del sistema {{system}}",
+    "basesize_none": "Aquest grading rule set no té talles definides.",
+    "measurements": "Mides base de l'item",
+    "cancel": "Cancel·lar",
+    "back": "Enrere",
+    "next": "Següent",
+    "finish": "Finalitzar",
+    "load_error": "No s'ha pogut carregar l'item.",
+    "save_error": "No s'ha pogut desar."
+  },
   "measurement_base_grid": {
     "col": {
       "sheet_name": "Nom fitxa",

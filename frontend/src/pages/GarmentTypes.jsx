@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { garmentTypes, garmentTypeItems, taskTimeEstimates, taskTypes } from '../api/endpoints'
@@ -25,6 +26,7 @@ const tdS = { padding: '6px 8px', fontSize: 'var(--fs-body)', borderBottom: '0.5
 
 export default function GarmentTypes() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
 
@@ -44,7 +46,6 @@ export default function GarmentTypes() {
   const [dirty, setDirty] = useState({})           // { itemId: true }
   const [savingRow, setSavingRow] = useState(null)
   const [typeModal, setTypeModal] = useState(null)
-  const [itemModal, setItemModal] = useState(null)
 
   const loadTypes = useCallback(() => {
     setError(false)
@@ -232,7 +233,7 @@ export default function GarmentTypes() {
                     {/* (3) gestió d'items: + Item */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                       <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('garment_types.matrix')} · {items.length} {t('garment_types.items').toLowerCase()}</span>
-                      {canEdit && <button onClick={() => setItemModal({ mode: 'create' })} style={{ ...primaryBtn, marginLeft: 0 }}>
+                      {canEdit && <button onClick={() => navigate(`/garment-type-items/nou/${selected.id}`)} style={{ ...primaryBtn, marginLeft: 0 }}>
                         <i className="ti ti-plus" style={{ fontSize: 13 }} />{t('garment_types.new_item')}
                       </button>}
                     </div>
@@ -261,7 +262,7 @@ export default function GarmentTypes() {
                                         </div>
                                         {canEdit && (
                                           <>
-                                            <button onClick={() => setItemModal({ mode: 'edit', item: it })} title={t('garment_types.edit')} style={iconBtn}><i className="ti ti-pencil" /></button>
+                                            <button onClick={() => navigate(`/garment-type-items/${it.id}/editar`)} title={t('garment_types.edit')} style={iconBtn}><i className="ti ti-pencil" /></button>
                                             <button onClick={() => deleteItem(it)} title={t('garment_types.delete')} style={{ ...iconBtn, color: 'var(--err)' }}><i className="ti ti-trash" /></button>
                                           </>
                                         )}
@@ -301,12 +302,6 @@ export default function GarmentTypes() {
         <TypeModal mode={typeModal.mode} tt={typeModal.tt} t={t} saving={saving} setSaving={setSaving}
           onCancel={() => setTypeModal(null)}
           onSaved={(msg) => { setTypeModal(null); loadTypes().then(() => setFeedback({ type: 'ok', text: msg })) }}
-          onError={(text) => setFeedback({ type: 'err', text })} />
-      )}
-      {itemModal && selected && (
-        <ItemModal mode={itemModal.mode} item={itemModal.item} typeId={selected.id} t={t} saving={saving} setSaving={setSaving}
-          onCancel={() => setItemModal(null)}
-          onSaved={(msg) => { setItemModal(null); loadDetail(selected.id).then(() => setFeedback({ type: 'ok', text: msg })) }}
           onError={(text) => setFeedback({ type: 'err', text })} />
       )}
     </div>
@@ -366,47 +361,6 @@ function TypeModal({ mode, tt, t, saving, setSaving, onCancel, onSaved, onError 
   )
 }
 
-function ItemModal({ mode, item, typeId, t, saving, setSaving, onCancel, onSaved, onError }) {
-  const isEdit = mode === 'edit'
-  const [code, setCode] = useState(item?.code || '')
-  const [name, setName] = useState(item?.name || '')
-  const [order, setOrder] = useState(item?.complexity_order ?? 0)
-  const [active, setActive] = useState(item?.active ?? true)
-  const invalid = (!isEdit && !code.trim()) || !name.trim()
-
-  const submit = () => {
-    if (invalid) { onError(t('garment_types.required_item')); return }
-    setSaving(true)
-    const payload = isEdit
-      ? { name: name.trim(), complexity_order: Number(order) || 0, active }              // code read-only en editar
-      : { garment_type: typeId, code: code.trim(), name: name.trim(), complexity_order: Number(order) || 0, active }
-    const req = isEdit ? garmentTypeItems.update(item.id, payload) : garmentTypeItems.create(payload)
-    req
-      .then(() => onSaved(isEdit ? t('garment_types.item_saved') : t('garment_types.item_created')))
-      .catch(e => onError(e?.response?.data?.code?.[0] || e?.response?.data?.non_field_errors?.[0] || t('garment_types.error')))
-      .finally(() => setSaving(false))
-  }
-
-  return (
-    <Modal title={isEdit ? t('garment_types.edit_item_title') : t('garment_types.new_item_title')}
-      cancelLabel={t('garment_types.cancel')} confirmLabel={isEdit ? t('garment_types.save') : t('garment_types.create')}
-      onCancel={onCancel} onConfirm={submit} confirmDisabled={saving || invalid}>
-      <Field label={t('garment_types.it_code')}>
-        <input value={code} disabled={isEdit} onChange={e => setCode(e.target.value)} placeholder="chino" style={{ ...selS, width: '100%', opacity: isEdit ? 0.6 : 1 }} />
-        {isEdit && <Hint>{t('garment_types.code_locked')}</Hint>}
-      </Field>
-      <Field label={t('garment_types.it_name')}><input value={name} onChange={e => setName(e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
-      <Field label={t('garment_types.it_order')}>
-        <input type="number" value={order} onChange={e => setOrder(e.target.value)} style={{ ...selS, width: '100%' }} />
-        <Hint>{t('garment_types.order_hint')}</Hint>
-      </Field>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginTop: 4 }}>
-        <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /><span>{t('garment_types.active')}</span>
-      </label>
-    </Modal>
-  )
-}
-
 function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 12 }}>
@@ -414,7 +368,4 @@ function Field({ label, children }) {
       {children}
     </div>
   )
-}
-function Hint({ children }) {
-  return <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginTop: 4 }}>{children}</div>
 }
