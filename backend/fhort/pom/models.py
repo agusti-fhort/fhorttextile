@@ -466,6 +466,11 @@ class ItemBaseMeasurement(models.Model):
     # consumidors cauen al default del catàleg (POMMaster.tolerancia_default_*).
     tol_minus = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     tol_plus = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    # Nomenclatura editable; còpia LITERAL de BaseMeasurement.nom_fitxa (models_app/models.py:515)
+    # perquè la sembra item→model copiï camp-a-camp sense traducció. Se sembra de l'abreviatura del
+    # POM, editable (sobirania de l'item).
+    # DEUTE: renombrar nom_fitxa→anglès a les DUES taules a la sessió Size Check.
+    nom_fitxa = models.CharField(max_length=20, blank=True, default='')
 
     class Meta:
         verbose_name = 'Mesura base d\'item'
