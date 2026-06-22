@@ -204,7 +204,7 @@ export default function BaseStageTable({ model, editable = false }) {
                 }}>
                   {i === 0 ? t('basestage.stage_measure') : ctxLabel(s.context)}<br />
                   <span style={{ fontWeight: 400, fontSize: 'var(--fs-caption)' }}>
-                    {[i === 0 ? null : fmtStageDate(s.at), i === lastIdx ? t('basestage.current') : null].filter(Boolean).join(' · ') || ' '}
+                    {[i === 0 ? null : `@${fmtStageDate(s.at)}`, i === lastIdx ? t('basestage.current') : null].filter(Boolean).join(' · ') || ' '}
                   </span>
                 </th>
               ))}
