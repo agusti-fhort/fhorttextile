@@ -439,7 +439,7 @@ export default function ModelMeasurements() {
                     borderRadius: 6, background: 'transparent',
                     color: 'var(--gold)', fontSize: 'var(--fs-body)', cursor: 'pointer',
                   }}>
-                  {t('model_measurements.propagate_grading')}
+                  {t('model_measurements.view_grading')}
                 </button>
               )}
             </div>
