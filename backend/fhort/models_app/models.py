@@ -486,6 +486,7 @@ class BaseMeasurement(models.Model):
         ('CALCULATED', 'Calculat des de talla base + delta'),
         ('TEMPLATE',   'Materialitzat de plantilla (sense valor encara)'),
         ('CHECKED',    'Validat en size check (proto a talla base)'),
+        ('ITEM_STANDARD', 'Sembrat de l\'estàndard de l\'item (copy-at-the-moment)'),
     ]
 
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='base_measurements')

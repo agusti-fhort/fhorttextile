@@ -443,40 +443,78 @@ def suggested_poms_view(request, model_id):
 @permission_classes([IsAuthenticated])
 def materialize_poms_view(request, model_id):
     """POST /api/v1/models/<id>/materialitzar-poms/ — instancia la pertinença de POMs de l'item
-    com a BaseMeasurement BUIDES (base_value_cm=None, origen='TEMPLATE'), copiant is_key/ordre de
-    la plantilla GarmentPOMMap. Idempotent (get_or_create per (model,pom)): no toca files existents
-    (amb o sense valor). Les buides NO disparen log (guard al signal). Sense garment_type_item → avís."""
+    com a BaseMeasurement, copiant is_key/ordre de la plantilla GarmentPOMMap.
+
+    B4 — SEMBRA item→model (copy-at-the-moment): si l'item té valors base (ItemBaseMeasurement),
+    copia valor + nom_fitxa + tolerància a la BaseMeasurement amb origen='ITEM_STANDARD'. Si no en
+    té, materialitza BUIDA (origen='TEMPLATE', base_value_cm=None) com abans.
+
+    SOBIRANIA DEL MODEL (idempotent): NOMÉS sembra on no hi ha res o on hi ha un TEMPLATE BUIT.
+    Una fila amb origen més específic (MANUAL/IMPORTED/FITTED) o amb valor ja posat NO es trepitja:
+    a partir del primer valor, el Model és sobirà. Re-executar no clobera res."""
+    from django.db import transaction
     try:
         model = Model.objects.get(id=model_id)
     except Model.DoesNotExist:
         return Response({'error': 'Model no trobat'}, status=404)
 
     if not model.garment_type_item_id:
-        return Response({'materialized': 0, 'skipped': 0,
+        return Response({'materialized': 0, 'seeded': 0, 'skipped': 0,
                          'warning': 'Garment type item no definit'})
 
-    from fhort.pom.models import GarmentPOMMap
+    from fhort.pom.models import GarmentPOMMap, ItemBaseMeasurement
     from fhort.models_app.models import BaseMeasurement
 
     maps = (GarmentPOMMap.objects
             .filter(garment_type_item=model.garment_type_item)
             .select_related('pom').order_by('ordre'))
-    materialized = skipped = 0
-    for m in maps:
-        _, created = BaseMeasurement.objects.get_or_create(
-            model=model, pom=m.pom,
-            defaults={
-                'base_value_cm': None,        # materialitzada sense valor
-                'origen': 'TEMPLATE',
-                'is_key': m.is_key,
-                'ordre': m.ordre,
-            },
-        )
-        if created:
-            materialized += 1
-        else:
-            skipped += 1
-    return Response({'materialized': materialized, 'skipped': skipped,
+    # Valors base de l'item per pom (plantilla → instància).
+    ibms = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(
+        garment_type_item=model.garment_type_item)}
+
+    materialized = seeded = skipped = 0
+    with transaction.atomic():
+        for m in maps:
+            ibm = ibms.get(m.pom_id)
+            has_value = ibm is not None and ibm.base_value_cm is not None
+            existing = BaseMeasurement.objects.filter(model=model, pom=m.pom).first()
+
+            if existing is None:
+                if has_value:
+                    BaseMeasurement.objects.create(
+                        model=model, pom=m.pom,
+                        base_value_cm=ibm.base_value_cm,
+                        nom_fitxa=ibm.nom_fitxa or '',
+                        tolerancia_minus=ibm.tol_minus,
+                        tolerancia_plus=ibm.tol_plus,
+                        origen='ITEM_STANDARD', is_key=m.is_key, ordre=m.ordre,
+                    )
+                    seeded += 1
+                else:
+                    BaseMeasurement.objects.create(
+                        model=model, pom=m.pom,
+                        base_value_cm=None, origen='TEMPLATE',
+                        is_key=m.is_key, ordre=m.ordre,
+                    )
+                    materialized += 1
+                continue
+
+            # Ja existeix: sobirania. Només sembra si és un TEMPLATE BUIT i l'item porta valor.
+            is_empty_template = existing.origen == 'TEMPLATE' and existing.base_value_cm is None
+            if has_value and is_empty_template:
+                existing.base_value_cm = ibm.base_value_cm
+                existing.nom_fitxa = ibm.nom_fitxa or existing.nom_fitxa
+                existing.tolerancia_minus = ibm.tol_minus
+                existing.tolerancia_plus = ibm.tol_plus
+                existing.origen = 'ITEM_STANDARD'
+                existing.save(update_fields=[
+                    'base_value_cm', 'nom_fitxa', 'tolerancia_minus',
+                    'tolerancia_plus', 'origen', 'updated_at'])
+                seeded += 1
+            else:
+                skipped += 1   # res a sembrar, o fila sobirana (MANUAL/IMPORTED/FITTED/amb valor)
+
+    return Response({'materialized': materialized, 'seeded': seeded, 'skipped': skipped,
                      'total_template': maps.count()})
 
 
