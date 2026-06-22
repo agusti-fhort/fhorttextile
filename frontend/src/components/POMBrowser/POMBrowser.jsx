@@ -107,6 +107,8 @@ export default function POMBrowser({
   const [notice, setNotice] = useState(null)
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogResults, setCatalogResults] = useState([])
+  // Valors base de plantilla per Item (P4): pom_id → {base_value_cm, tol_minus, tol_plus}.
+  const [baseVals, setBaseVals] = useState({})
 
   // Carrega els POMs mapejats a l'ITEM seleccionat: garment-pom-maps/?garment_type_item=<id>.
   // Sense mock: item sense mapes → llista buida (estat buit real). Recarregable via `reloadKey`.
@@ -124,6 +126,24 @@ export default function POMBrowser({
       .catch(() => setPoms([]))
       .finally(() => setLoading(false))
   }, [selectedItem, token, reloadKey])
+
+  // Mode assign: carrega els valors base de l'item (ItemBaseMeasurement, P3) per omplir els inputs.
+  // Mateix patró que la càrrega de garment-pom-maps; recarregable via reloadKey. Buit → {} (input buit).
+  useEffect(() => {
+    if (mode !== 'assign' || !selectedItem?.id) { setBaseVals({}); return }
+    const params = new URLSearchParams({ garment_type_item: selectedItem.id, page_size: '500' })
+    fetch(`${API}/api/v1/item-base-measurements/?${params}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        const rows = data.results || data
+        const m = {}
+        for (const it of rows) m[it.pom] = { base_value_cm: it.base_value_cm, tol_minus: it.tol_minus, tol_plus: it.tol_plus }
+        setBaseVals(m)
+      })
+      .catch(() => setBaseVals({}))
+  }, [selectedItem, token, reloadKey, mode])
 
   const matchSearch = (p) => {
     const q = search.trim().toLowerCase()
@@ -192,6 +212,31 @@ export default function POMBrowser({
       if (r.status === 403) return setNotice({ type: 'err', text: t('poms.err_perm_edit') })
       if (!r.ok) return setNotice({ type: 'err', text: t('poms.err_toggle_key') })
       setReloadKey(k => k + 1)
+    } catch { setNotice({ type: 'err', text: t('poms.err_connection') }) }
+  }
+
+  // Desar valor base + tolerància (±) per (item, pom) → upsert d'ItemBaseMeasurement (P3/P4).
+  // Tolerància simètrica: tol_minus = tol_plus (idioma ± d'aquesta pantalla). Buit → null. Valida
+  // numèric abans d'enviar (l'upsert escriu directament a DecimalField; evitem un 500 per text).
+  const saveBaseVal = async (pom, raw) => {
+    if (!pom.pom_id || !selectedItem?.id) return
+    setNotice(null)
+    const norm = {}
+    for (const k of ['base_value_cm', 'tol_minus', 'tol_plus']) {
+      const v = raw[k]
+      if (v === '' || v == null) { norm[k] = null; continue }
+      if (Number.isNaN(Number(v))) return setNotice({ type: 'err', text: t('poms.err_save_base') })
+      norm[k] = v
+    }
+    try {
+      const r = await fetch(`${API}/api/v1/item-base-measurements/upsert/`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({ garment_type_item: selectedItem.id, pom: pom.pom_id, ...norm }),
+      })
+      if (r.status === 403) return setNotice({ type: 'err', text: t('poms.err_perm_edit') })
+      if (!r.ok) return setNotice({ type: 'err', text: t('poms.err_save_base') })
+      const d = await r.json()
+      setBaseVals(prev => ({ ...prev, [pom.pom_id]: { base_value_cm: d.base_value_cm, tol_minus: d.tol_minus, tol_plus: d.tol_plus } }))
     } catch { setNotice({ type: 'err', text: t('poms.err_connection') }) }
   }
 
@@ -374,10 +419,12 @@ export default function POMBrowser({
                     <POMListRow
                       key={pom.map_id}
                       pom={pom}
+                      baseVal={baseVals[pom.pom_id]}
                       isSelected={selectedPom?.map_id === pom.map_id}
                       onRowClick={() => setSelectedPom(selectedPom?.map_id === pom.map_id ? null : pom)}
                       onRemove={() => assignRemove(pom)}
                       onToggleKey={() => toggleKey(pom)}
+                      onSaveBase={(vals) => saveBaseVal(pom, vals)}
                     />
                   ))}
                 </div>
@@ -412,10 +459,24 @@ export default function POMBrowser({
   )
 }
 
-function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
+function POMListRow({ pom, baseVal, isSelected, onRowClick, onRemove, onToggleKey, onSaveBase }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: String(pom.map_id) })
+  // Valor base + tolerància (±) de la plantilla de l'item. Tolerància simètrica (un sol ±).
+  const baseStr = baseVal?.base_value_cm != null ? String(baseVal.base_value_cm) : ''
+  const tolSrc = baseVal?.tol_plus ?? baseVal?.tol_minus
+  const tolStr = tolSrc != null ? String(tolSrc) : ''
+  const [val, setVal] = useState(baseStr)
+  const [tol, setTol] = useState(tolStr)
+  // Re-sincronitza quan canvia el valor desat (post-upsert/reload); no clobbera mentre s'edita
+  // perquè baseVal no canvia fins que es desa.
+  useEffect(() => { setVal(baseStr); setTol(tolStr) }, [baseStr, tolStr])
+  const commitBase = () => {
+    const nv = val.trim(), nt = tol.trim()
+    if (nv === baseStr && nt === tolStr) return   // res canviat → no desis
+    onSaveBase({ base_value_cm: nv, tol_minus: nt, tol_plus: nt })
+  }
   const style = {
     transform: CSS.Transform.toString(transform), transition,
     opacity: isDragging ? 0.6 : 1,
@@ -446,6 +507,21 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
           fontWeight: 600, letterSpacing: '.06em', border: '0.5px solid #f0c040',
         }}>{t('poms.revisar')}</span>
       )}
+      {/* Valor base + tolerància ± de plantilla (P4) — mateix idioma d'input que la graella Mesures */}
+      <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <input type="text" inputMode="decimal" value={val}
+          placeholder={t('poms.base_value_ph')} title={t('poms.base_value_hint')}
+          onChange={e => setVal(e.target.value)} onBlur={commitBase}
+          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+          style={{ ...ibInput, width: 56, textAlign: 'right' }} />
+        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>cm</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>±</span>
+        <input type="text" inputMode="decimal" value={tol}
+          placeholder={t('poms.base_value_ph')} title={t('poms.tol_hint')}
+          onChange={e => setTol(e.target.value)} onBlur={commitBase}
+          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+          style={{ ...ibInput, width: 44, textAlign: 'right' }} />
+      </div>
       <button type="button" onClick={(e) => { e.stopPropagation(); onToggleKey() }}
         title={t('poms.toggle_key_hint')} style={{
           cursor: 'pointer', fontSize: 'var(--fs-caption)', padding: '2px 7px', borderRadius: 3, fontWeight: 600,
@@ -692,4 +768,12 @@ const hintStyle = {
   fontSize: 'var(--fs-body)',
   color: 'var(--text-muted)',
   margin: 0,
+}
+
+// Input numèric de valor base/tolerància — tokens idèntics a la graella Mesures (SizeCheckCell.inputBase):
+// IBM Plex Mono, fontSize del cos, vora fina del design system. Sense outline:none (focus de teclat visible).
+const ibInput = {
+  font: 'inherit', fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)',
+  padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 3,
+  background: 'var(--white)', boxSizing: 'border-box', fontVariantNumeric: 'tabular-nums',
 }
