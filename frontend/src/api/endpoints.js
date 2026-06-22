@@ -47,6 +47,8 @@ export const modelFitxers = {
 
 export const poms = {
   list: (params) => client.get('/api/v1/poms/', { params }),
+  cerca: (params) => client.get('/api/v1/poms/cerca/', { params }),          // ?q & page_size
+  crearTenant: (data) => client.post('/api/v1/poms/crear-tenant/', data),    // POM tenant-only nou
 }
 
 // CRUD complet (GarmentTypeViewSet és ModelViewSet). S'usa al tram 7 (finder 3 columnes).
@@ -263,6 +265,23 @@ export const garmentTypeItems = {
   create: (data) => client.post('/api/v1/garment-type-items/', data),
   update: (id, data) => client.patch(`/api/v1/garment-type-items/${id}/`, data),
   remove: (id) => client.delete(`/api/v1/garment-type-items/${id}/`),
+}
+
+// Sprint Llibreria d'Items — pertinença POM de l'Item (garment-pom-maps/, ModelViewSet).
+// Escriptura gated CONFIGURE. Reorder = PATCH {ordre} per fila (mateix patró que POMBrowser).
+export const garmentPomMaps = {
+  list: (params) => client.get('/api/v1/garment-pom-maps/', { params }),   // ?garment_type_item & pom
+  create: (data) => client.post('/api/v1/garment-pom-maps/', data),
+  update: (id, data) => client.patch(`/api/v1/garment-pom-maps/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/garment-pom-maps/${id}/`),
+}
+
+// Sprint Llibreria d'Items — valors base de l'Item (item-base-measurements/, ModelViewSet + upsert).
+// upsert keyed (garment_type_item, pom): base_value_cm, tol_minus, tol_plus, nom_fitxa. Gated CONFIGURE.
+export const itemBaseMeasurements = {
+  list: (params) => client.get('/api/v1/item-base-measurements/', { params }),   // ?garment_type_item & pom
+  upsert: (data) => client.post('/api/v1/item-base-measurements/upsert/', data),
+  remove: (id) => client.delete(`/api/v1/item-base-measurements/${id}/`),
 }
 
 // Capa de Projecte — matriu de temps (task-time-estimates/, ModelViewSet).

@@ -1481,6 +1481,27 @@
       "sleeve_cb": "Largo manga CB ({{cb}}) debería ser > Largo manga ({{base}})."
     }
   },
+  "measurement_base_grid": {
+    "col": {
+      "sheet_name": "Nombre ficha",
+      "description": "Descripción",
+      "base_value": "Valor base (cm)",
+      "tol_minus": "Tol −",
+      "tol_plus": "Tol +"
+    },
+    "empty": "Aún no hay POMs. Añade alguno para definir las medidas base del item.",
+    "add_pom": "Añadir POM",
+    "search_placeholder": "Busca por nombre o código…",
+    "no_pom_found": "Ningún POM encontrado para \"{{query}}\".",
+    "create_pom": "Crear POM nuevo \"{{query}}\"",
+    "delete_row": "Eliminar fila",
+    "drag_handle": "Arrastra para reordenar",
+    "edit_cell": "Edita la celda",
+    "discard": "Descartar cambios",
+    "save": "Guardar medidas base",
+    "load_error": "No se han podido cargar las medidas base del item.",
+    "save_error": "No se han podido guardar las medidas base del item."
+  },
   "editable_table": {
     "import_title": "Tabla importada por IA.",
     "import_hint": "Revisa cada fila antes de confirmar — la IA puede cometer errores. Edita, añade o elimina filas si hace falta.",

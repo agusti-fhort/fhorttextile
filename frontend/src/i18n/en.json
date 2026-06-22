@@ -1481,6 +1481,27 @@
       "sleeve_cb": "Sleeve length CB ({{cb}}) should be > sleeve length ({{base}})."
     }
   },
+  "measurement_base_grid": {
+    "col": {
+      "sheet_name": "Sheet name",
+      "description": "Description",
+      "base_value": "Base value (cm)",
+      "tol_minus": "Tol −",
+      "tol_plus": "Tol +"
+    },
+    "empty": "No POMs yet. Add some to define the item's base measurements.",
+    "add_pom": "Add POM",
+    "search_placeholder": "Search by name or code…",
+    "no_pom_found": "No POM found for \"{{query}}\".",
+    "create_pom": "Create new POM \"{{query}}\"",
+    "delete_row": "Delete row",
+    "drag_handle": "Drag to reorder",
+    "edit_cell": "Edit cell",
+    "discard": "Discard changes",
+    "save": "Save base measurements",
+    "load_error": "Could not load the item's base measurements.",
+    "save_error": "Could not save the item's base measurements."
+  },
   "editable_table": {
     "import_title": "AI-imported table.",
     "import_hint": "Review each row before confirming — AI can make mistakes. Edit, add or remove rows if needed.",

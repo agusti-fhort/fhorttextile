@@ -1481,6 +1481,27 @@
       "sleeve_cb": "Llarg màniga CB ({{cb}}) hauria de ser > Llarg màniga ({{base}})."
     }
   },
+  "measurement_base_grid": {
+    "col": {
+      "sheet_name": "Nom fitxa",
+      "description": "Descripció",
+      "base_value": "Valor base (cm)",
+      "tol_minus": "Tol −",
+      "tol_plus": "Tol +"
+    },
+    "empty": "Encara no hi ha cap POM. Afegeix-ne per definir les mides base de l'item.",
+    "add_pom": "Afegir POM",
+    "search_placeholder": "Cerca per nom o codi…",
+    "no_pom_found": "Cap POM trobat per \"{{query}}\".",
+    "create_pom": "Crear POM nou \"{{query}}\"",
+    "delete_row": "Eliminar fila",
+    "drag_handle": "Arrossega per reordenar",
+    "edit_cell": "Edita la cel·la",
+    "discard": "Descartar canvis",
+    "save": "Desar mides base",
+    "load_error": "No s'han pogut carregar les mides base de l'item.",
+    "save_error": "No s'han pogut desar les mides base de l'item."
+  },
   "editable_table": {
     "import_title": "Taula importada per IA.",
     "import_hint": "Revisa cada fila abans de confirmar — la IA pot cometre errors. Edita, afegeix o elimina files si cal.",
