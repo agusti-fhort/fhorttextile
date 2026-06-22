@@ -295,8 +295,8 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='upsert')
     def upsert(self, request):
         """POST /api/v1/item-base-measurements/upsert/  Body: {garment_type_item, pom,
-        base_value_cm?, tol_minus?, tol_plus?}. update_or_create per (item, pom). Gated CONFIGURE
-        (l'acció no és list/retrieve → get_permissions retorna CONFIGURE)."""
+        base_value_cm?, tol_minus?, tol_plus?, nom_fitxa?}. update_or_create per (item, pom). Gated
+        CONFIGURE (l'acció no és list/retrieve → get_permissions retorna CONFIGURE)."""
         from fhort.tasks.models import GarmentTypeItem
         item_id = request.data.get('garment_type_item')
         pom_id = request.data.get('pom')
@@ -311,7 +311,8 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
         if not POMMaster.objects.filter(pk=pom_id).exists():
             return Response({'error': 'pom inexistent.'},
                             status=status.HTTP_400_BAD_REQUEST)
-        defaults = {f: request.data.get(f) for f in ('base_value_cm', 'tol_minus', 'tol_plus')
+        defaults = {f: request.data.get(f)
+                    for f in ('base_value_cm', 'tol_minus', 'tol_plus', 'nom_fitxa')
                     if f in request.data}
         obj, created = ItemBaseMeasurement.objects.update_or_create(
             garment_type_item_id=item_id, pom_id=pom_id, defaults=defaults)

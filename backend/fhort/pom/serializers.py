@@ -299,5 +299,5 @@ class ItemBaseMeasurementSerializer(serializers.ModelSerializer):
         model = ItemBaseMeasurement
         fields = (
             'id', 'garment_type_item', 'pom', 'pom_codi', 'pom_nom',
-            'base_value_cm', 'tol_minus', 'tol_plus',
+            'base_value_cm', 'tol_minus', 'tol_plus', 'nom_fitxa',
         )
