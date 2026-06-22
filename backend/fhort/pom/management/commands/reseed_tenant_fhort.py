@@ -15,7 +15,7 @@ Step D — SizingProfile (expand 1 Excel row → N GarmentType of the group)
 
 Adaptations vs original plan:
 - GarmentPOMMap uses `ordre` (not `display_order`).
-- GradingRule.pom is FK to POMMaster (not POMGlobal); requires talla_base and valor_base.
+- GradingRule.pom is FK to POMMaster (not POMGlobal); requires talla_base.
 - GradingRule has no `increment_above_xl` field: stored in `valors_step['above_xl']`.
 - SizingProfile has no `garment_group`: we expand per GarmentType of the group.
 - the RuleSet size_system is resolved from the SizingProfiles that reference it (the Excel does not provide it directly in the RuleSets sheet).
@@ -374,7 +374,6 @@ class Command(BaseCommand):
                         pom=pm,
                         talla_base=sd,
                         logica=d['logica'],
-                        valor_base=0,
                         increment=d['increment'],
                         valors_step=valors_step,
                         actiu=d['actiu'],

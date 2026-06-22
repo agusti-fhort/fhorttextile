@@ -525,7 +525,10 @@ class GradingRule(models.Model):
     talla_base = models.ForeignKey(SizeDefinition, on_delete=models.PROTECT, related_name='regles_base')
     logica = models.CharField(max_length=20, choices=LOGICA_CHOICES)
     # Sprint S16-A — decimals 4 → 2 (real precision for garment measurements in cm)
-    valor_base = models.DecimalField(max_digits=7, decimal_places=2, default=0)
+    # NOTA: el camp `valor_base` s'ha eliminat (Sprint Mesures Base per Item, P0). La talla base
+    # del grading viu a `talla_base`; el VALOR base de cada POM viu a BaseMeasurement (del Model)
+    # i, com a plantilla, a ItemBaseMeasurement (de l'Item). El grading no en depèn (mai es llegia
+    # per a càlcul; només s'emmagatzemava com a fidelitat redundant, sempre 0 a la BD).
     increment = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     valors_step = models.JSONField(null=True, blank=True)
     # Peça A — forma canònica d'aplicació (break ancorat per ETIQUETA, resolt al run de

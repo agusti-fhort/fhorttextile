@@ -160,7 +160,7 @@ class GradingRuleSerializer(serializers.ModelSerializer):
             'pom_nom_en', 'pom_nom_ca', 'pom_abbreviation',
             'pom_code_global', 'pom_categoria',
             'talla_base', 'talla_base_etiqueta',
-            'logica', 'valor_base', 'increment', 'valors_step', 'actiu',
+            'logica', 'increment', 'valors_step', 'actiu',
             'increment_base', 'increment_break', 'talla_break_label', 'talla_break_pos',  # Peça A (vista)
         )
         read_only_fields = ('rule_set',)

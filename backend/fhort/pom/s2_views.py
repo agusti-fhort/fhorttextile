@@ -177,7 +177,7 @@ def clone_sizing_profile_view(request, pk):
             )
 
             # Copy all the rules — tots els camps reals de GradingRule des de l'original
-            # (talla_base és NOT NULL; valor_base/valors_step preserven la fidelitat del grading).
+            # (talla_base és NOT NULL; valors_step preserva la fidelitat del grading).
             rules_creades = 0
             for rule in GradingRule.objects.filter(rule_set=original_rs):
                 GradingRule.objects.create(
@@ -185,7 +185,6 @@ def clone_sizing_profile_view(request, pk):
                     pom=rule.pom,
                     talla_base=rule.talla_base,
                     logica=rule.logica,
-                    valor_base=rule.valor_base,
                     increment=rule.increment,
                     valors_step=rule.valors_step,
                     actiu=rule.actiu,

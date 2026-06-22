@@ -291,12 +291,7 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
         if not res.get('logica'):
             avisos.append(f"POM {pm.codi_client}: grading no detectat; regla omesa.")
             continue
-        bv = valors.get(pid, {}).get(base_size)
-        try:
-            valor_base = float(bv) if bv not in (None, '') else 0
-        except (TypeError, ValueError):
-            valor_base = 0
-        pom_specs.append((pm, res, valor_base))
+        pom_specs.append((pm, res))
 
     if not pom_specs:
         avisos.append(
@@ -308,7 +303,7 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
         rs_constr = ConstructionType.objects.filter(codi__iexact=construction_codi).first() if construction_codi else None
         rs_fit = FitType.objects.filter(codi__iexact=fit_type_codi).first() if fit_type_codi else None
 
-        spec_by_pom = {pm.id: res for pm, res, _vb in pom_specs}
+        spec_by_pom = {pm.id: res for pm, res in pom_specs}
         candidat = None
         candidats = GradingRuleSet.objects.filter(
             is_system_default=False,
@@ -367,7 +362,7 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
         )
         if rs_target:
             new_rule_set.targets.add(rs_target)
-        for pm, res, valor_base in pom_specs:
+        for pm, res in pom_specs:
             # Peça A — omplir la forma canònica a més de valors_step (origen). STEP → derivar
             # increment_base/talla_break_label/increment_break del run; LINEAR → increment uniforme.
             ib, ibrk, tlabel, tpos = derive_break_fields(
@@ -379,7 +374,6 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
                 logica=res['logica'],
                 increment=res.get('increment') or 0,
                 valors_step=res.get('valors_step'),
-                valor_base=valor_base,
                 increment_base=ib,
                 increment_break=ibrk,
                 talla_break_label=tlabel,
