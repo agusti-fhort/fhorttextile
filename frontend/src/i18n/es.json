@@ -1275,6 +1275,9 @@
   "size_map_t_order": "Orden",
   "size_map_unmatched": "No reconocidas",
   "size_map_warnings": "avisos",
+  "tasktype": {
+    "size_check": "Medidas"
+  },
   "basestage": {
     "title": "Tabla base · estadios",
     "empty": "Aún no hay medidas base.",

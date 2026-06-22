@@ -1275,6 +1275,9 @@
   "size_map_t_order": "Order",
   "size_map_unmatched": "Unrecognised",
   "size_map_warnings": "warnings",
+  "tasktype": {
+    "size_check": "Measures"
+  },
   "basestage": {
     "title": "Base table · stages",
     "empty": "No base measurements yet.",

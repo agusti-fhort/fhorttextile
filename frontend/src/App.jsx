@@ -1,5 +1,5 @@
 import React, { useEffect, lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams, useSearchParams } from 'react-router-dom'
 import useAuthStore from './store/auth'
 import Login from './pages/Login'
 import Shell from './components/layout/Shell'
@@ -42,6 +42,15 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
   return isAuthenticated ? children : <Navigate to="/login" replace />
+}
+
+// v2: el Size Check antic es jubila. /size-check redirigeix a l'edició nova de mesures,
+// conservant task_id (la tasca "Mesurar prenda" hi navega).
+function SizeCheckRedirect() {
+  const { id } = useParams()
+  const [sp] = useSearchParams()
+  const taskId = sp.get('task_id')
+  return <Navigate to={`/models/${id}/mesures${taskId ? `?task_id=${taskId}` : ''}`} replace />
 }
 
 class AppErrorBoundary extends React.Component {
@@ -129,8 +138,8 @@ export default function App() {
           <Route path="models/:id/mesures" element={<ModelMeasurements />} />
           <Route path="models/:id/teixit" element={<ModelFabric />} />
           <Route path="models/:id/fitxers" element={<ModelSheet defaultTab="Fitxers" />} />
-          {/* SC-2 — superfície de treball del Size Check (des del Kanban): mode editable. */}
-          <Route path="models/:id/size-check" element={<ModelSheet defaultTab="Size Check" sizeCheckEditable />} />
+          {/* v2: Size Check jubilat → redirigeix a l'edició nova de mesures (conserva task_id). */}
+          <Route path="models/:id/size-check" element={<SizeCheckRedirect />} />
           {/* 5B.6 — capa de sessions de fitting (l'antiga SizeFitting es va jubilar al Pas 1 catàlegs) */}
           <Route path="fittings" element={<FittingSessionList />} />
           <Route path="fittings/new" element={<FittingSessionNew />} />

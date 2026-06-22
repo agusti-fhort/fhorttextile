@@ -1275,6 +1275,9 @@
   "size_map_t_order": "Ordre",
   "size_map_unmatched": "No reconegudes",
   "size_map_warnings": "avisos",
+  "tasktype": {
+    "size_check": "Mesures"
+  },
   "basestage": {
     "title": "Taula base · estadis",
     "empty": "Encara no hi ha mesures base.",

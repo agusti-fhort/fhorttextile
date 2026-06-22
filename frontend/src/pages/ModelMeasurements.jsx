@@ -144,7 +144,9 @@ export default function ModelMeasurements() {
         if (rows.length) setTaulaRows(rows)
         // VERGE = cap fila amb valor (de cap origen). TEMPLATE buit / sense files = verge.
         const verge = !rows.some(r => r.base_value_cm != null)
-        if (!verge) { setMode('selector'); return }   // ja té valors → mai oferir
+        // v2: edició lligada a tasca. Si el model JA té valors → obre l'edició DIRECTA (manual),
+        // sense el flash del selector. Només es mostra el selector/wizard si la taula és verge.
+        if (!verge) { setMode('manual'); return }
 
         // Taula verge: ¿l'item té valors base per oferir?
         let hasValues = false

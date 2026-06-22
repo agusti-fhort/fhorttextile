@@ -5,6 +5,7 @@ import Badge from '../ui/Badge'
 import Modal from '../ui/Modal'
 import { modelTasks } from '../../api/endpoints'
 import { formatMinutes } from '../../utils/format'
+import { taskTypeLabel } from '../../utils/taskType'
 
 // Pla de treball — PEÇA P3 + P4a (Q4 crescut): l'encàrrec del model com a procés.
 // Consumeix dashboard.tasques (compositor enriquit a P1, JA ordenat canònic) — NO reordena.
@@ -24,7 +25,8 @@ function toolRoute(task, modelId) {
   switch (task.task_type_code) {
     case 'pom':        return `/models/${modelId}/mesures`
     case 'tech_sheet': return `/models/${modelId}/fitxa?task_id=${task.id}`
-    case 'size_check': return `/models/${modelId}/size-check`
+    // v2: "Mesurar prenda" (size_check) → l'edició nova de mesures, amb task_id (futur compta-temps).
+    case 'size_check': return `/models/${modelId}/mesures?task_id=${task.id}`
     default:           return null
   }
 }
@@ -97,7 +99,7 @@ function TaskCard({ task, mine, onPlay, onPause, onStop }) {
         <i className={`ti ${icon}`} style={{ fontSize: 16, color: 'var(--gold)', flexShrink: 0 }} />
         <span style={{ fontWeight: 500, color: 'var(--text-main)', overflow: 'hidden',
                        textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {task.task_type_name || task.task_type_code || '—'}
+          {taskTypeLabel(t, task.task_type_code, task.task_type_name)}
         </span>
       </div>
 
@@ -184,7 +186,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
     const pausedId = res?.data?.paused_task_id
     if (!pausedId) return
     const p = list.find(x => x.id === pausedId)
-    const name = p ? (p.task_type_name || p.task_type_code || `#${pausedId}`) : `#${pausedId}`
+    const name = p ? taskTypeLabel(t, p.task_type_code, p.task_type_name) : `#${pausedId}`
     showToast('warn', t('model_sheet.dashboard.workplan.toast_paused', { name }))
   }
 

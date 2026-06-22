@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { modelTasks, gates, models, garmentTypes, users } from '../api/endpoints'
 import TimerWidget from '../components/ui/TimerWidget'
+import { taskTypeLabel } from '../utils/taskType'
 
 // Tram 4 — Kanban mestre-detall en un sol grid de 5 columnes (sempre visibles):
 //   [ models (crema) | Pendents | Pausades | En curs | Fetes ].
@@ -234,7 +235,7 @@ export default function KanbanTasks() {
         const pausedId = res.data?.paused_task_id
         if (pausedId) {
           const p = detailTasks.find(x => x.id === pausedId)
-          const name = p ? `${p.model_codi || '#' + p.model} · ${p.task_type_name || p.task_type_code}` : `#${pausedId}`
+          const name = p ? `${p.model_codi || '#' + p.model} · ${taskTypeLabel(t, p.task_type_code, p.task_type_name)}` : `#${pausedId}`
           showToast('warn', t('kanban.toast_paused', { name }))
         }
         loadDetail(selectedId)
@@ -629,7 +630,7 @@ function TaskCard({ task, canExecute, onTransition, t }) {
         )}
       </div>
       <div style={{ fontSize: 'var(--fs-body)', lineHeight: 1.4 }}>
-        {task.task_type_name || task.task_type_code}
+        {taskTypeLabel(t, task.task_type_code, task.task_type_name)}
       </div>
       {task.status === 'InProgress' && task.started_at && (
         <div style={{ marginTop: 6 }}>
@@ -684,14 +685,15 @@ function TaskCard({ task, canExecute, onTransition, t }) {
             if (canExecute && (task.status === 'Pending' || task.status === 'Paused')) {
               onTransition(task, 'InProgress')
             }
-            navigate(`/models/${task.model}/size-check`)
+            // v2: "Mesurar prenda" → l'edició nova de mesures (porta task_id per al futur compta-temps).
+            navigate(`/models/${task.model}/mesures?task_id=${task.id}`)
           }} style={{
             display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-body)', padding: '4px 8px',
             borderRadius: 6, border: '0.5px solid var(--gold)', background: 'var(--white)',
             cursor: 'pointer', color: 'var(--gold)', fontWeight: 500,
           }}>
             <i className="ti ti-ruler-measure" style={{ fontSize: 12 }} />
-            {t('kanban.action.open_size_check', 'Obrir size check')}
+            {t('kanban.action.open_poms', 'Obrir mides')}
           </button>
         </div>
       )}

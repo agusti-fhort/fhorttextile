@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Feedback from '../components/ui/Feedback'
 import ActionsMenu from '../components/model/ActionsMenu'
-import SizeCheckTab from '../components/model/SizeCheckTab'
 import BaseStageTable from '../components/model/BaseStageTable'
 import PropagatedEditor from './PropagatedEditor'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
@@ -11,8 +10,8 @@ import DashboardTab from '../components/model/DashboardTab'
 
 const API = import.meta.env.VITE_API_URL || ''
 // Menú net (PEÇA 5): Size Check absorbit a Mesures (taula base amb estadis), Producció retirat;
-// Fitting → Escalat (editor propagat). El tab id 'Size Check' es manté NOMÉS com a destí de la
-// ruta /size-check (tasca Kanban), però NO surt al menú visible.
+// Fitting → Escalat (editor propagat). v2: el Size Check antic queda jubilat — /size-check
+// redirigeix a /mesures (App.jsx), aquí ja no hi ha cap branca 'Size Check'.
 const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
@@ -215,8 +214,6 @@ export default function ModelSheet({ defaultTab = 'Dashboard', sizeCheckEditable
         )}
         {/* Escalat: CONSULTA read-only de la taula propagada (edició lligada a tasca). */}
         {activeTab === 'Escalat' && <PropagatedEditor modelId={parseInt(id)} inline readOnly />}
-        {/* Size Check: fora del menú visible; només accessible via la ruta /size-check (tasca Kanban). */}
-        {activeTab === 'Size Check' && <SizeCheckTab model={model} onFeedback={setFeedback} editable={sizeCheckEditable} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
         {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}

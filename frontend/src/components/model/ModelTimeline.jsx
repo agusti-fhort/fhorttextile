@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
+import { taskTypeLabel } from '../../utils/taskType'
 
 // Timeline del model — PEÇA F2 (Q2 "què ha canviat"), columna dreta del Dashboard.
 // Consumeix GET /api/v1/models/<id>/timeline/ (endpoint B2, read-only).
@@ -94,7 +95,7 @@ export default function ModelTimeline({ modelId }) {
           phase: t(`model_sheet.dashboard.phase.${p.to_phase}`, { defaultValue: p.to_phase || '—' }) })
       case 'task_transition':
         return t('model_sheet.dashboard.timeline.task_transition', {
-          task: p.task_type_name || p.task_type_code || '—',
+          task: taskTypeLabel(t, p.task_type_code, p.task_type_name),
           status: t(`model_sheet.dashboard.task_status.${p.to_status}`, { defaultValue: p.to_status || '—' }) })
       default:
         return ev.kind
