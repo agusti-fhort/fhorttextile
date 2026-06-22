@@ -1328,6 +1328,11 @@
   "model_measurements": {
     "err_grading": "Error generando el grading",
     "notice_no_item": "Este modelo no tiene tipo de ítem (garment_type_item) definido: no se materializan los POMs de la plantilla.",
+    "seed_title": "¿Partir de las medidas del item?",
+    "seed_subtitle": "Este modelo viene de un item con medidas base estándar.",
+    "seed_body": "Puedes sembrar el modelo con las medidas estándar del item (valor, nomenclatura y tolerancia) o empezar de cero y rellenarlas a mano. Las medidas que ya hayas tocado en el modelo no se sobrescriben.",
+    "seed_confirm": "Sembrar del item",
+    "seed_cancel": "Empezar de cero",
     "title": "Medidas y grading",
     "intro": "Introduce las medidas de la talla base. El sistema calculará el grading para todas las tallas.",
     "manual_title": "Introducir manualmente",

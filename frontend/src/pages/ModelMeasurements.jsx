@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import EditableTable from '../components/EditableTable/EditableTable'
 import ImportWizard from '../components/ImportWizard/ImportWizard'
+import Modal from '../components/ui/Modal'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -34,6 +35,9 @@ export default function ModelMeasurements() {
   const [generatingGrading, setGeneratingGrading] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  // B5 — oferta conscient de sembra (4a font): modal a la primera entrada si l'item té valors.
+  const [seedOffer, setSeedOffer] = useState(false)
+  const [seedBusy, setSeedBusy] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -84,31 +88,77 @@ export default function ModelMeasurements() {
     setDeltes(d.deltes || null)
   }
 
-  // Materialització família→item: en tenir el model, si té garment_type_item, instanciem la
-  // pertinença de POMs de l'item (idempotent) ABANS de carregar la taula. Sense item → avís.
+  // Recarrega la taula de mesures i fixa el mode (tancat → resultat; si no, afterMode).
+  const reloadTable = (afterMode = 'selector') =>
+    fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
+      .then(r => r.json())
+      .then(d => {
+        refreshTableMeta(d)
+        if (d.rows && d.rows.length > 0) setTaulaRows(d.rows)
+        setMode(d.tancat ? 'resultat' : afterMode)
+      })
+      .catch(() => setMode('selector'))
+
+  // B5 — Confirmar la sembra: crida materialitzar-poms (B4: valor+nom_fitxa+tol, origen
+  // ITEM_STANDARD, preservant sobirania) i mostra la graella sembrada.
+  const confirmSeed = async () => {
+    setSeedBusy(true)
+    try {
+      await fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders })
+      localStorage.setItem(`seed-decided-${id}`, '1')
+      setSeedOffer(false)
+      await reloadTable('manual')
+    } catch {
+      setError(t('model_sheet.err_connection'))
+    } finally {
+      setSeedBusy(false)
+    }
+  }
+  // Cancel·lar: no sembra (el tècnic omple des de zero). Es recorda per no repreguntar.
+  const cancelSeed = () => {
+    localStorage.setItem(`seed-decided-${id}`, '1')
+    setSeedOffer(false)
+    setMode('selector')
+  }
+
+  // Primera entrada a Mesures: en comptes de materialitzar SILENCIOSAMENT, OFERIM sembrar amb les
+  // mides estàndard de l'item (decisió conscient, 4a font). Només si l'item té valors i la taula
+  // és buida i no s'ha decidit abans. Sense valors d'item → membresia silenciosa (com abans).
   useEffect(() => {
     if (!id || !model) return
-    const loadTable = () =>
-      fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
-        .then(r => r.json())
-        .then(d => {
-          refreshTableMeta(d)
-          if (d.rows && d.rows.length > 0) {
-            setTaulaRows(d.rows)
-          }
-          // La pantalla d'opcions SEMPRE espera que l'usuari triï (manual/import).
-          // Única excepció: si la taula ja està TANCADA → directe a la vista de lectura.
-          setMode(d.tancat ? 'resultat' : 'selector')
-        })
-        .catch(() => setMode('selector'))
-    if (model.garment_type_item) {
-      fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders })
-        .then(() => loadTable())
-        .catch(() => loadTable())
-    } else {
+    if (!model.garment_type_item) {
       setNotice(t('model_measurements.notice_no_item'))
-      loadTable()
+      reloadTable(); return
     }
+    if (localStorage.getItem(`seed-decided-${id}`)) { reloadTable(); return }
+
+    fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
+      .then(r => r.json())
+      .then(async d => {
+        refreshTableMeta(d)
+        if (d.tancat) { if (d.rows) setTaulaRows(d.rows); setMode('resultat'); return }
+        if (d.rows && d.rows.length > 0) { setTaulaRows(d.rows); setMode('selector'); return }
+        // Taula buida: ¿l'item té valors base per oferir?
+        let hasValues = false
+        try {
+          const r2 = await fetch(
+            `${API}/api/v1/item-base-measurements/?garment_type_item=${model.garment_type_item}&page_size=500`,
+            { headers: authHeaders })
+          const dd = await r2.json()
+          const rows = dd.results || (Array.isArray(dd) ? dd : [])
+          hasValues = rows.some(x => x.base_value_cm != null)
+        } catch { /* manté hasValues=false: sense oferta, membresia silenciosa */ }
+        if (hasValues) {
+          setMode('selector'); setSeedOffer(true)   // oferta conscient (modal sobre el selector)
+        } else {
+          // Sense valors d'item: només membresia (comportament previ), marcada com a decidida.
+          fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders })
+            .then(() => { localStorage.setItem(`seed-decided-${id}`, '1'); reloadTable() })
+            .catch(() => reloadTable())
+        }
+      })
+      .catch(() => setMode('selector'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, model])
 
   return (
@@ -127,6 +177,22 @@ export default function ModelMeasurements() {
           background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
           padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: '#7a5a00',
         }}>{notice}</div>
+      )}
+
+      {seedOffer && (
+        <Modal
+          title={t('model_measurements.seed_title')}
+          subtitle={t('model_measurements.seed_subtitle')}
+          cancelLabel={t('model_measurements.seed_cancel')}
+          confirmLabel={seedBusy ? t('common.saving') : t('model_measurements.seed_confirm')}
+          onCancel={cancelSeed}
+          onConfirm={confirmSeed}
+          confirmDisabled={seedBusy}
+        >
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: 0 }}>
+            {t('model_measurements.seed_body')}
+          </p>
+        </Modal>
       )}
 
       {mode === 'loading' && !error && (

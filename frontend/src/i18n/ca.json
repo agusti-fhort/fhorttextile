@@ -1328,6 +1328,11 @@
   "model_measurements": {
     "err_grading": "Error generant grading",
     "notice_no_item": "Aquest model no té tipus d'ítem (garment_type_item) definit: no es materialitzen els POMs de la plantilla.",
+    "seed_title": "Partir de les mides de l'item?",
+    "seed_subtitle": "Aquest model ve d'un item amb mides base estàndard.",
+    "seed_body": "Pots sembrar el model amb les mides estàndard de l'item (valor, nomenclatura i tolerància) o començar de zero i omplir-les a mà. Les mides que ja hagis tocat al model no es trepitgen.",
+    "seed_confirm": "Sembrar de l'item",
+    "seed_cancel": "Començar de zero",
     "title": "Mesures i grading",
     "intro": "Introdueix les mesures de la talla base. El sistema calcularà el grading per a totes les talles.",
     "manual_title": "Introduir manualment",

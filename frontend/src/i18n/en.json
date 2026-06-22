@@ -1328,6 +1328,11 @@
   "model_measurements": {
     "err_grading": "Error generating grading",
     "notice_no_item": "This model has no item type (garment_type_item) defined: the template POMs are not materialized.",
+    "seed_title": "Start from the item's measurements?",
+    "seed_subtitle": "This model comes from an item with standard base measurements.",
+    "seed_body": "You can seed the model with the item's standard measurements (value, nomenclature and tolerance) or start from scratch and fill them in by hand. Measurements you have already edited on the model are not overwritten.",
+    "seed_confirm": "Seed from item",
+    "seed_cancel": "Start from scratch",
     "title": "Measurements and grading",
     "intro": "Enter the base size measurements. The system will compute grading for all sizes.",
     "manual_title": "Enter manually",
