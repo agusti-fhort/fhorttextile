@@ -1246,8 +1246,9 @@ def set_size_override_view(request, model_id):
     profile = getattr(request.user, 'profile', None)
 
     with transaction.atomic():
-        # 6. Override upsert idempotent (mirall de fitting/services.close_piece_fitting:405-413,
-        #    però origen MODEL, no sessió → fitting_ref=None).
+        # 6. Override upsert idempotent (origen MODEL, no sessió → fitting_ref=None). Aquest és
+        #    l'ÚNIC camí que escriu ModelGradingOverride per talla des de PEÇA 4 (la sessió de
+        #    fitting ja no n'escriu; vegeu close_piece_fitting).
         prev = (ModelGradingOverride.objects
                 .filter(model=model, pom=pom, size_label=size_label)
                 .values_list('value_cm', flat=True).first())
