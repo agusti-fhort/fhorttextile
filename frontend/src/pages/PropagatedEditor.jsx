@@ -9,7 +9,7 @@ import MeasureTable from './MeasureTable'
 // escriu un ModelGradingOverride i re-propaga al servidor (PEÇA 1); la talla base és de lectura
 // (s'edita com a mesura base). El règim per POM es canvia amb models.setPomRegim (ja independent
 // de la sessió). S'alimenta de taula-mesures (GradingVersion vigent, criteri PEÇA 0).
-export default function PropagatedEditor({ modelId, onClose }) {
+export default function PropagatedEditor({ modelId, onClose, inline = false }) {
   const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -91,14 +91,19 @@ export default function PropagatedEditor({ modelId, onClose }) {
     }
   })
 
+  // inline=true: incrustat com a contingut de pestanya (sense overlay fix ni botó tancar).
+  const outerStyle = inline
+    ? {}
+    : { position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.45)', display: 'flex', flexDirection: 'column' }
+  const bodyStyle = inline
+    ? { background: 'var(--white)' }
+    : { flex: 1, overflow: 'auto', background: 'var(--white)', padding: '1rem' }
+
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.45)',
-      display: 'flex', flexDirection: 'column',
-    }}>
+    <div style={outerStyle}>
       <div style={{
-        background: 'var(--bg-muted)', padding: '12px 18px',
-        borderBottom: '0.5px solid var(--border)', display: 'flex',
+        background: inline ? 'transparent' : 'var(--bg-muted)', padding: inline ? '0 0 12px' : '12px 18px',
+        borderBottom: inline ? 'none' : '0.5px solid var(--border)', display: 'flex',
         alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div>
@@ -109,13 +114,15 @@ export default function PropagatedEditor({ modelId, onClose }) {
             {t('model_measurements.propagated_hint')}
           </p>
         </div>
-        <button type="button" onClick={onClose}
-          style={{ padding: '6px 16px', border: '0.5px solid var(--border)', borderRadius: 6,
-                   background: 'var(--white)', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
-          {t('model_measurements.propagated_close')}
-        </button>
+        {!inline && (
+          <button type="button" onClick={onClose}
+            style={{ padding: '6px 16px', border: '0.5px solid var(--border)', borderRadius: 6,
+                     background: 'var(--white)', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
+            {t('model_measurements.propagated_close')}
+          </button>
+        )}
       </div>
-      <div style={{ flex: 1, overflow: 'auto', background: 'var(--white)', padding: '1rem' }}>
+      <div style={bodyStyle}>
         {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 8 }}>{err}</div>}
         {loading && !data ? (
           <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('app.loading')}</div>

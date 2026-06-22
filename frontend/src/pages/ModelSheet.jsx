@@ -1,27 +1,25 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import EditableTable from '../components/EditableTable/EditableTable'
 import Feedback from '../components/ui/Feedback'
 import ActionsMenu from '../components/model/ActionsMenu'
-import ProductionTab from '../components/model/ProductionTab'
-import FittingTab from '../components/model/FittingTab'
 import SizeCheckTab from '../components/model/SizeCheckTab'
 import BaseStageTable from '../components/model/BaseStageTable'
+import PropagatedEditor from './PropagatedEditor'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
 
 const API = import.meta.env.VITE_API_URL || ''
-const TABS = ['Dashboard', 'Resum', 'Mesures', 'Taula base', 'Size Check', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
+// Menú net (PEÇA 5): Size Check absorbit a Mesures (taula base amb estadis), Producció retirat;
+// Fitting → Escalat (editor propagat). El tab id 'Size Check' es manté NOMÉS com a destí de la
+// ruta /size-check (tasca Kanban), però NO surt al menú visible.
+const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
   'Dashboard': 'model_sheet.tab_dashboard',
   'Resum': 'model_sheet.tab_summary',
   'Mesures': 'model.tabs.mesures',
-  'Taula base': 'model_sheet.tab_base_stages',
-  'Size Check': 'model_sheet.tab_size_check',
-  'Producció': 'model_sheet.tab_production',
-  'Fitting': 'model_sheet.tab_fitting',
+  'Escalat': 'model_sheet.tab_grading',
   'Fitxa tècnica': 'model_sheet.tab_tech_sheet',
   'Fitxers': 'model.tabs.fitxers',
   "Registre d'activitat": 'model_sheet.tab_activity_log',
@@ -212,27 +210,16 @@ export default function ModelSheet({ defaultTab = 'Dashboard', sizeCheckEditable
                 </span>
               )}
             </div>
-            <EditableTable
-              rows={taulaRows}
-              sizeRun={(sizesAmbDades && sizesAmbDades.length
-                ? sizesAmbDades
-                : (model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean))}
-              baseSize={model?.base_size_label}
-              deltes={deltes}
-              modelId={parseInt(id)}
-              isImport={false}
-              readOnly={true}
-              onSaved={setTaulaRows}
-            />
+            <BaseStageTable model={model} editable={sizeCheckEditable} />
           </div>
         )}
-        {activeTab === 'Taula base' && <BaseStageTable model={model} editable={sizeCheckEditable} />}
+        {/* Escalat (PEÇA 5): editor propagat del model (totes les talles, règim, breaks) — PEÇA 2. */}
+        {activeTab === 'Escalat' && <PropagatedEditor modelId={parseInt(id)} inline />}
+        {/* Size Check: fora del menú visible; només accessible via la ruta /size-check (tasca Kanban). */}
         {activeTab === 'Size Check' && <SizeCheckTab model={model} onFeedback={setFeedback} editable={sizeCheckEditable} />}
-        {activeTab === 'Fitting' && <FittingTab model={model} onFeedback={setFeedback} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
         {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}
-        {activeTab === 'Producció' && <ProductionTab model={model} onFeedback={setFeedback} onChanged={reloadModel} />}
         {activeTab === "Registre d'activitat" && <RegistreActivitatTab modelId={id} />}
       </div>
     </div>

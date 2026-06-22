@@ -164,9 +164,9 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
             <div style={cardEmpty}>{t('model_sheet.dashboard.empty_fitxa')}</div>
           )}
 
-          {/* Grading → pestanya Fitting (on es treballa la taula graduada) */}
+          {/* Grading → pestanya Escalat (editor propagat de la taula graduada) */}
           {grading ? (
-            <button type="button" style={card} onClick={() => onOpenTab('Fitting')}>
+            <button type="button" style={card} onClick={() => onOpenTab('Escalat')}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="ti ti-table" style={{ fontSize: 16, color: 'var(--gold)' }} />
                 {t('model_sheet.dashboard.artefact_grading')}
