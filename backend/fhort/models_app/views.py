@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
+from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer
 from .serializers import (
     BaseMeasurementSerializer,
@@ -1161,6 +1162,125 @@ def generate_grading_view(request, model_id):
         'base_size': model.base_size_label,
         'rows': rows,
     })
+
+
+class _ExecuteTasksCap(HasCapability):
+    required_capability = EXECUTE_TASKS
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasksCap])
+def set_size_override_view(request, model_id):
+    """POST /api/v1/models/<model_id>/set-size-override/  Body: {pom_id, size_label, valor}
+
+    Edita el valor d'UNA talla NO-base com a ModelGradingOverride (per-model,
+    traçable) i RE-PROPAGA el grading (generate_graded_specs) sobre la
+    GradingVersion vigent (criteri de PEÇA 0). L'override té precedència màxima
+    al motor (override→exception→regla→FIXED), per tant editar una 2a talla
+    manté la 1a. NO toca GradedSpec directament (és sortida del motor) ni
+    PieceFittingLine. Idempotent per (model, pom, size_label).
+    """
+    from fhort.models_app.models import ModelGradingOverride, MeasurementChangeLog
+    from fhort.pom.models import POMMaster
+    from fhort.pom.services import generate_graded_specs
+    from fhort.fitting.services import _resolve_working_size_fitting, vigent_grading_version
+    from fhort.fitting.models import GradedSpec
+
+    # 1. Model
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    # 2. Payload
+    data = request.data or {}
+    pom_id = data.get('pom_id')
+    size_label = (data.get('size_label') or '').strip()
+    valor = data.get('valor')
+    if pom_id is None or not size_label or valor is None:
+        return Response({'error': 'Calen pom_id, size_label i valor.'}, status=400)
+    try:
+        valor = round(float(valor), 2)
+    except (TypeError, ValueError):
+        return Response({'error': 'valor ha de ser numèric.'}, status=400)
+
+    # 3. La talla base s'edita com a mesura base (BaseMeasurement), no com a override.
+    base_size = (model.base_size_label or '').strip()
+    if not base_size:
+        return Response({'error': 'El model no té talla base definida.'}, status=400)
+    if size_label == base_size:
+        return Response(
+            {'error': "La talla base s'edita com a mesura base, no com a override de talla."},
+            status=400,
+        )
+
+    # 4. La talla ha de ser al size run del model.
+    size_run = [s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()]
+    if size_label not in size_run:
+        return Response({'error': f"La talla '{size_label}' no és al size run del model."}, status=400)
+
+    # 5. POM
+    try:
+        pom = POMMaster.objects.get(id=pom_id)
+    except POMMaster.DoesNotExist:
+        return Response({'error': 'POM no trobat.'}, status=404)
+
+    profile = getattr(request.user, 'profile', None)
+
+    with transaction.atomic():
+        # 6. Override upsert idempotent (mirall de fitting/services.close_piece_fitting:405-413,
+        #    però origen MODEL, no sessió → fitting_ref=None).
+        prev = (ModelGradingOverride.objects
+                .filter(model=model, pom=pom, size_label=size_label)
+                .values_list('value_cm', flat=True).first())
+        ModelGradingOverride.objects.update_or_create(
+            model=model, pom=pom, size_label=size_label,
+            defaults={
+                'value_cm': valor,
+                'motiu': 'Edició manual de talla (taula propagada)',
+                'fitting_ref': None,
+                'created_by': profile,
+            },
+        )
+
+        # 7. Rastre F1: talla editada = esdeveniment. El signal post_save NOMÉS cobreix
+        #    BaseMeasurement; per a una talla no-base el registrem explícitament aquí.
+        if prev is None or abs(float(prev) - valor) > 1e-9:
+            MeasurementChangeLog.objects.create(
+                model=model, pom=pom, base_measurement=None,
+                valor_anterior=(float(prev) if prev is not None else None),
+                valor_nou=valor,
+                context='manual',
+                motiu=f'Override talla {size_label}',
+                created_by=request.user if getattr(request.user, 'is_authenticated', False) else None,
+            )
+
+        # 8. Re-propaga sobre la GradingVersion vigent (l'override mana al motor).
+        sf = _resolve_working_size_fitting(model)
+        if sf is None:
+            return Response(
+                {'error': 'El model no té SizeFitting; genera el grading abans d\'editar talles.'},
+                status=400,
+            )
+        try:
+            generate_graded_specs(sf.id)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+
+    # 9. Retorna el GradedSpec resultant de la talla editada (reflecteix l'override).
+    gv = vigent_grading_version(sf)
+    graded = (GradedSpec.objects
+              .filter(grading_version=gv, pom=pom, size_label=size_label)
+              .values_list('graded_value_cm', flat=True).first()) if gv else None
+    return Response({
+        'ok': True,
+        'model_id': model.id,
+        'pom_id': pom.id,
+        'size_label': size_label,
+        'override_value_cm': valor,
+        'grading_version_id': gv.id if gv else None,
+        'graded_value_cm': float(graded) if graded is not None else None,
+    }, status=200)
 
 
 ISO_SHRINKAGE_TABLE = [
