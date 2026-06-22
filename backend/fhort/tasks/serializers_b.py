@@ -64,7 +64,26 @@ class ProductionSerializer(serializers.ModelSerializer):
 class GarmentTypeItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = GarmentTypeItem
-        fields = ['id', 'garment_type', 'code', 'name', 'complexity_order', 'active']
+        # Sprint Llibreria d'Items (B3a): exposa el context de grading de l'Item (FK ruleset) i
+        # la talla base, escrivibles per la pàgina d'autoria (Fase B). Tots dos nullable.
+        fields = ['id', 'garment_type', 'code', 'name', 'complexity_order', 'active',
+                  'grading_rule_set', 'base_size_definition']
+
+    def validate(self, attrs):
+        # B3a — DRF no crida Model.clean() sol; l'invoquem aquí perquè el constrenyiment d'A3
+        # (base_size_definition.size_system == grading_rule_set.size_system) es validi al desar
+        # via serializer. Fusiona els attrs entrants amb la instància existent (PATCH parcial) i
+        # delega al clean() del model (font única; cas null = skip, sense error).
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        grs = attrs.get('grading_rule_set', getattr(self.instance, 'grading_rule_set', None))
+        bsd = attrs.get('base_size_definition', getattr(self.instance, 'base_size_definition', None))
+        probe = GarmentTypeItem(grading_rule_set=grs, base_size_definition=bsd)
+        try:
+            probe.clean()
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(
+                getattr(e, 'message_dict', None) or {'base_size_definition': e.messages})
+        return attrs
 
 
 class TaskTimeEstimateSerializer(serializers.ModelSerializer):
