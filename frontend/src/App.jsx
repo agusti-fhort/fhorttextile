@@ -114,18 +114,6 @@ export default function App() {
             <TechSheetTemplateEditor />
           </ProtectedRoute>
         } />
-        {/* Autoria d'Item (Llibreria d'Items B3): wizard full-screen FORA del Shell, protegit.
-            Crear (des d'un garment type) i obrir-existent (un dels esquelets). */}
-        <Route path="/garment-type-items/nou/:typeId" element={
-          <ProtectedRoute>
-            <ItemAuthoring />
-          </ProtectedRoute>
-        } />
-        <Route path="/garment-type-items/:itemId/editar" element={
-          <ProtectedRoute>
-            <ItemAuthoring />
-          </ProtectedRoute>
-        } />
         <Route path="/" element={
           <ProtectedRoute>
             <Shell />
@@ -151,6 +139,10 @@ export default function App() {
           <Route path="tasques/kanban" element={<KanbanTasks />} />
           <Route path="task-types" element={<TaskTypes />} />
           <Route path="garment-types" element={<GarmentTypes />} />
+          {/* Autoria d'Item (Llibreria d'Items B3): DINS el Shell (àrea de contingut).
+              Crear (des d'un garment type) i obrir-existent (un dels esquelets). */}
+          <Route path="garment-type-items/nou/:typeId" element={<ItemAuthoring />} />
+          <Route path="garment-type-items/:itemId/editar" element={<ItemAuthoring />} />
           <Route path="suppliers" element={<Suppliers />} />
           <Route path="clients" element={<Customers />} />
           <Route path="planificacio" element={<Planning />} />

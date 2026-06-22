@@ -8,14 +8,20 @@ import AxesSelector from '../components/grading/AxesSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
 import MeasurementBaseGrid from '../components/MeasurementBaseGrid/MeasurementBaseGrid'
 
-// ItemAuthoring — pàgina d'autoria d'Item full-screen (Sprint Llibreria d'Items, B3). Wizard de
-// 4 passos que reutilitza components existents: AxesSelector (1) → RuleSetPicker (2, assigna la FK
-// grading_rule_set via serializer de B3a) → selector de talla base (3, validat pel clean d'A3) →
-// MeasurementBaseGrid (4). Serveix CREAR (des de /nou/:typeId) i OBRIR-existent (/:itemId/editar).
-// Substitueix l'ItemModal de GarmentTypes (code/name/complexity hi viuen ara, al pas 1).
+// ItemAuthoring — pàgina d'autoria d'Item (Sprint Llibreria d'Items, B3 + B3-fix). Viu DINS el
+// Shell (àrea de contingut). Wizard de 2 passos que RECOMBINA components existents:
+//   PAS 1 CONTEXT: identitat (nom; codi auto-slug) + AxesSelector (B2) + RuleSetPicker (B2, en
+//     viu, onPick=assignar FK via serializer B3a). [Slot d'import previst, inert.]
+//   PAS 2 CONSTRUCCIÓ: selector de talla base (valida amb clean d'A3) + MeasurementBaseGrid (B1).
+// Serveix CREAR (/garment-type-items/nou/:typeId) i OBRIR-existent (/:itemId/editar).
 
 const MONO = 'IBM Plex Mono, monospace'
-const STEPS = ['step1_axes', 'step2_ruleset', 'step3_basesize', 'step4_grid']
+const STEPS = ['step1_context', 'step2_construction']
+
+// Slug del nom → codi (SlugField max_length=60). Treu accents, no-alfanumèrics → guió.
+const slugify = (s) => (s || '').toLowerCase().trim()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
 
 const btnPrimary = (disabled) => ({
   background: disabled ? '#ccc' : 'var(--gold)', color: 'var(--white)', border: 'none',
@@ -30,6 +36,10 @@ const inputS = {
   width: '100%', border: '0.5px solid var(--border)', borderRadius: 6, padding: '8px 10px',
   fontSize: 'var(--fs-body)', boxSizing: 'border-box', background: 'var(--white)',
 }
+const sectionTitle = {
+  fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--gold)',
+  letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 12px',
+}
 
 export default function ItemAuthoring() {
   const { t } = useTranslation()
@@ -40,19 +50,15 @@ export default function ItemAuthoring() {
   const [itemId, setItemId] = useState(routeItemId || null)   // es fixa en crear
   const [step, setStep] = useState(1)
 
-  // Identitat de l'item (pas 1, abans la vivia ItemModal).
-  const [code, setCode] = useState('')
   const [name, setName] = useState('')
-  const [order, setOrder] = useState(0)
+  const [code, setCode] = useState('')          // edició: existent; creació: derivat del nom
   const [active, setActive] = useState(true)
 
-  // Dades de grading (carregades un cop) + selecció.
   const [ruleSets, setRuleSets] = useState([])
   const [ggCodiById, setGgCodiById] = useState({})
   const [axes, setAxes] = useState({ target: null, construction: null, fit: null, garmentGroup: null })
   const [chosenRulesetId, setChosenRulesetId] = useState(null)
 
-  // Talla base (pas 3).
   const [sizeDefs, setSizeDefs] = useState([])
   const [baseSizeId, setBaseSizeId] = useState(null)
 
@@ -64,8 +70,10 @@ export default function ItemAuthoring() {
     () => ruleSets.find(r => r.id === chosenRulesetId) || null,
     [ruleSets, chosenRulesetId],
   )
+  // Codi mostrat: en edició el real (immutable); en creació el slug derivat del nom.
+  const shownCode = isEdit ? code : slugify(name)
 
-  // ── Càrrega inicial: rulesets + garment-groups (id→codi) + item (si edició) ──
+  // ── Càrrega inicial ──
   useEffect(() => {
     let alive = true
     setLoading(true)
@@ -81,27 +89,23 @@ export default function ItemAuthoring() {
       setRuleSets(rs); setGgCodiById(map)
       if (itRes?.data) {
         const it = itRes.data
-        setCode(it.code || ''); setName(it.name || '')
-        setOrder(it.complexity_order ?? 0); setActive(it.active ?? true)
+        setCode(it.code || ''); setName(it.name || ''); setActive(it.active ?? true)
         setChosenRulesetId(it.grading_rule_set ?? null)
         setBaseSizeId(it.base_size_definition ?? null)
-        // Deriva els eixos del ruleset assignat (millor esforç; garment_group pot ser null).
         const rsObj = rs.find(r => r.id === it.grading_rule_set)
-        if (rsObj) {
-          setAxes({
-            target: rsObj.targets_codis?.[0] ?? null,
-            construction: rsObj.construction_codi ?? null,
-            fit: rsObj.fit_type_codi ?? null,
-            garmentGroup: rsObj.garment_group ? (map[rsObj.garment_group] ?? null) : null,
-          })
-        }
+        if (rsObj) setAxes({
+          target: rsObj.targets_codis?.[0] ?? null,
+          construction: rsObj.construction_codi ?? null,
+          fit: rsObj.fit_type_codi ?? null,
+          garmentGroup: rsObj.garment_group ? (map[rsObj.garment_group] ?? null) : null,
+        })
       }
     }).catch(() => { if (alive) setError(t('item_authoring.load_error')) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [isEdit, routeItemId, t])
 
-  // ── Talla base: carrega les SizeDefinitions del size_system del ruleset triat ──
+  // ── Talla base: SizeDefinitions del size_system del ruleset triat ──
   const loadSizeDefs = useCallback((sizeSystemId) => {
     if (!sizeSystemId) { setSizeDefs([]); return }
     sizeDefinitions.list({ size_system: sizeSystemId, ordering: 'ordre', page_size: 200 })
@@ -114,50 +118,34 @@ export default function ItemAuthoring() {
     else setSizeDefs([])
   }, [chosenRuleset, loadSizeDefs])
 
-  const identityValid = (isEdit || code.trim()) && name.trim()
-  const axesComplete = axes.target && axes.construction && axes.fit && axes.garmentGroup
-
-  // ── Pas 1 → 2: assegura que l'item existeix (crea o desa identitat) ──
-  const ensureItemAndAdvance = async () => {
-    setBusy(true); setError(null)
-    try {
-      const payload = {
-        name: name.trim(), complexity_order: Number(order) || 0, active,
-      }
-      if (itemId) {
-        await garmentTypeItems.update(itemId, payload)
-      } else {
-        const res = await garmentTypeItems.create({
-          garment_type: Number(typeId), code: code.trim(), ...payload,
-        })
-        setItemId(res.data.id)
-      }
-      setStep(2)
-    } catch (e) {
-      setError(e?.response?.data?.code?.[0] || e?.response?.data?.detail || t('item_authoring.save_error'))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  // ── Pas 2: assignar ruleset (FK via serializer B3a). Si canvia de size_system, neteja talla base. ──
+  // ── Pas 1: assignar ruleset. Crea l'item si encara no existeix (codi = slug del nom). ──
   const assignRuleset = async (rs) => {
+    if (!name.trim()) { setError(t('item_authoring.need_name')); return }
     setBusy(true); setError(null)
     try {
+      let id = itemId
+      if (!id) {
+        const res = await garmentTypeItems.create({
+          garment_type: Number(typeId), code: slugify(name), name: name.trim(), active,
+        })
+        id = res.data.id; setItemId(id); setCode(res.data.code || slugify(name))
+      }
       const payload = { grading_rule_set: rs.id }
       const incompatible = baseSizeId && chosenRuleset && chosenRuleset.size_system !== rs.size_system
       if (incompatible) payload.base_size_definition = null
-      await garmentTypeItems.update(itemId, payload)
+      await garmentTypeItems.update(id, payload)
       setChosenRulesetId(rs.id)
       if (incompatible) setBaseSizeId(null)
     } catch (e) {
-      setError(e?.response?.data?.base_size_definition?.[0] || e?.response?.data?.detail || t('item_authoring.save_error'))
+      setError(e?.response?.data?.code?.[0]
+        || e?.response?.data?.base_size_definition?.[0]
+        || e?.response?.data?.detail || t('item_authoring.save_error'))
     } finally {
       setBusy(false)
     }
   }
 
-  // ── Pas 3: triar talla base (clean d'A3 valida al backend) ──
+  // ── Pas 2: talla base (clean d'A3 valida al backend) ──
   const pickBaseSize = async (sd) => {
     setBusy(true); setError(null)
     try {
@@ -170,27 +158,32 @@ export default function ItemAuthoring() {
     }
   }
 
-  const canNext =
-    step === 1 ? (identityValid && axesComplete) :
-    step === 2 ? !!chosenRulesetId :
-    step === 3 ? !!baseSizeId : false
+  const canNext = step === 1 ? !!chosenRulesetId : false
 
-  const goNext = () => {
-    if (step === 1) return ensureItemAndAdvance()
-    setStep(s => Math.min(4, s + 1))
+  const goNext = async () => {
+    if (step !== 1) return
+    setBusy(true); setError(null)
+    try {
+      if (itemId) await garmentTypeItems.update(itemId, { name: name.trim(), active })  // desa nom (codi immutable)
+      setStep(2)
+    } catch (e) {
+      setError(e?.response?.data?.detail || t('item_authoring.save_error'))
+    } finally {
+      setBusy(false)
+    }
   }
-  const goBack = () => (step === 1 ? navigate('/garment-types') : setStep(s => s - 1))
+  const goBack = () => (step === 1 ? navigate('/garment-types') : setStep(1))
   const finish = () => navigate('/garment-types')
 
   if (loading) {
-    return <div style={{ padding: 40, color: 'var(--text-muted)', fontFamily: MONO }}>{t('common.loading')}</div>
+    return <div style={{ padding: 32, color: 'var(--text-muted)', fontFamily: MONO }}>{t('common.loading')}</div>
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-main)', padding: '24px 32px', fontFamily: 'IBM Plex Sans, sans-serif' }}>
+    <div style={{ minWidth: 0, maxWidth: 1100 }}>
       {/* Capçalera */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, maxWidth: 1100, marginInline: 'auto' }}>
-        <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, fontFamily: MONO }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO }}>
           {isEdit ? t('item_authoring.title_edit', { code }) : t('item_authoring.title_new')}
         </h1>
         <button type="button" onClick={() => navigate('/garment-types')} style={btnSecondary}>
@@ -198,8 +191,8 @@ export default function ItemAuthoring() {
         </button>
       </div>
 
-      {/* Stepper */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, maxWidth: 1100, marginInline: 'auto', flexWrap: 'wrap' }}>
+      {/* Stepper (2 passos) */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {STEPS.map((key, i) => {
           const n = i + 1
           const done = n < step
@@ -225,46 +218,44 @@ export default function ItemAuthoring() {
         })}
       </div>
 
-      <div style={{ maxWidth: 1100, marginInline: 'auto' }}>
-        {error && (
+      {error && (
+        <div style={{
+          background: '#fdecea', border: '1px solid #f5c6cb', borderRadius: 8,
+          padding: '8px 14px', marginBottom: 16, fontSize: 'var(--fs-body)', color: '#a12622',
+        }}>{error}</div>
+      )}
+
+      {/* PAS 1 · CONTEXT */}
+      {step === 1 && (
+        <div>
           <div style={{
-            background: '#fdecea', border: '1px solid #f5c6cb', borderRadius: 8,
-            padding: '8px 14px', marginBottom: 16, fontSize: 'var(--fs-body)', color: '#a12622',
-          }}>{error}</div>
-        )}
-
-        {/* PAS 1: identitat + eixos */}
-        {step === 1 && (
-          <div>
-            <div style={{
-              border: '0.5px solid var(--border)', borderRadius: 12, background: 'var(--white)',
-              padding: 18, marginBottom: 20,
-            }}>
-              <p style={sectionTitle}>{t('item_authoring.identity')}</p>
-              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                <Field label={t('item_authoring.f_code')} style={{ flex: '1 1 160px' }}>
-                  <input value={code} disabled={isEdit} onChange={e => setCode(e.target.value)}
-                    placeholder="chino" style={{ ...inputS, opacity: isEdit ? 0.6 : 1 }} />
-                </Field>
-                <Field label={t('item_authoring.f_name')} style={{ flex: '2 1 220px' }}>
-                  <input value={name} onChange={e => setName(e.target.value)} style={inputS} />
-                </Field>
-                <Field label={t('item_authoring.f_order')} style={{ flex: '0 1 110px' }}>
-                  <input type="number" value={order} onChange={e => setOrder(e.target.value)} style={inputS} />
-                </Field>
+            border: '0.5px solid var(--border)', borderRadius: 12, background: 'var(--white)',
+            padding: 18, marginBottom: 20,
+          }}>
+            <p style={sectionTitle}>{t('item_authoring.identity')}</p>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div style={{ flex: '2 1 260px' }}>
+                <label style={fieldLabel}>{t('item_authoring.f_name')}</label>
+                <input value={name} onChange={e => setName(e.target.value)}
+                  placeholder={t('item_authoring.name_placeholder')} style={inputS} />
               </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginTop: 8 }}>
-                <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} />
-                <span>{t('item_authoring.active')}</span>
-              </label>
+              <div style={{ flex: '1 1 180px' }}>
+                <label style={fieldLabel}>{t('item_authoring.code_auto_label')}</label>
+                <div style={{
+                  ...inputS, background: 'var(--bg-muted)', color: 'var(--text-muted)',
+                  fontFamily: MONO, minHeight: 19,
+                }}>{shownCode || '—'}</div>
+              </div>
             </div>
-            <AxesSelector ruleSets={ruleSets} value={axes} onChange={setAxes} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginTop: 10 }}>
+              <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} />
+              <span>{t('item_authoring.active')}</span>
+            </label>
           </div>
-        )}
 
-        {/* PAS 2: triar ruleset */}
-        {step === 2 && (
-          <div>
+          <AxesSelector ruleSets={ruleSets} value={axes} onChange={setAxes} />
+
+          <div style={{ marginTop: 8 }}>
             <p style={sectionTitle}>{t('item_authoring.pick_ruleset')}</p>
             <RuleSetPicker
               ruleSets={ruleSets}
@@ -277,11 +268,34 @@ export default function ItemAuthoring() {
               emptyActionLabel={t('item_authoring.create_ruleset')}
             />
           </div>
-        )}
 
-        {/* PAS 3: talla base */}
-        {step === 3 && (
-          <div>
+          {/* SLOT D'IMPORT — previst (Fase C), inert. NO construir lògica. */}
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '0.5px dashed var(--border)' }}>
+            <button type="button" disabled title={t('item_authoring.import_tooltip')}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                background: 'transparent', color: 'var(--text-muted)',
+                border: '1px dashed var(--border)', borderRadius: 8, padding: '8px 16px',
+                fontSize: 'var(--fs-body)', cursor: 'not-allowed', opacity: 0.7,
+              }}>
+              <i className="ti ti-file-import" />
+              {t('item_authoring.import_soon')}
+              <span style={{
+                fontSize: 'var(--fs-caption)', background: 'var(--bg-muted)', color: 'var(--text-muted)',
+                borderRadius: 4, padding: '1px 6px', letterSpacing: '.04em',
+              }}>{t('item_authoring.coming_soon')}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PAS 2 · CONSTRUCCIÓ */}
+      {step === 2 && (
+        <div>
+          <div style={{
+            border: '0.5px solid var(--border)', borderRadius: 12, background: 'var(--white)',
+            padding: 18, marginBottom: 20,
+          }}>
             <p style={sectionTitle}>{t('item_authoring.confirm_basesize')}</p>
             {chosenRuleset && (
               <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
@@ -309,49 +323,32 @@ export default function ItemAuthoring() {
               )}
             </div>
           </div>
-        )}
 
-        {/* PAS 4: graella de mesures base */}
-        {step === 4 && (
-          <div>
-            <p style={sectionTitle}>{t('item_authoring.measurements')}</p>
-            <MeasurementBaseGrid garmentTypeItemId={itemId} />
-          </div>
-        )}
-
-        {/* Navegació */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28, paddingTop: 16, borderTop: '0.5px solid var(--border)' }}>
-          <button type="button" onClick={goBack} style={btnSecondary}>
-            ← {step === 1 ? t('item_authoring.cancel') : t('item_authoring.back')}
-          </button>
-          {step < 4 ? (
-            <button type="button" onClick={goNext} disabled={!canNext || busy} style={btnPrimary(!canNext || busy)}>
-              {busy ? t('common.saving') : `${t('item_authoring.next')} →`}
-            </button>
-          ) : (
-            <button type="button" onClick={finish} style={btnPrimary(false)}>
-              ✓ {t('item_authoring.finish')}
-            </button>
-          )}
+          <p style={sectionTitle}>{t('item_authoring.measurements')}</p>
+          <MeasurementBaseGrid garmentTypeItemId={itemId} />
         </div>
+      )}
+
+      {/* Navegació */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28, paddingTop: 16, borderTop: '0.5px solid var(--border)' }}>
+        <button type="button" onClick={goBack} style={btnSecondary}>
+          ← {step === 1 ? t('item_authoring.cancel') : t('item_authoring.back')}
+        </button>
+        {step < 2 ? (
+          <button type="button" onClick={goNext} disabled={!canNext || busy} style={btnPrimary(!canNext || busy)}>
+            {busy ? t('common.saving') : `${t('item_authoring.next')} →`}
+          </button>
+        ) : (
+          <button type="button" onClick={finish} style={btnPrimary(false)}>
+            ✓ {t('item_authoring.finish')}
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
-const sectionTitle = {
-  fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--gold)',
-  letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 12px',
-}
-
-function Field({ label, style, children }) {
-  return (
-    <div style={{ marginBottom: 4, ...style }}>
-      <label style={{
-        fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)',
-        textTransform: 'uppercase', display: 'block', marginBottom: 6,
-      }}>{label}</label>
-      {children}
-    </div>
-  )
+const fieldLabel = {
+  fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)',
+  textTransform: 'uppercase', display: 'block', marginBottom: 6,
 }
