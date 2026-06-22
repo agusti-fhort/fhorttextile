@@ -361,19 +361,47 @@ class GarmentTypeItem(models.Model):
     # pom.SizeDefinition, igual que `garment_type` → pom.GarmentType (pom viu al schema del tenant).
     # on_delete=SET_NULL: pointer OPCIONAL i tou — esborrar una talla del catàleg NO bloqueja (PROTECT)
     # ni destrueix l'Item (CASCADE); només neteja el pointer (el camp ja és nullable).
-    # LLIURE de moment (no es constreny al run de cap sistema de talles): es CONSTRENYIRÀ a un run
-    # coherent quan existeixi el lligam Item→GradingRuleSet (avui inexistent; vegeu DIAGNOSI T1).
+    # Sprint Llibreria d'Items (A3) — porta TANCADA: el lligam Item→GradingRuleSet JA existeix
+    # (grading_rule_set, sota). base_size_definition es CONSTRENY al size_system d'aquell ruleset
+    # via clean() (no constraint de BD, cross-table fràgil). Validació amb skip si algun és NULL.
     base_size_definition = models.ForeignKey(
         'pom.SizeDefinition', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='base_for_items',
-        help_text="Talla base de la plantilla de l'Item (on s'expressen els valors base). Lliure "
-                  "ara; es constrenyirà al run quan existeixi Item→GradingRuleSet.")
+        help_text="Talla base de la plantilla de l'Item (on s'expressen els valors base). Es "
+                  "constreny al size_system del grading_rule_set (validat a clean()).")
+
+    # Sprint Llibreria d'Items (A3) — context de grading de l'Item: UN sol ruleset.
+    # FK MUTABLE (es pot canviar; les regles no s'apliquen fins desplegar-les al model) i de
+    # moment NULLABLE: els items-llavor existents queden a NULL fins que la pàgina (Fase B) els
+    # assigni ruleset; una 2a migració (post-Fase B) la farà NOT NULL quan tots en tinguin.
+    # on_delete=PROTECT: esborrar un ruleset referenciat per items ha de BLOQUEJAR (no esborrar
+    # items ni deixar-los orfes). Cross-app tasks→pom amb constraint REAL (pom viu al schema del
+    # tenant), igual que base_size_definition (P1).
+    grading_rule_set = models.ForeignKey(
+        'pom.GradingRuleSet', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='garment_type_items',
+        help_text="Context de grading de l'Item (un sol ruleset). Mutable; obligatori a la pàgina "
+                  "(Fase B). Constreny base_size_definition al seu size_system.")
 
     class Meta:
         ordering = ['garment_type', 'complexity_order', 'code']
         unique_together = [('garment_type', 'code')]
         verbose_name = 'Garment type item'
         verbose_name_plural = 'Garment type items'
+
+    def clean(self):
+        # A3 — coherència talla base ↔ sistema de talles del ruleset. SKIP si algun dels dos és
+        # NULL (els items-llavor amb tots dos a NULL han de poder desar-se). Es revalida sempre que
+        # es desa (p.ex. en canviar el ruleset mutable). No és constraint de BD (cross-table fràgil).
+        super().clean()
+        if self.base_size_definition_id and self.grading_rule_set_id:
+            if self.base_size_definition.size_system_id != self.grading_rule_set.size_system_id:
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    'base_size_definition': (
+                        "La talla base ha de pertànyer al mateix sistema de talles que el "
+                        "grading rule set de l'Item.")
+                })
 
     def __str__(self):
         return f'{self.garment_type_id}/{self.code}'
