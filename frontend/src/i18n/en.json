@@ -1284,6 +1284,7 @@
     "current": "current",
     "col_nomenclatura": "Nomenclature",
     "stage_measure": "Measure",
+    "select_stage": "Click to view its decision and note",
     "stage_live": "Active stage: editable",
     "stage_readonly": "Read-only",
     "ctx": {

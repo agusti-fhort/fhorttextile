@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { models, baseMeasurements, sizeChecks, sizeCheckLines } from '../../api/endpoints'
+import { models, baseMeasurements, sizeChecks } from '../../api/endpoints'
 
 const MONO = 'IBM Plex Mono, monospace'
 const TEXT_2 = 'var(--text-muted)'
@@ -69,55 +69,23 @@ function NomenclaturaCell({ baseMeasurementId, value, fallback, isKey, title, ed
   )
 }
 
-// Controls de l'estadi actiu (size check) per POM: Real · Decisió · Nota. Autosave per cel·la.
-function StageCells({ line, disabled }) {
+// Decisió + Nota de la columna d'estadi SELECCIONADA (consulta read-only; l'edició viu a la tasca).
+// `line` = la SizeCheckLine de l'estadi seleccionat per a aquest POM (o null si l'estadi seleccionat
+// no és un check amb dades carregades).
+function DecisioNotaCells({ line }) {
   const { t } = useTranslation()
-  const NOTA_DESCARTAT = t('sizecheck.note_discarded_default', 'Cenyir-se a les mesures originals')
-  const [valor, setValor] = useState(line?.valor_real ?? '')
-  const [decisio, setDecisio] = useState(line?.decisio ?? '')
-  const [nota, setNota] = useState(line?.nota ?? '')
-  const persistValor = useCallback((raw) => sizeCheckLines.update(line.id, { valor_real: raw === '' ? null : Number(raw) }), [line?.id])
-  const persistNota = useCallback((raw) => sizeCheckLines.update(line.id, { nota: raw }), [line?.id])
-  const [vState, saveValor] = useDebouncedSave(persistValor)
-  const [nState, saveNota] = useDebouncedSave(persistNota)
-
   if (!line) {
-    // POM sense estadi actiu (cap size check viu per a aquesta fila).
     return (<>
-      <td style={{ ...td, textAlign: 'right', color: TEXT_2 }}>—</td>
       <td style={{ ...td, textAlign: 'center', color: TEXT_2 }}>—</td>
-      <td style={td} />
+      <td style={{ ...td, color: TEXT_2 }}>—</td>
     </>)
   }
-
-  const onDecisio = (v) => {
-    const next = v || null
-    setDecisio(v)
-    sizeCheckLines.update(line.id, { decisio: next }).catch(() => setDecisio(decisio))
-    if (next === 'valor_descartat' && !nota) { setNota(NOTA_DESCARTAT); saveNota(NOTA_DESCARTAT) }
-    else if (next === 'tolerancia_acceptada' && nota === NOTA_DESCARTAT) { setNota(''); saveNota('') }
-  }
-
+  const dec = line.decisio === 'tolerancia_acceptada' ? t('sizecheck.decisio.accepted', 'Tolerància acceptada')
+    : line.decisio === 'valor_descartat' ? t('sizecheck.decisio.discarded', 'Valor descartat')
+      : '—'
   return (<>
-    <td style={{ ...td, textAlign: 'right', position: 'relative' }}>
-      <input type="number" step="0.1" value={valor} disabled={disabled}
-        onChange={e => { setValor(e.target.value); saveValor(e.target.value) }}
-        style={{ ...inputBase(disabled), width: 76, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }} />
-      <SaveDot state={vState} />
-    </td>
-    <td style={{ ...td, textAlign: 'center' }}>
-      <select value={decisio} disabled={disabled} onChange={e => onDecisio(e.target.value)} style={{ ...inputBase(disabled) }}>
-        <option value="">{t('sizecheck.decisio.none', '—')}</option>
-        <option value="tolerancia_acceptada">{t('sizecheck.decisio.accepted', 'Tolerància acceptada')}</option>
-        <option value="valor_descartat">{t('sizecheck.decisio.discarded', 'Valor descartat')}</option>
-      </select>
-    </td>
-    <td style={{ ...td, position: 'relative' }}>
-      <input type="text" value={nota} disabled={disabled} placeholder="…"
-        onChange={e => { setNota(e.target.value); saveNota(e.target.value) }}
-        style={{ ...inputBase(disabled), width: '100%' }} />
-      <SaveDot state={nState} />
-    </td>
+    <td style={{ ...td, textAlign: 'center', color: 'var(--text-main)' }}>{dec}</td>
+    <td style={{ ...td, color: TEXT_2, whiteSpace: 'normal' }}>{line.nota || '—'}</td>
   </>)
 }
 
@@ -132,6 +100,8 @@ export default function BaseStageTable({ model, editable = false }) {
   const [lineByPom, setLineByPom] = useState({})
   const [checkEditable, setCheckEditable] = useState(false)
   const [loading, setLoading] = useState(true)
+  // PEÇA C: estadi seleccionat per a Decisió/Nota (default: l'últim/vigent).
+  const [selectedIdx, setSelectedIdx] = useState(null)
 
   const ctxLabel = (ctx) => t(`basestage.ctx.${ctx}`, ctx)
 
@@ -167,6 +137,11 @@ export default function BaseStageTable({ model, editable = false }) {
 
   const stages = data.stages || []
   const lastIdx = stages.length - 1
+  // PEÇA C: columna d'estadi seleccionada (default = vigent). L'estadi de check amb dades
+  // carregades (lineByPom = el check més recent) és l'últim estadi amb context 'checked'.
+  const sel = selectedIdx == null ? lastIdx : selectedIdx
+  const checkIdx = stages.reduce((acc, s, i) => (s.context === 'checked' ? i : acc), -1)
+  const selLine = (pomId) => (sel === checkIdx ? lineByPom[pomId] : null)
 
   const deltaOf = (row) => {
     const seq = stages.map(s => (s.key in row.takes ? row.takes[s.key] : null))
@@ -197,10 +172,11 @@ export default function BaseStageTable({ model, editable = false }) {
               <th style={th}>{t('basestage.col_nomenclatura')}</th>
               <th style={{ ...th, textAlign: 'right', padding: '6px 6px' }}>{t('sizecheck.col_tolerance')}</th>
               {stages.map((s, i) => (
-                <th key={s.key} style={{
-                  ...th, textAlign: 'right',
-                  background: i === lastIdx ? '#fdf6ee' : undefined,
+                <th key={s.key} onClick={() => setSelectedIdx(i)} title={t('basestage.select_stage')} style={{
+                  ...th, textAlign: 'right', cursor: 'pointer',
+                  background: i === sel ? '#f3e8d0' : (i === lastIdx ? '#fdf6ee' : undefined),
                   color: i === lastIdx ? '#7a4a10' : TEXT_2,
+                  boxShadow: i === sel ? 'inset 0 -2px 0 var(--gold)' : undefined,
                 }}>
                   {i === 0 ? t('basestage.stage_measure') : ctxLabel(s.context)}<br />
                   <span style={{ fontWeight: 400, fontSize: 'var(--fs-caption)' }}>
@@ -209,7 +185,6 @@ export default function BaseStageTable({ model, editable = false }) {
                 </th>
               ))}
               <th style={{ ...th, textAlign: 'right', padding: '6px 6px' }}>Δ</th>
-              <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_real')}</th>
               <th style={{ ...th, textAlign: 'center' }}>{t('sizecheck.col_decision')}</th>
               <th style={th}>{t('sizecheck.col_note')}</th>
             </tr>
@@ -231,7 +206,7 @@ export default function BaseStageTable({ model, editable = false }) {
                   {stages.map((s, i) => (
                     <td key={s.key} style={{
                       ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
-                      background: i === lastIdx ? '#fefaf5' : undefined,
+                      background: i === sel ? '#f7eeda' : (i === lastIdx ? '#fefaf5' : undefined),
                       color: i === lastIdx ? 'var(--text-main)' : TEXT_2,
                     }}>
                       {s.key in row.takes ? row.takes[s.key] : '—'}
@@ -244,7 +219,7 @@ export default function BaseStageTable({ model, editable = false }) {
                   }}>
                     {d == null ? '—' : (d > 0 ? `+${d}` : `${d}`)}
                   </td>
-                  <StageCells line={lineByPom[row.pom_id]} disabled={!checkEditable} />
+                  <DecisioNotaCells line={selLine(row.pom_id)} />
                 </tr>
               )
             })}

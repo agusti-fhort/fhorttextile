@@ -1284,6 +1284,7 @@
     "current": "vigent",
     "col_nomenclatura": "Nomenclatura",
     "stage_measure": "Mesura",
+    "select_stage": "Clica per veure'n la decisió i la nota",
     "stage_live": "Estadi actiu: editable",
     "stage_readonly": "Només lectura",
     "ctx": {

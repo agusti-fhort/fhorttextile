@@ -1284,6 +1284,7 @@
     "current": "vigente",
     "col_nomenclatura": "Nomenclatura",
     "stage_measure": "Medida",
+    "select_stage": "Clica para ver su decisión y nota",
     "stage_live": "Estadio activo: editable",
     "stage_readonly": "Solo lectura",
     "ctx": {
