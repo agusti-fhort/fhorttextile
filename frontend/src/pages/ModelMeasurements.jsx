@@ -105,56 +105,64 @@ export default function ModelMeasurements() {
     setSeedBusy(true)
     try {
       await fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders })
-      localStorage.setItem(`seed-decided-${id}`, '1')
       setSeedOffer(false)
-      await reloadTable('manual')
+      await reloadTable('manual')   // la taula deixa de ser verge → no es repreguntarà
     } catch {
       setError(t('model_sheet.err_connection'))
     } finally {
       setSeedBusy(false)
     }
   }
-  // Cancel·lar: no sembra (el tècnic omple des de zero). Es recorda per no repreguntar.
+  // Cancel·lar: no sembra (el tècnic omple des de zero). NO es persisteix el "no": la decisió
+  // ferma emergeix de l'acció (escriure un valor) — mentre la taula segueixi verge, es torna a
+  // oferir a la propera entrada (acceptat: no s'ha invertit feina).
   const cancelSeed = () => {
-    localStorage.setItem(`seed-decided-${id}`, '1')
     setSeedOffer(false)
     setMode('selector')
   }
 
   // Primera entrada a Mesures: en comptes de materialitzar SILENCIOSAMENT, OFERIM sembrar amb les
-  // mides estàndard de l'item (decisió conscient, 4a font). Només si l'item té valors i la taula
-  // és buida i no s'ha decidit abans. Sense valors d'item → membresia silenciosa (com abans).
+  // mides estàndard de l'item (decisió conscient, 4a font). La memòria de la decisió DERIVA de
+  // l'estat del model (sobirania al servidor, no localStorage): s'ofereix només si la taula és
+  // VERGE (cap BaseMeasurement amb valor, de cap origen — buida o TEMPLATE buit) i l'item té valors.
   useEffect(() => {
     if (!id || !model) return
     if (!model.garment_type_item) {
       setNotice(t('model_measurements.notice_no_item'))
       reloadTable(); return
     }
-    if (localStorage.getItem(`seed-decided-${id}`)) { reloadTable(); return }
 
     fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
       .then(r => r.json())
       .then(async d => {
         refreshTableMeta(d)
         if (d.tancat) { if (d.rows) setTaulaRows(d.rows); setMode('resultat'); return }
-        if (d.rows && d.rows.length > 0) { setTaulaRows(d.rows); setMode('selector'); return }
-        // Taula buida: ¿l'item té valors base per oferir?
+        const rows = d.rows || []
+        if (rows.length) setTaulaRows(rows)
+        // VERGE = cap fila amb valor (de cap origen). TEMPLATE buit / sense files = verge.
+        const verge = !rows.some(r => r.base_value_cm != null)
+        if (!verge) { setMode('selector'); return }   // ja té valors → mai oferir
+
+        // Taula verge: ¿l'item té valors base per oferir?
         let hasValues = false
         try {
           const r2 = await fetch(
             `${API}/api/v1/item-base-measurements/?garment_type_item=${model.garment_type_item}&page_size=500`,
             { headers: authHeaders })
           const dd = await r2.json()
-          const rows = dd.results || (Array.isArray(dd) ? dd : [])
-          hasValues = rows.some(x => x.base_value_cm != null)
-        } catch { /* manté hasValues=false: sense oferta, membresia silenciosa */ }
+          const ibm = dd.results || (Array.isArray(dd) ? dd : [])
+          hasValues = ibm.some(x => x.base_value_cm != null)
+        } catch { /* sense oferta; membresia silenciosa si cal */ }
+
         if (hasValues) {
           setMode('selector'); setSeedOffer(true)   // oferta conscient (modal sobre el selector)
-        } else {
-          // Sense valors d'item: només membresia (comportament previ), marcada com a decidida.
+        } else if (rows.length === 0) {
+          // Sense valors d'item i sense membresia encara: materialitza membresia (com abans).
           fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders })
-            .then(() => { localStorage.setItem(`seed-decided-${id}`, '1'); reloadTable() })
+            .then(() => reloadTable())
             .catch(() => reloadTable())
+        } else {
+          setMode('selector')   // membresia ja materialitzada, item sense valors → res a oferir
         }
       })
       .catch(() => setMode('selector'))
