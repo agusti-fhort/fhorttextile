@@ -62,12 +62,30 @@ class ProductionSerializer(serializers.ModelSerializer):
 
 
 class GarmentTypeItemSerializer(serializers.ModelSerializer):
+    # Sprint Llibreria d'Items (B3b): camps de completesa READ-ONLY per a la graella de cards de
+    # Garment Types (nom del ruleset, etiqueta de la talla base, compte de POMs). Additius; no
+    # afecten el write path (la pàgina d'autoria escriu via els FK grading_rule_set/base_size_definition).
+    grading_rule_set_nom = serializers.SerializerMethodField()
+    base_size_label = serializers.SerializerMethodField()
+    poms_count = serializers.SerializerMethodField()
+
     class Meta:
         model = GarmentTypeItem
         # Sprint Llibreria d'Items (B3a): exposa el context de grading de l'Item (FK ruleset) i
         # la talla base, escrivibles per la pàgina d'autoria (Fase B). Tots dos nullable.
         fields = ['id', 'garment_type', 'code', 'name', 'complexity_order', 'active',
-                  'grading_rule_set', 'base_size_definition']
+                  'grading_rule_set', 'base_size_definition',
+                  'grading_rule_set_nom', 'base_size_label', 'poms_count']
+
+    def get_grading_rule_set_nom(self, obj):
+        return obj.grading_rule_set.nom if obj.grading_rule_set_id else None
+
+    def get_base_size_label(self, obj):
+        return obj.base_size_definition.etiqueta if obj.base_size_definition_id else None
+
+    def get_poms_count(self, obj):
+        # Pertinença POM de l'item (GarmentPOMMap.related_name='pom_maps').
+        return obj.pom_maps.count()
 
     def validate(self, attrs):
         # B3a — DRF no crida Model.clean() sol; l'invoquem aquí perquè el constrenyiment d'A3

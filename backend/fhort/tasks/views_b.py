@@ -654,7 +654,9 @@ class _Configure(HasCapability):
 
 
 class GarmentTypeItemViewSet(viewsets.ModelViewSet):
-    queryset = GarmentTypeItem.objects.select_related('garment_type').all()
+    # B3b: select_related dels FK de completesa (ruleset/talla base) per evitar N+1 a la graella.
+    queryset = GarmentTypeItem.objects.select_related(
+        'garment_type', 'grading_rule_set', 'base_size_definition').all()
     serializer_class = GarmentTypeItemSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['garment_type', 'active']
