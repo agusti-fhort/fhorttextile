@@ -9,7 +9,7 @@ import MeasureTable from './MeasureTable'
 // escriu un ModelGradingOverride i re-propaga al servidor (PEÇA 1); la talla base és de lectura
 // (s'edita com a mesura base). El règim per POM es canvia amb models.setPomRegim (ja independent
 // de la sessió). S'alimenta de taula-mesures (GradingVersion vigent, criteri PEÇA 0).
-export default function PropagatedEditor({ modelId, onClose, inline = false }) {
+export default function PropagatedEditor({ modelId, onClose, inline = false, readOnly = false }) {
   const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -111,7 +111,7 @@ export default function PropagatedEditor({ modelId, onClose, inline = false }) {
             {t('model_measurements.propagated_title')}
           </h2>
           <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-            {t('model_measurements.propagated_hint')}
+            {readOnly ? t('model_measurements.propagated_hint_ro') : t('model_measurements.propagated_hint')}
           </p>
         </div>
         {!inline && (
@@ -137,11 +137,12 @@ export default function PropagatedEditor({ modelId, onClose, inline = false }) {
             reals={reals}
             editedIds={editedIds}
             focusedIdRef={focusedIdRef}
+            readOnly={readOnly}
             onValue={onValue}
             onAnchor={onAnchor}
             onPropagated={() => {}}
-            onRegimChange={onRegimChange}
-            persistCell={persistCell}
+            onRegimChange={readOnly ? () => {} : onRegimChange}
+            persistCell={readOnly ? null : persistCell}
             cellReadOnly={(row, s) => s === base}
           />
         )}

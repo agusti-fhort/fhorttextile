@@ -1279,6 +1279,8 @@
     "title": "Base table · stages",
     "empty": "No base measurements yet.",
     "current": "current",
+    "col_nomenclatura": "Nomenclature",
+    "stage_measure": "Measure",
     "stage_live": "Active stage: editable",
     "stage_readonly": "Read-only",
     "ctx": {
@@ -1368,6 +1370,7 @@
     "propagate_grading": "📐 Propagate to sizes",
     "propagated_title": "Propagated grading editor",
     "propagated_hint": "Edit a size value (not the base) to set a break; it re-propagates automatically. Regime changes per POM.",
+    "propagated_hint_ro": "Read-only view of the current grading. Editing opens from the corresponding task.",
     "propagated_close": "Close",
     "propagated_empty": "No base measurements to propagate yet.",
     "propagated_load_err": "Could not load the propagated table.",

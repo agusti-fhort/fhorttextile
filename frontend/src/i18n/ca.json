@@ -1279,6 +1279,8 @@
     "title": "Taula base · estadis",
     "empty": "Encara no hi ha mesures base.",
     "current": "vigent",
+    "col_nomenclatura": "Nomenclatura",
+    "stage_measure": "Mesura",
     "stage_live": "Estadi actiu: editable",
     "stage_readonly": "Només lectura",
     "ctx": {
@@ -1368,6 +1370,7 @@
     "propagate_grading": "📐 Propagar a talles",
     "propagated_title": "Editor de grading propagat",
     "propagated_hint": "Edita el valor d'una talla (no la base) per fixar un trencament; es re-propaga automàticament. El règim canvia per POM.",
+    "propagated_hint_ro": "Consulta de l'escalat vigent. L'edició s'obre des de la tasca corresponent.",
     "propagated_close": "Tancar",
     "propagated_empty": "Encara no hi ha mesures base per propagar.",
     "propagated_load_err": "No s'ha pogut carregar la taula propagada.",

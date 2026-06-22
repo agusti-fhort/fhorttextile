@@ -213,8 +213,8 @@ export default function ModelSheet({ defaultTab = 'Dashboard', sizeCheckEditable
             <BaseStageTable model={model} editable={sizeCheckEditable} />
           </div>
         )}
-        {/* Escalat (PEÇA 5): editor propagat del model (totes les talles, règim, breaks) — PEÇA 2. */}
-        {activeTab === 'Escalat' && <PropagatedEditor modelId={parseInt(id)} inline />}
+        {/* Escalat: CONSULTA read-only de la taula propagada (edició lligada a tasca). */}
+        {activeTab === 'Escalat' && <PropagatedEditor modelId={parseInt(id)} inline readOnly />}
         {/* Size Check: fora del menú visible; només accessible via la ruta /size-check (tasca Kanban). */}
         {activeTab === 'Size Check' && <SizeCheckTab model={model} onFeedback={setFeedback} editable={sizeCheckEditable} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}

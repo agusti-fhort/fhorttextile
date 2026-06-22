@@ -1279,6 +1279,8 @@
     "title": "Tabla base · estadios",
     "empty": "Aún no hay medidas base.",
     "current": "vigente",
+    "col_nomenclatura": "Nomenclatura",
+    "stage_measure": "Medida",
     "stage_live": "Estadio activo: editable",
     "stage_readonly": "Solo lectura",
     "ctx": {
@@ -1368,6 +1370,7 @@
     "propagate_grading": "📐 Propagar a tallas",
     "propagated_title": "Editor de grading propagado",
     "propagated_hint": "Edita el valor de una talla (no la base) para fijar una rotura; se re-propaga automáticamente. El régimen cambia por POM.",
+    "propagated_hint_ro": "Consulta del escalado vigente. La edición se abre desde la tarea correspondiente.",
     "propagated_close": "Cerrar",
     "propagated_empty": "Aún no hay medidas base para propagar.",
     "propagated_load_err": "No se ha podido cargar la tabla propagada.",

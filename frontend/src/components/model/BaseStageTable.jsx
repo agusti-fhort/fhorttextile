@@ -42,16 +42,28 @@ function SaveDot({ state }) {
 }
 
 // Cel·la editable de nom_fitxa (per-POM, compartida per talles). Escriu NOMÉS BaseMeasurement.
-function NomFitxaCell({ baseMeasurementId, value }) {
+// Nomenclatura (per-POM, compartida per talles). Si no hi ha nom_fitxa, el codi POM importat
+// ÉS la nomenclatura (una sola columna). Edició LLIGADA A TASCA: editable només quan editable=true
+// (vista de consulta = read-only); escriu NOMÉS BaseMeasurement.
+function NomenclaturaCell({ baseMeasurementId, value, fallback, isKey, title, editable }) {
   const [val, setVal] = useState(value ?? '')
   useEffect(() => { setVal(value ?? '') }, [value])
   const persist = useCallback((raw) => baseMeasurements.update(baseMeasurementId, { nom_fitxa: raw }), [baseMeasurementId])
   const [state, save] = useDebouncedSave(persist)
+  const star = isKey ? <span title="KEY" style={{ color: 'var(--gold)' }}> ★</span> : null
+  if (!editable) {
+    return (
+      <td style={{ ...td, color: 'var(--gold)', fontWeight: 500, whiteSpace: 'nowrap' }} title={title}>
+        {val || fallback || '—'}{star}
+      </td>
+    )
+  }
   return (
-    <td style={{ ...td, position: 'relative' }}>
-      <input type="text" value={val} placeholder="…"
+    <td style={{ ...td, position: 'relative', whiteSpace: 'nowrap' }} title={title}>
+      <input type="text" value={val} placeholder={fallback || '…'}
         onChange={e => { setVal(e.target.value); save(e.target.value) }}
-        style={{ ...inputBase(false), width: 130, color: 'var(--gold)', fontWeight: 500 }} />
+        style={{ ...inputBase(false), width: 96, color: 'var(--gold)', fontWeight: 500 }} />
+      {star}
       <SaveDot state={state} />
     </td>
   )
@@ -140,7 +152,9 @@ export default function BaseStageTable({ model, editable = false }) {
       const map = {}
       for (const l of (check?.lines || [])) map[l.pom] = l
       setLineByPom(map)
-      setCheckEditable(editable || (check?.estat === 'Pendent'))
+      // Principi rector: edició LLIGADA A TASCA. La pestanya és CONSULTA read-only; només
+      // és editable quan s'arriba des d'una tasca (editable=true via ruta de treball).
+      setCheckEditable(editable)
     }).finally(() => setLoading(false))
   }, [model.id, editable])
 
@@ -179,24 +193,22 @@ export default function BaseStageTable({ model, editable = false }) {
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead>
             <tr>
-              <th style={th}>#</th>
-              <th style={th}>{t('editable_table.col.sheet_name')}</th>
-              <th style={th}>POM</th>
-              <th style={th}>{t('sizecheck.col_measure')}</th>
-              <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_tolerance')}</th>
+              <th style={{ ...th, width: 26, padding: '6px 4px' }}>#</th>
+              <th style={th}>{t('basestage.col_nomenclatura')}</th>
+              <th style={{ ...th, textAlign: 'right', padding: '6px 6px' }}>{t('sizecheck.col_tolerance')}</th>
               {stages.map((s, i) => (
                 <th key={s.key} style={{
                   ...th, textAlign: 'right',
                   background: i === lastIdx ? '#fdf6ee' : undefined,
                   color: i === lastIdx ? '#7a4a10' : TEXT_2,
                 }}>
-                  {ctxLabel(s.context)}<br />
+                  {i === 0 ? t('basestage.stage_measure') : ctxLabel(s.context)}<br />
                   <span style={{ fontWeight: 400, fontSize: 'var(--fs-caption)' }}>
-                    {fmtStageDate(s.at)}{i === lastIdx ? ` · ${t('basestage.current')}` : ''}
+                    {[i === 0 ? null : fmtStageDate(s.at), i === lastIdx ? t('basestage.current') : null].filter(Boolean).join(' · ') || ' '}
                   </span>
                 </th>
               ))}
-              <th style={{ ...th, textAlign: 'right' }}>Δ</th>
+              <th style={{ ...th, textAlign: 'right', padding: '6px 6px' }}>Δ</th>
               <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_real')}</th>
               <th style={{ ...th, textAlign: 'center' }}>{t('sizecheck.col_decision')}</th>
               <th style={th}>{t('sizecheck.col_note')}</th>
@@ -207,13 +219,15 @@ export default function BaseStageTable({ model, editable = false }) {
               const { d, within } = deltaOf(row)
               return (
                 <tr key={row.pom_id}>
-                  <td style={{ ...td, color: TEXT_2 }}>{idx + 1}</td>
-                  <NomFitxaCell baseMeasurementId={row.base_measurement_id} value={row.nom_fitxa} />
-                  <td style={{ ...td, color: 'var(--gold)', fontWeight: row.is_key ? 700 : 400 }}>
-                    {row.pom_code}{row.is_key ? ' ★' : ''}
-                  </td>
-                  <td style={{ ...td, color: TEXT_2, whiteSpace: 'normal' }}>{row.nom_ca || row.nom_en}</td>
-                  <td style={{ ...td, textAlign: 'right', color: TEXT_2 }}>{fmtTol(row.tol_minus, row.tol_plus)}</td>
+                  <td style={{ ...td, color: TEXT_2, width: 26, padding: '4px 4px' }}>{idx + 1}</td>
+                  <NomenclaturaCell
+                    baseMeasurementId={row.base_measurement_id}
+                    value={row.nom_fitxa}
+                    fallback={row.pom_code}
+                    isKey={row.is_key}
+                    title={row.nom_ca || row.nom_en}
+                    editable={checkEditable} />
+                  <td style={{ ...td, textAlign: 'right', color: TEXT_2, padding: '4px 6px' }}>{fmtTol(row.tol_minus, row.tol_plus)}</td>
                   {stages.map((s, i) => (
                     <td key={s.key} style={{
                       ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
