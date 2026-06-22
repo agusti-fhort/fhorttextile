@@ -16,7 +16,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import GradedSpec, GradingVersion, SizeFitting
+from .models import GradedSpec, SizeFitting
 
 
 class GradedSpecTableView(APIView):
@@ -25,10 +25,13 @@ class GradedSpecTableView(APIView):
     def get(self, request, sf_id):
         sf = get_object_or_404(SizeFitting, pk=sf_id)
 
-        gv = GradingVersion.objects.filter(size_fitting=sf, is_active=True).first()
+        # Versió vigent: criteri ÚNIC compartit amb taula-mesures (is_active prioritari,
+        # fallback a la més recent). Evita divergència is_active vs -data.
+        from fhort.fitting.services import vigent_grading_version
+        gv = vigent_grading_version(sf)
         if gv is None:
             return Response(
-                {'detail': "Aquest SizeFitting no té cap GradingVersion activa."},
+                {'detail': "Aquest SizeFitting no té cap GradingVersion."},
                 status=404,
             )
 

@@ -539,6 +539,29 @@ def _active_grading_version(sf):
     )
 
 
+def vigent_grading_version(sf):
+    """GradingVersion VIGENT d'un SizeFitting per a SUPERFÍCIES DE LECTURA
+    (graded-table, taula-mesures, resposta de generar-grading): criteri ÚNIC compartit
+    perquè tots els lectors coincideixin en "quina versió mana".
+
+    is_active prioritari (via _active_grading_version, que desempata per -version_number);
+    si cap versió és activa (anomalia de dades), fallback a la més recent
+    (-version_number, després -data). NO es muta _active_grading_version perquè
+    seal_model_grading / close_piece_fitting / generate_grading_view n'exigeixen
+    estrictament l'activa.
+    """
+    from fhort.fitting.models import GradingVersion
+    gv = _active_grading_version(sf)
+    if gv is None:
+        gv = (
+            GradingVersion.objects
+            .filter(size_fitting=sf)
+            .order_by('-version_number', '-data')
+            .first()
+        )
+    return gv
+
+
 def seal_model_grading(model, *, user_profile_id=None, now=None):
     """Segella (aprovada=True) la GradingVersion activa del SizeFitting de treball del model.
 

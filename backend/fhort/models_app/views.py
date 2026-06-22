@@ -605,12 +605,15 @@ def measurements_table_view(request, model_id):
 
     graded_by_pom = {}
     try:
-        from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
-        sf = SizeFitting.objects.filter(model=model).first()
+        from fhort.fitting.models import GradedSpec
+        from fhort.fitting.services import (
+            _resolve_working_size_fitting, vigent_grading_version,
+        )
+        # Versió vigent: criteri ÚNIC compartit amb graded-table (SizeFitting de treball
+        # + is_active prioritari, fallback a la més recent). Abans: first()/-data divergent.
+        sf = _resolve_working_size_fitting(model)
         if sf:
-            gv = GradingVersion.objects.filter(
-                size_fitting=sf
-            ).order_by('-data').first()
+            gv = vigent_grading_version(sf)
             if gv:
                 for spec in GradedSpec.objects.filter(grading_version=gv):
                     pom_id = spec.pom_id
@@ -1085,7 +1088,7 @@ def generate_grading_view(request, model_id):
     if not model.size_run_model or not model.base_size_label:
         return Response({'error': 'Cal configurar talles i talla base'}, status=400)
 
-    from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
+    from fhort.fitting.models import SizeFitting, GradedSpec
     from fhort.pom.services import generate_graded_specs
 
     base_measurements_qs = BaseMeasurement.objects.filter(model=model, is_active=True)
@@ -1122,7 +1125,9 @@ def generate_grading_view(request, model_id):
 
     # Build a measurements-table-style response
     size_run = [s.strip() for s in model.size_run_model.split('·') if s.strip()]
-    gv = GradingVersion.objects.filter(size_fitting=sf).order_by('-data').first()
+    # Versió vigent: mateix criteri únic que els lectors graded-table/taula-mesures.
+    from fhort.fitting.services import vigent_grading_version
+    gv = vigent_grading_version(sf)
 
     rows = []
     for bm in (
