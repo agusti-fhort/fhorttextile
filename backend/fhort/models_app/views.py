@@ -626,10 +626,23 @@ def measurements_table_view(request, model_id):
     except Exception:
         pass
 
+    # Règim per POM (logica/increments/break) per a l'editor propagat: resolutor canònic
+    # (ModelGradingRule resident → fallback GradingRule del rule_set), batched una sola vegada.
+    rules_by_pom = {}
+    try:
+        from fhort.pom.services import _load_grading_rules
+        rules_by_pom = _load_grading_rules(model)
+    except Exception:
+        rules_by_pom = {}
+
+    def _flt(v):
+        return float(v) if v is not None else None
+
     rows = []
     for bm in base_measurements:
         pom = bm.pom
         pg = getattr(pom, 'pom_global', None)
+        rule = rules_by_pom.get(pom.id)
         rows.append({
             'id': bm.id,
             'ordre': bm.ordre,
@@ -644,6 +657,11 @@ def measurements_table_view(request, model_id):
             'origen': bm.origen,
             'notes': bm.notes or '',
             'graded': graded_by_pom.get(pom.id, {}),
+            # Règim (additiu; consumidors antics ignoren camps desconeguts).
+            'logica': getattr(rule, 'logica', None) if rule else None,
+            'increment_base': _flt(getattr(rule, 'increment_base', None)) if rule else None,
+            'increment_break': _flt(getattr(rule, 'increment_break', None)) if rule else None,
+            'talla_break_label': getattr(rule, 'talla_break_label', None) if rule else None,
         })
 
     base_size = model.base_size_label

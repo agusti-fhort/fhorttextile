@@ -1347,7 +1347,14 @@
     "continue_fabric": "Continuar → Teixit",
     "table_title": "Taula de mesures i grading",
     "edit_measures": "✏ Editar mesures",
-    "base_prefix": "Base:"
+    "base_prefix": "Base:",
+    "propagate_grading": "📐 Propagar a talles",
+    "propagated_title": "Editor de grading propagat",
+    "propagated_hint": "Edita el valor d'una talla (no la base) per fixar un trencament; es re-propaga automàticament. El règim canvia per POM.",
+    "propagated_close": "Tancar",
+    "propagated_empty": "Encara no hi ha mesures base per propagar.",
+    "propagated_load_err": "No s'ha pogut carregar la taula propagada.",
+    "regim_err": "No s'ha pogut canviar el règim."
   },
 
   "model_fabric": {

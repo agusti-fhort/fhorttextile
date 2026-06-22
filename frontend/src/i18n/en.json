@@ -1347,7 +1347,14 @@
     "continue_fabric": "Continue → Fabric",
     "table_title": "Measurements and grading table",
     "edit_measures": "✏ Edit measurements",
-    "base_prefix": "Base:"
+    "base_prefix": "Base:",
+    "propagate_grading": "📐 Propagate to sizes",
+    "propagated_title": "Propagated grading editor",
+    "propagated_hint": "Edit a size value (not the base) to set a break; it re-propagates automatically. Regime changes per POM.",
+    "propagated_close": "Close",
+    "propagated_empty": "No base measurements to propagate yet.",
+    "propagated_load_err": "Could not load the propagated table.",
+    "regim_err": "Could not change the regime."
   },
 
   "model_fabric": {

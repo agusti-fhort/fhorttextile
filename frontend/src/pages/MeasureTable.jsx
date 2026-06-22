@@ -35,19 +35,21 @@ const isModified = (value, baseValue) => value !== '' && value != null && baseVa
 // Stepper natiu (fletxes); amplada suficient per "104,75" + fletxes. Sense nota per cel·la
 // (el comentari és global del fitting, viu a Observacions).
 // Els hooks d'autosave viuen NOMÉS aquí → en lectura no es munten (es renderitza ReadOnlyCell).
-function EditableCell({ line, baseSize, baseValue, value, edited, onValue, onAnchor, onPropagated, focusRef }) {
-  // Persist segons règim del POM (ve a la línia): STEP → PATCH pur, només aquesta cel·la.
-  // LINEAR/canònic → propaga el delta i repinta les germanes amb el valor_real propagat.
+function EditableCell({ line, row, sizeLabel, baseSize, baseValue, value, edited, onValue, onAnchor, onPropagated, persistCell, focusRef }) {
+  // Persist: mode SESSIÓ (per defecte) escriu PieceFittingLine; mode MODEL (persistCell injectat)
+  // escriu l'override del model i re-propaga al servidor. Sense persistCell el comportament és
+  // idèntic al de sessió (FittingDetail intacte, byte-compatible).
   const lineId = line?.id
-  const isStep = line?.logica === 'STEP'
+  const isStep = (row?.logica ?? line?.logica) === 'STEP'
   const persist = useCallback((raw) => {
     const v = raw === '' ? null : Number(raw)
+    if (persistCell) return persistCell({ row, sizeLabel, line, raw })
     if (isStep) return pieceFittingLines.update(lineId, { valor_real: v })
     return pieceFittingLines.propagar(lineId, v).then(res => {
       onPropagated(res.data?.linies || [])
       return res
     })
-  }, [lineId, isStep, onPropagated])
+  }, [lineId, isStep, onPropagated, persistCell, row, sizeLabel, line])
   const [realState, saveReal] = useDebouncedSave(persist)
 
   const modified = isModified(value, baseValue)
@@ -89,12 +91,12 @@ function ReadOnlyCell({ baseSize, baseValue, value }) {
 
 // Selector prim de cel·la de fit actual: buida si no hi ha línia; lectura o edició segons readOnly.
 // Com que la tria es fa aquí, els hooks d'EditableCell només es munten en mode edició.
-function CurrentFitCell({ readOnly, line, baseSize, baseValue, value, edited, onValue, onAnchor, onPropagated, focusRef }) {
+function CurrentFitCell({ readOnly, line, row, sizeLabel, baseSize, baseValue, value, edited, onValue, onAnchor, onPropagated, persistCell, focusRef }) {
   if (!line) return <td style={cellTd(baseSize, false, baseSize)} />
   return readOnly
     ? <ReadOnlyCell baseSize={baseSize} baseValue={baseValue} value={value} />
-    : <EditableCell line={line} baseSize={baseSize} baseValue={baseValue} value={value} edited={edited}
-        onValue={onValue} onAnchor={onAnchor} onPropagated={onPropagated} focusRef={focusRef} />
+    : <EditableCell line={line} row={row} sizeLabel={sizeLabel} baseSize={baseSize} baseValue={baseValue} value={value} edited={edited}
+        onValue={onValue} onAnchor={onAnchor} onPropagated={onPropagated} persistCell={persistCell} focusRef={focusRef} />
 }
 
 // Graella matricial editable d'un fitting (files = POM, columnes = talles × versions + fit actual).
@@ -103,6 +105,10 @@ export default function MeasureTable({
   pomRows, sizeLabels, baseLabel, versionNumbers,
   reals, editedIds, focusedIdRef = null, readOnly = false,
   onValue, onAnchor, onPropagated, onRegimChange,
+  // Mode MODEL (opcionals): persistCell injecta l'escriptura per talla (override + re-propaga);
+  // cellReadOnly(row, size) força lectura en cel·les concretes (p.ex. la talla base). Sense
+  // aquests props el component es comporta exactament com en mode sessió.
+  persistCell = null, cellReadOnly = null,
 }) {
   const { t } = useTranslation()
 
@@ -222,11 +228,12 @@ export default function MeasureTable({
                     value={evoMap.has(vn) ? evoMap.get(vn) : null}
                     isBase={idx === 0} baseSize={base} groupStart={idx === 0} />
                 ))
+                const cellRO = readOnly || (cellReadOnly ? cellReadOnly(row, s) : false)
                 cells.push(
-                  <CurrentFitCell key={`${s}-cur`} readOnly={readOnly} line={line} baseSize={base} baseValue={baseValue}
+                  <CurrentFitCell key={`${s}-cur`} readOnly={cellRO} line={line} row={row} sizeLabel={s} baseSize={base} baseValue={baseValue}
                     value={line ? reals[line.id] ?? '' : ''}
                     edited={line ? editedIds.has(line.id) : false}
-                    onValue={onValue} onAnchor={onAnchor} onPropagated={onPropagated} focusRef={focusedIdRef} />
+                    onValue={onValue} onAnchor={onAnchor} onPropagated={onPropagated} persistCell={persistCell} focusRef={focusedIdRef} />
                 )
                 return cells
               })}

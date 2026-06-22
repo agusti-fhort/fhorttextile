@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import EditableTable from '../components/EditableTable/EditableTable'
 import ImportWizard from '../components/ImportWizard/ImportWizard'
 import Modal from '../components/ui/Modal'
+import PropagatedEditor from './PropagatedEditor'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -38,6 +39,8 @@ export default function ModelMeasurements() {
   // B5 — oferta conscient de sembra (4a font): modal a la primera entrada si l'item té valors.
   const [seedOffer, setSeedOffer] = useState(false)
   const [seedBusy, setSeedBusy] = useState(false)
+  // Editor propagat (totes les talles, règim, breaks) en mode edició — PEÇA 2.
+  const [showPropagated, setShowPropagated] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -203,6 +206,20 @@ export default function ModelMeasurements() {
         </Modal>
       )}
 
+      {showPropagated && (
+        <PropagatedEditor
+          modelId={parseInt(id)}
+          onClose={() => {
+            setShowPropagated(false)
+            // Reflectir els overrides re-propagats a la taula de resultat.
+            fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
+              .then(r => r.json())
+              .then(d => { setTaulaRows(d.rows || []); refreshTableMeta(d) })
+              .catch(() => {})
+          }}
+        />
+      )}
+
       {mode === 'loading' && !error && (
         <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
           {t('model_sheet.loading')}
@@ -330,6 +347,16 @@ export default function ModelMeasurements() {
                     {generatingGrading ? t('model_measurements.generating') : t('model_measurements.generate_grading')}
                   </button>
                 )}
+                {model?.grading_rule_set && (
+                  <button type="button" onClick={() => setShowPropagated(true)}
+                    style={{
+                      padding: '8px 16px', border: '0.5px solid var(--gold)',
+                      borderRadius: 6, background: 'transparent',
+                      color: 'var(--gold)', fontSize: 'var(--fs-body)', cursor: 'pointer',
+                    }}>
+                    {t('model_measurements.propagate_grading')}
+                  </button>
+                )}
                 <button type="button" onClick={() => navigate(`/models/${id}/teixit`)}
                   style={{
                     padding: '8px 20px', background: 'var(--gold)', color: 'var(--white)',
@@ -400,6 +427,16 @@ export default function ModelMeasurements() {
                     color: 'var(--gold)', fontSize: 'var(--fs-body)', cursor: 'pointer',
                   }}>
                   {generatingGrading ? t('model_measurements.generating') : t('model_measurements.generate_grading')}
+                </button>
+              )}
+              {model?.grading_rule_set && (
+                <button type="button" onClick={() => setShowPropagated(true)}
+                  style={{
+                    padding: '8px 16px', border: '0.5px solid var(--gold)',
+                    borderRadius: 6, background: 'transparent',
+                    color: 'var(--gold)', fontSize: 'var(--fs-body)', cursor: 'pointer',
+                  }}>
+                  {t('model_measurements.propagate_grading')}
                 </button>
               )}
             </div>
