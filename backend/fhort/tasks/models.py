@@ -356,6 +356,19 @@ class GarmentTypeItem(models.Model):
                          help_text="Ordre de complexitat creixent dins la família")
     active = models.BooleanField(default=True)
 
+    # Sprint Mesures Base per Item (P1) — talla base de la plantilla de l'Item: la talla a la qual
+    # s'expressen els valors base d'ItemBaseMeasurement (P2). FK NORMAL (constraint real) cap a
+    # pom.SizeDefinition, igual que `garment_type` → pom.GarmentType (pom viu al schema del tenant).
+    # on_delete=SET_NULL: pointer OPCIONAL i tou — esborrar una talla del catàleg NO bloqueja (PROTECT)
+    # ni destrueix l'Item (CASCADE); només neteja el pointer (el camp ja és nullable).
+    # LLIURE de moment (no es constreny al run de cap sistema de talles): es CONSTRENYIRÀ a un run
+    # coherent quan existeixi el lligam Item→GradingRuleSet (avui inexistent; vegeu DIAGNOSI T1).
+    base_size_definition = models.ForeignKey(
+        'pom.SizeDefinition', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='base_for_items',
+        help_text="Talla base de la plantilla de l'Item (on s'expressen els valors base). Lliure "
+                  "ara; es constrenyirà al run quan existeixi Item→GradingRuleSet.")
+
     class Meta:
         ordering = ['garment_type', 'complexity_order', 'code']
         unique_together = [('garment_type', 'code')]
