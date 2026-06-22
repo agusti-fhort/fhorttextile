@@ -211,6 +211,7 @@ export default function ModelMeasurements() {
       {showPropagated && (
         <PropagatedEditor
           modelId={parseInt(id)}
+          readOnly
           onClose={() => {
             setShowPropagated(false)
             // Reflectir els overrides re-propagats a la taula de resultat.
@@ -356,7 +357,7 @@ export default function ModelMeasurements() {
                       borderRadius: 6, background: 'transparent',
                       color: 'var(--gold)', fontSize: 'var(--fs-body)', cursor: 'pointer',
                     }}>
-                    {t('model_measurements.propagate_grading')}
+                    {t('model_measurements.view_grading')}
                   </button>
                 )}
                 <button type="button" onClick={() => navigate(`/models/${id}/teixit`)}

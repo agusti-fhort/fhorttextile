@@ -27,6 +27,8 @@ function toolRoute(task, modelId) {
     case 'tech_sheet': return `/models/${modelId}/fitxa?task_id=${task.id}`
     // v2: "Mesurar prenda" (size_check) → l'edició nova de mesures, amb task_id (futur compta-temps).
     case 'size_check': return `/models/${modelId}/mesures?task_id=${task.id}`
+    // v2 PEÇA F: "Escalat CAD" (scaling) → editor propagat editable, amb task_id (compta temps).
+    case 'scaling':    return `/models/${modelId}/escalat?task_id=${task.id}`
     default:           return null
   }
 }

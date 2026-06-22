@@ -924,7 +924,8 @@
       "reopen": "Reopen",
       "open_poms": "Open POMs",
       "open_size_check": "Open size check",
-      "open_tech_sheet": "Open tech sheet"
+      "open_tech_sheet": "Open tech sheet",
+      "open_grading": "Open grading"
     },
     "toast_paused": "Paused «{{name}}»",
     "not_allowed": "You're not allowed to run this task type.",
@@ -1372,6 +1373,7 @@
     "edit_measures": "✏ Edit measurements",
     "base_prefix": "Base:",
     "propagate_grading": "📐 Propagate to sizes",
+    "view_grading": "📐 View grading",
     "propagated_title": "Propagated grading editor",
     "propagated_hint": "Edit a size value (not the base) to set a break; it re-propagates automatically. Regime changes per POM.",
     "propagated_hint_ro": "Read-only view of the current grading. Editing opens from the corresponding task.",

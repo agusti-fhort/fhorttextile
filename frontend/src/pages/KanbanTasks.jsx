@@ -611,6 +611,8 @@ function TaskCard({ task, canExecute, onTransition, t }) {
   const isTechSheet = task.task_type_code === 'tech_sheet'
   // Tasca de size check: porta d'entrada a la graella de validació del proto a talla base.
   const isSizeCheck = task.task_type_code === 'size_check'
+  // Tasca d'escalat (scaling "Escalat CAD"): porta d'entrada a l'editor propagat editable (compta temps).
+  const isScaling = task.task_type_code === 'scaling'
   return (
     <div style={{
       border: '0.5px solid var(--gray-l)', borderRadius: 8,
@@ -694,6 +696,25 @@ function TaskCard({ task, canExecute, onTransition, t }) {
           }}>
             <i className="ti ti-ruler-measure" style={{ fontSize: 12 }} />
             {t('kanban.action.open_poms', 'Obrir mides')}
+          </button>
+        </div>
+      )}
+      {isScaling && (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={() => {
+            // Mateix patró que isPom: auto-iniciar (fire-and-forget) i obrir l'editor propagat
+            // editable. El timer i l'exclusió mútua els fa transition_task al backend.
+            if (canExecute && (task.status === 'Pending' || task.status === 'Paused')) {
+              onTransition(task, 'InProgress')
+            }
+            navigate(`/models/${task.model}/escalat?task_id=${task.id}`)
+          }} style={{
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-body)', padding: '4px 8px',
+            borderRadius: 6, border: '0.5px solid var(--gold)', background: 'var(--white)',
+            cursor: 'pointer', color: 'var(--gold)', fontWeight: 500,
+          }}>
+            <i className="ti ti-resize" style={{ fontSize: 12 }} />
+            {t('kanban.action.open_grading', 'Obrir escalat')}
           </button>
         </div>
       )}

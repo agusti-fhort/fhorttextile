@@ -924,7 +924,8 @@
       "reopen": "Reobrir",
       "open_poms": "Obrir mides",
       "open_size_check": "Obrir size check",
-      "open_tech_sheet": "Obrir fitxa"
+      "open_tech_sheet": "Obrir fitxa",
+      "open_grading": "Obrir escalat"
     },
     "toast_paused": "S'ha pausat «{{name}}»",
     "not_allowed": "No tens permès executar aquest tipus de tasca.",
@@ -1372,6 +1373,7 @@
     "edit_measures": "✏ Editar mesures",
     "base_prefix": "Base:",
     "propagate_grading": "📐 Propagar a talles",
+    "view_grading": "📐 Veure escalat",
     "propagated_title": "Editor de grading propagat",
     "propagated_hint": "Edita el valor d'una talla (no la base) per fixar un trencament; es re-propaga automàticament. El règim canvia per POM.",
     "propagated_hint_ro": "Consulta de l'escalat vigent. L'edició s'obre des de la tasca corresponent.",

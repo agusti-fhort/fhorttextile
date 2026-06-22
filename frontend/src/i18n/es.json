@@ -924,7 +924,8 @@
       "reopen": "Reabrir",
       "open_poms": "Abrir medidas",
       "open_size_check": "Abrir size check",
-      "open_tech_sheet": "Abrir ficha"
+      "open_tech_sheet": "Abrir ficha",
+      "open_grading": "Abrir escalado"
     },
     "toast_paused": "Se ha pausado «{{name}}»",
     "not_allowed": "No tienes permiso para ejecutar este tipo de tarea.",
@@ -1372,6 +1373,7 @@
     "edit_measures": "✏ Editar medidas",
     "base_prefix": "Base:",
     "propagate_grading": "📐 Propagar a tallas",
+    "view_grading": "📐 Ver escalado",
     "propagated_title": "Editor de grading propagado",
     "propagated_hint": "Edita el valor de una talla (no la base) para fijar una rotura; se re-propaga automáticamente. El régimen cambia por POM.",
     "propagated_hint_ro": "Consulta del escalado vigente. La edición se abre desde la tarea correspondiente.",
