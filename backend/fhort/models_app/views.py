@@ -1302,6 +1302,84 @@ def set_size_override_view(request, model_id):
     }, status=200)
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def base_stages_view(request, model_id):
+    """Taula base amb ESTADIS (talla base): columnes teòriques que CREIXEN, una per presa
+    que ha escrit base (de l'històric MeasurementChangeLog), + tolerància + base vigent.
+
+    Read-only i NOMÉS de la talla base — no toca la taula propagada (grading). Cada estadi
+    és un snapshot per carry-forward dels valors base fins aquell moment; l'últim estadi
+    coincideix amb la base vigent (BaseMeasurement).
+    """
+    from fhort.models_app.models import MeasurementChangeLog
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    bms = (BaseMeasurement.objects.filter(model=model, is_active=True)
+           .select_related('pom', 'pom__pom_global').order_by('ordre', 'pom__codi_client'))
+
+    def _tol(bm):
+        pom = bm.pom
+        tm = bm.tolerancia_minus if bm.tolerancia_minus is not None else getattr(pom, 'tolerancia_default_minus', None)
+        tp = bm.tolerancia_plus if bm.tolerancia_plus is not None else getattr(pom, 'tolerancia_default_plus', None)
+        return (float(tm) if tm is not None else 0.6, float(tp) if tp is not None else 0.6)
+
+    # Estadis = events de MeasurementChangeLog agrupats per (context, segon), en ordre d'aparició.
+    logs = (MeasurementChangeLog.objects.filter(model=model)
+            .select_related('pom').order_by('created_at', 'id'))
+    events, ev_index, changes_by_ev = [], {}, {}
+    for c in logs:
+        if c.valor_nou is None:
+            continue
+        bucket = c.created_at.replace(microsecond=0).isoformat()
+        key = f'{c.context}@{bucket}'
+        if key not in ev_index:
+            ev_index[key] = len(events)
+            events.append({'key': key, 'context': c.context, 'at': c.created_at.isoformat()})
+            changes_by_ev[key] = {}
+        changes_by_ev[key][c.pom_id] = float(c.valor_nou)
+
+    # Snapshots acumulats (carry-forward) per estadi.
+    snapshot, stages, stage_snaps = {}, [], []
+    for ev in events:
+        snapshot.update(changes_by_ev[ev['key']])
+        stages.append(ev)
+        stage_snaps.append(dict(snapshot))
+
+    rows = []
+    for bm in bms:
+        pom = bm.pom
+        pg = getattr(pom, 'pom_global', None)
+        tm, tp = _tol(bm)
+        takes = {}
+        for i, st in enumerate(stages):
+            v = stage_snaps[i].get(pom.id)
+            if v is not None:
+                takes[st['key']] = v
+        rows.append({
+            'pom_id': pom.id,
+            'pom_code': pom.codi_client,
+            'nom_fitxa': bm.nom_fitxa or '',
+            'nom_ca': pg.nom_ca if pg else pom.nom_client,
+            'nom_en': pg.nom_en if pg else pom.nom_client,
+            'is_key': bm.is_key,
+            'tol_minus': tm,
+            'tol_plus': tp,
+            'base_value_cm': float(bm.base_value_cm) if bm.base_value_cm is not None else None,
+            'base_measurement_id': bm.id,
+            'takes': takes,
+        })
+
+    return Response({
+        'base_size': model.base_size_label,
+        'stages': stages,
+        'rows': rows,
+    })
+
+
 ISO_SHRINKAGE_TABLE = [
     {'id': 'woven_cotton',    'nom': 'Woven Cotton',    'warp': 3.0, 'weft': 3.0},
     {'id': 'woven_linen',     'nom': 'Woven Linen',     'warp': 3.0, 'weft': 3.0},

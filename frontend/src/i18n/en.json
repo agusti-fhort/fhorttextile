@@ -367,6 +367,7 @@
     "tab_dashboard": "Dashboard",
     "tab_summary": "Summary",
     "tab_size_check": "Size Check",
+    "tab_base_stages": "Base table",
     "tab_production": "Production",
     "tab_fitting": "Fitting",
     "tab_tech_sheet": "Tech sheet",
@@ -1273,6 +1274,21 @@
   "size_map_t_order": "Order",
   "size_map_unmatched": "Unrecognised",
   "size_map_warnings": "warnings",
+  "basestage": {
+    "title": "Base table · stages",
+    "empty": "No base measurements yet.",
+    "current": "current",
+    "stage_live": "Active stage: editable",
+    "stage_readonly": "Read-only",
+    "ctx": {
+      "import": "Import",
+      "manual": "Manual",
+      "fitting": "Fitting",
+      "checked": "Size check",
+      "calculated": "Calculated",
+      "standard": "Standard"
+    }
+  },
   "sizecheck": {
     "col_date": "Date",
     "col_decision": "Decision",

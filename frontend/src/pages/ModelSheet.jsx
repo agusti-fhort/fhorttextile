@@ -7,16 +7,18 @@ import ActionsMenu from '../components/model/ActionsMenu'
 import ProductionTab from '../components/model/ProductionTab'
 import FittingTab from '../components/model/FittingTab'
 import SizeCheckTab from '../components/model/SizeCheckTab'
+import BaseStageTable from '../components/model/BaseStageTable'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
 
 const API = import.meta.env.VITE_API_URL || ''
-const TABS = ['Dashboard', 'Resum', 'Mesures', 'Size Check', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
+const TABS = ['Dashboard', 'Resum', 'Mesures', 'Taula base', 'Size Check', 'Producció', 'Fitting', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
   'Dashboard': 'model_sheet.tab_dashboard',
   'Resum': 'model_sheet.tab_summary',
   'Mesures': 'model.tabs.mesures',
+  'Taula base': 'model_sheet.tab_base_stages',
   'Size Check': 'model_sheet.tab_size_check',
   'Producció': 'model_sheet.tab_production',
   'Fitting': 'model_sheet.tab_fitting',
@@ -224,6 +226,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', sizeCheckEditable
             />
           </div>
         )}
+        {activeTab === 'Taula base' && <BaseStageTable model={model} editable={sizeCheckEditable} />}
         {activeTab === 'Size Check' && <SizeCheckTab model={model} onFeedback={setFeedback} editable={sizeCheckEditable} />}
         {activeTab === 'Fitting' && <FittingTab model={model} onFeedback={setFeedback} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}

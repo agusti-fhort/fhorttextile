@@ -367,6 +367,7 @@
     "tab_dashboard": "Dashboard",
     "tab_summary": "Resumen",
     "tab_size_check": "Size Check",
+    "tab_base_stages": "Tabla base",
     "tab_production": "Producción",
     "tab_fitting": "Fitting",
     "tab_tech_sheet": "Ficha técnica",
@@ -1273,6 +1274,21 @@
   "size_map_t_order": "Orden",
   "size_map_unmatched": "No reconocidas",
   "size_map_warnings": "avisos",
+  "basestage": {
+    "title": "Tabla base · estadios",
+    "empty": "Aún no hay medidas base.",
+    "current": "vigente",
+    "stage_live": "Estadio activo: editable",
+    "stage_readonly": "Solo lectura",
+    "ctx": {
+      "import": "Importación",
+      "manual": "Manual",
+      "fitting": "Fitting",
+      "checked": "Size check",
+      "calculated": "Calculado",
+      "standard": "Estándar"
+    }
+  },
   "sizecheck": {
     "col_date": "Fecha",
     "col_decision": "Decisión",

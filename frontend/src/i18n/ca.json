@@ -367,6 +367,7 @@
     "tab_dashboard": "Dashboard",
     "tab_summary": "Resum",
     "tab_size_check": "Size Check",
+    "tab_base_stages": "Taula base",
     "tab_production": "Producció",
     "tab_fitting": "Fitting",
     "tab_tech_sheet": "Fitxa tècnica",
@@ -1273,6 +1274,21 @@
   "size_map_t_order": "Ordre",
   "size_map_unmatched": "No reconegudes",
   "size_map_warnings": "avisos",
+  "basestage": {
+    "title": "Taula base · estadis",
+    "empty": "Encara no hi ha mesures base.",
+    "current": "vigent",
+    "stage_live": "Estadi actiu: editable",
+    "stage_readonly": "Només lectura",
+    "ctx": {
+      "import": "Importació",
+      "manual": "Manual",
+      "fitting": "Fitting",
+      "checked": "Size check",
+      "calculated": "Calculat",
+      "standard": "Estàndard"
+    }
+  },
   "sizecheck": {
     "col_date": "Data",
     "col_decision": "Decisió",

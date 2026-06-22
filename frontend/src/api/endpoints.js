@@ -41,6 +41,13 @@ export const models = {
   // Edita una talla NO-base com a ModelGradingOverride i re-propaga (editor propagat del model).
   setSizeOverride: (modelId, pomId, sizeLabel, valor) =>
     client.post(`/api/v1/models/${modelId}/set-size-override/`, { pom_id: pomId, size_label: sizeLabel, valor }),
+  // Taula base amb estadis (històric per presa + tolerància + base vigent). Read-only.
+  baseStages: (modelId) => client.get(`/api/v1/models/${modelId}/base-stages/`),
+}
+
+// Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).
+export const baseMeasurements = {
+  update: (id, body) => client.patch(`/api/v1/base-measurements/${id}/`, body),
 }
 
 // Fitxers del model (read-only) — panell info de fitting (5B.6-B1).
