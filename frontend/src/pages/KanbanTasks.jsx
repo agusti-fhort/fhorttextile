@@ -605,7 +605,7 @@ function GateRow({ gate, selected, onClick, onValidate, t }) {
 function TaskCard({ task, canExecute, onTransition, t }) {
   const actions = ACTIONS[task.status] || []
   const navigate = useNavigate()
-  // Tasca de POM: porta d'entrada a la pantalla de mides de l'item (materialitza la pertinença).
+  // Tasca de mesura (task_type_code 'pom'): porta d'entrada a la pantalla de mides de l'item.
   const isPom = task.task_type_code === 'pom'
   // Tasca de fitxa tècnica: porta d'entrada a l'editor full-screen de la fitxa.
   const isTechSheet = task.task_type_code === 'tech_sheet'
@@ -642,7 +642,7 @@ function TaskCard({ task, canExecute, onTransition, t }) {
       {isPom && (
         <div style={{ marginTop: 8 }}>
           <button onClick={() => {
-            // Sprint B · auto-iniciar: obrir mides posa la tasca pom En curs si estava
+            // Sprint B · auto-iniciar: obrir mides posa la tasca de mesura En curs si estava
             // Pending/Paused (l'exclusió mútua — auto-pausar l'altra InProgress — la fa
             // transition_task al backend). Fire-and-forget: navega igualment sense bloquejar,
             // i si la transició falla no atura l'obertura de la pantalla de mides.

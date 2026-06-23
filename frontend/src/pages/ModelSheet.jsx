@@ -208,13 +208,13 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
                 <button type="button" onClick={() => navigate(`/models/${id}/mesures`)}
                   style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
                   <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
-                  {t('model_sheet.edit_in_pom')}
+                  {t('model_sheet.edit_measures')}
                 </button>
               ) : (
-                <span title={t('model_sheet.no_pom_task_title')}
+                <span title={t('model_sheet.no_measure_task_title')}
                   style={{ ...btnSecondary, opacity: 0.5, cursor: 'not-allowed' }}>
                   <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
-                  {t('model_sheet.no_pom_task')}
+                  {t('model_sheet.no_measure_task')}
                 </span>
               )}
             </div>
