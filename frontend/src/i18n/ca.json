@@ -1320,7 +1320,8 @@
     "reschedule_title": "Reagendar el size check",
     "resolve_error": "No s'ha pogut resoldre",
     "save": "Gravar size check",
-    "validated_table": "Taula validada"
+    "validated_table": "Taula validada",
+    "work_title": "Mesura del proto · validació"
   },
 
   "time_tracking": {

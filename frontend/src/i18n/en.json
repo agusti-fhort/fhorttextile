@@ -1320,7 +1320,8 @@
     "reschedule_title": "Reschedule the size check",
     "resolve_error": "Could not be resolved",
     "save": "Save size check",
-    "validated_table": "Validated table"
+    "validated_table": "Validated table",
+    "work_title": "Proto measurement · check"
   },
 
   "time_tracking": {
