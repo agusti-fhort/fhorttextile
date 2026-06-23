@@ -492,6 +492,9 @@
     "edit_measures": "Editar medidas",
     "edit_grading": "Editar escalado",
     "open_task_err": "No se ha podido abrir la tarea.",
+    "use_ruleset": "Usar este conjunto",
+    "ruleset_changed": "Conjunto de reglas actualizado.",
+    "ruleset_err": "No se ha podido cambiar el conjunto de reglas.",
     "file_type": {
       "SKETCH_FLETXES": "Sketch con flechas",
       "SKETCH_NET": "Sketch limpio",

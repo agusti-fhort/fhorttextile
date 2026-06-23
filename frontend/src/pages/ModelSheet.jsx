@@ -5,6 +5,7 @@ import Feedback from '../components/ui/Feedback'
 import ActionsMenu from '../components/model/ActionsMenu'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import PropagatedEditor from './PropagatedEditor'
+import RuleSetCard from '../components/model/RuleSetCard'
 import { models } from '../api/endpoints'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
@@ -203,6 +204,8 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
               sizesAmbDades={sizesAmbDades}
               onUpdated={reloadModel}
             />
+            {/* P3 — ruleset CANVIABLE al model (SPEC §1.6): triar/canviar el joc de regles de grading. */}
+            {model && <RuleSetCard model={model} onChanged={reloadModel} />}
           </div>
         )}
         {activeTab === 'Mesures' && (
