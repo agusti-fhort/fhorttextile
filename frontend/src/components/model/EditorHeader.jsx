@@ -1,15 +1,20 @@
 import { useTranslation } from 'react-i18next'
+import BackButton from '../BackButton'
 
-// Capçalera UNIFICADA dels editors de mesura (check ara; fitting a P5). Dues parts:
+// Capçalera UNIFICADA dels editors de mesura (check ara; fitting a P5). Tres parts:
+//  · botó de tornar transversal (`onBack`) a dalt, perquè mai s'arribi a l'editor sense sortida.
 //  · barra d'IDENTITAT DE MODEL comuna (codi · nom · target/construction · base · run) — igual als
 //    dos editors i als dos modes (treball/consulta).
 //  · slot de FRANJA CONTEXTUAL (`context`) sota: el que és propi de la superfície (sessió de fitting:
 //    persona/responsable/lloc; tasca de check). El check no n'hi posa cap encara.
-export default function EditorHeader({ model, context = null }) {
+export default function EditorHeader({ model, context = null, onBack = null }) {
   const { t } = useTranslation()
   if (!model) return null
   return (
     <div style={{ marginBottom: 16 }}>
+      {onBack && (
+        <div style={{ marginBottom: 8 }}><BackButton onClick={onBack} /></div>
+      )}
       <div style={{
         display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap',
         background: 'var(--bg-muted)', border: '0.5px solid var(--border)',

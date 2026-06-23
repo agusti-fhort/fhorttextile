@@ -100,7 +100,7 @@ function regleLabel(row, t) {
   return `+${row.increment_base}`
 }
 
-export default function CheckMeasureEditor({ model, onFeedback, onResolved, readOnly = false }) {
+export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false }) {
   const { t } = useTranslation()
   const [baseData, setBaseData] = useState(null)
   const [check, setCheck] = useState(null)
@@ -215,7 +215,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, read
 
   return (
     <div>
-      <EditorHeader model={model} />
+      <EditorHeader model={model} onBack={onBack} />
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly} onSave={readOnly ? undefined : onSave}
         empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>} />
 
