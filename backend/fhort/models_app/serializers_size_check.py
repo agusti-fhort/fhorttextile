@@ -83,9 +83,15 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
             for bm in BaseMeasurement.objects.filter(model_id=obj.model_id)
         }
 
+        # Règim/regla de grading per POM (resident→fallback), MATEIXA font que el fitting
+        # (lectura per mostrar; NO recalcula res, NO toca el motor).
+        from fhort.pom.services import _load_grading_rules
+        rules = _load_grading_rules(obj.model)
+
         out = []
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
             bm = bm_map.get(line.pom_id)
+            r = rules.get(line.pom_id)
             tol_minus = float(bm.tolerancia_minus) if bm and bm.tolerancia_minus is not None else TOL_DEFAULT
             tol_plus = float(bm.tolerancia_plus) if bm and bm.tolerancia_plus is not None else TOL_DEFAULT
 
@@ -113,6 +119,11 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
                 'tol_minus': tol_minus,
                 'tol_plus': tol_plus,
                 'fora_tolerancia': fora,
+                # Règim/regla de grading (lectura per mostrar la columna Règim, com el fitting).
+                'logica': getattr(r, 'logica', None) if r else None,
+                'increment_base': float(r.increment_base) if r and r.increment_base is not None else None,
+                'increment_break': float(r.increment_break) if r and r.increment_break is not None else None,
+                'talla_break_label': getattr(r, 'talla_break_label', None) if r else None,
             })
 
         # Ordena per l'ordre de la fitxa (BaseMeasurement.ordre del model).

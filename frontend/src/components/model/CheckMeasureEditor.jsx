@@ -89,6 +89,16 @@ const btn = (variant) => ({
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
 const modal = { background: 'var(--white)', borderRadius: 8, padding: 24, maxWidth: 460, fontFamily: MONO, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }
 
+// Etiqueta compacta de regla (delta · trencament), com el fitting (MeasureTable.regleLabel).
+function regleLabel(row, t) {
+  if (row.logica == null) return ''
+  if (row.logica === 'STEP') return t('fitting.grid.rule_free')
+  if (row.increment_base == null) return ''
+  if (row.increment_break != null && row.talla_break_label)
+    return `+${row.increment_base} · ${t('fitting.grid.break')} ${row.talla_break_label} +${row.increment_break}`
+  return `+${row.increment_base}`
+}
+
 export default function CheckMeasureEditor({ model, onFeedback, onResolved, readOnly = false }) {
   const { t } = useTranslation()
   const [baseData, setBaseData] = useState(null)
@@ -166,6 +176,8 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, read
       codi: r.nom_fitxa || r.pom_code,
       nom_en: r.nom_en, nom_local: r.nom_ca,
       is_key: r.is_key,
+      logica: line?.logica, increment_base: line?.increment_base,
+      increment_break: line?.increment_break, talla_break_label: line?.talla_break_label,
       cells: { base: {
         history: Object.fromEntries(stages.map(s => [s.key, (s.key in r.takes) ? r.takes[s.key] : null])),
         // SEMBRA: la columna Real parteix amb l'última mesura vàlida (valor_teoric vigent) com a
@@ -177,9 +189,23 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, read
     }
   })
 
+  // Columna Règim (lectura): logica + etiqueta de regla a 2 línies, estil fitting. El check no
+  // edita el règim (és context de grading); el fitting sí (al seu editor). MeasureGrid ja té leadCols.
+  const leadCols = [{
+    key: 'regim', label: t('fitting.grid.regime'), width: 118,
+    render: (row) => (
+      <div>
+        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-main)' }}>{row.logica ?? '—'}</div>
+        {regleLabel(row, t) && (
+          <div style={{ fontSize: 'var(--fs-caption)', color: TEXT_2, whiteSpace: 'nowrap', marginTop: 1 }}>{regleLabel(row, t)}</div>
+        )}
+      </div>
+    ),
+  }]
+
   return (
     <div>
-      <MeasureGrid rows={rows} groups={groups} editable={!readOnly} onSave={readOnly ? undefined : onSave}
+      <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly} onSave={readOnly ? undefined : onSave}
         empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>} />
 
       {!readOnly && check && rows.length > 0 && (
