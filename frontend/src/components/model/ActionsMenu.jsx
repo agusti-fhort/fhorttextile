@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan } from '../../api/endpoints'
 import Modal from '../ui/Modal'
@@ -20,6 +21,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10)
 // Pas 5C · TRAM 2 — Desplegable "Accions" per a UN model (fitxa) o N (selecció a la llista).
 // Bulk = itera les crides per-model existents; cada model va a la SEVA next/prev. Feedback agregat.
 export default function ActionsMenu({ targets, model, onChanged, onFeedback, triggerLabel }) {
+  const navigate = useNavigate()
   const { t } = useTranslation()
   const list = (targets && targets.length ? targets : (model ? [model] : []))
   const single = list.length === 1 ? list[0] : null
@@ -172,6 +174,8 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
     { key: 'assign', label: t('model_sheet.assign_tasks'), icon: 'ti-users-plus', enabled: list.length > 0 },
     { key: 'production', label: t('model_sheet.send_to_production'), icon: 'ti-send', enabled: list.length > 0 },
     { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: list.length > 0 },
+    // Convocar fitting des del llenç (un sol model): obre la convocatòria amb el model precarregat.
+    { key: 'convene_fitting', label: t('model_sheet.convene_fitting'), icon: 'ti-shirt', enabled: !!single },
     { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: someNext },
     { key: 'back', label: t('model_sheet.back_phase'), icon: 'ti-arrow-left', enabled: somePrev },
   ]
@@ -193,7 +197,10 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
           <div style={menuBox}>
             {items.map(it => (
-              <button key={it.key} type="button" disabled={!it.enabled} onClick={() => it.enabled && openModal(it.key)} title={it.hint || ''}
+              <button key={it.key} type="button" disabled={!it.enabled}
+                onClick={() => it.enabled && (it.key === 'convene_fitting'
+                  ? navigate(`/fittings/new?model=${single.id}`)
+                  : openModal(it.key))} title={it.hint || ''}
                 style={{ ...menuItem, opacity: it.enabled ? 1 : 0.45, cursor: it.enabled ? 'pointer' : 'not-allowed' }}>
                 <i className={`ti ${it.icon}`} aria-hidden="true" /> {it.label}
                 {it.hint && <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--gray)', marginLeft: 'auto' }}>ⓘ</span>}

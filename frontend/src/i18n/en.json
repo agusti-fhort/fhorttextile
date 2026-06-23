@@ -309,6 +309,7 @@
     "select_supplier": "Select a supplier",
     "fitting_title": "Fitting sessions",
     "schedule_fitting": "Schedule fitting",
+    "convene_fitting": "Convene fitting",
     "date": "Date",
     "no_fittings": "No fitting session yet.",
     "scheduled": "Fitting scheduled.",
