@@ -14,7 +14,18 @@ const MONO = 'IBM Plex Mono, monospace'
 const TEXT_2 = 'var(--text-muted)'
 const BORDER = 'var(--border)'
 
-const stageAccent = (ctx) => ctx === 'checked' ? 'var(--gold)' : ctx === 'fitting' ? 'var(--ok)' : null
+// P9 — presa TIPADA per origen: cada estadi de l'historial mostra de quina presa ve, amb un punt de
+// color per família d'origen (origen ja viu a MeasurementChangeLog.context). Verd = sessió de fitting;
+// daurat = presa humana de taller/proto (size check / manual); gris = derivada/importada/sembra.
+// L'etiqueta de text (basestage.ctx.*) ja nomena l'origen; el punt el TIPA visualment a la columna.
+const stageAccent = (ctx) => ({
+  fitting: 'var(--ok)',
+  checked: 'var(--gold)',
+  manual: 'var(--gold-l)',
+  import: 'var(--gray)',
+  calculated: 'var(--gray)',
+  standard: 'var(--gray)',
+}[ctx] || null)
 const fmtStageDate = (iso) => iso ? new Date(iso).toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit' }) : ''
 
 function StageLabel({ ctx, at, first }) {
