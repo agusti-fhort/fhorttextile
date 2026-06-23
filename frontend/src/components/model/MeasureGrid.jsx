@@ -47,35 +47,70 @@ const activeRed = (value, active) => {
 
 // Cel·la activa editable (única amb input + autosave). Vermell si difereix de baseValue; negreta si
 // editada a mà (ancoratge). Buida si no hi ha línia activa per a aquest (pom, grup).
+const stepBtnStyle = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center', height: 11, width: 16,
+  padding: 0, border: '1px solid var(--border)', background: 'var(--white)',
+  color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1, fontSize: 9,
+}
+
 function ActiveCell({ active, editable, value, edited, onChange, onCommit, focusRef, unit }) {
   const [state, schedule] = useDebouncedSave(onCommit)
+  const [focused, setFocused] = useState(false)
   if (!active) return <td style={cellTd(true, false, false)} />
   const modified = activeRed(value, active)
   // `active.readonly` força lectura en una cel·la concreta encara que la graella sigui editable
   // (p.ex. la talla base de l'Escalat, que no s'edita com a override).
   if (!editable || active.readonly) {
-    // Lectura: format de presentació (1 decimal cm · 2 inch). L'edició NO es formata (precisió canònica).
+    // Lectura: format de presentació (1 decimal cm · 2 inch).
     return (
       <td style={{ ...cellTd(true, false, false), color: modified ? 'var(--err)' : 'var(--text-main)' }}>
         {fmtMeasure(value, unit) ?? '—'}
       </td>
     )
   }
+  // Edició: mentre s'escriu (focus) es mostra el valor CRU per teclejar lliure (coma inclosa); en
+  // perdre el focus es mostra FORMATAT (1 decimal cm · 2 inch), coherent amb les cel·les de lectura.
+  // Es desa sempre el valor canònic (toNum normalitza la coma al commit). type=text + fletxes pròpies
+  // (type=number no admet coma; les fletxes natives només existeixen a type=number → es recreen aquí).
+  const num = toNum(value)
+  const shown = focused
+    ? (value ?? '')
+    : (num == null || Number.isNaN(num) ? (value ?? '') : fmtMeasure(num, unit))
+  const bump = (dir) => {
+    const baseN = (num == null || Number.isNaN(num)) ? 0 : num
+    const next = String(Math.round((baseN + dir * 0.1) * 100) / 100)   // pas 0.1 (cm canònic)
+    onChange(active.lineId, next)
+    schedule(next)
+  }
   return (
     <td style={{ ...cellTd(true, false, false), position: 'relative' }}>
-      <input
-        type="text" inputMode="decimal" value={value ?? ''}
-        onFocus={() => { focusRef.current = active.lineId }}
-        onBlur={() => { if (focusRef.current === active.lineId) focusRef.current = null }}
-        onChange={e => { onChange(active.lineId, e.target.value); schedule(e.target.value) }}
-        style={{
-          font: 'inherit', width: 88, padding: '2px 4px', textAlign: 'right',
-          border: '1px solid var(--border)', borderRadius: 4, background: 'var(--white)',
-          color: modified ? 'var(--err)' : 'var(--text-main)',
-          fontWeight: modified && edited ? 700 : 400,
-          fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
-        }}
-      />
+      <span style={{ display: 'inline-flex', alignItems: 'stretch', gap: 2 }}>
+        <input
+          type="text" inputMode="decimal" value={shown}
+          onFocus={() => { setFocused(true); focusRef.current = active.lineId }}
+          onBlur={() => { setFocused(false); if (focusRef.current === active.lineId) focusRef.current = null }}
+          onChange={e => { onChange(active.lineId, e.target.value); schedule(e.target.value) }}
+          style={{
+            font: 'inherit', width: 70, padding: '2px 4px', textAlign: 'right',
+            border: '1px solid var(--border)', borderRadius: 4, background: 'var(--white)',
+            color: modified ? 'var(--err)' : 'var(--text-main)',
+            fontWeight: modified && edited ? 700 : 400,
+            fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
+          }}
+        />
+        <span style={{ display: 'inline-flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <button type="button" tabIndex={-1} title="+0.1" aria-label="+0.1"
+            onMouseDown={e => e.preventDefault()} onClick={() => bump(1)}
+            style={{ ...stepBtnStyle, borderRadius: '4px 4px 0 0', borderBottom: 'none' }}>
+            <i className="ti ti-chevron-up" />
+          </button>
+          <button type="button" tabIndex={-1} title="-0.1" aria-label="-0.1"
+            onMouseDown={e => e.preventDefault()} onClick={() => bump(-1)}
+            style={{ ...stepBtnStyle, borderRadius: '0 0 4px 4px' }}>
+            <i className="ti ti-chevron-down" />
+          </button>
+        </span>
+      </span>
       <SaveStatus state={state} absolute />
     </td>
   )
