@@ -67,6 +67,19 @@ function DecisioNotaCell({ line }) {
   )
 }
 
+// Slot Decisió·Nota en mode CONSULTA (read-only): text pla, mateixes etiquetes i18n.
+function ReadOnlyDecisioNota({ line }) {
+  const { t } = useTranslation()
+  const dec = line.decisio === 'tolerancia_acceptada' ? t('sizecheck.decisio.accepted', 'Tolerància acceptada')
+    : line.decisio === 'valor_descartat' ? t('sizecheck.decisio.discarded', 'Valor descartat') : '—'
+  return (
+    <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
+      <span style={{ color: 'var(--text-main)' }}>{dec}</span>
+      {line.nota && <span style={{ color: TEXT_2 }}> · {line.nota}</span>}
+    </span>
+  )
+}
+
 const btn = (variant) => ({
   fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
   border: '0.5px solid var(--gray-l)',
@@ -76,7 +89,7 @@ const btn = (variant) => ({
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
 const modal = { background: 'var(--white)', borderRadius: 8, padding: 24, maxWidth: 460, fontFamily: MONO, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }
 
-export default function CheckMeasureEditor({ model, onFeedback, onResolved }) {
+export default function CheckMeasureEditor({ model, onFeedback, onResolved, readOnly = false }) {
   const { t } = useTranslation()
   const [baseData, setBaseData] = useState(null)
   const [check, setCheck] = useState(null)
@@ -88,15 +101,18 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved }) {
 
   const load = useCallback(() => {
     setLoading(true)
-    Promise.all([
-      models.baseStages(model.id).then(r => r.data).catch(() => null),
-      sizeChecks.open(model.id).then(r => r.data).catch(() => null),
-    ]).then(([stages, chk]) => {
-      setBaseData(stages)
-      setCheck(chk)
-      if (!chk) onFeedback?.({ type: 'err', text: t('sizecheck.open_error') })
-    }).finally(() => setLoading(false))
-  }, [model.id, onFeedback, t])
+    // CONSULTA: NO obre cap check (només llegeix el més recent). TREBALL: open idempotent.
+    const checkP = readOnly
+      ? sizeChecks.list({ model: model.id, ordering: '-created_at', page_size: 1 })
+          .then(r => { const rows = r.data?.results ?? r.data ?? []; return rows.length ? sizeChecks.get(rows[0].id).then(x => x.data) : null })
+          .catch(() => null)
+      : sizeChecks.open(model.id).then(r => r.data).catch(() => null)
+    Promise.all([models.baseStages(model.id).then(r => r.data).catch(() => null), checkP])
+      .then(([stages, chk]) => {
+        setBaseData(stages); setCheck(chk)
+        if (!chk && !readOnly) onFeedback?.({ type: 'err', text: t('sizecheck.open_error') })
+      }).finally(() => setLoading(false))
+  }, [model.id, readOnly, onFeedback, t])
 
   useEffect(() => { load() }, [load])
 
@@ -153,17 +169,17 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved }) {
       cells: { base: {
         history: Object.fromEntries(stages.map(s => [s.key, (s.key in r.takes) ? r.takes[s.key] : null])),
         active: line ? { lineId: line.id, value: line.valor_real, baseValue: line.valor_teoric, tol: { minus: line.tol_minus, plus: line.tol_plus } } : null,
-        trail: { dn: line ? <DecisioNotaCell line={line} /> : null },
+        trail: { dn: line ? (readOnly ? <ReadOnlyDecisioNota line={line} /> : <DecisioNotaCell line={line} />) : null },
       } },
     }
   })
 
   return (
     <div>
-      <MeasureGrid rows={rows} groups={groups} editable onSave={onSave}
+      <MeasureGrid rows={rows} groups={groups} editable={!readOnly} onSave={readOnly ? undefined : onSave}
         empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>} />
 
-      {check && rows.length > 0 && (
+      {!readOnly && check && rows.length > 0 && (
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
           <button style={btn('gold')} disabled={busy} onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.save')}</button>
           <button style={btn('err')} disabled={busy} onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard')}</button>

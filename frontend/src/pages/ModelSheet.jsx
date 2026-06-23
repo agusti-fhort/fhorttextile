@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Feedback from '../components/ui/Feedback'
 import ActionsMenu from '../components/model/ActionsMenu'
-import BaseStageTable from '../components/model/BaseStageTable'
+import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import PropagatedEditor from './PropagatedEditor'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
@@ -72,7 +72,7 @@ const btnSecondary = {
   display: 'flex', alignItems: 'center', gap: 4,
 }
 
-export default function ModelSheet({ defaultTab = 'Dashboard', sizeCheckEditable = false }) {
+export default function ModelSheet({ defaultTab = 'Dashboard' }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -209,7 +209,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', sizeCheckEditable
                 </span>
               )}
             </div>
-            <BaseStageTable model={model} editable={sizeCheckEditable} />
+            <CheckMeasureEditor model={model} readOnly />
           </div>
         )}
         {/* Escalat: CONSULTA read-only de la taula propagada (edició lligada a tasca). */}
