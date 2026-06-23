@@ -9,7 +9,6 @@ const API = import.meta.env.VITE_API_URL || ""
 
 export default function GarmentPOMMapEditor() {
   const { id } = useParams()
-  const navigate = useNavigate()
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
 
   const [mapData, setMapData] = useState(null)
