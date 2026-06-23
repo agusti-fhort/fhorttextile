@@ -253,7 +253,9 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 'id': line.id,
                 'pom_id': line.pom_id,
                 'codi': pom.pom_code if pom else '',
-                'nom': (nom_fitxa_map.get(line.pom_id) or (pom.pom_code if pom else '')),
+                'nom': (nom_fitxa_map.get(line.pom_id) or (pom.pom_code if pom else '')),  # nom_fitxa (croquis)
+                'nom_en': pom.name_en if pom else '',        # nom canònic EN (línia superior, nomenclatura 2 línies)
+                'nom_local': pom.name_cat if pom else '',    # nom en idioma usuari (línia inferior)
                 'is_key': pom.is_key_measure if pom else False,
                 'size_label': line.size_label,
                 'valor_teoric': line.valor_teoric,
