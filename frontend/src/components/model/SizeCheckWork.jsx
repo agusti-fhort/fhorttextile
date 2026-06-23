@@ -205,7 +205,7 @@ export default function SizeCheckWork({ model, onFeedback, onResolved }) {
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                <th style={th}>POM</th>
+                <th style={th}>{t('sizecheck.col_pom')}</th>
                 <th style={th}>{t('sizecheck.col_measure')}</th>
                 <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_theoretical')}</th>
                 <th style={{ ...th, textAlign: 'right' }}>{t('sizecheck.col_tolerance')}</th>

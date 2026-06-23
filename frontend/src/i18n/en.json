@@ -1293,6 +1293,7 @@
     "col_decision": "Decision",
     "col_measure": "Measurement",
     "col_note": "Note",
+    "col_pom": "POM",
     "col_real": "Actual (proto)",
     "col_resolved_by": "Resolved by",
     "col_status": "Status",
