@@ -168,7 +168,10 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, read
       is_key: r.is_key,
       cells: { base: {
         history: Object.fromEntries(stages.map(s => [s.key, (s.key in r.takes) ? r.takes[s.key] : null])),
-        active: line ? { lineId: line.id, value: line.valor_real, baseValue: line.valor_teoric, tol: { minus: line.tol_minus, plus: line.tol_plus } } : null,
+        // SEMBRA: la columna Real parteix amb l'última mesura vàlida (valor_teoric vigent) com a
+        // prefill VISUAL; com que MeasureGrid només persisteix a onChange, una columna sembrada-i-no-
+        // tocada deixa valor_real=null i el motor (resolve_size_check) NO escriu base.
+        active: line ? { lineId: line.id, value: line.valor_real ?? line.valor_teoric, baseValue: line.valor_teoric, tol: { minus: line.tol_minus, plus: line.tol_plus } } : null,
         trail: { dn: line ? (readOnly ? <ReadOnlyDecisioNota line={line} /> : <DecisioNotaCell line={line} />) : null },
       } },
     }
