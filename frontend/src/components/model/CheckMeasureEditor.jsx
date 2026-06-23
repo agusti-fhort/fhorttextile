@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { models, sizeChecks, sizeCheckLines } from '../../api/endpoints'
 import MeasureGrid from './MeasureGrid'
 import EditorHeader from './EditorHeader'
+import DependencyPanel from './DependencyPanel'
 
 // CHECK sobre l'editor únic MeasureGrid (substitueix SizeCheckWork): UNA graella amb l'historial
 // d'estadis (base-stages, read-only) com a columnes + la columna activa 'Real' (valor_real) + el
@@ -216,6 +217,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   return (
     <div>
       <EditorHeader model={model} onBack={onBack} />
+      <DependencyPanel model={model} />
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly} onSave={readOnly ? undefined : onSave}
         empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>} />
 

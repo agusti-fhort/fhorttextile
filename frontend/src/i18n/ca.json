@@ -1964,5 +1964,11 @@
     "configure_run_title": "Configurar el run a la Size Library",
     "go_to_library": "Anar a la Library",
     "modal_body": "Sortiràs cap a la Size Library per generar aquesta graduació. Quan l'hagis creada, hauràs de tornar a aquest model manualment per continuar la importació."
+  },
+  "dependency": {
+    "title": "Dependència",
+    "ruleset": "Joc de regles",
+    "no_ruleset": "— cap",
+    "editable_hint": "lectura · editable a l'edició del model"
   }
 }

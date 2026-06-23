@@ -94,6 +94,7 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     garment_type_item_code = serializers.CharField(source='garment_type_item.code', read_only=True)
     size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
     size_system_nom = serializers.CharField(source='size_system.nom', read_only=True)
+    grading_rule_set_nom = serializers.CharField(source='grading_rule_set.nom', read_only=True)  # P8: ruleset vigent (lectura)
     customer_logo = serializers.SerializerMethodField()   # TS-4c: logo del client (URL)
 
     def get_customer_logo(self, obj):

@@ -1964,5 +1964,11 @@
     "configure_run_title": "Configurar el run en la Size Library",
     "go_to_library": "Ir a la Library",
     "modal_body": "Saldrás hacia la Size Library para generar esta graduación. Una vez creada, tendrás que volver a este modelo manualmente para continuar la importación."
+  },
+  "dependency": {
+    "title": "Dependencia",
+    "ruleset": "Conjunto de reglas",
+    "no_ruleset": "— ninguno",
+    "editable_hint": "lectura · editable en la edición del modelo"
   }
 }
