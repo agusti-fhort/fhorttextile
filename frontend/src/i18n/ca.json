@@ -1307,6 +1307,7 @@
     },
     "discard": "Descartar",
     "fb_discarded": "Descartat · reagendat a {{d}} · tasca pendent",
+    "fb_regraded": " · grading regradat (v{{v}})",
     "fb_rejected": "Proto no acceptat · reagendat a {{d}} · tasca pendent",
     "fb_saved": "Gravat i propagat · {{n}} mesures",
     "history": "Històric",

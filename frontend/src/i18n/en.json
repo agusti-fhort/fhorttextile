@@ -1307,6 +1307,7 @@
     },
     "discard": "Discard",
     "fb_discarded": "Discarded · rescheduled to {{d}} · task pending",
+    "fb_regraded": " · grading regraded (v{{v}})",
     "fb_rejected": "Proto not accepted · rescheduled to {{d}} · task pending",
     "fb_saved": "Saved and propagated · {{n}} measurements",
     "history": "History",

@@ -1307,6 +1307,7 @@
     },
     "discard": "Descartar",
     "fb_discarded": "Descartado · reprogramado a {{d}} · tarea pendiente",
+    "fb_regraded": " · grading regradado (v{{v}})",
     "fb_rejected": "Proto no aceptado · reprogramado a {{d}} · tarea pendiente",
     "fb_saved": "Guardado y propagado · {{n}} medidas",
     "history": "Historial",

@@ -118,10 +118,23 @@ function CheckCell({ line, disabled }) {
   )
 }
 
-export default function SizeCheckWork({ model, onFeedback }) {
+const btn = (variant) => ({
+  fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
+  border: '0.5px solid var(--gray-l)',
+  background: variant === 'err' ? 'var(--err)' : variant === 'plain' ? 'var(--white)' : 'var(--gold)',
+  color: variant === 'plain' ? 'var(--text-main)' : 'var(--white)', fontWeight: 500,
+})
+const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
+const modal = { background: 'var(--white)', borderRadius: 8, padding: 24, maxWidth: 460, fontFamily: MONO, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }
+
+export default function SizeCheckWork({ model, onFeedback, onResolved }) {
   const { t } = useTranslation()
   const [check, setCheck] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [confirm, setConfirm] = useState(null)        // modal propagació (Acceptat net amb deltes)
+  const [reschedule, setReschedule] = useState(null)  // {estat, descartades} → modal reagendar
+  const [reDate, setReDate] = useState('')
 
   const load = useCallback(() => {
     setLoading(true)
@@ -133,6 +146,48 @@ export default function SizeCheckWork({ model, onFeedback }) {
   }, [model.id, onFeedback, t])
 
   useEffect(() => { load() }, [load])
+
+  // Veredicte de MODEL derivat pel motor (no es col·lapsa al front): el control accept/descarta és
+  // PER LÍNIA. Semàntica preservada de SizeCheckTab: amb descartades, Acceptar esdevé Rebutjat amb
+  // reagenda obligatòria; Acceptat net amb deltes demana confirmar la propagació; Descartar reagenda.
+  const hasDescartades = (check?.lines || []).some(l => l.decisio === 'valor_descartat')
+
+  const onResolveClick = (estat) => {
+    if (estat === 'Acceptat') {
+      if (hasDescartades) { openReschedule('Acceptat', true); return }   // → Rebutjat
+      if (check?.te_deltes) { setConfirm('Acceptat'); return }           // propagació
+      doResolve('Acceptat'); return
+    }
+    openReschedule('Descartat', false)                                   // Descartar
+  }
+
+  const openReschedule = (estat, descartades) => {
+    setReDate(check?.data_represa_default || '')
+    setReschedule({ estat, descartades })
+  }
+
+  const doResolve = (estat, opts = {}) => {
+    if (!check) return
+    setConfirm(null); setReschedule(null); setBusy(true)
+    sizeChecks.resolve(check.id, estat, opts)
+      .then(r => {
+        const d = r.data || {}
+        const dr = d.data_represa
+        let text
+        if (d.estat === 'Acceptat') {
+          const extra = d.regradat ? t('sizecheck.fb_regraded', { v: d.nova_version }) : ''
+          text = t('sizecheck.fb_saved', { n: d.written || 0 }) + extra
+        } else if (d.estat === 'Rebutjat') {
+          text = t('sizecheck.fb_rejected', { d: dr || '—' })
+        } else {
+          text = t('sizecheck.fb_discarded', { d: dr || '—' })
+        }
+        onFeedback?.({ type: 'ok', text })
+        onResolved?.()   // feina acabada: el pare decideix (navega a Kanban) o recarrega
+      })
+      .catch(e => onFeedback?.({ type: 'err', text: e.response?.data?.error || t('sizecheck.resolve_error') }))
+      .finally(() => setBusy(false))
+  }
 
   if (loading) return <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('common.loading')}</div>
 
@@ -169,6 +224,53 @@ export default function SizeCheckWork({ model, onFeedback }) {
               ))}
             </tbody>
           </table>
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <button style={btn('gold')} disabled={busy} onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.save')}</button>
+            <button style={btn('err')} disabled={busy} onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard')}</button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal propagació (Acceptat net amb deltes). */}
+      {confirm && (
+        <div style={overlay} onClick={() => setConfirm(null)}>
+          <div onClick={e => e.stopPropagation()} style={modal}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 'var(--fs-h3)', fontWeight: 600 }}>{t('sizecheck.propagate_title')}</h3>
+            <p style={{ margin: '0 0 18px', fontSize: 'var(--fs-body)', lineHeight: 1.5, color: 'var(--text-main)' }}>
+              {t('sizecheck.propagate_warning')}
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button style={btn('plain')} disabled={busy} onClick={() => setConfirm(null)}>{t('common.cancel')}</button>
+              <button style={btn('gold')} disabled={busy} onClick={() => doResolve('Acceptat')}>{t('sizecheck.confirm_propagate')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal reagendar (Acceptat-amb-descartades=Rebutjat o Descartar): data OBLIGATÒRIA de represa. */}
+      {reschedule && (
+        <div style={overlay} onClick={() => setReschedule(null)}>
+          <div onClick={e => e.stopPropagation()} style={modal}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 'var(--fs-h3)', fontWeight: 600 }}>{t('sizecheck.reschedule_title')}</h3>
+            {reschedule.descartades && (
+              <p style={{ margin: '0 0 12px', fontSize: 'var(--fs-body)', lineHeight: 1.5, color: 'var(--err)' }}>
+                {t('sizecheck.reschedule_rejected')}
+              </p>
+            )}
+            <p style={{ margin: '0 0 8px', fontSize: 'var(--fs-body)', lineHeight: 1.5, color: 'var(--text-main)' }}>
+              {t('sizecheck.reschedule_help')}
+            </p>
+            <input type="date" value={reDate} onChange={e => setReDate(e.target.value)}
+                   style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 8px', borderRadius: 4, border: `1px solid ${BORDER}`, marginBottom: 18, width: '100%', boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button style={btn('plain')} disabled={busy} onClick={() => setReschedule(null)}>{t('common.cancel')}</button>
+              <button style={btn(reschedule.estat === 'Descartat' ? 'err' : 'gold')} disabled={busy || !reDate}
+                      onClick={() => doResolve(reschedule.estat, { data_represa: reDate })}>
+                {t('sizecheck.reschedule_confirm')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
