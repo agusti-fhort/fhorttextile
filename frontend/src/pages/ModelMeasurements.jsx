@@ -204,7 +204,6 @@ export default function ModelMeasurements() {
   if (checkMode) {
     return (
       <div style={{ width: '100%', padding: '1rem' }}>
-        <ModelSummaryBar model={model} />
         {error && (
           <div style={{ margin: '0 0 1rem', background: '#fee', border: '1px solid #fcc', borderRadius: 8,
                         padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: '#c00' }}>{error}</div>
