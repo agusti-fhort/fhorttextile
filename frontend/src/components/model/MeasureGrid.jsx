@@ -26,15 +26,20 @@ const cellTd = (filled, groupStart, groupEnd) => ({
   borderRight: groupEnd ? '1px solid var(--border)' : undefined,
 })
 
+// Parse numèric tolerant amb la COMA decimal (60,5 == 60.5). Buit → null; no-numèric → NaN.
+// L'input editable és type=text inputMode=decimal perquè la coma s'hi pugui escriure (type=number la
+// rebutja segons locale abans d'arribar a onChange).
+const toNum = (v) => (v === '' || v == null) ? null : Number(String(v).replace(',', '.'))
+
 const isModified = (value, baseValue) => value !== '' && value != null && baseValue != null
-  && Number(value) !== Number(baseValue)
+  && toNum(value) !== Number(baseValue)
 
 // Marcatge vermell de la cel·la activa: per defecte "difereix de base" (fitting); si l'active porta
 // `tol` (check), vermell NOMÉS quan surt de la banda de tolerància [base-minus, base+plus].
 const activeRed = (value, active) => {
   if (value === '' || value == null) return false
   if (active.tol && active.baseValue != null) {
-    const v = Number(value)
+    const v = toNum(value)
     return v < active.baseValue - active.tol.minus || v > active.baseValue + active.tol.plus
   }
   return isModified(value, active.baseValue)
@@ -59,7 +64,7 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
   return (
     <td style={{ ...cellTd(true, false, false), position: 'relative' }}>
       <input
-        type="number" step="0.1" value={value ?? ''}
+        type="text" inputMode="decimal" value={value ?? ''}
         onFocus={() => { focusRef.current = active.lineId }}
         onBlur={() => { if (focusRef.current === active.lineId) focusRef.current = null }}
         onChange={e => { onChange(active.lineId, e.target.value); schedule(e.target.value) }}
@@ -129,7 +134,9 @@ export default function MeasureGrid({
 
   const commitFor = useCallback((lineId) => (raw) => {
     if (!onSave) return Promise.resolve()
-    return Promise.resolve(onSave(lineId, raw === '' ? null : Number(raw))).then(res => {
+    const num = toNum(raw)
+    if (Number.isNaN(num)) return Promise.resolve()   // entrada incompleta/no-numèrica → no desa
+    return Promise.resolve(onSave(lineId, num)).then(res => {
       const propagated = res && res.data ? res.data.linies || res.data.lines : (res && (res.linies || res.lines))
       if (Array.isArray(propagated)) {
         setVals(prev => {
