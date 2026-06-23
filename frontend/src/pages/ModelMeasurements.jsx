@@ -5,7 +5,7 @@ import EditableTable from '../components/EditableTable/EditableTable'
 import ImportWizard from '../components/ImportWizard/ImportWizard'
 import Modal from '../components/ui/Modal'
 import PropagatedEditor from './PropagatedEditor'
-import SizeCheckWork from '../components/model/SizeCheckWork'
+import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import { modelTasks } from '../api/endpoints'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -213,7 +213,7 @@ export default function ModelMeasurements() {
           <div style={{ margin: '0 0 1rem', background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
                         padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: '#7a5a00' }}>{notice}</div>
         )}
-        <SizeCheckWork
+        <CheckMeasureEditor
           model={model}
           onFeedback={(fb) => { if (fb?.type === 'err') { setNotice(''); setError(fb.text) } else { setError(''); setNotice(fb.text) } }}
           onResolved={() => navigate('/tasques/kanban')}

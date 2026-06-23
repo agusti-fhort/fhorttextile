@@ -26,12 +26,23 @@ const cellTd = (accent, groupStart, groupEnd) => ({
 const isModified = (value, baseValue) => value !== '' && value != null && baseValue != null
   && Number(value) !== Number(baseValue)
 
+// Marcatge vermell de la cel·la activa: per defecte "difereix de base" (fitting); si l'active porta
+// `tol` (check), vermell NOMÉS quan surt de la banda de tolerància [base-minus, base+plus].
+const activeRed = (value, active) => {
+  if (value === '' || value == null) return false
+  if (active.tol && active.baseValue != null) {
+    const v = Number(value)
+    return v < active.baseValue - active.tol.minus || v > active.baseValue + active.tol.plus
+  }
+  return isModified(value, active.baseValue)
+}
+
 // Cel·la activa editable (única amb input + autosave). Vermell si difereix de baseValue; negreta si
 // editada a mà (ancoratge). Buida si no hi ha línia activa per a aquest (pom, grup).
 function ActiveCell({ active, accent, editable, value, edited, onChange, onCommit, focusRef }) {
   const [state, schedule] = useDebouncedSave(onCommit)
   if (!active) return <td style={cellTd(accent, false, accent)} />
-  const modified = isModified(value, active.baseValue)
+  const modified = activeRed(value, active)
   if (!editable) {
     return (
       <td style={{ ...cellTd(accent, false, accent), color: modified ? 'var(--err)' : 'var(--text-main)' }}>
