@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import EditableTable from '../components/EditableTable/EditableTable'
 import ImportWizard from '../components/ImportWizard/ImportWizard'
 import Modal from '../components/ui/Modal'
 import PropagatedEditor from './PropagatedEditor'
+import SizeCheckWork from '../components/model/SizeCheckWork'
+import { modelTasks } from '../api/endpoints'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -23,6 +25,9 @@ export default function ModelMeasurements() {
 
   const [model, setModel] = useState(null)
   const [mode, setMode] = useState('loading') // 'loading' | 'selector' | 'manual' | 'import' | 'resultat'
+  const [searchParams] = useSearchParams()
+  const taskId = searchParams.get('task_id')
+  const [checkMode, setCheckMode] = useState(null) // null=determinant · true=tasca size_check · false=mesura normal
 
   // Manual
   const [pomsSuggerits, setPomsSuggerits] = useState([])
@@ -54,6 +59,18 @@ export default function ModelMeasurements() {
       setSelectedPomIds(prev => prev.length > 0 ? prev : poms.filter(p => p.is_key).map(p => p.pom_id))
     }).catch(() => setError(t('errors.load_failed')))
   }, [id])
+
+  // Entrada des de la tasca: si task_id és una tasca 'size_check', la superfície entra en mode
+  // treball de check (mesura + resolució a la mateixa pantalla); fora de tasca o altres tipus de
+  // tasca → flux de mesura normal (read-only respecte del check).
+  useEffect(() => {
+    if (!taskId) { setCheckMode(false); return }
+    let alive = true
+    modelTasks.get(taskId)
+      .then(r => { if (alive) setCheckMode(r.data?.task_type_code === 'size_check') })
+      .catch(() => { if (alive) setCheckMode(false) })
+    return () => { alive = false }
+  }, [taskId])
 
   const togglePom = (pom) => {
     setSelectedPomIds(prev =>
@@ -130,6 +147,7 @@ export default function ModelMeasurements() {
   // VERGE (cap BaseMeasurement amb valor, de cap origen — buida o TEMPLATE buit) i l'item té valors.
   useEffect(() => {
     if (!id || !model) return
+    if (checkMode !== false) return   // mode treball de check: no s'executa el flux de mesura normal (ni sembra)
     if (!model.garment_type_item) {
       setNotice(t('model_measurements.notice_no_item'))
       reloadTable(); return
@@ -172,7 +190,37 @@ export default function ModelMeasurements() {
       })
       .catch(() => setMode('selector'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, model])
+  }, [id, model, checkMode])
+
+  // Mode treball de check (entrat des de la tasca size_check): mesura + resolució a la mateixa
+  // pantalla, amb el llibre major davant. Substitueix el flux de selector/manual/import.
+  if (checkMode === null || (checkMode && !model)) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+        {t('model_sheet.loading')}
+      </div>
+    )
+  }
+  if (checkMode) {
+    return (
+      <div style={{ width: '100%', padding: '1rem' }}>
+        <ModelSummaryBar model={model} />
+        {error && (
+          <div style={{ margin: '0 0 1rem', background: '#fee', border: '1px solid #fcc', borderRadius: 8,
+                        padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: '#c00' }}>{error}</div>
+        )}
+        {notice && (
+          <div style={{ margin: '0 0 1rem', background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
+                        padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: '#7a5a00' }}>{notice}</div>
+        )}
+        <SizeCheckWork
+          model={model}
+          onFeedback={(fb) => { if (fb?.type === 'err') { setNotice(''); setError(fb.text) } else { setError(''); setNotice(fb.text) } }}
+          onResolved={() => navigate('/tasques/kanban')}
+        />
+      </div>
+    )
+  }
 
   return (
     <>
