@@ -44,8 +44,6 @@ router.register('watchpoints', WatchpointViewSet, basename='watchpoint')
 # is not captured by 'models/<pk>/' of the ModelViewSet detail.
 try:
     from .extraction_views import (
-        extract_from_file_view,
-        create_from_extraction_view,
         delete_model_view,
         import_session_cribratge_view,
         import_session_talles_view,
@@ -58,8 +56,8 @@ try:
         import_session_confirmar_view,
     )
     _sprint6_paths = [
-        path('models/extract-from-file/', extract_from_file_view),
-        path('models/create-from-extraction/', create_from_extraction_view),
+        # P6 — camí d'import VELL retirat (0 consumidors al frontend; el wizard nou és l'únic camí).
+        # `extraction_service`/`EXTRACTION_PROMPT` es MANTENEN: són VIUS (els usa el wizard nou + size-map).
         path('models/<int:model_id>/delete/', delete_model_view, name='delete-model'),
         path('import-sessions/cribratge/', import_session_cribratge_view,
              name='import-session-cribratge'),
