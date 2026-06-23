@@ -1282,13 +1282,8 @@ def import_session_confirmar_view(request, token):
             confirmed_pom_ids.append(pid)
             n_bm += 1
 
-        # ── 2. SizeFitting CONTENIDOR per a la projecció CONSCIENT (D-10).
-        # PRINCIPI (sobirania): l'import CALCULA tot el grid (per derivar deltes+breaks) però RETÉ
-        # NOMÉS base + deltes + breaks (ModelGradingRule, derivats a 3b). NO reté el grading PROPAGAT
-        # (GradingVersion + GradedSpec) com a veritat del model: retenir-lo col·lisiona amb el sembrat
-        # del motor i fa dubtar el tècnic. El propagat el PROJECTA el motor després, conscientment,
-        # des de la regla vigent del model (generate_grading_view crea/omple la versió sobre AQUEST SF).
-        # El SF es manté com a contenidor; el seu estat/segellat (D-1) NO es decideix aquí.
+        # ── 2. Identificador del contenidor SF (NO es crea encara: si hi ha conflicte de grading
+        # sense decisió, retornem 409 + rollback i NO volem deixar cap SizeFitting orfe).
         next_num = 1
         while SizeFitting.objects.filter(model=model, numero=next_num).exists():
             next_num += 1
@@ -1296,15 +1291,13 @@ def import_session_confirmar_view(request, token):
         while SizeFitting.objects.filter(codi=sf_codi).exists():
             next_num += 1
             sf_codi = f"IMP-{model.id}-{next_num}"
-        size_fitting = SizeFitting.objects.create(
-            model=model, numero=next_num, codi=sf_codi, tipus='SizeSet',
-            estat='Tancat', base_tancada=True, creat_per=user_profile,
-            notes="Importació guiada (wizard). Contenidor; grading propagat NO retingut "
-                  "(es projecta conscientment des de la regla del model, D-10).",
-        )
-        # NO es crea GradingVersion ni GradedSpec a l'import: el grading propagat no és veritat del
-        # model fins a la projecció conscient. n_specs=0 (cap valor propagat persistit).
-        n_specs = 0
+
+        # P2 — snapshot de la regla RETINGUDA/HERETADA del model ABANS de qualsevol wipe
+        # (materialize_model_grading_rules és esborra-i-recrea). Serveix per detectar el conflicte
+        # conscient amb la regla IMPORTADA del document, sense sobreescriure en silenci.
+        from fhort.pom.grading_utils import grading_rules_match
+        retingut_snapshot = list(model.grading_rules.select_related('pom').all())
+        grading_choice = (request.data.get('grading_choice') or '').strip().lower()
 
         # ── 3b. Derivar la regla de grading des dels valors i re-apuntar-hi el model.
         # La derivació (detect_grading per POM + dedup + anti-proliferació 1D + crear/
@@ -1317,6 +1310,8 @@ def import_session_confirmar_view(request, token):
         new_rule_set = None
         n_rules = 0
         grading_avisos = []
+        conflict_divs = None        # P2: divergències importat-vs-retingut sense decisió → 409
+        aplicar_importada = True    # P2: per defecte (model nou / sense conflicte) s'aplica la importada
         prev_grs_id = model.grading_rule_set_id  # per restaurar la FK si el desament peta
         try:
             with transaction.atomic():
@@ -1331,10 +1326,30 @@ def import_session_confirmar_view(request, token):
                     construction_codi=model.construction,
                     fit_type_codi=model.fit_type,
                     nom=f"Importació fitxa · {model.codi_intern}",
-                    nom_sufix_unic=size_fitting.codi,
+                    nom_sufix_unic=sf_codi,
                     avisos=grading_avisos,
                 )
-                if new_rule_set is not None:
+                # P2 — CONFLICTE conscient: regla IMPORTADA (del document) vs RETINGUDA del model.
+                # Comparació per FORMA (grading_rules_match, util pur — NO toca el motor). Si
+                # difereixen i el tècnic no ha decidit, NO sobreescriure (→ 409 + rollback a fora).
+                if new_rule_set is not None and retingut_snapshot:
+                    ok_ret, divs_ret = grading_rules_match(
+                        retingut_snapshot, new_rule_set.regles.all())
+                    if not ok_ret:
+                        if grading_choice == 'heretats':
+                            aplicar_importada = False
+                            grading_avisos.append(
+                                "Regla del model mantinguda (heretada): la regla importada del "
+                                "document s'ha descartat per decisió del tècnic.")
+                        elif grading_choice == 'importats':
+                            grading_avisos.append(
+                                "Regla importada del document aplicada per decisió del tècnic "
+                                "(substitueix la regla retinguda del model).")
+                        else:
+                            aplicar_importada = False
+                            conflict_divs = divs_ret
+
+                if aplicar_importada and new_rule_set is not None and conflict_divs is None:
                     model.grading_rule_set = new_rule_set
                     model.save(update_fields=['grading_rule_set'])
                     # PG-2 Cas A: materialitza les regles residents (origen=IMPORTED). El motor
@@ -1342,13 +1357,11 @@ def import_session_confirmar_view(request, token):
                     from fhort.models_app.services import materialize_model_grading_rules
                     materialize_model_grading_rules(
                         model, new_rule_set.regles.all(), origen='IMPORTED')
-                    # PG-3 Cas A: compara el grading materialitzat (del document) amb el canònic
-                    # de la Library que encaixaria i emet advertència. NOMÉS informa: embolcallat
-                    # en try propi perquè un error de comparació NO faci rollback del grading ja
-                    # materialitzat (degradació gràcil — no bloqueja, no muta grading).
+                    # PG-3 Cas A: eix COMPLEMENTARI (importat vs CANÒNIC-Library, NO vs retingut):
+                    # compara el grading materialitzat amb el canònic que encaixaria i emet
+                    # advertència. NOMÉS informa (try propi: un error de comparació no fa rollback).
                     try:
-                        from fhort.pom.grading_utils import (
-                            cerca_canonic_equivalent, grading_rules_match)
+                        from fhort.pom.grading_utils import cerca_canonic_equivalent
                         canonic = cerca_canonic_equivalent(model)
                         if canonic is None:
                             grading_avisos.append(
@@ -1375,7 +1388,34 @@ def import_session_confirmar_view(request, token):
             new_rule_set = None
             grading_avisos.append(
                 f"Grading no derivat (error en desar regles: {e}); es manté el ruleset previ.")
-        n_rules = new_rule_set.regles.count() if new_rule_set else 0
+        n_rules = (new_rule_set.regles.count()
+                   if (new_rule_set and aplicar_importada and conflict_divs is None) else 0)
+
+        # P2 — conflicte de grading SENSE decisió del tècnic: NO sobreescriure res. Rollback de tot
+        # l'import (cap estat a mig fer, cap SizeFitting orfe) i 409 perquè el wizard demani la tria;
+        # el tècnic re-confirma amb grading_choice. Reusa el patró d'avís-i-confirma de la Size Library.
+        if conflict_divs is not None:
+            transaction.set_rollback(True)
+            return Response({
+                'conflict': True,
+                'tipus': 'grading',
+                'divergencies': [
+                    {'pom': d['pom_codi'], 'detall': d['detall']} for d in conflict_divs],
+                'message': ('La regla de grading importada del document difereix de la regla '
+                            'retinguda al model. Tria quina aplicar.'),
+            }, status=409)
+
+        # ── 3. SizeFitting CONTENIDOR per a la projecció CONSCIENT (D-10) — només quan no hi ha
+        # conflicte pendent. L'import reté base + deltes + breaks (ModelGradingRule); el grading
+        # PROPAGAT no es reté: el projecta el motor després, des de la regla vigent del model
+        # (generate_grading_view crea/omple la versió sobre AQUEST SF). Estat/segellat (D-1) NO aquí.
+        size_fitting = SizeFitting.objects.create(
+            model=model, numero=next_num, codi=sf_codi, tipus='SizeSet',
+            estat='Tancat', base_tancada=True, creat_per=user_profile,
+            notes="Importació guiada (wizard). Contenidor; grading propagat NO retingut "
+                  "(es projecta conscientment des de la regla del model, D-10).",
+        )
+        n_specs = 0   # cap valor propagat persistit a l'import
 
         if grading_avisos:
             session.avisos = (session.avisos or []) + grading_avisos
@@ -1431,7 +1471,9 @@ def import_session_confirmar_view(request, token):
         'size_fitting': size_fitting.codi,
         'document_fitxer': (doc_fitxer.nom_fitxer if doc_fitxer else None),
         'teixit_aplicat': teixit_aplicat,
-        'grading_rule_set': (new_rule_set.nom if new_rule_set else None),
+        'grading_rule_set': (new_rule_set.nom
+                             if (new_rule_set and aplicar_importada and conflict_divs is None)
+                             else None),
         'grading_rules': n_rules,
         'grading_avisos': grading_avisos,
         'message': f'Importació confirmada: {n_bm} POMs, regla (deltes+breaks) retinguda al model; '
