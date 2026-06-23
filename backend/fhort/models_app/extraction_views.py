@@ -1172,8 +1172,8 @@ def import_session_confirmar_view(request, token):
       1. Mana el document: crea NOMÉS BaseMeasurement dels POMs confirmats (Pas 2). NO
          materialitza la plantilla de l'item (no crida materialize_poms_view) i elimina les
          files buides de plantilla preexistents (base_value_cm=None).
-      2. Grading final tancat: SizeFitting + GradingVersion v1 + GradedSpec des dels valors
-         del Pas 3.
+      2. SizeFitting contenidor (sense GradingVersion/GradedSpec): el grading PROPAGAT no es
+         reté; es projecta conscientment des de la regla del model (deltes+breaks), D-10.
       3. NO sessions de fitting (cap FittingSession).
       4. PDF → ModelFitxer(categoria='Document', versio NNN, naming {codi}_DOCUMENT_{NNN});
          re-import → versio_anterior apunta a l'anterior.
@@ -1186,7 +1186,7 @@ def import_session_confirmar_view(request, token):
     from fhort.models_app.models import ImportSession, BaseMeasurement, ModelFitxer
     from fhort.accounts.models import UserProfile
     from fhort.pom.models import POMMaster
-    from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
+    from fhort.fitting.models import SizeFitting
     from fhort.models_app.matching import match_size_system
 
     session = ImportSession.objects.filter(token=token).select_related('model').first()
@@ -1282,7 +1282,13 @@ def import_session_confirmar_view(request, token):
             confirmed_pom_ids.append(pid)
             n_bm += 1
 
-        # ── 2 + 3. Grading final TANCAT (SizeFitting + GradingVersion v1 + GradedSpec). Cap FittingSession.
+        # ── 2. SizeFitting CONTENIDOR per a la projecció CONSCIENT (D-10).
+        # PRINCIPI (sobirania): l'import CALCULA tot el grid (per derivar deltes+breaks) però RETÉ
+        # NOMÉS base + deltes + breaks (ModelGradingRule, derivats a 3b). NO reté el grading PROPAGAT
+        # (GradingVersion + GradedSpec) com a veritat del model: retenir-lo col·lisiona amb el sembrat
+        # del motor i fa dubtar el tècnic. El propagat el PROJECTA el motor després, conscientment,
+        # des de la regla vigent del model (generate_grading_view crea/omple la versió sobre AQUEST SF).
+        # El SF es manté com a contenidor; el seu estat/segellat (D-1) NO es decideix aquí.
         next_num = 1
         while SizeFitting.objects.filter(model=model, numero=next_num).exists():
             next_num += 1
@@ -1293,39 +1299,12 @@ def import_session_confirmar_view(request, token):
         size_fitting = SizeFitting.objects.create(
             model=model, numero=next_num, codi=sf_codi, tipus='SizeSet',
             estat='Tancat', base_tancada=True, creat_per=user_profile,
-            notes="Importació guiada (wizard). Grading tancat des de la fitxa.",
+            notes="Importació guiada (wizard). Contenidor; grading propagat NO retingut "
+                  "(es projecta conscientment des de la regla del model, D-10).",
         )
-        grading_version = GradingVersion.objects.create(
-            size_fitting=size_fitting, version_number=1, nom='Importació (v1)',
-            aprovada=True, is_active=True, creat_per=user_profile,
-            notes='Generat des de la importació guiada de fitxa tècnica.',
-        )
-
+        # NO es crea GradingVersion ni GradedSpec a l'import: el grading propagat no és veritat del
+        # model fins a la projecció conscient. n_specs=0 (cap valor propagat persistit).
         n_specs = 0
-        for pid in confirmed_pom_ids:
-            pm = POMMaster.objects.filter(id=pid).first()
-            if not pm:
-                continue
-            base_val = valors.get(pid, {}).get(base_size)
-            for talla, val in (valors.get(pid) or {}).items():
-                if val in (None, ''):
-                    continue
-                try:
-                    v = float(val)
-                except (TypeError, ValueError):
-                    continue
-                bv = None
-                try:
-                    bv = float(base_val) if base_val not in (None, '') else None
-                except (TypeError, ValueError):
-                    bv = None
-                gtype = 'FIXED' if (bv is not None and abs(v - bv) < 0.01) else 'LINEAR'
-                GradedSpec.objects.update_or_create(
-                    grading_version=grading_version, pom=pm, size_label=str(talla).strip(),
-                    defaults={'graded_value_cm': v, 'grading_type_applied': gtype,
-                              'increment_applied_cm': 0, 'is_active': True},
-                )
-                n_specs += 1
 
         # ── 3b. Derivar la regla de grading des dels valors i re-apuntar-hi el model.
         # La derivació (detect_grading per POM + dedup + anti-proliferació 1D + crear/
@@ -1455,5 +1434,6 @@ def import_session_confirmar_view(request, token):
         'grading_rule_set': (new_rule_set.nom if new_rule_set else None),
         'grading_rules': n_rules,
         'grading_avisos': grading_avisos,
-        'message': f'Importació confirmada: {n_bm} POMs, {n_specs} valors de grading (tancat).',
+        'message': f'Importació confirmada: {n_bm} POMs, regla (deltes+breaks) retinguda al model; '
+                   f'grading propagat pendent de projecció conscient.',
     }, status=201)
