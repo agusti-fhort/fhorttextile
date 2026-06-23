@@ -180,12 +180,21 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
           />
         )}
         {activeTab === 'Resum' && (
-          <TabSummary
-            model={model}
-            modelId={parseInt(id)}
-            sizesAmbDades={sizesAmbDades}
-            onUpdated={reloadModel}
-          />
+          <div>
+            {/* P4: edició del MODEL aquí (a Resum), no a la capçalera global. */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+              <button type="button" onClick={() => navigate(`/models/${id}/editar`)}
+                style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+                <i className="ti ti-edit" style={{ fontSize: 14 }} aria-hidden="true" /> {t('app.edit')}
+              </button>
+            </div>
+            <TabSummary
+              model={model}
+              modelId={parseInt(id)}
+              sizesAmbDades={sizesAmbDades}
+              onUpdated={reloadModel}
+            />
+          </div>
         )}
         {activeTab === 'Mesures' && (
           <div>
@@ -398,12 +407,9 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {/* P4: "Editar" (edita el MODEL) s'ha mogut a la pestanya Resum perquè no confongui que edita
+            la pantalla visible. Aquí queden les accions de fase i l'esborrat. */}
         <ActionsMenu model={model} onChanged={onChanged} onFeedback={onFeedback} />
-        <button type="button"
-          onClick={() => navigate(`/models/${model.id}/editar`)}
-          style={btnSecondary}>
-          <i className="ti ti-edit" aria-hidden="true" /> {t('app.edit')}
-        </button>
         <button type="button" onClick={onDelete}
           style={{ ...btnSecondary, color: '#c5221f', borderColor: '#f5c6c6' }}>
           <i className="ti ti-trash" aria-hidden="true" /> {t('app.delete')}
