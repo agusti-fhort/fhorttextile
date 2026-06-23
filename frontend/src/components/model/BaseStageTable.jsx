@@ -16,6 +16,11 @@ const inputBase = (disabled) => ({
 const fmtTol = (m, p) => `-${m ?? '?'}/+${p ?? '?'}`
 const fmtStageDate = (iso) => iso ? new Date(iso).toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit' }) : ''
 
+// B1: accent de color per diferenciar estadis del llibre major. 'checked' (proto a taller) i
+// 'fitting' (prova amb model) són processos DISTINTS: cada un té el seu punt de color (tokens
+// existents; un punt no és icona → la regla outline-only no hi aplica).
+const stageAccent = (ctx) => ctx === 'checked' ? 'var(--gold)' : ctx === 'fitting' ? 'var(--ok)' : null
+
 // Debounce d'autosave (800ms), mateix patró que SizeCheckCell / la graella de fitting.
 function useDebouncedSave(persist) {
   const [state, setState] = useState('idle')
@@ -120,7 +125,9 @@ export default function BaseStageTable({ model, editable = false }) {
     ]).then(([stages, check]) => {
       setData(stages)
       const map = {}
-      for (const l of (check?.lines || [])) map[l.pom] = l
+      // El serializer (SizeCheckGridSerializer) emet `pom_id`, no `pom`: cal indexar per pom_id
+      // perquè selLine(row.pom_id) lligui (abans sempre donava undefined → Decisió/Nota a '—').
+      for (const l of (check?.lines || [])) map[l.pom_id] = l
       setLineByPom(map)
       // Principi rector: edició LLIGADA A TASCA. La pestanya és CONSULTA read-only; només
       // és editable quan s'arriba des d'una tasca (editable=true via ruta de treball).
@@ -171,19 +178,23 @@ export default function BaseStageTable({ model, editable = false }) {
               <th style={{ ...th, width: 26, padding: '6px 4px' }}>#</th>
               <th style={th}>{t('basestage.col_nomenclatura')}</th>
               <th style={{ ...th, textAlign: 'right', padding: '6px 6px' }}>{t('sizecheck.col_tolerance')}</th>
-              {stages.map((s, i) => (
+              {stages.map((s, i) => {
+                const accent = stageAccent(s.context)
+                return (
                 <th key={s.key} onClick={() => setSelectedIdx(i)} title={t('basestage.select_stage')} style={{
                   ...th, textAlign: 'right', cursor: 'pointer',
                   background: i === sel ? '#f3e8d0' : (i === lastIdx ? '#fdf6ee' : undefined),
                   color: i === lastIdx ? '#7a4a10' : TEXT_2,
                   boxShadow: i === sel ? 'inset 0 -2px 0 var(--gold)' : undefined,
                 }}>
+                  {accent && <span aria-hidden="true" style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: accent, marginRight: 5, verticalAlign: 'middle' }} />}
                   {i === 0 ? t('basestage.stage_measure') : ctxLabel(s.context)}<br />
                   <span style={{ fontWeight: 400, fontSize: 'var(--fs-caption)' }}>
                     {[i === 0 ? null : `@${fmtStageDate(s.at)}`, i === lastIdx ? t('basestage.current') : null].filter(Boolean).join(' · ') || ' '}
                   </span>
                 </th>
-              ))}
+                )
+              })}
               <th style={{ ...th, textAlign: 'right', padding: '6px 6px' }}>Δ</th>
               <th style={{ ...th, textAlign: 'center' }}>{t('sizecheck.col_decision')}</th>
               <th style={th}>{t('sizecheck.col_note')}</th>
