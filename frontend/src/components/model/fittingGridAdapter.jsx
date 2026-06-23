@@ -97,6 +97,42 @@ export function regimeLeadCol(t, onRegimChange, readOnly = false) {
   }
 }
 
+// --- ESCALAT (taula propagada del model) ---------------------------------------------------------
+// Mateix esquelet, eix degenerat: per talla, 1 columna read-only "Base" (valor vigent propagat) + la
+// columna activa "Fit actual" (editable = override de talla). La talla BASE és read-only (no override:
+// s'edita com a mesura base). Reusa regimeLeadCol. lineId = `${pom_id}:${size}`.
+export function buildEscalatGroups(sizeLabels, baseLabel, t) {
+  return sizeLabels.map(s => ({
+    key: s,
+    label: s === baseLabel
+      ? <span>{s}<i className="ti ti-star" style={{ fontSize: 10, marginLeft: 4, color: 'var(--gold)' }} /></span>
+      : s,
+    historyCols: [{ key: 'vigent', label: t('fitting.grid.base') }],
+    activeLabel: t('fitting.grid.fit_current'),
+    trailCols: [],
+  }))
+}
+
+export function buildEscalatRows(rows, sizeLabels, baseLabel) {
+  return (rows || []).map(row => {
+    const cells = {}
+    for (const s of sizeLabels) {
+      const v = s === baseLabel ? row.base_value_cm : (row.graded?.[s] ?? null)
+      cells[s] = {
+        history: { vigent: v },
+        active: { lineId: `${row.pom_id}:${s}`, value: v == null ? '' : v, baseValue: v, readonly: s === baseLabel },
+      }
+    }
+    return {
+      pom_id: row.pom_id, codi: row.pom_code, is_key: row.is_key,
+      nom_en: row.nom_en, nom_local: row.nom_ca,
+      logica: row.logica, increment_base: row.increment_base,
+      increment_break: row.increment_break, talla_break_label: row.talla_break_label,
+      cells,
+    }
+  })
+}
+
 // onSave de MeasureGrid per al fitting: despatxa per règim del POM (lineRegimeMap: lineId → 'LINEAR'|'STEP').
 // STEP → PATCH valor_real (no propaga). LINEAR → propagar (retorna {linies} → MeasureGrid refresca germanes).
 // Motor INTACTE: només es criden els endpoints d'autosave/propagació existents.

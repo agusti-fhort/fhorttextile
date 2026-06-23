@@ -46,7 +46,9 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
   const [state, schedule] = useDebouncedSave(onCommit)
   if (!active) return <td style={cellTd(true, false, false)} />
   const modified = activeRed(value, active)
-  if (!editable) {
+  // `active.readonly` força lectura en una cel·la concreta encara que la graella sigui editable
+  // (p.ex. la talla base de l'Escalat, que no s'edita com a override).
+  if (!editable || active.readonly) {
     // Lectura: format de presentació (1 decimal cm · 2 inch). L'edició NO es formata (precisió canònica).
     return (
       <td style={{ ...cellTd(true, false, false), color: modified ? 'var(--err)' : 'var(--text-main)' }}>

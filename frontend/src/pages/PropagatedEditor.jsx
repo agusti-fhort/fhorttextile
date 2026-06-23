@@ -1,95 +1,70 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import { models } from '../api/endpoints'
-import MeasureTable from './MeasureTable'
+import MeasureGrid from '../components/model/MeasureGrid'
+import EditorHeader from '../components/model/EditorHeader'
+import { buildEscalatGroups, buildEscalatRows, regimeLeadCol } from '../components/model/fittingGridAdapter'
 
-// Editor de la TAULA PROPAGADA del model (totes les talles, règim, breaks) en mode EDICIÓ.
-// Reusa MeasureTable (el mateix de la sessió de fitting) en "mode model": cada cel·la NO-base
-// escriu un ModelGradingOverride i re-propaga al servidor (PEÇA 1); la talla base és de lectura
-// (s'edita com a mesura base). El règim per POM es canvia amb models.setPomRegim (ja independent
-// de la sessió). S'alimenta de taula-mesures (GradingVersion vigent, criteri PEÇA 0).
+// ESCALAT — editor de la taula propagada del model (totes les talles) sobre l'editor únic MeasureGrid
+// (mode model). Cada cel·la NO-base escriu un ModelGradingOverride i re-propaga al servidor via
+// `models.setSizeOverride` (motor INTACTE: el QUI/QUAN no canvia); la talla base és read-only. El
+// règim per POM es canvia amb `models.setPomRegim`. S'alimenta de taula-mesures (GradingVersion vigent).
 export default function PropagatedEditor({ modelId, onClose, inline = false, readOnly = false }) {
   const { t } = useTranslation()
   const [data, setData] = useState(null)
+  const [modelInfo, setModelInfo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
-  const [reals, setReals] = useState({})
-  const [editedIds, setEditedIds] = useState(new Set())
-  const focusedIdRef = useRef(null)
-
-  const cellId = (pomId, size) => `${pomId}:${size}`
+  const [reloadKey, setReloadKey] = useState(0)   // remunta MeasureGrid en canvi de règim (re-sembra)
 
   const load = useCallback(() => {
     setLoading(true)
     return client.get(`/api/v1/models/${modelId}/taula-mesures/`)
-      .then(res => {
-        const d = res.data
-        setData(d)
-        const base = (d.base_size || '').trim()
-        const sizes = d.size_run || []
-        const r = {}
-        for (const row of d.rows || []) {
-          for (const s of sizes) {
-            const val = s === base ? row.base_value_cm : (row.graded?.[s] ?? null)
-            r[cellId(row.pom_id, s)] = val == null ? '' : val
-          }
-        }
-        // Després d'una re-propagació no trepitgem la cel·la amb focus (l'usuari pot teclejar-hi).
-        setReals(prev => {
-          const keep = focusedIdRef.current
-          if (keep && prev[keep] !== undefined) return { ...r, [keep]: prev[keep] }
-          return r
-        })
-      })
+      .then(res => setData(res.data))
       .catch(() => setErr(t('model_measurements.propagated_load_err')))
       .finally(() => setLoading(false))
   }, [modelId, t])
 
   useEffect(() => { load() }, [load])
+  // Identitat de model per a la capçalera unificada (EditorHeader).
+  useEffect(() => { models.get(modelId).then(r => setModelInfo(r.data)).catch(() => {}) }, [modelId])
 
-  const onValue = (id, v) => setReals(r => ({ ...r, [id]: v }))
-  const onAnchor = (id) => setEditedIds(new Set([id]))
+  const base = (data?.base_size || '').trim()
+  const sizes = data?.size_run || []
+  const gridGroups = buildEscalatGroups(sizes, base, t)
+  const gridRows = buildEscalatRows(data?.rows || [], sizes, base)
 
-  // Escriptura per talla (mode model): override + re-propaga; després recarrega per repintar germanes.
-  const persistCell = useCallback(({ row, sizeLabel, raw }) => {
-    const v = raw === '' ? null : Number(raw)
-    if (v == null || Number.isNaN(v)) return Promise.resolve()
-    return models.setSizeOverride(modelId, row.pom_id, sizeLabel, v).then(res => {
-      load()
-      return res
-    })
-  }, [modelId, load])
+  // Escriptura per talla (mode model): override + re-propaga (motor intacte). Després rellegeix la
+  // taula i retorna les cel·les del POM perquè MeasureGrid refresqui les germanes (excepte la del focus).
+  const onGridSave = useCallback((lineId, value) => {
+    if (value == null) return Promise.resolve()
+    const i = lineId.lastIndexOf(':')
+    const pomId = Number(lineId.slice(0, i))
+    const size = lineId.slice(i + 1)
+    return models.setSizeOverride(modelId, pomId, size, value)
+      .then(() => client.get(`/api/v1/models/${modelId}/taula-mesures/`))
+      .then(res => {
+        const d = res.data; setData(d)
+        const b = (d.base_size || '').trim()
+        const row = (d.rows || []).find(r => r.pom_id === pomId)
+        const lines = row ? (d.size_run || []).map(s => {
+          const v = s === b ? row.base_value_cm : (row.graded?.[s] ?? null)
+          return { id: `${pomId}:${s}`, valor_real: v == null ? '' : v }
+        }) : []
+        return { lines }
+      })
+  }, [modelId])
 
-  // Canvi de règim del POM (reusa l'endpoint ja independent de la sessió) → recarrega.
+  // Canvi de règim del POM (endpoint independent de la sessió) → rellegeix i remunta la graella.
   const onRegimChange = (row, nova) => {
     if (!nova || nova === (row.logica ?? '')) return
-    models.setPomRegim(modelId, row.pom_id, nova).then(() => load())
+    models.setPomRegim(modelId, row.pom_id, nova)
+      .then(() => load().then(() => setReloadKey(k => k + 1)))
       .catch(() => setErr(t('model_measurements.regim_err')))
   }
 
-  // Construeix les files en la forma que espera MeasureTable. Una sola "versió" (la vigent):
-  // columna read-only "Base" (valor propagat actual) + columna editable "Fit actual".
-  const base = (data?.base_size || '').trim()
-  const sizes = data?.size_run || []
-  const versionNumbers = [1]
-  const pomRows = (data?.rows || []).map(row => {
-    const cells = {}
-    for (const s of sizes) {
-      const v = s === base ? row.base_value_cm : (row.graded?.[s] ?? null)
-      cells[s] = {
-        id: cellId(row.pom_id, s), pom_id: row.pom_id, size_label: s,
-        logica: row.logica,
-        evolucio: [{ version_number: 1, valor_cm: v }],
-      }
-    }
-    return {
-      pom_id: row.pom_id, codi: row.pom_code, nom: row.nom_ca || row.nom_en, is_key: row.is_key,
-      logica: row.logica, increment_base: row.increment_base,
-      increment_break: row.increment_break, talla_break_label: row.talla_break_label,
-      cells,
-    }
-  })
+  const leadCols = [regimeLeadCol(t, onRegimChange, readOnly)]
 
   // inline=true: incrustat com a contingut de pestanya (sense overlay fix ni botó tancar).
   const outerStyle = inline
@@ -101,49 +76,41 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
 
   return (
     <div style={outerStyle}>
-      <div style={{
-        background: inline ? 'transparent' : 'var(--bg-muted)', padding: inline ? '0 0 12px' : '12px 18px',
-        borderBottom: inline ? 'none' : '0.5px solid var(--border)', display: 'flex',
-        alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        <div>
-          <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, margin: 0 }}>
-            {t('model_measurements.propagated_title')}
-          </h2>
-          <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-            {readOnly ? t('model_measurements.propagated_hint_ro') : t('model_measurements.propagated_hint')}
-          </p>
-        </div>
-        {!inline && (
-          <button type="button" onClick={onClose}
-            style={{ padding: '6px 16px', border: '0.5px solid var(--border)', borderRadius: 6,
-                     background: 'var(--white)', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
-            {t('model_measurements.propagated_close')}
-          </button>
-        )}
-      </div>
       <div style={bodyStyle}>
+        {/* Overlay (ruta /escalat o modal "Veure escalat"): botó tancar sempre disponible (no depèn
+            que hagi carregat la identitat de model). */}
+        {!inline && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <button type="button" onClick={onClose}
+              style={{ padding: '6px 16px', border: '0.5px solid var(--border)', borderRadius: 6,
+                       background: 'var(--white)', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
+              {t('model_measurements.propagated_close')}
+            </button>
+          </div>
+        )}
+        {/* Capçalera UNIFICADA: identitat de model + franja contextual (Escalat · pista). */}
+        <EditorHeader
+          model={modelInfo}
+          context={
+            <span>
+              <strong>{t('model_sheet.tab_grading')}</strong>
+              {' — '}
+              {readOnly ? t('model_measurements.propagated_hint_ro') : t('model_measurements.propagated_hint')}
+            </span>
+          }
+        />
         {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 8 }}>{err}</div>}
         {loading && !data ? (
           <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('app.loading')}</div>
-        ) : pomRows.length === 0 ? (
+        ) : gridRows.length === 0 ? (
           <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('model_measurements.propagated_empty')}</div>
         ) : (
-          <MeasureTable
-            pomRows={pomRows}
-            sizeLabels={sizes}
-            baseLabel={base}
-            versionNumbers={versionNumbers}
-            reals={reals}
-            editedIds={editedIds}
-            focusedIdRef={focusedIdRef}
-            readOnly={readOnly}
-            onValue={onValue}
-            onAnchor={onAnchor}
-            onPropagated={() => {}}
-            onRegimChange={readOnly ? () => {} : onRegimChange}
-            persistCell={readOnly ? null : persistCell}
-            cellReadOnly={(row, s) => s === base}
+          <MeasureGrid
+            key={`${modelId}:${reloadKey}`}
+            editable={!readOnly}
+            rows={gridRows} groups={gridGroups}
+            leadCols={leadCols}
+            onSave={onGridSave}
           />
         )}
       </div>
