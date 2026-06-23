@@ -1377,6 +1377,7 @@
     "generating": "⏳ Generating…",
     "generate_grading": "⚡ Auto-generate grading",
     "continue_fabric": "Continue → Fabric",
+    "back_to_model": "↩ Back to model",
     "table_title": "Measurements and grading table",
     "edit_measures": "✏ Edit measurements",
     "base_prefix": "Base:",

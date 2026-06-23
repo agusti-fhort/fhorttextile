@@ -1377,6 +1377,7 @@
     "generating": "⏳ Generando…",
     "generate_grading": "⚡ Generar grading automático",
     "continue_fabric": "Continuar → Tejido",
+    "back_to_model": "↩ Volver al modelo",
     "table_title": "Tabla de medidas y grading",
     "edit_measures": "✏ Editar medidas",
     "base_prefix": "Base:",

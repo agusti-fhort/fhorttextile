@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import EditableTable from '../components/EditableTable/EditableTable'
 import ImportWizard from '../components/ImportWizard/ImportWizard'
 import Modal from '../components/ui/Modal'
-import PropagatedEditor from './PropagatedEditor'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import { modelTasks } from '../api/endpoints'
 
@@ -38,14 +37,11 @@ export default function ModelMeasurements() {
   const [sizesAmbDades, setSizesAmbDades] = useState(null)
   const [deltes, setDeltes] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [generatingGrading, setGeneratingGrading] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   // B5 — oferta conscient de sembra (4a font): modal a la primera entrada si l'item té valors.
   const [seedOffer, setSeedOffer] = useState(false)
   const [seedBusy, setSeedBusy] = useState(false)
-  // Editor propagat (totes les talles, règim, breaks) en mode edició — PEÇA 2.
-  const [showPropagated, setShowPropagated] = useState(false)
 
   // Compta-temps (PLA_DE_TREBALL §4): si s'ha entrat per tasca, en SORTIR de l'eina (desmuntar /
   // navegar enrere / resoldre) es pausa la tasca, com EscalatTask/TechSheetEditor. L'obertura (En curs)
@@ -90,27 +86,8 @@ export default function ModelMeasurements() {
     )
   }
 
-  const handleGenerateGrading = async () => {
-    setGeneratingGrading(true); setError('')
-    try {
-      const r = await fetch(`${API}/api/v1/models/${id}/generar-grading/`, {
-        method: 'POST', headers: authHeaders,
-      })
-      const d = await r.json()
-      if (r.ok) {
-        setTaulaRows(d.rows || [])
-        // Grading fills graded for all sizes → we refresh columns/delta.
-        fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
-          .then(r => r.json()).then(refreshTableMeta).catch(() => {})
-      } else {
-        setError(d.error || t('model_measurements.err_grading'))
-      }
-    } catch {
-      setError(t('model_sheet.err_connection'))
-    } finally {
-      setGeneratingGrading(false)
-    }
-  }
+  // P5 — "Generar grading automàtic" RETIRAT d'aquesta superfície: la propagació és conscient
+  // (D-10), no un botó pla. L'endpoint generar-grading es CONSERVA per a la projecció conscient.
 
   // Refresh column/delta metadata from taula-mesures (single source).
   const refreshTableMeta = (d) => {
@@ -267,21 +244,6 @@ export default function ModelMeasurements() {
         </Modal>
       )}
 
-      {showPropagated && (
-        <PropagatedEditor
-          modelId={parseInt(id)}
-          readOnly
-          onClose={() => {
-            setShowPropagated(false)
-            // Reflectir els overrides re-propagats a la taula de resultat.
-            fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
-              .then(r => r.json())
-              .then(d => { setTaulaRows(d.rows || []); refreshTableMeta(d) })
-              .catch(() => {})
-          }}
-        />
-      )}
-
       {mode === 'loading' && !error && (
         <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
           {t('model_sheet.loading')}
@@ -392,42 +354,27 @@ export default function ModelMeasurements() {
           />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 24 }}>
-            <button type="button" onClick={() => setMode('selector')}
-              style={{ padding: '8px 16px', border: '0.5px solid var(--border)',
-                       borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
-              ← {t('app.back')}
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" onClick={() => setMode('selector')}
+                style={{ padding: '8px 16px', border: '0.5px solid var(--border)',
+                         borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
+                ← {t('app.back')}
+              </button>
+              <button type="button" onClick={() => navigate(`/models/${id}`)}
+                style={{ padding: '8px 16px', border: '0.5px solid var(--border)',
+                         borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
+                {t('model_measurements.back_to_model')}
+              </button>
+            </div>
             {taulaRows.length > 0 && (
-              <div style={{ display: 'flex', gap: 8 }}>
-                {model?.grading_rule_set && (
-                  <button type="button" onClick={handleGenerateGrading} disabled={generatingGrading}
-                    style={{
-                      padding: '8px 16px', border: '0.5px solid var(--gold)',
-                      borderRadius: 6, background: 'transparent',
-                      color: 'var(--gold)', fontSize: 'var(--fs-body)', cursor: 'pointer',
-                    }}>
-                    {generatingGrading ? t('model_measurements.generating') : t('model_measurements.generate_grading')}
-                  </button>
-                )}
-                {model?.grading_rule_set && (
-                  <button type="button" onClick={() => setShowPropagated(true)}
-                    style={{
-                      padding: '8px 16px', border: '0.5px solid var(--gold)',
-                      borderRadius: 6, background: 'transparent',
-                      color: 'var(--gold)', fontSize: 'var(--fs-body)', cursor: 'pointer',
-                    }}>
-                    {t('model_measurements.view_grading')}
-                  </button>
-                )}
-                <button type="button" onClick={() => navigate(`/models/${id}/teixit`)}
-                  style={{
-                    padding: '8px 20px', background: 'var(--gold)', color: 'var(--white)',
-                    border: 'none', borderRadius: 6, fontSize: 'var(--fs-h3)', fontWeight: 500,
-                    cursor: 'pointer',
-                  }}>
-                  {t('model_measurements.continue_fabric')}
-                </button>
-              </div>
+              <button type="button" onClick={() => navigate(`/models/${id}/teixit`)}
+                style={{
+                  padding: '8px 20px', background: 'var(--gold)', color: 'var(--white)',
+                  border: 'none', borderRadius: 6, fontSize: 'var(--fs-h3)', fontWeight: 500,
+                  cursor: 'pointer',
+                }}>
+                {t('model_measurements.continue_fabric')}
+              </button>
             )}
           </div>
         </div>
@@ -480,28 +427,11 @@ export default function ModelMeasurements() {
 
           <div style={{ display: 'flex', justifyContent: 'space-between',
                         alignItems: 'center', marginTop: 16 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {model?.grading_rule_set && (
-                <button type="button" onClick={handleGenerateGrading} disabled={generatingGrading}
-                  style={{
-                    padding: '8px 16px', border: '0.5px solid var(--gold)',
-                    borderRadius: 6, background: 'transparent',
-                    color: 'var(--gold)', fontSize: 'var(--fs-body)', cursor: 'pointer',
-                  }}>
-                  {generatingGrading ? t('model_measurements.generating') : t('model_measurements.generate_grading')}
-                </button>
-              )}
-              {model?.grading_rule_set && (
-                <button type="button" onClick={() => setShowPropagated(true)}
-                  style={{
-                    padding: '8px 16px', border: '0.5px solid var(--gold)',
-                    borderRadius: 6, background: 'transparent',
-                    color: 'var(--gold)', fontSize: 'var(--fs-body)', cursor: 'pointer',
-                  }}>
-                  {t('model_measurements.view_grading')}
-                </button>
-              )}
-            </div>
+            <button type="button" onClick={() => navigate(`/models/${id}`)}
+              style={{ padding: '8px 16px', border: '0.5px solid var(--border)',
+                       borderRadius: 6, background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
+              {t('model_measurements.back_to_model')}
+            </button>
             <button type="button" onClick={() => navigate(`/models/${id}/teixit`)}
               style={{
                 padding: '8px 20px', borderRadius: 6, border: 'none',
