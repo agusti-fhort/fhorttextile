@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { models, sizeChecks, sizeCheckLines } from '../../api/endpoints'
+import { models, sizeChecks, sizeCheckLines, baseMeasurements } from '../../api/endpoints'
 import MeasureGrid from './MeasureGrid'
 import EditorHeader from './EditorHeader'
 import DependencyPanel from './DependencyPanel'
@@ -168,6 +168,10 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   }
 
   const onSave = useCallback((lineId, value) => sizeCheckLines.update(lineId, { valor_real: value }), [])
+  // P4 — autoria del nom a nivell MODEL: desa nom_fitxa de la BaseMeasurement (NO el POM tenant).
+  const onNomSave = useCallback((bmId, value) =>
+    baseMeasurements.update(bmId, { nom_fitxa: value || null })
+      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.nom_save_err') })), [onFeedback, t])
 
   if (loading) return <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('common.loading')}</div>
 
@@ -188,6 +192,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       pom_id: r.pom_id,
       codi: r.nom_fitxa || r.pom_code,
       nom_en: r.nom_en, nom_local: r.nom_ca,
+      nom_fitxa: r.nom_fitxa, bm_id: r.base_measurement_id,
       is_key: r.is_key,
       logica: line?.logica, increment_base: line?.increment_base,
       increment_break: line?.increment_break, talla_break_label: line?.talla_break_label,
@@ -229,7 +234,8 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     <div>
       <EditorHeader model={model} onBack={onBack} />
       <DependencyPanel model={model} />
-      <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly} onSave={readOnly ? undefined : onSave}
+      <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
+        onSave={readOnly ? undefined : onSave} onNomSave={readOnly ? undefined : onNomSave}
         empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>} />
 
       {!readOnly && check && rows.length > 0 && (

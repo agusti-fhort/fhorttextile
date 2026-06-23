@@ -1294,7 +1294,8 @@
   },
   "measuregrid": {
     "col_pom": "POM",
-    "col_nom": "Nom"
+    "col_nom": "Nom",
+    "nom_save_err": "No s'ha pogut desar el nom."
   },
   "sizecheck": {
     "col_date": "Data",

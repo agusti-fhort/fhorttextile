@@ -1294,7 +1294,8 @@
   },
   "measuregrid": {
     "col_pom": "POM",
-    "col_nom": "Nombre"
+    "col_nom": "Nombre",
+    "nom_save_err": "No se ha podido guardar el nombre."
   },
   "sizecheck": {
     "col_date": "Fecha",

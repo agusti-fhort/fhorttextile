@@ -116,17 +116,42 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
   )
 }
 
-// Nomenclatura a 2 línies (llei de presentació): nom EN canònic a dalt + idioma usuari a sota
-// (petit, cursiva, gris). Fallback al que hi hagi.
-function NomCell({ nomEn, nomLocal, style }) {
+// Nomenclatura a 2 línies (llei de presentació): nom EN canònic a dalt (sembra, read-only) + nom
+// d'autoria a sota (petit, cursiva, gris). L'autoria viu a nivell MODEL (BaseMeasurement.nom_fitxa,
+// precedència sobre la canònica `nom_local`); en mode edició amb `bmId`, la línia inferior és
+// EDITABLE i desa via `onNomSave(bmId, value)` (P4: sobirania — NO toca el POM tenant compartit).
+function NomCell({ nomEn, nomLocal, nomFitxa, bmId, editable, onNomSave, style }) {
   const top = nomEn || nomLocal || ''
-  const bottom = nomEn && nomLocal && nomLocal !== nomEn ? nomLocal : ''
+  const canon = nomEn && nomLocal && nomLocal !== nomEn ? nomLocal : (nomLocal || '')
+  const modelName = (nomFitxa != null && nomFitxa !== '') ? nomFitxa : canon
+  const canEdit = !!(editable && bmId != null && onNomSave)
+  const [val, setVal] = useState(modelName ?? '')
+  const [focused, setFocused] = useState(false)
+  useEffect(() => { if (!focused) setVal(modelName ?? '') }, [modelName, focused])
+  const commit = () => {
+    setFocused(false)
+    const v = (val ?? '').trim()
+    if (v !== (modelName ?? '')) onNomSave(bmId, v)
+  }
   return (
     <td style={style}>
       <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>{top || '—'}</div>
-      {bottom && (
-        <div style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }}>{bottom}</div>
-      )}
+      {canEdit ? (
+        <input
+          value={val ?? ''} onChange={e => setVal(e.target.value)}
+          onFocus={() => setFocused(true)} onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+          placeholder={canon || ''}
+          style={{
+            font: 'inherit', fontSize: 'var(--fs-caption)', fontStyle: 'italic',
+            color: 'var(--text-muted)', width: '100%', padding: '0 2px', boxSizing: 'border-box',
+            borderRadius: 3, background: focused ? 'var(--white)' : 'transparent',
+            border: focused ? '1px solid var(--border)' : '1px solid transparent',
+          }}
+        />
+      ) : (modelName && (
+        <div style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }}>{modelName}</div>
+      ))}
     </td>
   )
 }
@@ -137,6 +162,7 @@ export default function MeasureGrid({
   leadCols = [],          // [{key, label, width, render:(row)=>node}]  sticky després de POM/Nom (consulta: render pot ser text)
   editable = false,
   onSave,                 // (lineId, rawValue) => Promise (pot resoldre amb {lines:[{id,valor_real}]} per propagar)
+  onNomSave = null,       // (bmId, value) => Promise — desa el nom d'autoria del MODEL (P4); null = no editable
   empty = null,           // node quan no hi ha files
 }) {
   const { t } = useTranslation()
@@ -239,7 +265,8 @@ export default function MeasureGrid({
                     {r.codi}{r.is_key && <i className="ti ti-star" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title="KEY" />}
                   </span>
                 </td>
-                <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} style={stickyTd(COL_POM_W, COL_NOM_W, rowBg)} />
+                <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} nomFitxa={r.nom_fitxa} bmId={r.bm_id}
+                  editable={editable} onNomSave={onNomSave} style={stickyTd(COL_POM_W, COL_NOM_W, rowBg)} />
                 {leadCols.map((c, idx) => (
                   <td key={c.key} style={stickyTd(leadLefts[idx], c.width, rowBg)}>{c.render(r)}</td>
                 ))}

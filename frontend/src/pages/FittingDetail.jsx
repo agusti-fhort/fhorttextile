@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, pieceFittings, fittingPhotos, modelFitxers, models } from '../api/endpoints'
+import { fittingSessions, pieceFittings, fittingPhotos, modelFitxers, models, baseMeasurements } from '../api/endpoints'
 import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
@@ -548,7 +548,7 @@ export default function FittingDetail() {
     if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, {
       pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key,
       // Nomenclatura 2 línies (nom EN canònic dalt · idioma usuari sota) — heretada per MeasureGrid (P5).
-      nom_en: l.nom_en, nom_local: l.nom_local,
+      nom_en: l.nom_en, nom_local: l.nom_local, nom_fitxa: l.nom_fitxa, bm_id: l.bm_id,
       // Règim per POM (mateix valor a cada talla) → etiqueta de regla a la capçalera de fila.
       logica: l.logica, increment_base: l.increment_base,
       increment_break: l.increment_break, talla_break_label: l.talla_break_label,
@@ -571,6 +571,8 @@ export default function FittingDetail() {
   const gridRows = buildFittingRows(pomRows, sizeLabels, versionNumbers)
   const lineRegimeMap = new Map(lines.map(l => [l.id, l.logica]))
   const onGridSave = makeFittingOnSave(lineRegimeMap)
+  // P4 — autoria del nom a nivell MODEL: nom_fitxa de BaseMeasurement (NO el POM tenant compartit).
+  const onNomSave = (bmId, value) => baseMeasurements.update(bmId, { nom_fitxa: value || null }).catch(() => {})
 
   // PG-4b-3c — canvi de règim del POM des de la capçalera de fila. Materialitza NOMÉS si difereix
   // (mirar no materialitza). Èxit → actualitza in-place les línies del POM (logica + deltas) perquè
@@ -731,7 +733,7 @@ export default function FittingDetail() {
               editable
               rows={gridRows} groups={gridGroups}
               leadCols={[regimeLeadCol(t, onRegimChange, false)]}
-              onSave={onGridSave}
+              onSave={onGridSave} onNomSave={onNomSave}
             />
           )}
         </Card>

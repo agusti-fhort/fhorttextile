@@ -44,6 +44,7 @@ export function buildFittingRows(pomRows, sizeLabels, versionNumbers) {
     return {
       pom_id: row.pom_id, codi: row.codi, is_key: row.is_key,
       nom_en: row.nom_en, nom_local: row.nom_local,
+      nom_fitxa: row.nom_fitxa, bm_id: row.bm_id,   // P4 — autoria de nom a nivell model
       logica: row.logica, increment_base: row.increment_base,
       increment_break: row.increment_break, talla_break_label: row.talla_break_label,
       cells,
