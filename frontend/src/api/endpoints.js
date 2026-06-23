@@ -40,6 +40,9 @@ export const models = {
   unassign: (id) => client.post(`/api/v1/models/${id}/unassign/`),
   // PG-4b-3b — fixa el règim de grading d'un POM del model (l'usarà 3c). {logica}
   setPomRegim: (modelId, pomId, logica) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, { logica }),
+  // P3 — autoria de la REGLA viva del model per POM: delta + break (+ règim). Patrimoni del model
+  // (origen MANUAL). payload: {logica?, increment_base?, increment_break?, talla_break_label?}.
+  setPomRule: (modelId, pomId, payload) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, payload),
   // Edita una talla NO-base com a ModelGradingOverride i re-propaga (editor propagat del model).
   setSizeOverride: (modelId, pomId, sizeLabel, valor) =>
     client.post(`/api/v1/models/${modelId}/set-size-override/`, { pom_id: pomId, size_label: sizeLabel, valor }),

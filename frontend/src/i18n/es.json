@@ -1295,7 +1295,12 @@
   "measuregrid": {
     "col_pom": "POM",
     "col_nom": "Nombre",
-    "nom_save_err": "No se ha podido guardar el nombre."
+    "nom_save_err": "No se ha podido guardar el nombre.",
+    "regle_delta": "Δ",
+    "regle_break": "Break",
+    "regle_from": "a partir de",
+    "regle_none": "—",
+    "regle_save_err": "No se ha podido guardar la regla."
   },
   "sizecheck": {
     "col_date": "Fecha",

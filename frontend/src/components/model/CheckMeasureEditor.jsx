@@ -113,6 +113,63 @@ function regleLabel(row, t) {
   return `+${row.increment_base}`
 }
 
+// P3 — editor de la REGLA VIVA del model (delta + break) a la talla base. La regla és patrimoni del
+// MODEL: s'escriu a ModelGradingRule (origen='MANUAL') via models.setPomRule i el motor la llegeix
+// tal qual (NO es toca el càlcul). Sense break → delta uniforme (talla_break_label null = LINEAR pur).
+// Amb break (talla + valor) → LINEAR amb trencament. STEP (irregular) no s'edita aquí; es mostra inert.
+const regleInput = {
+  font: 'inherit', fontFamily: MONO, fontSize: 'var(--fs-caption)', width: 46, padding: '1px 3px',
+  textAlign: 'right', border: `1px solid ${BORDER}`, borderRadius: 3, background: 'var(--white)',
+  color: 'var(--text-main)', boxSizing: 'border-box',
+}
+function RegleEditCell({ modelId, row, sizeRun, onFeedback }) {
+  const { t } = useTranslation()
+  const [delta, setDelta] = useState(row.increment_base ?? '')
+  const [brk, setBrk] = useState(row.increment_break ?? '')
+  const [brkSize, setBrkSize] = useState(row.talla_break_label ?? '')
+  useEffect(() => {
+    setDelta(row.increment_base ?? ''); setBrk(row.increment_break ?? '')
+    setBrkSize(row.talla_break_label ?? '')
+  }, [row.pom_id, row.increment_base, row.increment_break, row.talla_break_label])
+
+  const save = (d, b, bs) => {
+    models.setPomRule(modelId, row.pom_id, {
+      logica: 'LINEAR',
+      increment_base: d === '' ? null : d,
+      talla_break_label: bs || null,
+      increment_break: bs ? (b === '' ? null : b) : null,
+    }).catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.regle_save_err') }))
+  }
+  if (row.logica === 'STEP') {
+    // Règim irregular (STEP): no es desglossa a delta+break; es mostra inert (s'edita al fitting).
+    return <div style={{ fontSize: 'var(--fs-caption)', color: TEXT_2 }}>{t('fitting.grid.rule_free')}</div>
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-caption)', color: TEXT_2 }}>
+        <span style={{ width: 30 }}>{t('measuregrid.regle_delta')}</span>
+        <input type="text" inputMode="decimal" value={delta} aria-label={t('measuregrid.regle_delta')}
+          onChange={e => setDelta(e.target.value)} onBlur={() => save(delta, brk, brkSize)}
+          style={regleInput} />
+      </label>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-caption)', color: TEXT_2 }}>
+        <span style={{ width: 30 }}>{t('measuregrid.regle_break')}</span>
+        <input type="text" inputMode="decimal" value={brk} aria-label={t('measuregrid.regle_break')}
+          disabled={!brkSize} onChange={e => setBrk(e.target.value)} onBlur={() => save(delta, brk, brkSize)}
+          style={{ ...regleInput, opacity: brkSize ? 1 : 0.5 }} />
+        <span>{t('measuregrid.regle_from')}</span>
+        <select value={brkSize} aria-label={t('measuregrid.regle_from')}
+          onChange={e => { const v = e.target.value; setBrkSize(v); save(delta, brk, v) }}
+          style={{ font: 'inherit', fontSize: 'var(--fs-caption)', padding: '1px 2px', border: `1px solid ${BORDER}`,
+                   borderRadius: 3, background: 'var(--white)', color: 'var(--text-main)' }}>
+          <option value="">{t('measuregrid.regle_none')}</option>
+          {(sizeRun || []).map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </label>
+    </div>
+  )
+}
+
 export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false, taskId = null }) {
   const { t } = useTranslation()
   const [baseData, setBaseData] = useState(null)
@@ -209,18 +266,24 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     }
   })
 
-  // Columna Règim (lectura): logica + etiqueta de regla a 2 línies, estil fitting. El check no
-  // edita el règim (és context de grading); el fitting sí (al seu editor). MeasureGrid ja té leadCols.
+  // Run de talles del model (per al desplegable "a partir de" del break de la regla).
+  const sizeRun = (model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean)
+
+  // Columna Règim: en CONSULTA, lectura (logica + etiqueta de regla a 2 línies). En TREBALL, la regla
+  // (delta + break) és EDITABLE — patrimoni viu del model (P3): escriu a ModelGradingRule i el motor
+  // la propaga des d'ella. El fitting també edita el règim (al seu editor); aquí s'autora a la base.
   const leadCols = [{
-    key: 'regim', label: t('fitting.grid.regime'), width: 118,
-    render: (row) => (
+    key: 'regim', label: t('fitting.grid.regime'), width: readOnly ? 118 : 184,
+    render: (row) => (readOnly ? (
       <div>
         <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-main)' }}>{row.logica ?? '—'}</div>
         {regleLabel(row, t) && (
           <div style={{ fontSize: 'var(--fs-caption)', color: TEXT_2, whiteSpace: 'nowrap', marginTop: 1 }}>{regleLabel(row, t)}</div>
         )}
       </div>
-    ),
+    ) : (
+      <RegleEditCell modelId={model.id} row={row} sizeRun={sizeRun} onFeedback={onFeedback} />
+    )),
   }, {
     // Tolerància (lectura): es mostra tal com ve (-minus/+plus); NO es col·lapsa a ±únic (deute sprint POMs).
     key: 'tol', label: t('sizecheck.col_tolerance'), width: 72,

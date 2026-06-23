@@ -1854,20 +1854,37 @@ def registre_activitat_view(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def set_pom_regim_view(request, model_id, pom_id):
-    """PG-4b-3a — UPSERT del règim (logica) d'UNA ModelGradingRule resident per (model, pom).
+    """PG-4b-3a / P3 — UPSERT de la REGLA resident (ModelGradingRule) per (model, pom).
 
-    Body: {logica: 'LINEAR'|'STEP'}. Si la resident existeix → actualitza logica + origen='MANUAL'.
-    Si no → la materialitza copiant els camps canònics del fallback GradingRule del rule_set
-    (segur: amb logica='STEP' el motor ignora increment_base — es conserva latent). Sense fallback
-    → 400 (no es crea cap resident buida). Innocu sobre el grading persistent (no toca
-    measurements_version / GradedSpec / GradingVersion; només el proper generate_graded_specs).
+    La regla (règim + deltes + break) és patrimoni VIU del MODEL (origen='MANUAL'); el motor la
+    llegeix via _load_grading_rules→_apply_rule (NO es toca el CÀLCUL). Body (tots opcionals;
+    s'actualitza només el que ve):
+      - logica: 'LINEAR' | 'STEP'
+      - increment_base: float|null   (delta base, p.ex. 4)
+      - increment_break: float|null  (delta a partir del trencament, p.ex. 2.5)
+      - talla_break_label: str|null  (talla d'inici del break; del run del model)
+    Si la resident no existeix: es materialitza des del fallback del catàleg; si tampoc n'hi ha,
+    es crea de nou (autoria manual de la regla des de zero). Innocu sobre el grading persistent
+    (no toca GradedSpec/GradingVersion; només el proper generate_graded_specs).
     """
     from fhort.models_app.models import ModelGradingRule
     from fhort.pom.models import GradingRule
 
-    logica = (request.data.get('logica') or '').strip().upper()
-    if logica not in ('LINEAR', 'STEP'):
+    data = request.data
+    has = lambda k: k in data   # noqa: E731 — actualització selectiva per presència de camp
+
+    logica = (data.get('logica') or '').strip().upper() if has('logica') else None
+    if logica is not None and logica not in ('LINEAR', 'STEP'):
         return Response({'detail': "logica ha de ser 'LINEAR' o 'STEP'."}, status=400)
+
+    def _num(k):
+        v = data.get(k)
+        if v in (None, ''):
+            return None
+        try:
+            return float(str(v).replace(',', '.'))
+        except (TypeError, ValueError):
+            return 'ERR'
 
     model = Model.objects.filter(pk=model_id).first()
     if model is None:
@@ -1875,24 +1892,40 @@ def set_pom_regim_view(request, model_id, pom_id):
 
     with transaction.atomic():
         rule = ModelGradingRule.objects.filter(model=model, pom_id=pom_id).first()
-        if rule is not None:
-            rule.logica = logica
-            rule.origen = 'MANUAL'
-            rule.save(update_fields=['logica', 'origen', 'updated_at'])
-        else:
+        if rule is None:
+            # Sembra des del fallback del catàleg si n'hi ha; si no, regla nova (autoria de zero).
             src = (GradingRule.objects.filter(
                        rule_set_id=model.grading_rule_set_id, pom_id=pom_id).first()
                    if model.grading_rule_set_id else None)
-            if src is None:
-                return Response(
-                    {'detail': "No hi ha regla de fallback per a aquest POM; cal definir-la "
-                               "al catàleg abans de triar-ne el règim."}, status=400)
-            rule = ModelGradingRule.objects.create(
-                model=model, pom_id=pom_id, logica=logica, origen='MANUAL', actiu=True,
-                increment=src.increment, valors_step=src.valors_step,
-                increment_base=src.increment_base, increment_break=src.increment_break,
-                talla_break_label=src.talla_break_label, talla_break_pos=src.talla_break_pos,
+            rule = ModelGradingRule(
+                model=model, pom_id=pom_id, actiu=True,
+                logica=(src.logica if src else 'LINEAR'),
+                increment=(src.increment if src else 0),
+                valors_step=(src.valors_step if src else None),
+                increment_base=(src.increment_base if src else None),
+                increment_break=(src.increment_break if src else None),
+                talla_break_label=(src.talla_break_label if src else None),
+                talla_break_pos=(src.talla_break_pos if src else None),
             )
+
+        if logica is not None:
+            rule.logica = logica
+        for k in ('increment_base', 'increment_break'):
+            if has(k):
+                val = _num(k)
+                if val == 'ERR':
+                    return Response({'detail': f"{k} ha de ser numèric."}, status=400)
+                setattr(rule, k, val)
+        if has('talla_break_label'):
+            tbl = (data.get('talla_break_label') or '').strip() or None
+            rule.talla_break_label = tbl
+            rule.talla_break_pos = None
+            if tbl and model.size_run_model:
+                run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
+                if tbl in run:
+                    rule.talla_break_pos = run.index(tbl)
+        rule.origen = 'MANUAL'
+        rule.save()
 
     return Response({
         'model': model.id,
