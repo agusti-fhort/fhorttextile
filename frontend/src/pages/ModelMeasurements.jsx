@@ -47,6 +47,16 @@ export default function ModelMeasurements() {
   // Editor propagat (totes les talles, règim, breaks) en mode edició — PEÇA 2.
   const [showPropagated, setShowPropagated] = useState(false)
 
+  // Compta-temps (PLA_DE_TREBALL §4): si s'ha entrat per tasca, en SORTIR de l'eina (desmuntar /
+  // navegar enrere / resoldre) es pausa la tasca, com EscalatTask/TechSheetEditor. L'obertura (En curs)
+  // la fa la navegació del Kanban/WorkPlan. Si la tasca ja no és InProgress (p.ex. resolta → Done) la
+  // transició no és vàlida i s'ignora. Desbloqueja el Play-per-reobrir (InProgress no té Play).
+  useEffect(() => {
+    return () => {
+      if (taskId) modelTasks.transition(taskId, { to_status: 'Paused' }).catch(() => {})
+    }
+  }, [taskId])
+
   useEffect(() => {
     if (!id) return
     Promise.all([
