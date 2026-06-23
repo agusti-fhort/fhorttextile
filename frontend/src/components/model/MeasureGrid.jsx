@@ -16,12 +16,14 @@ import { thStyle, SaveStatus, useDebouncedSave } from '../../pages/fittingShared
 const COL_POM_W = 78
 const COL_NOM_W = 160
 
-const cellTd = (accent, groupStart, groupEnd) => ({
+// `filled` = gold-pale (NOMÉS la columna activa destaca); groupStart/End = filet subtil de
+// delimitació del grup (no daurat, per no competir amb el destacat de l'activa).
+const cellTd = (filled, groupStart, groupEnd) => ({
   padding: '5px 8px', borderBottom: '0.5px solid var(--border)', verticalAlign: 'middle',
   textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
-  background: accent ? 'var(--gold-pale)' : undefined,
-  borderLeft: groupStart && accent ? '1px solid var(--gold)' : '0.5px solid var(--border)',
-  borderRight: groupEnd && accent ? '1px solid var(--gold)' : undefined,
+  background: filled ? 'var(--gold-pale)' : undefined,
+  borderLeft: groupStart ? '1px solid var(--border)' : '0.5px solid var(--border)',
+  borderRight: groupEnd ? '1px solid var(--border)' : undefined,
 })
 
 const isModified = (value, baseValue) => value !== '' && value != null && baseValue != null
@@ -40,19 +42,19 @@ const activeRed = (value, active) => {
 
 // Cel·la activa editable (única amb input + autosave). Vermell si difereix de baseValue; negreta si
 // editada a mà (ancoratge). Buida si no hi ha línia activa per a aquest (pom, grup).
-function ActiveCell({ active, accent, editable, value, edited, onChange, onCommit, focusRef }) {
+function ActiveCell({ active, editable, value, edited, onChange, onCommit, focusRef }) {
   const [state, schedule] = useDebouncedSave(onCommit)
-  if (!active) return <td style={cellTd(accent, false, accent)} />
+  if (!active) return <td style={cellTd(true, false, false)} />
   const modified = activeRed(value, active)
   if (!editable) {
     return (
-      <td style={{ ...cellTd(accent, false, accent), color: modified ? 'var(--err)' : 'var(--text-main)' }}>
+      <td style={{ ...cellTd(true, false, false), color: modified ? 'var(--err)' : 'var(--text-main)' }}>
         {value === '' || value == null ? '—' : value}
       </td>
     )
   }
   return (
-    <td style={{ ...cellTd(accent, false, accent), position: 'relative' }}>
+    <td style={{ ...cellTd(true, false, false), position: 'relative' }}>
       <input
         type="number" step="0.1" value={value ?? ''}
         onFocus={() => { focusRef.current = active.lineId }}
@@ -162,8 +164,8 @@ export default function MeasureGrid({
               return (
                 <th key={g.key} colSpan={span} style={{
                   ...thStyle, textAlign: 'center',
-                  background: g.accent ? 'var(--gold-pale)' : 'var(--bg-muted)',
-                  borderLeft: g.accent ? '1px solid var(--gold)' : '0.5px solid var(--border)',
+                  background: 'var(--bg-muted)',
+                  borderLeft: '1px solid var(--border)',
                 }}>{g.label}</th>
               )
             })}
@@ -171,10 +173,11 @@ export default function MeasureGrid({
           <tr>
             {groups.flatMap(g => {
               const sub = (start) => ({ ...thStyle, textAlign: 'right', fontSize: 'var(--fs-caption)', padding: '3px 8px',
-                background: g.accent ? 'var(--gold-pale)' : 'var(--bg-muted)',
-                borderLeft: start && g.accent ? '1px solid var(--gold)' : '0.5px solid var(--border)' })
+                background: 'var(--bg-muted)',
+                borderLeft: start ? '1px solid var(--border)' : '0.5px solid var(--border)' })
+              const activeSub = { ...sub(false), background: 'var(--gold-pale)' }   // NOMÉS la columna activa destaca
               const hs = (g.historyCols || []).map((h, idx) => <th key={`${g.key}-h-${h.key}`} style={sub(idx === 0)}>{h.label}</th>)
-              hs.push(<th key={`${g.key}-active`} style={sub(false)}>{g.activeLabel}</th>)
+              hs.push(<th key={`${g.key}-active`} style={activeSub}>{g.activeLabel}</th>)
               for (const tcol of (g.trailCols || [])) hs.push(<th key={`${g.key}-t-${tcol.key}`} style={{ ...sub(false), textAlign: 'center' }}>{tcol.label}</th>)
               return hs
             })}
@@ -200,14 +203,14 @@ export default function MeasureGrid({
                     const hv = cell.history?.[h.key]
                     const v = hv && typeof hv === 'object' ? hv.value : hv
                     return (
-                      <td key={`${g.key}-h-${h.key}`} style={{ ...cellTd(g.accent, idx === 0, false), color: 'var(--text-main)' }}>
+                      <td key={`${g.key}-h-${h.key}`} style={{ ...cellTd(false, idx === 0, false), color: 'var(--text-main)' }}>
                         {v == null ? '—' : v}
                       </td>
                     )
                   })
                   const a = cell.active
                   out.push(
-                    <ActiveCell key={`${g.key}-active`} active={a} accent={g.accent} editable={editable}
+                    <ActiveCell key={`${g.key}-active`} active={a} editable={editable}
                       value={a ? (vals[a.lineId] ?? '') : ''} edited={a ? edited.has(a.lineId) : false}
                       onChange={onChange} onCommit={a ? commitFor(a.lineId) : (() => Promise.resolve())} focusRef={focusRef} />
                   )
