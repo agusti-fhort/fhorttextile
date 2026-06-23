@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { thStyle, SaveStatus, useDebouncedSave } from '../../pages/fittingShared'
 
 // MeasureGrid — editor únic de mesures (un component, dos modes treball/consulta) que serveix els
@@ -93,6 +94,7 @@ export default function MeasureGrid({
   onSave,                 // (lineId, rawValue) => Promise (pot resoldre amb {lines:[{id,valor_real}]} per propagar)
   empty = null,           // node quan no hi ha files
 }) {
+  const { t } = useTranslation()
   const [vals, setVals] = useState({})        // buffer local lineId -> string
   const [edited, setEdited] = useState(() => new Set())  // ancoratge (editat a mà)
   const focusRef = useRef(null)
@@ -150,8 +152,8 @@ export default function MeasureGrid({
       <table style={{ borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
         <thead>
           <tr>
-            <th rowSpan={2} style={stickyHd(0, COL_POM_W)}>POM</th>
-            <th rowSpan={2} style={stickyHd(COL_POM_W, COL_NOM_W)}>Nom</th>
+            <th rowSpan={2} style={stickyHd(0, COL_POM_W)}>{t('measuregrid.col_pom')}</th>
+            <th rowSpan={2} style={stickyHd(COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>
             {leadCols.map((c, i) => (
               <th key={c.key} rowSpan={2} style={stickyHd(leadLefts[i], c.width)}>{c.label}</th>
             ))}

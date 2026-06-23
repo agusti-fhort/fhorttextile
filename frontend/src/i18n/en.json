@@ -1288,6 +1288,10 @@
       "standard": "Standard"
     }
   },
+  "measuregrid": {
+    "col_pom": "POM",
+    "col_nom": "Name"
+  },
   "sizecheck": {
     "col_date": "Date",
     "col_decision": "Decision",
