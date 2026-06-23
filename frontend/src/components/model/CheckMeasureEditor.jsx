@@ -178,6 +178,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, read
       is_key: r.is_key,
       logica: line?.logica, increment_base: line?.increment_base,
       increment_break: line?.increment_break, talla_break_label: line?.talla_break_label,
+      tol_minus: line?.tol_minus, tol_plus: line?.tol_plus,
       cells: { base: {
         history: Object.fromEntries(stages.map(s => [s.key, (s.key in r.takes) ? r.takes[s.key] : null])),
         // SEMBRA: la columna Real parteix amb l'última mesura vàlida (valor_teoric vigent) com a
@@ -200,6 +201,14 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, read
           <div style={{ fontSize: 'var(--fs-caption)', color: TEXT_2, whiteSpace: 'nowrap', marginTop: 1 }}>{regleLabel(row, t)}</div>
         )}
       </div>
+    ),
+  }, {
+    // Tolerància (lectura): es mostra tal com ve (-minus/+plus); NO es col·lapsa a ±únic (deute sprint POMs).
+    key: 'tol', label: t('sizecheck.col_tolerance'), width: 72,
+    render: (row) => (
+      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>
+        {row.tol_minus != null ? `-${row.tol_minus}/+${row.tol_plus}` : '—'}
+      </span>
     ),
   }]
 
