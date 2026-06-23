@@ -489,8 +489,8 @@
     "viab_disclaimer": "Estimación orientativa · jornada 420 min/día · días laborables (lu-vi) · sin festivos",
     "measures_consult": "Consulta — la edición de medidas se hace desde la tarea de medición.",
     "edit_measures": "Editar medidas",
-    "no_measure_task": "Sin tarea de medición",
-    "no_measure_task_title": "Este modelo no tiene ninguna tarea de medición definida",
+    "edit_grading": "Editar escalado",
+    "open_task_err": "No se ha podido abrir la tarea.",
     "file_type": {
       "SKETCH_FLETXES": "Sketch con flechas",
       "SKETCH_NET": "Sketch limpio",

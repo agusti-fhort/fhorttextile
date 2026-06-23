@@ -489,8 +489,8 @@
     "viab_disclaimer": "Indicative estimate · 420 min/day · working days (Mon–Fri) · no holidays",
     "measures_consult": "Consultation — measurement editing is done from the measurement task.",
     "edit_measures": "Edit measurements",
-    "no_measure_task": "No measurement task",
-    "no_measure_task_title": "This model has no measurement task defined",
+    "edit_grading": "Edit grading",
+    "open_task_err": "Could not open the task.",
     "file_type": {
       "SKETCH_FLETXES": "Sketch with arrows",
       "SKETCH_NET": "Clean sketch",

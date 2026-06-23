@@ -5,6 +5,7 @@ import Feedback from '../components/ui/Feedback'
 import ActionsMenu from '../components/model/ActionsMenu'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import PropagatedEditor from './PropagatedEditor'
+import { models } from '../api/endpoints'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
 
@@ -87,7 +88,6 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState(null)
-  const [hasPomTask, setHasPomTask] = useState(false)
 
   const reloadModel = useCallback(() => {
     fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
@@ -100,17 +100,26 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
     Promise.all([
       fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders }).then(r => r.json()),
       fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders }).then(r => r.json()),
-      fetch(`${API}/api/v1/model-task-items/?model=${id}`, { headers: authHeaders }).then(r => r.json()),
-    ]).then(([modelData, taulaData, tasksData]) => {
+    ]).then(([modelData, taulaData]) => {
       setModel(modelData)
       setTaulaRows(taulaData.rows || [])
       setSizesAmbDades(taulaData.sizes_amb_dades || null)
       setDeltes(taulaData.deltes || null)
-      const tasks = tasksData.results || tasksData || []
-      setHasPomTask(Array.isArray(tasks) && tasks.some(tk => tk.task_type_code === 'pom'))
     }).catch(() => setError(t('model_sheet.err_load')))
     .finally(() => setLoading(false))
   }, [id])
+
+  // Porta-menú: obre (crea-si-falta + auto-assign + En curs) la tasca `code` i navega a l'eina amb el
+  // task_id. Reusa el servei open-task; el botó funciona encara que el model no tingui la tasca creada.
+  const [openingTask, setOpeningTask] = useState(false)
+  const openTaskAndGo = (code, toRoute) => {
+    if (openingTask) return
+    setOpeningTask(true)
+    models.openTask(parseInt(id), code)
+      .then(res => navigate(toRoute(res.data.task_id)))
+      .catch(() => setFeedback({ type: 'err', text: t('model_sheet.open_task_err') }))
+      .finally(() => setOpeningTask(false))
+  }
 
   const handleDelete = async () => {
     if (!window.confirm(t('model_sheet.confirm_delete', { codi: model?.codi_intern }))) return
@@ -204,25 +213,34 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
                              }}>
                 {t('model_sheet.measures_consult')}
               </span>
-              {hasPomTask ? (
-                <button type="button" onClick={() => navigate(`/models/${id}/mesures`)}
-                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
-                  <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
-                  {t('model_sheet.edit_measures')}
-                </button>
-              ) : (
-                <span title={t('model_sheet.no_measure_task_title')}
-                  style={{ ...btnSecondary, opacity: 0.5, cursor: 'not-allowed' }}>
-                  <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
-                  {t('model_sheet.no_measure_task')}
-                </span>
-              )}
+              {/* Porta-menú: obre la tasca de mesura (la crea si el model encara no en té) i entra a
+                  l'eina amb el task_id (compta-temps). Sense gate: funciona sempre. */}
+              <button type="button" disabled={openingTask}
+                onClick={() => openTaskAndGo('pom', tid => `/models/${id}/mesures?task_id=${tid}`)}
+                style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
+                         opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
+                <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
+                {t('model_sheet.edit_measures')}
+              </button>
             </div>
             <CheckMeasureEditor model={model} readOnly />
           </div>
         )}
-        {/* Escalat: CONSULTA read-only de la taula propagada (edició lligada a tasca). */}
-        {activeTab === 'Escalat' && <PropagatedEditor modelId={parseInt(id)} inline readOnly />}
+        {/* Escalat: CONSULTA read-only + porta-menú per obrir la tasca d'escalat (edició via tasca). */}
+        {activeTab === 'Escalat' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+              <button type="button" disabled={openingTask}
+                onClick={() => openTaskAndGo('scaling', tid => `/models/${id}/escalat?task_id=${tid}`)}
+                style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
+                         opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
+                <i className="ti ti-resize" style={{ fontSize: 14 }} />
+                {t('model_sheet.edit_grading')}
+              </button>
+            </div>
+            <PropagatedEditor modelId={parseInt(id)} inline readOnly />
+          </div>
+        )}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
         {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}

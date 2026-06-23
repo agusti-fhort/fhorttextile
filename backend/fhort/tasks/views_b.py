@@ -437,6 +437,65 @@ def claim_task_view(request, pk):
     return Response(ModelTaskSerializer(task).data, status=http_status.HTTP_200_OK)
 
 
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def open_model_task_view(request, model_id):
+    """POST /api/v1/models/<model_id>/open-task/  Body: {"code": "pom"}
+
+    PORTA-MENÚ (zoom-in): obre una tasca CONCRETA del model des del menú, encara que NO estigui
+    assignada al tècnic actual. Orquestra (sense lògica nova) els camins ja vius:
+      1. CREA-si-falta la ModelTask del tipus `code` (idempotent per (model, task_type), igual que
+         define-tasks: order al final + snapshot d'estimació).
+      2. La posa En curs reusant `transition_task` (auto-assign + timer + exclusió un-InProgress).
+         Si ja és En curs d'un altre tècnic → la fa SEVA (claim, sense re-transicionar). Si ja és
+         meva i En curs → no-op.
+    Retorna {task_id, code, created, status} perquè el front navegui a l'eina amb el task_id.
+    """
+    code = (request.data or {}).get('code')
+    if not code:
+        return Response({'error': 'Cal el code del tipus de tasca.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        model = Model.objects.get(pk=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    try:
+        tt = TaskType.objects.get(code=code, active=True)
+    except TaskType.DoesNotExist:
+        return Response({'error': f"Tipus de tasca '{code}' no trobat o inactiu."}, status=http_status.HTTP_404_NOT_FOUND)
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'}, status=http_status.HTTP_403_FORBIDDEN)
+    # GUARD allow-list: només pots obrir un tipus que executes (admin = bypass) — igual que claim.
+    if code not in get_allowed_task_types(request.user):
+        return Response({'error': f"No pots obrir una tasca del tipus '{code}' (no és a la teva allow-list)."},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    # 1. Crea-si-falta (mirall de define_model_tasks_view).
+    task = ModelTask.objects.filter(model=model, task_type=tt).first()
+    created = False
+    if task is None:
+        order = ModelTask.objects.filter(model=model).count()
+        est = lookup_estimated_minutes(model, tt)
+        task = ModelTask.objects.create(model=model, task_type=tt, order=order,
+                                        status='Pending', estimated_minutes=est)
+        created = True
+    # 2. En curs (reusa transition_task) o claim si ja és En curs d'un altre.
+    if task.status != 'InProgress':
+        try:
+            transition_task(task, 'InProgress', profile)
+        except TransitionError as e:
+            return Response({'error': str(e)}, status=http_status.HTTP_409_CONFLICT)
+    elif task.assignee_id != profile.id:
+        old_assignee_id = task.assignee_id
+        task.assignee = profile
+        task.save(update_fields=['assignee', 'updated_at'])
+        from fhort.planning.plan_service import recompute_for_technicians, cleanup_queue_order
+        cleanup_queue_order([old_assignee_id, profile.id], [task.model_id])
+        recompute_for_technicians([old_assignee_id, profile.id])
+    task.refresh_from_db()
+    return Response({'task_id': task.id, 'code': code, 'created': created, 'status': task.status},
+                    status=http_status.HTTP_200_OK)
+
+
 class _CloseGates(HasCapability):
     required_capability = CLOSE_GATES
 

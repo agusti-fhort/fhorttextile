@@ -489,8 +489,8 @@
     "viab_disclaimer": "Estimació orientativa · jornada 420 min/dia · dies laborables (dl-dv) · sense festius",
     "measures_consult": "Consulta — l'edició de mides es fa des de la tasca de mesura.",
     "edit_measures": "Editar mides",
-    "no_measure_task": "Sense tasca de mesura",
-    "no_measure_task_title": "Aquest model no té cap tasca de mesura definida",
+    "edit_grading": "Editar escalat",
+    "open_task_err": "No s'ha pogut obrir la tasca.",
     "file_type": {
       "SKETCH_FLETXES": "Sketch amb fletxes",
       "SKETCH_NET": "Sketch net",
