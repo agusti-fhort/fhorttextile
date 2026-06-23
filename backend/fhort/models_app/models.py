@@ -854,6 +854,35 @@ class SizeCheckLine(models.Model):
         return f'{self.size_check_id} · {self.pom.codi_client}'
 
 
+class Watchpoint(models.Model):
+    """D-12 — advertència de TEXT LLIURE que viatja amb el MODEL a través dels gates. Ancorada al
+    model i, com a ORIGEN, a la tasca/ronda on es va crear (referència; travessa gates igualment).
+    Cicle open→resolved (qui/quan/per què). NO va a la fitxa tècnica; viu a l'historial perquè un
+    altre tècnic entengui l'advertència."""
+    ESTAT_CHOICES = [('open', 'Oberta'), ('resolved', 'Resolta')]
+    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='watchpoints')
+    # Origen: la tasca/ronda on es va crear (la referència es conserva encara que la tasca es tanqui).
+    task = models.ForeignKey('tasks.ModelTask', on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name='watchpoints')
+    text = models.TextField()
+    estat = models.CharField(max_length=10, choices=ESTAT_CHOICES, default='open')
+    created_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='watchpoints_creats')
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='watchpoints_resolts')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolution_note = models.TextField(blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Watchpoint'
+        verbose_name_plural = 'Watchpoints'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Watchpoint #{self.pk} ({self.estat}) · model {self.model_id}'
+
+
 # Fitxa tècnica editable (editor full-screen). Definit a tech_sheet_models.py i importat
 # aquí perquè Django el descobreixi dins l'app `models_app` (migracions → models_app/).
 from .tech_sheet_models import TechSheet  # noqa: E402,F401

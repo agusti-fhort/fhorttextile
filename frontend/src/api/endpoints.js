@@ -52,6 +52,14 @@ export const baseMeasurements = {
   update: (id, body) => client.patch(`/api/v1/base-measurements/${id}/`, body),
 }
 
+// D-12 — Watchpoints: advertències de text lliure ancorades al model (+ tasca d'origen), open→resolved.
+export const watchpoints = {
+  list: (params) => client.get('/api/v1/watchpoints/', { params }),     // ?model&estat&task
+  create: (data) => client.post('/api/v1/watchpoints/', data),          // {model, task?, text}
+  resolve: (id, data) => client.post(`/api/v1/watchpoints/${id}/resolve/`, data || {}),
+  reopen: (id) => client.post(`/api/v1/watchpoints/${id}/reopen/`),
+}
+
 // Fitxers del model (read-only) — panell info de fitting (5B.6-B1).
 export const modelFitxers = {
   list: (params) => client.get('/api/v1/model-fitxers/', { params }),

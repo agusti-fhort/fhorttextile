@@ -1975,5 +1975,17 @@
     "ruleset": "Joc de regles",
     "no_ruleset": "— cap",
     "editable_hint": "lectura · editable a l'edició del model"
+  },
+  "watchpoints": {
+    "title": "Watchpoints",
+    "open": "obertes",
+    "show_resolved": "Veure resoltes ({{n}})",
+    "hide_resolved": "Amaga resoltes",
+    "placeholder": "Advertència per al model (viatja amb ell pels gates)…",
+    "add": "Afegir",
+    "empty": "Cap advertència oberta.",
+    "resolve": "Resoldre",
+    "reopen": "Reobrir",
+    "resolved_by": "resolta per {{who}}"
   }
 }

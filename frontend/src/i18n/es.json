@@ -1975,5 +1975,17 @@
     "ruleset": "Conjunto de reglas",
     "no_ruleset": "— ninguno",
     "editable_hint": "lectura · editable en la edición del modelo"
+  },
+  "watchpoints": {
+    "title": "Watchpoints",
+    "open": "abiertas",
+    "show_resolved": "Ver resueltas ({{n}})",
+    "hide_resolved": "Ocultar resueltas",
+    "placeholder": "Advertencia para el modelo (viaja con él por los gates)…",
+    "add": "Añadir",
+    "empty": "Ninguna advertencia abierta.",
+    "resolve": "Resolver",
+    "reopen": "Reabrir",
+    "resolved_by": "resuelta por {{who}}"
   }
 }

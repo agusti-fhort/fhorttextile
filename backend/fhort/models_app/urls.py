@@ -5,6 +5,7 @@ from .views import (
     BaseMeasurementViewSet,
     ModelFitxerViewSet,
     ModelViewSet,
+    WatchpointViewSet,
     ai_analysis_view,
     consumption_delivery_view,
     model_dashboard_view,
@@ -37,6 +38,7 @@ router.register('model-fitxers', ModelFitxerViewSet, basename='model-fitxer')
 router.register('base-measurements', BaseMeasurementViewSet, basename='base-measurement')
 router.register('size-checks', SizeCheckViewSet, basename='size-check')
 router.register('size-check-lines', SizeCheckLineViewSet, basename='size-check-line')
+router.register('watchpoints', WatchpointViewSet, basename='watchpoint')
 
 # Sprint 6 — AI extraction. Paths before the router so 'models/extract-from-file/'
 # is not captured by 'models/<pk>/' of the ModelViewSet detail.

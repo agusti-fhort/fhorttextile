@@ -2,7 +2,7 @@ import datetime
 
 from django.db import connection, transaction
 from rest_framework import viewsets
-from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes, action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -10,12 +10,13 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
 from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
-from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer
+from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
 from .serializers import (
     BaseMeasurementSerializer,
     ModelDetailSerializer,
     ModelFitxerSerializer,
     ModelListSerializer,
+    WatchpointSerializer,
 )
 
 
@@ -79,6 +80,41 @@ class ModelFitxerViewSet(viewsets.ModelViewSet):
     filterset_fields = ['model', 'categoria', 'tipus', 'enviat_ia']
     ordering_fields = ['data_pujada']
     ordering = ['-data_pujada']
+
+
+# D-12 — Watchpoints: advertències de text lliure que viatgen amb el model a través dels gates.
+class WatchpointViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = WatchpointSerializer
+    queryset = Watchpoint.objects.select_related('created_by', 'resolved_by', 'task__task_type').all()
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['model', 'estat', 'task']
+    ordering_fields = ['created_at']
+    ordering = ['-created_at']
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=getattr(self.request.user, 'profile', None))
+
+    @action(detail=True, methods=['post'])
+    def resolve(self, request, pk=None):
+        from django.utils import timezone
+        wp = self.get_object()
+        wp.estat = 'resolved'
+        wp.resolved_by = getattr(request.user, 'profile', None)
+        wp.resolved_at = timezone.now()
+        wp.resolution_note = (request.data.get('resolution_note') or '').strip()
+        wp.save(update_fields=['estat', 'resolved_by', 'resolved_at', 'resolution_note'])
+        return Response(self.get_serializer(wp).data)
+
+    @action(detail=True, methods=['post'])
+    def reopen(self, request, pk=None):
+        wp = self.get_object()
+        wp.estat = 'open'
+        wp.resolved_by = None
+        wp.resolved_at = None
+        wp.resolution_note = ''
+        wp.save(update_fields=['estat', 'resolved_by', 'resolved_at', 'resolution_note'])
+        return Response(self.get_serializer(wp).data)
 
 
 # Sprint S14B — BaseMeasurement CRUD

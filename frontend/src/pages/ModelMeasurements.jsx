@@ -227,6 +227,7 @@ export default function ModelMeasurements() {
           onFeedback={(fb) => { if (fb?.type === 'err') { setNotice(''); setError(fb.text) } else { setError(''); setNotice(fb.text) } }}
           onResolved={() => navigate('/tasques/kanban')}
           onBack={() => navigate(-1)}
+          taskId={taskId}
         />
       </div>
     )

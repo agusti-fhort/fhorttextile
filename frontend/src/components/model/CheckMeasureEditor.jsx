@@ -4,6 +4,7 @@ import { models, sizeChecks, sizeCheckLines, baseMeasurements } from '../../api/
 import MeasureGrid from './MeasureGrid'
 import EditorHeader from './EditorHeader'
 import DependencyPanel from './DependencyPanel'
+import WatchpointsPanel from './WatchpointsPanel'
 
 // CHECK sobre l'editor únic MeasureGrid (substitueix SizeCheckWork): UNA graella amb l'historial
 // d'estadis (base-stages, read-only) com a columnes + la columna activa 'Real' (valor_real) + el
@@ -112,7 +113,7 @@ function regleLabel(row, t) {
   return `+${row.increment_base}`
 }
 
-export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false }) {
+export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false, taskId = null }) {
   const { t } = useTranslation()
   const [baseData, setBaseData] = useState(null)
   const [check, setCheck] = useState(null)
@@ -244,6 +245,9 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           <button style={btn('err')} disabled={busy} onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard')}</button>
         </div>
       )}
+
+      {/* D-12 — Watchpoints del model (crear en treball, veure sempre). Origen = la tasca actual. */}
+      {model?.id && <WatchpointsPanel modelId={model.id} taskId={taskId} editable={!readOnly} />}
 
       {confirm && (
         <div style={overlay} onClick={() => setConfirm(null)}>

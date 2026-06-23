@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import BaseMeasurement, Contracte, LiniaContracte, Model, ModelFitxer, ModelServei
+from .models import BaseMeasurement, Contracte, LiniaContracte, Model, ModelFitxer, ModelServei, Watchpoint
 
 
 class ModelFitxerSerializer(serializers.ModelSerializer):
@@ -154,3 +154,19 @@ class ModelServeiSerializer(serializers.ModelSerializer):
             'linia_addicional',
         ]
         read_only_fields = ['nom_servei', 'grup', 'slots_base']
+
+
+class WatchpointSerializer(serializers.ModelSerializer):
+    created_by_nom = serializers.CharField(source='created_by.nom_complet', read_only=True)
+    resolved_by_nom = serializers.CharField(source='resolved_by.nom_complet', read_only=True)
+    task_type_code = serializers.CharField(source='task.task_type.code', read_only=True)
+
+    class Meta:
+        model = Watchpoint
+        fields = [
+            'id', 'model', 'task', 'task_type_code', 'text', 'estat',
+            'created_by', 'created_by_nom', 'created_at',
+            'resolved_by', 'resolved_by_nom', 'resolved_at', 'resolution_note',
+        ]
+        # L'estat i l'autoria es gestionen pel servidor (create / accions resolve/reopen).
+        read_only_fields = ['estat', 'created_by', 'created_at', 'resolved_by', 'resolved_at', 'resolution_note']

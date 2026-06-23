@@ -1975,5 +1975,17 @@
     "ruleset": "Rule set",
     "no_ruleset": "— none",
     "editable_hint": "read-only · editable in model edit"
+  },
+  "watchpoints": {
+    "title": "Watchpoints",
+    "open": "open",
+    "show_resolved": "Show resolved ({{n}})",
+    "hide_resolved": "Hide resolved",
+    "placeholder": "Warning for the model (travels with it across gates)…",
+    "add": "Add",
+    "empty": "No open warnings.",
+    "resolve": "Resolve",
+    "reopen": "Reopen",
+    "resolved_by": "resolved by {{who}}"
   }
 }
