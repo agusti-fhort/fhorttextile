@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { thStyle, SaveStatus, useDebouncedSave } from '../../pages/fittingShared'
+import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from '../../pages/fittingShared'
 
 // MeasureGrid — editor únic de mesures (un component, dos modes treball/consulta) que serveix els
 // DOS eixos via SLOTS, reusant l'esquelet del fitting editor (MeasureTable):
@@ -42,14 +42,15 @@ const activeRed = (value, active) => {
 
 // Cel·la activa editable (única amb input + autosave). Vermell si difereix de baseValue; negreta si
 // editada a mà (ancoratge). Buida si no hi ha línia activa per a aquest (pom, grup).
-function ActiveCell({ active, editable, value, edited, onChange, onCommit, focusRef }) {
+function ActiveCell({ active, editable, value, edited, onChange, onCommit, focusRef, unit }) {
   const [state, schedule] = useDebouncedSave(onCommit)
   if (!active) return <td style={cellTd(true, false, false)} />
   const modified = activeRed(value, active)
   if (!editable) {
+    // Lectura: format de presentació (1 decimal cm · 2 inch). L'edició NO es formata (precisió canònica).
     return (
       <td style={{ ...cellTd(true, false, false), color: modified ? 'var(--err)' : 'var(--text-main)' }}>
-        {value === '' || value == null ? '—' : value}
+        {fmtMeasure(value, unit) ?? '—'}
       </td>
     )
   }
@@ -97,6 +98,7 @@ export default function MeasureGrid({
   empty = null,           // node quan no hi ha files
 }) {
   const { t } = useTranslation()
+  const unit = useUnit()                       // unitat del tenant (CM|INCH) → format de presentació
   const [vals, setVals] = useState({})        // buffer local lineId -> string
   const [edited, setEdited] = useState(() => new Set())  // ancoratge (editat a mà)
   const focusRef = useRef(null)
@@ -204,13 +206,13 @@ export default function MeasureGrid({
                     const v = hv && typeof hv === 'object' ? hv.value : hv
                     return (
                       <td key={`${g.key}-h-${h.key}`} style={{ ...cellTd(false, idx === 0, false), color: 'var(--text-main)' }}>
-                        {v == null ? '—' : v}
+                        {fmtMeasure(v, unit) ?? '—'}
                       </td>
                     )
                   })
                   const a = cell.active
                   out.push(
-                    <ActiveCell key={`${g.key}-active`} active={a} editable={editable}
+                    <ActiveCell key={`${g.key}-active`} active={a} editable={editable} unit={unit}
                       value={a ? (vals[a.lineId] ?? '') : ''} edited={a ? edited.has(a.lineId) : false}
                       onChange={onChange} onCommit={a ? commitFor(a.lineId) : (() => Promise.resolve())} focusRef={focusRef} />
                   )
