@@ -48,6 +48,10 @@ export const models = {
     client.post(`/api/v1/models/${modelId}/set-size-override/`, { pom_id: pomId, size_label: sizeLabel, valor }),
   // Taula base amb estadis (històric per presa + tolerància + base vigent). Read-only.
   baseStages: (modelId) => client.get(`/api/v1/models/${modelId}/base-stages/`),
+  // Peça 2 — propagació conscient a Escalat: {new_version:true} crea v+1 sobre la vigent. Sobre
+  // una versió segellada retorna 409 {error:'sealed', version_number} → cal doble confirmació
+  // ({allow_reopen_sealed:true}).
+  generarGrading: (modelId, body) => client.post(`/api/v1/models/${modelId}/generar-grading/`, body || {}),
 }
 
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).

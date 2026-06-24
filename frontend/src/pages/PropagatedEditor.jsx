@@ -4,6 +4,7 @@ import client from '../api/client'
 import { models } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
 import EditorHeader from '../components/model/EditorHeader'
+import Modal from '../components/ui/Modal'
 import { buildEscalatGroups, buildEscalatRows, regimeLeadCol } from '../components/model/fittingGridAdapter'
 
 // ESCALAT — editor de la taula propagada del model (totes les talles) sobre l'editor únic MeasureGrid
@@ -17,6 +18,12 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [reloadKey, setReloadKey] = useState(0)   // remunta MeasureGrid en canvi de règim (re-sembra)
+  // Peça 2 — propagació conscient: estat del botó, conflicte de segellat (409) i pas de la doble
+  // confirmació (1 = avís, 2 = confirmació de producció), i feedback breu d'èxit.
+  const [propagating, setPropagating] = useState(false)
+  const [sealed, setSealed] = useState(null)      // payload 409 {version_number, message}
+  const [sealedStep, setSealedStep] = useState(0)
+  const [notice, setNotice] = useState('')
 
   const load = useCallback(() => {
     setLoading(true)
@@ -64,6 +71,26 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
       .catch(() => setErr(t('model_measurements.regim_err')))
   }
 
+  // Propagar conscient → crea v+1 sobre la versió vigent. Normal = un clic. Sobre una versió
+  // segellada el backend torna 409 'sealed' → doble confirmació; només amb les dues capes es
+  // reintenta amb allow_reopen_sealed (que deixa un watchpoint de traça al servidor).
+  const onPropagar = useCallback((allowReopen = false) => {
+    setPropagating(true); setErr(''); setNotice('')
+    const body = { new_version: true }
+    if (allowReopen) body.allow_reopen_sealed = true
+    return models.generarGrading(modelId, body)
+      .then(() => {
+        setSealed(null); setSealedStep(0)
+        return load().then(() => { setReloadKey(k => k + 1); setNotice(t('grading_propagate.done')) })
+      })
+      .catch(e => {
+        const d = e?.response?.data
+        if (e?.response?.status === 409 && d?.error === 'sealed') { setSealed(d); setSealedStep(1) }
+        else { setErr(t('grading_propagate.err')) }
+      })
+      .finally(() => setPropagating(false))
+  }, [modelId, load, t])
+
   const leadCols = [regimeLeadCol(t, onRegimChange, readOnly)]
 
   // inline=true: incrustat com a contingut de pestanya (sense overlay fix ni botó tancar).
@@ -77,15 +104,31 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   return (
     <div style={outerStyle}>
       <div style={bodyStyle}>
-        {/* Overlay (ruta /escalat o modal "Veure escalat"): botó tancar sempre disponible (no depèn
-            que hagi carregat la identitat de model). */}
-        {!inline && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-            <button type="button" onClick={onClose}
-              style={{ padding: '6px 16px', border: '0.5px solid var(--border)', borderRadius: 6,
-                       background: 'var(--white)', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
-              {t('model_measurements.propagated_close')}
-            </button>
+        {/* Barra d'accions: Propagar (acte conscient, quan editable) a l'esquerra; tancar (overlay)
+            a la dreta. El botó tancar segueix disponible encara que no hagi carregat la identitat. */}
+        {(!readOnly || !inline) && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        gap: 12, marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {!readOnly && (
+                <button type="button" onClick={() => onPropagar(false)} disabled={propagating}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 16px',
+                           border: '0.5px solid var(--border)', borderRadius: 6, background: 'var(--white)',
+                           cursor: propagating ? 'not-allowed' : 'pointer', opacity: propagating ? 0.5 : 1,
+                           fontSize: 'var(--fs-body)' }}>
+                  <i className="ti ti-git-branch" style={{ fontSize: 14 }} />
+                  {propagating ? t('grading_propagate.running') : t('grading_propagate.button')}
+                </button>
+              )}
+              {notice && <span style={{ color: 'var(--ok)', fontSize: 'var(--fs-body)' }}>{notice}</span>}
+            </div>
+            {!inline && (
+              <button type="button" onClick={onClose}
+                style={{ padding: '6px 16px', border: '0.5px solid var(--border)', borderRadius: 6,
+                         background: 'var(--white)', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
+                {t('model_measurements.propagated_close')}
+              </button>
+            )}
           </div>
         )}
         {/* Capçalera UNIFICADA: identitat de model + franja contextual (Escalat · pista). */}
@@ -114,6 +157,28 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
           />
         )}
       </div>
+
+      {/* Doble confirmació conscient en propagar sobre una versió SEGELLADA (409 'sealed'). */}
+      {sealed && sealedStep === 1 && (
+        <Modal
+          title={t('grading_propagate.sealed_title')}
+          subtitle={t('grading_propagate.sealed_l1', { version: sealed.version_number })}
+          confirmLabel={t('grading_propagate.continue')}
+          cancelLabel={t('app.cancel')}
+          onCancel={() => { setSealed(null); setSealedStep(0) }}
+          onConfirm={() => setSealedStep(2)}
+        />
+      )}
+      {sealed && sealedStep === 2 && (
+        <Modal
+          title={t('grading_propagate.sealed_title')}
+          subtitle={t('grading_propagate.sealed_l2')}
+          confirmLabel={t('grading_propagate.confirm_supersede')}
+          cancelLabel={t('app.cancel')}
+          onCancel={() => { setSealed(null); setSealedStep(0) }}
+          onConfirm={() => onPropagar(true)}
+        />
+      )}
     </div>
   )
 }

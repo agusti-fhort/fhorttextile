@@ -1170,13 +1170,64 @@ def generate_grading_view(request, model_id):
         except Exception as e:
             return Response({'error': f'Error creant SizeFitting: {e}'}, status=500)
 
-    # Call the existing engine
-    try:
-        graded_count = generate_graded_specs(sf.id)
-    except ValueError as e:
-        return Response({'error': str(e)}, status=400)
-    except Exception as e:
-        return Response({'error': f'Error generant grading: {e}'}, status=500)
+    new_version = bool(request.data.get('new_version', False))
+    allow_reopen_sealed = bool(request.data.get('allow_reopen_sealed', False))
+
+    # Crida el motor. new_version=True → acte conscient de PROPAGAR (Peça 2): crea v+1 via el
+    # helper bump_grading_version_and_generate (base_changed=False: propagar NO toca la base, no
+    # incrementa measurements_version). Sobre una versió SEGELLADA (aprovada) sense autorització
+    # → 409 conscient perquè el frontend demani la doble confirmació. new_version=False →
+    # comportament clàssic (reutilitza la versió vigent): NO es toca per als usos vells.
+    if new_version:
+        from fhort.fitting.models import GradingVersion
+        from fhort.pom.services import bump_grading_version_and_generate
+        sealed_active = (GradingVersion.objects
+                         .filter(size_fitting=sf, is_active=True, aprovada=True)
+                         .order_by('-version_number').first())
+        if sealed_active is not None and not allow_reopen_sealed:
+            return Response({
+                'error': 'sealed',
+                'version_number': sealed_active.version_number,
+                'message': (f'La versió vigent v{sealed_active.version_number} està segellada '
+                            f'(aprovada a producció); cal confirmació explícita per superar-la.'),
+            }, status=409)
+        profile = getattr(request.user, 'profile', None)
+        try:
+            new_v = bump_grading_version_and_generate(
+                sf.id,
+                base_changed=False,
+                profile_id=(profile.id if profile else None),
+                allow_reopen_sealed=allow_reopen_sealed,
+                nom='Propagació conscient',
+                reopen_context='Propagació conscient',
+            )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+        except Exception as e:
+            return Response({'error': f'Error generant grading: {e}'}, status=500)
+        graded_count = GradedSpec.objects.filter(grading_version=new_v).count()
+        # Watchpoint informatiu de traça quan s'ha superat una versió segellada (NO bloca).
+        if sealed_active is not None and allow_reopen_sealed:
+            from fhort.tasks.models import ModelTask
+            scaling_task = (ModelTask.objects
+                            .filter(model=model, task_type__code='scaling')
+                            .order_by('-id').first())
+            Watchpoint.objects.create(
+                model=model,
+                task=scaling_task,
+                text=(f'Versió segellada v{sealed_active.version_number} superada per '
+                      f'{str(profile) if profile else "usuari desconegut"} '
+                      f'propagant a v{new_v.version_number}.'),
+                estat='open',
+                created_by=profile,
+            )
+    else:
+        try:
+            graded_count = generate_graded_specs(sf.id)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+        except Exception as e:
+            return Response({'error': f'Error generant grading: {e}'}, status=500)
 
     # Build a measurements-table-style response
     size_run = [s.strip() for s in model.size_run_model.split('·') if s.strip()]

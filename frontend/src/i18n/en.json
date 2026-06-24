@@ -1,4 +1,15 @@
 {
+  "grading_propagate": {
+    "button": "Propagate",
+    "running": "Propagating…",
+    "done": "Propagated · new version created",
+    "err": "Could not propagate",
+    "sealed_title": "Sealed version",
+    "sealed_l1": "The current version v{{version}} is sealed (approved for production). Propagating will create a new version and the sealed one will be superseded as history. Continue?",
+    "continue": "Continue",
+    "sealed_l2": "Confirm that you understand you are superseding a PRODUCTION version.",
+    "confirm_supersede": "Confirm propagation"
+  },
   "size_map_title": "Size systems",
   "size_map_subtitle": "Derived customer runs and canonical systems",
   "size_map_step_target": "Destination",

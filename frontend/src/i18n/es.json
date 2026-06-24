@@ -1,4 +1,15 @@
 {
+  "grading_propagate": {
+    "button": "Propagar",
+    "running": "Propagando…",
+    "done": "Propagado · nueva versión creada",
+    "err": "No se ha podido propagar",
+    "sealed_title": "Versión sellada",
+    "sealed_l1": "La versión vigente v{{version}} está sellada (aprobada en producción). Propagar creará una versión nueva y la sellada quedará superada como histórico. ¿Continuar?",
+    "continue": "Continuar",
+    "sealed_l2": "Confirma que entiendes que superas una versión de PRODUCCIÓN.",
+    "confirm_supersede": "Confirmar propagación"
+  },
   "size_map_title": "Sistemas de tallas",
   "size_map_subtitle": "Runs de cliente derivados y sistemas canónicos",
   "size_map_step_target": "Destino",

@@ -1,4 +1,15 @@
 {
+  "grading_propagate": {
+    "button": "Propagar",
+    "running": "Propagant…",
+    "done": "Propagat · nova versió creada",
+    "err": "No s'ha pogut propagar",
+    "sealed_title": "Versió segellada",
+    "sealed_l1": "La versió vigent v{{version}} està segellada (aprovada a producció). Propagar crearà una versió nova i la segellada quedarà superada com a històric. Vols continuar?",
+    "continue": "Continua",
+    "sealed_l2": "Confirma que entens que superes una versió de PRODUCCIÓ.",
+    "confirm_supersede": "Confirma propagació"
+  },
   "size_map_title": "Sistemes de talles",
   "size_map_subtitle": "Runs de client derivats i sistemes canònics",
   "size_map_step_target": "Destí",
