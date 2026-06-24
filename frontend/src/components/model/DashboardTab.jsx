@@ -18,8 +18,12 @@ const MONO = 'IBM Plex Mono, monospace'
 // flexWrap fa que en pantalla estreta la dreta caigui SOTA l'esquerra (apilat), no comprimida.
 const grid = { display: 'flex', flexWrap: 'wrap', gap: '2rem', alignItems: 'flex-start' }
 const wrap = { display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: '1 1 380px', maxWidth: 760 }
-// Columna dreta ~50%: KPIs albarà (tira) + Watchpoints (fil 1) + Timeline (fil 2), apilats.
+// Columna dreta ~50%: Watchpoints (fil 1) + Timeline (fil 2), apilats i BESSONS.
 const rightCol = { display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: '1 1 0', minWidth: 0 }
+// Marc compartit dels dos fils: mateix límit d'alçada + scroll propi (filScroll) i mateixa caixa
+// (filCaixa, calcada de la caixa pròpia del WatchpointsPanel) perquè siguin indistingibles.
+const filScroll = { maxHeight: '44vh', overflowY: 'auto', paddingRight: 4 }
+const filCaixa = { border: '0.5px solid var(--border)', borderRadius: 8, padding: '12px 16px', marginTop: 16, background: 'var(--bg-card)' }
 const sectionTitle = {
   fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
   textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8,
@@ -46,6 +50,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showTech, setShowTech] = useState(false)
+  const [albaraTime, setAlbaraTime] = useState(null)   // temps total del model (GET /albara/), per al títol "On sóc"
 
   // Càrrega del compositor. Reutilitzable: el transport del Pla de treball (P3) la torna a
   // cridar (onRefresh) després de cada transició que NO navega, perquè estat/temps/obertures
@@ -65,6 +70,18 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
   }, [modelId])
 
   useEffect(() => load(), [load])
+
+  // Temps acumulat del model: mateixa font que la pestanya Registre (GET /albara/), sense recalcular.
+  // Només se'n mostra el "temps total" a la línia del títol "On sóc". Degrada net si no hi ha activitat.
+  useEffect(() => {
+    let alive = true
+    fetch(`${API}/api/v1/models/${modelId}/albara/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (alive) setAlbaraTime(d && d.merited !== false ? formatMinutes(d.totals?.total_minutes) : null) })
+      .catch(() => {})
+    return () => { alive = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelId])
 
   if (loading) {
     return (
@@ -112,7 +129,11 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
 
       {/* ── Q1 · On sóc / què bloqueja ─────────────────────────────── */}
       <section>
-        <div style={sectionTitle}>{t('model_sheet.dashboard.section_status')}</div>
+        {/* B — temps acumulat afegit a la DRETA del títol (mateix tipus), sense tocar la resta del bloc. */}
+        <div style={{ ...sectionTitle, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+          <span>{t('model_sheet.dashboard.section_status')}</span>
+          {albaraTime && <span style={{ textTransform: 'none' }}>{albaraTime}</span>}
+        </div>
         <div style={stateBox}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, color: 'var(--text-main)' }}>
@@ -240,64 +261,23 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
       </section>
       </div>
 
-      {/* ── Columna dreta (~50%): KPIs albarà · Watchpoints · Memòria ── */}
+      {/* ── Columna dreta (~50%): dos fils BESSONS (mateixa caixa + alçada + scroll propi) ── */}
       <div style={rightCol}>
 
-        {/* KPIs de l'albarà (tira compacta, mateixa font que la pestanya Registre) */}
-        <AlbaraKpis modelId={modelId} />
-
-        {/* Fil 1 — Watchpoints del model (consulta, fil complet amb scroll propi) */}
-        <section>
-          <div style={sectionTitle}>{t('watchpoints.title')}</div>
-          <div style={{ maxHeight: '40vh', overflowY: 'auto', paddingRight: 4 }}>
-            <WatchpointsPanel key={`wp-${wpVersion}`} modelId={modelId} editable={false} showAllByDefault />
-          </div>
-        </section>
-
-        {/* Fil 2 — Què ha canviat (timeline multi-font, ja porta scroll intern i sticky) */}
-        <ModelTimeline modelId={modelId} />
-      </div>
-      </div>
-    </div>
-  )
-}
-
-// Tira compacta de 3 KPIs de l'albarà (temps total · passos · rectificacions).
-// Mateixa font que la pestanya Registre (GET /albara/), sense recalcular: només llegeix les xifres.
-// Degrada net si el model encara no té activitat meritada (merited===false → 0 / '—').
-function AlbaraKpis({ modelId }) {
-  const { t } = useTranslation()
-  const token = localStorage.getItem('access_token')
-  const [data, setData] = useState(null)
-
-  useEffect(() => {
-    let alive = true
-    fetch(`${API}/api/v1/models/${modelId}/albara/`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (alive) setData(d) })
-      .catch(() => {})
-    return () => { alive = false }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelId])
-
-  const merited = data?.merited !== false
-  const totals = data?.totals || {}
-  const steps = Array.isArray(data?.steps) ? data.steps : []
-  const kpis = [
-    { label: t('albara.totalTime'), value: merited ? formatMinutes(totals.total_minutes) : '—' },
-    { label: t('albara.steps'), value: merited ? steps.length : 0 },
-    { label: t('albara.rectifications'), value: merited ? (totals.rectifications ?? 0) : 0 },
-  ]
-
-  return (
-    <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', fontFamily: MONO }}>
-      {kpis.map(k => (
-        <div key={k.label}>
-          <div style={{ fontSize: 'var(--fs-h2)', fontWeight: 600, color: 'var(--text-main)' }}>{k.value}</div>
-          <div style={{ fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '0.04em',
-                        color: 'var(--text-muted)', marginTop: 2 }}>{k.label}</div>
+        {/* Fil 1 — Watchpoints (consulta, fil complet). El panell ja porta la seva pròpia caixa. */}
+        <div style={filScroll}>
+          <WatchpointsPanel key={`wp-${wpVersion}`} modelId={modelId} editable={false} showAllByDefault />
         </div>
-      ))}
+
+        {/* Fil 2 — Què ha canviat. ModelTimeline NO es toca per dins; se li iguala la caixa i
+            l'alçada des de fora perquè sigui bessó del fil 1. */}
+        <div style={filScroll}>
+          <div style={filCaixa}>
+            <ModelTimeline modelId={modelId} />
+          </div>
+        </div>
+      </div>
+      </div>
     </div>
   )
 }
