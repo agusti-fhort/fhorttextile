@@ -18,10 +18,6 @@ const KIND_META = {
   task_transition: { icon: 'ti-checkbox',        color: 'var(--text-muted)' },
 }
 
-const sectionTitle = {
-  fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
-  textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8,
-}
 const cardEmpty = {
   border: '0.5px dashed var(--border)', borderRadius: 8, padding: '0.7rem 0.9rem',
   background: 'var(--bg-muted)', color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
@@ -130,7 +126,7 @@ export default function ModelTimeline({ modelId }) {
       g.items.push(ev)
     }
     body = (
-      <div style={{ maxHeight: '75vh', overflowY: 'auto', paddingRight: 4 }}>
+      <div>
         {groups.map(g => (
           <div key={g.key}>
             <div style={dayHeader}>{g.label}</div>
@@ -173,9 +169,10 @@ export default function ModelTimeline({ modelId }) {
     )
   }
 
+  // Sense títol propi (el posa el dashboard a FORA) ni scroll intern (el dóna el contenidor exterior).
+  // Es manté intacta la lògica: agrupació per dia, sticky de dia, dades.
   return (
-    <section style={{ flex: '1 1 420px', maxWidth: 560, minWidth: 0 }}>
-      <div style={sectionTitle}>{t('model_sheet.dashboard.timeline.section')}</div>
+    <section style={{ minWidth: 0 }}>
       {body}
     </section>
   )

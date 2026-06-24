@@ -20,10 +20,14 @@ const grid = { display: 'flex', flexWrap: 'wrap', gap: '2rem', alignItems: 'flex
 const wrap = { display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: '1 1 380px', maxWidth: 760 }
 // Columna dreta ~50%: Watchpoints (fil 1) + Timeline (fil 2), apilats i BESSONS.
 const rightCol = { display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: '1 1 0', minWidth: 0 }
-// Marc compartit dels dos fils: mateix límit d'alçada + scroll propi (filScroll) i mateixa caixa
-// (filCaixa, calcada de la caixa pròpia del WatchpointsPanel) perquè siguin indistingibles.
-const filScroll = { maxHeight: '44vh', overflowY: 'auto', paddingRight: 4 }
-const filCaixa = { border: '0.5px solid var(--border)', borderRadius: 8, padding: '12px 16px', marginTop: 16, background: 'var(--bg-card)' }
+// Marc ÚNIC compartit pels dos fils: el contenidor exterior és l'únic marc (vora + caixa) i porta el
+// scroll propi (maxHeight + overflowY). Els components interns (WatchpointsPanel, ModelTimeline) ja no
+// aporten ni caixa ni capçalera → cap caixa-dins-de-caixa. El títol va a FORA (sectionTitle).
+const filScroll = {
+  maxHeight: '40vh', overflowY: 'auto',
+  border: '0.5px solid var(--border)', borderRadius: 8, background: 'var(--bg-card)',
+  padding: '8px 12px',
+}
 const sectionTitle = {
   fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
   textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8,
@@ -129,12 +133,10 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
 
       {/* ── Q1 · On sóc / què bloqueja ─────────────────────────────── */}
       <section>
-        {/* B — temps acumulat afegit a la DRETA del títol (mateix tipus), sense tocar la resta del bloc. */}
-        <div style={{ ...sectionTitle, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-          <span>{t('model_sheet.dashboard.section_status')}</span>
-          {albaraTime && <span style={{ textTransform: 'none' }}>{albaraTime}</span>}
-        </div>
+        <div style={sectionTitle}>{t('model_sheet.dashboard.section_status')}</div>
         <div style={stateBox}>
+          {/* D — temps acumulat a la DRETA de la línia de la fase (Desenvolupament), MATEIXA MIDA que el
+              títol de fase. Reusa total_minutes de /albara/. La resta del bloc queda intacta. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, color: 'var(--text-main)' }}>
               {phaseLabel}
@@ -144,6 +146,11 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
               <Badge variant="gate" icon="ti-flag-check">
                 {t('model_sheet.dashboard.ready_for_gate')}
               </Badge>
+            )}
+            {albaraTime && (
+              <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-h2)', fontWeight: 500, color: 'var(--text-main)' }}>
+                {albaraTime}
+              </span>
             )}
           </div>
           <div style={{ marginTop: 10 }}>
@@ -261,21 +268,24 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
       </section>
       </div>
 
-      {/* ── Columna dreta (~50%): dos fils BESSONS (mateixa caixa + alçada + scroll propi) ── */}
+      {/* ── Columna dreta (~50%): dos fils BESSONS, títol a FORA + un sol marc amb scroll propi ── */}
       <div style={rightCol}>
 
-        {/* Fil 1 — Watchpoints (consulta, fil complet). El panell ja porta la seva pròpia caixa. */}
-        <div style={filScroll}>
-          <WatchpointsPanel key={`wp-${wpVersion}`} modelId={modelId} editable={false} showAllByDefault />
-        </div>
+        {/* Fil 1 — Avisos (Watchpoints, consulta). Títol a fora; el panell va sense caixa ni capçalera. */}
+        <section>
+          <div style={sectionTitle}>{t('watchpoints.dashboard_title')}</div>
+          <div style={filScroll}>
+            <WatchpointsPanel key={`wp-${wpVersion}`} modelId={modelId} editable={false} showAllByDefault />
+          </div>
+        </section>
 
-        {/* Fil 2 — Què ha canviat. ModelTimeline NO es toca per dins; se li iguala la caixa i
-            l'alçada des de fora perquè sigui bessó del fil 1. */}
-        <div style={filScroll}>
-          <div style={filCaixa}>
+        {/* Fil 2 — Què ha canviat (timeline). Mateix títol-a-fora + mateix marc → bessó del fil 1. */}
+        <section>
+          <div style={sectionTitle}>{t('model_sheet.dashboard.timeline.section')}</div>
+          <div style={filScroll}>
             <ModelTimeline modelId={modelId} />
           </div>
-        </div>
+        </section>
       </div>
       </div>
     </div>

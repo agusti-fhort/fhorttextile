@@ -1988,8 +1988,8 @@
   "watchpoints": {
     "title": "Watchpoints",
     "tab_label": "Watchpoints",
+    "dashboard_title": "AVISOS",
     "err_save": "No se ha podido guardar la anotación.",
-    "open": "abiertas",
     "show_resolved": "Ver resueltas ({{n}})",
     "hide_resolved": "Ocultar resueltas",
     "placeholder": "Advertencia para el modelo (viaja con él por los gates)…",
