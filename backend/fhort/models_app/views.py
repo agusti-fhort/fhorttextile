@@ -1389,6 +1389,141 @@ def set_size_override_view(request, model_id):
     }, status=200)
 
 
+@api_view(['POST'])
+@permission_classes([_ExecuteTasksCap])
+def escalat_ajustar_talla_view(request, model_id):
+    """POST /api/v1/models/<model_id>/escalat/ajustar-talla/  Body: {pom_id, talla, valor}
+
+    Convergència amb el fitting (piece-fitting-lines/propagar): ancora la talla editada i PROPAGA
+    EL DELTA per regla a les germanes, com fa el fitting amb propaga_ancoratges. A nivell de MODEL
+    no hi ha PieceFittingLine; el magatzem que sobreviu la re-derivació amb la regla intacta és la
+    BASE (BaseMeasurement): propaga_ancoratges desplaça tota la corba mantenint els deltes de la
+    regla, per tant n'hi ha prou d'escriure la nova base i re-derivar (generate_graded_specs).
+
+      · LINEAR/canònic, talla no-base → propaga_ancoratges → nova base → BaseMeasurement → re-deriva.
+      · talla BASE (editable, el fitting no la bloqueja) → escriu BaseMeasurement directament.
+      · STEP/FIXED/ZERO o sense regla → NO propaga (com el fitting): override puntual de la cel·la.
+
+    Re-deriva amb el motor PUR existent (generate_graded_specs); NO duplica lògica de grading ni
+    crea versió nova (l'acte conscient de versionar és Propagar, generate_grading_view). Retorna
+    'linies' [{id, valor_real}] per refrescar la fila sencera (mirall de /propagar).
+    """
+    from fhort.models_app.models import ModelGradingOverride, MeasurementChangeLog
+    from fhort.pom.models import POMMaster
+    from fhort.pom.services import generate_graded_specs, _load_grading_rules
+    from fhort.pom.grading_utils import propaga_ancoratges
+    from fhort.fitting.services import _resolve_working_size_fitting, vigent_grading_version
+    from fhort.fitting.models import GradedSpec
+
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    data = request.data or {}
+    pom_id = data.get('pom_id')
+    talla = (data.get('talla') or '').strip()
+    valor = data.get('valor')
+    if pom_id is None or not talla:
+        return Response({'error': 'Calen pom_id i talla.'}, status=400)
+
+    base_size = (model.base_size_label or '').strip()
+    if not base_size:
+        return Response({'error': 'El model no té talla base definida.'}, status=400)
+    size_run = [s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()]
+    if talla not in size_run:
+        return Response({'error': f"La talla '{talla}' no és al size run del model."}, status=400)
+    try:
+        pom = POMMaster.objects.get(id=pom_id)
+    except POMMaster.DoesNotExist:
+        return Response({'error': 'POM no trobat.'}, status=404)
+
+    sf = _resolve_working_size_fitting(model)
+    if sf is None:
+        return Response(
+            {'error': "El model no té SizeFitting; genera el grading abans d'escalar."}, status=400)
+
+    profile = getattr(request.user, 'profile', None)
+    auth_user = request.user if getattr(request.user, 'is_authenticated', False) else None
+
+    # Valor buit → cap escriptura (mirall del fitting: ancoratge None no propaga). Retorna l'estat actual.
+    if valor in (None, ''):
+        propagat, motiu = False, 'sense_ancoratge'
+    else:
+        try:
+            valor = round(float(valor), 2)
+        except (TypeError, ValueError):
+            return Response({'error': 'valor ha de ser numèric.'}, status=400)
+
+        rule = _load_grading_rules(model).get(pom.id)
+        logica = getattr(rule, 'logica', None) if rule else None
+        canonic = getattr(rule, 'increment_base', None) is not None if rule else False
+        # LINEAR/canònic → propaga per regla (com el fitting, que sobreescriu TOTES les germanes);
+        # STEP/FIXED/ZERO o sense regla → NO propaga (només la cel·la editada).
+        propaga = rule is not None and (logica != 'STEP') and (canonic or logica == 'LINEAR')
+
+        with transaction.atomic():
+            if propaga:
+                # Nova base de la corba ancorada a l'edició (per a la base, l'ancoratge ÉS la base).
+                nova_base = (valor if talla == base_size
+                             else propaga_ancoratges(rule, talla, valor, size_run).get(base_size))
+                if nova_base is None:
+                    return Response({'error': "No s'ha pogut derivar la base des de la talla ancorada."}, status=400)
+                _write_base(model, pom, round(float(nova_base), 2), auth_user,
+                            f'Escalat · ajust talla {talla} (propaga per regla)')
+                # La corba de la regla mana: neteja els pins per cel·la del POM (el fitting sobreescriu
+                # els valor_real de les germanes; aquí l'equivalent és treure els overrides residuals).
+                ModelGradingOverride.objects.filter(model=model, pom=pom).delete()
+                propagat, motiu = True, (logica or 'CANONIC')
+            elif talla == base_size:
+                # Base sense règim LINEAR: desa la base; germanes intactes (mirall del fitting STEP).
+                _write_base(model, pom, valor, auth_user, f'Escalat · base {talla}')
+                propagat, motiu = False, (logica or 'BASE')
+            else:
+                # STEP/FIXED/ZERO o sense regla → override puntual (germanes intactes, com el fitting).
+                prev = (ModelGradingOverride.objects
+                        .filter(model=model, pom=pom, size_label=talla)
+                        .values_list('value_cm', flat=True).first())
+                ModelGradingOverride.objects.update_or_create(
+                    model=model, pom=pom, size_label=talla,
+                    defaults={'value_cm': valor, 'motiu': 'Escalat · ajust talla (sense propagació)',
+                              'fitting_ref': None, 'created_by': profile},
+                )
+                if prev is None or abs(float(prev) - valor) > 1e-9:
+                    MeasurementChangeLog.objects.create(
+                        model=model, pom=pom, base_measurement=None,
+                        valor_anterior=(float(prev) if prev is not None else None), valor_nou=valor,
+                        context='manual', motiu=f'Escalat talla {talla}', created_by=auth_user)
+                propagat, motiu = False, (logica or 'sense_regla')
+
+            try:
+                generate_graded_specs(sf.id)
+            except ValueError as e:
+                return Response({'error': str(e)}, status=400)
+
+    # Files actualitzades del POM (mirall de 'linies' de /propagar): {id, valor_real} per talla.
+    gv = vigent_grading_version(sf)
+    graded = {}
+    if gv:
+        for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom):
+            graded[spec.size_label] = (
+                float(spec.graded_value_cm) if spec.graded_value_cm is not None else None)
+    linies = [{'id': f'{pom.id}:{s}', 'valor_real': graded.get(s)} for s in size_run]
+    return Response({'ok': True, 'propagat': propagat, 'motiu': motiu,
+                     'grading_version_id': gv.id if gv else None, 'linies': linies}, status=200)
+
+
+def _write_base(model, pom, valor, auth_user, motiu):
+    """Escriu BaseMeasurement(model, pom).base_value_cm i deixa que el signal F1 registri el canvi."""
+    from fhort.models_app.models import BaseMeasurement
+    bm, _created = BaseMeasurement.objects.get_or_create(
+        model=model, pom=pom, defaults={'base_value_cm': valor, 'origen': 'STANDARD'})
+    bm.base_value_cm = valor
+    bm._changed_by = auth_user
+    bm._motiu = motiu
+    bm.save()
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def base_stages_view(request, model_id):
