@@ -370,7 +370,6 @@
     "tab_grading": "Escalado",
     "tab_tech_sheet": "Ficha técnica",
     "tab_activity_log": "Registro de actividad",
-    "tab_ai_analysis": "Análisis IA",
     "dashboard": {
       "err_load": "Error al cargar el dashboard",
       "section_status": "Dónde estoy",

@@ -370,7 +370,6 @@
     "tab_grading": "Grading",
     "tab_tech_sheet": "Tech sheet",
     "tab_activity_log": "Activity log",
-    "tab_ai_analysis": "AI analysis",
     "dashboard": {
       "err_load": "Error loading the dashboard",
       "section_status": "Where I am",

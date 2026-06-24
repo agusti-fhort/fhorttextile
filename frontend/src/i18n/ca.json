@@ -370,7 +370,6 @@
     "tab_grading": "Escalat",
     "tab_tech_sheet": "Fitxa tècnica",
     "tab_activity_log": "Registre d'activitat",
-    "tab_ai_analysis": "Anàlisi IA",
     "dashboard": {
       "err_load": "Error carregant el dashboard",
       "section_status": "On sóc",

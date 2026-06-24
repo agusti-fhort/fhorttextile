@@ -15,7 +15,9 @@ const API = import.meta.env.VITE_API_URL || ''
 // Menú net (PEÇA 5): Size Check absorbit a Mesures (taula base amb estadis), Producció retirat;
 // Fitting → Escalat (editor propagat). v2: el Size Check antic queda jubilat — /size-check
 // redirigeix a /mesures (App.jsx), aquí ja no hi ha cap branca 'Size Check'.
-const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Anàlisi IA']
+// 'Anàlisi IA' OCULTAT del menú (peça F): inert avui. El case i el component TabAIAnalysis es
+// conserven (no destructiu); simplement no apareix a la banda de pestanyes.
+const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat"]
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
   'Dashboard': 'model_sheet.tab_dashboard',
@@ -25,7 +27,6 @@ const TAB_LABELS = {
   'Fitxa tècnica': 'model_sheet.tab_tech_sheet',
   'Fitxers': 'model.tabs.fitxers',
   "Registre d'activitat": 'model_sheet.tab_activity_log',
-  'Anàlisi IA': 'model_sheet.tab_ai_analysis',
 }
 
 // ── Helpers de viabilitat (purs) ──────────────────────────────────────────
