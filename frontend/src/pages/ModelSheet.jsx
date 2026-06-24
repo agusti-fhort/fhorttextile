@@ -6,6 +6,7 @@ import ActionsMenu from '../components/model/ActionsMenu'
 import WatchpointDrawer from '../components/model/WatchpointDrawer'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import PropagatedEditor from './PropagatedEditor'
+import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
 import { models, watchpoints } from '../api/endpoints'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
@@ -126,6 +127,31 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
       .finally(() => setOpeningTask(false))
   }
 
+  // Fase 3 — "Propagar a grading" des de MESURES (origen): crea una versió nova (helper Peça 1 via
+  // generate_grading_view new_version) i navega a Escalat amb tot propagat. Sobre una versió segellada
+  // el backend torna 409 'sealed' → doble confirmació (capa1 + capa2) abans d'enviar allow_reopen_sealed
+  // (que deixa un watchpoint de traça). Reusa el patró conscient construït a la Peça 2.
+  const [propagating, setPropagating] = useState(false)
+  const [sealed, setSealed] = useState(null)
+  const [sealedStep, setSealedStep] = useState(0)
+  const propagarAGrading = (allowReopen = false) => {
+    if (propagating) return
+    setPropagating(true)
+    const body = { new_version: true }
+    if (allowReopen) body.allow_reopen_sealed = true
+    models.generarGrading(parseInt(id), body)
+      .then(() => {
+        setSealed(null); setSealedStep(0)
+        openTaskAndGo('scaling', tid => `/models/${id}/escalat?task_id=${tid}`)
+      })
+      .catch(e => {
+        const d = e?.response?.data
+        if (e?.response?.status === 409 && d?.error === 'sealed') { setSealed(d); setSealedStep(1) }
+        else { setFeedback({ type: 'err', text: t('grading_propagate.err') }) }
+      })
+      .finally(() => setPropagating(false))
+  }
+
   const handleDelete = async () => {
     if (!window.confirm(t('model_sheet.confirm_delete', { codi: model?.codi_intern }))) return
     try {
@@ -226,15 +252,26 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
                              }}>
                 {t('model_sheet.measures_consult')}
               </span>
-              {/* Porta-menú: obre la tasca de mesura (la crea si el model encara no en té) i entra a
-                  l'eina amb el task_id (compta-temps). Sense gate: funciona sempre. */}
-              <button type="button" disabled={openingTask}
-                onClick={() => openTaskAndGo('pom', tid => `/models/${id}/mesures?task_id=${tid}`)}
-                style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
-                         opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
-                <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
-                {t('model_sheet.edit_measures')}
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Porta-menú: obre la tasca de mesura (la crea si el model encara no en té) i entra a
+                    l'eina amb el task_id (compta-temps). Sense gate: funciona sempre. */}
+                <button type="button" disabled={openingTask}
+                  onClick={() => openTaskAndGo('pom', tid => `/models/${id}/mesures?task_id=${tid}`)}
+                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
+                           opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
+                  <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
+                  {t('model_sheet.edit_measures')}
+                </button>
+                {/* Fase 3 — Propagar a grading (origen): crea versió nova i porta a Escalat. */}
+                <button type="button" disabled={openingTask || propagating}
+                  onClick={() => propagarAGrading(false)}
+                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
+                           opacity: (openingTask || propagating) ? 0.6 : 1,
+                           cursor: (openingTask || propagating) ? 'default' : 'pointer' }}>
+                  <i className="ti ti-git-branch" style={{ fontSize: 14 }} />
+                  {propagating ? t('grading_propagate.running') : t('grading_propagate.button')}
+                </button>
+              </div>
             </div>
             <CheckMeasureEditor model={model} readOnly />
           </div>
@@ -253,6 +290,27 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
             </div>
             <PropagatedEditor modelId={parseInt(id)} inline readOnly />
           </div>
+        )}
+        {/* Fase 3 — doble confirmació en propagar sobre una versió SEGELLADA (409 'sealed'). */}
+        {sealed && sealedStep === 1 && (
+          <Modal
+            title={t('grading_propagate.sealed_title')}
+            subtitle={t('grading_propagate.sealed_l1', { version: sealed.version_number })}
+            confirmLabel={t('grading_propagate.continue')}
+            cancelLabel={t('app.cancel')}
+            onCancel={() => { setSealed(null); setSealedStep(0) }}
+            onConfirm={() => setSealedStep(2)}
+          />
+        )}
+        {sealed && sealedStep === 2 && (
+          <Modal
+            title={t('grading_propagate.sealed_title')}
+            subtitle={t('grading_propagate.sealed_l2')}
+            confirmLabel={t('grading_propagate.confirm_supersede')}
+            cancelLabel={t('app.cancel')}
+            onCancel={() => { setSealed(null); setSealedStep(0) }}
+            onConfirm={() => propagarAGrading(true)}
+          />
         )}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
         {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}
