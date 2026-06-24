@@ -1309,6 +1309,8 @@
     "col_pom": "POM",
     "col_nom": "Nom",
     "nom_save_err": "No s'ha pogut desar el nom.",
+    "reorder": "Arrossega per reordenar",
+    "reorder_err": "No s'ha pogut desar l'ordre.",
     "regle_delta": "Δ",
     "regle_break": "Break",
     "regle_from": "a partir de",

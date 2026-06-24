@@ -226,6 +226,12 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   }
 
   const onSave = useCallback((lineId, value) => sizeCheckLines.update(lineId, { valor_real: value }), [])
+  // Reordena els POM del model (DnD): desa l'ordre global i rellegeix. L'ordre es materialitza a Grading
+  // en propagar (totes les taules llegeixen order_by('ordre')).
+  const onReorder = useCallback((orderedBmIds) =>
+    baseMeasurements.reorder(model.id, orderedBmIds)
+      .then(() => load())
+      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.reorder_err') })), [model.id, load, onFeedback, t])
   // P4 — autoria del nom a nivell MODEL: desa nom_fitxa de la BaseMeasurement (NO el POM tenant).
   const onNomSave = useCallback((bmId, value) =>
     baseMeasurements.update(bmId, { nom_fitxa: value || null })
@@ -300,6 +306,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       <DependencyPanel model={model} />
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
         onSave={readOnly ? undefined : onSave} onNomSave={readOnly ? undefined : onNomSave}
+        reorderable={!readOnly} onReorder={readOnly ? undefined : onReorder}
         empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>} />
 
       {!readOnly && check && rows.length > 0 && (

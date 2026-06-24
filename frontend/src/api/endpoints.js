@@ -64,6 +64,8 @@ export const models = {
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).
 export const baseMeasurements = {
   update: (id, body) => client.patch(`/api/v1/base-measurements/${id}/`, body),
+  // Reordena els POM del model en bloc (ordre ÚNIC i global; es materialitza a Grading en propagar).
+  reorder: (modelId, ids) => client.post(`/api/v1/models/${modelId}/base-measurements/reorder/`, { ids }),
 }
 
 // D-12 — Watchpoints: advertències de text lliure ancorades al model (+ tasca d'origen), open→resolved.

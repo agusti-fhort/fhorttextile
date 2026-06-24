@@ -163,6 +163,8 @@ export default function MeasureGrid({
   editable = false,
   onSave,                 // (lineId, rawValue) => Promise (pot resoldre amb {lines:[{id,valor_real}]} per propagar)
   onNomSave = null,       // (bmId, value) => Promise — desa el nom d'autoria del MODEL (P4); null = no editable
+  reorderable = false,    // DnD de files (NOMÉS Mesures-edició); default false → Escalat/fitting/consulta intactes
+  onReorder = null,       // (orderedBmIds) => Promise — desa el nou ordre global del model
   empty = null,           // node quan no hi ha files
 }) {
   const { t } = useTranslation()
@@ -170,6 +172,18 @@ export default function MeasureGrid({
   const [vals, setVals] = useState({})        // buffer local lineId -> string
   const [edited, setEdited] = useState(() => new Set())  // ancoratge (editat a mà)
   const focusRef = useRef(null)
+  const dragFrom = useRef(null)
+  // Reordena (DnD): en deixar anar, calcula el nou ordre de bm_id i ho delega a onReorder (que desa +
+  // refresca). Sense estat visual local: la fila es recol·loca en rellegir (simple i sense desincronies).
+  const onRowDrop = (toIdx) => {
+    const from = dragFrom.current
+    dragFrom.current = null
+    if (from == null || from === toIdx || !onReorder) return
+    const ids = rows.map(r => r.bm_id)
+    const [moved] = ids.splice(from, 1)
+    ids.splice(toIdx, 0, moved)
+    onReorder(ids.filter(x => x != null))
+  }
 
   // Sincronitza el buffer des de les props quan canvien els valors actius (excepte la cel·la amb focus,
   // perquè la propagació/refresc no trepitgi el que l'usuari està escrivint).
@@ -259,10 +273,20 @@ export default function MeasureGrid({
           {rows.map((r, i) => {
             const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-card)'
             return (
-              <tr key={r.pom_id} style={{ background: rowBg }}>
+              <tr key={r.pom_id} style={{ background: rowBg }}
+                draggable={reorderable || undefined}
+                onDragStart={reorderable ? (() => { dragFrom.current = i }) : undefined}
+                onDragOver={reorderable ? (e => e.preventDefault()) : undefined}
+                onDrop={reorderable ? (() => onRowDrop(i)) : undefined}>
                 <td style={stickyTd(0, COL_POM_W, rowBg)}>
-                  <span style={{ fontWeight: 500, color: 'var(--gold)' }}>
-                    {r.codi}{r.is_key && <i className="ti ti-star" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title="KEY" />}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {reorderable && (
+                      <i className="ti ti-grip-vertical" title={t('measuregrid.reorder')}
+                        style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'grab' }} />
+                    )}
+                    <span style={{ fontWeight: 500, color: 'var(--gold)' }}>
+                      {r.codi}{r.is_key && <i className="ti ti-star" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title="KEY" />}
+                    </span>
                   </span>
                 </td>
                 <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} nomFitxa={r.nom_fitxa} bmId={r.bm_id}

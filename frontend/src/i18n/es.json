@@ -1309,6 +1309,8 @@
     "col_pom": "POM",
     "col_nom": "Nombre",
     "nom_save_err": "No se ha podido guardar el nombre.",
+    "reorder": "Arrastra para reordenar",
+    "reorder_err": "No se ha podido guardar el orden.",
     "regle_delta": "Δ",
     "regle_break": "Break",
     "regle_from": "a partir de",

@@ -1555,6 +1555,32 @@ def grading_status_view(request, model_id):
     })
 
 
+@api_view(['POST'])
+@permission_classes([_ExecuteTasksCap])
+def base_measurements_reorder_view(request, model_id):
+    """POST /api/v1/models/<model_id>/base-measurements/reorder/  Body: {ids: [bm_id, ...] ordenats}
+
+    Desa BaseMeasurement.ordre = posició a la llista (ordre ÚNIC i global del model). Totes les taules
+    llegeixen order_by('ordre') → reordenar a Mesures es materialitza a Grading EN PROPAGAR (la fase
+    nova sobre llenç net hereta l'ordre vigent). Reescriptura en bloc, atòmica, sense col·lisions.
+    """
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+    ids = request.data.get('ids')
+    if not isinstance(ids, list) or not ids:
+        return Response({'error': 'Cal una llista ids ordenada.'}, status=400)
+    bms = {bm.id: bm for bm in BaseMeasurement.objects.filter(model=model, id__in=ids)}
+    with transaction.atomic():
+        for pos, bid in enumerate(ids):
+            bm = bms.get(bid)
+            if bm is not None and bm.ordre != pos:
+                bm.ordre = pos
+                bm.save(update_fields=['ordre'])
+    return Response({'ok': True, 'n': len(bms)})
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def base_stages_view(request, model_id):
