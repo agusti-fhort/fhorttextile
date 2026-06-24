@@ -77,7 +77,7 @@ const btnSecondary = {
   display: 'flex', alignItems: 'center', gap: 4,
 }
 
-export default function ModelSheet({ defaultTab = 'Dashboard' }) {
+export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -156,6 +156,16 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
   useEffect(() => () => {
     if (editTaskId) modelTasks.transition(editTaskId, { to_status: 'Paused' }).catch(() => {})
   }, [editTaskId])
+  // Entrada directa en mode edició (rutes de tasca /mesures·/escalat → ModelSheet defaultTab+autoEdit):
+  // obre la tasca i commuta a edició un sol cop en muntar (preserva el compta-temps de les portes Kanban/
+  // WorkPlan sense pàgina externa).
+  const autoEditRef = useRef(false)
+  useEffect(() => {
+    if (autoEdit && !autoEditRef.current) {
+      autoEditRef.current = true
+      enterEdit(autoEdit, autoEdit === 'Escalat' ? 'scaling' : 'pom')
+    }
+  }, [autoEdit])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // "Propagar a grading" des de MESURES (origen): inicia una FASE NOVA sobre llenç net
   // (generate_grading_view new_version → esborra propagació anterior + regenera) i porta a la tab Escalat.

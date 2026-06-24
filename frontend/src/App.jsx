@@ -24,7 +24,6 @@ const OnboardingWizard = lazy(() => import('./pages/OnboardingWizard'))
 const ModelWizard = lazy(() => import('./pages/ModelWizard'))
 const BulkImportWizard = lazy(() => import('./pages/BulkImportWizard'))
 const ModelMeasurements = lazy(() => import('./pages/ModelMeasurements'))
-const EscalatTask = lazy(() => import('./pages/EscalatTask'))
 const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
@@ -137,8 +136,9 @@ export default function App() {
           <Route path="models/:id" element={<ModelSheet />} />
           <Route path="models/:id/editar" element={<ModelWizard />} />
           <Route path="models/:id/mesures" element={<ModelMeasurements />} />
-          {/* v2 PEÇA F: superfície de treball de l'escalat (tasca scaling, amb task_id → compta temps). */}
-          <Route path="models/:id/escalat" element={<EscalatTask />} />
+          {/* Escalat: l'edició viu DINS el ModelSheet (tab Escalat en mode edició). La ruta de tasca
+              hi entra directament (defaultTab+autoEdit), sense pàgina externa ni overlay. */}
+          <Route path="models/:id/escalat" element={<ModelSheet defaultTab="Escalat" autoEdit="Escalat" />} />
           <Route path="models/:id/teixit" element={<ModelFabric />} />
           <Route path="models/:id/fitxers" element={<ModelSheet defaultTab="Fitxers" />} />
           {/* v2: Size Check jubilat → redirigeix a l'edició nova de mesures (conserva task_id). */}
