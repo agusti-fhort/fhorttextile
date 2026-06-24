@@ -8,7 +8,7 @@ const linkBtn = { background: 'none', border: 'none', cursor: 'pointer', fontSiz
 // D-12 — Watchpoints: advertències de TEXT LLIURE que viatgen amb el model a través dels gates.
 // Crear (mode treball) + veure/resoldre. Origen = la tasca on es crea (`taskId`). NO van a la fitxa
 // tècnica; viuen amb el model perquè un altre tècnic entengui l'advertència.
-export default function WatchpointsPanel({ modelId, taskId = null, editable = false }) {
+export default function WatchpointsPanel({ modelId, taskId = null, editable = false, showAllByDefault = false }) {
   const { t } = useTranslation()
   const [items, setItems] = useState([])
   const [text, setText] = useState('')
@@ -37,7 +37,8 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
 
   const open = items.filter(w => w.estat === 'open')
   const resolved = items.filter(w => w.estat === 'resolved')
-  const visible = showResolved ? items : open
+  // Al dashboard (consulta) volem el fil COMPLET sense dependre del toggle.
+  const visible = (showAllByDefault || showResolved) ? items : open
 
   return (
     <div style={{ border: '0.5px solid var(--border)', borderRadius: 8, padding: '12px 16px', marginTop: 16, background: 'var(--bg-card)' }}>

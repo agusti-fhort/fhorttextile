@@ -90,6 +90,8 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState(null)
+  // Coherència B↔C: en tancar el drawer (escriptura) es bumpa per refrescar el fil del dashboard.
+  const [wpVersion, setWpVersion] = useState(0)
 
   const reloadModel = useCallback(() => {
     fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
@@ -175,7 +177,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
         {/* B — Watchpoints: pastilla destacada ancorada a la dreta de la banda de pestanyes.
             Obre el drawer flotant (escriptura); visible des de qualsevol tab. */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-          <WatchpointTrigger modelId={model.id} />
+          <WatchpointTrigger modelId={model.id} onClosed={() => setWpVersion(v => v + 1)} />
         </div>
       </div>
 
@@ -193,6 +195,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
             modelId={parseInt(id)}
             onOpenTab={setActiveTab}
             navigate={navigate}
+            wpVersion={wpVersion}
           />
         )}
         {activeTab === 'Resum' && (
@@ -451,7 +454,7 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
 // (mateixa font que el panell: watchpoints.list). Un sol pols breu quan el comptador PUJA respecte
 // l'anterior (entrada nova) — mai en la càrrega inicial, mai en bucle. En tancar el drawer, refresca
 // el comptador. Estat local i aïllat: obrir-lo no toca l'estat del model ni re-munta cap pestanya.
-function WatchpointTrigger({ modelId }) {
+function WatchpointTrigger({ modelId, onClosed }) {
   const { t } = useTranslation()
   const [count, setCount] = useState(0)
   const [open, setOpen] = useState(false)
@@ -482,7 +485,7 @@ function WatchpointTrigger({ modelId }) {
 
   useEffect(() => { fetchCount() }, [fetchCount])
 
-  const handleClose = () => { setOpen(false); fetchCount() }
+  const handleClose = () => { setOpen(false); fetchCount(); onClosed?.() }
 
   return (
     <div style={{ position: 'relative' }}>

@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
 import ModelTimeline from './ModelTimeline'
 import WorkPlan from './WorkPlan'
+import WatchpointsPanel from './WatchpointsPanel'
+import { formatMinutes } from '../../utils/format'
 
 // Dashboard del model — PEÇA F1 (Q1 "on sóc" + Q4 "què puc fer").
 // Consumeix GET /api/v1/models/<id>/dashboard/ (endpoint B1, read-only).
@@ -16,6 +18,8 @@ const MONO = 'IBM Plex Mono, monospace'
 // flexWrap fa que en pantalla estreta la dreta caigui SOTA l'esquerra (apilat), no comprimida.
 const grid = { display: 'flex', flexWrap: 'wrap', gap: '2rem', alignItems: 'flex-start' }
 const wrap = { display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: '1 1 380px', maxWidth: 760 }
+// Columna dreta ~50%: KPIs albarà (tira) + Watchpoints (fil 1) + Timeline (fil 2), apilats.
+const rightCol = { display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: '1 1 0', minWidth: 0 }
 const sectionTitle = {
   fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
   textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8,
@@ -35,7 +39,7 @@ const stateBox = {
   background: 'var(--bg-card)',
 }
 
-export default function DashboardTab({ modelId, onOpenTab, navigate }) {
+export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion = 0 }) {
   const { t } = useTranslation()
   const token = localStorage.getItem('access_token')
   const [data, setData] = useState(null)
@@ -236,9 +240,64 @@ export default function DashboardTab({ modelId, onOpenTab, navigate }) {
       </section>
       </div>
 
-      {/* ── Q2 · Memòria (timeline de passat) — columna dreta ──────── */}
-      <ModelTimeline modelId={modelId} />
+      {/* ── Columna dreta (~50%): KPIs albarà · Watchpoints · Memòria ── */}
+      <div style={rightCol}>
+
+        {/* KPIs de l'albarà (tira compacta, mateixa font que la pestanya Registre) */}
+        <AlbaraKpis modelId={modelId} />
+
+        {/* Fil 1 — Watchpoints del model (consulta, fil complet amb scroll propi) */}
+        <section>
+          <div style={sectionTitle}>{t('watchpoints.title')}</div>
+          <div style={{ maxHeight: '40vh', overflowY: 'auto', paddingRight: 4 }}>
+            <WatchpointsPanel key={`wp-${wpVersion}`} modelId={modelId} editable={false} showAllByDefault />
+          </div>
+        </section>
+
+        {/* Fil 2 — Què ha canviat (timeline multi-font, ja porta scroll intern i sticky) */}
+        <ModelTimeline modelId={modelId} />
       </div>
+      </div>
+    </div>
+  )
+}
+
+// Tira compacta de 3 KPIs de l'albarà (temps total · passos · rectificacions).
+// Mateixa font que la pestanya Registre (GET /albara/), sense recalcular: només llegeix les xifres.
+// Degrada net si el model encara no té activitat meritada (merited===false → 0 / '—').
+function AlbaraKpis({ modelId }) {
+  const { t } = useTranslation()
+  const token = localStorage.getItem('access_token')
+  const [data, setData] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    fetch(`${API}/api/v1/models/${modelId}/albara/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (alive) setData(d) })
+      .catch(() => {})
+    return () => { alive = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelId])
+
+  const merited = data?.merited !== false
+  const totals = data?.totals || {}
+  const steps = Array.isArray(data?.steps) ? data.steps : []
+  const kpis = [
+    { label: t('albara.totalTime'), value: merited ? formatMinutes(totals.total_minutes) : '—' },
+    { label: t('albara.steps'), value: merited ? steps.length : 0 },
+    { label: t('albara.rectifications'), value: merited ? (totals.rectifications ?? 0) : 0 },
+  ]
+
+  return (
+    <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', fontFamily: MONO }}>
+      {kpis.map(k => (
+        <div key={k.label}>
+          <div style={{ fontSize: 'var(--fs-h2)', fontWeight: 600, color: 'var(--text-main)' }}>{k.value}</div>
+          <div style={{ fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '0.04em',
+                        color: 'var(--text-muted)', marginTop: 2 }}>{k.label}</div>
+        </div>
+      ))}
     </div>
   )
 }
