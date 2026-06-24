@@ -117,14 +117,16 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
 }
 
 // Nomenclatura a 2 línies (llei de presentació): nom EN canònic a dalt (sembra, read-only) + nom
-// d'autoria a sota (petit, cursiva, gris). L'autoria viu a nivell MODEL (BaseMeasurement.nom_fitxa,
-// precedència sobre la canònica `nom_local`); en mode edició amb `bmId`, la línia inferior és
-// EDITABLE i desa via `onNomSave(bmId, value)` (P4: sobirania — NO toca el POM tenant compartit).
-function NomCell({ nomEn, nomLocal, nomFitxa, bmId, editable, onNomSave, style }) {
+// local a sota (petit, cursiva, gris). Aquesta cel·la és DESCRIPTIVA (només noms); la nomenclatura
+// CURTA (nom_fitxa, CH/WA/HI) s'edita a la columna POM (CodiCell) quan `editCodi`. Llegat: quan
+// `editCodi` és fals (fitting), la 2a línia mostra nom_fitxa amb precedència i és EDITABLE via
+// `onNomSave(bmId, value)` (P4: NO toca el POM tenant compartit).
+function NomCell({ nomEn, nomLocal, nomFitxa, bmId, editable, onNomSave, editCodi = false, style }) {
   const top = nomEn || nomLocal || ''
   const canon = nomEn && nomLocal && nomLocal !== nomEn ? nomLocal : (nomLocal || '')
-  const modelName = (nomFitxa != null && nomFitxa !== '') ? nomFitxa : canon
-  const canEdit = !!(editable && bmId != null && onNomSave)
+  // editCodi → la 2a línia és el nom LOCAL (la nomenclatura curta viu a la columna POM, no aquí).
+  const modelName = editCodi ? canon : ((nomFitxa != null && nomFitxa !== '') ? nomFitxa : canon)
+  const canEdit = !!(editable && bmId != null && onNomSave && !editCodi)
   const [val, setVal] = useState(modelName ?? '')
   const [focused, setFocused] = useState(false)
   useEffect(() => { if (!focused) setVal(modelName ?? '') }, [modelName, focused])
@@ -159,13 +161,61 @@ function NomCell({ nomEn, nomLocal, nomFitxa, bmId, editable, onNomSave, style }
   )
 }
 
+// Columna POM = nomenclatura CURTA del model (nom_fitxa: CH/WA/HI). En lectura mostra `codi`
+// (nom_fitxa || pom_code global). En edició (`editCodi` + bmId + onNomSave) és un input que desa
+// nom_fitxa per-model via onNomSave (NO toca el POM global; placeholder = codi global per defecte).
+// Mateix patró que el llegat del NomCell: buffer local, commit on blur, affordance només si editable.
+function CodiCell({ codi, nomFitxa, pomCode, bmId, isKey, editable, editCodi, onNomSave, reorderable, style }) {
+  const { t } = useTranslation()
+  const canEdit = !!(editable && editCodi && bmId != null && onNomSave)
+  const [val, setVal] = useState(nomFitxa ?? '')
+  const [focused, setFocused] = useState(false)
+  useEffect(() => { if (!focused) setVal(nomFitxa ?? '') }, [nomFitxa, focused])
+  const commit = () => {
+    setFocused(false)
+    const v = (val ?? '').trim()
+    if (v !== (nomFitxa ?? '')) onNomSave(bmId, v)
+  }
+  return (
+    <td style={style}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {reorderable && (
+          <i className="ti ti-grip-vertical" title={t('measuregrid.reorder')}
+            style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'grab' }} />
+        )}
+        {canEdit ? (
+          <input
+            value={val ?? ''} onChange={e => setVal(e.target.value)}
+            onFocus={() => setFocused(true)} onBlur={commit}
+            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+            placeholder={pomCode || ''}
+            style={{
+              font: 'inherit', fontWeight: 500, color: 'var(--gold)', width: 52,
+              padding: '0 2px', boxSizing: 'border-box', borderRadius: 3,
+              background: focused ? 'var(--white)' : 'transparent',
+              // Affordance: subratllat tènue en repòs → vora completa en focus.
+              border: '1px solid transparent',
+              borderBottom: focused ? '1px solid var(--border)' : '1px dashed var(--border)',
+              ...(focused && { borderColor: 'var(--border)' }),
+            }}
+          />
+        ) : (
+          <span style={{ fontWeight: 500, color: 'var(--gold)' }}>{codi}</span>
+        )}
+        {isKey && <i className="ti ti-star" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title="KEY" />}
+      </span>
+    </td>
+  )
+}
+
 export default function MeasureGrid({
   rows = [],
   groups = [],            // [{key, label, accent?, historyCols:[{key,label}], activeLabel, trailCols:[{key,label}]}]
   leadCols = [],          // [{key, label, width, render:(row)=>node}]  sticky després de POM/Nom (consulta: render pot ser text)
   editable = false,
   onSave,                 // (lineId, rawValue) => Promise (pot resoldre amb {lines:[{id,valor_real}]} per propagar)
-  onNomSave = null,       // (bmId, value) => Promise — desa el nom d'autoria del MODEL (P4); null = no editable
+  onNomSave = null,       // (bmId, value) => Promise — desa la nomenclatura curta del MODEL (nom_fitxa, P4); null = no editable
+  editCodi = false,       // on s'edita nom_fitxa: true → columna POM (codi curt CH/WA/HI, Mesures); false → 2a línia del Nom (fitting, llegat)
   reorderable = false,    // DnD de files (NOMÉS Mesures-edició); default false → Escalat/fitting/consulta intactes
   onReorder = null,       // (orderedBmIds) => Promise — desa el nou ordre global del model
   empty = null,           // node quan no hi ha files
@@ -281,19 +331,11 @@ export default function MeasureGrid({
                 onDragStart={reorderable ? (() => { dragFrom.current = i }) : undefined}
                 onDragOver={reorderable ? (e => e.preventDefault()) : undefined}
                 onDrop={reorderable ? (() => onRowDrop(i)) : undefined}>
-                <td style={stickyTd(0, COL_POM_W, rowBg)}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    {reorderable && (
-                      <i className="ti ti-grip-vertical" title={t('measuregrid.reorder')}
-                        style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'grab' }} />
-                    )}
-                    <span style={{ fontWeight: 500, color: 'var(--gold)' }}>
-                      {r.codi}{r.is_key && <i className="ti ti-star" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title="KEY" />}
-                    </span>
-                  </span>
-                </td>
+                <CodiCell codi={r.codi} nomFitxa={r.nom_fitxa} pomCode={r.pom_code} bmId={r.bm_id}
+                  isKey={r.is_key} editable={editable} editCodi={editCodi} onNomSave={onNomSave}
+                  reorderable={reorderable} style={stickyTd(0, COL_POM_W, rowBg)} />
                 <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} nomFitxa={r.nom_fitxa} bmId={r.bm_id}
-                  editable={editable} onNomSave={onNomSave} style={stickyTd(COL_POM_W, COL_NOM_W, rowBg)} />
+                  editable={editable} onNomSave={onNomSave} editCodi={editCodi} style={stickyTd(COL_POM_W, COL_NOM_W, rowBg)} />
                 {leadCols.map((c, idx) => (
                   <td key={c.key} style={stickyTd(leadLefts[idx], c.width, rowBg)}>{c.render(r)}</td>
                 ))}

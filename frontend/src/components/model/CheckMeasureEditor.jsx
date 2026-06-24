@@ -258,6 +258,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     return {
       pom_id: r.pom_id,
       codi: r.nom_fitxa || r.pom_code,
+      pom_code: r.pom_code,
       nom_en: r.nom_en, nom_local: r.nom_ca,
       nom_fitxa: r.nom_fitxa, bm_id: r.base_measurement_id,
       is_key: r.is_key,
@@ -309,7 +310,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       <DependencyPanel model={model} />
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
         onSave={readOnly ? undefined : onSave} onNomSave={readOnly ? undefined : onNomSave}
-        reorderable={!readOnly} onReorder={readOnly ? undefined : onReorder}
+        editCodi reorderable={!readOnly} onReorder={readOnly ? undefined : onReorder}
         empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>} />
 
       {!readOnly && check && rows.length > 0 && (
