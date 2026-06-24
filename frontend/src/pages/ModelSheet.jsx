@@ -8,7 +8,7 @@ import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import PropagatedEditor from './PropagatedEditor'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
-import { models, watchpoints } from '../api/endpoints'
+import { models, watchpoints, modelTasks } from '../api/endpoints'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
 
@@ -126,6 +126,36 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
       .catch(() => setFeedback({ type: 'err', text: t('model_sheet.open_task_err') }))
       .finally(() => setOpeningTask(false))
   }
+
+  // FASE A — edició INLINE: la tab commuta consulta↔edició mantenint el context (sidebar+tabs+
+  // capçalera+watchpoint), en comptes de navegar a /mesures·/escalat. openTask posa la tasca
+  // InProgress (compta-temps); en sortir de mode edició es pausa. El lifecycle del timer es mou de
+  // mount/unmount de ruta (EscalatTask/ModelMeasurements) a enter/exit de mode.
+  const [editing, setEditing] = useState(null)        // null | 'Mesures' | 'Escalat'
+  const [editTaskId, setEditTaskId] = useState(null)
+  const enterEdit = (tab, code) => {
+    if (openingTask) return
+    setOpeningTask(true)
+    models.openTask(parseInt(id), code)
+      .then(res => { setEditTaskId(res.data.task_id); setEditing(tab) })
+      .catch(() => setFeedback({ type: 'err', text: t('model_sheet.open_task_err') }))
+      .finally(() => setOpeningTask(false))
+  }
+  const exitEdit = useCallback(() => {
+    setEditTaskId(prev => {
+      if (prev) modelTasks.transition(prev, { to_status: 'Paused' }).catch(() => {})
+      return null
+    })
+    setEditing(null)
+  }, [])
+  // Sortir de mode edició en canviar de tab (pausa la tasca).
+  useEffect(() => {
+    if (editing && editing !== activeTab) exitEdit()
+  }, [activeTab, editing, exitEdit])
+  // Pausa la tasca en desmuntar el ModelSheet si quedava en edició.
+  useEffect(() => () => {
+    if (editTaskId) modelTasks.transition(editTaskId, { to_status: 'Paused' }).catch(() => {})
+  }, [editTaskId])
 
   // Fase 3 — "Propagar a grading" des de MESURES (origen): crea una versió nova (helper Peça 1 via
   // generate_grading_view new_version) i navega a Escalat amb tot propagat. Sobre una versió segellada
@@ -248,21 +278,27 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           marginBottom: 10, gap: 12 }}>
-              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
-                             }}>
-                {t('model_sheet.measures_consult')}
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                {editing === 'Mesures' ? t('model_sheet.measures_editing') : t('model_sheet.measures_consult')}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* Porta-menú: obre la tasca de mesura (la crea si el model encara no en té) i entra a
-                    l'eina amb el task_id (compta-temps). Sense gate: funciona sempre. */}
-                <button type="button" disabled={openingTask}
-                  onClick={() => openTaskAndGo('pom', tid => `/models/${id}/mesures?task_id=${tid}`)}
-                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
-                           opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
-                  <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
-                  {t('model_sheet.edit_measures')}
-                </button>
-                {/* Fase 3 — Propagar a grading (origen): crea versió nova i porta a Escalat. */}
+                {/* Commuta consulta↔edició DINS la tab (no navega): manté tot el context. */}
+                {editing === 'Mesures' ? (
+                  <button type="button" onClick={exitEdit}
+                    style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+                    <i className="ti ti-eye" style={{ fontSize: 14 }} />
+                    {t('model_sheet.back_to_consult')}
+                  </button>
+                ) : (
+                  <button type="button" disabled={openingTask}
+                    onClick={() => enterEdit('Mesures', 'pom')}
+                    style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
+                             opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
+                    <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
+                    {t('model_sheet.edit_measures')}
+                  </button>
+                )}
+                {/* Propagar a grading (origen): inicia fase nova sobre llenç net i porta a Escalat. */}
                 <button type="button" disabled={openingTask || propagating}
                   onClick={() => propagarAGrading(false)}
                   style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
@@ -273,22 +309,35 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
                 </button>
               </div>
             </div>
-            <CheckMeasureEditor model={model} readOnly />
+            {editing === 'Mesures' ? (
+              <CheckMeasureEditor model={model} readOnly={false} taskId={editTaskId}
+                onFeedback={fb => setFeedback(fb)} onResolved={exitEdit} onBack={exitEdit} />
+            ) : (
+              <CheckMeasureEditor model={model} readOnly />
+            )}
           </div>
         )}
-        {/* Escalat: CONSULTA read-only + porta-menú per obrir la tasca d'escalat (edició via tasca). */}
+        {/* Escalat: consulta ↔ edició DINS la tab (inline, sense overlay; manté el context). */}
         {activeTab === 'Escalat' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-              <button type="button" disabled={openingTask}
-                onClick={() => openTaskAndGo('scaling', tid => `/models/${id}/escalat?task_id=${tid}`)}
-                style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
-                         opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
-                <i className="ti ti-resize" style={{ fontSize: 14 }} />
-                {t('model_sheet.edit_grading')}
-              </button>
+              {editing === 'Escalat' ? (
+                <button type="button" onClick={exitEdit}
+                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+                  <i className="ti ti-eye" style={{ fontSize: 14 }} />
+                  {t('model_sheet.back_to_consult')}
+                </button>
+              ) : (
+                <button type="button" disabled={openingTask}
+                  onClick={() => enterEdit('Escalat', 'scaling')}
+                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
+                           opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
+                  <i className="ti ti-resize" style={{ fontSize: 14 }} />
+                  {t('model_sheet.edit_grading')}
+                </button>
+              )}
             </div>
-            <PropagatedEditor modelId={parseInt(id)} inline readOnly />
+            <PropagatedEditor modelId={parseInt(id)} inline readOnly={editing !== 'Escalat'} />
           </div>
         )}
         {/* Fase 3 — doble confirmació en propagar sobre una versió SEGELLADA (409 'sealed'). */}
