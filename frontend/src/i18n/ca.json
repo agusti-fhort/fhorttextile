@@ -2,12 +2,13 @@
   "grading_propagate": {
     "button": "Propagar",
     "running": "Propagant…",
-    "done": "Propagat · nova versió creada",
     "err": "No s'ha pogut propagar",
-    "sealed_title": "Versió segellada",
-    "sealed_l1": "La versió vigent v{{version}} està segellada (aprovada a producció). Propagar crearà una versió nova i la segellada quedarà superada com a històric. Vols continuar?",
+    "warn_title": "Ja hi ha taula propagada",
+    "warn_substitute": "Propagar inicia una fase nova sobre llenç net: la taula propagada actual es SUBSTITUIRÀ (es perd la propagació anterior). Vols continuar?",
+    "warn_sealed": "La versió vigent v{{version}} està SEGELLADA (producció). Propagar la substituirà sobre llenç net i es perdran les dades de producció. Vols continuar?",
     "continue": "Continua",
-    "sealed_l2": "Confirma que entens que superes una versió de PRODUCCIÓ.",
+    "confirm_title": "Confirma la propagació",
+    "confirm_sure": "N'estàs segur? Aquesta acció parteix de llenç net i no es pot desfer.",
     "confirm_supersede": "Confirma propagació"
   },
   "size_map_title": "Sistemes de talles",

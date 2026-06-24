@@ -2,12 +2,13 @@
   "grading_propagate": {
     "button": "Propagar",
     "running": "Propagando…",
-    "done": "Propagado · nueva versión creada",
     "err": "No se ha podido propagar",
-    "sealed_title": "Versión sellada",
-    "sealed_l1": "La versión vigente v{{version}} está sellada (aprobada en producción). Propagar creará una versión nueva y la sellada quedará superada como histórico. ¿Continuar?",
+    "warn_title": "Ya hay una tabla propagada",
+    "warn_substitute": "Propagar inicia una fase nueva sobre lienzo limpio: la tabla propagada actual se SUSTITUIRÁ (se pierde la propagación anterior). ¿Continuar?",
+    "warn_sealed": "La versión vigente v{{version}} está SELLADA (producción). Propagar la sustituirá sobre lienzo limpio y se perderán los datos de producción. ¿Continuar?",
     "continue": "Continuar",
-    "sealed_l2": "Confirma que entiendes que superas una versión de PRODUCCIÓN.",
+    "confirm_title": "Confirma la propagación",
+    "confirm_sure": "¿Estás seguro? Esta acción parte de lienzo limpio y no se puede deshacer.",
     "confirm_supersede": "Confirmar propagación"
   },
   "size_map_title": "Sistemas de tallas",

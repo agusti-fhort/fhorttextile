@@ -1192,6 +1192,11 @@ def generate_grading_view(request, model_id):
                             f'(aprovada a producció); cal confirmació explícita per superar-la.'),
             }, status=409)
         profile = getattr(request.user, 'profile', None)
+        # LLENÇ NET (LLEI): propagar inicia una FASE NOVA des de base+regla, esborrant els ajustos per
+        # cel·la (ModelGradingOverride) de la propagació anterior; el motor (helper) regenera de zero.
+        # NO és un eix de versions per comparar: el botó ja ha advertit (2 passos) abans d'arribar aquí.
+        from fhort.models_app.models import ModelGradingOverride
+        ModelGradingOverride.objects.filter(model=model).delete()
         try:
             new_v = bump_grading_version_and_generate(
                 sf.id,
@@ -1526,67 +1531,27 @@ def _write_base(model, pom, valor, auth_user, motiu):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def grading_history_view(request, model_id):
-    """GET /api/v1/models/<model_id>/grading-history/  (read-only)
+def grading_status_view(request, model_id):
+    """GET /api/v1/models/<model_id>/grading-status/  (read-only)
 
-    Eix de versions per a Escalat (convergit amb el fitting): per cada POM i talla, el valor a CADA
-    GradingVersion (història, read-only) + el valor VIGENT (columna activa editable). Alimenta
-    buildEscalatGroups/Rows (mirall de l'evolucio[] del fitting), sense tocar el motor.
+    Perquè el botó "Propagar a grading" MIRI ABANS d'executar (avís de 2 passos): retorna si ja hi
+    ha una propagació vigent (que es SUBSTITUIRÀ sobre llenç net) i si està segellada (producció).
     """
-    from fhort.fitting.models import GradingVersion, GradedSpec
+    from fhort.fitting.models import GradedSpec
     from fhort.fitting.services import _resolve_working_size_fitting, vigent_grading_version
-    from fhort.pom.services import _load_grading_rules
 
     try:
         model = Model.objects.get(id=model_id)
     except Model.DoesNotExist:
         return Response({'error': 'Model no trobat'}, status=404)
 
-    size_run = [s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()]
-    base_size = (model.base_size_label or '').strip()
     sf = _resolve_working_size_fitting(model)
-    versions = list(GradingVersion.objects.filter(size_fitting=sf).order_by('version_number')) if sf else []
-    version_numbers = [v.version_number for v in versions]
     gv = vigent_grading_version(sf) if sf else None
-    vigent_vn = gv.version_number if gv else None
-
-    spec_map = {}   # (pom_id, size_label, version_number) → graded_value_cm
-    if sf:
-        for sp in (GradedSpec.objects.filter(grading_version__size_fitting=sf)
-                   .select_related('grading_version')):
-            spec_map[(sp.pom_id, sp.size_label, sp.grading_version.version_number)] = (
-                float(sp.graded_value_cm) if sp.graded_value_cm is not None else None)
-
-    rules = _load_grading_rules(model)
-
-    def _flt(x):
-        return float(x) if x is not None else None
-
-    rows = []
-    for bm in (BaseMeasurement.objects.filter(model=model, is_active=True)
-               .select_related('pom', 'pom__pom_global').order_by('ordre')):
-        pom = bm.pom
-        pg = getattr(pom, 'pom_global', None)
-        r = rules.get(pom.id)
-        history = {s: {vn: spec_map.get((pom.id, s, vn)) for vn in version_numbers} for s in size_run}
-        active = {s: (spec_map.get((pom.id, s, vigent_vn)) if vigent_vn else None) for s in size_run}
-        rows.append({
-            'pom_id': pom.id, 'pom_code': pom.codi_client, 'bm_id': bm.id,
-            'nom_fitxa': bm.nom_fitxa or '',
-            'nom_ca': pg.nom_ca if pg else pom.nom_client,
-            'nom_en': pg.nom_en if pg else pom.nom_client,
-            'is_key': getattr(bm, 'is_key', False), 'ordre': bm.ordre,
-            'base_value_cm': _flt(bm.base_value_cm),
-            'logica': getattr(r, 'logica', None) if r else None,
-            'increment_base': _flt(getattr(r, 'increment_base', None)) if r else None,
-            'increment_break': _flt(getattr(r, 'increment_break', None)) if r else None,
-            'talla_break_label': getattr(r, 'talla_break_label', None) if r else None,
-            'history': history, 'active': active,
-        })
-
+    te_dades = bool(gv and GradedSpec.objects.filter(grading_version=gv).exists())
     return Response({
-        'model_id': model.id, 'base_size': base_size, 'size_run': size_run,
-        'versions': version_numbers, 'vigent': vigent_vn, 'rows': rows,
+        'te_dades_propagades': te_dades,
+        'segellada': bool(gv and gv.aprovada),
+        'version_number': gv.version_number if gv else None,
     })
 
 

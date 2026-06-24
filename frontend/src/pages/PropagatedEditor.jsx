@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import client from '../api/client'
 import { models } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
 import EditorHeader from '../components/model/EditorHeader'
@@ -8,8 +9,9 @@ import { buildEscalatGroups, buildEscalatRows, regimeLeadCol } from '../componen
 // ESCALAT — editor de la taula propagada del model (totes les talles) sobre l'editor únic MeasureGrid,
 // CONVERGIT amb el fitting: totes les talles editables (base inclosa) i editar una cel·la PROPAGA per
 // regla a les germanes (endpoint escalat/ajustar-talla → propaga_ancoratges, com piece-fitting-lines/
-// propagar). El règim per POM es canvia amb setPomRegim. S'alimenta de grading-history (versions + valor
-// vigent per talla). Versionar (crear v+1) és l'acte conscient "Propagar a grading" a MESURES, no aquí.
+// propagar). El règim per POM es canvia amb setPomRegim. S'alimenta de taula-mesures (UNA taula vigent
+// neta; LLEI: propagar = llenç net, no eix de versions). Versionar és l'acte conscient "Propagar a
+// grading" a MESURES, no aquí.
 export default function PropagatedEditor({ modelId, onClose, inline = false, readOnly = false }) {
   const { t } = useTranslation()
   const [data, setData] = useState(null)
@@ -20,7 +22,7 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
 
   const load = useCallback(() => {
     setLoading(true)
-    return models.gradingHistory(modelId)
+    return client.get(`/api/v1/models/${modelId}/taula-mesures/`)
       .then(res => setData(res.data))
       .catch(() => setErr(t('model_measurements.propagated_load_err')))
       .finally(() => setLoading(false))
@@ -32,10 +34,8 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
 
   const base = (data?.base_size || '').trim()
   const sizes = data?.size_run || []
-  const versionNumbers = data?.versions || []
-  const vigent = data?.vigent
-  const gridGroups = buildEscalatGroups(sizes, base, versionNumbers, vigent, t)
-  const gridRows = buildEscalatRows(data?.rows || [], sizes, base, versionNumbers, vigent)
+  const gridGroups = buildEscalatGroups(sizes, base, t)
+  const gridRows = buildEscalatRows(data?.rows || [], sizes, base)
 
   // Escriptura per talla (convergit amb el fitting): ancora la talla i PROPAGA per regla a les germanes.
   // Retorna l'axios promise; MeasureGrid llegeix res.data.linies i refresca la fila (germanes + base).

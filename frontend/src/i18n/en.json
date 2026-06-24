@@ -2,12 +2,13 @@
   "grading_propagate": {
     "button": "Propagate",
     "running": "Propagating…",
-    "done": "Propagated · new version created",
     "err": "Could not propagate",
-    "sealed_title": "Sealed version",
-    "sealed_l1": "The current version v{{version}} is sealed (approved for production). Propagating will create a new version and the sealed one will be superseded as history. Continue?",
+    "warn_title": "A propagated table already exists",
+    "warn_substitute": "Propagating starts a new phase on a clean slate: the current propagated table will be REPLACED (the previous propagation is lost). Continue?",
+    "warn_sealed": "The current version v{{version}} is SEALED (production). Propagating will replace it on a clean slate and production data will be lost. Continue?",
     "continue": "Continue",
-    "sealed_l2": "Confirm that you understand you are superseding a PRODUCTION version.",
+    "confirm_title": "Confirm propagation",
+    "confirm_sure": "Are you sure? This action starts from a clean slate and cannot be undone.",
     "confirm_supersede": "Confirm propagation"
   },
   "size_map_title": "Size systems",

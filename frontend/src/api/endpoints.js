@@ -56,8 +56,9 @@ export const models = {
   // fitting). Retorna {linies:[{id,valor_real}]} per refrescar la fila. Base inclosa.
   escalatAjustarTalla: (modelId, pomId, talla, valor) =>
     client.post(`/api/v1/models/${modelId}/escalat/ajustar-talla/`, { pom_id: pomId, talla, valor }),
-  // Fase 2 — historial GradingVersion+GradedSpec per a l'eix de versions d'Escalat (read-only).
-  gradingHistory: (modelId) => client.get(`/api/v1/models/${modelId}/grading-history/`),
+  // Fase B — estat de propagació perquè el botó Propagar MIRI ABANS (read-only):
+  // {te_dades_propagades, segellada, version_number}.
+  gradingStatus: (modelId) => client.get(`/api/v1/models/${modelId}/grading-status/`),
 }
 
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).

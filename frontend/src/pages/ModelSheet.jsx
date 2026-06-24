@@ -157,28 +157,34 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
     if (editTaskId) modelTasks.transition(editTaskId, { to_status: 'Paused' }).catch(() => {})
   }, [editTaskId])
 
-  // Fase 3 — "Propagar a grading" des de MESURES (origen): crea una versió nova (helper Peça 1 via
-  // generate_grading_view new_version) i navega a Escalat amb tot propagat. Sobre una versió segellada
-  // el backend torna 409 'sealed' → doble confirmació (capa1 + capa2) abans d'enviar allow_reopen_sealed
-  // (que deixa un watchpoint de traça). Reusa el patró conscient construït a la Peça 2.
+  // "Propagar a grading" des de MESURES (origen): inicia una FASE NOVA sobre llenç net
+  // (generate_grading_view new_version → esborra propagació anterior + regenera) i porta a la tab Escalat.
+  // MIRA ABANS (grading-status) i adverteix en 2 passos si ja hi ha propagació: pas 1 segons gravetat
+  // (segellada/producció → es perden dades; o substitució simple), pas 2 universal de confirmació. Sobre
+  // segellada s'envia allow_reopen_sealed (deixa un watchpoint de traça).
   const [propagating, setPropagating] = useState(false)
-  const [sealed, setSealed] = useState(null)
-  const [sealedStep, setSealedStep] = useState(0)
-  const propagarAGrading = (allowReopen = false) => {
+  const [propStatus, setPropStatus] = useState(null)   // {te_dades_propagades, segellada, version_number}
+  const [propStep, setPropStep] = useState(0)           // 0 cap modal · 1 avís adaptat · 2 confirmació final
+  // MIRA ABANS d'executar: si no hi ha propagació prèvia → propaga directe; si n'hi ha → avís de 2 passos
+  // (pas 1 segons gravetat: segellada/producció vs substitució; pas 2 universal "n'estàs segur?").
+  const onPropagarClick = () => {
+    if (propagating) return
+    models.gradingStatus(parseInt(id))
+      .then(res => {
+        const st = res.data
+        if (!st.te_dades_propagades) execPropagar(false)   // llenç ja net → directe
+        else { setPropStatus(st); setPropStep(1) }
+      })
+      .catch(() => setFeedback({ type: 'err', text: t('grading_propagate.err') }))
+  }
+  const execPropagar = (allowReopen) => {
     if (propagating) return
     setPropagating(true)
     const body = { new_version: true }
     if (allowReopen) body.allow_reopen_sealed = true
     models.generarGrading(parseInt(id), body)
-      .then(() => {
-        setSealed(null); setSealedStep(0)
-        openTaskAndGo('scaling', tid => `/models/${id}/escalat?task_id=${tid}`)
-      })
-      .catch(e => {
-        const d = e?.response?.data
-        if (e?.response?.status === 409 && d?.error === 'sealed') { setSealed(d); setSealedStep(1) }
-        else { setFeedback({ type: 'err', text: t('grading_propagate.err') }) }
-      })
+      .then(() => { setPropStatus(null); setPropStep(0); setActiveTab('Escalat') })   // porta a Escalat (inline)
+      .catch(() => setFeedback({ type: 'err', text: t('grading_propagate.err') }))
       .finally(() => setPropagating(false))
   }
 
@@ -298,9 +304,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
                     {t('model_sheet.edit_measures')}
                   </button>
                 )}
-                {/* Propagar a grading (origen): inicia fase nova sobre llenç net i porta a Escalat. */}
+                {/* Propagar a grading (origen): inicia fase nova sobre llenç net i porta a Escalat.
+                    Mira abans i adverteix (2 passos) si ja hi ha propagació. */}
                 <button type="button" disabled={openingTask || propagating}
-                  onClick={() => propagarAGrading(false)}
+                  onClick={onPropagarClick}
                   style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
                            opacity: (openingTask || propagating) ? 0.6 : 1,
                            cursor: (openingTask || propagating) ? 'default' : 'pointer' }}>
@@ -340,25 +347,27 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
             <PropagatedEditor modelId={parseInt(id)} inline readOnly={editing !== 'Escalat'} />
           </div>
         )}
-        {/* Fase 3 — doble confirmació en propagar sobre una versió SEGELLADA (409 'sealed'). */}
-        {sealed && sealedStep === 1 && (
+        {/* FaseB — avís de 2 passos en propagar amb dades existents (mira abans). Pas 1 segons gravetat. */}
+        {propStatus && propStep === 1 && (
           <Modal
-            title={t('grading_propagate.sealed_title')}
-            subtitle={t('grading_propagate.sealed_l1', { version: sealed.version_number })}
+            title={t('grading_propagate.warn_title')}
+            subtitle={propStatus.segellada
+              ? t('grading_propagate.warn_sealed', { version: propStatus.version_number })
+              : t('grading_propagate.warn_substitute')}
             confirmLabel={t('grading_propagate.continue')}
             cancelLabel={t('app.cancel')}
-            onCancel={() => { setSealed(null); setSealedStep(0) }}
-            onConfirm={() => setSealedStep(2)}
+            onCancel={() => { setPropStatus(null); setPropStep(0) }}
+            onConfirm={() => setPropStep(2)}
           />
         )}
-        {sealed && sealedStep === 2 && (
+        {propStatus && propStep === 2 && (
           <Modal
-            title={t('grading_propagate.sealed_title')}
-            subtitle={t('grading_propagate.sealed_l2')}
+            title={t('grading_propagate.confirm_title')}
+            subtitle={t('grading_propagate.confirm_sure')}
             confirmLabel={t('grading_propagate.confirm_supersede')}
             cancelLabel={t('app.cancel')}
-            onCancel={() => { setSealed(null); setSealedStep(0) }}
-            onConfirm={() => propagarAGrading(true)}
+            onCancel={() => { setPropStatus(null); setPropStep(0) }}
+            onConfirm={() => execPropagar(propStatus.segellada)}
           />
         )}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
