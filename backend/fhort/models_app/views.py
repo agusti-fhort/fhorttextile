@@ -1571,8 +1571,8 @@ def base_stages_view(request, model_id):
     except Model.DoesNotExist:
         return Response({'error': 'Model no trobat'}, status=404)
 
-    bms = (BaseMeasurement.objects.filter(model=model, is_active=True)
-           .select_related('pom', 'pom__pom_global').order_by('ordre', 'pom__codi_client'))
+    bms = list(BaseMeasurement.objects.filter(model=model, is_active=True)
+               .select_related('pom', 'pom__pom_global').order_by('ordre', 'pom__codi_client'))
 
     def _tol(bm):
         pom = bm.pom
@@ -1601,6 +1601,14 @@ def base_stages_view(request, model_id):
         snapshot.update(changes_by_ev[ev['key']])
         stages.append(ev)
         stage_snaps.append(dict(snapshot))
+
+    # FaseD — descarta els estadis (columnes de presa) sense CAP valor displayable per a les files
+    # mostrades (p.ex. events de POMs després desactivats): no es pinten columnes buides.
+    displayed = {bm.pom_id for bm in bms}
+    keep = [i for i in range(len(stages))
+            if any(stage_snaps[i].get(pid) is not None for pid in displayed)]
+    stages = [stages[i] for i in keep]
+    stage_snaps = [stage_snaps[i] for i in keep]
 
     rows = []
     for bm in bms:
