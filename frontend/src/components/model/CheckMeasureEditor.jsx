@@ -233,9 +233,12 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       .then(() => load())
       .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.reorder_err') })), [model.id, load, onFeedback, t])
   // P4 — autoria del nom a nivell MODEL: desa nom_fitxa de la BaseMeasurement (NO el POM tenant).
+  // Rellegeix en desar (mirall d'onReorder) perquè el prop modelName arribi actualitzat al NomCell i
+  // l'input no reverteixi al valor stale en perdre el focus.
   const onNomSave = useCallback((bmId, value) =>
     baseMeasurements.update(bmId, { nom_fitxa: value || null })
-      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.nom_save_err') })), [onFeedback, t])
+      .then(() => load())
+      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.nom_save_err') })), [load, onFeedback, t])
 
   if (loading) return <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('common.loading')}</div>
 

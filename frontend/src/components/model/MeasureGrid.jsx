@@ -146,7 +146,10 @@ function NomCell({ nomEn, nomLocal, nomFitxa, bmId, editable, onNomSave, style }
             font: 'inherit', fontSize: 'var(--fs-caption)', fontStyle: 'italic',
             color: 'var(--text-muted)', width: '100%', padding: '0 2px', boxSizing: 'border-box',
             borderRadius: 3, background: focused ? 'var(--white)' : 'transparent',
-            border: focused ? '1px solid var(--border)' : '1px solid transparent',
+            // Affordance: subratllat tènue en repòs (pista d'editabilitat) → vora completa en focus.
+            border: '1px solid transparent',
+            borderBottom: focused ? '1px solid var(--border)' : '1px dashed var(--border)',
+            ...(focused && { borderColor: 'var(--border)' }),
           }}
         />
       ) : (modelName && (
