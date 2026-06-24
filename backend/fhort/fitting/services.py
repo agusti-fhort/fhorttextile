@@ -356,11 +356,8 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
     Returns: {'changed', 'base_changed', 'override_changed', 'new_version'}.
     'override_changed' es manté per compat. de forma però SEMPRE és False (PEÇA 4).
     """
-    from django.db.models import F, Max
-    from fhort.fitting.models import (
-        PieceFitting, PieceFittingLine, GradingVersion,
-    )
-    from fhort.models_app.models import Model, BaseMeasurement
+    from fhort.fitting.models import PieceFitting, PieceFittingLine
+    from fhort.models_app.models import BaseMeasurement
 
     pf = PieceFitting.objects.select_related(
         'model', 'grading_version', 'grading_version__size_fitting',
@@ -427,46 +424,20 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
 
     new_version_number = None
     if changed:
-        # D-1 guard: no superar silenciosament una GradingVersion ja segellada a
-        # producció (aprovada=True). Un canvi tardà ha de ser una reobertura EXPLÍCITA
-        # i registrada (allow_reopen_sealed=True), per disseny §3.1.
-        sealed_active = (GradingVersion.objects
-                         .filter(size_fitting=sf, is_active=True, aprovada=True)
-                         .order_by('-version_number').first())
-        if sealed_active is not None and not allow_reopen_sealed:
-            raise ValueError(
-                f"GradingVersion v{sealed_active.version_number} està aprovada "
-                f"(segellada a producció); cal reobertura explícita per superar-la."
-            )
-        reopen_note = None
-        if sealed_active is not None:
-            reopen_note = (f'Reobertura explícita D-1: supera v{sealed_active.version_number} '
-                           f'aprovada (PieceFitting {pf.pk}).')
-            logger.warning(f"D-1: {reopen_note}")
-        # Functional versioning: deactivate ALL active versions (handles the
-        # legacy multi-active anomaly), then create the new active one.
-        GradingVersion.objects.filter(size_fitting=sf, is_active=True).update(is_active=False)
-        max_num = GradingVersion.objects.filter(size_fitting=sf).aggregate(
-            m=Max('version_number')
-        )['m'] or 0
-        new_version = GradingVersion.objects.create(
-            size_fitting=sf,
-            version_number=max_num + 1,
-            is_active=True,
-            creat_per=profile,
+        # PEÇA 1: versionat funcional centralitzat al helper (guard D-1 + desactiva actives +
+        # crea v+1 + measurements_version++ si base_changed + re-propaga). Mateix comportament
+        # que el bloc inline anterior; ara compartit amb resolve_size_check i la propagació
+        # conscient (PEÇA 2).
+        from fhort.pom.services import bump_grading_version_and_generate
+        new_version = bump_grading_version_and_generate(
+            sf.pk,
+            base_changed=base_changed,
+            profile_id=user_profile_id,
+            allow_reopen_sealed=allow_reopen_sealed,
             nom=f'Fitting sessió {pf.session_id}',
-            notes=reopen_note,
+            reopen_context=f'PieceFitting {pf.pk}',
         )
         new_version_number = new_version.version_number
-
-        if base_changed:
-            Model.objects.filter(pk=model.pk).update(
-                measurements_version=F('measurements_version') + 1
-            )
-
-        # Regenerate grading into the NEW active version (reads new base + overrides).
-        from fhort.pom.services import generate_graded_specs
-        generate_graded_specs(sf.pk)
 
         # Brain stub (decoupled; no propagation yet).
         from fhort.fitting.brain import on_fitting_measurement_changed
