@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { watchpoints } from '../../api/endpoints'
 
-const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit', year: '2-digit' }) : ''
+const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('ca-ES', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
 const linkBtn = { background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-caption)', color: 'var(--gold)' }
 
 // D-12 — Watchpoints: advertències de TEXT LLIURE que viatgen amb el model a través dels gates.

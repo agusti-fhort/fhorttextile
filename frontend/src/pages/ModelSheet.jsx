@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Feedback from '../components/ui/Feedback'
 import ActionsMenu from '../components/model/ActionsMenu'
+import WatchpointDrawer from '../components/model/WatchpointDrawer'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import PropagatedEditor from './PropagatedEditor'
 import RuleSetCard from '../components/model/RuleSetCard'
-import { models } from '../api/endpoints'
+import { models, watchpoints } from '../api/endpoints'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
 
@@ -428,6 +429,9 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {/* B — Watchpoint flotant: icona+badge a la capçalera, obre el drawer (fil cronològic).
+            Independent de la pestanya activa; NO toca l'estat del model. */}
+        <WatchpointTrigger modelId={model.id} />
         {/* P4: "Editar" (edita el MODEL) s'ha mogut a la pestanya Resum perquè no confongui que edita
             la pantalla visible. Aquí queden les accions de fase i l'esborrat. */}
         <ActionsMenu model={model} onChanged={onChanged} onFeedback={onFeedback} />
@@ -437,6 +441,62 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
         </button>
       </div>
     </div>
+    </div>
+  )
+}
+
+// Disparador del Watchpoint flotant: icona (outline) + badge amb el TOTAL d'entrades del model
+// (mateixa font que el panell: watchpoints.list). Un sol pols breu quan el comptador PUJA respecte
+// l'anterior (entrada nova) — mai en la càrrega inicial, mai en bucle. En tancar el drawer, refresca
+// el comptador. Estat local i aïllat: obrir-lo no toca l'estat del model ni re-munta cap pestanya.
+function WatchpointTrigger({ modelId }) {
+  const { t } = useTranslation()
+  const [count, setCount] = useState(0)
+  const [open, setOpen] = useState(false)
+  const badgeRef = useRef(null)
+  const prevCount = useRef(0)
+  const initialized = useRef(false)
+
+  const fetchCount = useCallback(() => {
+    if (!modelId) return
+    watchpoints.list({ model: modelId })
+      .then(r => {
+        const total = typeof r.data?.count === 'number'
+          ? r.data.count
+          : (r.data?.results ?? r.data ?? []).length
+        if (initialized.current && total > prevCount.current && badgeRef.current) {
+          // Pols one-shot via Web Animations API (cap CSS global, cap bucle).
+          badgeRef.current.animate(
+            [{ transform: 'scale(1)' }, { transform: 'scale(1.4)' }, { transform: 'scale(1)' }],
+            { duration: 500, easing: 'ease-out' },
+          )
+        }
+        prevCount.current = total
+        initialized.current = true
+        setCount(total)
+      })
+      .catch(() => {})
+  }, [modelId])
+
+  useEffect(() => { fetchCount() }, [fetchCount])
+
+  const handleClose = () => { setOpen(false); fetchCount() }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(true)}
+        title={t('watchpoints.title')} aria-label={t('watchpoints.title')}
+        style={{ ...btnSecondary, borderColor: 'var(--border)', color: 'var(--text-muted)', position: 'relative' }}>
+        <i className="ti ti-message-2" aria-hidden="true" />
+        {count > 0 && (
+          <span ref={badgeRef} style={{
+            position: 'absolute', top: -6, right: -6, minWidth: 16, height: 16, padding: '0 4px',
+            borderRadius: 9, background: 'var(--gold)', color: 'var(--white)',
+            fontSize: 'var(--fs-label)', fontWeight: 600, lineHeight: '16px', textAlign: 'center',
+          }}>{count}</span>
+        )}
+      </button>
+      <WatchpointDrawer modelId={modelId} open={open} onClose={handleClose} />
     </div>
   )
 }

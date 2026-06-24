@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan, watchpoints, modelTasks } from '../../api/endpoints'
+import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan } from '../../api/endpoints'
 import Modal from '../ui/Modal'
 import { selS } from '../ui/buttons'
 import TaskAssignWizard from '../TaskAssignWizard'
@@ -52,7 +52,6 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
 
   const openModal = (kind) => {
     setOpen(false)
-    if (kind === 'watchpoint') setForm({ wp_text: '' })
     if (kind === 'production') setForm({ supplier_id: '', phase: defaultPhase, expected_at: '', notes: '' })
     if (kind === 'fitting') {
       setForm({ fase: single ? single.fase_actual : CURRENT, data: todayISO(), expected_at: '',
@@ -171,30 +170,8 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
   const runAdvance = () => runBulk(m => { const nx = nextPhase(m.fase_actual); if (!nx) throw { response: { data: { error: t('model_sheet.phase_top') } } }; return modelsApi.gate(m.id, { to_phase: nx }) })
   const runBack = () => runBulk(m => { const pv = prevPhase(m.fase_actual); if (!pv) throw { response: { data: { error: t('model_sheet.phase_first') } } }; return modelsApi.regress(m.id, { to_phase: pv }) })
 
-  // P6 — "Fer comentari": crea un Watchpoint (D-12) ancorat al MODEL i, com a origen, a la tasca
-  // EN CURS del model si n'hi ha (l'hora i el procés on s'està treballant); si cap, task=null
-  // (ancorat només al model, permès per SET_NULL). Entitat + endpoint create ja existeixen.
-  const runWatchpoint = async () => {
-    const text = (form.wp_text || '').trim()
-    if (!text || !single) { onFeedback({ type: 'err', text: t('model_sheet.comment_empty') }); return }
-    setBusy(true)
-    let taskId = null
-    try {
-      const r = await modelTasks.list({ model: single.id, status: 'InProgress', page_size: 50 })
-      const tasks = r.data?.results ?? r.data ?? []
-      const enCurs = tasks.find(tk => tk.status === 'InProgress') || tasks[0]
-      if (enCurs) taskId = enCurs.id
-    } catch { /* sense tasca activa accessible → ancorat només al model */ }
-    try {
-      await watchpoints.create({ model: single.id, task: taskId, text })
-      setBusy(false); setModal(null)
-      onFeedback({ type: 'ok', text: t('model_sheet.comment_saved') })
-      onChanged && onChanged()
-    } catch (e) {
-      setBusy(false)
-      onFeedback({ type: 'err', text: e.response?.data?.detail || e.response?.data?.error || 'error' })
-    }
-  }
+  // B — La creació de Watchpoints (D-12) viu ara a l'overlay flotant de la capçalera del model
+  // (WatchpointDrawer → WatchpointsPanel), única porta de creació. Aquí ja no hi ha "Fer comentari".
 
   const items = [
     { key: 'assign', label: t('model_sheet.assign_tasks'), icon: 'ti-users-plus', enabled: list.length > 0 },
@@ -202,8 +179,6 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
     { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: list.length > 0 },
     // Convocar fitting des del llenç (un sol model): obre la convocatòria amb el model precarregat.
     { key: 'convene_fitting', label: t('model_sheet.convene_fitting'), icon: 'ti-shirt', enabled: !!single },
-    // P6 — Fer comentari (Watchpoint D-12): advertència de text que viatja amb el model. Un sol model.
-    { key: 'watchpoint', label: t('model_sheet.make_comment'), icon: 'ti-message-circle', enabled: !!single },
     { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: someNext },
     { key: 'back', label: t('model_sheet.back_phase'), icon: 'ti-arrow-left', enabled: somePrev },
   ]
@@ -244,21 +219,6 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
           onClose={() => setModal(null)}
           onSuccess={() => { setModal(null); onChanged?.() }}
         />
-      )}
-
-      {modal === 'watchpoint' && (
-        <Modal title={t('model_sheet.make_comment')}
-          confirmLabel={busy ? t('model_sheet.working') : t('model_sheet.comment_save')}
-          cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy}
-          onConfirm={runWatchpoint} onCancel={() => !busy && setModal(null)}>
-          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 0, lineHeight: 1.5 }}>
-            {t('model_sheet.comment_help')}
-          </p>
-          <textarea autoFocus value={form.wp_text || ''}
-            placeholder={t('model_sheet.comment_placeholder')}
-            onChange={e => setForm(f => ({ ...f, wp_text: e.target.value }))}
-            style={{ ...fullSel, minHeight: 90, resize: 'vertical' }} />
-        </Modal>
       )}
 
       {modal === 'production' && (
