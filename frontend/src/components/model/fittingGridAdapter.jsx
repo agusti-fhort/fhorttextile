@@ -127,7 +127,9 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel) {
       }
     }
     return {
-      pom_id: row.pom_id, codi: row.pom_code, is_key: row.is_key,
+      // Nomenclatura client COHERENT amb Mesures: prevaler nom_fitxa (nom de model editable) sobre
+      // pom_code (codi_client). taula-mesures ja retorna nom_fitxa.
+      pom_id: row.pom_id, codi: row.nom_fitxa || row.pom_code, is_key: row.is_key,
       nom_en: row.nom_en, nom_local: row.nom_ca,
       logica: row.logica, increment_base: row.increment_base,
       increment_break: row.increment_break, talla_break_label: row.talla_break_label,
