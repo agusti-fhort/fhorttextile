@@ -1990,6 +1990,7 @@
     "tab_label": "Watchpoints",
     "dashboard_title": "NOTICES",
     "err_save": "Could not save the note.",
+    "open": "open",
     "show_resolved": "Show resolved ({{n}})",
     "hide_resolved": "Hide resolved",
     "placeholder": "Warning for the model (travels with it across gates)…",

@@ -27,10 +27,11 @@ const dayHeader = {
   margin: '14px 0 6px', position: 'sticky', top: 0, zIndex: 1,
   background: 'var(--bg-main)', padding: '2px 0',
 }
-const eventRow = {
-  display: 'flex', gap: 10, alignItems: 'flex-start',
-  border: '0.5px solid var(--border)', borderRadius: 8,
-  padding: '0.6rem 0.8rem', background: 'var(--white)',
+// Fila en LÍNIA, sense capsa: ni border, ni fons, ni borderRadius. Només un separador fi (borderTop)
+// i densitat alta. El marc i el scroll viuen al contenidor exterior (DashboardTab).
+const eventLine = {
+  display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap',
+  padding: '4px 0', borderTop: '0.5px solid var(--border)', fontSize: 'var(--fs-body)',
 }
 
 function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
@@ -130,35 +131,30 @@ export default function ModelTimeline({ modelId }) {
         {groups.map(g => (
           <div key={g.key}>
             <div style={dayHeader}>{g.label}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div>
               {g.items.map((ev, i) => {
                 const meta = KIND_META[ev.kind] || { icon: 'ti-point', color: 'var(--text-muted)' }
                 const p = ev.payload || {}
                 return (
-                  <div key={i} style={eventRow}>
-                    <i className={`ti ${meta.icon}`} style={{ fontSize: 16, color: meta.color, marginTop: 2 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)',
-                                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span>{lineText(ev)}</span>
-                        {ev.kind === 'measure_change' && p.fora_de_tolerancia && (
-                          <Badge variant="err" icon="ti-alert-triangle">
-                            {t('model_sheet.dashboard.timeline.out_of_tolerance')}
-                          </Badge>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
-                        {relTime(ev.at)}
-                        {ev.actor && <> · {t('model_sheet.dashboard.timeline.by', { label: ev.actor.label })}</>}
-                        {ev.kind === 'measure_change' && p.context && (
-                          <> · {t(`model_sheet.dashboard.timeline.context.${p.context}`, { defaultValue: p.context })}</>
-                        )}
-                      </div>
-                      {ev.kind === 'measure_change' && p.motiu && (
-                        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
-                                      fontStyle: 'italic', marginTop: 2 }}>{p.motiu}</div>
-                      )}
-                    </div>
+                  <div key={i} style={eventLine}>
+                    <i className={`ti ${meta.icon}`} style={{ fontSize: 14, color: meta.color, flexShrink: 0, alignSelf: 'center' }} />
+                    <span style={{ color: 'var(--text-main)' }}>{lineText(ev)}</span>
+                    {ev.kind === 'measure_change' && p.fora_de_tolerancia && (
+                      <Badge variant="err" icon="ti-alert-triangle">
+                        {t('model_sheet.dashboard.timeline.out_of_tolerance')}
+                      </Badge>
+                    )}
+                    {ev.kind === 'measure_change' && p.context && (
+                      <span style={{ color: 'var(--text-muted)' }}>
+                        · {t(`model_sheet.dashboard.timeline.context.${p.context}`, { defaultValue: p.context })}
+                      </span>
+                    )}
+                    {ev.kind === 'measure_change' && p.motiu && (
+                      <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>· {p.motiu}</span>
+                    )}
+                    <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: 'var(--fs-label)', whiteSpace: 'nowrap' }}>
+                      {relTime(ev.at)}{ev.actor ? ` · ${t('model_sheet.dashboard.timeline.by', { label: ev.actor.label })}` : ''}
+                    </span>
                   </div>
                 )
               })}

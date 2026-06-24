@@ -41,9 +41,20 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
   const visible = (showAllByDefault || showResolved) ? items : open
 
   return (
-    // Sense caixa ni capçalera pròpies: el títol ("AVISOS" al dashboard / "Watchpoints" al drawer) i el
-    // marc els posa el contenidor de FORA. Aquí només la llista (+ input/toggle quan cal).
+    // Sense CAIXA pròpia (el marc i el scroll els posa el contenidor de FORA), però SÍ amb capçalera
+    // interna "Watchpoints (N obertes)" + "Veure resoltes" (decisió UX: relaciona l'avís amb el component).
     <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <i className="ti ti-flag" style={{ color: 'var(--warn)' }} />
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)' }}>{t('watchpoints.title')}</span>
+        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>({open.length} {t('watchpoints.open')})</span>
+        {resolved.length > 0 && (
+          <button type="button" onClick={() => setShowResolved(s => !s)}
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+            {showResolved ? t('watchpoints.hide_resolved') : t('watchpoints.show_resolved', { n: resolved.length })}
+          </button>
+        )}
+      </div>
       {editable && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input value={text} onChange={e => setText(e.target.value)} placeholder={t('watchpoints.placeholder')}
@@ -58,14 +69,6 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
       {editable && err && (
         <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--err)', marginBottom: 10 }}>
           {t('watchpoints.err_save')}
-        </div>
-      )}
-      {resolved.length > 0 && (
-        <div style={{ display: 'flex', marginBottom: 8 }}>
-          <button type="button" onClick={() => setShowResolved(s => !s)}
-            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
-            {showResolved ? t('watchpoints.hide_resolved') : t('watchpoints.show_resolved', { n: resolved.length })}
-          </button>
         </div>
       )}
       {visible.length === 0 ? (
