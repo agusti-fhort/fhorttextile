@@ -1988,6 +1988,8 @@
   },
   "watchpoints": {
     "title": "Watchpoints",
+    "tab_label": "Watchpoints",
+    "err_save": "Could not save the note.",
     "open": "open",
     "show_resolved": "Show resolved ({{n}})",
     "hide_resolved": "Hide resolved",

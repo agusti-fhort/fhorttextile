@@ -172,6 +172,11 @@ export default function ModelSheet({ defaultTab = 'Dashboard' }) {
             {t(TAB_LABELS[tab])}
           </button>
         ))}
+        {/* B — Watchpoints: pastilla destacada ancorada a la dreta de la banda de pestanyes.
+            Obre el drawer flotant (escriptura); visible des de qualsevol tab. */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+          <WatchpointTrigger modelId={model.id} />
+        </div>
       </div>
 
       {error && (
@@ -429,9 +434,6 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        {/* B — Watchpoint flotant: icona+badge a la capçalera, obre el drawer (fil cronològic).
-            Independent de la pestanya activa; NO toca l'estat del model. */}
-        <WatchpointTrigger modelId={model.id} />
         {/* P4: "Editar" (edita el MODEL) s'ha mogut a la pestanya Resum perquè no confongui que edita
             la pantalla visible. Aquí queden les accions de fase i l'esborrat. */}
         <ActionsMenu model={model} onChanged={onChanged} onFeedback={onFeedback} />
@@ -484,15 +486,22 @@ function WatchpointTrigger({ modelId }) {
 
   return (
     <div style={{ position: 'relative' }}>
+      {/* Pastilla destacada amb CONTORN DAURAT: icona outline + etiqueta + badge comptador. */}
       <button type="button" onClick={() => setOpen(true)}
-        title={t('watchpoints.title')} aria-label={t('watchpoints.title')}
-        style={{ ...btnSecondary, borderColor: 'var(--border)', color: 'var(--text-muted)', position: 'relative' }}>
-        <i className="ti ti-message-2" aria-hidden="true" />
+        title={t('watchpoints.tab_label')} aria-label={t('watchpoints.tab_label')}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '6px 14px', borderRadius: 20,
+          border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)',
+          cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 500,
+        }}>
+        <i className="ti ti-message-2" aria-hidden="true" style={{ fontSize: 16 }} />
+        {t('watchpoints.tab_label')}
         {count > 0 && (
           <span ref={badgeRef} style={{
-            position: 'absolute', top: -6, right: -6, minWidth: 16, height: 16, padding: '0 4px',
-            borderRadius: 9, background: 'var(--gold)', color: 'var(--white)',
-            fontSize: 'var(--fs-label)', fontWeight: 600, lineHeight: '16px', textAlign: 'center',
+            minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9,
+            background: 'var(--gold)', color: 'var(--white)',
+            fontSize: 'var(--fs-label)', fontWeight: 600, lineHeight: '18px', textAlign: 'center',
           }}>{count}</span>
         )}
       </button>

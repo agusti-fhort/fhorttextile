@@ -1988,6 +1988,8 @@
   },
   "watchpoints": {
     "title": "Watchpoints",
+    "tab_label": "Watchpoints",
+    "err_save": "No s'ha pogut desar l'anotació.",
     "open": "obertes",
     "show_resolved": "Veure resoltes ({{n}})",
     "hide_resolved": "Amaga resoltes",

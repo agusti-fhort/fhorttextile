@@ -1988,6 +1988,8 @@
   },
   "watchpoints": {
     "title": "Watchpoints",
+    "tab_label": "Watchpoints",
+    "err_save": "No se ha podido guardar la anotación.",
     "open": "abiertas",
     "show_resolved": "Ver resueltas ({{n}})",
     "hide_resolved": "Ocultar resueltas",

@@ -14,6 +14,7 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [showResolved, setShowResolved] = useState(false)
+  const [err, setErr] = useState(false)
 
   const load = useCallback(() => {
     if (!modelId) return
@@ -25,9 +26,11 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
   const add = () => {
     const v = text.trim()
     if (!v || busy) return
-    setBusy(true)
+    setBusy(true); setErr(false)
     watchpoints.create({ model: modelId, task: taskId || null, text: v })
-      .then(() => { setText(''); load() }).finally(() => setBusy(false))
+      .then(() => { setText(''); load() })
+      .catch(() => setErr(true))   // visible: ja no s'empassa el fallo (p.ex. 500)
+      .finally(() => setBusy(false))
   }
   const resolve = (id) => { setBusy(true); watchpoints.resolve(id).then(load).finally(() => setBusy(false)) }
   const reopen = (id) => { setBusy(true); watchpoints.reopen(id).then(load).finally(() => setBusy(false)) }
@@ -58,6 +61,11 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
             style={{ padding: '4px 12px', border: '0.5px solid var(--gold)', borderRadius: 4, background: 'var(--white)', color: 'var(--gold)', cursor: busy ? 'default' : 'pointer', fontSize: 'var(--fs-body)' }}>
             + {t('watchpoints.add')}
           </button>
+        </div>
+      )}
+      {editable && err && (
+        <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--err)', marginBottom: 10 }}>
+          {t('watchpoints.err_save')}
         </div>
       )}
       {visible.length === 0 ? (
