@@ -514,7 +514,7 @@ def bump_grading_version_and_generate(sf_id, *, base_changed, profile_id=None,
         version_number=max_num + 1,
         is_active=True,
         creat_per=profile,
-        nom=nom,
+        nom=(nom or 'Propagació'),   # default sensat: nom és NOT NULL a la BD (footgun nom=None/buit)
         notes=reopen_note,
     )
 
