@@ -48,10 +48,16 @@ export const models = {
     client.post(`/api/v1/models/${modelId}/set-size-override/`, { pom_id: pomId, size_label: sizeLabel, valor }),
   // Taula base amb estadis (històric per presa + tolerància + base vigent). Read-only.
   baseStages: (modelId) => client.get(`/api/v1/models/${modelId}/base-stages/`),
-  // Peça 2 — propagació conscient a Escalat: {new_version:true} crea v+1 sobre la vigent. Sobre
+  // Peça 2 — propagació conscient (origen Mesures): {new_version:true} crea v+1 sobre la vigent. Sobre
   // una versió segellada retorna 409 {error:'sealed', version_number} → cal doble confirmació
   // ({allow_reopen_sealed:true}).
   generarGrading: (modelId, body) => client.post(`/api/v1/models/${modelId}/generar-grading/`, body || {}),
+  // Fase 2 — ajust de talla a Escalat: ancora la talla i PROPAGA per regla a les germanes (com el
+  // fitting). Retorna {linies:[{id,valor_real}]} per refrescar la fila. Base inclosa.
+  escalatAjustarTalla: (modelId, pomId, talla, valor) =>
+    client.post(`/api/v1/models/${modelId}/escalat/ajustar-talla/`, { pom_id: pomId, talla, valor }),
+  // Fase 2 — historial GradingVersion+GradedSpec per a l'eix de versions d'Escalat (read-only).
+  gradingHistory: (modelId) => client.get(`/api/v1/models/${modelId}/grading-history/`),
 }
 
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).

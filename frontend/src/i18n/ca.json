@@ -1393,7 +1393,7 @@
     "base_prefix": "Base:",
     "view_grading": "📐 Veure escalat",
     "propagated_title": "Editor de grading propagat",
-    "propagated_hint": "Edita el valor d'una talla (no la base) per fixar un trencament; es re-propaga automàticament. El règim canvia per POM.",
+    "propagated_hint": "Edita qualsevol talla (base inclosa): el valor es propaga per regla a les talles germanes. El règim canvia per POM.",
     "propagated_hint_ro": "Consulta de l'escalat vigent. L'edició s'obre des de la tasca corresponent.",
     "propagated_close": "Tancar",
     "propagated_empty": "Encara no hi ha mesures base per propagar.",

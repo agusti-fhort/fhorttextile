@@ -99,33 +99,41 @@ export function regimeLeadCol(t, onRegimChange, readOnly = false) {
 }
 
 // --- ESCALAT (taula propagada del model) ---------------------------------------------------------
-// Mateix esquelet, eix degenerat: per talla, 1 columna read-only "Base" (valor vigent propagat) + la
-// columna activa "Fit actual" (editable = override de talla). La talla BASE és read-only (no override:
-// s'edita com a mesura base). Reusa regimeLeadCol. lineId = `${pom_id}:${size}`.
-export function buildEscalatGroups(sizeLabels, baseLabel, t) {
+// Convergit amb el fitting: per talla, history = versions ANTERIORS read-only (Base, Fit 1…) + columna
+// activa "Fit actual" EDITABLE per a TOTES les talles, BASE inclosa (el fitting no la bloqueja).
+// Reusa regimeLeadCol. lineId = `${pom_id}:${size}`. Alimentat per grading-history (versions + history
+// + active per talla). `vigent` = la versió activa, que és la columna editable (no surt com a història).
+export function buildEscalatGroups(sizeLabels, baseLabel, versionNumbers, vigent, t) {
+  const past = (versionNumbers || []).filter(vn => vn !== vigent)
+  const all = versionNumbers || []
   return sizeLabels.map(s => ({
     key: s,
     label: s === baseLabel
       ? <span>{s}<i className="ti ti-star" style={{ fontSize: 10, marginLeft: 4, color: 'var(--gold)' }} /></span>
       : s,
-    historyCols: [{ key: 'vigent', label: t('fitting.grid.base') }],
+    historyCols: past.map(vn => ({ key: `v${vn}`, label: versionLabel(vn, all.indexOf(vn), t) })),
     activeLabel: t('fitting.grid.fit_current'),
     trailCols: [],
   }))
 }
 
-export function buildEscalatRows(rows, sizeLabels, baseLabel) {
+export function buildEscalatRows(rows, sizeLabels, baseLabel, versionNumbers, vigent) {
+  const past = (versionNumbers || []).filter(vn => vn !== vigent)
   return (rows || []).map(row => {
     const cells = {}
     for (const s of sizeLabels) {
-      const v = s === baseLabel ? row.base_value_cm : (row.graded?.[s] ?? null)
+      const hist = row.history?.[s] || {}
+      const history = {}
+      for (const vn of past) history[`v${vn}`] = hist[vn] ?? null
+      const v = row.active?.[s] ?? null
       cells[s] = {
-        history: { vigent: v },
-        active: { lineId: `${row.pom_id}:${s}`, value: v == null ? '' : v, baseValue: v, readonly: s === baseLabel },
+        history,
+        // TOTES editables (base inclosa); baseValue = base del POM per al marcatge difereix-de-base.
+        active: { lineId: `${row.pom_id}:${s}`, value: v == null ? '' : v, baseValue: row.base_value_cm ?? null },
       }
     }
     return {
-      pom_id: row.pom_id, codi: row.pom_code, is_key: row.is_key,
+      pom_id: row.pom_id, codi: row.pom_code, is_key: row.is_key, bm_id: row.bm_id,
       nom_en: row.nom_en, nom_local: row.nom_ca,
       logica: row.logica, increment_base: row.increment_base,
       increment_break: row.increment_break, talla_break_label: row.talla_break_label,
