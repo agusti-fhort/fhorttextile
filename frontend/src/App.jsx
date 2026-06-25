@@ -43,13 +43,13 @@ function ProtectedRoute({ children }) {
   return isAuthenticated ? children : <Navigate to="/login" replace />
 }
 
-// v2: el Size Check antic es jubila. /size-check redirigeix a l'edició nova de mesures,
-// conservant task_id (la tasca "Mesurar prenda" hi navega).
+// v2/J1: el Size Check antic es jubila. /size-check redirigeix al TAB Mesures del ModelSheet,
+// conservant task_id (que el tab consumeix). Ja NO apunta a la pàgina standalone (jubilada).
 function SizeCheckRedirect() {
   const { id } = useParams()
   const [sp] = useSearchParams()
   const taskId = sp.get('task_id')
-  return <Navigate to={`/models/${id}/mesures${taskId ? `?task_id=${taskId}` : ''}`} replace />
+  return <Navigate to={`/models/${id}?tab=Mesures${taskId ? `&task_id=${taskId}` : ''}`} replace />
 }
 
 class AppErrorBoundary extends React.Component {
