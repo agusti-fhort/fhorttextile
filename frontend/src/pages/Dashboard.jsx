@@ -450,31 +450,23 @@ export default function Dashboard() {
 
   // Auth guard: redirect if there is no token (no fetch will run without auth)
   useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
-  const [stats, setStats] = useState({})
   const [me, setMe] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [onboarding, setOnboarding] = useState(null)
 
   // Abast [me|all]. null fins que arriba `me` → default per rol (view_team_tasks → tots; si no, meus).
   const [scope, setScope] = useState(null)
   const [scopeRows, setScopeRows] = useState([])     // by-model de l'abast (substrat dels KPIs)
   const [scopeLoading, setScopeLoading] = useState(true)
+  // Models amb ≥1 tasca en risc (planned_end > data_objectiu), de calendar/events. Es creua amb
+  // l'abast (scopeRows) per al KPI 'En risc'; es carrega un sol cop (la visibilitat ja l'acota el backend).
+  const [riskyModelIds, setRiskyModelIds] = useState(() => new Set())
 
   useEffect(() => {
     const headers = { Authorization: `Bearer ${token}` }
     Promise.allSettled([
-      fetch(`${API}/api/v1/models/?limit=100`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/me/`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/onboarding-status/`, { headers }).then(r => r.ok ? r.json() : null),
-    ]).then(([allRes, meRes, onbRes]) => {
-      if (allRes.status === "fulfilled") {
-        const all = allRes.value
-        const items = Array.isArray(all) ? all : (all.results || [])
-        const total = all.count || items.length
-        const enCurs = items.filter(m => m.estat === "EnCurs").length
-        const tallesGen = items.filter(m => m.fase_actual === "Prototip" || m.fase_actual === "Mostres").length
-        setStats({ total, enCurs, tallesGen })
-      }
+    ]).then(([meRes, onbRes]) => {
       if (meRes.status === "fulfilled") {
         setMe(meRes.value)
         // Default d'abast per rol (només si encara no s'ha fixat): qui veu l'equip
@@ -483,9 +475,29 @@ export default function Dashboard() {
         setScope(prev => prev ?? (caps.includes("view_team_tasks") ? "all" : "me"))
       }
       if (onbRes.status === "fulfilled" && onbRes.value) setOnboarding(onbRes.value)
-      setLoading(false)
     })
   }, [token])
+
+  // Models en risc: calendar/events (tasca amb en_risc = planned_end > data_objectiu). Un sol cop;
+  // l'abast l'aplica el creuament amb scopeRows al càlcul dels KPIs.
+  useEffect(() => {
+    calendar.events({})
+      .then(res => {
+        const ids = new Set()
+        ;(res.data?.events ?? []).forEach(ev => {
+          if (ev.tipus === "tasca" && ev.en_risc && ev.meta?.model_id != null) ids.add(ev.meta.model_id)
+        })
+        setRiskyModelIds(ids)
+      })
+      .catch(() => setRiskyModelIds(new Set()))
+  }, [])
+
+  // KPIs derivats de l'abast (es recalculen en commutar): senyals d'acció, no recompte de fases.
+  const kpi = useMemo(() => ({
+    total: scopeRows.length,
+    open: scopeRows.filter(m => m.kanban_state === "open").length,
+    risc: scopeRows.filter(m => riskyModelIds.has(m.model_id)).length,
+  }), [scopeRows, riskyModelIds])
 
   // Substrat dels KPIs: by-model de TOT l'abast (scope-only, sense filtres de campanya). Es
   // recarrega en commutar l'abast. all=true per comptar també els models tot-Done. El load es
@@ -572,26 +584,24 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          {/* KPIs (SOTA el selector) */}
+          {/* KPIs (SOTA el selector) — derivats de l'abast. Senyals d'acció, no recompte de fases. */}
           <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
             <KPICard
-              label={t("dashboard.kpi.total_models")}
-              value={loading ? "…" : stats.total}
-              sub={t("dashboard.kpi_sub.in_system")}
-              onClick={() => navigate("/models")}
+              label={t("dashboard.kpi.scope_total")}
+              value={scopeLoading ? "…" : kpi.total}
+              sub={t("dashboard.kpi_sub.scope_total")}
             />
             <KPICard
-              label={t("model.estats.EnCurs")}
-              value={loading ? "…" : stats.enCurs}
-              sub={t("dashboard.kpi_sub.active_models")}
+              label={t("dashboard.kpi.at_risk")}
+              value={scopeLoading ? "…" : kpi.risc}
+              sub={t("dashboard.kpi_sub.at_risk")}
+              color="var(--err)"
+            />
+            <KPICard
+              label={t("dashboard.kpi.in_progress")}
+              value={scopeLoading ? "…" : kpi.open}
+              sub={t("dashboard.kpi_sub.in_progress")}
               color="var(--gold)"
-              onClick={() => navigate("/models?estat=EnCurs")}
-            />
-            <KPICard
-              label={t("dashboard.kpi.prototype_samples")}
-              value={loading ? "…" : stats.tallesGen}
-              sub={t("dashboard.kpi_sub.critical_phase")}
-              color="var(--warn)"
             />
           </div>
 

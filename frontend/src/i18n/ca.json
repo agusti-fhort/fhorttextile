@@ -1620,13 +1620,14 @@
     "onboarding_complete_setup": "Completa el setup inicial per desbloquejar totes les funcionalitats",
     "complete_setup": "Completar setup",
     "kpi": {
-      "total_models": "Total models",
-      "prototype_samples": "En prototip/mostres"
+      "scope_total": "Models de l'abast",
+      "at_risk": "En risc",
+      "in_progress": "En curs"
     },
     "kpi_sub": {
-      "in_system": "al sistema",
-      "active_models": "models actius",
-      "critical_phase": "models en fase crítica"
+      "scope_total": "a l'abast seleccionat",
+      "at_risk": "amb tasca fora de termini",
+      "in_progress": "amb feina activa"
     },
     "recent_active_models": "Models actius recents",
     "no_models_in_progress": "Sense models en curs.",

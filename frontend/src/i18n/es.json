@@ -1620,13 +1620,14 @@
     "onboarding_complete_setup": "Completa el setup inicial para desbloquear todas las funcionalidades",
     "complete_setup": "Completar setup",
     "kpi": {
-      "total_models": "Total modelos",
-      "prototype_samples": "En prototipo/muestras"
+      "scope_total": "Modelos del alcance",
+      "at_risk": "En riesgo",
+      "in_progress": "En curso"
     },
     "kpi_sub": {
-      "in_system": "en el sistema",
-      "active_models": "modelos activos",
-      "critical_phase": "modelos en fase crítica"
+      "scope_total": "en el alcance seleccionado",
+      "at_risk": "con tarea fuera de plazo",
+      "in_progress": "con trabajo activo"
     },
     "recent_active_models": "Modelos activos recientes",
     "no_models_in_progress": "Sin modelos en curso.",
