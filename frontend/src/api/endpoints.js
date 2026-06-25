@@ -442,4 +442,5 @@ export const timeAnalysis = {
   byPhase: () => client.get('/api/v1/time-analysis/by-phase/'),               // -> {phases, welford_min_samples}
   tree: (params) => client.get('/api/v1/time-analysis/tree/', { params }),    // ?fase&task_type&garment_type&garment_type_item
   setEstimate: (data) => client.post('/api/v1/time-analysis/set-estimate/', data),   // {garment_type_item, task_type, minutes}
+  byModel: (params) => client.get('/api/v1/time-analysis/by-model/', { params }),    // ?model&fase → {models:[{label,nom,est,real,n,fases:[{fase,...,tasks:[...]}]}]}
 }

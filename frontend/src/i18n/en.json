@@ -269,7 +269,8 @@
     "users": "Users & roles",
     "company_calendar": "Company calendar",
     "planning": "Planning",
-    "planning_calendar": "Calendar"
+    "planning_calendar": "Calendar",
+    "my_calendar": "My calendar"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -822,6 +823,37 @@
     },
     "gov_subtitle": "Governance space: plan, validate phases and track models",
     "coming_soon": "Coming soon",
+    "informes": {
+      "deadlines": {
+        "title": "Deadline compliance",
+        "subtitle": "Models by predicted end date (scheduler) vs target date.",
+        "on_time": "On time",
+        "at_risk": "At risk",
+        "overdue": "Overdue",
+        "no_deadline": "No deadline"
+      },
+      "cartera": {
+        "title": "Portfolio",
+        "subtitle": "Global state of models grouped; each group with its phase distribution and at-risk models.",
+        "dim_temporada": "Season",
+        "dim_collection": "Collection",
+        "no_temporada": "— no season",
+        "no_collection": "— no collection",
+        "total": "Total",
+        "en_risc": "At risk",
+        "empty": "No models."
+      },
+      "productivity": {
+        "title": "Productivity",
+        "subtitle": "Consolidated actual time (timers) vs estimated per phase, across the whole portfolio.",
+        "estimate": "Estimated",
+        "real": "Actual",
+        "deviation": "Deviation",
+        "tasks": "Tasks",
+        "total": "Total",
+        "empty": "No time logged yet."
+      }
+    },
     "gantt": {
       "empty": "No models to show.",
       "legend_proto": "Proto arrival",
@@ -897,7 +929,9 @@
         "group_by": "Group by",
         "by_phase": "Phase",
         "by_garment": "Garment type",
+        "by_model": "Model",
         "col_item": "Item",
+        "col_task": "Task",
         "col_estimate": "Estimated",
         "col_real": "Actual",
         "col_n": "n",

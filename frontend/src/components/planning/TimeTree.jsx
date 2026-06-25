@@ -51,9 +51,12 @@ function MatDot({ m }) {
 }
 
 export default function TimeTree({ t }) {
-  const [axis, setAxis] = useState('fase')   // 'fase' | 'garment_type'
+  const [axis, setAxis] = useState('fase')   // 'fase' | 'garment_type' | 'model'
   const [phases, setPhases] = useState([])
+  const [modelTree, setModelTree] = useState([])   // eix MODEL: [{label,nom,est,real,n,fases:[...]}]
   const [loading, setLoading] = useState(true)
+  const [loadingModels, setLoadingModels] = useState(false)
+  const [modelsLoaded, setModelsLoaded] = useState(false)
   const [expanded, setExpanded] = useState(() => new Set())
   const [editing, setEditing] = useState(null)   // `${gti}:${code}`
   const [editVal, setEditVal] = useState('')
@@ -68,6 +71,17 @@ export default function TimeTree({ t }) {
       .finally(() => setLoading(false))
   }, [t])
   useEffect(() => { load() }, [load])
+
+  // Eix MODEL — substrat propi (ModelTask→fase→task_type; TaskTimeEstimate no té model). Es carrega
+  // mandrós: només el primer cop que l'usuari selecciona l'eix "Model" (evita el cost si no s'usa).
+  useEffect(() => {
+    if (axis !== 'model' || modelsLoaded) return
+    setLoadingModels(true)
+    timeAnalysis.byModel({})
+      .then(res => { setModelTree(res.data?.models || []); setModelsLoaded(true) })
+      .catch(() => setFeedback({ type: 'err', text: t('planning.time.tree.error') }))
+      .finally(() => setLoadingModels(false))
+  }, [axis, modelsLoaded, t])
 
   // Aplana totes les fulles, conservant fase + task_type d'origen.
   const allItems = useMemo(() => {
@@ -122,7 +136,7 @@ export default function TimeTree({ t }) {
         <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '.04em' }}>
           {t('planning.time.tree.group_by')}
         </span>
-        {[['fase', 'by_phase'], ['garment_type', 'by_garment']].map(([val, key]) => (
+        {[['fase', 'by_phase'], ['garment_type', 'by_garment'], ['model', 'by_model']].map(([val, key]) => (
           <button key={val} type="button" onClick={() => setAxis(val)} style={{
             ...ghostBtn, background: axis === val ? 'var(--gold)' : 'none',
             color: axis === val ? 'var(--text-main)' : 'var(--text-main)',
@@ -134,7 +148,9 @@ export default function TimeTree({ t }) {
 
       <Feedback feedback={feedback} />
 
-      {groups.length === 0
+      {axis === 'model'
+        ? <ModelAxisTree tree={modelTree} loading={loadingModels} expanded={expanded} toggle={toggle} t={t} />
+        : groups.length === 0
         ? <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>{t('planning.time.tree.empty')}</div>
         : (
           <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflow: 'hidden' }}>
@@ -216,6 +232,76 @@ export default function TimeTree({ t }) {
             })}
           </div>
         )}
+    </div>
+  )
+}
+
+// Maduresa d'un node de l'eix MODEL: empíric si hi ha real consolidat, seed si només estimació.
+const modelMaturity = (real, est) => (real > 0 ? 'empiric' : (est > 0 ? 'seed' : 'empty'))
+
+// Eix MODEL — arbre model → fase → task_type. A diferència dels eixos fase/tipus-de-peça (que
+// reagrupen les MATEIXES cel·les de TaskTimeEstimate), aquí la font és ModelTask: estimat = snapshot
+// per tasca, real = Sum(timers). Per tant les fulles són task_types (un per model+fase), sense edició
+// de seed (la captura-PM viu a l'eix tècnic). Reusa Row/MatDot/fmtMins.
+function ModelAxisTree({ tree, loading, expanded, toggle, t }) {
+  if (loading) return <Center>{t('planning.loading')}</Center>
+  if (!tree.length) return (
+    <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+      {t('planning.time.tree.empty')}
+    </div>
+  )
+  return (
+    <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflow: 'hidden' }}>
+      {tree.map(mod => {
+        const mk = `m:${mod.model_id}`
+        const mOpen = expanded.has(mk)
+        return (
+          <div key={mk} style={{ borderBottom: '0.5px solid var(--gray-l)' }}>
+            <Row onClick={() => toggle(mk)} open={mOpen} depth={0} t={t}
+                 label={`${mod.label}${mod.nom ? ` · ${mod.nom}` : ''}`}
+                 m={modelMaturity(mod.real, mod.est)} minutes={mod.real || mod.est} count={mod.n} />
+            {mOpen && (mod.fases || []).map(ph => {
+              const fk = `${mk}/${ph.fase}`
+              const fOpen = expanded.has(fk)
+              return (
+                <div key={fk}>
+                  <Row onClick={() => toggle(fk)} open={fOpen} depth={1} t={t}
+                       label={t(`planning.time.phase.${FASE_KEY[ph.fase] || 'other'}`, { defaultValue: ph.fase })}
+                       m={modelMaturity(ph.real, ph.est)} minutes={ph.real || ph.est} count={ph.n} />
+                  {fOpen && (
+                    <div style={{ background: 'var(--bg-muted)', padding: '4px 0' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead><tr>
+                          <th style={{ ...thS, paddingLeft: 48 }}>{t('planning.time.tree.col_task')}</th>
+                          <th style={thS}>{t('planning.time.tree.col_estimate')}</th>
+                          <th style={thS}>{t('planning.time.tree.col_real')}</th>
+                          <th style={thS}>{t('planning.time.tree.col_deviation')}</th>
+                        </tr></thead>
+                        <tbody>
+                          {(ph.tasks || []).map(tk => (
+                            <tr key={tk.task_type_code} style={{ borderTop: '0.5px solid var(--gray-l)' }}>
+                              <td style={{ ...tdS, paddingLeft: 48, fontFamily: MONO }}>
+                                <MatDot m={tk.maturity} />{' '}{tk.task_type_name || tk.task_type_code}
+                              </td>
+                              <td style={tdS}>{tk.estimated_minutes != null ? fmtMins(tk.estimated_minutes) : '—'}</td>
+                              <td style={tdS}>{tk.real_minutes != null ? fmtMins(tk.real_minutes) : '—'}</td>
+                              <td style={{ ...tdS, color: tk.desviacio_min > 0 ? 'var(--err)' : (tk.desviacio_min < 0 ? 'var(--ok)' : 'inherit') }}>
+                                {tk.desviacio_min != null
+                                  ? `${tk.desviacio_min > 0 ? '+' : ''}${fmtMins(Math.abs(tk.desviacio_min))}${tk.desviacio_pct != null ? ` (${tk.desviacio_pct > 0 ? '+' : ''}${tk.desviacio_pct}%)` : ''}`
+                                  : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
     </div>
   )
 }
