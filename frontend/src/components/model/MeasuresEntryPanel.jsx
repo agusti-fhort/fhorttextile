@@ -16,7 +16,7 @@ const API = import.meta.env.VITE_API_URL || ''
 // NO inclou el camí 'size_check' (CheckMeasureEditor): això és el flux de TREBALL del tab, no la
 // genesi (es reapuntarà a J1b). Quan la base queda materialitzada, crida onMaterialized() perquè el
 // tab rellegeixi taula-mesures i passi a la superfície de consulta/treball (CheckMeasureEditor).
-export default function MeasuresEntryPanel({ model, onMaterialized }) {
+export default function MeasuresEntryPanel({ model, onMaterialized, entryMode = false }) {
   const { t } = useTranslation()
   const id = model?.id
   const token = localStorage.getItem('access_token')
@@ -95,8 +95,12 @@ export default function MeasuresEntryPanel({ model, onMaterialized }) {
         const rows = d.rows || []
         if (rows.length) setTaulaRows(rows)
         const verge = !rows.some(r => r.base_value_cm != null)
-        // Si ja té valors, no és verge → el tab no hauria de mostrar la genesi; per robustesa, surt.
-        if (!verge) { onMaterialized?.(); return }
+        // Si ja té valors (no verge): en mode ENTRADA (Definició POM) NO sortim a consulta — obrim el
+        // selector perquè l'usuari pugui afegir POMs / importar. Fora de mode entrada, surt a consulta.
+        if (!verge) {
+          if (entryMode) { setMode('selector'); return }
+          onMaterialized?.(); return
+        }
 
         let hasValues = false
         try {
