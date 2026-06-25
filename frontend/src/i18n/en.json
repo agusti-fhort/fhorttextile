@@ -817,10 +817,40 @@
       "planificacio": "Planning",
       "assignacio": "Assignment",
       "calendari": "Calendar",
+      "calendari_projecte": "Project calendar",
       "informes": "Reports"
     },
     "gov_subtitle": "Governance space: plan, validate phases and track models",
     "coming_soon": "Coming soon",
+    "gantt": {
+      "empty": "No models to show.",
+      "legend_proto": "Proto arrival",
+      "legend_fitting": "Fitting session",
+      "legend_objectiu": "Target date",
+      "legend_today": "Today",
+      "legend_wait": "Wait (production)",
+      "order": {
+        "label": "Sort by",
+        "lliurament": "Delivery",
+        "fita": "Next milestone",
+        "fase": "Phase"
+      },
+      "risk_first": "Risk first",
+      "only_risk": "Only at risk",
+      "risk_flag": "At risk: predicted end exceeds target date",
+      "color": {
+        "label": "Color by",
+        "tecnic": "Technician",
+        "fase": "Phase",
+        "risc": "Risk",
+        "colleccio": "Collection"
+      },
+      "filter": {
+        "all_collections": "All collections",
+        "all_seasons": "All seasons",
+        "techs": "Technicians:"
+      }
+    },
     "gates": {
       "title": "Ready to validate",
       "subtitle": "Models with all tasks done, ready to advance phase",

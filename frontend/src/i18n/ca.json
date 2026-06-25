@@ -817,10 +817,40 @@
       "planificacio": "Planificació",
       "assignacio": "Assignació",
       "calendari": "Calendari",
+      "calendari_projecte": "Calendari de projecte",
       "informes": "Informes"
     },
     "gov_subtitle": "Espai de govern: planifica, valida fases i fes el seguiment dels models",
     "coming_soon": "Pròximament",
+    "gantt": {
+      "empty": "Cap model per mostrar.",
+      "legend_proto": "Arribada de proto",
+      "legend_fitting": "Sessió de fitting",
+      "legend_objectiu": "Data objectiu",
+      "legend_today": "Avui",
+      "legend_wait": "Espera (confecció)",
+      "order": {
+        "label": "Ordena per",
+        "lliurament": "Lliurament",
+        "fita": "Pròxima fita",
+        "fase": "Fase"
+      },
+      "risk_first": "Risc primer",
+      "only_risk": "Només en risc",
+      "risk_flag": "En risc: la fi prevista supera la data objectiu",
+      "color": {
+        "label": "Pinta per",
+        "tecnic": "Tècnic",
+        "fase": "Fase",
+        "risc": "Risc",
+        "colleccio": "Col·lecció"
+      },
+      "filter": {
+        "all_collections": "Totes les col·leccions",
+        "all_seasons": "Totes les temporades",
+        "techs": "Tècnics:"
+      }
+    },
     "gates": {
       "title": "Llestos per validar",
       "subtitle": "Models amb totes les tasques fetes, a punt per avançar de fase",

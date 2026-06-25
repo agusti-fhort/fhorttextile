@@ -817,10 +817,40 @@
       "planificacio": "Planificación",
       "assignacio": "Asignación",
       "calendari": "Calendario",
+      "calendari_projecte": "Calendario de proyecto",
       "informes": "Informes"
     },
     "gov_subtitle": "Espacio de gobierno: planifica, valida fases y haz seguimiento de los modelos",
     "coming_soon": "Próximamente",
+    "gantt": {
+      "empty": "Ningún modelo para mostrar.",
+      "legend_proto": "Llegada de proto",
+      "legend_fitting": "Sesión de fitting",
+      "legend_objectiu": "Fecha objetivo",
+      "legend_today": "Hoy",
+      "legend_wait": "Espera (confección)",
+      "order": {
+        "label": "Ordenar por",
+        "lliurament": "Entrega",
+        "fita": "Próximo hito",
+        "fase": "Fase"
+      },
+      "risk_first": "Riesgo primero",
+      "only_risk": "Solo en riesgo",
+      "risk_flag": "En riesgo: el fin previsto supera la fecha objetivo",
+      "color": {
+        "label": "Pinta por",
+        "tecnic": "Técnico",
+        "fase": "Fase",
+        "risc": "Riesgo",
+        "colleccio": "Colección"
+      },
+      "filter": {
+        "all_collections": "Todas las colecciones",
+        "all_seasons": "Todas las temporadas",
+        "techs": "Técnicos:"
+      }
+    },
     "gates": {
       "title": "Listos para validar",
       "subtitle": "Modelos con todas las tareas hechas, a punto para avanzar de fase",
