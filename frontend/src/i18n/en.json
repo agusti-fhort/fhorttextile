@@ -1653,6 +1653,16 @@
         "paused": "Paused",
         "done": "Done"
       }
+    },
+    "milestones": {
+      "title": "Upcoming milestones",
+      "empty": "No milestones in the next {{days}} days.",
+      "at_risk": "At risk",
+      "type": {
+        "tasca": "Task",
+        "confeccio": "Production",
+        "fitting": "Fitting"
+      }
     }
   },
   "alerts": {

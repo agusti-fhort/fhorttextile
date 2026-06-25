@@ -1653,6 +1653,16 @@
         "paused": "Pausados",
         "done": "Hechos"
       }
+    },
+    "milestones": {
+      "title": "Próximos hitos",
+      "empty": "Ningún hito en los próximos {{days}} días.",
+      "at_risk": "En riesgo",
+      "type": {
+        "tasca": "Tarea",
+        "confeccio": "Confección",
+        "fitting": "Fitting"
+      }
     }
   },
   "alerts": {

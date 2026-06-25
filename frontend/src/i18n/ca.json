@@ -1653,6 +1653,16 @@
         "paused": "Pausats",
         "done": "Fets"
       }
+    },
+    "milestones": {
+      "title": "Properes fites",
+      "empty": "Cap fita en els propers {{days}} dies.",
+      "at_risk": "En risc",
+      "type": {
+        "tasca": "Tasca",
+        "confeccio": "Confecció",
+        "fitting": "Fitting"
+      }
     }
   },
   "alerts": {
