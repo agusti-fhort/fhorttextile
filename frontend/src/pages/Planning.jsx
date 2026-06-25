@@ -93,10 +93,14 @@ async function fetchAllPages(apiFn, baseParams = {}) {
   return out
 }
 
-// Contingut de la carpeta "Planificació" (Pendents + Assignades). Era el cos sencer de Planning;
-// ara viu com a panell d'un tab dins el shell de govern (M1). La gestió de l'accés (canPlan) la fa
-// el shell; aquí només es carrega quan l'usuari hi té dret.
-function PlanificacioPanel() {
+// Panell de la cua de tasques. UNA sola lògica de càrrega (les 3 fonts) i un sol estat; el `mode`
+// decideix QUINA carpeta es mostra:
+//   mode='pending'  → tab PLANIFICACIÓ: només models NO assignats (el que falta per col·locar).
+//   mode='assigned' → tab ASSIGNACIÓ: models assignats per tècnic, amb reordenar/desassignar/reassignar.
+// Abans era un sol panell amb un selector intern Pendents/Assignades; M-Planning-complet el parteix en
+// dos tabs del shell de govern reusant EXACTAMENT la mateixa lògica (assignar/reordenar/reassignar).
+// La gestió de l'accés (canPlan) la fa el shell; aquí només es carrega quan l'usuari hi té dret.
+function PlanificacioPanel({ mode = 'pending' }) {
   const { t } = useTranslation()
   const me = useAuthStore(s => s.user)
   const canPlan = !!me?.capabilities?.some(c => c === 'define_tasks' || c === 'configure')
@@ -104,7 +108,7 @@ function PlanificacioPanel() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState(null)   // { type, text }
-  const [tab, setTab] = useState('pending')
+  const tab = mode === 'assigned' ? 'assigned' : 'pending'   // carpeta fixada pel tab que munta el panell
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState([])
   const [usersById, setUsersById] = useState({})
@@ -245,17 +249,12 @@ function PlanificacioPanel() {
     <div style={{ minWidth: 0, maxWidth: '100%' }}>
       <Feedback feedback={feedback} />
 
-      {/* Tabs de carpeta + cerca */}
+      {/* Capçalera de carpeta (la tria pending/assigned la fa el tab del shell) + cerca */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
-          {[['pending', 'tab_pending'], ['assigned', 'tab_assigned']].map(([val, key]) => (
-            <button key={val} onClick={() => setTab(val)} style={{
-              fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '7px 16px', border: 'none', cursor: 'pointer',
-              background: tab === val ? CREMA : 'var(--white)', color: tab === val ? AMBER : 'var(--gray)',
-              fontWeight: tab === val ? 600 : 400,
-            }}>{t(`planning.${key}`)} ({rows.filter(r => r.folder === val).length})</button>
-          ))}
-        </div>
+        <span style={{
+          fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '7px 16px', borderRadius: 8,
+          background: CREMA, color: AMBER, fontWeight: 600,
+        }}>{t(`planning.${tab === 'assigned' ? 'tab_assigned' : 'tab_pending'}`)} ({rows.filter(r => r.folder === tab).length})</span>
         <input value={search} onChange={e => setSearch(e.target.value)}
                placeholder={t('planning.search_ph')} style={{ ...selS, flex: '0 1 280px', minWidth: 180 }} />
         {tab === 'pending' && selected.size > 0 && (
@@ -487,8 +486,8 @@ export default function Planning() {
       </div>
 
       {activeTab === 'dashboard' && <DashboardGovPanel me={me} />}
-      {activeTab === 'planificacio' && <PlanificacioPanel />}
-      {activeTab === 'assignacio' && <ComingSoon t={t} />}
+      {activeTab === 'planificacio' && <PlanificacioPanel mode="pending" />}
+      {activeTab === 'assignacio' && <PlanificacioPanel mode="assigned" />}
       {activeTab === 'calendari' && <PlanningCalendar />}
       {activeTab === 'calendari_projecte' && <ProjectGantt t={t} />}
       {activeTab === 'informes' && <ComingSoon t={t} />}
