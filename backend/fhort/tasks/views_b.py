@@ -26,28 +26,16 @@ from .services_e import (request_production, set_production_status,
 from .services_g import lookup_estimated_minutes
 
 
-class TaskTypeViewSet(viewsets.ModelViewSet):
-    """Catàleg de tipus de tasca (editable). Lectura: autenticat. Escriptura: define_tasks."""
+class TaskTypeViewSet(viewsets.ReadOnlyModelViewSet):
+    """Catàleg CANÒNIC de tipus de tasca (propietat del sistema). READ-ONLY via API:
+    el tenant no l'edita (només list/retrieve, autenticat). L'alta/enriquiment del catàleg
+    viu a migracions de seed (patró POMGlobal), no a un CRUD del tenant. Escriure-hi
+    (POST/PUT/PATCH/DELETE) retorna 405 per a tothom, inclòs admin."""
     queryset = TaskType.objects.all()
     serializer_class = TaskTypeSerializer
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['active']
-
-    def get_permissions(self):
-        if self.action in ('list', 'retrieve'):
-            return [IsAuthenticated()]
-        perm = HasCapability(); self.required_capability = DEFINE_TASKS
-        return [perm]
-
-    def destroy(self, request, *args, **kwargs):
-        # FK ModelTask.task_type = PROTECT → si el tipus té instàncies, l'esborrat falla.
-        # Retornem 409 net (en lloc d'un 500 cru) perquè el front en mostri el missatge.
-        try:
-            return super().destroy(request, *args, **kwargs)
-        except ProtectedError:
-            return Response(
-                {'detail': "No es pot esborrar: hi ha tasques que l'usen. Desactiva'l en lloc d'esborrar."},
-                status=status.HTTP_409_CONFLICT)
 
 
 class ModelTaskViewSet(viewsets.ModelViewSet):
