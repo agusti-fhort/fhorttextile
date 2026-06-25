@@ -9,7 +9,7 @@ from django.db.models import Count, Q, ProtectedError
 
 from rest_framework.exceptions import ValidationError
 from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TASKS,
-                                         CLOSE_GATES, SCHEDULE_FITTINGS, CONFIGURE,
+                                         CLOSE_GATES, SCHEDULE_FITTINGS, CONFIGURE, VIEW_TEAM_TASKS,
                                          get_allowed_task_types, scope_model_task_queryset)
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
@@ -768,3 +768,81 @@ class TaskTimeEstimateViewSet(viewsets.ModelViewSet):
 # Sprint B (motor): plan/compute + preview + apply + snapshots s'han mogut a
 # fhort/planning/views.py (motor determinista sobre el calendari laboral).
 # El plan/compute per-model-en-sèrie (Sprint H, services_h.py) queda jubilat.
+
+
+# ── Sprint M2 — Anàlisi de temps (rollup task_type→fase + arbre drill-down) ──────────────────
+# El motor de temps (Welford) viu a nivell de cel·la (garment_type_item × task_type). Aquí
+# s'AGREGA cap amunt per fase (TaskType.fase), de manera consultiva. Cap escriptura del motor.
+
+class _ViewTeamTasks(HasCapability):
+    required_capability = VIEW_TEAM_TASKS
+
+
+def _cell_effective_and_maturity(cell):
+    """(minuts|None, maduresa) d'una cel·la TaskTimeEstimate. maduresa ∈ empiric|seed|none.
+    Mirall de services_i.effective_minutes però retornant també l'origen (per a la cobertura)."""
+    from .services_i import WELFORD_MIN_SAMPLES
+    if cell.n >= WELFORD_MIN_SAMPLES and cell.mean_minutes > 0:
+        emp = int(round(cell.mean_minutes))
+        if emp > 0:
+            return emp, 'empiric'
+    seed = cell.estimated_minutes
+    if seed and seed > 0:
+        return int(seed), 'seed'
+    return None, 'none'
+
+
+def _phase_rollup(cells):
+    """Rollup task_type→fase sobre un iterable de TaskTimeEstimate (amb task_type carregat).
+    Mitjana PONDERADA per n: cada cel·la aporta el seu temps efectiu (empíric si n>=llindar, si
+    no el seed); pes = n per a empíriques, 1 per a seed. Retorna {fase: acumulador}."""
+    from collections import defaultdict
+    acc = defaultdict(lambda: {'cells_total': 0, 'cells_empiric': 0, 'cells_seed': 0,
+                               'cells_none': 0, 'n_total': 0, '_wsum': 0.0, '_w': 0,
+                               '_vsum': 0, '_vcount': 0})
+    for c in cells:
+        a = acc[c.task_type.fase]
+        a['cells_total'] += 1
+        a['n_total'] += c.n
+        val, mat = _cell_effective_and_maturity(c)
+        a['cells_' + mat] += 1
+        if val is not None:
+            w = c.n if mat == 'empiric' else 1
+            a['_wsum'] += val * w
+            a['_w'] += w
+            a['_vsum'] += val
+            a['_vcount'] += 1
+    return acc
+
+
+def _phase_summary(fase, a):
+    """Projecta l'acumulador d'una fase a la forma servible (None-safe)."""
+    minutes = int(round(a['_wsum'] / a['_w'])) if (a and a['_w'] > 0) else None
+    avg = int(round(a['_vsum'] / a['_vcount'])) if (a and a['_vcount']) else None
+    maturity = 'empty'
+    if a:
+        if a['cells_empiric'] > 0:
+            maturity = 'empiric'
+        elif a['cells_seed'] > 0:
+            maturity = 'seed'
+    return {
+        'fase': fase, 'minutes': minutes, 'avg_minutes': avg, 'maturity': maturity,
+        'cells_total': a['cells_total'] if a else 0,
+        'cells_empiric': a['cells_empiric'] if a else 0,
+        'cells_seed': a['cells_seed'] if a else 0,
+        'cells_none': a['cells_none'] if a else 0,
+        'n_total': a['n_total'] if a else 0,
+    }
+
+
+@api_view(['GET'])
+@permission_classes([_ViewTeamTasks])
+def time_by_phase_view(request):
+    """GET /api/v1/time-analysis/by-phase/ — temps estadístic agregat per fase (rollup
+    task_type→fase). Inclou TOTES les fases del catàleg; les buides surten amb maturity='empty'.
+    Gated view_team_tasks (manager/admin)."""
+    from .services_i import WELFORD_MIN_SAMPLES
+    cells = TaskTimeEstimate.objects.select_related('task_type').all()
+    acc = _phase_rollup(cells)
+    phases = [_phase_summary(fase, acc.get(fase)) for fase, _label in TaskType.FASE_CHOICES]
+    return Response({'phases': phases, 'welford_min_samples': WELFORD_MIN_SAMPLES})

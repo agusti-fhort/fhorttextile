@@ -65,6 +65,17 @@ try:
 except Exception:
     pass
 
+# Sprint M2 — Anàlisi de temps: rollup per fase (gated view_team_tasks a la view).
+try:
+    from fhort.tasks.views_b import time_by_phase_view
+    from django.urls import path as _path_m2
+    _sprintm2_paths = [
+        _path_m2('time-analysis/by-phase/', time_by_phase_view),
+    ]
+    urlpatterns = _sprintm2_paths + urlpatterns
+except Exception:
+    pass
+
 # Sprint B (motor) — plan/compute + preview + apply + snapshots viuen ara a
 # fhort/planning/urls.py (motor determinista). El plan/compute per-model-en-sèrie de
 # l'Sprint H s'ha jubilat (services_h.py).
