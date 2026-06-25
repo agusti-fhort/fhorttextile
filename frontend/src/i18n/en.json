@@ -1629,10 +1629,6 @@
       "at_risk": "with an overdue task",
       "in_progress": "with active work"
     },
-    "recent_active_models": "Recent active models",
-    "no_models_in_progress": "No models in progress.",
-    "create_first": "Create the first one",
-    "see_all_models": "See all models",
     "board": {
       "title": "Model board",
       "results_n": "{{n}} models",

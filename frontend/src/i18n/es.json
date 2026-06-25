@@ -1629,10 +1629,6 @@
       "at_risk": "con tarea fuera de plazo",
       "in_progress": "con trabajo activo"
     },
-    "recent_active_models": "Modelos activos recientes",
-    "no_models_in_progress": "Sin modelos en curso.",
-    "create_first": "Crea el primero",
-    "see_all_models": "Ver todos los modelos",
     "board": {
       "title": "Tablero de modelos",
       "results_n": "{{n}} modelos",

@@ -1629,10 +1629,6 @@
       "at_risk": "amb tasca fora de termini",
       "in_progress": "amb feina activa"
     },
-    "recent_active_models": "Models actius recents",
-    "no_models_in_progress": "Sense models en curs.",
-    "create_first": "Crea el primer",
-    "see_all_models": "Veure tots els models",
     "board": {
       "title": "Tauler de models",
       "results_n": "{{n}} models",
