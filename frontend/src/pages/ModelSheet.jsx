@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Feedback from '../components/ui/Feedback'
 import ActionsMenu from '../components/model/ActionsMenu'
 import WatchpointDrawer from '../components/model/WatchpointDrawer'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
+import MeasuresEntryPanel from '../components/model/MeasuresEntryPanel'
 import PropagatedEditor from './PropagatedEditor'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
@@ -84,8 +85,12 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   const { t } = useTranslation()
+  const [sp] = useSearchParams()
+  // ?tab= permet obrir el full directament en una pestanya concreta (p.ex. ModelFabric → tab Mesures).
+  // El task_id/session entrants (J1b) es plomaran a sobre d'aquest mateix mecanisme més endavant.
+  const tabParam = sp.get('tab')
   const [model, setModel] = useState(null)
-  const [activeTab, setActiveTab] = useState(defaultTab)
+  const [activeTab, setActiveTab] = useState(TABS.includes(tabParam) ? tabParam : defaultTab)
   const [taulaRows, setTaulaRows] = useState([])
   const [sizesAmbDades, setSizesAmbDades] = useState(null)
   const [deltes, setDeltes] = useState(null)
@@ -98,6 +103,15 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const reloadModel = useCallback(() => {
     fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders })
       .then(r => r.json()).then(setModel).catch(() => {})
+  }, [id])
+
+  // Rellegeix la taula de mesures (post-genesi: seed/import/manual). El tab Mesures decideix genesi↔
+  // consulta a partir d'aquestes files (verge = cap base_value_cm).
+  const reloadTaula = useCallback(() => {
+    fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
+      .then(r => r.json())
+      .then(d => { setTaulaRows(d.rows || []); setSizesAmbDades(d.sizes_amb_dades || null); setDeltes(d.deltes || null) })
+      .catch(() => {})
   }, [id])
 
   useEffect(() => {
@@ -114,6 +128,23 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     }).catch(() => setError(t('model_sheet.err_load')))
     .finally(() => setLoading(false))
   }, [id])
+
+  // J1a — genesi al tab Mesures: si el model és VERGE (cap mesura base amb valor), la pestanya mostra
+  // el flux d'ENTRADA (MeasuresEntryPanel) en lloc de la consulta buida. La decisió es pren NOMÉS en
+  // ENTRAR a la pestanya (no de manera reactiva a cada tecla), perquè materialitzar no estiri la graella
+  // d'edició a mig escriure. En materialitzar-se (onMaterialized) → consulta (CheckMeasureEditor).
+  const [mesuresGenesis, setMesuresGenesis] = useState(false)
+  const prevTabRef = useRef(null)
+  useEffect(() => {
+    // Mentre carrega no decidim NI actualitzem el ref (si no, l'entrada directa ?tab=Mesures fixaria el
+    // ref a 'Mesures' durant la càrrega i la genesi no s'avaluaria mai en acabar de carregar).
+    if (loading) return
+    if (activeTab === 'Mesures' && prevTabRef.current !== 'Mesures') {
+      const verge = !taulaRows.some(r => r.base_value_cm != null)
+      setMesuresGenesis(verge)
+    }
+    prevTabRef.current = activeTab
+  }, [activeTab, loading, taulaRows])
 
   // Porta-menú: obre (crea-si-falta + auto-assign + En curs) la tasca `code` i navega a l'eina amb el
   // task_id. Reusa el servei open-task; el botó funciona encara que el model no tingui la tasca creada.
@@ -291,6 +322,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           </div>
         )}
         {activeTab === 'Mesures' && (
+          mesuresGenesis && editing !== 'Mesures' ? (
+            <MeasuresEntryPanel model={model}
+              onMaterialized={() => { setMesuresGenesis(false); reloadTaula(); reloadModel() }} />
+          ) : (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           marginBottom: 10, gap: 12 }}>
@@ -333,6 +368,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
               <CheckMeasureEditor model={model} readOnly />
             )}
           </div>
+          )
         )}
         {/* Escalat: consulta ↔ edició DINS la tab (inline, sense overlay; manté el context). */}
         {activeTab === 'Escalat' && (
