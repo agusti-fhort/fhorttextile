@@ -54,8 +54,9 @@ const TRANSPORT = {
   Done:       { play: true,  pause: false, stop: false },
 }
 
-// Fora d'encàrrec: a v1 cap dada ho marca (les externes són P4). Rending definit però inert.
-function isOutOfCharge(_task) { return false }   // TODO P4: derivar de l'origen/flag de tasca externa
+// Fora d'encàrrec: tasca iniciada fora de l'encàrrec del PM (arbre global / externa lliure),
+// marcada al backend amb origen='ad_hoc' (les 'prevista' són d'encàrrec). Activa el filet grana.
+function isOutOfCharge(task) { return task?.origen === 'ad_hoc' }
 
 const containerStyle = { background: 'transparent', width: '100%' }
 const cardsGrid = { display: 'flex', flexWrap: 'wrap', gap: 12 }
