@@ -23,7 +23,9 @@ const API = import.meta.env.VITE_API_URL || ''
 // NO importem ACTIONS del kanban). null = tipus sense eina → transport manual (§4).
 function toolRoute(task, modelId) {
   switch (task.task_type_code) {
-    case 'pom':        return `/models/${modelId}/mesures`
+    // J1: "Definició POM" (pom) → el TAB Mesures del ModelSheet (genesi si el model és verge, consulta
+    // si ja té mesures). Sense task_id (la definició de POMs no en porta). Ja NO la pàgina standalone.
+    case 'pom':        return `/models/${modelId}?tab=Mesures`
     case 'tech_sheet': return `/models/${modelId}/fitxa?task_id=${task.id}`
     // J1: "Mesurar prenda" (size_check) → el TAB Mesures del ModelSheet amb task_id (el tab el consumeix
     // sense encunyar-ne cap de nova). Ja NO va a la pàgina standalone (jubilada).
