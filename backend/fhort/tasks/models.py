@@ -104,9 +104,15 @@ class ModelTask(models.Model):
     """Instància de tasca d'un model. Estats nous (Sprint B); temps/log a Sprint C."""
     STATUS_CHOICES = [('Pending', 'Pending'), ('Paused', 'Paused'),
                       ('InProgress', 'InProgress'), ('Done', 'Done')]
+    # Origen de la tasca: 'prevista' = creada pel flux normal del PM (define-tasks /
+    # assign-batch / open-task des d'una eina); 'ad_hoc' = iniciada fora de l'encàrrec
+    # (arbre global / tasca externa lliure). El rending "fora d'encàrrec" (filet grana)
+    # i la tasca ad-hoc en depenen. Default 'prevista' perquè tot el flux actual és d'encàrrec.
+    ORIGEN_CHOICES = [('prevista', 'Prevista'), ('ad_hoc', 'Ad-hoc')]
     model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='model_tasks')
     task_type = models.ForeignKey(TaskType, on_delete=models.PROTECT, related_name='instances')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    origen = models.CharField(max_length=20, choices=ORIGEN_CHOICES, default='prevista')
     assignee = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
                                  null=True, blank=True, related_name='assigned_tasks')
     order = models.PositiveIntegerField(default=0)
