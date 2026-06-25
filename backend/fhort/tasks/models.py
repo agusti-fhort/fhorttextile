@@ -183,11 +183,35 @@ class PaquetServeiTasca(models.Model):
 
 
 class TaskType(models.Model):
-    """Catàleg de tipus de tasca (per-tenant, editable). Pla i simple."""
+    """Catàleg CANÒNIC de tipus de tasca (propietat del sistema; el tenant no l'edita).
+    PLA per disseny: l'arbre de 2 nivells (pare→subtasca) és UX del frontend, no jerarquia de BD.
+    `default_order` és l'ordre canònic global. Gate i espera NO són tasca → no hi ha és_gate ni
+    bloqueja_model aquí. Camps de procés (fase/tipus/eina/mode/facturable) sembrats per code."""
+    FASE_CHOICES = [
+        ('Disseny', 'Disseny'),
+        ('Dev. tècnic', 'Dev. tècnic'),
+        ('Prototip', 'Prototip'),
+        ('Mostres', 'Mostres'),
+        ('Preproducció', 'Preproducció'),
+        ('Producció', 'Producció'),
+    ]
+    TIPUS_CHOICES = [
+        ('Interna', 'Interna'),
+        ('Externa-lliure', 'Externa-lliure'),
+    ]
     code = models.SlugField(max_length=50, unique=True)
     name = models.CharField(max_length=200)
     default_order = models.PositiveIntegerField(default=0)
     active = models.BooleanField(default=True)
+    # --- Catàleg canònic (Sprint catàleg de tasques) ---
+    fase = models.CharField(max_length=20, choices=FASE_CHOICES, default='Dev. tècnic')
+    tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES, default='Interna')
+    eina = models.CharField(max_length=30, null=True, blank=True,
+                            help_text="Slug de l'eina que transporta la tasca. null = transport "
+                                      "manual / eina futura.")
+    mode = models.CharField(max_length=40, null=True, blank=True,
+                            help_text="Context d'obertura de l'eina (sub-mode). null si sense eina.")
+    facturable = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['default_order', 'code']
