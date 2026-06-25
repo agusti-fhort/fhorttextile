@@ -1631,7 +1631,29 @@
     "recent_active_models": "Recent active models",
     "no_models_in_progress": "No models in progress.",
     "create_first": "Create the first one",
-    "see_all_models": "See all models"
+    "see_all_models": "See all models",
+    "board": {
+      "title": "Model board",
+      "results_n": "{{n}} models",
+      "total": "Total",
+      "search_ph": "Search model…",
+      "filter_customer": "Customer",
+      "filter_collection": "Collection",
+      "filter_temporada": "Season",
+      "filter_estat": "Status",
+      "filter_date_from": "Target from",
+      "filter_date_to": "Target to",
+      "clear": "Clear",
+      "load_more": "Load more",
+      "tasks_n": "{{n}} tasks",
+      "empty_col": "—",
+      "state": {
+        "pending": "Pending",
+        "open": "Open",
+        "paused": "Paused",
+        "done": "Done"
+      }
+    }
   },
   "alerts": {
     "gravetat": {

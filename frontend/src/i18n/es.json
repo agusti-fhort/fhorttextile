@@ -1631,7 +1631,29 @@
     "recent_active_models": "Modelos activos recientes",
     "no_models_in_progress": "Sin modelos en curso.",
     "create_first": "Crea el primero",
-    "see_all_models": "Ver todos los modelos"
+    "see_all_models": "Ver todos los modelos",
+    "board": {
+      "title": "Tablero de modelos",
+      "results_n": "{{n}} modelos",
+      "total": "Total",
+      "search_ph": "Buscar modelo…",
+      "filter_customer": "Cliente",
+      "filter_collection": "Colección",
+      "filter_temporada": "Temporada",
+      "filter_estat": "Estado",
+      "filter_date_from": "Objetivo desde",
+      "filter_date_to": "Objetivo hasta",
+      "clear": "Limpiar",
+      "load_more": "Cargar más",
+      "tasks_n": "{{n}} tareas",
+      "empty_col": "—",
+      "state": {
+        "pending": "Pendientes",
+        "open": "En curso",
+        "paused": "Pausados",
+        "done": "Hechos"
+      }
+    }
   },
   "alerts": {
     "gravetat": {

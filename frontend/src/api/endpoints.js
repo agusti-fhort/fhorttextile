@@ -59,6 +59,10 @@ export const models = {
   // Fase B — estat de propagació perquè el botó Propagar MIRI ABANS (read-only):
   // {te_dades_propagades, segellada, version_number}.
   gradingStatus: (modelId) => client.get(`/api/v1/models/${modelId}/grading-status/`),
+  // Sprint 5 — comptadors de models per fase (board del Dashboard). Respecta els mateixos
+  // filtres que el Model list (customer/collection/data_objectiu_after|before/temporada/...).
+  // → {counts:{<fase>:n}, total}.
+  faseCounts: (params) => client.get('/api/v1/models/fase-counts/', { params }),
 }
 
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).

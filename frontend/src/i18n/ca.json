@@ -1631,7 +1631,29 @@
     "recent_active_models": "Models actius recents",
     "no_models_in_progress": "Sense models en curs.",
     "create_first": "Crea el primer",
-    "see_all_models": "Veure tots els models"
+    "see_all_models": "Veure tots els models",
+    "board": {
+      "title": "Tauler de models",
+      "results_n": "{{n}} models",
+      "total": "Total",
+      "search_ph": "Cerca model…",
+      "filter_customer": "Client",
+      "filter_collection": "Col·lecció",
+      "filter_temporada": "Temporada",
+      "filter_estat": "Estat",
+      "filter_date_from": "Objectiu des de",
+      "filter_date_to": "Objectiu fins a",
+      "clear": "Neteja",
+      "load_more": "Carrega'n més",
+      "tasks_n": "{{n}} tasques",
+      "empty_col": "—",
+      "state": {
+        "pending": "Pendents",
+        "open": "En curs",
+        "paused": "Pausats",
+        "done": "Fets"
+      }
+    }
   },
   "alerts": {
     "gravetat": {
