@@ -820,7 +820,21 @@
       "informes": "Informes"
     },
     "gov_subtitle": "Espai de govern: planifica, valida fases i fes el seguiment dels models",
-    "coming_soon": "Pròximament"
+    "coming_soon": "Pròximament",
+    "gates": {
+      "title": "Llestos per validar",
+      "subtitle": "Models amb totes les tasques fetes, a punt per avançar de fase",
+      "col_phase": "Fase actual",
+      "col_next": "Següent",
+      "validate": "Validar gate",
+      "validate_selected": "Validar seleccionats ({{n}})",
+      "at_top": "Ja a producció",
+      "empty": "Cap model llest per validar.",
+      "validated_ok": "Gate validat.",
+      "validated_bulk_ok": "{{n}} gates validats.",
+      "validated_bulk_partial": "{{ok}} validats, {{err}} amb error.",
+      "error": "No s'ha pogut validar el gate."
+    }
   },
   "companyCalendar": {
     "title": "Calendari d'empresa",

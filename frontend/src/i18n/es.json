@@ -820,7 +820,21 @@
       "informes": "Informes"
     },
     "gov_subtitle": "Espacio de gobierno: planifica, valida fases y haz seguimiento de los modelos",
-    "coming_soon": "Próximamente"
+    "coming_soon": "Próximamente",
+    "gates": {
+      "title": "Listos para validar",
+      "subtitle": "Modelos con todas las tareas hechas, a punto para avanzar de fase",
+      "col_phase": "Fase actual",
+      "col_next": "Siguiente",
+      "validate": "Validar gate",
+      "validate_selected": "Validar seleccionados ({{n}})",
+      "at_top": "Ya en producción",
+      "empty": "Ningún modelo listo para validar.",
+      "validated_ok": "Gate validado.",
+      "validated_bulk_ok": "{{n}} gates validados.",
+      "validated_bulk_partial": "{{ok}} validados, {{err}} con error.",
+      "error": "No se ha podido validar el gate."
+    }
   },
   "companyCalendar": {
     "title": "Calendario de empresa",

@@ -15,6 +15,7 @@ import Feedback from '../components/ui/Feedback'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import TaskAssignWizard from '../components/TaskAssignWizard'
 import PlanningCalendar from './PlanningCalendar'
+import DashboardGovPanel from '../components/planning/DashboardGovPanel'
 
 // Tram 2 — Pantalla "Planificació": dues carpetes Pendents/Assignades (gated define_tasks/configure).
 // Pendents = models SENSE cap tasca no-Done assignada. Assignades = models amb ALMENYS UNA no-Done amb tècnic.
@@ -484,7 +485,7 @@ export default function Planning() {
         ))}
       </div>
 
-      {activeTab === 'dashboard' && <ComingSoon t={t} />}
+      {activeTab === 'dashboard' && <DashboardGovPanel me={me} />}
       {activeTab === 'planificacio' && <PlanificacioPanel />}
       {activeTab === 'assignacio' && <ComingSoon t={t} />}
       {activeTab === 'calendari' && <PlanningCalendar />}

@@ -820,7 +820,21 @@
       "informes": "Reports"
     },
     "gov_subtitle": "Governance space: plan, validate phases and track models",
-    "coming_soon": "Coming soon"
+    "coming_soon": "Coming soon",
+    "gates": {
+      "title": "Ready to validate",
+      "subtitle": "Models with all tasks done, ready to advance phase",
+      "col_phase": "Current phase",
+      "col_next": "Next",
+      "validate": "Validate gate",
+      "validate_selected": "Validate selected ({{n}})",
+      "at_top": "Already in production",
+      "empty": "No models ready to validate.",
+      "validated_ok": "Gate validated.",
+      "validated_bulk_ok": "{{n}} gates validated.",
+      "validated_bulk_partial": "{{ok}} validated, {{err}} with error.",
+      "error": "Could not validate the gate."
+    }
   },
   "companyCalendar": {
     "title": "Company calendar",
