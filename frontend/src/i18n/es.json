@@ -844,6 +844,24 @@
       "col_deviation": "Desviación",
       "deviation_days": "+{{n}} d",
       "empty": "Ningún modelo en riesgo."
+    },
+    "time": {
+      "title": "Análisis de tiempo",
+      "subtitle": "Tiempo estadístico por fase (rollup de las tareas): empírico cuando hay muestras, si no la estimación",
+      "phase": {
+        "disseny": "Diseño",
+        "dev_tecnic": "Dev. técnico",
+        "prototip": "Prototipo",
+        "mostres": "Muestras",
+        "preproduccio": "Preproducción",
+        "produccio": "Producción"
+      },
+      "maturity": {
+        "empiric": "empírico",
+        "seed": "estimado",
+        "empty": "sin datos"
+      },
+      "coverage_tip": "{{empiric}} empíricas · {{seed}} estimadas · {{none}} sin dato · {{n}} muestras"
     }
   },
   "companyCalendar": {
@@ -1427,6 +1445,7 @@
     "continue_fabric": "Continuar → Tejido",
     "back_to_model": "↩ Volver al modelo",
     "table_title": "Tabla de medidas y grading",
+    "view_table": "Ver tabla de medidas",
     "edit_measures": "✏ Editar medidas",
     "base_prefix": "Base:",
     "view_grading": "📐 Ver escalado",

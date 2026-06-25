@@ -844,6 +844,24 @@
       "col_deviation": "Desviació",
       "deviation_days": "+{{n}} d",
       "empty": "Cap model en risc."
+    },
+    "time": {
+      "title": "Anàlisi de temps",
+      "subtitle": "Temps estadístic per fase (rollup de les tasques): empíric quan hi ha mostres, si no l'estimació",
+      "phase": {
+        "disseny": "Disseny",
+        "dev_tecnic": "Dev. tècnic",
+        "prototip": "Prototip",
+        "mostres": "Mostres",
+        "preproduccio": "Preproducció",
+        "produccio": "Producció"
+      },
+      "maturity": {
+        "empiric": "empíric",
+        "seed": "estimat",
+        "empty": "sense dades"
+      },
+      "coverage_tip": "{{empiric}} empíriques · {{seed}} estimades · {{none}} sense dada · {{n}} mostres"
     }
   },
   "companyCalendar": {
@@ -1427,6 +1445,7 @@
     "continue_fabric": "Continuar → Teixit",
     "back_to_model": "↩ Tornar al model",
     "table_title": "Taula de mesures i grading",
+    "view_table": "Veure taula de mesures",
     "edit_measures": "✏ Editar mesures",
     "base_prefix": "Base:",
     "view_grading": "📐 Veure escalat",

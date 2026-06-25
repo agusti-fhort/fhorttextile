@@ -844,6 +844,24 @@
       "col_deviation": "Deviation",
       "deviation_days": "+{{n}} d",
       "empty": "No models at risk."
+    },
+    "time": {
+      "title": "Time analysis",
+      "subtitle": "Statistical time per phase (rollup of tasks): empirical when there are samples, otherwise the estimate",
+      "phase": {
+        "disseny": "Design",
+        "dev_tecnic": "Tech. dev",
+        "prototip": "Prototype",
+        "mostres": "Samples",
+        "preproduccio": "Pre-production",
+        "produccio": "Production"
+      },
+      "maturity": {
+        "empiric": "empirical",
+        "seed": "estimated",
+        "empty": "no data"
+      },
+      "coverage_tip": "{{empiric}} empirical · {{seed}} estimated · {{none}} no data · {{n}} samples"
     }
   },
   "companyCalendar": {
@@ -1427,6 +1445,7 @@
     "continue_fabric": "Continue → Fabric",
     "back_to_model": "↩ Back to model",
     "table_title": "Measurements and grading table",
+    "view_table": "View measurements table",
     "edit_measures": "✏ Edit measurements",
     "base_prefix": "Base:",
     "view_grading": "📐 View grading",

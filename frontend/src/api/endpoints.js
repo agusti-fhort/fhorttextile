@@ -434,3 +434,10 @@ export const users = {
   bulk: (data) => client.post('/api/v1/users/bulk/', data),   // {user_ids, action, value} -> {updated}
   resetLink: (id) => client.post(`/api/v1/users/${id}/reset-link/`),   // -> {url}
 }
+
+// Sprint M2 — Anàlisi de temps (gated view_team_tasks; set-estimate gated define_tasks).
+export const timeAnalysis = {
+  byPhase: () => client.get('/api/v1/time-analysis/by-phase/'),               // -> {phases, welford_min_samples}
+  tree: (params) => client.get('/api/v1/time-analysis/tree/', { params }),    // ?fase&task_type&garment_type&garment_type_item
+  setEstimate: (data) => client.post('/api/v1/time-analysis/set-estimate/', data),   // {garment_type_item, task_type, minutes}
+}

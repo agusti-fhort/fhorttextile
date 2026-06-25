@@ -5,6 +5,7 @@ import { gates, models as modelsApi } from '../../api/endpoints'
 import Center from '../ui/Center'
 import Feedback from '../ui/Feedback'
 import { primaryBtn } from '../ui/buttons'
+import PhaseTimeStrip from './PhaseTimeStrip'
 
 // Panell de govern (tab "Tauler" de Planificació). Recupera la cua de gates òrfena de la
 // jubilació del Kanban (DIAGNOSI §16.A.b: gates/ready sense surface). Es construeix per blocs;
@@ -29,6 +30,9 @@ export default function DashboardGovPanel({ me }) {
   // GATING ii: la cua de gates només es renderitza si l'usuari pot tancar gates (close_gates).
   // La resta del panell (comptadors, risc) NO depèn d'aquesta capacitat.
   const canCloseGates = !!me?.capabilities?.includes('close_gates')
+  // L'anàlisi de temps consumeix endpoints gated view_team_tasks → es mostra només a qui la té
+  // (manager/admin); evita un 403 a qui no pot veure-la.
+  const canViewTeam = !!me?.capabilities?.includes('view_team_tasks')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
@@ -36,7 +40,24 @@ export default function DashboardGovPanel({ me }) {
       {/* La cua de gates (acció de govern) només per a qui pot tancar gates. */}
       {canCloseGates && <GatesReadyBlock t={t} />}
       <RiskBlock t={t} />
+      {canViewTeam && <TimeAnalysisSection t={t} me={me} />}
     </div>
+  )
+}
+
+// Secció ANÀLISI DE TEMPS: tira de fases amb temps estadístic (M2/4) + arbre drill-down (M2/5).
+function TimeAnalysisSection({ t }) {
+  return (
+    <section>
+      <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, fontFamily: MONO, margin: '0 0 4px' }}>
+        <i className="ti ti-clock-cog" style={{ fontSize: 16, marginRight: 6, color: 'var(--gold)' }} />
+        {t('planning.time.title')}
+      </h2>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginTop: 0, marginBottom: 12 }}>
+        {t('planning.time.subtitle')}
+      </p>
+      <PhaseTimeStrip t={t} />
+    </section>
   )
 }
 
