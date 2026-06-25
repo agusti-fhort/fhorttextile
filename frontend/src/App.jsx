@@ -29,7 +29,6 @@ const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
 const TechSheetTemplateEditor = lazy(() => import('./pages/TechSheetTemplateEditor'))
 const ItemAuthoring = lazy(() => import('./pages/ItemAuthoring'))
-const KanbanTasks = lazy(() => import('./pages/KanbanTasks'))
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
 const UsersRoles = lazy(() => import('./pages/UsersRoles'))
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
@@ -148,7 +147,7 @@ export default function App() {
           <Route path="fittings/new" element={<FittingSessionNew />} />
           <Route path="fittings/:id" element={<FittingDetail />} />
           <Route path="tasques" element={<Tasks />} />
-          <Route path="tasques/kanban" element={<KanbanTasks />} />
+          {/* Sprint 5: pàgina Kanban global jubilada → el board per-model viu al Dashboard (/). */}
           <Route path="task-types" element={<TaskTypes />} />
           <Route path="garment-types" element={<GarmentTypes />} />
           {/* Autoria d'Item (Llibreria d'Items B3): DINS el Shell (àrea de contingut).
