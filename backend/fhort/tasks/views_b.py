@@ -957,3 +957,65 @@ def time_set_estimate_view(request):
     cell = TaskTimeEstimate.objects.select_related(
         'task_type', 'garment_type_item', 'garment_type_item__garment_type').get(pk=cell.pk)
     return Response(_cell_item_payload(cell), status=http_status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([_ViewTeamTasks])
+def time_by_model_view(request):
+    """GET /api/v1/time-analysis/by-model/ — anàlisi de temps amb el MODEL com a eix.
+
+    L'eix tècnic (TaskTimeEstimate, `garment_type_item × task_type`) NO té dimensió model
+    (`unique_together=[('garment_type_item','task_type')]`); per tant el "per model" NO es pot
+    derivar de l'arbre `tree`/`by-phase`. La dimensió model viu a `ModelTask.model` (snapshot
+    `estimated_minutes` per tasca) + `TimerEntrada.minuts` (real consolidat). Aquesta vista
+    reusa la MATEIXA mètrica est/real/n/desviació/maduresa de l'arbre, agrupant
+    model → fase → task_type (cada model té com a molt una ModelTask per task_type:
+    `unique_together=[('model','task_type')]`, doncs el task_type és la fulla).
+
+    Filtres opcionals: ?model=id ?fase=. Gated view_team_tasks (com la resta d'anàlisi de temps)."""
+    from django.db.models import Sum
+    from .models import TimerEntrada
+    qs = ModelTask.objects.select_related('task_type', 'model').all()
+    model_id = request.query_params.get('model')
+    if model_id:
+        qs = qs.filter(model_id=model_id)
+    fase = request.query_params.get('fase')
+    if fase:
+        qs = qs.filter(task_type__fase=fase)
+    # Real consolidat per ModelTask = Sum(timers.minuts); timers oberts (minuts NULL) fora (B1-a).
+    # Mateixa regla que l'albarà (models_app/views.py) i el helper canònic _real_minutes. 1 query.
+    real_per_task = {r['model_task_id']: (r['s'] or 0) for r in (
+        TimerEntrada.objects.filter(model_task__in=qs)
+        .values('model_task_id').annotate(s=Sum('minuts')))}
+
+    fase_order = {f: i for i, (f, _l) in enumerate(TaskType.FASE_CHOICES)}
+    models = {}   # model_id → {label, nom, est, real, n, fases: {fase: {...}}}
+    for tk in qs:
+        m = models.setdefault(tk.model_id, {
+            'model_id': tk.model_id, 'label': tk.model.codi_intern,
+            'nom': tk.model.nom_prenda or '', 'est': 0, 'real': 0, 'n': 0, 'fases': {}})
+        ph = m['fases'].setdefault(tk.task_type.fase, {
+            'fase': tk.task_type.fase, 'est': 0, 'real': 0, 'n': 0, 'tasks': []})
+        est = int(tk.estimated_minutes or 0)
+        real = int(real_per_task.get(tk.id, 0))
+        ph['tasks'].append({
+            'task_type_code': tk.task_type.code, 'task_type_name': tk.task_type.name,
+            'status': tk.status,
+            'estimated_minutes': est or None, 'real_minutes': real or None,
+            'desviacio_min': (real - est) if (est and real) else None,
+            'desviacio_pct': int(round((real - est) / est * 100)) if (est and real) else None,
+            'maturity': 'empiric' if real else ('seed' if est else 'none'),
+        })
+        for node in (m, ph):
+            node['est'] += est
+            node['real'] += real
+            node['n'] += 1
+
+    out = []
+    for m in sorted(models.values(), key=lambda x: x['label']):
+        fases = sorted(m['fases'].values(), key=lambda x: fase_order.get(x['fase'], 99))
+        for ph in fases:
+            ph['tasks'].sort(key=lambda x: x['task_type_code'])
+        out.append({'model_id': m['model_id'], 'label': m['label'], 'nom': m['nom'],
+                    'est': m['est'], 'real': m['real'], 'n': m['n'], 'fases': fases})
+    return Response({'models': out})
