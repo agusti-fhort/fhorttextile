@@ -356,3 +356,23 @@ class PlanSnapshot(models.Model):
 
     def __str__(self):
         return f'Plan {self.id} @ {self.computed_at:%Y-%m-%d %H:%M}'
+
+
+class TimeSeed(models.Model):
+    """Llavor de temps del tenant (cascada graó 3): minuts per defecte quan no hi ha cap
+    cel·la (item×task) ni empíric global. HETEROGÈNIA (model híbrid c): uns nodes definits a
+    nivell de task_type, altres a nivell de fase. Dada de tenant EVOLUTIVA, separada del
+    catàleg canònic TaskType (que es manté read-only)."""
+    SCOPE_CHOICES = [('task', 'task'), ('phase', 'phase')]
+    scope = models.CharField(max_length=10, choices=SCOPE_CHOICES)
+    key = models.CharField(max_length=50,
+            help_text="TaskType.code si scope='task'; TaskType.fase (nom de fase) si scope='phase'.")
+    minuts = models.PositiveIntegerField()
+
+    class Meta:
+        unique_together = [('scope', 'key')]
+        verbose_name = 'Time seed'
+        verbose_name_plural = 'Time seeds'
+
+    def __str__(self):
+        return f'{self.scope}:{self.key}={self.minuts}'

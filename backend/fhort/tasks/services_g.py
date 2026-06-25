@@ -34,5 +34,13 @@ def lookup_estimated_minutes(model, task_type):
     if avg and avg > 0:
         return int(round(avg))
 
-    # Graó 3 (llavor task/fase) i 4 (None): graons posteriors.
+    # Graó 3 — llavor task/fase (TimeSeed): primer per task_type.code (scope='task'), sinó
+    # per fase del task_type (scope='phase'). Llavor de tenant, separada del catàleg.
+    from .models import TimeSeed
+    seed = (TimeSeed.objects.filter(scope='task', key=task_type.code).first()
+            or TimeSeed.objects.filter(scope='phase', key=task_type.fase).first())
+    if seed and seed.minuts and seed.minuts > 0:
+        return seed.minuts
+
+    # Graó 4 (captura-PM): None — sprint posterior.
     return None
