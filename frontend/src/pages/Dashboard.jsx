@@ -48,6 +48,20 @@ const selS = {
   background: 'var(--white)', color: 'var(--text-main)',
 }
 
+// Segueix la paginació de DRF per no truncar (mateix patró que Planning/Kanban).
+async function fetchAllPages(apiFn, baseParams = {}) {
+  const out = []
+  let page = 1
+  for (;;) {
+    const res = await apiFn({ ...baseParams, page })
+    const data = res.data
+    out.push(...(data?.results ?? (Array.isArray(data) ? data : [])))
+    if (data?.next) page++
+    else break
+  }
+  return out
+}
+
 // Card de MODEL (zoom-in: clic → /models/:id). Reusa la forma de la ModelRow del Kanban,
 // adaptada a navegació directa i tokens del design system.
 function ModelCard({ model, onClick, t }) {
@@ -96,7 +110,7 @@ function FaseChip({ label, n }) {
   )
 }
 
-function ModelBoard() {
+function ModelBoard({ scope }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
 
@@ -118,8 +132,11 @@ function ModelBoard() {
   const [customerOpts, setCustomerOpts] = useState([])
 
   // Paràmetres de campanya compartits per by-model i fase-counts (mateix contracte de filtres).
+  // L'abast (scope) "els meus" hi afegeix responsable=me (assignee), de manera que board, chips i
+  // comptadors es filtren com els KPIs en commutar l'abast.
   const buildParams = useCallback(() => {
     const p = {}
+    if (scope === 'me') p.responsable = 'me'
     const s = search.trim(); if (s) p.search = s
     if (fTemporada) p.temporada = fTemporada
     if (fEstat) p.estat = fEstat
@@ -128,7 +145,7 @@ function ModelBoard() {
     if (fAfter) p.data_objectiu_after = fAfter
     if (fBefore) p.data_objectiu_before = fBefore
     return p
-  }, [search, fTemporada, fEstat, fCustomer, fCollection, fAfter, fBefore])
+  }, [scope, search, fTemporada, fEstat, fCustomer, fCollection, fAfter, fBefore])
 
   // Carrega una pàgina de by-model. all=true perquè la columna "Fets" (models tot-Done,
   // ocultats per defecte) també tingui contingut. replace reinicia (canvi de filtre).
@@ -401,6 +418,31 @@ function UpcomingMilestones() {
   )
 }
 
+// Selector d'abast del dashboard del tècnic: [Els meus · Tots]. Default per ROL (es deriva del
+// rol/capabilities a Dashboard, NO de localStorage). Sempre visible i commutable.
+const SCOPES = [["me", "scope_mine"], ["all", "scope_all"]]
+function ScopeSelector({ scope, onChange, t }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+      <span style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: ".06em" }}>
+        {t("dashboard.scope.label")}
+      </span>
+      <div style={{ display: "flex", border: "0.5px solid var(--gray-l)", borderRadius: 8, overflow: "hidden" }}>
+        {SCOPES.map(([val, key]) => {
+          const active = scope === val
+          return (
+            <button key={val} onClick={() => onChange(val)} style={{
+              fontFamily: MONO, fontSize: 'var(--fs-body)', padding: "7px 16px", border: "none", cursor: "pointer",
+              background: active ? "var(--gold-pale)" : "var(--white)",
+              color: active ? "var(--gold)" : "var(--gray)", fontWeight: active ? 600 : 400,
+            }}>{t(`dashboard.scope.${key}`)}</button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
@@ -413,6 +455,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [onboarding, setOnboarding] = useState(null)
 
+  // Abast [me|all]. null fins que arriba `me` → default per rol (view_team_tasks → tots; si no, meus).
+  const [scope, setScope] = useState(null)
+  const [scopeRows, setScopeRows] = useState([])     // by-model de l'abast (substrat dels KPIs)
+  const [scopeLoading, setScopeLoading] = useState(true)
+
   useEffect(() => {
     const headers = { Authorization: `Bearer ${token}` }
     Promise.allSettled([
@@ -420,7 +467,6 @@ export default function Dashboard() {
       fetch(`${API}/api/v1/me/`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/onboarding-status/`, { headers }).then(r => r.ok ? r.json() : null),
     ]).then(([allRes, meRes, onbRes]) => {
-      // Stats
       if (allRes.status === "fulfilled") {
         const all = allRes.value
         const items = Array.isArray(all) ? all : (all.results || [])
@@ -429,14 +475,34 @@ export default function Dashboard() {
         const tallesGen = items.filter(m => m.fase_actual === "Prototip" || m.fase_actual === "Mostres").length
         setStats({ total, enCurs, tallesGen })
       }
-      // Me
-      if (meRes.status === "fulfilled") setMe(meRes.value)
-      // Onboarding
+      if (meRes.status === "fulfilled") {
+        setMe(meRes.value)
+        // Default d'abast per rol (només si encara no s'ha fixat): qui veu l'equip
+        // (view_team_tasks) → "tots"; la resta (tècnic) → "els meus". Substrat: §16.C. NO localStorage.
+        const caps = meRes.value?.capabilities || []
+        setScope(prev => prev ?? (caps.includes("view_team_tasks") ? "all" : "me"))
+      }
       if (onbRes.status === "fulfilled" && onbRes.value) setOnboarding(onbRes.value)
-
       setLoading(false)
     })
   }, [token])
+
+  // Substrat dels KPIs: by-model de TOT l'abast (scope-only, sense filtres de campanya). Es
+  // recarrega en commutar l'abast. all=true per comptar també els models tot-Done. El load es
+  // difereix (setTimeout) per no cridar setState síncron dins l'efecte (mateix patró que el board).
+  useEffect(() => {
+    if (scope === null) return
+    let alive = true
+    const id = setTimeout(() => {
+      setScopeLoading(true)
+      const params = { all: "true", ...(scope === "me" ? { responsable: "me" } : {}) }
+      fetchAllPages(modelTasks.byModel, params)
+        .then(rows => { if (alive) setScopeRows(rows) })
+        .catch(() => { if (alive) setScopeRows([]) })
+        .finally(() => { if (alive) setScopeLoading(false) })
+    }, 0)
+    return () => { alive = false; clearTimeout(id) }
+  }, [scope])
 
   const hora = new Date().getHours()
   const salutacio = hora < 13 ? t("dashboard.greeting_morning") : hora < 20 ? t("dashboard.greeting_afternoon") : t("dashboard.greeting_evening")
@@ -492,31 +558,47 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPIs */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
-        <KPICard
-          label={t("dashboard.kpi.total_models")}
-          value={loading ? "…" : stats.total}
-          sub={t("dashboard.kpi_sub.in_system")}
-          onClick={() => navigate("/models")}
-        />
-        <KPICard
-          label={t("model.estats.EnCurs")}
-          value={loading ? "…" : stats.enCurs}
-          sub={t("dashboard.kpi_sub.active_models")}
-          color="var(--gold)"
-          onClick={() => navigate("/models?estat=EnCurs")}
-        />
-        <KPICard
-          label={t("dashboard.kpi.prototype_samples")}
-          value={loading ? "…" : stats.tallesGen}
-          sub={t("dashboard.kpi_sub.critical_phase")}
-          color="var(--warn)"
-        />
-      </div>
+      {/* Selector d'abast (DALT): Els meus · Tots. */}
+      {scope !== null && <ScopeSelector scope={scope} onChange={setScope} t={t} />}
 
-      {/* Board per-model (zoom-out): substitueix la llista de recents i el Kanban global. */}
-      <ModelBoard />
+      {scope === "me" && !scopeLoading && scopeRows.length === 0 ? (
+        // Estat buit de "els meus": NO cau a tots; convida a mirar tot l'abast.
+        <div style={{
+          padding: "32px 20px", border: "1px dashed var(--border)", borderRadius: 8,
+          textAlign: "center", color: "var(--text-muted)", fontSize: 'var(--fs-body)', fontFamily: MONO,
+        }}>
+          <i className="ti ti-inbox-off" style={{ fontSize: 26, color: "var(--gray)", display: "block", marginBottom: 8 }} />
+          {t("dashboard.scope.empty_mine")}
+        </div>
+      ) : (
+        <>
+          {/* KPIs (SOTA el selector) */}
+          <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
+            <KPICard
+              label={t("dashboard.kpi.total_models")}
+              value={loading ? "…" : stats.total}
+              sub={t("dashboard.kpi_sub.in_system")}
+              onClick={() => navigate("/models")}
+            />
+            <KPICard
+              label={t("model.estats.EnCurs")}
+              value={loading ? "…" : stats.enCurs}
+              sub={t("dashboard.kpi_sub.active_models")}
+              color="var(--gold)"
+              onClick={() => navigate("/models?estat=EnCurs")}
+            />
+            <KPICard
+              label={t("dashboard.kpi.prototype_samples")}
+              value={loading ? "…" : stats.tallesGen}
+              sub={t("dashboard.kpi_sub.critical_phase")}
+              color="var(--warn)"
+            />
+          </div>
+
+          {/* Board per-model (a continuació): rep l'abast (responsable=me quan "els meus"). */}
+          <ModelBoard scope={scope} />
+        </>
+      )}
 
       {/* Properes fites: arribades de proto / fittings / tasques en risc (calendar/events). */}
       <UpcomingMilestones />

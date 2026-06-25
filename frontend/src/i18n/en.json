@@ -1663,6 +1663,12 @@
         "confeccio": "Production",
         "fitting": "Fitting"
       }
+    },
+    "scope": {
+      "label": "Scope",
+      "scope_mine": "Mine",
+      "scope_all": "All",
+      "empty_mine": "You have no assigned models."
     }
   },
   "alerts": {
