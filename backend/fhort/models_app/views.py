@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
+import django_filters
 
 from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
@@ -20,10 +21,27 @@ from .serializers import (
 )
 
 
+class ModelFilter(django_filters.FilterSet):
+    """Filtres del Model list. Additiu sobre els exactes històrics (estat/fase_actual/
+    garment_type/responsable/temporada/any): afegeix campanya (customer/collection) i un
+    rang de dates sobre data_objectiu per al board per-model del Dashboard (Sprint 5).
+      - ?customer=<id>                  exacte (FK)
+      - ?collection=<text>              icontains (CharField lliure)
+      - ?data_objectiu_after=YYYY-MM-DD&data_objectiu_before=YYYY-MM-DD  rang inclusiu
+    """
+    collection = django_filters.CharFilter(field_name='collection', lookup_expr='icontains')
+    data_objectiu = django_filters.DateFromToRangeFilter(field_name='data_objectiu')
+
+    class Meta:
+        model = Model
+        fields = ['estat', 'fase_actual', 'garment_type', 'responsable', 'temporada', 'any',
+                  'customer', 'collection', 'data_objectiu']
+
+
 class ModelViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estat', 'fase_actual', 'garment_type', 'responsable', 'temporada', 'any']
+    filterset_class = ModelFilter
     search_fields = ['codi_intern', 'codi_client', 'nom_prenda']
     ordering_fields = ['prioritat', 'data_objectiu', 'data_entrada']
     ordering = ['-prioritat']
@@ -70,6 +88,24 @@ class ModelViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             return ModelListSerializer
         return ModelDetailSerializer
+
+    @action(detail=False, methods=['get'], url_path='fase-counts')
+    def fase_counts(self, request):
+        """GET /api/v1/models/fase-counts/ — comptadors de models per fase.
+
+        Respecta EXACTAMENT els mateixos filtres que el board (filter_queryset → mateix
+        FilterSet + search). Es calcula a la BD (values+annotate), sense carregar files,
+        per escalar a 600+ models. Retorna {counts:{<fase>:n}, total}.
+
+        L'acció no és 'list' → get_queryset() torna el queryset pla (sense les anotacions
+        de cicle de la llista). order_by() buit abans de values() perquè un OrderingFilter
+        actiu no trenqui el GROUP BY.
+        """
+        from django.db.models import Count
+        qs = self.filter_queryset(self.get_queryset()).order_by()
+        rows = qs.values('fase_actual').annotate(n=Count('id'))
+        counts = {r['fase_actual']: r['n'] for r in rows}
+        return Response({'counts': counts, 'total': sum(counts.values())})
 
 
 class ModelFitxerViewSet(viewsets.ModelViewSet):

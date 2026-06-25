@@ -175,6 +175,22 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             # Per defecte només models amb alguna tasca no-Done (HAVING sobre els comptadors).
             agg = agg.filter(Q(pending__gt=0) | Q(paused__gt=0) | Q(in_progress__gt=0))
 
+        def kanban_state(pending, paused, in_progress, done):
+            """Estat-kanban derivat del model (única font de veritat al backend, Sprint 5 1c).
+            ∈ {pending, open, paused, done}. Ordre: feina viva mana sobre l'estàtica.
+              open    si in_progress>0
+              paused  si paused>0 i in_progress=0
+              pending si queda pendent (i res actiu/pausat)
+              done    si tot Done (cap pending/paused/in_progress)
+            Així el frontend no recalcula la classificació."""
+            if in_progress > 0:
+                return 'open'
+            if paused > 0:
+                return 'paused'
+            if pending > 0:
+                return 'pending'
+            return 'done'
+
         def shape(row):
             return {
                 'model_id': row['model_id'],
@@ -187,6 +203,8 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                     'in_progress': row['in_progress'],
                     'done': row['done'],
                 },
+                'kanban_state': kanban_state(
+                    row['pending'], row['paused'], row['in_progress'], row['done']),
                 # Extres additius (la UI els pot etiquetar sense una segona crida):
                 'prioritat': row['model__prioritat'],
                 'temporada': row['model__temporada'],
