@@ -811,7 +811,16 @@
     "error": "Ha ocurrido un error.",
     "col_max_start": "Inicio máximo",
     "critical": "Crítico",
-    "on_track": "En plazo"
+    "on_track": "En plazo",
+    "tabs": {
+      "dashboard": "Panel",
+      "planificacio": "Planificación",
+      "assignacio": "Asignación",
+      "calendari": "Calendario",
+      "informes": "Informes"
+    },
+    "gov_subtitle": "Espacio de gobierno: planifica, valida fases y haz seguimiento de los modelos",
+    "coming_soon": "Próximamente"
   },
   "companyCalendar": {
     "title": "Calendario de empresa",

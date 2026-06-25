@@ -14,6 +14,7 @@ import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import TaskAssignWizard from '../components/TaskAssignWizard'
+import PlanningCalendar from './PlanningCalendar'
 
 // Tram 2 — Pantalla "Planificació": dues carpetes Pendents/Assignades (gated define_tasks/configure).
 // Pendents = models SENSE cap tasca no-Done assignada. Assignades = models amb ALMENYS UNA no-Done amb tècnic.
@@ -90,7 +91,10 @@ async function fetchAllPages(apiFn, baseParams = {}) {
   return out
 }
 
-export default function Planning() {
+// Contingut de la carpeta "Planificació" (Pendents + Assignades). Era el cos sencer de Planning;
+// ara viu com a panell d'un tab dins el shell de govern (M1). La gestió de l'accés (canPlan) la fa
+// el shell; aquí només es carrega quan l'usuari hi té dret.
+function PlanificacioPanel() {
   const { t } = useTranslation()
   const me = useAuthStore(s => s.user)
   const canPlan = !!me?.capabilities?.some(c => c === 'define_tasks' || c === 'configure')
@@ -235,21 +239,8 @@ export default function Planning() {
       .finally(() => setSaving(false))
   }
 
-  if (me == null) return <Center>{t('planning.loading')}</Center>
-  if (!canPlan) return (
-    <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-      <i className="ti ti-lock" style={{ fontSize: 32, color: 'var(--gray)' }} />
-      <p style={{ marginTop: 12, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('planning.no_access')}</p>
-    </div>
-  )
-
   return (
     <div style={{ minWidth: 0, maxWidth: '100%' }}>
-      <div style={{ marginBottom: '1rem' }}>
-        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('planning.title')}</h1>
-        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('planning.subtitle')}</p>
-      </div>
-
       <Feedback feedback={feedback} />
 
       {/* Tabs de carpeta + cerca */}
@@ -436,6 +427,69 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
         </td></tr>
       )}
     </>
+  )
+}
+
+// Placeholder reutilitzable per als tabs encara no construïts (Assignació, Informes).
+function ComingSoon({ t }) {
+  return (
+    <div style={{ padding: '3rem 2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+      <i className="ti ti-clock-hour-4" style={{ fontSize: 28, color: 'var(--gray)' }} />
+      <p style={{ marginTop: 10, fontSize: 'var(--fs-body)' }}>{t('planning.coming_soon')}</p>
+    </div>
+  )
+}
+
+// Shell de govern (patró del shell de tabs de ModelSheet): capçalera + banda de pestanyes.
+// Tabs: Dashboard (panell de govern, s'omple per blocs) · Planificació (contingut actual) ·
+// Assignació (futur) · Calendari (PlanningCalendar incrustat) · Informes (futur).
+// Gating de pantalla: define_tasks||configure (el mateix que tenia Planning).
+const GOV_TABS = ['dashboard', 'planificacio', 'assignacio', 'calendari', 'informes']
+
+export default function Planning() {
+  const { t } = useTranslation()
+  const me = useAuthStore(s => s.user)
+  const canPlan = !!me?.capabilities?.some(c => c === 'define_tasks' || c === 'configure')
+  const [activeTab, setActiveTab] = useState('dashboard')
+
+  if (me == null) return <Center>{t('planning.loading')}</Center>
+  if (!canPlan) return (
+    <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+      <i className="ti ti-lock" style={{ fontSize: 32, color: 'var(--gray)' }} />
+      <p style={{ marginTop: 12, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('planning.no_access')}</p>
+    </div>
+  )
+
+  return (
+    <div style={{ minWidth: 0, maxWidth: '100%' }}>
+      <div style={{ marginBottom: '1rem' }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('planning.title')}</h1>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('planning.gov_subtitle')}</p>
+      </div>
+
+      <div style={{
+        display: 'flex', gap: 8, paddingBottom: '0.75rem', marginBottom: '1rem',
+        borderBottom: '0.5px solid var(--border)', flexWrap: 'wrap',
+      }}>
+        {GOV_TABS.map(tab => (
+          <button key={tab} type="button" onClick={() => setActiveTab(tab)} style={{
+            padding: '6px 16px', borderRadius: 6, border: 'none',
+            background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
+            color: activeTab === tab ? 'var(--white)' : 'var(--text-muted)',
+            cursor: 'pointer', fontSize: 'var(--fs-body)', fontFamily: MONO,
+            fontWeight: activeTab === tab ? 500 : 400,
+          }}>
+            {t(`planning.tabs.${tab}`)}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'dashboard' && <ComingSoon t={t} />}
+      {activeTab === 'planificacio' && <PlanificacioPanel />}
+      {activeTab === 'assignacio' && <ComingSoon t={t} />}
+      {activeTab === 'calendari' && <PlanningCalendar />}
+      {activeTab === 'informes' && <ComingSoon t={t} />}
+    </div>
   )
 }
 

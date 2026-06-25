@@ -811,7 +811,16 @@
     "error": "Something went wrong.",
     "col_max_start": "Max start",
     "critical": "Critical",
-    "on_track": "On track"
+    "on_track": "On track",
+    "tabs": {
+      "dashboard": "Dashboard",
+      "planificacio": "Planning",
+      "assignacio": "Assignment",
+      "calendari": "Calendar",
+      "informes": "Reports"
+    },
+    "gov_subtitle": "Governance space: plan, validate phases and track models",
+    "coming_soon": "Coming soon"
   },
   "companyCalendar": {
     "title": "Company calendar",

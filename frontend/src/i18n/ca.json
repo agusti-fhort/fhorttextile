@@ -811,7 +811,16 @@
     "error": "Hi ha hagut un error.",
     "col_max_start": "Inici màxim",
     "critical": "Crític",
-    "on_track": "En termini"
+    "on_track": "En termini",
+    "tabs": {
+      "dashboard": "Tauler",
+      "planificacio": "Planificació",
+      "assignacio": "Assignació",
+      "calendari": "Calendari",
+      "informes": "Informes"
+    },
+    "gov_subtitle": "Espai de govern: planifica, valida fases i fes el seguiment dels models",
+    "coming_soon": "Pròximament"
   },
   "companyCalendar": {
     "title": "Calendari d'empresa",
