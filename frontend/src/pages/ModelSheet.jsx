@@ -89,6 +89,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // ?tab= permet obrir el full directament en una pestanya concreta (p.ex. ModelFabric → tab Mesures).
   // El task_id/session entrants (J1b) es plomaran a sobre d'aquest mateix mecanisme més endavant.
   const tabParam = sp.get('tab')
+  // ?mode=entry → "Definició POM": obre el tab Mesures en mode ENTRADA (genesi/wizard) encara que el
+  // model JA tingui mesures (l'usuari ve a definir/afegir POMs, no a consultar).
+  const entryMode = sp.get('mode') === 'entry'
   const [model, setModel] = useState(null)
   const [activeTab, setActiveTab] = useState(TABS.includes(tabParam) ? tabParam : defaultTab)
   const [taulaRows, setTaulaRows] = useState([])
@@ -141,10 +144,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     if (loading) return
     if (activeTab === 'Mesures' && prevTabRef.current !== 'Mesures') {
       const verge = !taulaRows.some(r => r.base_value_cm != null)
-      setMesuresGenesis(verge)
+      setMesuresGenesis(verge || entryMode)
     }
     prevTabRef.current = activeTab
-  }, [activeTab, loading, taulaRows])
+  }, [activeTab, loading, taulaRows, entryMode])
 
   // Porta-menú: obre (crea-si-falta + auto-assign + En curs) la tasca `code` i navega a l'eina amb el
   // task_id. Reusa el servei open-task; el botó funciona encara que el model no tingui la tasca creada.
@@ -339,7 +342,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         )}
         {activeTab === 'Mesures' && (
           mesuresGenesis && editing !== 'Mesures' ? (
-            <MeasuresEntryPanel model={model}
+            <MeasuresEntryPanel model={model} entryMode={entryMode}
               onMaterialized={() => { setMesuresGenesis(false); reloadTaula(); reloadModel() }} />
           ) : (
           <div>
