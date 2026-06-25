@@ -17,6 +17,7 @@ import TaskAssignWizard from '../components/TaskAssignWizard'
 import PlanningCalendar from './PlanningCalendar'
 import DashboardGovPanel from '../components/planning/DashboardGovPanel'
 import ProjectGantt from '../components/planning/ProjectGantt'
+import InformesPanel from '../components/planning/InformesPanel'
 
 // Tram 2 — Pantalla "Planificació": dues carpetes Pendents/Assignades (gated define_tasks/configure).
 // Pendents = models SENSE cap tasca no-Done assignada. Assignades = models amb ALMENYS UNA no-Done amb tècnic.
@@ -431,16 +432,6 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
   )
 }
 
-// Placeholder reutilitzable per als tabs encara no construïts (Assignació, Informes).
-function ComingSoon({ t }) {
-  return (
-    <div style={{ padding: '3rem 2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-      <i className="ti ti-clock-hour-4" style={{ fontSize: 28, color: 'var(--gray)' }} />
-      <p style={{ marginTop: 10, fontSize: 'var(--fs-body)' }}>{t('planning.coming_soon')}</p>
-    </div>
-  )
-}
-
 // Shell de govern (patró del shell de tabs de ModelSheet): capçalera + banda de pestanyes.
 // Tabs: Dashboard (panell de govern, s'omple per blocs) · Planificació (contingut actual) ·
 // Assignació (futur) · Calendari (PlanningCalendar incrustat) · Informes (futur).
@@ -490,7 +481,7 @@ export default function Planning() {
       {activeTab === 'assignacio' && <PlanificacioPanel mode="assigned" />}
       {activeTab === 'calendari' && <PlanningCalendar />}
       {activeTab === 'calendari_projecte' && <ProjectGantt t={t} />}
-      {activeTab === 'informes' && <ComingSoon t={t} />}
+      {activeTab === 'informes' && <InformesPanel me={me} />}
     </div>
   )
 }

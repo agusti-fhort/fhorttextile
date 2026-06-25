@@ -822,6 +822,37 @@
     },
     "gov_subtitle": "Espacio de gobierno: planifica, valida fases y haz seguimiento de los modelos",
     "coming_soon": "Próximamente",
+    "informes": {
+      "deadlines": {
+        "title": "Cumplimiento de plazos",
+        "subtitle": "Modelos según la fecha prevista de fin (planificador) vs la fecha objetivo.",
+        "on_time": "En plazo",
+        "at_risk": "En riesgo",
+        "overdue": "Retrasados",
+        "no_deadline": "Sin plazo"
+      },
+      "cartera": {
+        "title": "Cartera",
+        "subtitle": "Estado global de los modelos agrupados; cada grupo con la distribución por fase y los modelos en riesgo.",
+        "dim_temporada": "Temporada",
+        "dim_collection": "Colección",
+        "no_temporada": "— sin temporada",
+        "no_collection": "— sin colección",
+        "total": "Total",
+        "en_risc": "En riesgo",
+        "empty": "Sin modelos."
+      },
+      "productivity": {
+        "title": "Productividad",
+        "subtitle": "Tiempo real consolidado (timers) vs estimado por fase, sobre toda la cartera.",
+        "estimate": "Estimado",
+        "real": "Real",
+        "deviation": "Desviación",
+        "tasks": "Tareas",
+        "total": "Total",
+        "empty": "Aún sin tiempo registrado."
+      }
+    },
     "gantt": {
       "empty": "Ningún modelo para mostrar.",
       "legend_proto": "Llegada de proto",

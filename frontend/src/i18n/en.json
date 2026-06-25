@@ -822,6 +822,37 @@
     },
     "gov_subtitle": "Governance space: plan, validate phases and track models",
     "coming_soon": "Coming soon",
+    "informes": {
+      "deadlines": {
+        "title": "Deadline compliance",
+        "subtitle": "Models by predicted end date (scheduler) vs target date.",
+        "on_time": "On time",
+        "at_risk": "At risk",
+        "overdue": "Overdue",
+        "no_deadline": "No deadline"
+      },
+      "cartera": {
+        "title": "Portfolio",
+        "subtitle": "Global state of models grouped; each group with its phase distribution and at-risk models.",
+        "dim_temporada": "Season",
+        "dim_collection": "Collection",
+        "no_temporada": "— no season",
+        "no_collection": "— no collection",
+        "total": "Total",
+        "en_risc": "At risk",
+        "empty": "No models."
+      },
+      "productivity": {
+        "title": "Productivity",
+        "subtitle": "Consolidated actual time (timers) vs estimated per phase, across the whole portfolio.",
+        "estimate": "Estimated",
+        "real": "Actual",
+        "deviation": "Deviation",
+        "tasks": "Tasks",
+        "total": "Total",
+        "empty": "No time logged yet."
+      }
+    },
     "gantt": {
       "empty": "No models to show.",
       "legend_proto": "Proto arrival",

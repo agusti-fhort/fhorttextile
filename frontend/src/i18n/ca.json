@@ -822,6 +822,37 @@
     },
     "gov_subtitle": "Espai de govern: planifica, valida fases i fes el seguiment dels models",
     "coming_soon": "Pròximament",
+    "informes": {
+      "deadlines": {
+        "title": "Compliment de terminis",
+        "subtitle": "Models segons la data prevista de fi (planificador) vs la data objectiu.",
+        "on_time": "En temps",
+        "at_risk": "En risc",
+        "overdue": "Endarrerits",
+        "no_deadline": "Sense termini"
+      },
+      "cartera": {
+        "title": "Cartera",
+        "subtitle": "Estat global dels models agrupats; cada grup amb la distribució per fase i els models en risc.",
+        "dim_temporada": "Temporada",
+        "dim_collection": "Col·lecció",
+        "no_temporada": "— sense temporada",
+        "no_collection": "— sense col·lecció",
+        "total": "Total",
+        "en_risc": "En risc",
+        "empty": "Sense models."
+      },
+      "productivity": {
+        "title": "Productivitat",
+        "subtitle": "Temps real consolidat (timers) vs estimat per fase, sobre tota la cartera.",
+        "estimate": "Estimat",
+        "real": "Real",
+        "deviation": "Desviació",
+        "tasks": "Tasques",
+        "total": "Total",
+        "empty": "Encara sense temps registrat."
+      }
+    },
     "gantt": {
       "empty": "Cap model per mostrar.",
       "legend_proto": "Arribada de proto",
