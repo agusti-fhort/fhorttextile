@@ -149,25 +149,6 @@ class BaseMeasurementViewSet(viewsets.ModelViewSet):
 
 
 
-# Sprint 1C — ModelServeiViewSet
-from rest_framework import viewsets, permissions
-from django_filters.rest_framework import DjangoFilterBackend
-
-class ModelServeiViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['model', 'servei', 'contractat', 'estat_autoritzacio']
-    ordering = ['servei__ordre_popup']
-
-    def get_queryset(self):
-        from .models import ModelServei
-        return ModelServei.objects.select_related('servei', 'model').all()
-
-    def get_serializer_class(self):
-        from .serializers import ModelServeiSerializer
-        return ModelServeiSerializer
-
-
 def _resolve_customer_code(customer_id):
     """Codi (3 chars) per a un customer_id donat, amb fallback al self-customer del tenant.
     Font única del prefix per als endpoints de codi-gen (preview i creació)."""

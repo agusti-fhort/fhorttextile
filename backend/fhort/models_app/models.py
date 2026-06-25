@@ -421,56 +421,6 @@ class ImportSession(models.Model):
         return f'ImportSession {self.token} [{self.estat}]'
 
 
-class ModelServei(models.Model):
-    """Services assigned to a Model. Child table of the Servei tab."""
-    model = models.ForeignKey(
-        'Model', on_delete=models.CASCADE, related_name='serveis_model',
-    )
-    servei = models.ForeignKey(
-        'tasks.PaquetServei', on_delete=models.PROTECT, related_name='models_servei',
-    )
-    nom_servei = models.CharField(max_length=200, null=True, blank=True)
-    grup = models.CharField(max_length=50, null=True, blank=True)
-    slots_base = models.FloatField(null=True, blank=True)
-    contractat = models.BooleanField(default=True)
-    ampliat = models.BooleanField(default=False)
-    estat_autoritzacio = models.CharField(
-        max_length=20,
-        choices=[
-            ('Pendent', 'Pendent'),
-            ('Autoritzat', 'Autoritzat'),
-            ('Rebutjat', 'Rebutjat'),
-        ],
-        null=True, blank=True,
-    )
-    autoritzat_per = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True, blank=True,
-        on_delete=models.SET_NULL,
-        related_name='autorizacions_servei',
-    )
-    data_autoritzacio = models.DateTimeField(null=True, blank=True)
-    linia_addicional = models.CharField(max_length=100, null=True, blank=True)
-
-    class Meta:
-        ordering = ['servei__ordre_popup', 'id']
-        verbose_name = 'Servei del model'
-        verbose_name_plural = 'Serveis del model'
-
-    def save(self, *args, **kwargs):
-        if self.servei_id:
-            if not self.nom_servei:
-                self.nom_servei = self.servei.nom
-            if not self.grup:
-                self.grup = self.servei.grup
-            if self.slots_base is None:
-                self.slots_base = self.servei.slots_base
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.model.codi} — {self.nom_servei or self.servei.nom}"
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Sprint 3 — Grading engine
 # ─────────────────────────────────────────────────────────────────────────────

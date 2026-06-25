@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import BaseMeasurement, Contracte, LiniaContracte, Model, ModelFitxer, ModelServei, Watchpoint
+from .models import BaseMeasurement, Contracte, LiniaContracte, Model, ModelFitxer, Watchpoint
 
 
 class ModelFitxerSerializer(serializers.ModelSerializer):
@@ -138,22 +138,6 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
             'updated_at',
         )
         read_only_fields = ('updated_at',)
-
-
-# Sprint 1C — ModelServei
-class ModelServeiSerializer(serializers.ModelSerializer):
-    servei_nom = serializers.CharField(source='servei.nom', read_only=True)
-    servei_grup = serializers.CharField(source='servei.grup', read_only=True)
-
-    class Meta:
-        model = ModelServei
-        fields = [
-            'id', 'model', 'servei', 'servei_nom', 'servei_grup',
-            'nom_servei', 'grup', 'slots_base', 'contractat', 'ampliat',
-            'estat_autoritzacio', 'autoritzat_per', 'data_autoritzacio',
-            'linia_addicional',
-        ]
-        read_only_fields = ['nom_servei', 'grup', 'slots_base']
 
 
 class WatchpointSerializer(serializers.ModelSerializer):

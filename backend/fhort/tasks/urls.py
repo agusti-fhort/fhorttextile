@@ -1,27 +1,9 @@
 from rest_framework.routers import DefaultRouter
 
-from .views import (
-    TascaViewSet,
-    TimerEntradaViewSet,
-)
+from .views import TimerEntradaViewSet
 
 router = DefaultRouter()
 router.register('timers', TimerEntradaViewSet, basename='timer')
-
-# Sprint 1C — new endpoints (the sprint1c TascaViewSet is richer than the one in views.py).
-# If sprint1c does not exist yet, we fall back to the legacy TascaViewSet.
-try:
-    from fhort.tasks.views_sprint1c import TascaViewSet as _Sprint1CTascaViewSet, PaquetServeiViewSet
-    router.register(r'tasques', _Sprint1CTascaViewSet, basename='tasca')
-    router.register(r'paquets-servei', PaquetServeiViewSet, basename='paquet-servei')
-except Exception:
-    router.register('tasques', TascaViewSet, basename='tasca')
-
-try:
-    from fhort.models_app.views import ModelServeiViewSet
-    router.register(r'model-serveis', ModelServeiViewSet, basename='model-servei')
-except Exception:
-    pass
 
 # model-fitxers already registered in fhort.models_app.urls
 
