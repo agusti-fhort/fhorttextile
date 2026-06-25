@@ -39,6 +39,9 @@ class ModelListSerializer(serializers.ModelSerializer):
             'responsable',
             'prioritat',
             'data_objectiu',
+            # M1 — predicció del planificador (min start / max end de les tasques; §17). Read-only.
+            'predicted_start',
+            'predicted_end',
             # Pas 5C — cicle
             'entrada_prod',
             'arribada_proto',

@@ -31,11 +31,137 @@ export default function DashboardGovPanel({ me }) {
   const canCloseGates = !!me?.capabilities?.includes('close_gates')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      {canCloseGates
-        ? <GatesReadyBlock t={t} />
-        : <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: '1rem 0' }}>{t('planning.coming_soon')}</p>}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+      <CountersBlock t={t} />
+      {/* La cua de gates (acció de govern) només per a qui pot tancar gates. */}
+      {canCloseGates && <GatesReadyBlock t={t} />}
+      <RiskBlock t={t} />
     </div>
+  )
+}
+
+// Helper local: descarrega totes les pàgines d'un endpoint paginat (mateix patró que Planning).
+async function fetchAllPages(apiFn, baseParams = {}) {
+  const out = []; let page = 1
+  for (;;) {
+    const res = await apiFn({ ...baseParams, page })
+    const data = res.data
+    out.push(...(data?.results ?? (Array.isArray(data) ? data : [])))
+    if (data?.next) page++; else break
+  }
+  return out
+}
+
+// Bloc COMPTADORS: total de models + recompte per fase (GET models/fase-counts/, ja existent).
+// Visible per a tothom amb accés al govern (no depèn de close_gates).
+function CountersBlock({ t }) {
+  const [data, setData] = useState({ counts: {}, total: 0 })
+  useEffect(() => {
+    modelsApi.faseCounts({})
+      .then(res => setData({ counts: res.data?.counts || {}, total: res.data?.total ?? 0 }))
+      .catch(() => setData({ counts: {}, total: 0 }))
+  }, [])
+  return (
+    <section>
+      <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, fontFamily: MONO, margin: '0 0 12px' }}>
+        <i className="ti ti-chart-bar" style={{ fontSize: 16, marginRight: 6, color: 'var(--gold)' }} />
+        {t('planning.counters.title')}
+      </h2>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Chip label={t('dashboard.board.total')} n={data.total} strong />
+        {PHASES.map(ph => (
+          <Chip key={ph} label={t(`model_sheet.dashboard.phase.${ph}`, { defaultValue: ph })} n={data.counts?.[ph] ?? 0} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function Chip({ label, n, strong }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', fontFamily: MONO,
+      color: 'var(--text-muted)', padding: '4px 11px', borderRadius: 10, background: 'var(--white)',
+      border: `0.5px solid ${strong ? 'var(--gold)' : 'var(--gray-l)'}`,
+    }}>
+      <span>{label}</span>
+      <span style={{ fontWeight: 600, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>{n}</span>
+    </span>
+  )
+}
+
+// Bloc MODELS EN RISC: la data prevista de fi (predicted_end, del planificador) supera la data
+// objectiu. Es deriva del model list (predicted_end exposat al serializer, M1). Visible per a tothom.
+function RiskBlock({ t }) {
+  const navigate = useNavigate()
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let alive = true
+    fetchAllPages(modelsApi.list, {})
+      .then(models => {
+        if (!alive) return
+        const risky = models
+          .filter(m => m.predicted_end && m.data_objectiu && m.predicted_end > m.data_objectiu)
+          .map(m => ({
+            id: m.id, codi: m.codi_intern, nom: m.nom_prenda, fase: m.fase_actual,
+            data_objectiu: m.data_objectiu, predicted_end: m.predicted_end,
+            desviacio: Math.round((new Date(m.predicted_end) - new Date(m.data_objectiu)) / 86400000),
+          }))
+          .sort((a, b) => b.desviacio - a.desviacio)
+        setRows(risky)
+      })
+      .catch(() => { if (alive) setRows([]) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+  return (
+    <section>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
+        <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, fontFamily: MONO, margin: 0 }}>
+          <i className="ti ti-alert-triangle" style={{ fontSize: 16, marginRight: 6, color: 'var(--warn)' }} />
+          {t('planning.risk.title')}
+        </h2>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontFamily: MONO }}>{rows.length}</span>
+      </div>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginTop: 0, marginBottom: 12 }}>
+        {t('planning.risk.subtitle')}
+      </p>
+      {loading ? <Center>{t('planning.loading')}</Center>
+        : rows.length === 0 ? (
+          <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+            {t('planning.risk.empty')}
+          </div>
+        ) : (
+          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <thead><tr>
+                <th style={thS}>{t('planning.col_model')}</th>
+                <th style={thS}>{t('planning.gates.col_phase')}</th>
+                <th style={thS}>{t('planning.col_deadline')}</th>
+                <th style={thS}>{t('planning.col_end')}</th>
+                <th style={thS}>{t('planning.risk.col_deviation')}</th>
+              </tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/models/${r.id}`)}>
+                    <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600 }}>
+                      {r.codi}
+                      <div style={{ fontWeight: 400, color: 'var(--gray)' }}>{r.nom}</div>
+                    </td>
+                    <td style={tdS}>{t(`model_sheet.dashboard.phase.${r.fase}`, { defaultValue: r.fase })}</td>
+                    <td style={tdS}>{r.data_objectiu}</td>
+                    <td style={{ ...tdS, color: 'var(--err)' }}>{r.predicted_end}</td>
+                    <td style={{ ...tdS, color: 'var(--err)', fontWeight: 600, fontFamily: MONO }}>
+                      {t('planning.risk.deviation_days', { n: r.desviacio })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+    </section>
   )
 }
 

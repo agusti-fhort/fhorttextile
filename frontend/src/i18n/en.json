@@ -834,6 +834,16 @@
       "validated_bulk_ok": "{{n}} gates validated.",
       "validated_bulk_partial": "{{ok}} validated, {{err}} with error.",
       "error": "Could not validate the gate."
+    },
+    "counters": {
+      "title": "Models by phase"
+    },
+    "risk": {
+      "title": "Models at risk",
+      "subtitle": "Predicted end date exceeds the target date",
+      "col_deviation": "Deviation",
+      "deviation_days": "+{{n}} d",
+      "empty": "No models at risk."
     }
   },
   "companyCalendar": {
