@@ -97,12 +97,32 @@ class ModelViewSet(viewsets.ModelViewSet):
         FilterSet + search). Es calcula a la BD (values+annotate), sense carregar files,
         per escalar a 600+ models. Retorna {counts:{<fase>:n}, total}.
 
+        ABAST "els meus" (Sprint board tècnic): ?responsable=me | <profile_id> filtra els
+        models on l'usuari (o el perfil) és ASSIGNEE d'≥1 ModelTask — MATEIXA semàntica que
+        by-model (views_b.py), NO Model.responsable (director). Es treu del filterset (que el
+        llegiria com a FK director i petaria amb 'me') i s'aplica a mà, perquè els KPIs/chips
+        quadrin amb el board quan es commuta a "els meus".
+
         L'acció no és 'list' → get_queryset() torna el queryset pla (sense les anotacions
         de cicle de la llista). order_by() buit abans de values() perquè un OrderingFilter
         actiu no trenqui el GROUP BY.
         """
         from django.db.models import Count
+        from fhort.tasks.models import ModelTask
+        # Treu 'responsable' del GET abans del filterset (s'aplica a mà, semàntica assignee).
+        responsable = request.query_params.get('responsable')
+        if responsable is not None:
+            mutable = request._request.GET.copy()
+            mutable.pop('responsable', None)
+            request._request.GET = mutable
         qs = self.filter_queryset(self.get_queryset()).order_by()
+        if responsable == 'me':
+            profile = getattr(request.user, 'profile', None)
+            qs = (qs.filter(id__in=ModelTask.objects.filter(assignee=profile).values('model_id'))
+                  if profile is not None else qs.none())
+        elif responsable and responsable.isdigit():
+            qs = qs.filter(id__in=ModelTask.objects.filter(
+                assignee_id=int(responsable)).values('model_id'))
         rows = qs.values('fase_actual').annotate(n=Count('id'))
         counts = {r['fase_actual']: r['n'] for r in rows}
         return Response({'counts': counts, 'total': sum(counts.values())})
