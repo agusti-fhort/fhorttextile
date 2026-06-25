@@ -859,9 +859,29 @@
       "maturity": {
         "empiric": "empíric",
         "seed": "estimat",
-        "empty": "sense dades"
+        "empty": "sense dades",
+        "none": "sense dada"
       },
-      "coverage_tip": "{{empiric}} empíriques · {{seed}} estimades · {{none}} sense dada · {{n}} mostres"
+      "coverage_tip": "{{empiric}} empíriques · {{seed}} estimades · {{none}} sense dada · {{n}} mostres",
+      "tree": {
+        "group_by": "Agrupar per",
+        "by_phase": "Fase",
+        "by_garment": "Tipus de peça",
+        "col_item": "Element",
+        "col_estimate": "Estimat",
+        "col_real": "Real",
+        "col_n": "n",
+        "col_deviation": "Desviació",
+        "set_estimate": "Posar estimació",
+        "save": "Desar",
+        "cancel": "Cancel·lar",
+        "minutes_ph": "min",
+        "cells_n": "{{n}} cel·les",
+        "saved_ok": "Estimació desada.",
+        "invalid": "Posa un nombre de minuts > 0.",
+        "empty": "Sense dades de temps.",
+        "error": "No s'ha pogut completar l'operació."
+      }
     }
   },
   "companyCalendar": {

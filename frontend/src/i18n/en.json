@@ -859,9 +859,29 @@
       "maturity": {
         "empiric": "empirical",
         "seed": "estimated",
-        "empty": "no data"
+        "empty": "no data",
+        "none": "no data"
       },
-      "coverage_tip": "{{empiric}} empirical · {{seed}} estimated · {{none}} no data · {{n}} samples"
+      "coverage_tip": "{{empiric}} empirical · {{seed}} estimated · {{none}} no data · {{n}} samples",
+      "tree": {
+        "group_by": "Group by",
+        "by_phase": "Phase",
+        "by_garment": "Garment type",
+        "col_item": "Item",
+        "col_estimate": "Estimated",
+        "col_real": "Actual",
+        "col_n": "n",
+        "col_deviation": "Deviation",
+        "set_estimate": "Set estimate",
+        "save": "Save",
+        "cancel": "Cancel",
+        "minutes_ph": "min",
+        "cells_n": "{{n}} cells",
+        "saved_ok": "Estimate saved.",
+        "invalid": "Enter a number of minutes > 0.",
+        "empty": "No time data.",
+        "error": "Could not complete the operation."
+      }
     }
   },
   "companyCalendar": {

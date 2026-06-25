@@ -6,6 +6,7 @@ import Center from '../ui/Center'
 import Feedback from '../ui/Feedback'
 import { primaryBtn } from '../ui/buttons'
 import PhaseTimeStrip from './PhaseTimeStrip'
+import TimeTree from './TimeTree'
 
 // Panell de govern (tab "Tauler" de Planificació). Recupera la cua de gates òrfena de la
 // jubilació del Kanban (DIAGNOSI §16.A.b: gates/ready sense surface). Es construeix per blocs;
@@ -57,6 +58,7 @@ function TimeAnalysisSection({ t }) {
         {t('planning.time.subtitle')}
       </p>
       <PhaseTimeStrip t={t} />
+      <TimeTree t={t} />
     </section>
   )
 }

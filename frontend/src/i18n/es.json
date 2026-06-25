@@ -859,9 +859,29 @@
       "maturity": {
         "empiric": "empírico",
         "seed": "estimado",
-        "empty": "sin datos"
+        "empty": "sin datos",
+        "none": "sin dato"
       },
-      "coverage_tip": "{{empiric}} empíricas · {{seed}} estimadas · {{none}} sin dato · {{n}} muestras"
+      "coverage_tip": "{{empiric}} empíricas · {{seed}} estimadas · {{none}} sin dato · {{n}} muestras",
+      "tree": {
+        "group_by": "Agrupar por",
+        "by_phase": "Fase",
+        "by_garment": "Tipo de prenda",
+        "col_item": "Elemento",
+        "col_estimate": "Estimado",
+        "col_real": "Real",
+        "col_n": "n",
+        "col_deviation": "Desviación",
+        "set_estimate": "Poner estimación",
+        "save": "Guardar",
+        "cancel": "Cancelar",
+        "minutes_ph": "min",
+        "cells_n": "{{n}} celdas",
+        "saved_ok": "Estimación guardada.",
+        "invalid": "Pon un número de minutos > 0.",
+        "empty": "Sin datos de tiempo.",
+        "error": "No se ha podido completar la operación."
+      }
     }
   },
   "companyCalendar": {
