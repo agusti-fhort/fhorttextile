@@ -792,47 +792,50 @@ def _cell_effective_and_maturity(cell):
     return None, 'none'
 
 
+# Acumulador genèric d'un node (fase, task_type, …): mitjana ponderada per n + cobertura.
+def _acc_factory():
+    return {'cells_total': 0, 'cells_empiric': 0, 'cells_seed': 0, 'cells_none': 0,
+            'n_total': 0, '_wsum': 0.0, '_w': 0, '_vsum': 0, '_vcount': 0}
+
+
+def _acc_add(a, cell):
+    """Acumula una cel·la TaskTimeEstimate al node. Pes = n (empíric) | 1 (seed)."""
+    a['cells_total'] += 1
+    a['n_total'] += cell.n
+    val, mat = _cell_effective_and_maturity(cell)
+    a['cells_' + mat] += 1
+    if val is not None:
+        w = cell.n if mat == 'empiric' else 1
+        a['_wsum'] += val * w
+        a['_w'] += w
+        a['_vsum'] += val
+        a['_vcount'] += 1
+
+
+def _acc_metrics(a):
+    """Projecta un acumulador a minuts ponderats + mitjana simple + maduresa + cobertura."""
+    return {
+        'minutes': int(round(a['_wsum'] / a['_w'])) if a['_w'] > 0 else None,
+        'avg_minutes': int(round(a['_vsum'] / a['_vcount'])) if a['_vcount'] else None,
+        'maturity': 'empiric' if a['cells_empiric'] > 0 else ('seed' if a['cells_seed'] > 0 else 'empty'),
+        'cells_total': a['cells_total'], 'cells_empiric': a['cells_empiric'],
+        'cells_seed': a['cells_seed'], 'cells_none': a['cells_none'], 'n_total': a['n_total'],
+    }
+
+
 def _phase_rollup(cells):
     """Rollup task_type→fase sobre un iterable de TaskTimeEstimate (amb task_type carregat).
-    Mitjana PONDERADA per n: cada cel·la aporta el seu temps efectiu (empíric si n>=llindar, si
-    no el seed); pes = n per a empíriques, 1 per a seed. Retorna {fase: acumulador}."""
+    Retorna {fase: acumulador}."""
     from collections import defaultdict
-    acc = defaultdict(lambda: {'cells_total': 0, 'cells_empiric': 0, 'cells_seed': 0,
-                               'cells_none': 0, 'n_total': 0, '_wsum': 0.0, '_w': 0,
-                               '_vsum': 0, '_vcount': 0})
+    acc = defaultdict(_acc_factory)
     for c in cells:
-        a = acc[c.task_type.fase]
-        a['cells_total'] += 1
-        a['n_total'] += c.n
-        val, mat = _cell_effective_and_maturity(c)
-        a['cells_' + mat] += 1
-        if val is not None:
-            w = c.n if mat == 'empiric' else 1
-            a['_wsum'] += val * w
-            a['_w'] += w
-            a['_vsum'] += val
-            a['_vcount'] += 1
+        _acc_add(acc[c.task_type.fase], c)
     return acc
 
 
 def _phase_summary(fase, a):
     """Projecta l'acumulador d'una fase a la forma servible (None-safe)."""
-    minutes = int(round(a['_wsum'] / a['_w'])) if (a and a['_w'] > 0) else None
-    avg = int(round(a['_vsum'] / a['_vcount'])) if (a and a['_vcount']) else None
-    maturity = 'empty'
-    if a:
-        if a['cells_empiric'] > 0:
-            maturity = 'empiric'
-        elif a['cells_seed'] > 0:
-            maturity = 'seed'
-    return {
-        'fase': fase, 'minutes': minutes, 'avg_minutes': avg, 'maturity': maturity,
-        'cells_total': a['cells_total'] if a else 0,
-        'cells_empiric': a['cells_empiric'] if a else 0,
-        'cells_seed': a['cells_seed'] if a else 0,
-        'cells_none': a['cells_none'] if a else 0,
-        'n_total': a['n_total'] if a else 0,
-    }
+    return {'fase': fase, **_acc_metrics(a if a else _acc_factory())}
 
 
 @api_view(['GET'])
@@ -846,3 +849,78 @@ def time_by_phase_view(request):
     acc = _phase_rollup(cells)
     phases = [_phase_summary(fase, acc.get(fase)) for fase, _label in TaskType.FASE_CHOICES]
     return Response({'phases': phases, 'welford_min_samples': WELFORD_MIN_SAMPLES})
+
+
+def _cell_item_payload(c):
+    """Projecta una cel·la a la fulla de l'arbre: estimat (seed) vs real (mean) vs n vs desviació."""
+    val, mat = _cell_effective_and_maturity(c)
+    seed = int(c.estimated_minutes) if (c.estimated_minutes and c.estimated_minutes > 0) else None
+    mean = int(round(c.mean_minutes)) if (c.n > 0 and c.mean_minutes > 0) else None
+    item = c.garment_type_item
+    gt = getattr(item, 'garment_type', None) if item else None
+    gt_nom = ''
+    if gt:
+        gt_nom = (gt.nom_client or gt.nom_ca or gt.nom_es or gt.nom_en or gt.codi_client
+                  or f'#{gt.id}')
+    return {
+        'garment_type_item_id': c.garment_type_item_id,
+        'item_nom': getattr(item, 'name', '') if item else '',
+        'garment_type_id': getattr(gt, 'id', None),
+        'garment_type_nom': gt_nom,
+        'task_type_code': c.task_type.code,
+        'estimated_minutes': seed,
+        'mean_minutes': mean,
+        'effective_minutes': val,
+        'n': c.n,
+        'desviacio_min': (mean - seed) if (mean is not None and seed is not None) else None,
+        'desviacio_pct': int(round((mean - seed) / seed * 100)) if (mean is not None and seed) else None,
+        'maturity': mat,
+    }
+
+
+@api_view(['GET'])
+@permission_classes([_ViewTeamTasks])
+def time_tree_view(request):
+    """GET /api/v1/time-analysis/tree/ — arbre consultiu fase→task_type→item amb temps estimat
+    (seed) vs real (mean) vs n vs desviació vs maduresa per cel·la. Reusa el rollup ponderat del
+    commit 1 a cada node. Filtres opcionals: ?fase= ?task_type=(code) ?garment_type=
+    ?garment_type_item=. Gated view_team_tasks."""
+    from .services_i import WELFORD_MIN_SAMPLES
+    qs = TaskTimeEstimate.objects.select_related(
+        'task_type', 'garment_type_item', 'garment_type_item__garment_type').all()
+    fase = request.query_params.get('fase')
+    if fase:
+        qs = qs.filter(task_type__fase=fase)
+    tt = request.query_params.get('task_type')
+    if tt:
+        qs = qs.filter(task_type__code=tt)
+    gt = request.query_params.get('garment_type')
+    if gt:
+        qs = qs.filter(garment_type_item__garment_type_id=gt)
+    gti = request.query_params.get('garment_type_item')
+    if gti:
+        qs = qs.filter(garment_type_item_id=gti)
+
+    phases = {}   # fase → {'acc', 'tts': {tt_id: {'code','name','fase','acc','items'}}}
+    for c in qs:
+        ph = phases.setdefault(c.task_type.fase, {'acc': _acc_factory(), 'tts': {}})
+        _acc_add(ph['acc'], c)
+        node = ph['tts'].setdefault(c.task_type_id, {
+            'code': c.task_type.code, 'name': c.task_type.name, 'fase': c.task_type.fase,
+            'acc': _acc_factory(), 'items': []})
+        _acc_add(node['acc'], c)
+        node['items'].append(_cell_item_payload(c))
+
+    out = []
+    for fase, _label in TaskType.FASE_CHOICES:
+        ph = phases.get(fase)
+        if not ph:
+            continue   # fase sense cel·les (després de filtrar) → fora de l'arbre
+        tts = []
+        for node in ph['tts'].values():
+            node['items'].sort(key=lambda x: (x['item_nom'] or ''))
+            tts.append({'code': node['code'], 'name': node['name'], 'fase': node['fase'],
+                        **_acc_metrics(node['acc']), 'items': node['items']})
+        tts.sort(key=lambda x: x['code'])
+        out.append({'fase': fase, **_acc_metrics(ph['acc']), 'task_types': tts})
+    return Response({'phases': out, 'welford_min_samples': WELFORD_MIN_SAMPLES})
