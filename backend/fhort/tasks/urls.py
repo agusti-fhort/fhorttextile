@@ -67,11 +67,12 @@ except Exception:
 
 # Sprint M2 — Anàlisi de temps: rollup per fase + arbre drill-down (gated view_team_tasks).
 try:
-    from fhort.tasks.views_b import time_by_phase_view, time_tree_view
+    from fhort.tasks.views_b import time_by_phase_view, time_tree_view, time_set_estimate_view
     from django.urls import path as _path_m2
     _sprintm2_paths = [
         _path_m2('time-analysis/by-phase/', time_by_phase_view),
         _path_m2('time-analysis/tree/', time_tree_view),
+        _path_m2('time-analysis/set-estimate/', time_set_estimate_view),
     ]
     urlpatterns = _sprintm2_paths + urlpatterns
 except Exception:

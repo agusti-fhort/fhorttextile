@@ -924,3 +924,36 @@ def time_tree_view(request):
         tts.sort(key=lambda x: x['code'])
         out.append({'fase': fase, **_acc_metrics(ph['acc']), 'task_types': tts})
     return Response({'phases': out, 'welford_min_samples': WELFORD_MIN_SAMPLES})
+
+
+@api_view(['POST'])
+@permission_classes([_DefineTasks])
+def time_set_estimate_view(request):
+    """POST /api/v1/time-analysis/set-estimate/ — captura-PM (graó 4 de la cascada de temps):
+    fixa el seed (estimated_minutes) d'una cel·la (garment_type_item × task_type), creant-la si no
+    existeix. NO toca mai l'empíric (n/mean/m2). Body: {garment_type_item, task_type(code), minutes}.
+    Gated define_tasks. Retorna la fulla actualitzada (mateixa forma que l'arbre)."""
+    gti = request.data.get('garment_type_item')
+    code = request.data.get('task_type')
+    minutes = request.data.get('minutes')
+    if not gti or not code:
+        return Response({'error': 'garment_type_item i task_type requerits.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        minutes = int(minutes)
+    except (TypeError, ValueError):
+        return Response({'error': 'minutes ha de ser un enter.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    if minutes <= 0:
+        return Response({'error': 'minutes ha de ser > 0.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        tt = TaskType.objects.get(code=code)
+    except TaskType.DoesNotExist:
+        return Response({'error': 'task_type no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    if not GarmentTypeItem.objects.filter(pk=gti).exists():
+        return Response({'error': 'garment_type_item no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    cell, _created = TaskTimeEstimate.objects.get_or_create(garment_type_item_id=gti, task_type=tt)
+    cell.estimated_minutes = minutes
+    cell.save(update_fields=['estimated_minutes'])   # NOMÉS el seed; mai n/mean/m2
+    cell = TaskTimeEstimate.objects.select_related(
+        'task_type', 'garment_type_item', 'garment_type_item__garment_type').get(pk=cell.pk)
+    return Response(_cell_item_payload(cell), status=http_status.HTTP_200_OK)
