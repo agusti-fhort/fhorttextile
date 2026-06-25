@@ -218,13 +218,20 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
   // igualment. Sense eina: InProgress sense navegar (§4) — la targeta passa a "en curs".
   function playMine(task) {
     const route = toolRoute(task, modelId)
+    // PUNT COMÚ d'obertura: porta la tasca a InProgress NOMÉS si cal, comprovant l'estat ACTUAL. Si ja
+    // és InProgress NO demanem la transició — ALLOWED no permet InProgress→InProgress (services_c.py)
+    // i tornaria 400, deixant la tasca sense obrir. Pending/Paused/Done → InProgress (Done = reobertura,
+    // ja permesa). Qualsevol camí de Play (propi, handoff acceptat, futur Q2) hereta aquest guard.
+    const needsStart = task.status !== 'InProgress'
     if (route) {
-      if (task.status === 'Pending' || task.status === 'Paused' || task.status === 'Done') {
-        modelTasks.transition(task.id, { to_status: 'InProgress' }).catch(() => {})  // fire-and-forget
-      }
+      // Amb eina: transiciona si cal (fire-and-forget) i navega IGUALMENT — si la transició falla, la
+      // UI no queda penjada (l'eina s'obre; la tasca ja era En curs).
+      if (needsStart) modelTasks.transition(task.id, { to_status: 'InProgress' }).catch(() => {})
       navigate(route)
+    } else if (needsStart) {
+      doTransition(task, 'InProgress')   // sense eina: transiciona + refresca (gestiona l'error visible)
     } else {
-      doTransition(task, 'InProgress')
+      onRefresh?.()   // ja En curs i sense eina: només re-sincronitza la targeta, sense demanar res
     }
   }
 
