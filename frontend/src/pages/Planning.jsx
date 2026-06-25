@@ -16,6 +16,7 @@ import { selS, primaryBtn } from '../components/ui/buttons'
 import TaskAssignWizard from '../components/TaskAssignWizard'
 import PlanningCalendar from './PlanningCalendar'
 import DashboardGovPanel from '../components/planning/DashboardGovPanel'
+import ProjectGantt from '../components/planning/ProjectGantt'
 
 // Tram 2 — Pantalla "Planificació": dues carpetes Pendents/Assignades (gated define_tasks/configure).
 // Pendents = models SENSE cap tasca no-Done assignada. Assignades = models amb ALMENYS UNA no-Done amb tècnic.
@@ -445,7 +446,7 @@ function ComingSoon({ t }) {
 // Tabs: Dashboard (panell de govern, s'omple per blocs) · Planificació (contingut actual) ·
 // Assignació (futur) · Calendari (PlanningCalendar incrustat) · Informes (futur).
 // Gating de pantalla: define_tasks||configure (el mateix que tenia Planning).
-const GOV_TABS = ['dashboard', 'planificacio', 'assignacio', 'calendari', 'informes']
+const GOV_TABS = ['dashboard', 'planificacio', 'assignacio', 'calendari', 'calendari_projecte', 'informes']
 
 export default function Planning() {
   const { t } = useTranslation()
@@ -489,6 +490,7 @@ export default function Planning() {
       {activeTab === 'planificacio' && <PlanificacioPanel />}
       {activeTab === 'assignacio' && <ComingSoon t={t} />}
       {activeTab === 'calendari' && <PlanningCalendar />}
+      {activeTab === 'calendari_projecte' && <ProjectGantt t={t} />}
       {activeTab === 'informes' && <ComingSoon t={t} />}
     </div>
   )

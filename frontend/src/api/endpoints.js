@@ -243,6 +243,8 @@ export const productions = {
 // Les respostes del motor (compute/preview/apply) porten planned_start/end en ISO LOCAL
 // (Europe/Madrid, sense offset) → pintar directe; NO barrejar amb el serializer de tasca (UTC).
 export const plan = {
+  // M3 — Calendari-Gantt de projecte (gated view_team_tasks). ?model_id&responsable&collection&temporada
+  gantt: (params) => client.get('/api/v1/plan/gantt/', { params }),   // → {models:[...], today}
   // body: {model_ids?:[...], campaign_filter?:{temporada,any}}  (sense res = tot el pendent)
   // → {snapshot_id, result:{placements:[{task_id,model,task_type,assignee,planned_start,planned_end,locked}], warnings, models}}
   compute: (body) => client.post('/api/v1/plan/compute/', body),

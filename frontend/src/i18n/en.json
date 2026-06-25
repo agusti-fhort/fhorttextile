@@ -817,10 +817,19 @@
       "planificacio": "Planning",
       "assignacio": "Assignment",
       "calendari": "Calendar",
+      "calendari_projecte": "Project calendar",
       "informes": "Reports"
     },
     "gov_subtitle": "Governance space: plan, validate phases and track models",
     "coming_soon": "Coming soon",
+    "gantt": {
+      "empty": "No models to show.",
+      "legend_proto": "Proto arrival",
+      "legend_fitting": "Fitting session",
+      "legend_objectiu": "Target date",
+      "legend_today": "Today",
+      "legend_wait": "Wait (production)"
+    },
     "gates": {
       "title": "Ready to validate",
       "subtitle": "Models with all tasks done, ready to advance phase",
