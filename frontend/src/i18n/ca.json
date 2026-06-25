@@ -837,7 +837,19 @@
       },
       "risk_first": "Risc primer",
       "only_risk": "Només en risc",
-      "risk_flag": "En risc: la fi prevista supera la data objectiu"
+      "risk_flag": "En risc: la fi prevista supera la data objectiu",
+      "color": {
+        "label": "Pinta per",
+        "tecnic": "Tècnic",
+        "fase": "Fase",
+        "risc": "Risc",
+        "colleccio": "Col·lecció"
+      },
+      "filter": {
+        "all_collections": "Totes les col·leccions",
+        "all_seasons": "Totes les temporades",
+        "techs": "Tècnics:"
+      }
     },
     "gates": {
       "title": "Llestos per validar",

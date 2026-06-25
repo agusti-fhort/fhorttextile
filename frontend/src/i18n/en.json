@@ -837,7 +837,19 @@
       },
       "risk_first": "Risk first",
       "only_risk": "Only at risk",
-      "risk_flag": "At risk: predicted end exceeds target date"
+      "risk_flag": "At risk: predicted end exceeds target date",
+      "color": {
+        "label": "Color by",
+        "tecnic": "Technician",
+        "fase": "Phase",
+        "risc": "Risk",
+        "colleccio": "Collection"
+      },
+      "filter": {
+        "all_collections": "All collections",
+        "all_seasons": "All seasons",
+        "techs": "Technicians:"
+      }
     },
     "gates": {
       "title": "Ready to validate",

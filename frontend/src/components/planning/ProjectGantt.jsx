@@ -19,6 +19,17 @@ const parseISO = (s) => new Date(s + 'T00:00:00')
 const dayDiff = (a, b) => Math.round((b - a) / 86400000)
 const fmtDM = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
 const FASE_ORDER = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
+// Paleta categòrica per a "pintar per" (data-viz; mateix criteri que els colors fixos de
+// PlanningCalendar). El color de tècnic ve del backend (responsable_color).
+const FASE_COLORS = {
+  Pending: '#9aa0a6', Dev: '#3a7ca5', Proto: '#7e57c2', SizeSet: '#2a9d8f', PP: '#e07b39', TOP: '#3c9a5f',
+}
+const PALETTE = ['#3a7ca5', '#e07b39', '#7e57c2', '#2a9d8f', '#c0476b', '#b08900', '#5c6bc0', '#7c6f64']
+function paletteColor(key) {
+  let h = 0; const s = String(key || '')
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return PALETTE[h % PALETTE.length]
+}
 
 // Pròxima fita futura (>= avui) d'un model, per a l'ordre "pròxima fita". Sense fita futura → ∞.
 function nextFita(m, today) {
@@ -34,6 +45,10 @@ export default function ProjectGantt({ t }) {
   const [order, setOrder] = useState('lliurament')   // lliurament | fita | fase
   const [riskFirst, setRiskFirst] = useState(false)
   const [onlyRisk, setOnlyRisk] = useState(false)
+  const [colorBy, setColorBy] = useState('tecnic')   // tecnic | fase | risc | colleccio
+  const [filterTechs, setFilterTechs] = useState(() => new Set())   // buit = tots
+  const [filterColleccio, setFilterColleccio] = useState('')
+  const [filterTemporada, setFilterTemporada] = useState('')
 
   useEffect(() => {
     plan.gantt({})
@@ -42,10 +57,33 @@ export default function ProjectGantt({ t }) {
       .finally(() => setLoading(false))
   }, [])
 
-  // Models a pintar: filtre (només en risc) → ordre escollit → (opcional) risc primer.
-  // El RISC NO és un ordre: és realçat + toggle "risc primer" + filtre "només en risc".
+  // Llistes distintes per als filtres (a partir de les dades carregades).
+  const opts = useMemo(() => {
+    const techs = new Map(), cols = new Set(), temps = new Set()
+    for (const m of models) {
+      if (m.responsable_id) techs.set(m.responsable_id, { id: m.responsable_id, nom: m.responsable_nom, color: m.responsable_color })
+      if (m.collection) cols.add(m.collection)
+      if (m.temporada) temps.add(m.temporada)
+    }
+    return { techs: [...techs.values()].sort((a, b) => (a.nom || '').localeCompare(b.nom || '')),
+             cols: [...cols].sort(), temps: [...temps].sort() }
+  }, [models])
+
+  // Color d'una barra segons l'eix "pintar per" (ortogonal al filtre).
+  const colorOf = (m) => {
+    if (colorBy === 'fase') return FASE_COLORS[m.fase] || DEFAULT_COLOR
+    if (colorBy === 'risc') return m.en_risc ? 'var(--err)' : 'var(--ok)'
+    if (colorBy === 'colleccio') return m.collection ? paletteColor(m.collection) : DEFAULT_COLOR
+    return m.responsable_color || DEFAULT_COLOR   // tècnic (default)
+  }
+
+  // Models a pintar: FILTRE (multi-tècnic / col·lecció / temporada / només risc) → ordre → risc primer.
   const displayed = useMemo(() => {
-    let list = onlyRisk ? models.filter(m => m.en_risc) : models.slice()
+    let list = models.filter(m =>
+      (!onlyRisk || m.en_risc) &&
+      (filterTechs.size === 0 || filterTechs.has(m.responsable_id)) &&
+      (!filterColleccio || m.collection === filterColleccio) &&
+      (!filterTemporada || m.temporada === filterTemporada))
     const cmp = {
       lliurament: (a, b) => a.end.localeCompare(b.end) || a.codi.localeCompare(b.codi),
       fita: (a, b) => nextFita(a, today).localeCompare(nextFita(b, today)) || a.codi.localeCompare(b.codi),
@@ -54,7 +92,7 @@ export default function ProjectGantt({ t }) {
     list.sort(cmp)
     if (riskFirst) list.sort((a, b) => (b.en_risc === a.en_risc ? 0 : b.en_risc ? 1 : -1))
     return list
-  }, [models, onlyRisk, order, riskFirst, today])
+  }, [models, onlyRisk, order, riskFirst, today, filterTechs, filterColleccio, filterTemporada])
 
   // Rang temporal global (min start, max end) amb 1 dia de marge a banda i banda.
   const range = useMemo(() => {
@@ -93,6 +131,10 @@ export default function ProjectGantt({ t }) {
       <GanttControls t={t} order={order} setOrder={setOrder}
                      riskFirst={riskFirst} setRiskFirst={setRiskFirst}
                      onlyRisk={onlyRisk} setOnlyRisk={setOnlyRisk} />
+      <ColorFilterControls t={t} colorBy={colorBy} setColorBy={setColorBy} opts={opts}
+                           filterTechs={filterTechs} setFilterTechs={setFilterTechs}
+                           filterColleccio={filterColleccio} setFilterColleccio={setFilterColleccio}
+                           filterTemporada={filterTemporada} setFilterTemporada={setFilterTemporada} />
       <Legend t={t} />
       <div style={{ overflowX: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
         <div style={{ minWidth: LABEL_W + trackW }}>
@@ -112,7 +154,7 @@ export default function ProjectGantt({ t }) {
           {displayed.length === 0 ? (
             <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('planning.gantt.empty')}</div>
           ) : displayed.map(m => (
-            <GanttRow key={m.model_id} m={m} trackW={trackW} x={x} todayX={todayX}
+            <GanttRow key={m.model_id} m={m} color={colorOf(m)} trackW={trackW} x={x} todayX={todayX}
                       ticks={ticks} onClick={() => navigate(`/models/${m.model_id}`)} t={t} />
           ))}
         </div>
@@ -153,8 +195,64 @@ function GanttControls({ t, order, setOrder, riskFirst, setRiskFirst, onlyRisk, 
   )
 }
 
-function GanttRow({ m, trackW, x, todayX, ticks, onClick, t }) {
-  const color = m.responsable_color || DEFAULT_COLOR
+// "Pintar per" (color, default tècnic) + FILTRE multi-select (ortogonal al color).
+function ColorFilterControls({ t, colorBy, setColorBy, opts, filterTechs, setFilterTechs,
+                               filterColleccio, setFilterColleccio, filterTemporada, setFilterTemporada }) {
+  const selS = {
+    fontFamily: MONO, fontSize: 'var(--fs-label)', padding: '4px 8px',
+    border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', cursor: 'pointer',
+  }
+  const toggleTech = (id) => setFilterTechs(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>
+        {t('planning.gantt.color.label')}
+        <select value={colorBy} onChange={e => setColorBy(e.target.value)} style={selS}>
+          <option value="tecnic">{t('planning.gantt.color.tecnic')}</option>
+          <option value="fase">{t('planning.gantt.color.fase')}</option>
+          <option value="risc">{t('planning.gantt.color.risc')}</option>
+          <option value="colleccio">{t('planning.gantt.color.colleccio')}</option>
+        </select>
+      </label>
+
+      {opts.cols.length > 0 && (
+        <select value={filterColleccio} onChange={e => setFilterColleccio(e.target.value)} style={selS}>
+          <option value="">{t('planning.gantt.filter.all_collections')}</option>
+          {opts.cols.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      )}
+      {opts.temps.length > 0 && (
+        <select value={filterTemporada} onChange={e => setFilterTemporada(e.target.value)} style={selS}>
+          <option value="">{t('planning.gantt.filter.all_seasons')}</option>
+          {opts.temps.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      )}
+
+      {/* multi-select de tècnics (chips); buit = tots */}
+      {opts.techs.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>{t('planning.gantt.filter.techs')}</span>
+          {opts.techs.map(tech => {
+            const on = filterTechs.has(tech.id)
+            return (
+              <button key={tech.id} type="button" onClick={() => toggleTech(tech.id)} title={tech.nom} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer',
+                fontFamily: MONO, fontSize: 'var(--fs-label)', padding: '3px 9px', borderRadius: 12,
+                border: `0.5px solid ${on ? 'var(--text-main)' : 'var(--gray-l)'}`,
+                background: on ? 'var(--bg-muted)' : 'none', opacity: (filterTechs.size === 0 || on) ? 1 : 0.5,
+              }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: tech.color || DEFAULT_COLOR }} />
+                {tech.nom || `#${tech.id}`}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GanttRow({ m, color, trackW, x, todayX, ticks, onClick, t }) {
   const left = x(m.start)
   const right = x(m.end) + PX_PER_DAY            // fi inclusiu (el dia de fi compta sencer)
   const width = Math.max(PX_PER_DAY * 0.7, right - left)
