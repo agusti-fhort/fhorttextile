@@ -611,8 +611,10 @@ function TaskCard({ task, canExecute, onTransition, t }) {
   const isTechSheet = task.task_type_code === 'tech_sheet'
   // Tasca de size check: porta d'entrada a la graella de validació del proto a talla base.
   const isSizeCheck = task.task_type_code === 'size_check'
-  // Tasca d'escalat (scaling "Escalat CAD"): porta d'entrada a l'editor propagat editable (compta temps).
-  const isScaling = task.task_type_code === 'scaling'
+  // Tasca d'escalat (grading "Escalat" = definir la regla de gradació): porta d'entrada a
+  // l'editor propagat editable (PropagatedEditor, compta temps). scaling ("Escalat CAD" = aplicar
+  // al patró) és una tasca diferent, eina futura → no obre aquí.
+  const isGrading = task.task_type_code === 'grading'
   return (
     <div style={{
       border: '0.5px solid var(--gray-l)', borderRadius: 8,
@@ -699,7 +701,7 @@ function TaskCard({ task, canExecute, onTransition, t }) {
           </button>
         </div>
       )}
-      {isScaling && (
+      {isGrading && (
         <div style={{ marginTop: 8 }}>
           <button onClick={() => {
             // Mateix patró que isPom: auto-iniciar (fire-and-forget) i obrir l'editor propagat

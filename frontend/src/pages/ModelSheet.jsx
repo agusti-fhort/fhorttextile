@@ -163,7 +163,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   useEffect(() => {
     if (autoEdit && !autoEditRef.current) {
       autoEditRef.current = true
-      enterEdit(autoEdit, autoEdit === 'Escalat' ? 'scaling' : 'pom')
+      enterEdit(autoEdit, autoEdit === 'Escalat' ? 'grading' : 'pom')
     }
   }, [autoEdit])   // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -346,7 +346,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 </button>
               ) : (
                 <button type="button" disabled={openingTask}
-                  onClick={() => enterEdit('Escalat', 'scaling')}
+                  onClick={() => enterEdit('Escalat', 'grading')}
                   style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
                            opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
                   <i className="ti ti-resize" style={{ fontSize: 14 }} />
