@@ -48,7 +48,8 @@ const navGroups = [
     { to: '/models', labelKey: 'nav.models', icon: 'ti-shirt' },
     { to: '/registre-activitat', labelKey: 'nav.registre_activitat', icon: 'ti-clipboard-list' },
     { to: '/planificacio', labelKey: 'nav.planning', icon: 'ti-subtask', cap: 'plan' },
-    { to: '/planificacio/calendari', labelKey: 'nav.planning_calendar', icon: 'ti-calendar' },
+    // M1 — el calendari ara és el tab "Calendari" dins Planificació; s'ha retirat l'entrada pròpia
+    // de menú (la ruta /planificacio/calendari segueix viva). Nota: queda dins l'àmbit gated 'plan'.
     { to: '/temps', labelKey: 'nav.temps', icon: 'ti-clock' },
     { to: '/fittings', labelKey: 'nav.fittings', icon: 'ti-ruler-2' },
   ]},
