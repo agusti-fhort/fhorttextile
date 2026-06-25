@@ -89,8 +89,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // ?tab= permet obrir el full directament en una pestanya concreta (p.ex. ModelFabric → tab Mesures).
   // El task_id/session entrants (J1b) es plomaran a sobre d'aquest mateix mecanisme més endavant.
   const tabParam = sp.get('tab')
-  // ?mode=entry → "Definició POM": obre el tab Mesures en mode ENTRADA (genesi/wizard) encara que el
-  // model JA tingui mesures (l'usuari ve a definir/afegir POMs, no a consultar).
+  const taskParam = sp.get('task_id')
+  // ?mode=entry → "Definició POM" via URL: obre el tab Mesures en mode ENTRADA (genesi/wizard) encara
+  // que el model JA tingui mesures (l'usuari ve a definir/afegir POMs, no a consultar).
   const entryMode = sp.get('mode') === 'entry'
   const [model, setModel] = useState(null)
   const [activeTab, setActiveTab] = useState(TABS.includes(tabParam) ? tabParam : defaultTab)
@@ -136,7 +137,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // el flux d'ENTRADA (MeasuresEntryPanel) en lloc de la consulta buida. La decisió es pren NOMÉS en
   // ENTRAR a la pestanya (no de manera reactiva a cada tecla), perquè materialitzar no estiri la graella
   // d'edició a mig escriure. En materialitzar-se (onMaterialized) → consulta (CheckMeasureEditor).
-  const [mesuresGenesis, setMesuresGenesis] = useState(false)
+  // PUNT COMÚ del mode del tab Mesures segons el TIPUS de tasca: 'pom' (Definició POM) → ENTRADA
+  // (wizard); 'size_check' (Mesurar prenda) → TREBALL (graella). Qualsevol camí (URL ?mode=entry,
+  // openTask intern via enterEdit, o futur arbre Q2) hereta aquesta regla. mesuresEntry = mostra wizard.
+  const [mesuresEntry, setMesuresEntry] = useState(false)
   const prevTabRef = useRef(null)
   useEffect(() => {
     // Mentre carrega no decidim NI actualitzem el ref (si no, l'entrada directa ?tab=Mesures fixaria el
@@ -144,10 +148,11 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     if (loading) return
     if (activeTab === 'Mesures' && prevTabRef.current !== 'Mesures') {
       const verge = !taulaRows.some(r => r.base_value_cm != null)
-      setMesuresGenesis(verge || entryMode)
+      // size_check (porta task_id) = TREBALL, no entrada; pom/?mode=entry/verge = ENTRADA.
+      setMesuresEntry((verge || entryMode) && !taskParam)
     }
     prevTabRef.current = activeTab
-  }, [activeTab, loading, taulaRows, entryMode])
+  }, [activeTab, loading, taulaRows, entryMode, taskParam])
 
   // Porta-menú: obre (crea-si-falta + auto-assign + En curs) la tasca `code` i navega a l'eina amb el
   // task_id. Reusa el servei open-task; el botó funciona encara que el model no tingui la tasca creada.
@@ -171,7 +176,13 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     if (openingTask) return
     setOpeningTask(true)
     models.openTask(parseInt(id), code)
-      .then(res => { setEditTaskId(res.data.task_id); setEditing(tab) })
+      .then(res => {
+        setEditTaskId(res.data.task_id)
+        // PUNT COMÚ: una tasca 'pom' obre el tab Mesures en mode ENTRADA (wizard), no edició de graella.
+        // (size_check ve per URL i passa per editing='Mesures'; grading → tab Escalat.)
+        if (tab === 'Mesures' && code === 'pom') setMesuresEntry(true)
+        else setEditing(tab)
+      })
       .catch(() => setFeedback({ type: 'err', text: t('model_sheet.open_task_err') }))
       .finally(() => setOpeningTask(false))
   }
@@ -181,11 +192,12 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       return null
     })
     setEditing(null)
+    setMesuresEntry(false)
   }, [])
-  // Sortir de mode edició en canviar de tab (pausa la tasca).
+  // Sortir de mode edició/entrada en canviar de tab (pausa la tasca si n'hi havia).
   useEffect(() => {
-    if (editing && editing !== activeTab) exitEdit()
-  }, [activeTab, editing, exitEdit])
+    if ((editing && editing !== activeTab) || (mesuresEntry && activeTab !== 'Mesures')) exitEdit()
+  }, [activeTab, editing, mesuresEntry, exitEdit])
   // Pausa la tasca en desmuntar el ModelSheet si quedava en edició.
   useEffect(() => () => {
     if (editTaskId) modelTasks.transition(editTaskId, { to_status: 'Paused' }).catch(() => {})
@@ -206,7 +218,6 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // (compta-temps + origen de watchpoints), SENSE encunyar-ne una de nova (a diferència del botó "Editar
   // mides", que crida openTask). La tasca ja ve En curs des del Kanban/WorkPlan; aquí només es consumeix
   // i es pausa en sortir/desmuntar (com feia ModelMeasurements). Un sol cop, després de carregar el model.
-  const taskParam = sp.get('task_id')
   const autoTaskRef = useRef(false)
   useEffect(() => {
     if (autoTaskRef.current || loading) return
@@ -341,9 +352,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           </div>
         )}
         {activeTab === 'Mesures' && (
-          mesuresGenesis && editing !== 'Mesures' ? (
-            <MeasuresEntryPanel model={model} entryMode={entryMode}
-              onMaterialized={() => { setMesuresGenesis(false); reloadTaula(); reloadModel() }} />
+          mesuresEntry && editing !== 'Mesures' ? (
+            <MeasuresEntryPanel model={model} entryMode={mesuresEntry}
+              onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }} />
           ) : (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
