@@ -50,6 +50,11 @@ const navGroups = [
     { to: '/planificacio', labelKey: 'nav.planning', icon: 'ti-subtask', cap: 'plan' },
     // M1 — el calendari ara és el tab "Calendari" dins Planificació; s'ha retirat l'entrada pròpia
     // de menú (la ruta /planificacio/calendari segueix viva). Nota: queda dins l'àmbit gated 'plan'.
+    // P4 (Planning-complet) — el calendari de l'EXECUTOR (tasca/hores) és eina del tècnic, NO de
+    // govern: M1 va deixar el tècnic (sense 'plan') sense accés de menú a la seva pròpia agenda, tot
+    // i tenir-hi la ruta. Es recupera amb una entrada gated 'execute' (execute_tasks; el tècnic la
+    // té, NO és 'plan'). Distint del tab "Calendari de projecte" (Gantt, model/dies, govern).
+    { to: '/planificacio/calendari', labelKey: 'nav.my_calendar', icon: 'ti-calendar-week', cap: 'execute' },
     { to: '/temps', labelKey: 'nav.temps', icon: 'ti-clock' },
     { to: '/fittings', labelKey: 'nav.fittings', icon: 'ti-ruler-2' },
   ]},
@@ -195,6 +200,7 @@ export default function Sidebar() {
   const canManageUsers = !!user?.capabilities?.includes('manage_users')
   const canConfigure = !!user?.capabilities?.includes('configure')
   const canPlan = !!user?.capabilities?.some(c => c === 'define_tasks' || c === 'configure')
+  const canExecute = !!user?.capabilities?.includes('execute_tasks')
   const [expanded, setExpanded] = useState({['nav.models']: true})
   const [logoutHover, setLogoutHover] = useState(false)
   const [onboardingPct, setOnboardingPct] = useState(100)
@@ -228,6 +234,7 @@ export default function Sidebar() {
     const allowed = (it) => {
       switch (it.cap) {
         case 'plan': return canPlan
+        case 'execute': return canExecute
         case 'configure': return canConfigure
         case 'manage_users': return canManageUsers
         case 'onboarding': return onboardingPct < 100
@@ -237,7 +244,7 @@ export default function Sidebar() {
     return navGroups
       .map(g => ({ sectionKey: g.sectionKey, items: g.items.filter(allowed) }))
       .filter(g => g.items.length > 0)
-  }, [canPlan, canConfigure, canManageUsers, onboardingPct])
+  }, [canPlan, canExecute, canConfigure, canManageUsers, onboardingPct])
 
   const allItems = useMemo(() => groups.flatMap(g => g.items), [groups])
 

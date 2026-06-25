@@ -269,7 +269,8 @@
     "users": "Usuaris i rols",
     "company_calendar": "Calendari d'empresa",
     "planning": "Planificació",
-    "planning_calendar": "Calendari"
+    "planning_calendar": "Calendari",
+    "my_calendar": "El meu calendari"
   },
   "planning_calendar": {
     "title": "Planning Calendar",

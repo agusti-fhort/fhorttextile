@@ -269,7 +269,8 @@
     "users": "Users & roles",
     "company_calendar": "Company calendar",
     "planning": "Planning",
-    "planning_calendar": "Calendar"
+    "planning_calendar": "Calendar",
+    "my_calendar": "My calendar"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
