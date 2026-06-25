@@ -18,12 +18,22 @@ const DEFAULT_COLOR = 'var(--gray)'
 const parseISO = (s) => new Date(s + 'T00:00:00')
 const dayDiff = (a, b) => Math.round((b - a) / 86400000)
 const fmtDM = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+const FASE_ORDER = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
+
+// Pròxima fita futura (>= avui) d'un model, per a l'ordre "pròxima fita". Sense fita futura → ∞.
+function nextFita(m, today) {
+  const fut = (m.fites || []).map(f => f.data).filter(d => !today || d >= today).sort()
+  return fut.length ? fut[0] : '9999-12-31'
+}
 
 export default function ProjectGantt({ t }) {
   const navigate = useNavigate()
   const [models, setModels] = useState([])
   const [today, setToday] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [order, setOrder] = useState('lliurament')   // lliurament | fita | fase
+  const [riskFirst, setRiskFirst] = useState(false)
+  const [onlyRisk, setOnlyRisk] = useState(false)
 
   useEffect(() => {
     plan.gantt({})
@@ -31,6 +41,20 @@ export default function ProjectGantt({ t }) {
       .catch(() => setModels([]))
       .finally(() => setLoading(false))
   }, [])
+
+  // Models a pintar: filtre (només en risc) → ordre escollit → (opcional) risc primer.
+  // El RISC NO és un ordre: és realçat + toggle "risc primer" + filtre "només en risc".
+  const displayed = useMemo(() => {
+    let list = onlyRisk ? models.filter(m => m.en_risc) : models.slice()
+    const cmp = {
+      lliurament: (a, b) => a.end.localeCompare(b.end) || a.codi.localeCompare(b.codi),
+      fita: (a, b) => nextFita(a, today).localeCompare(nextFita(b, today)) || a.codi.localeCompare(b.codi),
+      fase: (a, b) => (FASE_ORDER.indexOf(a.fase) - FASE_ORDER.indexOf(b.fase)) || a.end.localeCompare(b.end),
+    }[order]
+    list.sort(cmp)
+    if (riskFirst) list.sort((a, b) => (b.en_risc === a.en_risc ? 0 : b.en_risc ? 1 : -1))
+    return list
+  }, [models, onlyRisk, order, riskFirst, today])
 
   // Rang temporal global (min start, max end) amb 1 dia de marge a banda i banda.
   const range = useMemo(() => {
@@ -66,6 +90,9 @@ export default function ProjectGantt({ t }) {
 
   return (
     <div>
+      <GanttControls t={t} order={order} setOrder={setOrder}
+                     riskFirst={riskFirst} setRiskFirst={setRiskFirst}
+                     onlyRisk={onlyRisk} setOnlyRisk={setOnlyRisk} />
       <Legend t={t} />
       <div style={{ overflowX: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
         <div style={{ minWidth: LABEL_W + trackW }}>
@@ -82,12 +109,46 @@ export default function ProjectGantt({ t }) {
           </div>
 
           {/* Files de models */}
-          {models.map(m => (
+          {displayed.length === 0 ? (
+            <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('planning.gantt.empty')}</div>
+          ) : displayed.map(m => (
             <GanttRow key={m.model_id} m={m} trackW={trackW} x={x} todayX={todayX}
                       ticks={ticks} onClick={() => navigate(`/models/${m.model_id}`)} t={t} />
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+// Controls de l'ordre + realçat de risc. Drag-ready: no toca el layout de barres.
+function GanttControls({ t, order, setOrder, riskFirst, setRiskFirst, onlyRisk, setOnlyRisk }) {
+  const selS = {
+    fontFamily: MONO, fontSize: 'var(--fs-label)', padding: '4px 8px',
+    border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', cursor: 'pointer',
+  }
+  const chip = (active) => ({
+    display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+    fontFamily: MONO, fontSize: 'var(--fs-label)', padding: '4px 10px', borderRadius: 6,
+    border: `0.5px solid ${active ? 'var(--err)' : 'var(--gray-l)'}`,
+    background: active ? 'var(--err)' : 'none', color: active ? 'var(--white)' : 'var(--text-main)',
+  })
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>
+        {t('planning.gantt.order.label')}
+        <select value={order} onChange={e => setOrder(e.target.value)} style={selS}>
+          <option value="lliurament">{t('planning.gantt.order.lliurament')}</option>
+          <option value="fita">{t('planning.gantt.order.fita')}</option>
+          <option value="fase">{t('planning.gantt.order.fase')}</option>
+        </select>
+      </label>
+      <button type="button" onClick={() => setRiskFirst(v => !v)} style={chip(riskFirst)}>
+        <i className="ti ti-flag" style={{ fontSize: 13 }} />{t('planning.gantt.risk_first')}
+      </button>
+      <button type="button" onClick={() => setOnlyRisk(v => !v)} style={chip(onlyRisk)}>
+        <i className="ti ti-alert-triangle" style={{ fontSize: 13 }} />{t('planning.gantt.only_risk')}
+      </button>
     </div>
   )
 }
@@ -107,8 +168,12 @@ function GanttRow({ m, trackW, x, todayX, ticks, onClick, t }) {
       display: 'flex', height: ROW_H, cursor: 'pointer', borderBottom: '0.5px solid var(--base-hairline, var(--gray-l))',
     }}>
       <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--white)', zIndex: 2,
-                    borderRight: '0.5px solid var(--gray-l)', padding: '4px 10px', overflow: 'hidden' }}>
-        <div style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.codi}</div>
+                    borderRight: '0.5px solid var(--gray-l)', borderLeft: m.en_risc ? '2px solid var(--err)' : '2px solid transparent',
+                    padding: '4px 10px', overflow: 'hidden' }}>
+        <div style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+          {m.en_risc && <i className="ti ti-flag" title={t('planning.gantt.risk_flag')} style={{ fontSize: 12, color: 'var(--err)', marginRight: 4 }} />}
+          {m.codi}
+        </div>
         <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.responsable_nom || '—'}</div>
       </div>
 
@@ -122,8 +187,9 @@ function GanttRow({ m, trackW, x, todayX, ticks, onClick, t }) {
         {/* línia DATA OBJECTIU (vermella discontínua) */}
         {objX != null && <div style={{ position: 'absolute', left: objX, top: 0, bottom: 0, borderLeft: '1.5px dashed var(--err)' }} />}
 
-        {/* BARRA del model */}
-        <div style={{ position: 'absolute', left, width, top: (ROW_H - BAR_H) / 2, height: BAR_H }}>
+        {/* BARRA del model (realçat vermell si en risc) */}
+        <div style={{ position: 'absolute', left, width, top: (ROW_H - BAR_H) / 2, height: BAR_H,
+                      boxShadow: m.en_risc ? '0 0 0 1.5px var(--err)' : 'none', borderRadius: 5 }}>
           {/* contenidor (rang sencer, color tènue) */}
           <div style={{ position: 'absolute', inset: 0, borderRadius: 5, background: color, opacity: 0.22, border: `0.5px solid ${color}` }} />
           {/* farciment % completat */}

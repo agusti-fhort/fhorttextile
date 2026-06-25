@@ -828,7 +828,16 @@
       "legend_fitting": "Sessió de fitting",
       "legend_objectiu": "Data objectiu",
       "legend_today": "Avui",
-      "legend_wait": "Espera (confecció)"
+      "legend_wait": "Espera (confecció)",
+      "order": {
+        "label": "Ordena per",
+        "lliurament": "Lliurament",
+        "fita": "Pròxima fita",
+        "fase": "Fase"
+      },
+      "risk_first": "Risc primer",
+      "only_risk": "Només en risc",
+      "risk_flag": "En risc: la fi prevista supera la data objectiu"
     },
     "gates": {
       "title": "Llestos per validar",

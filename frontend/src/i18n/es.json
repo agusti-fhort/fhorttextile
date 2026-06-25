@@ -828,7 +828,16 @@
       "legend_fitting": "Sesión de fitting",
       "legend_objectiu": "Fecha objetivo",
       "legend_today": "Hoy",
-      "legend_wait": "Espera (confección)"
+      "legend_wait": "Espera (confección)",
+      "order": {
+        "label": "Ordenar por",
+        "lliurament": "Entrega",
+        "fita": "Próximo hito",
+        "fase": "Fase"
+      },
+      "risk_first": "Riesgo primero",
+      "only_risk": "Solo en riesgo",
+      "risk_flag": "En riesgo: el fin previsto supera la fecha objetivo"
     },
     "gates": {
       "title": "Listos para validar",
