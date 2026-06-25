@@ -102,7 +102,7 @@ def compute_and_save(*, model_ids=None, campaign_filter=None, computed_by=None, 
 def _pin_block(profile, task, new_start_naive):
     """Calcula la franja (start, end) naïf d'una tasca fixada a new_start (per la durada
     snapshot). Llança ValueError si la tasca no té estimació."""
-    if task.estimated_minutes is None:
+    if not task.estimated_minutes or task.estimated_minutes <= 0:
         raise ValueError('La tasca moguda no té estimació; no es pot reposicionar.')
     end_naive = add_working_minutes(profile, new_start_naive, task.estimated_minutes)
     return new_start_naive, end_naive

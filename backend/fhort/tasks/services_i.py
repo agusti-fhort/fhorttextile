@@ -47,7 +47,12 @@ def record_actual_time(model_task):
 
 
 def effective_minutes(cell):
-    """Temps que el planificador ha d'usar: mitjana real si n>=llindar, si no el seed."""
+    """Temps que el planificador ha d'usar: mitjana real si n>=llindar, si no el seed.
+    CONTRACTE: retorna SEMPRE un enter > 0, o None (sense dada). Mai 0/negatiu com a
+    durada planificable (treu l'ambigüitat None-vs-0 aigües avall)."""
     if cell.n >= WELFORD_MIN_SAMPLES and cell.mean_minutes > 0:
-        return int(round(cell.mean_minutes))
-    return cell.estimated_minutes   # seed (pot ser None)
+        emp = int(round(cell.mean_minutes))
+        if emp > 0:                      # arrodoniment pot caure a 0 si mean < 0.5 → sense dada
+            return emp
+    seed = cell.estimated_minutes        # seed (pot ser None o 0)
+    return seed if (seed and seed > 0) else None
