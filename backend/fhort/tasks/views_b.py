@@ -92,6 +92,8 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             ?temporada= (SS/FW/CO/SP)  ?estat= (Nou/EnCurs/EnRevisio/Tancat)
             ?fase_actual= (Proto/Fit/SizeSet/PP/TOP)  ?garment_type=<id>  ?any=<int>
             ?prioritat=<int>  ?responsable=<userprofile_id> | me (perfil de request.user)
+            ?customer=<id>  ?collection=<text icontains>  (campanya del board, Sprint 5)
+            ?data_objectiu_after=YYYY-MM-DD  ?data_objectiu_before=YYYY-MM-DD (rang inclusiu)
 
         Resposta (paginada, mateixa paginació del projecte):
           [{ model_id, model_codi, model_nom, fase, counts:{pending,paused,in_progress,done},
@@ -146,6 +148,24 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         prioritat = qp.get('prioritat')
         if prioritat and prioritat.isdigit():
             qs = qs.filter(model__prioritat=int(prioritat))
+
+        # --- Filtres de campanya del board (Sprint 5): mirall additiu del filterset del Model
+        # list, perquè el board del Dashboard pugui acotar per client/col·lecció/data-objectiu
+        # igual que els comptadors per fase. Valors invàlids ignorats silenciosament. ---
+        customer = qp.get('customer')
+        if customer and customer.isdigit():
+            qs = qs.filter(model__customer_id=int(customer))
+        collection = (qp.get('collection') or '').strip()
+        if collection:
+            qs = qs.filter(model__collection__icontains=collection)
+        from datetime import date as _date
+        for param, lookup in (('data_objectiu_after', 'gte'), ('data_objectiu_before', 'lte')):
+            raw = qp.get(param)
+            if raw:
+                try:
+                    qs = qs.filter(**{f'model__data_objectiu__{lookup}': _date.fromisoformat(raw)})
+                except ValueError:
+                    pass   # data mal formada → s'ignora (no trenca la consulta)
 
         agg = (qs.values(
                    'model_id', 'model__codi_intern', 'model__nom_prenda', 'model__fase_actual',
