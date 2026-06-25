@@ -23,6 +23,7 @@ from .serializers import (CompanyCalendarSerializer, JornadaSerializer,
 from . import plan_service
 from fhort.tasks.models import ModelTask, PlanSnapshot, Production
 from fhort.fitting.models import FittingSession
+from fhort.models_app.models import Model
 
 
 class _Configure(HasCapability):
@@ -605,3 +606,88 @@ def plan_assign_batch_view(request):
     except ValueError as e:
         return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
     return Response(out, status=http_status.HTTP_200_OK)
+
+
+# ── Sprint M3 — Calendari-Gantt de projecte (una barra per MODEL, eix=dies) ──────────────────
+class _ViewTeamTasks(HasCapability):
+    required_capability = VIEW_TEAM_TASKS
+
+
+def _effective_responsable(tasks, model):
+    """Tècnic que 'porta' el model (color del Gantt): assignee de tasca InProgress → assignee
+    no-Done majoritari → Model.responsable. Retorna (id, nom, color) o (None, None, None)."""
+    from collections import Counter
+    for tk in tasks:                                   # 1) tasca activa
+        if tk.status == 'InProgress' and tk.assignee_id:
+            a = tk.assignee
+            return a.id, a.nom_complet, a.color_avatar
+    cnt = Counter(tk.assignee_id for tk in tasks if tk.status != 'Done' and tk.assignee_id)
+    if cnt:                                            # 2) no-Done majoritari
+        aid = cnt.most_common(1)[0][0]
+        a = next(tk.assignee for tk in tasks if tk.assignee_id == aid)
+        return a.id, a.nom_complet, a.color_avatar
+    if model.responsable_id:                           # 3) responsable del model
+        r = model.responsable
+        return r.id, r.nom_complet, r.color_avatar
+    return None, None, None
+
+
+@api_view(['GET'])
+@permission_classes([_ViewTeamTasks])
+def gantt_view(request):
+    """GET /api/v1/plan/gantt/ — Gantt de projecte: UNA barra per model, eix=DIES (no hores).
+    Per model: start (consumption_started_at real | predicted_start), end (predicted_end), pct
+    (tasques Done/total), fase, responsable efectiu (color=tècnic), data_objectiu (línia vermella),
+    fites [{tipus proto|fitting, data, estat}], esperes [{from,to}] (finestra de confecció externa
+    Production: requested_at → delivered_at|expected_at). Filtres: ?model_id ?responsable
+    ?collection ?temporada. Gated view_team_tasks. CAPA DE LECTURA (drag = sprint posterior)."""
+    qp = request.query_params
+    qs = (Model.objects.all().select_related('responsable')
+          .prefetch_related('model_tasks', 'model_tasks__assignee', 'productions', 'fitting_sessions'))
+    if qp.get('model_id'):
+        qs = qs.filter(pk=qp['model_id'])
+    if qp.get('responsable'):
+        qs = qs.filter(responsable_id=qp['responsable'])
+    if qp.get('collection'):
+        qs = qs.filter(collection=qp['collection'])
+    if qp.get('temporada'):
+        qs = qs.filter(temporada=qp['temporada'])
+
+    out = []
+    for m in qs:
+        tasks = list(m.model_tasks.all())
+        total = len(tasks)
+        done = sum(1 for tk in tasks if tk.status == 'Done')
+        pct = round(100 * done / total) if total else 0
+        start = m.consumption_started_at.date() if m.consumption_started_at else m.predicted_start
+        end = m.predicted_end or start
+        start = start or end
+        if not start or not end:
+            continue                                   # sense cap data ancorable → fora del Gantt
+        resp_id, resp_nom, resp_color = _effective_responsable(tasks, m)
+        objectiu = m.data_objectiu
+        fites, esperes = [], []
+        for p in m.productions.all():
+            d = p.delivered_at.date() if p.delivered_at else p.expected_at
+            if d:
+                fites.append({'tipus': 'proto', 'data': d.isoformat(), 'estat': p.status})
+            w_from = p.requested_at.date() if p.requested_at else None
+            w_to = p.delivered_at.date() if p.delivered_at else p.expected_at
+            if w_from and w_to and w_to > w_from:
+                esperes.append({'from': w_from.isoformat(), 'to': w_to.isoformat(), 'tipus': 'confeccio'})
+        for f in m.fitting_sessions.all():
+            if f.data:
+                fites.append({'tipus': 'fitting', 'data': f.data.isoformat(), 'estat': f.estat})
+        fites.sort(key=lambda x: x['data'])
+        out.append({
+            'model_id': m.id, 'codi': m.codi_intern, 'nom': m.nom_prenda,
+            'fase': m.fase_actual, 'pct': pct,
+            'start': start.isoformat(), 'end': end.isoformat(),
+            'data_objectiu': objectiu.isoformat() if objectiu else None,
+            'responsable_id': resp_id, 'responsable_nom': resp_nom, 'responsable_color': resp_color,
+            'en_risc': bool(end and objectiu and end > objectiu),
+            'collection': m.collection or '', 'temporada': m.temporada,
+            'fites': fites, 'esperes': esperes,
+        })
+    out.sort(key=lambda x: x['end'])                   # default: data de fi (lliurament) asc
+    return Response({'models': out, 'today': _date.today().isoformat()})
