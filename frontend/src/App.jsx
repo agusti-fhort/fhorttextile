@@ -23,7 +23,6 @@ const SizeLibrary = lazy(() => import('./pages/SizeLibrary'))
 const OnboardingWizard = lazy(() => import('./pages/OnboardingWizard'))
 const ModelWizard = lazy(() => import('./pages/ModelWizard'))
 const BulkImportWizard = lazy(() => import('./pages/BulkImportWizard'))
-const ModelMeasurements = lazy(() => import('./pages/ModelMeasurements'))
 const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
@@ -43,13 +42,23 @@ function ProtectedRoute({ children }) {
   return isAuthenticated ? children : <Navigate to="/login" replace />
 }
 
-// v2: el Size Check antic es jubila. /size-check redirigeix a l'edició nova de mesures,
-// conservant task_id (la tasca "Mesurar prenda" hi navega).
+// v2/J1: el Size Check antic es jubila. /size-check redirigeix al TAB Mesures del ModelSheet,
+// conservant task_id (que el tab consumeix). Ja NO apunta a la pàgina standalone (jubilada).
 function SizeCheckRedirect() {
   const { id } = useParams()
   const [sp] = useSearchParams()
   const taskId = sp.get('task_id')
-  return <Navigate to={`/models/${id}/mesures${taskId ? `?task_id=${taskId}` : ''}`} replace />
+  return <Navigate to={`/models/${id}?tab=Mesures${taskId ? `&task_id=${taskId}` : ''}`} replace />
+}
+
+// J1: la pàgina standalone de Mesures (/models/:id/mesures) JUBILADA. La superfície única és el tab
+// Mesures del ModelSheet. Aquesta ruta queda només com a REDIRECT (enllaços/punts vells) → tab,
+// preservant task_id si en porta. La pàgina ja no existeix; ningú hi torna.
+function MesuresRedirect() {
+  const { id } = useParams()
+  const [sp] = useSearchParams()
+  const taskId = sp.get('task_id')
+  return <Navigate to={`/models/${id}?tab=Mesures${taskId ? `&task_id=${taskId}` : ''}`} replace />
 }
 
 class AppErrorBoundary extends React.Component {
@@ -134,7 +143,8 @@ export default function App() {
           <Route path="models/nou-des-de-fitxer" element={<Navigate to="/models/nou" replace />} />
           <Route path="models/:id" element={<ModelSheet />} />
           <Route path="models/:id/editar" element={<ModelWizard />} />
-          <Route path="models/:id/mesures" element={<ModelMeasurements />} />
+          {/* J1: pàgina standalone JUBILADA → redirect al tab Mesures del ModelSheet. */}
+          <Route path="models/:id/mesures" element={<MesuresRedirect />} />
           {/* Escalat: l'edició viu DINS el ModelSheet (tab Escalat en mode edició). La ruta de tasca
               hi entra directament (defaultTab+autoEdit), sense pàgina externa ni overlay. */}
           <Route path="models/:id/escalat" element={<ModelSheet defaultTab="Escalat" autoEdit="Escalat" />} />

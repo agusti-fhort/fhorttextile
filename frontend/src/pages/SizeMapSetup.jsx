@@ -120,10 +120,11 @@ export default function SizeMapSetup() {
         showReturnBanner={!!prefill?.import_session_token}
         onClose={() => setWizardOpen(false)}
         onComplete={(data) => {
-          // Branch de tornada preservat IDÈNTIC (ruta vella): si venim del W1, tornem a
-          // la fitxa en curs (pas mesures); si no, mode llista + feedback amb warnings.
+          // Branch de tornada: si venim del W1, tornem al model (tab Mesures). J1: ja NO a la pàgina
+          // standalone. El param ?session= era un no-op (ModelMeasurements no el llegia mai), per això
+          // es deixa caure; el tab mostra la genesi (si verge) o la consulta (si ja té mesures).
           if (prefill?.import_session_token && prefill?.model_id) {
-            navigate(`/models/${prefill.model_id}/mesures?session=${prefill.import_session_token}`)
+            navigate(`/models/${prefill.model_id}?tab=Mesures`)
             return
           }
           setWizardOpen(false)
