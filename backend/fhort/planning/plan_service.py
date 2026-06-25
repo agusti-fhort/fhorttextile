@@ -48,14 +48,29 @@ def _technician_queue(profile):
 def recompute_for_technicians(profile_ids, *, now=None):
     """Recalcula la cua SENCERA de cada tècnic afectat (totes les seves no-Done, com fa apply),
     NO només un model → evita solapaments amb la feina ja assignada del tècnic. Done intactes.
-    `profile_ids`: iterable d'ids de UserProfile (es filtren els None i es deduplica)."""
+    `profile_ids`: iterable d'ids de UserProfile (es filtren els None i es deduplica).
+
+    Re-resolució (decisió A, diagnosi §9.5): abans de planificar, refresca el snapshot de durada
+    (estimated_minutes) de les tasques MOVIBLES des de la cascada en viu (lookup_estimated_minutes),
+    perquè el recàlcul reflecteixi dades de temps que han madurat. NO toca les planned_locked
+    (punts fixos) ni les Done (immutables; ja excloses de la cua)."""
     from fhort.accounts.models import UserProfile
+    from fhort.tasks.services_g import lookup_estimated_minutes
     now = now or _now_naive()
     results = {}
     for pid in {p for p in profile_ids if p}:
         prof = UserProfile.objects.filter(pk=pid).first()
-        if prof is not None:
-            results[pid] = schedule(_technician_queue(prof), now=now, save=True)
+        if prof is None:
+            continue
+        queue = list(_technician_queue(prof))
+        for t in queue:
+            if t.planned_locked:
+                continue   # punt fix: la durada snapshot es respecta tal qual
+            fresh = lookup_estimated_minutes(t.model, t.task_type)
+            if fresh != t.estimated_minutes:
+                t.estimated_minutes = fresh
+                t.save(update_fields=['estimated_minutes', 'updated_at'])
+        results[pid] = schedule(queue, now=now, save=True)
     return results
 
 
