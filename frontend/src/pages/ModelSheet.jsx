@@ -198,6 +198,22 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     }
   }, [autoEdit])   // eslint-disable-line react-hooks/exhaustive-deps
 
+  // J1b — CONSUM de la tasca entrant: si el full s'obre amb ?tab=Mesures&task_id= (size_check "Mesurar
+  // prenda" via WorkPlan / redirect /size-check), el tab entra en mode TREBALL lligat a ESA tasca
+  // (compta-temps + origen de watchpoints), SENSE encunyar-ne una de nova (a diferència del botó "Editar
+  // mides", que crida openTask). La tasca ja ve En curs des del Kanban/WorkPlan; aquí només es consumeix
+  // i es pausa en sortir/desmuntar (com feia ModelMeasurements). Un sol cop, després de carregar el model.
+  const taskParam = sp.get('task_id')
+  const autoTaskRef = useRef(false)
+  useEffect(() => {
+    if (autoTaskRef.current || loading) return
+    if (activeTab === 'Mesures' && taskParam) {
+      autoTaskRef.current = true
+      setEditTaskId(parseInt(taskParam))
+      setEditing('Mesures')
+    }
+  }, [loading, activeTab, taskParam])
+
   // "Propagar a grading" des de MESURES (origen): inicia una FASE NOVA sobre llenç net
   // (generate_grading_view new_version → esborra propagació anterior + regenera) i porta a la tab Escalat.
   // MIRA ABANS (grading-status) i adverteix en 2 passos si ja hi ha propagació: pas 1 segons gravetat
