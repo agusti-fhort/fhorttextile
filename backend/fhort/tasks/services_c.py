@@ -17,14 +17,18 @@ ALLOWED = {
 
 
 def _open_timer(task, profile):
+    # Invariant ≤1 timer obert per tasca: tanca qualsevol obert previ abans d'obrir-ne un de nou
+    # (defensa contra fuites; en condicions normals no n'hi ha cap d'obert en entrar a InProgress).
+    _close_open_timer(task)
     TimerEntrada.objects.create(model_task=task, tecnic=profile,
                                 inici=timezone.now(), actiu=True)
 
 
 def _close_open_timer(task):
-    t = TimerEntrada.objects.filter(model_task=task, fi__isnull=True, actiu=True).first()
-    if t:
-        now = timezone.now()
+    # Tanca TOTS els timers oberts de la tasca (no només .first()): si se n'havien acumulat 2+
+    # per una fuita, abans en quedava un de penjat permanent. Cada timer tanca amb la SEVA durada.
+    now = timezone.now()
+    for t in TimerEntrada.objects.filter(model_task=task, fi__isnull=True, actiu=True):
         t.fi = now
         t.minuts = max(0, int((now - t.inici).total_seconds() // 60))
         t.actiu = False
