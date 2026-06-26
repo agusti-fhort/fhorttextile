@@ -21,7 +21,6 @@ const BOARD_COLS = [
 // Fases del cicle de disseny (eix independent del kanban_state) per als comptadors per fase.
 const PHASES = ["Pending", "Dev", "Proto", "SizeSet", "PP", "TOP"]
 const TEMPORADES = ["SS", "FW", "CO", "SP"]
-const ESTATS = ["Nou", "EnCurs", "EnRevisio", "Tancat"]
 
 function KPICard({ label, value, sub, color = "var(--gold)", onClick }) {
   return (
@@ -117,7 +116,7 @@ function ModelBoard({ scope }) {
   // Filtres de campanya (tot va al backend; consumeix by-model + fase-counts, Sprint 5 1a/1b).
   const [search, setSearch] = useState("")
   const [fTemporada, setFTemporada] = useState("")
-  const [fEstat, setFEstat] = useState("")
+  const [fFase, setFFase] = useState("")
   const [fCustomer, setFCustomer] = useState("")
   const [fCollection, setFCollection] = useState("")
   const [fAfter, setFAfter] = useState("")
@@ -139,13 +138,13 @@ function ModelBoard({ scope }) {
     if (scope === 'me') p.responsable = 'me'
     const s = search.trim(); if (s) p.search = s
     if (fTemporada) p.temporada = fTemporada
-    if (fEstat) p.estat = fEstat
+    if (fFase) p.fase_actual = fFase
     if (fCustomer) p.customer = fCustomer
     const col = fCollection.trim(); if (col) p.collection = col
     if (fAfter) p.data_objectiu_after = fAfter
     if (fBefore) p.data_objectiu_before = fBefore
     return p
-  }, [scope, search, fTemporada, fEstat, fCustomer, fCollection, fAfter, fBefore])
+  }, [scope, search, fTemporada, fFase, fCustomer, fCollection, fAfter, fBefore])
 
   // Carrega una pàgina de by-model. all=true perquè la columna "Fets" (models tot-Done,
   // ocultats per defecte) també tingui contingut. replace reinicia (canvi de filtre).
@@ -190,7 +189,7 @@ function ModelBoard({ scope }) {
   }
 
   const clearFilters = () => {
-    setSearch(""); setFTemporada(""); setFEstat("")
+    setSearch(""); setFTemporada(""); setFFase("")
     setFCustomer(""); setFCollection(""); setFAfter(""); setFBefore("")
   }
 
@@ -245,9 +244,9 @@ function ModelBoard({ scope }) {
           <option value="">{t("dashboard.board.filter_temporada")}</option>
           {TEMPORADES.map(x => <option key={x} value={x}>{t(`kanban.temporades.${x}`)}</option>)}
         </select>
-        <select value={fEstat} onChange={e => setFEstat(e.target.value)} style={selS}>
-          <option value="">{t("dashboard.board.filter_estat")}</option>
-          {ESTATS.map(x => <option key={x} value={x}>{t(`kanban.estats.${x}`)}</option>)}
+        <select value={fFase} onChange={e => setFFase(e.target.value)} style={selS}>
+          <option value="">{t("dashboard.board.filter_fase")}</option>
+          {PHASES.map(x => <option key={x} value={x}>{t(`model_sheet.dashboard.phase.${x}`)}</option>)}
         </select>
         <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 'var(--fs-label)', color: "var(--text-muted)", fontFamily: MONO }}>
           {t("dashboard.board.filter_date_from")}

@@ -1797,7 +1797,7 @@
       "filter_customer": "Cliente",
       "filter_collection": "Colección",
       "filter_temporada": "Temporada",
-      "filter_estat": "Estado",
+      "filter_fase": "Fase",
       "filter_date_from": "Objetivo desde",
       "filter_date_to": "Objetivo hasta",
       "clear": "Limpiar",

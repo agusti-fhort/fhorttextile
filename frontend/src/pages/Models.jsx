@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { models as modelsApi } from '../api/endpoints'
 import ActionsMenu, { PHASES } from '../components/model/ActionsMenu'
 import Feedback from '../components/ui/Feedback'
-import { EstatBadge } from '../components/EstatBadge'
 
 const MONO = 'IBM Plex Mono, monospace'
 const SEASONS = ['SS', 'FW', 'CO', 'SP']
@@ -157,12 +156,11 @@ function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale }) {
           {m.codi_client && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>· {m.codi_client}</span>}
           {m.collection && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>· {m.collection}</span>}
           <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{m.temporada}{m.any ? ` ${m.any}` : ''}</span>
-          <EstatBadge estat={m.estat} size="xs" />
           <button onClick={onDelete} title={t('models_list.delete')} style={delBtn}><i className="ti ti-trash" /></button>
         </div>
         {/* Fila 2 — operativa */}
         <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr 1.4fr', gap: 12, alignItems: 'center', fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
-          <span style={faseBadge}>{m.fase_actual}</span>
+          <span style={faseBadge}>{m.fase_actual ? t(`model_sheet.dashboard.phase.${m.fase_actual}`, m.fase_actual) : '—'}</span>
           <Cell label={t('models_list.col_entrada')} value={fmtDate(m.entrada_prod, locale)} />
           <Cell label={t('models_list.col_proto')} value={fmtDate(m.arribada_proto, locale)} />
           <Cell label={t('models_list.col_fitting')} value={fmtDate(m.fitting_prev, locale)} />

@@ -1797,7 +1797,7 @@
       "filter_customer": "Client",
       "filter_collection": "Col·lecció",
       "filter_temporada": "Temporada",
-      "filter_estat": "Estat",
+      "filter_fase": "Fase",
       "filter_date_from": "Objectiu des de",
       "filter_date_to": "Objectiu fins a",
       "clear": "Neteja",

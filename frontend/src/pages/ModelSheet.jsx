@@ -683,18 +683,10 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
           </>
         )}
         <span style={{
-          fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 20, fontWeight: 500,
-          background: 'var(--bg-muted)',
-          color: 'var(--text-muted)',
-          border: '0.5px solid var(--border)',
-        }}>
-          {model.estat}
-        </span>
-        <span style={{
           fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 20, fontWeight: 600,
           background: 'var(--gold)', color: 'var(--white)',
         }} title={t('model_sheet.phase')}>
-          {model.fase_actual}
+          {model.fase_actual ? t(`model_sheet.dashboard.phase.${model.fase_actual}`, model.fase_actual) : '—'}
         </span>
       </div>
 
@@ -892,7 +884,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
       ? sizesAmbDades.join('·')
       : model.size_run_model) || '—', mono: true },
     { label: t('model.sections.grading'), value: model.grading_rule_set ? t('model_sheet.grading_configured') : '—' },
-    { label: t('model.fields.estat'), value: model.estat },
+    { label: t('model_sheet.phase'), value: model.fase_actual ? t(`model_sheet.dashboard.phase.${model.fase_actual}`, model.fase_actual) : '—' },
     { label: t('model_sheet.field_created_by'), value: model.created_by_nom || '—' },
     { label: t('model_sheet.field_created_at'), value: fmtDateTime(model.created_at) },
     ...(model.fabric_main ? [
