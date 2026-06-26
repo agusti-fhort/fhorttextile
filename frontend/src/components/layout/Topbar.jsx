@@ -11,13 +11,11 @@ const PATH_TO_KEY = {
   '/models/nou':                'nav.models_new',
   '/models/nou-des-de-fitxer':  'nav.models_from_file',
   '/fittings':                  'nav.fittings',
+  '/planificacio':              'nav.planning',
   '/task-types':                'nav.tasques_catalog',
-  '/tasques/kanban':            'nav.kanban',
   '/temps':                     'nav.temps',
-  '/fitxers':                   'nav.fitxers',
   '/poms':                      'nav.poms',
   '/poms/grading':              'nav.grading',
-  '/ia':                        'nav.ia',
   '/perfil':                    'nav.perfil',
 }
 
