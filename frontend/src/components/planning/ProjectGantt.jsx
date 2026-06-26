@@ -10,7 +10,7 @@ import { IconPackage, IconUser, IconFlag } from '@tabler/icons-react'
 // Tokens del DS (no canvas). CONVIU amb el tab "Calendari" (PlanningCalendar, executor/hores).
 const MONO = 'IBM Plex Mono, monospace'
 const LABEL_W = 320
-const PX_PER_DAY = 26
+const PX_PER_DAY = 44   // prou ample per encabir "dd/mm" a cada dia sense solapar
 const ROW_H = 50
 const BAR_H = 24
 const AXIS_H = 26
@@ -139,8 +139,9 @@ export default function ProjectGantt({ t }) {
   const x = (iso) => dayDiff(range.min, parseISO(iso)) * PX_PER_DAY
   const todayX = today ? x(today) : null
 
-  // Ticks de l'eix (densitat segons amplada del rang).
-  const step = range.days > 40 ? 7 : (range.days > 14 ? 3 : 1)
+  // PEÇA 1 — granularitat DIÀRIA: una columna i una etiqueta per dia (step=1). El scroll-X absorbeix
+  // l'amplada extra (PX_PER_DAY=44).
+  const step = 1
   const ticks = []
   for (let i = 0; i < range.days; i += step) {
     ticks.push({ i, d: new Date(range.min.getTime() + i * 86400000) })
