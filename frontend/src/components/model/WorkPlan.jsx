@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
 import Modal from '../ui/Modal'
-import { modelTasks } from '../../api/endpoints'
+import { models, modelTasks } from '../../api/endpoints'
 import { formatMinutes } from '../../utils/format'
 import { taskTypeLabel } from '../../utils/taskType'
 
 // Pla de treball — PEÇA P3 + P4a (Q4 crescut): l'encàrrec del model com a procés.
 // Consumeix dashboard.tasques (compositor enriquit a P1, JA ordenat canònic) — NO reordena.
-// Transport (Play/Pause/Stop) CABLEJAT a modelTasks.transition (P3). "Play obre l'eina"
-// (decisió Agus): Play = anar a treballar → transition InProgress + navega a l'eina; si la
+// Transport (Play/Pause/Stop) CABLEJAT al backend de tasques (P3). "Play obre l'eina"
+// (decisió Agus): Play = anar a treballar → open-task idempotent + navega a l'eina; si la
 // tasca no en té (pattern_*, bom, scaling, marking, Audit) → InProgress sense navegar (§4).
 // P4a — handoff (§6): Play sobre tasca d'ALTRI obre un diàleg de reassignació; en confirmar fa
 // modelTasks.claim (self-only, gated execute_tasks) i després el mateix camí de Play de P3.
@@ -213,26 +213,31 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
       })
   }
 
-  // Camí de Play de P3 (sobre tasca PRÒPIA): anar a treballar (decisió Agus). Amb eina: transition
-  // InProgress + navega (idèntic al kanban; Done = reobertura §3.8). Fire-and-forget: navega
-  // igualment. Sense eina: InProgress sense navegar (§4) — la targeta passa a "en curs".
+  // Camí de Play de P3 (sobre tasca PRÒPIA): anar a treballar (decisió Agus). Amb eina: open-task
+  // idempotent al backend + navega (Done = reobertura §3.8). Sense eina: InProgress sense navegar (§4)
+  // — la targeta passa a "en curs".
   function playMine(task) {
     const route = toolRoute(task, modelId)
-    // PUNT COMÚ d'obertura: porta la tasca a InProgress NOMÉS si cal, comprovant l'estat ACTUAL. Si ja
-    // és InProgress NO demanem la transició — ALLOWED no permet InProgress→InProgress (services_c.py)
-    // i tornaria 400, deixant la tasca sense obrir. Pending/Paused/Done → InProgress (Done = reobertura,
-    // ja permesa). Qualsevol camí de Play (propi, handoff acceptat, futur Q2) hereta aquest guard.
-    const needsStart = task.status !== 'InProgress'
-    if (route) {
-      // Amb eina: transiciona si cal (fire-and-forget) i navega IGUALMENT — si la transició falla, la
-      // UI no queda penjada (l'eina s'obre; la tasca ja era En curs).
-      if (needsStart) modelTasks.transition(task.id, { to_status: 'InProgress' }).catch(() => {})
-      navigate(route)
-    } else if (needsStart) {
-      doTransition(task, 'InProgress')   // sense eina: transiciona + refresca (gestiona l'error visible)
-    } else {
-      onRefresh?.()   // ja En curs i sense eina: només re-sincronitza la targeta, sense demanar res
-    }
+    // El backend decideix si cal crear/reobrir/claimar o fer no-op. Evita basar-se en l'estat
+    // possiblement obsolet de la targeta i no pot demanar InProgress→InProgress.
+    models.openTask(modelId, task.task_type_code)
+      .then(res => {
+        const openedTask = {
+          ...task,
+          id: res?.data?.task_id ?? task.id,
+          status: res?.data?.status ?? task.status,
+        }
+        if (route) navigate(toolRoute(openedTask, modelId))
+        onRefresh?.()
+      })
+      .catch(err => {
+        const msg = err?.response?.data?.error
+          || (err?.response?.status === 403
+            ? t('model_sheet.dashboard.workplan.not_allowed')
+            : t('model_sheet.dashboard.workplan.transition_error'))
+        showToast('err', msg)
+        onRefresh?.()
+      })
   }
 
   // P4a — Play segons qui té la tasca. Meva → camí de P3 directe. D'altri → diàleg de handoff (§6).
