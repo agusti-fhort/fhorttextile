@@ -41,38 +41,6 @@ def parse_any(raw):
         return _dt.date.today().year
 
 
-def _create_pom_alert(model, pom_master, client_code, description, confidence, match_type):
-    """Create a POMAlert for uncertain matches (MEDIUM/LOW) or newly created POMs."""
-    try:
-        from fhort.fitting.models import POMAlert
-        # Real POMAlert.tipus choices: 'desviacio', 'fora_rang', 'manca', 'conflicte'.
-        # New POMs → 'manca' (not in the catalog); medium matches → 'conflicte'.
-        tipus = 'manca' if match_type == 'auto_created' else 'conflicte'
-        if match_type == 'auto_created':
-            missatge = (
-                f'POM nou creat automàticament: "{client_code}" ({description}). '
-                f'Cal completar la descripció, creixements i vincular al catàleg global.'
-            )
-        else:
-            missatge = (
-                f'POM "{client_code}" ({description}) importat amb confiança {confidence} '
-                f'via {match_type}. Assignat a: {pom_master.codi_client} ({pom_master.nom_client}). '
-                f"Verificar que l'assignació és correcta."
-            )
-        POMAlert.objects.create(
-            model=model,
-            pom=pom_master,
-            tipus=tipus,
-            missatge=missatge,
-            origen='IMPORTACIO',
-            estat='Pendent',
-            creat_per='sistema',
-        )
-    except Exception:
-        # Do not block the import if creating the alert fails.
-        pass
-
-
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def delete_model_view(request, model_id):
