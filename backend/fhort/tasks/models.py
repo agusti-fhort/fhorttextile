@@ -1,48 +1,6 @@
 from django.db import models
 
 
-class TipologiaModel(models.Model):
-    """Model typology with load slots per production route.
-
-    NOTE: the spec asked for IntegerField but the real master-data values
-    contain decimals (3.5, 5.0, 6.5) — we use DecimalField to avoid losing
-    precision. Likewise, patrons_aprox is a range ("10-14"), hence CharField.
-    """
-
-    codi = models.CharField(max_length=40, unique=True)
-    nom = models.CharField(max_length=200, blank=True)
-    familia = models.CharField(max_length=80, blank=True)
-    familia_codi = models.CharField(max_length=20, blank=True)
-    garment_type = models.ForeignKey(
-        'pom.GarmentType',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='tipologies',
-    )
-
-    complexitat = models.CharField(max_length=40, null=True, blank=True)
-    patrons_aprox = models.CharField(max_length=20, null=True, blank=True)
-
-    slots_cad_client = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    slots_digitalitzacio = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    slots_des_de_zero = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    slots_conf_proto = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    slots_conf_proto_sample = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    slots_conf_proto_sample_size = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-
-    actiu = models.BooleanField(default=True)
-    notes = models.TextField(blank=True)
-
-    class Meta:
-        verbose_name = 'Tipologia de model'
-        verbose_name_plural = 'Tipologies de model'
-        ordering = ['familia_codi', 'codi']
-
-    def __str__(self):
-        return f'{self.codi} · {self.nom}'
-
-
 class TimerEntrada(models.Model):
     model_task = models.ForeignKey('ModelTask', on_delete=models.CASCADE, related_name='timers')
     tecnic = models.ForeignKey('accounts.UserProfile', on_delete=models.PROTECT, related_name='timers')
