@@ -820,6 +820,7 @@ def set_measurements_view(request, model_id):
                     defaults={
                         'base_value_cm': float(value),
                         'notes': m.get('notes', ''),
+                        'nom_fitxa': m.get('nom_fitxa', '') or '',
                         'origen': 'MANUAL',
                         # Re-entrar un valor reactiva una fila prèviament eliminada.
                         'is_active': True,
