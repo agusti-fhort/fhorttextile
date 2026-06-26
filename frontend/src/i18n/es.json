@@ -2115,7 +2115,8 @@
     "garment_type_item": "Tipología de la prenda (tipo)",
     "base_size": "Talla base",
     "size_run": "Run de tallas (sistema de tallas)",
-    "grading_rule_set": "Regla de escalado (grading)"
+    "grading_rule_set": "Regla de escalado (grading)",
+    "action": "Completa el modelo"
   },
   "watchpoints": {
     "title": "Watchpoints",

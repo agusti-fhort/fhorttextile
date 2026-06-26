@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { watchpoints } from '../../api/endpoints'
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('ca-ES', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
@@ -10,6 +11,7 @@ const linkBtn = { background: 'none', border: 'none', cursor: 'pointer', fontSiz
 // tècnica; viuen amb el model perquè un altre tècnic entengui l'advertència.
 export default function WatchpointsPanel({ modelId, taskId = null, editable = false, showAllByDefault = false }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [items, setItems] = useState([])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -87,6 +89,13 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
                 <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
                   {w.dades.map(camp => <li key={camp}>{t(`import_missing.${camp}`, camp)}</li>)}
                 </ul>
+                {w.estat === 'open' && modelId && (
+                  // F4 — gate SUPER SUAU: acció genèrica disponible, però el tècnic decideix (no redirecció).
+                  <button type="button" onClick={() => navigate(`/models/${modelId}/editar`)}
+                    style={{ ...linkBtn, padding: 0, marginTop: 4, display: 'inline-block' }}>
+                    {t('import_missing.action')}
+                  </button>
+                )}
               </div>
             ) : (
               <div style={{ fontSize: 'var(--fs-body)', whiteSpace: 'pre-wrap',

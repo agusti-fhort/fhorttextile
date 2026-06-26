@@ -518,7 +518,11 @@ def open_model_task_view(request, model_id):
         cleanup_queue_order([old_assignee_id, profile.id], [task.model_id])
         recompute_for_technicians([old_assignee_id, profile.id])
     task.refresh_from_db()
-    return Response({'task_id': task.id, 'code': code, 'created': created, 'status': task.status},
+    # F4 — gate SUPER SUAU: informem de quins camps de config falten (font única F1), però NO bloquegem
+    # l'obertura de la tasca. El Watchpoint persistent (F2/F3) ja mostra l'avís accionable; el tècnic decideix.
+    from fhort.models_app.services import model_config_missing
+    return Response({'task_id': task.id, 'code': code, 'created': created, 'status': task.status,
+                     'missing_config': model_config_missing(model)},
                     status=http_status.HTTP_200_OK)
 
 

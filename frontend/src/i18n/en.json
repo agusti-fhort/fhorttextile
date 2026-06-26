@@ -2115,7 +2115,8 @@
     "garment_type_item": "Garment type (item)",
     "base_size": "Base size",
     "size_run": "Size run (size system)",
-    "grading_rule_set": "Grading rule set"
+    "grading_rule_set": "Grading rule set",
+    "action": "Complete the model"
   },
   "watchpoints": {
     "title": "Watchpoints",
