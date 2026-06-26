@@ -1,4 +1,5 @@
 import datetime
+from decimal import Decimal, InvalidOperation
 
 from django.db import connection, transaction
 from rest_framework import viewsets
@@ -848,6 +849,174 @@ def set_measurements_view(request, model_id):
     return Response({'created': created, 'updated': updated, 'deactivated': deactivated,
                      'errors': errors},
                     status=201 if not errors else 207)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def gravar_pom_view(request, model_id):
+    """POST /api/v1/models/<id>/gravar-pom/
+
+    Acte lleuger de genesi POM: persisteix base + nomenclatura + regles residents i tanca
+    la ModelTask `pom` a Done. No tanca SizeFitting, no genera GradedSpec i no propaga.
+    """
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'}, status=403)
+
+    measurements = request.data.get('measurements', [])
+    rules = request.data.get('rules', [])
+    keep_pom_ids = request.data.get('keep_pom_ids', None)
+    if not measurements and keep_pom_ids is None:
+        return Response({'error': 'measurements és obligatori'}, status=400)
+
+    from fhort.pom.models import GradingRule, POMMaster
+    from fhort.models_app.models import BaseMeasurement, ModelGradingRule
+
+    def _to_float(value, field_name, errors):
+        if value in (None, ''):
+            return None
+        try:
+            return float(str(value).replace(',', '.'))
+        except (TypeError, ValueError):
+            errors.append(f'{field_name} ha de ser numèric')
+            return None
+
+    def _to_decimal(value, field_name, errors):
+        if value in (None, ''):
+            return None
+        try:
+            return Decimal(str(value).replace(',', '.'))
+        except (InvalidOperation, TypeError, ValueError):
+            errors.append(f'{field_name} ha de ser numèric')
+            return None
+
+    def _break_pos(label):
+        if not label or not model.size_run_model:
+            return None
+        run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
+        return run.index(label) if label in run else None
+
+    errors = []
+    prepared = []
+    for m in measurements:
+        pom_id = m.get('pom_id')
+        value = _to_float(m.get('base_value_cm'), 'base_value_cm', errors)
+        if not pom_id or value is None:
+            errors.append('pom_id i base_value_cm obligatoris')
+            continue
+        prepared.append((m, value))
+
+    if not prepared:
+        errors.append('Cal introduir almenys una mida base abans de gravar POM')
+    if errors:
+        return Response({'errors': errors}, status=400)
+
+    created = updated = deactivated = rules_saved = 0
+    try:
+        with transaction.atomic():
+            had_base_before = BaseMeasurement.objects.filter(
+                model=model, is_active=True, base_value_cm__isnull=False,
+            ).exists()
+
+            for m, value in prepared:
+                try:
+                    pom = POMMaster.objects.get(id=m.get('pom_id'))
+                except POMMaster.DoesNotExist:
+                    errors.append(f"POMMaster {m.get('pom_id')} no trobat")
+                    continue
+
+                bm = BaseMeasurement.objects.filter(model=model, pom=pom).first()
+                if bm is None:
+                    bm = BaseMeasurement(model=model, pom=pom, created_by=request.user)
+                    created += 1
+                else:
+                    updated += 1
+                bm.base_value_cm = value
+                bm.notes = m.get('notes', '') or ''
+                bm.nom_fitxa = m.get('nom_fitxa', '') or ''
+                bm.origen = 'MANUAL'
+                bm.is_active = True
+                bm.tolerancia_minus = pom.tolerancia_default_minus
+                bm.tolerancia_plus = pom.tolerancia_default_plus
+                bm._changed_by = request.user
+                bm._motiu = 'gravar_pom'
+                bm.save()
+
+            if errors:
+                raise ValueError('; '.join(errors))
+
+            if keep_pom_ids is not None:
+                keep = [int(x) for x in keep_pom_ids]
+                deactivated = (BaseMeasurement.objects
+                               .filter(model=model, is_active=True)
+                               .exclude(pom_id__in=keep)
+                               .update(is_active=False))
+
+            for r in rules:
+                pom_id = r.get('pom_id')
+                if not pom_id:
+                    continue
+                logica = (r.get('logica') or '').strip().upper() or None
+                if logica is not None and logica not in ('LINEAR', 'STEP'):
+                    errors.append("logica ha de ser 'LINEAR' o 'STEP'")
+                    continue
+                src = (GradingRule.objects.filter(
+                           rule_set_id=model.grading_rule_set_id, pom_id=pom_id).first()
+                       if model.grading_rule_set_id else None)
+                rule = ModelGradingRule.objects.filter(model=model, pom_id=pom_id).first()
+                if rule is None:
+                    rule = ModelGradingRule(
+                        model=model, pom_id=pom_id, actiu=True,
+                        logica=(src.logica if src else 'LINEAR'),
+                        increment=(src.increment if src else 0),
+                        valors_step=(src.valors_step if src else None),
+                        increment_base=(src.increment_base if src else None),
+                        increment_break=(src.increment_break if src else None),
+                        talla_break_label=(src.talla_break_label if src else None),
+                        talla_break_pos=(src.talla_break_pos if src else None),
+                    )
+                if logica is not None:
+                    rule.logica = logica
+                if 'increment_base' in r:
+                    rule.increment_base = _to_decimal(r.get('increment_base'), 'increment_base', errors)
+                if 'increment_break' in r:
+                    rule.increment_break = _to_decimal(r.get('increment_break'), 'increment_break', errors)
+                if 'talla_break_label' in r:
+                    label = (r.get('talla_break_label') or '').strip() or None
+                    rule.talla_break_label = label
+                    rule.talla_break_pos = _break_pos(label)
+                rule.origen = 'MANUAL'
+                rule.actiu = True
+                rule.save()
+                rules_saved += 1
+
+            if errors:
+                raise ValueError('; '.join(errors))
+
+            if not BaseMeasurement.objects.filter(
+                model=model, is_active=True, base_value_cm__isnull=False,
+            ).exists():
+                raise ValueError('Cal introduir mides abans de gravar POM')
+
+            pom_task = _close_pom_task_for_model(model, profile)
+            if pom_task.get('reason') == 'no_pom_task':
+                raise ValueError('Cal obrir la tasca POM abans de gravar-la')
+    except ValueError as e:
+        return Response({'error': str(e)}, status=400)
+
+    return Response({
+        'created': created,
+        'updated': updated,
+        'deactivated': deactivated,
+        'rules_saved': rules_saved,
+        'reseed': had_base_before,
+        'pom_task': pom_task,
+    }, status=200)
 
 
 @api_view(['POST'])

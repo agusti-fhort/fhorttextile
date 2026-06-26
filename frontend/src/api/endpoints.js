@@ -32,6 +32,8 @@ export const models = {
   defineTasks: (id, data) => client.post(`/api/v1/models/${id}/define-tasks/`, data),   // {task_type_ids:[...]}
   // Porta-menú: obre una tasca concreta del model (crea-si-falta + auto-assign + En curs). {code}
   openTask: (id, code) => client.post(`/api/v1/models/${id}/open-task/`, { code }),
+  // Acte lleuger de gènesi POM: base+nomenclatura+regles i tanca la tasca pom. No propaga.
+  gravarPom: (id, data) => client.post(`/api/v1/models/${id}/gravar-pom/`, data),
   gate: (id, data) => client.post(`/api/v1/models/${id}/gate/`, data),                   // {to_phase} o {to_phases:[...]}
   regress: (id, data) => client.post(`/api/v1/models/${id}/regress/`, data),             // {to_phase} — retrocés net
   // Tram 2 planificació (gated define_tasks): assigna les no-Done a un tècnic + compute de cua
