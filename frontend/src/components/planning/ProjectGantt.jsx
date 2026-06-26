@@ -136,7 +136,7 @@ export default function ProjectGantt({ t }) {
                            filterColleccio={filterColleccio} setFilterColleccio={setFilterColleccio}
                            filterTemporada={filterTemporada} setFilterTemporada={setFilterTemporada} />
       <Legend t={t} />
-      <div style={{ overflowX: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+      <div style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', overflowX: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
         <div style={{ minWidth: LABEL_W + trackW }}>
           {/* Eix de dies */}
           <div style={{ display: 'flex', position: 'sticky', top: 0, zIndex: 3, background: 'var(--bg-muted)', borderBottom: '0.5px solid var(--gray-l)' }}>
@@ -261,18 +261,27 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, onClick, t }) {
   // Finestres d'espera (confecció externa): es pinten com a segment trencat ratllat.
   const esperes = (m.esperes || []).map(w => ({ l: x(w.from), r: x(w.to) + PX_PER_DAY }))
 
+  // PEÇA 3b — línia de context (col·lecció · any · temporada). L'any es deriva de temporada
+  // ("FW26"→"26"); si temporada ja conté l'any (cas habitual) no el dupliquem. Sense col·lecció → s'omet.
+  const anyTxt = m.temporada ? (String(m.temporada).match(/\d+/) || [''])[0] : ''
+  const seasonCtx = (anyTxt && m.temporada && !m.temporada.includes(anyTxt)) ? [anyTxt, m.temporada] : [m.temporada]
+  const ctxLine = m.collection ? [m.collection, ...seasonCtx].filter(Boolean).join(' · ') : null
+
   return (
     <div onClick={onClick} title={`${m.codi} · ${m.nom || ''}`} style={{
       display: 'flex', height: ROW_H, cursor: 'pointer', borderBottom: '0.5px solid var(--base-hairline, var(--gray-l))',
     }}>
       <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--white)', zIndex: 2,
                     borderRight: '0.5px solid var(--gray-l)', borderLeft: m.en_risc ? '2px solid var(--err)' : '2px solid transparent',
-                    padding: '4px 10px', overflow: 'hidden' }}>
-        <div style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                    padding: '2px 10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        {ctxLine && (
+          <div style={{ fontSize: 12, fontFamily: MONO, lineHeight: 1.05, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{ctxLine}</div>
+        )}
+        <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, lineHeight: 1.1, color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
           {m.en_risc && <i className="ti ti-flag" title={t('planning.gantt.risk_flag')} style={{ fontSize: 12, color: 'var(--err)', marginRight: 4 }} />}
-          {m.codi}
+          {m.nom || '—'}
         </div>
-        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.responsable_nom || '—'}</div>
+        <div style={{ fontSize: 11, fontFamily: MONO, lineHeight: 1.05, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.codi}</div>
       </div>
 
       <div style={{ position: 'relative', width: trackW, height: ROW_H }}>
