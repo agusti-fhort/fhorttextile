@@ -24,7 +24,7 @@ function localISO(d) {
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`
 }
 
-export default function ModelMilestones({ modelId, navigate, sectionTitle }) {
+export default function ModelMilestones({ modelId, navigate, onOpenTab, sectionTitle }) {
   const { t, i18n } = useTranslation()
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
@@ -60,6 +60,18 @@ export default function ModelMilestones({ modelId, navigate, sectionTitle }) {
   const fmtDay = (day) => new Date(day + 'T00:00:00').toLocaleDateString(
     i18n.language || 'ca', { weekday: 'long', day: 'numeric', month: 'long' })
 
+  function openEventLink(ev, e) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!ev.link) return
+    const url = new URL(ev.link, window.location.origin)
+    if (url.pathname === `/models/${modelId}`) {
+      const tab = url.searchParams.get('tab')
+      if (tab) onOpenTab?.(tab)
+    }
+    navigate(ev.link)
+  }
+
   return (
     <section>
       <div style={sectionTitle}>{t('model_sheet.dashboard.milestones.section')}</div>
@@ -82,7 +94,7 @@ export default function ModelMilestones({ modelId, navigate, sectionTitle }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {g.events.map(ev => (
-                  <button key={ev.id} type="button" onClick={() => ev.link && navigate(ev.link)} style={{
+                  <button key={ev.id} type="button" onClick={e => openEventLink(ev, e)} style={{
                     textAlign: 'left', width: '100%', border: 'none', background: 'transparent',
                     padding: '4px 0', cursor: ev.link ? 'pointer' : 'default',
                     display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-main)',

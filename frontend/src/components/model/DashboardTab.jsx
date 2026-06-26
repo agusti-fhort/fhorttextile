@@ -240,7 +240,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
       </section>
 
       {/* ── Properes fites del MODEL (sota Què tinc fet) ───────────── */}
-      <ModelMilestones modelId={modelId} navigate={navigate} sectionTitle={sectionTitle} />
+      <ModelMilestones modelId={modelId} navigate={navigate} onOpenTab={onOpenTab} sectionTitle={sectionTitle} />
 
       {/* Q4 (llista plana de F1) ABSORBIT pel contenidor Pla de treball (P2a/P2b). */}
 
