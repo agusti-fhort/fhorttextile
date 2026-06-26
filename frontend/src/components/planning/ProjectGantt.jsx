@@ -9,9 +9,9 @@ import { IconPackage, IconUser, IconFlag } from '@tabler/icons-react'
 // el drag de prioritats (M-assist) després només cal sobre aquesta capa, sense reescriure-la.
 // Tokens del DS (no canvas). CONVIU amb el tab "Calendari" (PlanningCalendar, executor/hores).
 const MONO = 'IBM Plex Mono, monospace'
-const LABEL_W = 230
+const LABEL_W = 280
 const PX_PER_DAY = 26
-const ROW_H = 58
+const ROW_H = 70
 const BAR_H = 24
 const AXIS_H = 26
 const DEFAULT_COLOR = 'var(--gray)'
@@ -262,28 +262,26 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
   // Finestres d'espera (confecció externa): es pinten com a segment trencat ratllat.
   const esperes = (m.esperes || []).map(w => ({ l: x(w.from), r: x(w.to) + PX_PER_DAY }))
 
-  // PEÇA 3b — línia de context (col·lecció · any · temporada). L'any es deriva de temporada
-  // ("FW26"→"26"); si temporada ja conté l'any (cas habitual) no el dupliquem. Sense col·lecció → s'omet.
-  const anyTxt = m.temporada ? (String(m.temporada).match(/\d+/) || [''])[0] : ''
-  const seasonCtx = (anyTxt && m.temporada && !m.temporada.includes(anyTxt)) ? [anyTxt, m.temporada] : [m.temporada]
-  const ctxLine = m.collection ? [m.collection, ...seasonCtx].filter(Boolean).join(' · ') : null
-
   return (
     <div onClick={onClick} title={`${m.codi} · ${m.nom || ''}`} style={{
       display: 'flex', height: ROW_H, cursor: 'pointer', borderBottom: '0.5px solid var(--base-hairline, var(--gray-l))',
     }}>
-      {/* PEÇA 2 — label (patró .glabel del mostra): codi · nom · col·lecció·temporada. Tokens d'escala
-          (--fs-*), mai px literals. Nom a 1 línia amb ellipsis (LABEL_W=230). */}
+      {/* PEÇA 1 — label (ordre explícit d'Agus): codi (gris petit) · nom (negre, fins a 2 línies) ·
+          col·lecció (gris petit) · temporada (gris petit). Tokens d'escala (--fs-*), mai px literals. */}
       <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--white)', zIndex: 2,
                     borderRight: '0.5px solid var(--gray-l)', borderLeft: m.en_risc ? '2px solid var(--err)' : '2px solid transparent',
-                    padding: '11px 14px', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3 }}>
-        <div style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 700, color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-          {m.en_risc && <i className="ti ti-flag" title={t('planning.gantt.risk_flag')} style={{ fontSize: 'var(--fs-body)', color: 'var(--err)', marginRight: 4 }} />}
+                    padding: '8px 14px', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
+        <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+          {m.en_risc && <i className="ti ti-flag" title={t('planning.gantt.risk_flag')} style={{ fontSize: 'var(--fs-label)', color: 'var(--err)', marginRight: 4 }} />}
           {m.codi}
         </div>
-        <div style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.nom || '—'}</div>
-        {ctxLine && (
-          <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{ctxLine}</div>
+        <div style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-main)', lineHeight: 1.2,
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{m.nom || '—'}</div>
+        {m.collection && (
+          <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.collection}</div>
+        )}
+        {m.temporada && (
+          <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.temporada}</div>
         )}
       </div>
 
