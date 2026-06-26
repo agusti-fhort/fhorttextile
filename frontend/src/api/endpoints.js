@@ -181,9 +181,7 @@ export const tasks = modelTasks
 export const taskTypes = {
   list: (params) => client.get('/api/v1/task-types/', { params }),
   get: (id) => client.get(`/api/v1/task-types/${id}/`),
-  create: (data) => client.post('/api/v1/task-types/', data),
-  update: (id, data) => client.patch(`/api/v1/task-types/${id}/`, data),
-  remove: (id) => client.delete(`/api/v1/task-types/${id}/`),
+  // create/update/remove retirats (G8-2): el backend és ReadOnlyModelViewSet (405) i cap pantalla els cridava.
 }
 
 // Capa de Projecte — gate del responsable (cartes sintètiques al kanban).
