@@ -1758,6 +1758,7 @@
     "search_placeholder": "Cerca per nom o codi…",
     "no_pom_found": "Cap POM trobat per \"{{query}}\".",
     "create_pom": "Crear POM nou \"{{query}}\"",
+    "regime_locked_hint": "Règim de regla de catàleg (Fixed/Zero/Exception) — no editable aquí",
     "col": {
       "sheet_name": "Nom fitxa",
       "description": "Descripció",

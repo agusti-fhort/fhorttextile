@@ -315,19 +315,28 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
           mono right readOnly={readOnly} />
       </td>
       <td style={tdS}>
-        <select
-          value={row.logica || 'LINEAR'}
-          disabled={readOnly}
-          onChange={e => onCellChange(row.id, 'logica', e.target.value)}
-          style={{
-            font: 'inherit', border: '1px solid var(--border)', borderRadius: 4,
-            padding: '2px 4px', background: readOnly ? 'transparent' : 'var(--white)',
-            color: 'var(--text-main)',
-          }}
-        >
-          <option value="LINEAR">LINEAR</option>
-          <option value="STEP">STEP</option>
-        </select>
+        {row.logica && !['LINEAR', 'STEP'].includes(row.logica) ? (
+          // FIXED/ZERO/EXCEPTION: règim de regla de catàleg, NO editable a mà aquí → mostra el valor
+          // REAL com a etiqueta (mai emmascarat com a LINEAR). El payload el reenvia tal qual.
+          <span title={t('editable_table.regime_locked_hint')}
+            style={{ fontSize: 'inherit', color: 'var(--text-muted)' }}>
+            {row.logica}
+          </span>
+        ) : (
+          <select
+            value={row.logica || 'LINEAR'}
+            disabled={readOnly}
+            onChange={e => onCellChange(row.id, 'logica', e.target.value)}
+            style={{
+              font: 'inherit', border: '1px solid var(--border)', borderRadius: 4,
+              padding: '2px 4px', background: readOnly ? 'transparent' : 'var(--white)',
+              color: 'var(--text-main)',
+            }}
+          >
+            <option value="LINEAR">LINEAR</option>
+            <option value="STEP">STEP</option>
+          </select>
+        )}
       </td>
       <td style={{ ...tdS, textAlign: 'right' }}>
         <EditableCell value={row.increment_base ?? ''}

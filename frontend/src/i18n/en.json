@@ -1758,6 +1758,7 @@
     "search_placeholder": "Search by name or code…",
     "no_pom_found": "No POM found for \"{{query}}\".",
     "create_pom": "Create new POM \"{{query}}\"",
+    "regime_locked_hint": "Catalog rule regime (Fixed/Zero/Exception) — not editable here",
     "col": {
       "sheet_name": "Sheet name",
       "description": "Description",
