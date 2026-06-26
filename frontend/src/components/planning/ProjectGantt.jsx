@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { plan } from '../../api/endpoints'
 import Center from '../ui/Center'
-import { IconPackage, IconUser } from '@tabler/icons-react'
+import { IconPackage, IconUser, IconFlag } from '@tabler/icons-react'
 
 // Calendari-Gantt de projecte (LECTURA): UNA barra per model, eix=DIES. Consumeix GET plan/gantt/.
 // Drag-ready: les barres es posicionen per data absoluta (x = dies des de l'inici del rang) → afegir
@@ -294,6 +294,18 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
         {todayX != null && <div style={{ position: 'absolute', left: todayX, top: 0, bottom: 0, borderLeft: '1px solid var(--gold)', opacity: 0.6 }} />}
         {/* línia DATA OBJECTIU (vermella discontínua) */}
         {objX != null && <div style={{ position: 'absolute', left: objX, top: 0, bottom: 0, borderLeft: '1.5px dashed var(--err)' }} />}
+        {/* PEÇA 6 — símbol de lliurament a la data objectiu, NOMÉS en ordre 'lliurament' (altres ordres:
+            la línia es manté però sense pill). El text de la pastilla ja alinea a la dreta (Peça 4b). */}
+        {objX != null && order === 'lliurament' && (
+          <div title={t('planning.gantt.legend_objectiu')} style={{
+            position: 'absolute', left: objX, top: 2, transform: 'translateX(-50%)', zIndex: 6,
+            display: 'flex', alignItems: 'center', gap: 2, padding: '1px 4px', background: 'var(--white)',
+            border: '1px solid var(--err)', borderRadius: 8,
+          }}>
+            <IconFlag size={11} color="var(--err)" stroke={1.75} />
+            <span style={{ fontSize: 8, fontFamily: MONO, color: 'var(--err)', lineHeight: 1 }}>obj</span>
+          </div>
+        )}
 
         {/* BARRA del model (realçat vermell si en risc) */}
         <div style={{ position: 'absolute', left, width, top: (ROW_H - BAR_H) / 2, height: BAR_H,
