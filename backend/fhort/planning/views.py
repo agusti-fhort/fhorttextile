@@ -243,6 +243,7 @@ def calendar_events_view(request):
 
     # Rang opcional sobre la data LOCAL de planned_start (inclusiu a banda i banda).
     start_raw, end_raw = request.query_params.get('start'), request.query_params.get('end')
+    model_id_raw = request.query_params.get('model_id')   # acota a UN model (bloc fites del ModelSheet)
     try:
         start_d = _date.fromisoformat(start_raw) if start_raw else None
         end_d = _date.fromisoformat(end_raw) if end_raw else None
@@ -253,6 +254,8 @@ def calendar_events_view(request):
         qs = qs.filter(planned_start__date__gte=start_d)
     if end_d:
         qs = qs.filter(planned_start__date__lte=end_d)
+    if model_id_raw:
+        qs = qs.filter(model_id=model_id_raw)
 
     events = []
     for tk in qs:
@@ -294,6 +297,8 @@ def calendar_events_view(request):
         prods = prods.filter(expected_at__gte=start_d)
     if end_d:
         prods = prods.filter(requested_at__date__lte=end_d)
+    if model_id_raw:
+        prods = prods.filter(model_id=model_id_raw)
     for p in prods:
         req_d = timezone.localtime(p.requested_at).date()
         # Marcador d'UN SOL DIA al dia d'entrega (expected_at), com fa fitting. Ja no es pinta com a
@@ -342,6 +347,8 @@ def calendar_events_view(request):
         fitting_qs = fitting_qs.filter(data__gte=start_d)
     if end_d:
         fitting_qs = fitting_qs.filter(data__lte=end_d)
+    if model_id_raw:
+        fitting_qs = fitting_qs.filter(model_id=model_id_raw)
     # Scope (mateix criteri que les tasques): sense view_team_tasks → només on sóc assistent.
     if VIEW_TEAM_TASKS not in get_capabilities(request.user):
         profile = getattr(request.user, 'profile', None)
