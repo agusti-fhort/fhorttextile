@@ -50,7 +50,8 @@ const TASK_ICON = {
 const STATUS_VARIANT = { Done: 'ok', InProgress: 'gold', Paused: 'warn', Pending: 'gray' }
 
 // Transport actiu per estat (mirall d'ACTIONS de KanbanTasks: quins botons toquen a cada estat).
-// play = Pending/Paused/Done (start/resume/reopen) · pause+stop = InProgress.
+// play = Pending/Paused/Done (start/resume/reopen); en InProgress només es reactiva si hi ha eina
+// per navegar-hi. pause+stop = InProgress.
 const TRANSPORT = {
   Pending:    { play: true,  pause: false, stop: false },
   Paused:     { play: true,  pause: false, stop: false },
@@ -87,11 +88,12 @@ function TransportBtn({ icon, active, title, onClick }) {
   )
 }
 
-function TaskCard({ task, mine, onPlay, onPause, onStop }) {
+function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop }) {
   const { t } = useTranslation()
   const out = isOutOfCharge(task)
   const transport = TRANSPORT[task.status] || TRANSPORT.Pending
   const icon = TASK_ICON[task.task_type_code] || 'ti-checkbox'
+  const playActive = mine ? (transport.play || (hasToolRoute && task.status === 'InProgress')) : true
   // Renderings §5: meva = nítida + transport operable; d'altri = fade + transport apagat.
   const otherTech = !mine && task.assignee_id != null
   return (
@@ -136,7 +138,7 @@ function TaskCard({ task, mine, onPlay, onPause, onStop }) {
                     gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 4 }}>
           {/* P4a: Play disponible també a d'altri (obre diàleg de handoff). Pause/Stop només meves. */}
-          <TransportBtn icon="ti-player-play"  active={mine ? transport.play : true} title={mine ? t('model_sheet.dashboard.workplan.play') : t('model_sheet.dashboard.workplan.handoff_play')} onClick={() => onPlay(task)} />
+          <TransportBtn icon="ti-player-play"  active={playActive} title={mine ? t('model_sheet.dashboard.workplan.play') : t('model_sheet.dashboard.workplan.handoff_play')} onClick={() => onPlay(task)} />
           <TransportBtn icon="ti-player-pause" active={mine && transport.pause} title={t('model_sheet.dashboard.workplan.pause')} onClick={() => onPause(task)} />
           <TransportBtn icon="ti-player-stop"  active={mine && transport.stop}  title={t('model_sheet.dashboard.workplan.stop')}  onClick={() => onStop(task)} />
         </div>
@@ -284,7 +286,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
       ) : (
         <div style={cardsGrid}>
           {list.map(task => (
-            <TaskCard key={task.id} task={task} mine={isMine(task)}
+            <TaskCard key={task.id} task={task} mine={isMine(task)} hasToolRoute={Boolean(toolRoute(task, modelId))}
               onPlay={handlePlay} onPause={handlePause} onStop={handleStop} />
           ))}
         </div>
