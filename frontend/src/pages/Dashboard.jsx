@@ -313,111 +313,6 @@ function ModelBoard({ scope }) {
 
 const ph = { fontSize: 'var(--fs-body)', color: 'var(--gray)', textAlign: 'center', padding: '1.2rem', fontWeight: 300 }
 
-// Finestra (dies) de "Properes fites" que es consulta a calendar/events.
-const MILESTONES_DAYS = 14
-const MILESTONE_ICON = { tasca: "ti-subtask", confeccio: "ti-building-factory", fitting: "ti-ruler-2" }
-// Data local YYYY-MM-DD (no UTC) per acotar el rang de l'endpoint.
-function localISO(d) {
-  const z = n => String(n).padStart(2, "0")
-  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`
-}
-
-// Sprint 5 — "Properes fites": arribada de proto / fitting / tasca en risc en els propers
-// MILESTONES_DAYS dies, agrupades per data. Reusa GET /calendar/events/ (unifica tasca +
-// confecció + fitting); cap view nova.
-function UpcomingMilestones() {
-  const navigate = useNavigate()
-  const { t, i18n } = useTranslation()
-  const [groups, setGroups] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const today = new Date()
-    const end = new Date(); end.setDate(end.getDate() + MILESTONES_DAYS)
-    calendar.events({ start: localISO(today), end: localISO(end) })
-      .then(res => {
-        const events = res.data?.events ?? []
-        // Agrupa per dia (prefix YYYY-MM-DD, vàlid tant per ISO datetime com per date-only).
-        const byDay = {}
-        events.forEach(ev => {
-          if (!ev.start) return
-          const day = ev.start.slice(0, 10)
-          ;(byDay[day] ||= []).push(ev)
-        })
-        const sorted = Object.keys(byDay).sort().map(day => ({
-          day,
-          events: byDay[day].sort((a, b) => (a.start || "").localeCompare(b.start || "")),
-        }))
-        setGroups(sorted)
-      })
-      .catch(() => setGroups([]))
-      .finally(() => setLoading(false))
-  }, [])
-
-  const fmtDay = (day) => new Date(day + "T00:00:00").toLocaleDateString(
-    i18n.language || "ca", { weekday: "long", day: "numeric", month: "long" })
-
-  return (
-    <div style={{ marginTop: 32 }}>
-      <div style={{
-        fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em",
-        textTransform: "uppercase", color: "var(--gold)", fontFamily: MONO, marginBottom: 12,
-      }}>
-        {t("dashboard.milestones.title")}
-      </div>
-      {loading ? (
-        <div style={{ color: "var(--text-muted)", fontSize: 'var(--fs-body)', fontFamily: MONO }}>{t("common.loading")}</div>
-      ) : groups.length === 0 ? (
-        <div style={{
-          padding: "20px", border: "1px dashed var(--border)", borderRadius: 8,
-          textAlign: "center", color: "var(--text-muted)", fontSize: 'var(--fs-body)', fontFamily: MONO,
-        }}>
-          {t("dashboard.milestones.empty", { days: MILESTONES_DAYS })}
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {groups.map(g => (
-            <div key={g.day}>
-              <div style={{
-                fontSize: 'var(--fs-label)', fontFamily: MONO, color: "var(--text-muted)",
-                textTransform: "capitalize", marginBottom: 6,
-              }}>
-                {fmtDay(g.day)}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {g.events.map(ev => (
-                  <button key={ev.id} onClick={() => ev.link && navigate(ev.link)} style={{
-                    textAlign: "left", width: "100%", border: "0.5px solid var(--gray-l)",
-                    background: "var(--white)", borderRadius: 8, padding: "8px 12px", cursor: ev.link ? "pointer" : "default",
-                    display: "flex", alignItems: "center", gap: 10,
-                  }}
-                    onMouseEnter={e => ev.link && (e.currentTarget.style.borderColor = "var(--gold)")}
-                    onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--gray-l)")}
-                  >
-                    <i className={`ti ${MILESTONE_ICON[ev.tipus] || "ti-point"}`} style={{ fontSize: 15, color: ev.color || "var(--gray)" }} />
-                    <span style={{ flex: 1, fontSize: 'var(--fs-body)', color: "var(--text-main)" }}>{ev.titol}</span>
-                    <span style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: "var(--text-muted)" }}>
-                      {t(`dashboard.milestones.type.${ev.tipus}`, ev.tipus)}
-                    </span>
-                    {ev.en_risc && (
-                      <span style={{
-                        fontSize: 'var(--fs-label)', color: "var(--err)", background: "var(--err-bg)",
-                        padding: "1px 7px", borderRadius: 8, whiteSpace: "nowrap",
-                      }}>
-                        <i className="ti ti-alert-triangle" style={{ fontSize: 11 }} /> {t("dashboard.milestones.at_risk")}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // Selector d'abast del dashboard del tècnic: [Els meus · Tots]. Default per ROL (es deriva del
 // rol/capabilities a Dashboard, NO de localStorage). Sempre visible i commutable.
 const SCOPES = [["me", "scope_mine"], ["all", "scope_all"]]
@@ -609,9 +504,6 @@ export default function Dashboard() {
           <ModelBoard scope={scope} />
         </>
       )}
-
-      {/* Properes fites: arribades de proto / fittings / tasques en risc (calendar/events). */}
-      <UpcomingMilestones />
     </div>
   )
 }
