@@ -651,7 +651,7 @@ def gantt_view(request):
     qp = request.query_params
     qs = (Model.objects.all().select_related('responsable')
           .prefetch_related('model_tasks', 'model_tasks__assignee', 'model_tasks__task_type',
-                            'model_tasks__timers', 'productions', 'fitting_sessions'))
+                            'productions', 'fitting_sessions'))
     if qp.get('model_id'):
         qs = qs.filter(pk=qp['model_id'])
     if qp.get('responsable'):
@@ -666,13 +666,9 @@ def gantt_view(request):
         tasks = list(m.model_tasks.all())
         total = len(tasks)
         done = sum(1 for tk in tasks if tk.status == 'Done')
-        # PEÇA 4a — maduresa REAL: minuts consumits (timers) de les tasques Done sobre el total estimat.
-        # ModelTask no té camp temps_consumit_min → s'agrega TimerEntrada.minuts via related 'timers'.
-        done_min = sum(sum(tmr.minuts or 0 for tmr in tk.timers.all())
-                       for tk in tasks if tk.status == 'Done')
-        total_min = sum(tk.estimated_minutes or 0 for tk in tasks)
-        # Fallback: cap tasca amb estimació → % per recompte de Done (comportament previ).
-        pct = round(100 * done_min / total_min) if total_min else (round(100 * done / total) if total else 0)
+        # Maduresa = % de tasques Done sobre el total. Base consistent (recompte/recompte),
+        # FITAT 0-100 per construcció. (Abans es barrejava minuts consumits/estimats → >100%.)
+        pct = round(100 * done / total) if total else 0
         # Pròxima tasca pendent (primera no-Done en ordre [model, order]) → etiqueta de la pastilla.
         next_task = next((tk.task_type.code for tk in tasks if tk.status != 'Done'), None)
         start = m.consumption_started_at.date() if m.consumption_started_at else m.predicted_start
