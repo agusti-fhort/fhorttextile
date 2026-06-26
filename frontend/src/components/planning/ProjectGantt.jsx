@@ -299,6 +299,8 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
 
   // Finestres d'espera (confecció externa): es pinten com a segment trencat ratllat.
   const esperes = (m.esperes || []).map(w => ({ l: x(w.from), r: x(w.to) + PX_PER_DAY }))
+  // PEÇA 4 — text de la pastilla (tècnic · next_task · %): desborda la barra; també com a title (hover).
+  const barText = [m.responsable_nom, m.next_task, `${m.pct}%`].filter(Boolean).join(' · ')
 
   return (
     <div onClick={onClick} title={`${m.codi} · ${m.nom || ''}`} style={{
@@ -349,28 +351,21 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
           </div>
         )}
 
-        {/* BARRA del model (realçat vermell si en risc) */}
-        <div style={{ position: 'absolute', left, width, top: (ROW_H - BAR_H) / 2, height: BAR_H,
+        {/* BARRA del model (realçat vermell si en risc). title = xarxa de seguretat (PEÇA 4 opció B). */}
+        <div title={barText} style={{ position: 'absolute', left, width, top: (ROW_H - BAR_H) / 2, height: BAR_H,
                       boxShadow: m.en_risc ? '0 0 0 1.5px var(--err)' : 'none', borderRadius: 5 }}>
           {/* contenidor (rang sencer): opacity 0.35 + vora 1px → el color del tècnic es veu encara amb pct=0 */}
           <div style={{ position: 'absolute', inset: 0, borderRadius: 5, background: color, opacity: 0.35, border: `1px solid ${color}` }} />
           {/* farciment % completat (fitat 0-100 per Peça 1) */}
           <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${m.pct}%`, borderRadius: 5, background: color, opacity: 0.85 }} />
-          {/* PEÇA 4b — pastilla: punt-color tècnic · nom · next_task · pct%. Barra estreta (<80px) → només
-              pct%. Alineació dreta en ordre 'lliurament' (per no solapar el símbol d'objectiu de la Peça 6). */}
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-                        justifyContent: width < 80 ? 'center' : (order === 'lliurament' ? 'flex-end' : 'flex-start'),
+          {/* PEÇA 4 — pastilla: punt-color tècnic · next_task · pct%. Anclada a l'esquerra; el text
+              DESBORDA a la dreta de la barra sense ellipsis (overflow visible). Mai es talla. */}
+          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, display: 'flex', alignItems: 'center',
                         padding: '0 6px', fontSize: 'var(--fs-label)', fontFamily: MONO,
-                        color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', pointerEvents: 'none' }}>
-            {width < 80 ? `${m.pct}%` : (
-              <>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, marginRight: 5,
-                               background: m.responsable_color || DEFAULT_COLOR }} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {[m.responsable_nom, m.next_task, `${m.pct}%`].filter(Boolean).join(' · ')}
-                </span>
-              </>
-            )}
+                        color: 'var(--text-main)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, marginRight: 5,
+                           background: m.responsable_color || DEFAULT_COLOR }} />
+            <span>{barText}</span>
           </div>
         </div>
 
