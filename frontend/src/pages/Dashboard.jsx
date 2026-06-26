@@ -465,7 +465,7 @@ export default function Dashboard() {
     const headers = { Authorization: `Bearer ${token}` }
     Promise.allSettled([
       fetch(`${API}/api/v1/me/`, { headers }).then(r => r.json()),
-      fetch(`${API}/api/v1/onboarding-status/`, { headers }).then(r => r.ok ? r.json() : null),
+      fetch(`${API}/api/v1/onboarding/status/`, { headers }).then(r => r.ok ? r.json() : null),
     ]).then(([meRes, onbRes]) => {
       if (meRes.status === "fulfilled") {
         setMe(meRes.value)
