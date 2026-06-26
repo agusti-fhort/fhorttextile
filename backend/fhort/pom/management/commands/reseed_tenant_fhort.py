@@ -21,7 +21,7 @@ Adaptations vs original plan:
 - the RuleSet size_system is resolved from the SizingProfiles that reference it (the Excel does not provide it directly in the RuleSets sheet).
 """
 import openpyxl
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django_tenants.utils import schema_context
 
@@ -77,6 +77,15 @@ class Command(BaseCommand):
                             help='Excel ampliat de GradingRuleSets + GradingRules (S14-A)')
 
     def handle(self, *args, **opts):
+        # Bloc 4 / 4c — GUARD OBSOLET: aquest command crea GarmentPOMMap amb l'eix `garment_type`,
+        # ELIMINAT a la migració pom 0016 (cal `garment_type_item`). Abans de petar a la creació
+        # (cap a L290) faria DELETEs destructius (p.ex. GarmentPOMMap.objects.all().delete()), per
+        # tant cal avortar AQUÍ, abans de tocar cap dada. Veure capçalera del fitxer per refer-lo.
+        raise CommandError(
+            'reseed_tenant_fhort és OBSOLET: usa l\'eix `garment_type` de GarmentPOMMap, eliminat a '
+            'la migració pom 0016. Cal reescriure\'l per `garment_type_item` abans d\'executar-lo '
+            '(faria DELETEs destructius i després petaria). Veure docstring del fitxer.')
+
         tenant = opts['tenant']
         excel_path = opts['excel']
         grading_excel_path = opts['grading_excel']
