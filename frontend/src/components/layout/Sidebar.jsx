@@ -63,7 +63,6 @@ const navGroups = [
     { to: '/poms', labelKey: 'nav.poms_list', icon: 'ti-ruler-measure' },
     { to: '/size-library', labelKey: 'nav.size_library', icon: 'ti-books' },
     { to: '/poms/grading', labelKey: 'nav.grading', icon: 'ti-chart-dots' },
-    { to: '/task-types', labelKey: 'nav.tasques_catalog', icon: 'ti-list-details' },
   ]},
   // Estudi tècnic — gestió INTERNA del tenant (NO el backoffice futur de tots els tenants).
   // Futur (previst, no implementat): Configuració de l'Estudi · Equip/usuaris · Catàleg de serveis/tasques.
@@ -75,6 +74,8 @@ const navGroups = [
     { to: '/onboarding', labelKey: 'nav.onboarding', icon: 'ti-rocket', cap: 'onboarding' },
     { to: '/configuracio/calendari', labelKey: 'nav.company_calendar', icon: 'ti-calendar-cog', cap: 'configure' },
     { to: '/configuracio/usuaris', labelKey: 'nav.users', icon: 'ti-users', cap: 'manage_users' },
+    // G9 "consulta sí / edició no": catàleg de tasques consultable per a tothom (sense `cap`).
+    { to: '/task-types', labelKey: 'nav.tasques_catalog', icon: 'ti-list-details' },
     { to: '/perfil', labelKey: 'nav.perfil', icon: 'ti-user' },
   ]},
 ]
