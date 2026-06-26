@@ -7,7 +7,6 @@ import Shell from './components/layout/Shell'
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Models = lazy(() => import('./pages/Models'))
 const POMs = lazy(() => import('./pages/POMs'))
-const Tasks = lazy(() => import('./pages/Tasks'))
 const TaskTypes = lazy(() => import('./pages/TaskTypes'))
 const GarmentTypes = lazy(() => import('./pages/GarmentTypes'))
 const Suppliers = lazy(() => import('./pages/Suppliers'))
@@ -155,8 +154,9 @@ export default function App() {
           <Route path="fittings" element={<FittingSessionList />} />
           <Route path="fittings/new" element={<FittingSessionNew />} />
           <Route path="fittings/:id" element={<FittingDetail />} />
-          <Route path="tasques" element={<Tasks />} />
-          {/* Sprint 5: pàgina Kanban global jubilada → el board per-model viu al Dashboard (/). */}
+          {/* Sprint 5: pàgina Kanban global jubilada → el board per-model viu al Dashboard (/).
+              Bloc 3: la pàgina-llistat residual /tasques (Tasks.jsx) també jubilada (endpoint
+              model-tasques/ inexistent → 404); deep-links cauen al catch-all *→/. */}
           <Route path="task-types" element={<TaskTypes />} />
           <Route path="garment-types" element={<GarmentTypes />} />
           {/* Autoria d'Item (Llibreria d'Items B3): DINS el Shell (àrea de contingut).
