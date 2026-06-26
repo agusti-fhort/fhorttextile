@@ -10,6 +10,13 @@ import { calendar } from '../../api/endpoints'
 const MONO = 'IBM Plex Mono, monospace'
 const MILESTONES_DAYS = 14
 const MILESTONE_ICON = { tasca: 'ti-subtask', confeccio: 'ti-building-factory', fitting: 'ti-ruler-2' }
+// Mateix contenidor que els blocs germans del dashboard del model (rèplica EXACTA de `stateBox`
+// a DashboardTab.jsx): filet --border, radius 8, padding, fons --bg-card. La capçalera
+// (sectionTitle) va a FORA de la capsa, igual que fan ON SÓC / QUÈ TINC FET / AVISOS.
+const box = {
+  border: '0.5px solid var(--border)', borderRadius: 8, padding: '1rem 1.1rem',
+  background: 'var(--bg-card)',
+}
 
 // Data local YYYY-MM-DD (no UTC) per acotar el rang de l'endpoint.
 function localISO(d) {
@@ -56,6 +63,7 @@ export default function ModelMilestones({ modelId, navigate, sectionTitle }) {
   return (
     <section>
       <div style={sectionTitle}>{t('model_sheet.dashboard.milestones.section')}</div>
+      <div style={box}>
       {loading ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', fontFamily: MONO }}>
           {t('model_sheet.loading')}
@@ -97,6 +105,7 @@ export default function ModelMilestones({ modelId, navigate, sectionTitle }) {
           ))}
         </div>
       )}
+      </div>
     </section>
   )
 }
