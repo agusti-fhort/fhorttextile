@@ -957,13 +957,14 @@ def gravar_pom_view(request, model_id):
                                .exclude(pom_id__in=keep)
                                .update(is_active=False))
 
+            valid_logiques = {code for code, _ in GradingRule.LOGICA_CHOICES}
             for r in rules:
                 pom_id = r.get('pom_id')
                 if not pom_id:
                     continue
                 logica = (r.get('logica') or '').strip().upper() or None
-                if logica is not None and logica not in ('LINEAR', 'STEP'):
-                    errors.append("logica ha de ser 'LINEAR' o 'STEP'")
+                if logica is not None and logica not in valid_logiques:
+                    errors.append(f"logica ha de ser un de: {', '.join(sorted(valid_logiques))}")
                     continue
                 src = (GradingRule.objects.filter(
                            rule_set_id=model.grading_rule_set_id, pom_id=pom_id).first()
@@ -2331,9 +2332,10 @@ def set_pom_regim_view(request, model_id, pom_id):
     data = request.data
     has = lambda k: k in data   # noqa: E731 — actualització selectiva per presència de camp
 
+    valid_logiques = {code for code, _ in GradingRule.LOGICA_CHOICES}
     logica = (data.get('logica') or '').strip().upper() if has('logica') else None
-    if logica is not None and logica not in ('LINEAR', 'STEP'):
-        return Response({'detail': "logica ha de ser 'LINEAR' o 'STEP'."}, status=400)
+    if logica is not None and logica not in valid_logiques:
+        return Response({'detail': f"logica ha de ser un de: {', '.join(sorted(valid_logiques))}"}, status=400)
 
     def _num(k):
         v = data.get(k)
