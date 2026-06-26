@@ -146,8 +146,9 @@ export default function ProjectGantt({ t }) {
             <div style={{ position: 'relative', width: trackW, height: AXIS_H }}>
               {ticks.map(tk => (
                 <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, height: AXIS_H, borderLeft: '0.5px solid var(--gray-l)' }}>
-                  {/* PEÇA 2 — data centrada sobre la columna del dia, negra i més gran (clarament llegible) */}
-                  <span style={{ position: 'absolute', left: PX_PER_DAY / 2, top: '50%', transform: 'translate(-50%, -50%)',
+                  {/* PEÇA 2 — data centrada al MIG de la franja visible (step·PX_PER_DAY) entre línies de
+                      graella, no a la vora esquerra. A step=1 equival a PX_PER_DAY/2. Negra i llegible. */}
+                  <span style={{ position: 'absolute', left: (step * PX_PER_DAY) / 2, top: '50%', transform: 'translate(-50%, -50%)',
                                  fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>{fmtDM(tk.d)}</span>
                 </div>
               ))}
