@@ -38,6 +38,16 @@ function toolRoute(task, modelId) {
   }
 }
 
+function toolTab(task) {
+  switch (task.task_type_code) {
+    case 'pom':
+    case 'size_check':
+      return 'Mesures'
+    default:
+      return null
+  }
+}
+
 // task_type.code → icona Tabler (no hi havia mapa compartit; design system).
 const TASK_ICON = {
   pattern_digit: 'ti-vector', pattern_cad: 'ti-vector-bezier', pattern_hand: 'ti-pencil',
@@ -74,7 +84,11 @@ const footerWrap = { width: '100%', marginTop: 14 }
 function TransportBtn({ icon, active, title, onClick }) {
   return (
     <button type="button" title={title} disabled={!active}
-      onClick={() => { if (active) onClick?.() }}
+      onClick={e => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (active) onClick?.(e)
+      }}
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         width: 28, height: 28, borderRadius: 6,
@@ -150,7 +164,7 @@ function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop }) {
   )
 }
 
-export default function WorkPlan({ tasques, modelId, onRefresh }) {
+export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -220,6 +234,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
   // — la targeta passa a "en curs".
   function playMine(task) {
     const route = toolRoute(task, modelId)
+    const tab = toolTab(task)
     // El backend decideix si cal crear/reobrir/claimar o fer no-op. Evita basar-se en l'estat
     // possiblement obsolet de la targeta i no pot demanar InProgress→InProgress.
     models.openTask(modelId, task.task_type_code)
@@ -229,8 +244,12 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
           id: res?.data?.task_id ?? task.id,
           status: res?.data?.status ?? task.status,
         }
-        if (route) navigate(toolRoute(openedTask, modelId))
-        onRefresh?.()
+        if (route) {
+          if (tab) onOpenTab?.(tab)
+          navigate(toolRoute(openedTask, modelId))
+        } else {
+          onRefresh?.()
+        }
       })
       .catch(err => {
         const msg = err?.response?.data?.error
@@ -259,7 +278,6 @@ export default function WorkPlan({ tasques, modelId, onRefresh }) {
       .then(() => {
         setHandoff(null)
         playMine({ ...task, assignee_id: myProfileId })
-        onRefresh?.()
       })
       .catch(err => {
         setHandoff(null)

@@ -127,7 +127,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
       {/* ── Pla de treball (Q4 crescut) — ample total dalt (P2a) ───── */}
-      <WorkPlan tasques={tasques} modelId={modelId} onRefresh={load} />
+      <WorkPlan tasques={tasques} modelId={modelId} onRefresh={load} onOpenTab={onOpenTab} />
 
       <div style={grid}>
       <div style={wrap}>
