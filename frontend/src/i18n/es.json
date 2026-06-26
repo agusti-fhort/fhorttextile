@@ -2028,31 +2028,6 @@
     "examples": "Ejemplos: \"El POM D es 35.5cm\" · \"Añade el POM de cintura\" · \"Elimina Y5\"",
     "input_placeholder": "Escribe un mensaje… (Enter para enviar)"
   },
-  "design_freeze": {
-    "returned": "DEVUELTO",
-    "blockers": "Campos bloqueantes ({{count}})",
-    "warnings": "Avisos ({{count}})",
-    "extracted_data": "Datos extraídos",
-    "poms_detected": "POMs detectados ({{count}})",
-    "grading_included": "· tabla de grading incluida",
-    "poms_no_base": "POMs sin valor de talla base — se generarán desde las Grading Rules del cliente",
-    "visual_description": "Descripción visual: ",
-    "continue": "Continuar",
-    "field": {
-      "brand": "Marca",
-      "style": "Estilo",
-      "code": "Código",
-      "season": "Temporada",
-      "year": "Año",
-      "garment": "Prenda",
-      "material": "Material",
-      "composition": "Composición",
-      "base_size": "Talla base",
-      "size_run": "Run tallas",
-      "designer": "Diseñador",
-      "patternmaker": "Patronista"
-    }
-  },
   "tasks": {
     "title": "Tareas",
     "col_task": "Tarea",
