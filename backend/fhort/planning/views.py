@@ -426,8 +426,8 @@ def calendar_events_view(request):
                 'meta': meta_base,
             })
 
-    # ── Agregació per convocatòria (C4): UN event per (convocatòria × assistent); si la
-    # convocatòria no té cap assistent intern → UN event únic (tecnic_id=None, color fix). ──
+    # ── Convocatòria (C4 + G7/4b): per cada (convocatòria × assistent) emetem UN marcador per
+    # SESSIÓ REAL del grup (no un bloc/rang). Sense assistent intern → marcadors amb tecnic_id=None. ──
     for convocatoria, grup in conv_groups.items():
         per_att = {}   # att_id -> {'att', 'sessions'}
         for s in grup:
@@ -439,59 +439,62 @@ def calendar_events_view(request):
                 if per_att else [(None, list(grup))])
         for att, sessions in emis:
             sessions_grup = sorted(sessions, key=lambda x: (x.data, x.start_time or _dt.time.min))
-            primera = sessions_grup[0]
             # E4: n = sessions NO anul·lades (les Anul·lades ja s'han exclòs del queryset).
             n = len(sessions_grup)
-            grp_tancada = all(s.estat == 'Tancada' for s in sessions_grup)
-            # E2: durada del bloc = suma d'efectives (real per Tancades, prevista per vives).
-            total_eff = sum(_eff_minutes(s) for s in sessions_grup)
-            if primera.start_time and total_eff:
-                start_base = timezone.make_aware(
-                    _dt.datetime.combine(primera.data, primera.start_time))
-                end_base = start_base + _dt.timedelta(minutes=total_eff)
-                start_dt = timezone.localtime(start_base).isoformat()
-                end_dt = timezone.localtime(end_base).isoformat()
-                all_day = False
-            else:
-                start_dt = primera.data.isoformat()
-                end_dt = sessions_grup[-1].data.isoformat()
-                all_day = True
-            avis = any(
-                bool(expected_by_key.get((s.model_id, s.fase)) and s.data and
-                     s.data < expected_by_key[(s.model_id, s.fase)])
-                for s in sessions_grup if s.model_id)
-            meta = {
-                'convocatoria': str(convocatoria),
-                'n_models': n,
-                'model_ids': [s.model_id for s in sessions_grup],
-                'fase': primera.fase,
-                'lloc': primera.lloc,
-                'avis_abans_confeccio': avis,
-                'tancada': grp_tancada,
-                'durada_real_min': total_eff,
-            }
-            titol = f'Fitting · {n} models · {primera.fase}'
-            if att is not None:
-                events.append({
-                    'id': f'fitting-conv-{convocatoria}-{att.id}',
-                    'tipus': 'fitting', 'tancada': grp_tancada,
-                    'start': start_dt, 'end': end_dt, 'titol': titol,
-                    'tecnic_id': att.id,
-                    'tecnic_nom': att.user.get_full_name() or att.user.username,
-                    'color': COLOR_FITTING_CLOSED if grp_tancada else (att.color_avatar or '#888888'),
-                    'link': '/fittings', 'en_risc': False, 'all_day': all_day,
-                    'meta': meta,
-                })
-            else:
-                events.append({
-                    'id': f'fitting-conv-{convocatoria}',
-                    'tipus': 'fitting', 'tancada': grp_tancada,
-                    'start': start_dt, 'end': end_dt, 'titol': titol,
-                    'tecnic_id': None, 'tecnic_nom': None,
-                    'color': COLOR_FITTING_CLOSED if grp_tancada else COLOR_FITTING,
-                    'link': '/fittings', 'en_risc': False, 'all_day': all_day,
-                    'meta': meta,
-                })
+            model_ids_grup = [s.model_id for s in sessions_grup]
+            # G7 (Bloc 4 / 4b): UN marcador per cada FittingSession REAL del grup, cada un al
+            # seu propi dia (start==end, com el fitting individual a dalt). NO un rang/bloc:
+            # els dies SENSE sessió queden buits (abans inRange replicava l'all-day a tot el
+            # rang primera→última). Cada marcador conserva meta de convocatòria (UUID + n_models)
+            # perquè el front pugui agrupar-los visualment si vol.
+            for s in sessions_grup:
+                s_tancada = s.estat == 'Tancada'
+                eff = _eff_minutes(s)
+                if s.start_time and eff:
+                    base = timezone.make_aware(_dt.datetime.combine(s.data, s.start_time))
+                    start_dt = timezone.localtime(base).isoformat()
+                    end_dt = timezone.localtime(base + _dt.timedelta(minutes=eff)).isoformat()
+                    all_day = False
+                else:
+                    start_dt = s.data.isoformat()
+                    end_dt = s.data.isoformat()
+                    all_day = True
+                avis = bool(s.model_id and expected_by_key.get((s.model_id, s.fase)) and
+                            s.data and s.data < expected_by_key[(s.model_id, s.fase)])
+                meta = {
+                    'convocatoria': str(convocatoria),
+                    'n_models': n,
+                    'model_id': s.model_id,
+                    'model_ids': model_ids_grup,
+                    'fase': s.fase,
+                    'lloc': s.lloc,
+                    'avis_abans_confeccio': avis,
+                    'tancada': s_tancada,
+                    'duracio_minuts': s.duracio_minuts,
+                    'durada_real': eff if (s.started_at and s.finished_at) else None,
+                }
+                titol = f'Fitting · {n} models · {s.fase}'
+                if att is not None:
+                    events.append({
+                        'id': f'fitting-conv-{convocatoria}-{att.id}-{s.id}',
+                        'tipus': 'fitting', 'tancada': s_tancada,
+                        'start': start_dt, 'end': end_dt, 'titol': titol,
+                        'tecnic_id': att.id,
+                        'tecnic_nom': att.user.get_full_name() or att.user.username,
+                        'color': COLOR_FITTING_CLOSED if s_tancada else (att.color_avatar or '#888888'),
+                        'link': '/fittings', 'en_risc': False, 'all_day': all_day,
+                        'meta': meta,
+                    })
+                else:
+                    events.append({
+                        'id': f'fitting-conv-{convocatoria}-{s.id}',
+                        'tipus': 'fitting', 'tancada': s_tancada,
+                        'start': start_dt, 'end': end_dt, 'titol': titol,
+                        'tecnic_id': None, 'tecnic_nom': None,
+                        'color': COLOR_FITTING_CLOSED if s_tancada else COLOR_FITTING,
+                        'link': '/fittings', 'en_risc': False, 'all_day': all_day,
+                        'meta': meta,
+                    })
 
     return Response({'events': events}, status=http_status.HTTP_200_OK)
 
