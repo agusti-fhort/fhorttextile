@@ -9,9 +9,9 @@ import { IconPackage, IconUser, IconFlag } from '@tabler/icons-react'
 // el drag de prioritats (M-assist) després només cal sobre aquesta capa, sense reescriure-la.
 // Tokens del DS (no canvas). CONVIU amb el tab "Calendari" (PlanningCalendar, executor/hores).
 const MONO = 'IBM Plex Mono, monospace'
-const LABEL_W = 280
+const LABEL_W = 320
 const PX_PER_DAY = 26
-const ROW_H = 70
+const ROW_H = 50
 const BAR_H = 24
 const AXIS_H = 26
 const DEFAULT_COLOR = 'var(--gray)'
@@ -269,9 +269,9 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
     <div onClick={onClick} title={`${m.codi} · ${m.nom || ''}`} style={{
       display: 'flex', height: ROW_H, cursor: 'pointer', borderBottom: '0.5px solid var(--base-hairline, var(--gray-l))',
     }}>
-      {/* PEÇA 1 — label (ordre explícit d'Agus): codi (gris petit) · nom (negre, fins a 2 línies) ·
-          col·lecció (gris petit) · temporada (gris petit). Tokens d'escala (--fs-*), mai px literals.
-          PEÇA 3 — z=7: label sticky-left PER SOBRE de les pills del track (z=6) en scroll-X (fons opac). */}
+      {/* PEÇA 1 — label en 2 LÍNIES (ordre definitiu Agus): línia 1 = codi (gris petit); línia 2 en flow
+          horitzontal = nom (negre) · col·lecció · temporada (grisos petits). Tokens d'escala, sense px
+          literals. z=7 (sticky-left per sobre de les pills del track z=6 en scroll-X; fons opac). */}
       <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--white)', zIndex: 7,
                     borderRight: '0.5px solid var(--gray-l)', borderLeft: m.en_risc ? '2px solid var(--err)' : '2px solid transparent',
                     padding: '8px 14px', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
@@ -279,14 +279,11 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
           {m.en_risc && <i className="ti ti-flag" title={t('planning.gantt.risk_flag')} style={{ fontSize: 'var(--fs-label)', color: 'var(--err)', marginRight: 4 }} />}
           {m.codi}
         </div>
-        <div style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-main)', lineHeight: 1.2,
-                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{m.nom || '—'}</div>
-        {m.collection && (
-          <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.collection}</div>
-        )}
-        {m.temporada && (
-          <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.temporada}</div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, overflow: 'hidden' }}>
+          <span style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', flexShrink: 1, minWidth: 0 }}>{m.nom || '—'}</span>
+          {m.collection && <span style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>· {m.collection}</span>}
+          {m.temporada && <span style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>· {m.temporada}</span>}
+        </div>
       </div>
 
       <div style={{ position: 'relative', width: trackW, height: ROW_H }}>
