@@ -643,7 +643,8 @@ def gantt_view(request):
     ?collection ?temporada. Gated view_team_tasks. CAPA DE LECTURA (drag = sprint posterior)."""
     qp = request.query_params
     qs = (Model.objects.all().select_related('responsable')
-          .prefetch_related('model_tasks', 'model_tasks__assignee', 'productions', 'fitting_sessions'))
+          .prefetch_related('model_tasks', 'model_tasks__assignee', 'model_tasks__task_type',
+                            'model_tasks__timers', 'productions', 'fitting_sessions'))
     if qp.get('model_id'):
         qs = qs.filter(pk=qp['model_id'])
     if qp.get('responsable'):
@@ -658,7 +659,15 @@ def gantt_view(request):
         tasks = list(m.model_tasks.all())
         total = len(tasks)
         done = sum(1 for tk in tasks if tk.status == 'Done')
-        pct = round(100 * done / total) if total else 0
+        # PEÇA 4a — maduresa REAL: minuts consumits (timers) de les tasques Done sobre el total estimat.
+        # ModelTask no té camp temps_consumit_min → s'agrega TimerEntrada.minuts via related 'timers'.
+        done_min = sum(sum(tmr.minuts or 0 for tmr in tk.timers.all())
+                       for tk in tasks if tk.status == 'Done')
+        total_min = sum(tk.estimated_minutes or 0 for tk in tasks)
+        # Fallback: cap tasca amb estimació → % per recompte de Done (comportament previ).
+        pct = round(100 * done_min / total_min) if total_min else (round(100 * done / total) if total else 0)
+        # Pròxima tasca pendent (primera no-Done en ordre [model, order]) → etiqueta de la pastilla.
+        next_task = next((tk.task_type.code for tk in tasks if tk.status != 'Done'), None)
         start = m.consumption_started_at.date() if m.consumption_started_at else m.predicted_start
         end = m.predicted_end or start
         start = start or end
@@ -685,6 +694,7 @@ def gantt_view(request):
             'start': start.isoformat(), 'end': end.isoformat(),
             'data_objectiu': objectiu.isoformat() if objectiu else None,
             'responsable_id': resp_id, 'responsable_nom': resp_nom, 'responsable_color': resp_color,
+            'next_task': next_task,
             'en_risc': bool(end and objectiu and end > objectiu),
             'collection': m.collection or '', 'temporada': m.temporada,
             'fites': fites, 'esperes': esperes,

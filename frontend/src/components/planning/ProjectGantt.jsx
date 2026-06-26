@@ -155,7 +155,7 @@ export default function ProjectGantt({ t }) {
             <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('planning.gantt.empty')}</div>
           ) : displayed.map(m => (
             <GanttRow key={m.model_id} m={m} color={colorOf(m)} trackW={trackW} x={x} todayX={todayX}
-                      ticks={ticks} onClick={() => navigate(`/models/${m.model_id}`)} t={t} />
+                      ticks={ticks} order={order} onClick={() => navigate(`/models/${m.model_id}`)} t={t} />
           ))}
         </div>
       </div>
@@ -252,7 +252,7 @@ function ColorFilterControls({ t, colorBy, setColorBy, opts, filterTechs, setFil
   )
 }
 
-function GanttRow({ m, color, trackW, x, todayX, ticks, onClick, t }) {
+function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
   const left = x(m.start)
   const right = x(m.end) + PX_PER_DAY            // fi inclusiu (el dia de fi compta sencer)
   const width = Math.max(PX_PER_DAY * 0.7, right - left)
@@ -309,10 +309,21 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, onClick, t }) {
               border: '0.5px dashed var(--text-muted)', borderRadius: 2,
             }} />
           ))}
-          {/* etiqueta fase · % */}
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-main)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
-            {t(`model_sheet.dashboard.phase.${m.fase}`, { defaultValue: m.fase })} · {m.pct}%
+          {/* PEÇA 4b — pastilla: punt-color tècnic · nom · next_task · pct%. Barra estreta (<80px) → només
+              pct%. Alineació dreta en ordre 'lliurament' (per no solapar el símbol d'objectiu de la Peça 6). */}
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                        justifyContent: width < 80 ? 'center' : (order === 'lliurament' ? 'flex-end' : 'flex-start'),
+                        padding: '0 6px', fontSize: 'var(--fs-label)', fontFamily: MONO,
+                        color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', pointerEvents: 'none' }}>
+            {width < 80 ? `${m.pct}%` : (
+              <>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, marginRight: 5,
+                               background: m.responsable_color || DEFAULT_COLOR }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {[m.responsable_nom, m.next_task, `${m.pct}%`].filter(Boolean).join(' · ')}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
