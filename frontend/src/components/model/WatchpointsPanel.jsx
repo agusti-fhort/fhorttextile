@@ -78,9 +78,21 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
           <i className={`ti ${w.estat === 'resolved' ? 'ti-check' : 'ti-flag'}`}
             style={{ fontSize: 14, marginTop: 2, color: w.estat === 'resolved' ? 'var(--ok)' : 'var(--warn)' }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 'var(--fs-body)', whiteSpace: 'pre-wrap',
-                          color: w.estat === 'resolved' ? 'var(--text-muted)' : 'var(--text-main)',
-                          textDecoration: w.estat === 'resolved' ? 'line-through' : 'none' }}>{w.text}</div>
+            {Array.isArray(w.dades) && w.dades.length > 0 ? (
+              // F2 — Watchpoint de SISTEMA (import viu): render PER CLAU en l'idioma del lector.
+              <div style={{ fontSize: 'var(--fs-body)',
+                            color: w.estat === 'resolved' ? 'var(--text-muted)' : 'var(--text-main)',
+                            textDecoration: w.estat === 'resolved' ? 'line-through' : 'none' }}>
+                <div style={{ fontWeight: 500 }}>{t('import_missing.title')}</div>
+                <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                  {w.dades.map(camp => <li key={camp}>{t(`import_missing.${camp}`, camp)}</li>)}
+                </ul>
+              </div>
+            ) : (
+              <div style={{ fontSize: 'var(--fs-body)', whiteSpace: 'pre-wrap',
+                            color: w.estat === 'resolved' ? 'var(--text-muted)' : 'var(--text-main)',
+                            textDecoration: w.estat === 'resolved' ? 'line-through' : 'none' }}>{w.text}</div>
+            )}
             <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
               {w.created_by_nom || '—'} · {fmtDate(w.created_at)}{w.task_type_code ? ` · ${w.task_type_code}` : ''}
               {w.estat === 'resolved' && w.resolved_by_nom ? ` · ${t('watchpoints.resolved_by', { who: w.resolved_by_nom })}` : ''}

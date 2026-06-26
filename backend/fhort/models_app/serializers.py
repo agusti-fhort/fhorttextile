@@ -150,9 +150,10 @@ class WatchpointSerializer(serializers.ModelSerializer):
     class Meta:
         model = Watchpoint
         fields = [
-            'id', 'model', 'task', 'task_type_code', 'text', 'estat',
+            'id', 'model', 'task', 'task_type_code', 'text', 'estat', 'dades',
             'created_by', 'created_by_nom', 'created_at',
             'resolved_by', 'resolved_by_nom', 'resolved_at', 'resolution_note',
         ]
         # L'estat i l'autoria es gestionen pel servidor (create / accions resolve/reopen).
-        read_only_fields = ['estat', 'created_by', 'created_at', 'resolved_by', 'resolved_at', 'resolution_note']
+        # 'dades' és de sistema (l'omple l'import/recàlcul, F2/F3) → read-only per al client.
+        read_only_fields = ['estat', 'dades', 'created_by', 'created_at', 'resolved_by', 'resolved_at', 'resolution_note']

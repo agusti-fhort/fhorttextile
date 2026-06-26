@@ -2110,6 +2110,13 @@
     "no_ruleset": "— none",
     "editable_hint": "read-only · editable in model edit"
   },
+  "import_missing": {
+    "title": "Complete the model configuration before defining POMs",
+    "garment_type_item": "Garment type (item)",
+    "base_size": "Base size",
+    "size_run": "Size run (size system)",
+    "grading_rule_set": "Grading rule set"
+  },
   "watchpoints": {
     "title": "Watchpoints",
     "tab_label": "Watchpoints",

@@ -2110,6 +2110,13 @@
     "no_ruleset": "— cap",
     "editable_hint": "lectura · editable a l'edició del model"
   },
+  "import_missing": {
+    "title": "Completa la configuració del model abans de definir POMs",
+    "garment_type_item": "Tipologia de la peça (tipus)",
+    "base_size": "Talla base",
+    "size_run": "Run de talles (sistema de talles)",
+    "grading_rule_set": "Regla d'escalat (grading)"
+  },
   "watchpoints": {
     "title": "Watchpoints",
     "tab_label": "Watchpoints",

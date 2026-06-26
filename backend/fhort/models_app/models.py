@@ -815,6 +815,10 @@ class Watchpoint(models.Model):
     task = models.ForeignKey('tasks.ModelTask', on_delete=models.SET_NULL, null=True, blank=True,
                              related_name='watchpoints')
     text = models.TextField()
+    # F2 — Watchpoint estructurat: si 'dades' és no-null, és un Watchpoint de SISTEMA (no human-authored;
+    # p.ex. l'import viu) i conté dades per renderitzar per clau en l'idioma del lector (llista de claus de
+    # config que falten, de model_config_missing). Combinat amb task IS NULL identifica l'origen import.
+    dades = models.JSONField(null=True, blank=True)
     estat = models.CharField(max_length=10, choices=ESTAT_CHOICES, default='open')
     created_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
                                    related_name='watchpoints_creats')
