@@ -15,6 +15,11 @@ const thS = {
   borderBottom: '1px solid var(--border)',
 }
 const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 'var(--fs-body)' }
+// Règims editables a mà (les NORMES de gradació, mirall de GradingRule.LOGICA_CHOICES). FIXED és una
+// norma igual que LINEAR/STEP → canviable des del desplegable. ZERO/EXCEPTION NO s'ofereixen com a tria
+// nova (ZERO = nínxol "sempre 0"; EXCEPTION = tipus APLICAT per cel·la pel motor —override/excepció—,
+// no un règim de POM); si una fila ja en porta un, es manté com a opció perquè el valor real no s'emmascari.
+const REGIME_OPTIONS = ['LINEAR', 'STEP', 'FIXED']
 const btnPrimary = (disabled) => ({
   background: disabled ? 'var(--bg-muted)' : 'var(--gold)', color: disabled ? 'var(--text-muted)' : 'var(--white)',
   border: 'none', borderRadius: 6, padding: '7px 18px',
@@ -315,28 +320,26 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
           mono right readOnly={readOnly} />
       </td>
       <td style={tdS}>
-        {row.logica && !['LINEAR', 'STEP'].includes(row.logica) ? (
-          // FIXED/ZERO/EXCEPTION: règim de regla de catàleg, NO editable a mà aquí → mostra el valor
-          // REAL com a etiqueta (mai emmascarat com a LINEAR). El payload el reenvia tal qual.
-          <span title={t('editable_table.regime_locked_hint')}
-            style={{ fontSize: 'inherit', color: 'var(--text-muted)' }}>
-            {row.logica}
-          </span>
-        ) : (
-          <select
-            value={row.logica || 'LINEAR'}
-            disabled={readOnly}
-            onChange={e => onCellChange(row.id, 'logica', e.target.value)}
-            style={{
-              font: 'inherit', border: '1px solid var(--border)', borderRadius: 4,
-              padding: '2px 4px', background: readOnly ? 'transparent' : 'var(--white)',
-              color: 'var(--text-main)',
-            }}
-          >
-            <option value="LINEAR">LINEAR</option>
-            <option value="STEP">STEP</option>
-          </select>
-        )}
+        {(() => {
+          const cur = row.logica || 'LINEAR'
+          // No emmascarar: si la fila ja porta un valor fora de les normes editables (ZERO/EXCEPTION),
+          // s'afegeix com a opció perquè es vegi el valor real i es pugui canviar a LINEAR/STEP/FIXED.
+          const opts = REGIME_OPTIONS.includes(cur) ? REGIME_OPTIONS : [...REGIME_OPTIONS, cur]
+          return (
+            <select
+              value={cur}
+              disabled={readOnly}
+              onChange={e => onCellChange(row.id, 'logica', e.target.value)}
+              style={{
+                font: 'inherit', border: '1px solid var(--border)', borderRadius: 4,
+                padding: '2px 4px', background: readOnly ? 'transparent' : 'var(--white)',
+                color: 'var(--text-main)',
+              }}
+            >
+              {opts.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          )
+        })()}
       </td>
       <td style={{ ...tdS, textAlign: 'right' }}>
         <EditableCell value={row.increment_base ?? ''}

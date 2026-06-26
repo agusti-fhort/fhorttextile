@@ -1763,7 +1763,6 @@
     "search_placeholder": "Busca por nombre o código…",
     "no_pom_found": "Ningún POM encontrado para \"{{query}}\".",
     "create_pom": "Crear POM nuevo \"{{query}}\"",
-    "regime_locked_hint": "Régimen de regla de catálogo (Fixed/Zero/Exception) — no editable aquí",
     "col": {
       "sheet_name": "Nombre ficha",
       "description": "Descripción",
