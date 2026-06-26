@@ -1554,6 +1554,11 @@
     "propagated_load_err": "No s'ha pogut carregar la taula propagada.",
     "regim_err": "No s'ha pogut canviar el règim.",
     "save_pom": "Gravar POM",
+    "gravar_confirm_title": "Gravar POM",
+    "gravar_confirm_simple": "Els POM construïts es gravaran a la taula de mesures. D'acord?",
+    "gravar_confirm_reseed": "Aquest model ja té mesures base. En gravar, se substituiran les mesures actuals per les construïdes aquí.",
+    "gravar_confirm_ok": "Gravar POM",
+    "gravar_confirm_cancel": "Cancel·lar",
     "save_pom_err": "No s'ha pogut gravar POM.",
     "unsaved_pom_hint": "Grava POM per tancar la tasca i activar Mesures."
   },

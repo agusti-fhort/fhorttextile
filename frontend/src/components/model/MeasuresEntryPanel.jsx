@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import EditableTable from '../EditableTable/EditableTable'
 import ImportWizard from '../ImportWizard/ImportWizard'
@@ -34,6 +34,18 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   const [seedOffer, setSeedOffer] = useState(false)
   const [seedBusy, setSeedBusy] = useState(false)
   const [savingPom, setSavingPom] = useState(false)
+  // Confirmació de Gravar POM (paral·lel a "Propagar"): missatge SIMPLE la 1a vegada; ADVERTÈNCIA si
+  // resembra (el model JA tenia base → llenç net que substitueix). `hadBaseRef` captura l'estat ABANS
+  // de cap sembra (primer cop que veiem files de taula-mesures). `confirmRef` desa la promesa que
+  // savePom torna a EditableTable: resol en confirmar+desar, rebutja en cancel·lar (no marca "desat").
+  const [pomConfirmOpen, setPomConfirmOpen] = useState(false)
+  const [pomReseed, setPomReseed] = useState(false)
+  const pendingPayloadRef = useRef(null)
+  const confirmRef = useRef(null)
+  const hadBaseRef = useRef(null)
+  const captureHadBase = (rows) => {
+    if (hadBaseRef.current === null) hadBaseRef.current = (rows || []).some(r => r.base_value_cm != null)
+  }
 
   const togglePom = (pom) => {
     setSelectedPomIds(prev =>
@@ -50,7 +62,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   const reloadTable = (afterMode = 'manual') =>
     fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders })
       .then(r => r.json())
-      .then(d => { refreshTableMeta(d); if (d.rows?.length) setTaulaRows(d.rows); setMode(afterMode) })
+      .then(d => { refreshTableMeta(d); captureHadBase(d.rows); if (d.rows?.length) setTaulaRows(d.rows); setMode(afterMode) })
       .catch(() => setMode('selector'))
 
   // B5 — confirmar la sembra: materialitzar-poms (valor+nom_fitxa+tol, origen ITEM_STANDARD) i mostra
@@ -95,6 +107,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
         if (!alive) return
         refreshTableMeta(d)
         const rows = d.rows || []
+        captureHadBase(rows)
         if (rows.length) setTaulaRows(rows)
         const verge = !rows.some(r => r.base_value_cm != null)
         // Si ja té valors (no verge): en mode ENTRADA (Definició POM) NO sortim a consulta — obrim el
@@ -134,20 +147,43 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
     : model?.size_run_model?.split('·').map(s => s.trim())) || []
   const hasValues = taulaRows.some(r => r.base_value_cm != null)
 
-  const savePom = async (payload) => {
+  // Gravar POM passa per CONFIRMACIÓ (paral·lel a Propagar). savePom (cridat per EditableTable amb el
+  // payload) NO desa directament: obre el modal i torna una promesa que es resol quan l'usuari confirma
+  // i el desat reïx, o es rebutja si cancel·la/falla (perquè EditableTable no marqui la taula com a desada).
+  const savePom = (payload) => new Promise((resolve, reject) => {
+    pendingPayloadRef.current = payload
+    setPomReseed(!!hadBaseRef.current)
+    confirmRef.current = { resolve, reject }
+    setError('')
+    setPomConfirmOpen(true)
+  })
+
+  const confirmGravarPom = async () => {
     setSavingPom(true)
     setError('')
     try {
-      await models.gravarPom(id, payload)
+      await models.gravarPom(id, pendingPayloadRef.current)
+      setPomConfirmOpen(false)
+      confirmRef.current?.resolve()
       onPomSaved?.()
     } catch (err) {
       const msg = err?.response?.data?.error || err?.response?.data?.errors?.join?.(' · ')
         || t('model_measurements.save_pom_err')
       setError(msg)
-      throw err
+      setPomConfirmOpen(false)
+      confirmRef.current?.reject(err)
     } finally {
       setSavingPom(false)
+      confirmRef.current = null
+      pendingPayloadRef.current = null
     }
+  }
+
+  const cancelGravarPom = () => {
+    setPomConfirmOpen(false)
+    confirmRef.current?.reject(new Error('cancelled'))
+    confirmRef.current = null
+    pendingPayloadRef.current = null
   }
 
   return (
@@ -173,6 +209,23 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
         >
           <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: 0 }}>
             {t('model_measurements.seed_body')}
+          </p>
+        </Modal>
+      )}
+
+      {pomConfirmOpen && (
+        <Modal
+          title={t('model_measurements.gravar_confirm_title')}
+          cancelLabel={t('model_measurements.gravar_confirm_cancel')}
+          confirmLabel={savingPom ? t('common.saving') : t('model_measurements.gravar_confirm_ok')}
+          onCancel={cancelGravarPom}
+          onConfirm={confirmGravarPom}
+          confirmDisabled={savingPom}
+        >
+          <p style={{ fontSize: 'var(--fs-body)', margin: 0, display: 'flex', alignItems: 'flex-start', gap: 8,
+                      color: pomReseed ? 'var(--err)' : 'var(--text-muted)' }}>
+            {pomReseed && <i className="ti ti-alert-triangle" style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }} />}
+            {pomReseed ? t('model_measurements.gravar_confirm_reseed') : t('model_measurements.gravar_confirm_simple')}
           </p>
         </Modal>
       )}

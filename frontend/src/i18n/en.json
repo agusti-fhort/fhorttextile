@@ -1554,6 +1554,11 @@
     "propagated_load_err": "Could not load the propagated table.",
     "regim_err": "Could not change the regime.",
     "save_pom": "Save POM",
+    "gravar_confirm_title": "Save POM",
+    "gravar_confirm_simple": "The built POMs will be saved to the measurements table. OK?",
+    "gravar_confirm_reseed": "This model already has base measurements. Saving will replace the current measurements with the ones built here.",
+    "gravar_confirm_ok": "Save POM",
+    "gravar_confirm_cancel": "Cancel",
     "save_pom_err": "Could not save POM.",
     "unsaved_pom_hint": "Save POM to close the task and enable Measurements."
   },

@@ -1554,6 +1554,11 @@
     "propagated_load_err": "No se ha podido cargar la tabla propagada.",
     "regim_err": "No se ha podido cambiar el régimen.",
     "save_pom": "Grabar POM",
+    "gravar_confirm_title": "Grabar POM",
+    "gravar_confirm_simple": "Los POM construidos se grabarán en la tabla de medidas. ¿De acuerdo?",
+    "gravar_confirm_reseed": "Este modelo ya tiene medidas base. Al grabar, se sustituirán las medidas actuales por las construidas aquí.",
+    "gravar_confirm_ok": "Grabar POM",
+    "gravar_confirm_cancel": "Cancelar",
     "save_pom_err": "No se ha podido grabar POM.",
     "unsaved_pom_hint": "Graba POM para cerrar la tarea y activar Medidas."
   },
