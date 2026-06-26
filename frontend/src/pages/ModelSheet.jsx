@@ -78,6 +78,8 @@ const btnSecondary = {
   display: 'flex', alignItems: 'center', gap: 4,
 }
 
+const taskListFromResponse = (data) => data?.results || (Array.isArray(data) ? data : [])
+
 export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }) {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -96,6 +98,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [model, setModel] = useState(null)
   const [activeTab, setActiveTab] = useState(TABS.includes(tabParam) ? tabParam : defaultTab)
   const [taulaRows, setTaulaRows] = useState([])
+  const [modelTaskRows, setModelTaskRows] = useState([])
   const [sizesAmbDades, setSizesAmbDades] = useState(null)
   const [deltes, setDeltes] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -118,28 +121,38 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       .catch(() => {})
   }, [id])
 
+  const reloadTasks = useCallback(() => {
+    modelTasks.listByModel(id)
+      .then(res => setModelTaskRows(taskListFromResponse(res.data)))
+      .catch(() => {})
+  }, [id])
+
   useEffect(() => {
     if (!id) return
     setLoading(true)
     Promise.all([
       fetch(`${API}/api/v1/models/${id}/`, { headers: authHeaders }).then(r => r.json()),
       fetch(`${API}/api/v1/models/${id}/taula-mesures/`, { headers: authHeaders }).then(r => r.json()),
-    ]).then(([modelData, taulaData]) => {
+      modelTasks.listByModel(id).then(r => r.data).catch(() => []),
+    ]).then(([modelData, taulaData, taskData]) => {
       setModel(modelData)
       setTaulaRows(taulaData.rows || [])
       setSizesAmbDades(taulaData.sizes_amb_dades || null)
       setDeltes(taulaData.deltes || null)
+      setModelTaskRows(taskListFromResponse(taskData))
     }).catch(() => setError(t('model_sheet.err_load')))
     .finally(() => setLoading(false))
   }, [id])
 
-  // J1a — genesi al tab Mesures: si el model és VERGE (cap mesura base amb valor), la pestanya mostra
-  // el flux d'ENTRADA (MeasuresEntryPanel) en lloc de la consulta buida. La decisió es pren NOMÉS en
-  // ENTRAR a la pestanya (no de manera reactiva a cada tecla), perquè materialitzar no estiri la graella
-  // d'edició a mig escriure. En materialitzar-se (onMaterialized) → consulta (CheckMeasureEditor).
-  // PUNT COMÚ del mode del tab Mesures segons el TIPUS de tasca: 'pom' (Definició POM) → ENTRADA
-  // (wizard); 'size_check' (Mesurar prenda) → TREBALL (graella). Qualsevol camí (URL ?mode=entry,
-  // openTask intern via enterEdit, o futur arbre Q2) hereta aquesta regla. mesuresEntry = mostra wizard.
+  const pomTask = modelTaskRows.find(task => task.task_type_code === 'pom')
+  const hasBaseValue = taulaRows.some(r => r.base_value_cm != null)
+  const pomDone = pomTask?.status === 'Done'
+  const pomGenesisOpen = pomTask && ['InProgress', 'Paused'].includes(pomTask.status)
+  const pomReady = pomDone && hasBaseValue
+
+  // POM-genesi surt del tab Mesures lliure: Mesures només és treballable amb POM Done + base.
+  // `task_id` de size_check continua sent treball, no genesi; `mode=entry` i pom oberta/pausada
+  // obren la pantalla POM pròpia.
   const [mesuresEntry, setMesuresEntry] = useState(false)
   const prevTabRef = useRef(null)
   useEffect(() => {
@@ -147,12 +160,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     // ref a 'Mesures' durant la càrrega i la genesi no s'avaluaria mai en acabar de carregar).
     if (loading) return
     if (activeTab === 'Mesures' && prevTabRef.current !== 'Mesures') {
-      const verge = !taulaRows.some(r => r.base_value_cm != null)
-      // size_check (porta task_id) = TREBALL, no entrada; pom/?mode=entry/verge = ENTRADA.
-      setMesuresEntry((verge || entryMode) && !taskParam)
+      setMesuresEntry((entryMode || pomGenesisOpen) && !taskParam)
     }
     prevTabRef.current = activeTab
-  }, [activeTab, loading, taulaRows, entryMode, taskParam])
+  }, [activeTab, loading, entryMode, taskParam, pomGenesisOpen])
 
   // Porta-menú: obre (crea-si-falta + auto-assign + En curs) la tasca `code` i navega a l'eina amb el
   // task_id. Reusa el servei open-task; el botó funciona encara que el model no tingui la tasca creada.
@@ -209,10 +220,14 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     setEditTaskId(null)
     setEditing(null)
     setMesuresEntry(false)
+    setModelTaskRows(prev => prev.map(task => (
+      task.task_type_code === 'pom' ? { ...task, status: 'Done' } : task
+    )))
     reloadTaula()
     reloadModel()
+    reloadTasks()
     setWpVersion(v => v + 1)
-  }, [reloadModel, reloadTaula])
+  }, [reloadModel, reloadTaula, reloadTasks])
   // Sortir de mode edició/entrada en canviar de tab (pausa la tasca si n'hi havia).
   useEffect(() => {
     if ((editing && editing !== activeTab) || (mesuresEntry && activeTab !== 'Mesures')) exitEdit()
@@ -386,11 +401,31 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         )}
         {activeTab === 'Mesures' && (
           mesuresEntry && editing !== 'Mesures' ? (
-	            <MeasuresEntryPanel model={model} entryMode={mesuresEntry}
-	              onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }}
-	              onPomSaved={finishPomEntry} />
+            <MeasuresEntryPanel model={model} entryMode={mesuresEntry}
+              onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }}
+              onPomSaved={finishPomEntry} />
+          ) : (!taskParam && editing !== 'Mesures' && !pomReady) ? (
+            <div style={{
+              border: '0.5px dashed var(--border)', borderRadius: 8, padding: '1.25rem',
+              background: 'var(--bg-muted)', color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
+              display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap',
+            }}>
+              <div>
+                <div style={{ fontSize: 'var(--fs-h3)', color: 'var(--text-main)', marginBottom: 4 }}>
+                  {t('model_sheet.measures_empty_title')}
+                </div>
+                <div>{t('model_sheet.measures_empty_body')}</div>
+              </div>
+              <button type="button" disabled={openingTask}
+                onClick={() => enterEdit('Mesures', 'pom')}
+                style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
+                         opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
+                <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
+                {t('model_sheet.start_pom')}
+              </button>
+            </div>
           ) : (
-          <div>
+	          <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           marginBottom: 10, gap: 12 }}>
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
@@ -410,7 +445,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                     style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
                              opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
                     <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
-                    {t('model_sheet.edit_measures')}
+                    {t('model_sheet.edit_pom')}
                   </button>
                 )}
                 {/* Propagar a grading (origen): inicia fase nova sobre llenç net i porta a Escalat.
