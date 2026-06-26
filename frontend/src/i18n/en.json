@@ -829,7 +829,8 @@
       "assignacio": "Assignment",
       "calendari": "Calendar",
       "calendari_projecte": "Project calendar",
-      "informes": "Reports"
+      "informes": "Reports",
+      "registre": "Activity log"
     },
     "gov_subtitle": "Governance space: plan, validate phases and track models",
     "coming_soon": "Coming soon",

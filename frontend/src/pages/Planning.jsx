@@ -17,6 +17,7 @@ import TaskAssignWizard from '../components/TaskAssignWizard'
 import DashboardGovPanel from '../components/planning/DashboardGovPanel'
 import ProjectGantt from '../components/planning/ProjectGantt'
 import InformesPanel from '../components/planning/InformesPanel'
+import RegistreActivitat from './RegistreActivitat'
 
 // Tram 2 — Pantalla "Planificació": dues carpetes Pendents/Assignades (gated define_tasks/configure).
 // Pendents = models SENSE cap tasca no-Done assignada. Assignades = models amb ALMENYS UNA no-Done amb tècnic.
@@ -437,7 +438,7 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
 // El tab "Calendari" antic (PlanningCalendar incrustat) s'ha jubilat; el calendari de l'EXECUTOR
 // segueix viu via ruta /planificacio/calendari + entrada de menú del tècnic (Sidebar, cap 'execute').
 // Gating de pantalla: define_tasks||configure (el mateix que tenia Planning).
-const GOV_TABS = ['dashboard', 'planificacio', 'assignacio', 'calendari_projecte', 'informes']
+const GOV_TABS = ['dashboard', 'planificacio', 'assignacio', 'calendari_projecte', 'informes', 'registre']
 
 export default function Planning() {
   const { t } = useTranslation()
@@ -482,6 +483,7 @@ export default function Planning() {
       {activeTab === 'assignacio' && <PlanificacioPanel mode="assigned" />}
       {activeTab === 'calendari_projecte' && <ProjectGantt t={t} />}
       {activeTab === 'informes' && <InformesPanel me={me} />}
+      {activeTab === 'registre' && <RegistreActivitat />}
     </div>
   )
 }

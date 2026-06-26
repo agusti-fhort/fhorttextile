@@ -34,7 +34,6 @@ const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
 const CompanyCalendar = lazy(() => import('./pages/CompanyCalendar'))
 const Planning = lazy(() => import('./pages/Planning'))
 const PlanningCalendar = lazy(() => import('./pages/PlanningCalendar'))
-const RegistreActivitat = lazy(() => import('./pages/RegistreActivitat'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 
 function ProtectedRoute({ children }) {
@@ -177,7 +176,8 @@ export default function App() {
           <Route path="onboarding" element={<OnboardingWizard />} />
           <Route path="configuracio/usuaris" element={<UsersRoles />} />
           <Route path="configuracio/calendari" element={<CompanyCalendar />} />
-          <Route path="registre-activitat" element={<RegistreActivitat />} />
+          {/* Bloc 2 Peça 3: Registre d'activitat retirat com a ruta standalone → ara tab de Planning
+              (oversight, gate canPlan). Deep-links a /registre-activitat cauen al catch-all → /. */}
           <Route path="perfil" element={<UserProfilePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
