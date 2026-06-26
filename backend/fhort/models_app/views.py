@@ -35,7 +35,7 @@ class ModelFilter(django_filters.FilterSet):
 
     class Meta:
         model = Model
-        fields = ['estat', 'fase_actual', 'garment_type', 'responsable', 'temporada', 'any',
+        fields = ['fase_actual', 'garment_type', 'responsable', 'temporada', 'any',
                   'customer', 'collection', 'data_objectiu']
 
 

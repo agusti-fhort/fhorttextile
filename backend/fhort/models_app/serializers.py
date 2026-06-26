@@ -34,7 +34,6 @@ class ModelListSerializer(serializers.ModelSerializer):
             'created_at',
             'garment_type',
             'garment_type_item_nom',
-            'estat',
             'fase_actual',
             'responsable',
             'prioritat',
