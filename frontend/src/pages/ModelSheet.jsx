@@ -225,17 +225,32 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // J1b — CONSUM de la tasca entrant: si el full s'obre amb ?tab=Mesures&task_id= (size_check "Mesurar
   // prenda" via WorkPlan / redirect /size-check), el tab entra en mode TREBALL lligat a ESA tasca
   // (compta-temps + origen de watchpoints), SENSE encunyar-ne una de nova (a diferència del botó "Editar
-  // mides", que crida openTask). La tasca ja ve En curs des del Kanban/WorkPlan; aquí només es consumeix
-  // i es pausa en sortir/desmuntar (com feia ModelMeasurements). Un sol cop, després de carregar el model.
+  // mides", que crida openTask). La tasca ja ve En curs des del Kanban/WorkPlan; aquí es consumeix i, BLOC 1,
+  // es REGISTRA a activeTaskRef (PUNT COMÚ) perquè pauseActiveTask la pausi en sortir/desmuntar. Un sol cop.
   const autoTaskRef = useRef(false)
   useEffect(() => {
     if (autoTaskRef.current || loading) return
     if (activeTab === 'Mesures' && taskParam) {
       autoTaskRef.current = true
-      setEditTaskId(parseInt(taskParam))
+      const tid = parseInt(taskParam)
+      setEditTaskId(tid)
+      activeTaskRef.current = tid   // BLOC 1: tasca viva → pausada en sortir (abans no es feia: GAP P3 size_check)
       setEditing('Mesures')
     }
   }, [loading, activeTab, taskParam])
+
+  // BLOC 1 — pom via URL ?mode=entry (WorkPlan/menú "Definició POM"): la tasca ve En curs però SENSE task_id
+  // a la URL, així que el ModelSheet no la coneixia → quedava InProgress orfe (GAP P3 pom). La registrem pel
+  // MATEIX punt comú que el botó intern: enterEdit('Mesures','pom') (openTask idempotent → activeTaskRef),
+  // de manera que es pausi en sortir/desmuntar. NOMÉS amb ?mode=entry (NO toca la genesi del model verge).
+  const entryEditRef = useRef(false)
+  useEffect(() => {
+    if (entryEditRef.current || loading) return
+    if (entryMode && !taskParam && activeTab === 'Mesures') {
+      entryEditRef.current = true
+      enterEdit('Mesures', 'pom')
+    }
+  }, [loading, entryMode, taskParam, activeTab])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // "Propagar a grading" des de MESURES (origen): inicia una FASE NOVA sobre llenç net
   // (generate_grading_view new_version → esborra propagació anterior + regenera) i porta a la tab Escalat.
