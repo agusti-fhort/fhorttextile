@@ -1522,12 +1522,15 @@
     "seed_confirm": "Seed from item",
     "seed_cancel": "Start from scratch",
     "title": "Measurements and grading",
+    "pom_title": "POM definition and base size",
+    "pom_subtitle": "Create the model base: POMs, short nomenclature, values and initial rules.",
     "intro": "Enter the base size measurements. The system will compute grading for all sizes.",
     "manual_title": "Enter manually",
     "manual_desc": "The system proposes the standard POMs for {{type}}. Enter the base size values.",
     "this_garment": "this garment type",
     "poms_available": "{{total}} POMs available · {{key}} KEY",
     "import_title": "Import from tech sheet",
+    "import_table": "Import table",
     "import_desc": "Upload a PDF or image of the client tech sheet. The AI will extract measurements, sizes and grading automatically.",
     "suggested_poms": "Suggested POMs for this garment type — click to add to the table:",
     "generating": "⏳ Generating…",
@@ -1545,7 +1548,10 @@
     "propagated_close": "Close",
     "propagated_empty": "No base measurements to propagate yet.",
     "propagated_load_err": "Could not load the propagated table.",
-    "regim_err": "Could not change the regime."
+    "regim_err": "Could not change the regime.",
+    "save_pom": "Save POM",
+    "save_pom_err": "Could not save POM.",
+    "unsaved_pom_hint": "Save POM to close the task and enable Measurements."
   },
 
   "model_fabric": {
@@ -1750,7 +1756,12 @@
     "create_pom": "Create new POM \"{{query}}\"",
     "col": {
       "sheet_name": "Sheet name",
-      "description": "Description"
+      "description": "Description",
+      "base_value": "Base value",
+      "regime": "Regime",
+      "delta": "Delta",
+      "break_delta": "Break delta",
+      "break_size": "Break size"
     }
   },
   "dashboard": {

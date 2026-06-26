@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import EditableTable from '../EditableTable/EditableTable'
 import ImportWizard from '../ImportWizard/ImportWizard'
 import Modal from '../ui/Modal'
+import { models } from '../../api/endpoints'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -16,7 +17,7 @@ const API = import.meta.env.VITE_API_URL || ''
 // NO inclou el camí 'size_check' (CheckMeasureEditor): això és el flux de TREBALL del tab, no la
 // genesi (es reapuntarà a J1b). Quan la base queda materialitzada, crida onMaterialized() perquè el
 // tab rellegeixi taula-mesures i passi a la superfície de consulta/treball (CheckMeasureEditor).
-export default function MeasuresEntryPanel({ model, onMaterialized, entryMode = false }) {
+export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, entryMode = false }) {
   const { t } = useTranslation()
   const id = model?.id
   const token = localStorage.getItem('access_token')
@@ -32,6 +33,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, entryMode = 
   const [notice, setNotice] = useState('')
   const [seedOffer, setSeedOffer] = useState(false)
   const [seedBusy, setSeedBusy] = useState(false)
+  const [savingPom, setSavingPom] = useState(false)
 
   const togglePom = (pom) => {
     setSelectedPomIds(prev =>
@@ -132,15 +134,31 @@ export default function MeasuresEntryPanel({ model, onMaterialized, entryMode = 
     : model?.size_run_model?.split('·').map(s => s.trim())) || []
   const hasValues = taulaRows.some(r => r.base_value_cm != null)
 
+  const savePom = async (payload) => {
+    setSavingPom(true)
+    setError('')
+    try {
+      await models.gravarPom(id, payload)
+      onPomSaved?.()
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.response?.data?.errors?.join?.(' · ')
+        || t('model_measurements.save_pom_err')
+      setError(msg)
+      throw err
+    } finally {
+      setSavingPom(false)
+    }
+  }
+
   return (
     <div>
       {error && (
-        <div style={{ margin: '0 0 1rem', background: '#fee', border: '1px solid #fcc', borderRadius: 8,
-                      padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: '#c00' }}>{error}</div>
+        <div style={{ margin: '0 0 1rem', background: 'var(--err-bg)', border: '1px solid var(--err)', borderRadius: 8,
+                      padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: 'var(--err)' }}>{error}</div>
       )}
       {notice && (
-        <div style={{ margin: '0 0 1rem', background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
-                      padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: '#7a5a00' }}>{notice}</div>
+        <div style={{ margin: '0 0 1rem', background: 'var(--warn-bg)', border: '1px solid var(--warn)', borderRadius: 8,
+                      padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>{notice}</div>
       )}
 
       {seedOffer && (
@@ -168,7 +186,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, entryMode = 
       {mode === 'selector' && (
         <div style={{ maxWidth: 800 }}>
           <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '0 0 0.5rem' }}>
-            {t('model_measurements.title')}
+            {t('model_measurements.pom_title')}
           </h2>
           <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
             {t('model_measurements.intro')}
@@ -201,6 +219,21 @@ export default function MeasuresEntryPanel({ model, onMaterialized, entryMode = 
 
       {mode === 'manual' && (
         <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
+            <div>
+              <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '0 0 0.25rem' }}>
+                {t('model_measurements.pom_title')}
+              </h2>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                {t('model_measurements.pom_subtitle')}
+              </div>
+            </div>
+            <button type="button" onClick={() => setMode('import')}
+              style={{ background: 'transparent', color: 'var(--gold)', border: '0.5px solid var(--gold)',
+                       borderRadius: 6, padding: '7px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
+              <i className="ti ti-upload" /> {t('model_measurements.import_table')}
+            </button>
+          </div>
           {taulaRows.length === 0 && pomsSuggerits.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>
@@ -239,6 +272,8 @@ export default function MeasuresEntryPanel({ model, onMaterialized, entryMode = 
             deltes={deltes}
             modelId={id}
             isImport={false}
+            saveLabel={savingPom ? t('common.saving') : t('model_measurements.save_pom')}
+            onPomSave={savePom}
             onSaved={(newRows) => setTaulaRows(newRows)}
           />
 
@@ -248,13 +283,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, entryMode = 
                        background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
               ← {t('app.back')}
             </button>
-            {hasValues && (
-              <button type="button" onClick={() => onMaterialized?.()}
-                style={{ padding: '8px 20px', background: 'var(--gold)', color: 'var(--white)', border: 'none',
-                         borderRadius: 6, fontSize: 'var(--fs-h3)', fontWeight: 500, cursor: 'pointer' }}>
-                {t('model_measurements.view_table')}
-              </button>
-            )}
+            {hasValues && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_measurements.unsaved_pom_hint')}</span>}
           </div>
         </div>
       )}
@@ -263,7 +292,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, entryMode = 
         <ImportWizard
           model={model}
           onCancel={() => setMode('selector')}
-          onComplete={() => onMaterialized?.()}
+          onComplete={() => reloadTable('manual')}
         />
       )}
     </div>
@@ -276,8 +305,8 @@ function POMChipSuggerit({ pom, selected, onToggle }) {
       style={{
         padding: '3px 10px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
         border: selected ? '1.5px solid var(--gold)' : '0.5px solid var(--border)',
-        background: selected ? '#fdf6ee' : 'transparent',
-        color: selected ? '#7a4a10' : 'var(--text-muted)',
+        background: selected ? 'var(--gold-pale)' : 'transparent',
+        color: selected ? 'var(--gold)' : 'var(--text-muted)',
       }}>
       <span style={{ marginRight: 4 }}>{pom.pom_code}</span>
       {pom.nom_ca || pom.nom_en}

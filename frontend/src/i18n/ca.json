@@ -1522,12 +1522,15 @@
     "seed_confirm": "Sembrar de l'item",
     "seed_cancel": "Començar de zero",
     "title": "Mesures i grading",
+    "pom_title": "Definició de POMs i talla base",
+    "pom_subtitle": "Crea la base del model: POMs, nomenclatura curta, valors i regles inicials.",
     "intro": "Introdueix les mesures de la talla base. El sistema calcularà el grading per a totes les talles.",
     "manual_title": "Introduir manualment",
     "manual_desc": "El sistema proposa els POMs estàndard per a {{type}}. Introdueix els valors de la talla base.",
     "this_garment": "aquest tipus de peça",
     "poms_available": "{{total}} POMs disponibles · {{key}} KEY",
     "import_title": "Importar de fitxa tècnica",
+    "import_table": "Importar taula",
     "import_desc": "Puja un PDF o imatge de la fitxa tècnica del client. La IA extraurà les mesures, talles i grading automàticament.",
     "suggested_poms": "POMs suggerits per a aquest tipus de peça — clica per afegir a la taula:",
     "generating": "⏳ Generant…",
@@ -1545,7 +1548,10 @@
     "propagated_close": "Tancar",
     "propagated_empty": "Encara no hi ha mesures base per propagar.",
     "propagated_load_err": "No s'ha pogut carregar la taula propagada.",
-    "regim_err": "No s'ha pogut canviar el règim."
+    "regim_err": "No s'ha pogut canviar el règim.",
+    "save_pom": "Gravar POM",
+    "save_pom_err": "No s'ha pogut gravar POM.",
+    "unsaved_pom_hint": "Grava POM per tancar la tasca i activar Mesures."
   },
 
   "model_fabric": {
@@ -1750,7 +1756,12 @@
     "create_pom": "Crear POM nou \"{{query}}\"",
     "col": {
       "sheet_name": "Nom fitxa",
-      "description": "Descripció"
+      "description": "Descripció",
+      "base_value": "Valor base",
+      "regime": "Règim",
+      "delta": "Delta",
+      "break_delta": "Delta break",
+      "break_size": "Talla break"
     }
   },
   "dashboard": {

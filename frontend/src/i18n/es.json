@@ -1522,12 +1522,15 @@
     "seed_confirm": "Sembrar del item",
     "seed_cancel": "Empezar de cero",
     "title": "Medidas y grading",
+    "pom_title": "Definición de POMs y talla base",
+    "pom_subtitle": "Crea la base del modelo: POMs, nomenclatura corta, valores y reglas iniciales.",
     "intro": "Introduce las medidas de la talla base. El sistema calculará el grading para todas las tallas.",
     "manual_title": "Introducir manualmente",
     "manual_desc": "El sistema propone los POMs estándar para {{type}}. Introduce los valores de la talla base.",
     "this_garment": "este tipo de prenda",
     "poms_available": "{{total}} POMs disponibles · {{key}} KEY",
     "import_title": "Importar de ficha técnica",
+    "import_table": "Importar tabla",
     "import_desc": "Sube un PDF o imagen de la ficha técnica del cliente. La IA extraerá las medidas, tallas y grading automáticamente.",
     "suggested_poms": "POMs sugeridos para este tipo de prenda — haz clic para añadir a la tabla:",
     "generating": "⏳ Generando…",
@@ -1545,7 +1548,10 @@
     "propagated_close": "Cerrar",
     "propagated_empty": "Aún no hay medidas base para propagar.",
     "propagated_load_err": "No se ha podido cargar la tabla propagada.",
-    "regim_err": "No se ha podido cambiar el régimen."
+    "regim_err": "No se ha podido cambiar el régimen.",
+    "save_pom": "Grabar POM",
+    "save_pom_err": "No se ha podido grabar POM.",
+    "unsaved_pom_hint": "Graba POM para cerrar la tarea y activar Medidas."
   },
 
   "model_fabric": {
@@ -1750,7 +1756,12 @@
     "create_pom": "Crear POM nuevo \"{{query}}\"",
     "col": {
       "sheet_name": "Nombre ficha",
-      "description": "Descripción"
+      "description": "Descripción",
+      "base_value": "Valor base",
+      "regime": "Régimen",
+      "delta": "Delta",
+      "break_delta": "Delta break",
+      "break_size": "Talla break"
     }
   },
   "dashboard": {

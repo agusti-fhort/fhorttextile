@@ -204,6 +204,15 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     setEditing(null)
     setMesuresEntry(false)
   }, [pauseActiveTask])
+  const finishPomEntry = useCallback(() => {
+    activeTaskRef.current = null
+    setEditTaskId(null)
+    setEditing(null)
+    setMesuresEntry(false)
+    reloadTaula()
+    reloadModel()
+    setWpVersion(v => v + 1)
+  }, [reloadModel, reloadTaula])
   // Sortir de mode edició/entrada en canviar de tab (pausa la tasca si n'hi havia).
   useEffect(() => {
     if ((editing && editing !== activeTab) || (mesuresEntry && activeTab !== 'Mesures')) exitEdit()
@@ -377,8 +386,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         )}
         {activeTab === 'Mesures' && (
           mesuresEntry && editing !== 'Mesures' ? (
-            <MeasuresEntryPanel model={model} entryMode={mesuresEntry}
-              onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }} />
+	            <MeasuresEntryPanel model={model} entryMode={mesuresEntry}
+	              onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }}
+	              onPomSaved={finishPomEntry} />
           ) : (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -1473,4 +1483,3 @@ function TabAIAnalysis({ modelId }) {
     </div>
   )
 }
-
