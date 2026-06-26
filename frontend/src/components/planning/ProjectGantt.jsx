@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { plan } from '../../api/endpoints'
+import { plan, companyCalendar } from '../../api/endpoints'
 import Center from '../ui/Center'
 import { IconPackage, IconUser, IconFlag } from '@tabler/icons-react'
 
@@ -19,6 +19,12 @@ const DEFAULT_COLOR = 'var(--gray)'
 const parseISO = (s) => new Date(s + 'T00:00:00')
 const dayDiff = (a, b) => Math.round((b - a) / 86400000)
 const fmtDM = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+// PEÇA 3 — no-laborables des de CompanyCalendar (font única, MATEIXA lògica que PlanningCalendar):
+// DOW alineat amb weekday() del backend (0=dilluns); un dia és no-laborable si el seu dia de setmana
+// no té trams d'horari O és a festius_extra → isDayOff = slotsFor(d).length===0 || festius.includes(iso).
+const DOW = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+const dowKey = (d) => DOW[(d.getDay() + 6) % 7]
+const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const FASE_ORDER = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
 // Paleta categòrica per a "pintar per" (data-viz; mateix criteri que els colors fixos de
 // PlanningCalendar). El color de tècnic ve del backend (responsable_color).
@@ -50,12 +56,25 @@ export default function ProjectGantt({ t }) {
   const [filterTechs, setFilterTechs] = useState(() => new Set())   // buit = tots
   const [filterColleccio, setFilterColleccio] = useState('')
   const [filterTemporada, setFilterTemporada] = useState('')
+  const [horaris, setHoraris] = useState({})   // CompanyCalendar: {dia:[[a,b],...]}
+  const [festius, setFestius] = useState([])   // festius_extra (dates ISO)
 
   useEffect(() => {
     plan.gantt({})
       .then(res => { setModels(res.data?.models || []); setToday(res.data?.today || null) })
       .catch(() => setModels([]))
       .finally(() => setLoading(false))
+  }, [])
+
+  // PEÇA 3 — calendari laboral (no-laborables): càrrega única, MATEIXA font que PlanningCalendar.
+  useEffect(() => {
+    companyCalendar.get()
+      .then(res => {
+        const h = res.data?.horaris || {}
+        setHoraris(Object.fromEntries(DOW.map(d => [d, Array.isArray(h[d]) ? h[d] : []])))
+        setFestius(Array.isArray(res.data?.festius_extra) ? res.data.festius_extra : [])
+      })
+      .catch(() => {})
   }, [])
 
   // Llistes distintes per als filtres (a partir de les dades carregades).
@@ -127,6 +146,16 @@ export default function ProjectGantt({ t }) {
     ticks.push({ i, d: new Date(range.min.getTime() + i * 86400000) })
   }
 
+  // PEÇA 3 — índexs de columna no-laborables (CompanyCalendar). Buit fins que carrega l'horari
+  // (evita ombrejar-ho tot mentre horaris=={}). isDayOff = sense trams al dia de setmana O festiu_extra.
+  const nonWorkCols = []
+  if (Object.keys(horaris).length > 0) {
+    for (let i = 0; i < range.days; i++) {
+      const d = new Date(range.min.getTime() + i * 86400000)
+      if ((horaris[dowKey(d)] || []).length === 0 || festius.includes(isoLocal(d))) nonWorkCols.push(i)
+    }
+  }
+
   return (
     <div>
       <GanttControls t={t} order={order} setOrder={setOrder}
@@ -160,7 +189,8 @@ export default function ProjectGantt({ t }) {
             <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('planning.gantt.empty')}</div>
           ) : displayed.map(m => (
             <GanttRow key={m.model_id} m={m} color={colorOf(m)} trackW={trackW} x={x} todayX={todayX}
-                      ticks={ticks} order={order} onClick={() => navigate(`/models/${m.model_id}`)} t={t} />
+                      ticks={ticks} order={order} nonWorkCols={nonWorkCols}
+                      onClick={() => navigate(`/models/${m.model_id}`)} t={t} />
           ))}
         </div>
       </div>
@@ -257,7 +287,7 @@ function ColorFilterControls({ t, colorBy, setColorBy, opts, filterTechs, setFil
   )
 }
 
-function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
+function GanttRow({ m, color, trackW, x, todayX, ticks, order, nonWorkCols, onClick, t }) {
   const left = x(m.start)
   const right = x(m.end) + PX_PER_DAY            // fi inclusiu (el dia de fi compta sencer)
   const width = Math.max(PX_PER_DAY * 0.7, right - left)
@@ -288,6 +318,12 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
       </div>
 
       <div style={{ position: 'relative', width: trackW, height: ROW_H }}>
+        {/* PEÇA 3 — columnes NO-LABORABLES (CompanyCalendar): cap de setmana / dies sense horari /
+            festius_extra. Fons taronja pàl·lid (token --gold-pale ≈ #f7ede0 del calendari), a tota
+            l'alçada del track i DARRERE de gridlines i barres (primer fill, sense z-index). */}
+        {nonWorkCols.map(i => (
+          <div key={`nw${i}`} style={{ position: 'absolute', left: i * PX_PER_DAY, top: 0, bottom: 0, width: PX_PER_DAY, background: 'var(--gold-pale)' }} />
+        ))}
         {/* graella vertical */}
         {ticks.map(tk => (
           <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, bottom: 0, borderLeft: '0.5px solid var(--bg-muted)' }} />
