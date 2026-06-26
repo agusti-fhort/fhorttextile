@@ -9,10 +9,10 @@ import { IconPackage, IconUser, IconFlag } from '@tabler/icons-react'
 // el drag de prioritats (M-assist) després només cal sobre aquesta capa, sense reescriure-la.
 // Tokens del DS (no canvas). CONVIU amb el tab "Calendari" (PlanningCalendar, executor/hores).
 const MONO = 'IBM Plex Mono, monospace'
-const LABEL_W = 190
+const LABEL_W = 230
 const PX_PER_DAY = 26
-const ROW_H = 36
-const BAR_H = 20
+const ROW_H = 58
+const BAR_H = 24
 const AXIS_H = 26
 const DEFAULT_COLOR = 'var(--gray)'
 
@@ -272,17 +272,19 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
     <div onClick={onClick} title={`${m.codi} · ${m.nom || ''}`} style={{
       display: 'flex', height: ROW_H, cursor: 'pointer', borderBottom: '0.5px solid var(--base-hairline, var(--gray-l))',
     }}>
+      {/* PEÇA 2 — label (patró .glabel del mostra): codi · nom · col·lecció·temporada. Tokens d'escala
+          (--fs-*), mai px literals. Nom a 1 línia amb ellipsis (LABEL_W=230). */}
       <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--white)', zIndex: 2,
                     borderRight: '0.5px solid var(--gray-l)', borderLeft: m.en_risc ? '2px solid var(--err)' : '2px solid transparent',
-                    padding: '2px 10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        {ctxLine && (
-          <div style={{ fontSize: 12, fontFamily: MONO, lineHeight: 1.05, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{ctxLine}</div>
-        )}
-        <div style={{ fontSize: 14, fontFamily: MONO, fontWeight: 700, lineHeight: 1.1, color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-          {m.en_risc && <i className="ti ti-flag" title={t('planning.gantt.risk_flag')} style={{ fontSize: 12, color: 'var(--err)', marginRight: 4 }} />}
-          {m.nom || '—'}
+                    padding: '11px 14px', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3 }}>
+        <div style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 700, color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+          {m.en_risc && <i className="ti ti-flag" title={t('planning.gantt.risk_flag')} style={{ fontSize: 'var(--fs-body)', color: 'var(--err)', marginRight: 4 }} />}
+          {m.codi}
         </div>
-        <div style={{ fontSize: 11, fontFamily: MONO, lineHeight: 1.05, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.codi}</div>
+        <div style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.nom || '—'}</div>
+        {ctxLine && (
+          <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{ctxLine}</div>
+        )}
       </div>
 
       <div style={{ position: 'relative', width: trackW, height: ROW_H }}>
@@ -349,12 +351,12 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
           const col = f.tipus === 'proto' ? 'var(--taupe, #7c6f64)' : 'var(--info, #3a7ca5)'
           return (
             <div key={i} title={`${t(`planning.gantt.legend_${f.tipus}`)} · ${f.data}`} style={{
-              position: 'absolute', left: x(f.data) + PX_PER_DAY / 2, top: 8, transform: 'translateX(-50%)',
+              position: 'absolute', left: x(f.data) + PX_PER_DAY / 2, top: (ROW_H - 18) / 2, transform: 'translateX(-50%)',
               height: 18, display: 'flex', alignItems: 'center', gap: 4, padding: '2px 6px', zIndex: 6,
               background: 'var(--white)', border: '1px solid var(--gray-l)', borderRadius: 10,
             }}>
               <Icon size={12} color={col} stroke={1.75} />
-              <span style={{ fontSize: 9, fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDM(parseISO(f.data))}</span>
+              <span style={{ fontSize: 'var(--fs-caption)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDM(parseISO(f.data))}</span>
             </div>
           )
         })}
