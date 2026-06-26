@@ -14,7 +14,6 @@ import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import TaskAssignWizard from '../components/TaskAssignWizard'
-import PlanningCalendar from './PlanningCalendar'
 import DashboardGovPanel from '../components/planning/DashboardGovPanel'
 import ProjectGantt from '../components/planning/ProjectGantt'
 import InformesPanel from '../components/planning/InformesPanel'
@@ -434,9 +433,11 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
 
 // Shell de govern (patró del shell de tabs de ModelSheet): capçalera + banda de pestanyes.
 // Tabs: Dashboard (panell de govern, s'omple per blocs) · Planificació (contingut actual) ·
-// Assignació (futur) · Calendari (PlanningCalendar incrustat) · Informes (futur).
+// Assignació (futur) · Calendari de projecte (Gantt, model/dies) · Informes (futur).
+// El tab "Calendari" antic (PlanningCalendar incrustat) s'ha jubilat; el calendari de l'EXECUTOR
+// segueix viu via ruta /planificacio/calendari + entrada de menú del tècnic (Sidebar, cap 'execute').
 // Gating de pantalla: define_tasks||configure (el mateix que tenia Planning).
-const GOV_TABS = ['dashboard', 'planificacio', 'assignacio', 'calendari', 'calendari_projecte', 'informes']
+const GOV_TABS = ['dashboard', 'planificacio', 'assignacio', 'calendari_projecte', 'informes']
 
 export default function Planning() {
   const { t } = useTranslation()
@@ -479,7 +480,6 @@ export default function Planning() {
       {activeTab === 'dashboard' && <DashboardGovPanel me={me} />}
       {activeTab === 'planificacio' && <PlanificacioPanel mode="pending" />}
       {activeTab === 'assignacio' && <PlanificacioPanel mode="assigned" />}
-      {activeTab === 'calendari' && <PlanningCalendar />}
       {activeTab === 'calendari_projecte' && <ProjectGantt t={t} />}
       {activeTab === 'informes' && <InformesPanel me={me} />}
     </div>
