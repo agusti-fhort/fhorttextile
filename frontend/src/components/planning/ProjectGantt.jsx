@@ -180,7 +180,7 @@ export default function ProjectGantt({ t }) {
                   <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, height: AXIS_H, borderLeft: '0.5px solid var(--gray-l)' }}>
                     {/* data centrada al MIG de la franja del dia (step=1 → PX_PER_DAY/2) */}
                     <span style={{ position: 'absolute', left: (step * PX_PER_DAY) / 2, top: '50%', transform: 'translate(-50%, -50%)',
-                                   fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: isToday ? 800 : 600,
+                                   fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600,
                                    color: isToday ? 'var(--gold)' : 'var(--text-main)', whiteSpace: 'nowrap' }}>{fmtDM(tk.d)}</span>
                   </div>
                 )
