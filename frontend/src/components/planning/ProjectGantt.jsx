@@ -140,8 +140,9 @@ export default function ProjectGantt({ t }) {
       <div style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', overflowX: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
         <div style={{ minWidth: LABEL_W + trackW }}>
           {/* Eix de dies */}
-          <div style={{ display: 'flex', position: 'sticky', top: 0, zIndex: 3, background: 'var(--bg-muted)', borderBottom: '0.5px solid var(--gray-l)' }}>
-            <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--bg-muted)', zIndex: 4, borderRight: '0.5px solid var(--gray-l)' }} />
+          {/* PEÇA 3 — header sticky-top z=8 (per sobre de les pills z=6 en scroll-Y); cantonada z=9 (màxim) */}
+          <div style={{ display: 'flex', position: 'sticky', top: 0, zIndex: 8, background: 'var(--bg-muted)', borderBottom: '0.5px solid var(--gray-l)' }}>
+            <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--bg-muted)', zIndex: 9, borderRight: '0.5px solid var(--gray-l)' }} />
             <div style={{ position: 'relative', width: trackW, height: AXIS_H }}>
               {ticks.map(tk => (
                 <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, height: AXIS_H, borderLeft: '0.5px solid var(--gray-l)' }}>
@@ -269,8 +270,9 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
       display: 'flex', height: ROW_H, cursor: 'pointer', borderBottom: '0.5px solid var(--base-hairline, var(--gray-l))',
     }}>
       {/* PEÇA 1 — label (ordre explícit d'Agus): codi (gris petit) · nom (negre, fins a 2 línies) ·
-          col·lecció (gris petit) · temporada (gris petit). Tokens d'escala (--fs-*), mai px literals. */}
-      <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--white)', zIndex: 2,
+          col·lecció (gris petit) · temporada (gris petit). Tokens d'escala (--fs-*), mai px literals.
+          PEÇA 3 — z=7: label sticky-left PER SOBRE de les pills del track (z=6) en scroll-X (fons opac). */}
+      <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--white)', zIndex: 7,
                     borderRight: '0.5px solid var(--gray-l)', borderLeft: m.en_risc ? '2px solid var(--err)' : '2px solid transparent',
                     padding: '8px 14px', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
         <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
