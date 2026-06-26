@@ -172,12 +172,24 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // mount/unmount de ruta (EscalatTask/ModelMeasurements) a enter/exit de mode.
   const [editing, setEditing] = useState(null)        // null | 'Mesures' | 'Escalat'
   const [editTaskId, setEditTaskId] = useState(null)
+  // PEÇA 2 — guard 400: open-task deixa la tasca En curs (InProgress). Aquest ref recorda quina tasca està
+  // VIVA per pausar-la EXACTAMENT UN COP. Sense ell, exitEdit i el cleanup de desmuntatge demanaven tots
+  // dos transition→Paused sobre la mateixa tasca → la 2a era Paused→Paused, que ALLOWED rebutja amb 400
+  // (services_c.py). Nul = res a pausar (≈ task.status !== 'InProgress').
+  const activeTaskRef = useRef(null)
+  const pauseActiveTask = useCallback(() => {
+    const tid = activeTaskRef.current
+    if (tid == null) return                 // ja pausada o cap tasca En curs → no demanem transició (evita 400)
+    activeTaskRef.current = null
+    modelTasks.transition(tid, { to_status: 'Paused' }).catch(() => {})
+  }, [])
   const enterEdit = (tab, code) => {
     if (openingTask) return
     setOpeningTask(true)
     models.openTask(parseInt(id), code)
       .then(res => {
         setEditTaskId(res.data.task_id)
+        activeTaskRef.current = res.data.task_id   // open-task la deixa En curs → viva per pausar després
         // PUNT COMÚ: una tasca 'pom' obre el tab Mesures en mode ENTRADA (wizard), no edició de graella.
         // (size_check ve per URL i passa per editing='Mesures'; grading → tab Escalat.)
         if (tab === 'Mesures' && code === 'pom') setMesuresEntry(true)
@@ -187,21 +199,18 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       .finally(() => setOpeningTask(false))
   }
   const exitEdit = useCallback(() => {
-    setEditTaskId(prev => {
-      if (prev) modelTasks.transition(prev, { to_status: 'Paused' }).catch(() => {})
-      return null
-    })
+    pauseActiveTask()
+    setEditTaskId(null)
     setEditing(null)
     setMesuresEntry(false)
-  }, [])
+  }, [pauseActiveTask])
   // Sortir de mode edició/entrada en canviar de tab (pausa la tasca si n'hi havia).
   useEffect(() => {
     if ((editing && editing !== activeTab) || (mesuresEntry && activeTab !== 'Mesures')) exitEdit()
   }, [activeTab, editing, mesuresEntry, exitEdit])
-  // Pausa la tasca en desmuntar el ModelSheet si quedava en edició.
-  useEffect(() => () => {
-    if (editTaskId) modelTasks.transition(editTaskId, { to_status: 'Paused' }).catch(() => {})
-  }, [editTaskId])
+  // Pausa la tasca NOMÉS en desmuntar el ModelSheet si quedava En curs (idempotent: si exitEdit ja
+  // l'ha pausada, activeTaskRef és null i no es demana res → cap 400 Paused→Paused).
+  useEffect(() => () => { pauseActiveTask() }, [pauseActiveTask])
   // Entrada directa en mode edició (rutes de tasca /mesures·/escalat → ModelSheet defaultTab+autoEdit):
   // obre la tasca i commuta a edició un sol cop en muntar (preserva el compta-temps de les portes Kanban/
   // WorkPlan sense pàgina externa).
