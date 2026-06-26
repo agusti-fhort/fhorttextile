@@ -323,10 +323,11 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
 
       <div style={{ position: 'relative', width: trackW, height: ROW_H }}>
         {/* PEÇA 3 — columnes NO-LABORABLES (CompanyCalendar): cap de setmana / dies sense horari /
-            festius_extra. Fons taronja pàl·lid (token --gold-pale ≈ #f7ede0 del calendari), a tota
-            l'alçada del track i DARRERE de gridlines i barres (primer fill, sense z-index). */}
+            festius_extra. Ombreig MOLT subtil (gris neutre --text-main a opacity 0.06) per no competir
+            amb les barres — divergeix a posta del taronja del calendari (decisió Agus). A tota l'alçada
+            del track i DARRERE de gridlines i barres (primer fill, sense z-index). */}
         {nonWorkCols.map(i => (
-          <div key={`nw${i}`} style={{ position: 'absolute', left: i * PX_PER_DAY, top: 0, bottom: 0, width: PX_PER_DAY, background: 'var(--gold-pale)' }} />
+          <div key={`nw${i}`} style={{ position: 'absolute', left: i * PX_PER_DAY, top: 0, bottom: 0, width: PX_PER_DAY, background: 'var(--text-main)', opacity: 0.06 }} />
         ))}
         {/* graella vertical */}
         {ticks.map(tk => (
