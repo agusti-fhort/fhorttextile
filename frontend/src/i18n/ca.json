@@ -239,11 +239,9 @@
     "dashboard": "Desenvolupament",
     "models": "Models",
     "models_new": "Nou model",
-    "registre_activitat": "Registre d'activitat",
     "models_from_file": "Nou des de fitxer",
     "fitting": "Size & Fitting",
     "fittings": "Fittings",
-    "tasques": "Tasques",
     "tasques_catalog": "Catàleg de tasques",
     "tasques_paquets": "Paquets de servei",
     "kanban": "Kanban",
@@ -827,7 +825,6 @@
       "dashboard": "Tauler",
       "planificacio": "Planificació",
       "assignacio": "Assignació",
-      "calendari": "Calendari",
       "calendari_projecte": "Calendari de projecte",
       "informes": "Informes",
       "registre": "Registre d'activitat"
@@ -2027,14 +2024,6 @@
     "empty_hint": "Fes una pregunta o demana un canvi a les mesures.",
     "examples": "Exemples: \"El POM D és 35.5cm\" · \"Afegeix el POM de cintura\" · \"Elimina Y5\"",
     "input_placeholder": "Escriu un missatge… (Enter per enviar)"
-  },
-  "tasks": {
-    "title": "Tasques",
-    "col_task": "Tasca",
-    "col_model": "Model",
-    "col_phase": "Fase",
-    "col_status": "Estat",
-    "empty": "Sense tasques en estat \"{{status}}\""
   },
   "size_system": {
     "code": "Codi",

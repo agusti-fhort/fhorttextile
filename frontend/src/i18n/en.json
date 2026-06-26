@@ -239,11 +239,9 @@
     "dashboard": "Development",
     "models": "Models",
     "models_new": "New model",
-    "registre_activitat": "Activity log",
     "models_from_file": "New from file",
     "fitting": "Size & Fitting",
     "fittings": "Fittings",
-    "tasques": "Tasks",
     "tasques_catalog": "Task catalog",
     "tasques_paquets": "Service packages",
     "kanban": "Kanban",
@@ -827,7 +825,6 @@
       "dashboard": "Dashboard",
       "planificacio": "Planning",
       "assignacio": "Assignment",
-      "calendari": "Calendar",
       "calendari_projecte": "Project calendar",
       "informes": "Reports",
       "registre": "Activity log"
@@ -2027,14 +2024,6 @@
     "empty_hint": "Ask a question or request a change to the measurements.",
     "examples": "Examples: \"POM D is 35.5cm\" · \"Add the waist POM\" · \"Delete Y5\"",
     "input_placeholder": "Type a message… (Enter to send)"
-  },
-  "tasks": {
-    "title": "Tasks",
-    "col_task": "Task",
-    "col_model": "Model",
-    "col_phase": "Phase",
-    "col_status": "Status",
-    "empty": "No tasks with status \"{{status}}\""
   },
   "size_system": {
     "code": "Code",
