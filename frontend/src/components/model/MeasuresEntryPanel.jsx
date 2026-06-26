@@ -110,10 +110,12 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
         captureHadBase(rows)
         if (rows.length) setTaulaRows(rows)
         const verge = !rows.some(r => r.base_value_cm != null)
-        // Si ja té valors (no verge): en mode ENTRADA (Definició POM) NO sortim a consulta — obrim el
-        // selector perquè l'usuari pugui afegir POMs / importar. Fora de mode entrada, surt a consulta.
+        // Si ja té valors (no verge): en mode ENTRADA (Definició POM / Editar POM) va DIRECTE a la graella
+        // poblada ('manual') per editar/resembrar — NO al wizard de selecció (manual/import), que és només
+        // per a la gènesi des de zero. "Importar taula" segueix disponible a dalt de la graella. Fora de
+        // mode entrada, surt a consulta.
         if (!verge) {
-          if (entryMode) { setMode('selector'); return }
+          if (entryMode) { setMode('manual'); return }
           onMaterialized?.(); return
         }
 
