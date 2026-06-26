@@ -371,9 +371,10 @@ def commit_import(imp, creat_per_profile):
     """Crea els Models + SizeFittings de les files OK/AVIS dins una sola transacció.
     Genera codi_intern al pipeline (bulk_create bypassa el signal). Retorna stats."""
     from django.db import transaction
-    from fhort.models_app.models import Model, GarmentSet, BulkCollectionRow
+    from fhort.models_app.models import Model, GarmentSet, BulkCollectionRow, Watchpoint
     from fhort.fitting.models import SizeFitting
-    from fhort.models_app.services import reserve_sequence_range
+    from fhort.models_app.services import (
+        reserve_sequence_range, model_config_missing, config_missing_text)
 
     cat = build_catalog()
     customer = imp.customer
@@ -454,6 +455,17 @@ def commit_import(imp, creat_per_profile):
                for _row, m in all_models]
         if sfs:
             SizeFitting.objects.bulk_create(sfs)
+
+        # 5b) F3 — Watchpoint d'import VIU: per cada model amb config incompleta, un avís
+        # estructurat (task=None → origen sistema; dades = claus que falten de model_config_missing).
+        # Es recalcularà/resoldrà sol via post_save (signals.py) en omplir-se els camps. bulk_create
+        # bypassa signals, per això la creació es fa aquí explícitament.
+        wps = [Watchpoint(model=m, task=None, dades=missing,
+                          text=config_missing_text(missing), estat='open')
+               for _row, m in all_models
+               for missing in [model_config_missing(m)] if missing]
+        if wps:
+            Watchpoint.objects.bulk_create(wps)
 
         # 6) Enllaçar BulkCollectionRow.model_creat.
         for row, m in all_models:

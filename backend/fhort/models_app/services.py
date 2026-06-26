@@ -92,6 +92,25 @@ def model_config_missing(model):
     return missing
 
 
+# Etiquetes curtes (CA) per al text de fallback del Watchpoint d'import. El front re-renderitza
+# per clau en l'idioma del lector quan hi ha 'dades'; aquest text és el resum llegible de reserva.
+_CONFIG_LABELS_CA = {
+    'garment_type_item': 'tipologia de la peça',
+    'base_size': 'talla base',
+    'size_run': 'run de talles',
+    'grading_rule_set': "regla d'escalat",
+}
+
+
+def config_missing_text(missing):
+    """Text de fallback (CA) per al Watchpoint d'import segons les claus que falten.
+    Llista buida → missatge de configuració completa."""
+    if not missing:
+        return 'Configuració del model completa.'
+    labels = ', '.join(_CONFIG_LABELS_CA.get(k, k) for k in missing)
+    return f'Completa la configuració del model abans de definir POMs: {labels}.'
+
+
 def materialize_model_grading_rules(model, source_rules, origen):
     """Materialitza regles de grading residents al model des d'un iterable de
     GradingRule. Wipe-and-recreate: el set resultant és EXACTAMENT source_rules.
