@@ -312,9 +312,9 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
         {/* BARRA del model (realçat vermell si en risc) */}
         <div style={{ position: 'absolute', left, width, top: (ROW_H - BAR_H) / 2, height: BAR_H,
                       boxShadow: m.en_risc ? '0 0 0 1.5px var(--err)' : 'none', borderRadius: 5 }}>
-          {/* contenidor (rang sencer, color tènue) */}
-          <div style={{ position: 'absolute', inset: 0, borderRadius: 5, background: color, opacity: 0.22, border: `0.5px solid ${color}` }} />
-          {/* farciment % completat */}
+          {/* contenidor (rang sencer): opacity 0.35 + vora 1px → el color del tècnic es veu encara amb pct=0 */}
+          <div style={{ position: 'absolute', inset: 0, borderRadius: 5, background: color, opacity: 0.35, border: `1px solid ${color}` }} />
+          {/* farciment % completat (fitat 0-100 per Peça 1) */}
           <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${m.pct}%`, borderRadius: 5, background: color, opacity: 0.85 }} />
           {/* PEÇA 4b — pastilla: punt-color tècnic · nom · next_task · pct%. Barra estreta (<80px) → només
               pct%. Alineació dreta en ordre 'lliurament' (per no solapar el símbol d'objectiu de la Peça 6). */}
