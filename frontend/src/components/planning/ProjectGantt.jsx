@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { plan } from '../../api/endpoints'
 import Center from '../ui/Center'
+import { IconPackage, IconUser } from '@tabler/icons-react'
 
 // Calendari-Gantt de projecte (LECTURA): UNA barra per model, eix=DIES. Consumeix GET plan/gantt/.
 // Drag-ready: les barres es posicionen per data absoluta (x = dies des de l'inici del rang) → afegir
@@ -301,14 +302,6 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
           <div style={{ position: 'absolute', inset: 0, borderRadius: 5, background: color, opacity: 0.22, border: `0.5px solid ${color}` }} />
           {/* farciment % completat */}
           <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${m.pct}%`, borderRadius: 5, background: color, opacity: 0.85 }} />
-          {/* finestres d'espera (ratllat = barra trencada) */}
-          {esperes.map((w, i) => (
-            <div key={i} title={t('planning.gantt.legend_wait')} style={{
-              position: 'absolute', top: 0, bottom: 0, left: w.l - left, width: Math.max(2, w.r - w.l),
-              background: 'repeating-linear-gradient(45deg, var(--white), var(--white) 3px, var(--gray-l) 3px, var(--gray-l) 5px)',
-              border: '0.5px dashed var(--text-muted)', borderRadius: 2,
-            }} />
-          ))}
           {/* PEÇA 4b — pastilla: punt-color tècnic · nom · next_task · pct%. Barra estreta (<80px) → només
               pct%. Alineació dreta en ordre 'lliurament' (per no solapar el símbol d'objectiu de la Peça 6). */}
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
@@ -327,16 +320,32 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, onClick, t }) {
           </div>
         </div>
 
-        {/* FITES (marcadors) */}
-        {m.fites.map((f, i) => (
-          <div key={i} title={`${t(`planning.gantt.legend_${f.tipus}`)} · ${f.data}`} style={{
-            position: 'absolute', left: x(f.data) + PX_PER_DAY / 2 - 7, top: 1, width: 14, height: 14,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+        {/* PEÇA 5 — connector d'espera (confecció externa): línia fina + fletxa ▶ a la dreta, a ROW_H/2.
+            Substitueix el segment ratllat dins la barra. */}
+        {esperes.map((w, i) => (
+          <div key={`w${i}`} title={t('planning.gantt.legend_wait')} style={{
+            position: 'absolute', left: w.l, width: Math.max(2, w.r - w.l), top: ROW_H / 2,
+            borderTop: '1px solid var(--text-muted)', zIndex: 1,
           }}>
-            <i className={`ti ti-${f.tipus === 'proto' ? 'package' : 'ruler-2'}`}
-               style={{ fontSize: 13, color: f.tipus === 'proto' ? 'var(--taupe, #7c6f64)' : 'var(--info, #3a7ca5)' }} />
+            <span style={{ position: 'absolute', right: -2, top: -6, fontSize: 9, lineHeight: 1, color: 'var(--text-muted)' }}>▶</span>
           </div>
         ))}
+
+        {/* PEÇA 5 — FITES com a contenidor (pill): icona + data curta (dd/mm) */}
+        {m.fites.map((f, i) => {
+          const Icon = f.tipus === 'proto' ? IconPackage : IconUser
+          const col = f.tipus === 'proto' ? 'var(--taupe, #7c6f64)' : 'var(--info, #3a7ca5)'
+          return (
+            <div key={i} title={`${t(`planning.gantt.legend_${f.tipus}`)} · ${f.data}`} style={{
+              position: 'absolute', left: x(f.data) + PX_PER_DAY / 2, top: 8, transform: 'translateX(-50%)',
+              height: 18, display: 'flex', alignItems: 'center', gap: 4, padding: '2px 6px', zIndex: 6,
+              background: 'var(--white)', border: '1px solid var(--gray-l)', borderRadius: 10,
+            }}>
+              <Icon size={12} color={col} stroke={1.75} />
+              <span style={{ fontSize: 9, fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDM(parseISO(f.data))}</span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -353,7 +362,7 @@ function Legend({ t }) {
   return (
     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 10 }}>
       {item('package', 'var(--taupe, #7c6f64)', t('planning.gantt.legend_proto'))}
-      {item('ruler-2', 'var(--info, #3a7ca5)', t('planning.gantt.legend_fitting'))}
+      {item('user', 'var(--info, #3a7ca5)', t('planning.gantt.legend_fitting'))}
       {item('line', 'var(--err)', t('planning.gantt.legend_objectiu'))}
       {item('line', 'var(--gold)', t('planning.gantt.legend_today'))}
     </div>
