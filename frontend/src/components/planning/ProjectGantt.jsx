@@ -137,7 +137,6 @@ export default function ProjectGantt({ t }) {
 
   const trackW = range.days * PX_PER_DAY
   const x = (iso) => dayDiff(range.min, parseISO(iso)) * PX_PER_DAY
-  const todayX = today ? x(today) : null
 
   // PEÇA 1 — granularitat DIÀRIA: una columna i una etiqueta per dia (step=1). El scroll-X absorbeix
   // l'amplada extra (PX_PER_DAY=44).
@@ -174,14 +173,18 @@ export default function ProjectGantt({ t }) {
           <div style={{ display: 'flex', position: 'sticky', top: 0, zIndex: 8, background: 'var(--bg-muted)', borderBottom: '0.5px solid var(--gray-l)' }}>
             <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--bg-muted)', zIndex: 9, borderRight: '0.5px solid var(--gray-l)' }} />
             <div style={{ position: 'relative', width: trackW, height: AXIS_H }}>
-              {ticks.map(tk => (
-                <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, height: AXIS_H, borderLeft: '0.5px solid var(--gray-l)' }}>
-                  {/* PEÇA 2 — data centrada al MIG de la franja visible (step·PX_PER_DAY) entre línies de
-                      graella, no a la vora esquerra. A step=1 equival a PX_PER_DAY/2. Negra i llegible. */}
-                  <span style={{ position: 'absolute', left: (step * PX_PER_DAY) / 2, top: '50%', transform: 'translate(-50%, -50%)',
-                                 fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>{fmtDM(tk.d)}</span>
-                </div>
-              ))}
+              {ticks.map(tk => {
+                // PEÇA 2 — AVUI es marca NOMÉS aquí: etiqueta daurada en negreta (sense línia a la graella).
+                const isToday = today && isoLocal(tk.d) === today
+                return (
+                  <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, height: AXIS_H, borderLeft: '0.5px solid var(--gray-l)' }}>
+                    {/* data centrada al MIG de la franja del dia (step=1 → PX_PER_DAY/2) */}
+                    <span style={{ position: 'absolute', left: (step * PX_PER_DAY) / 2, top: '50%', transform: 'translate(-50%, -50%)',
+                                   fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: isToday ? 800 : 600,
+                                   color: isToday ? 'var(--gold)' : 'var(--text-main)', whiteSpace: 'nowrap' }}>{fmtDM(tk.d)}</span>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -189,7 +192,7 @@ export default function ProjectGantt({ t }) {
           {displayed.length === 0 ? (
             <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('planning.gantt.empty')}</div>
           ) : displayed.map(m => (
-            <GanttRow key={m.model_id} m={m} color={colorOf(m)} trackW={trackW} x={x} todayX={todayX}
+            <GanttRow key={m.model_id} m={m} color={colorOf(m)} trackW={trackW} x={x}
                       ticks={ticks} order={order} nonWorkCols={nonWorkCols}
                       onClick={() => navigate(`/models/${m.model_id}`)} t={t} />
           ))}
@@ -288,7 +291,7 @@ function ColorFilterControls({ t, colorBy, setColorBy, opts, filterTechs, setFil
   )
 }
 
-function GanttRow({ m, color, trackW, x, todayX, ticks, order, nonWorkCols, onClick, t }) {
+function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }) {
   const left = x(m.start)
   const right = x(m.end) + PX_PER_DAY            // fi inclusiu (el dia de fi compta sencer)
   const width = Math.max(PX_PER_DAY * 0.7, right - left)
@@ -329,8 +332,7 @@ function GanttRow({ m, color, trackW, x, todayX, ticks, order, nonWorkCols, onCl
         {ticks.map(tk => (
           <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, bottom: 0, borderLeft: '0.5px solid var(--bg-muted)' }} />
         ))}
-        {/* línia AVUI */}
-        {todayX != null && <div style={{ position: 'absolute', left: todayX, top: 0, bottom: 0, borderLeft: '1px solid var(--gold)', opacity: 0.6 }} />}
+        {/* PEÇA 2 — sense línia AVUI a la graella: el dia actual es marca només a la capçalera (daurada). */}
         {/* línia DATA OBJECTIU (vermella discontínua) */}
         {objX != null && <div style={{ position: 'absolute', left: objX, top: 0, bottom: 0, borderLeft: '1.5px dashed var(--err)' }} />}
         {/* PEÇA 6 — símbol de lliurament a la data objectiu, NOMÉS en ordre 'lliurament' (altres ordres:
@@ -415,7 +417,7 @@ function Legend({ t }) {
       {item('package', 'var(--taupe, #7c6f64)', t('planning.gantt.legend_proto'))}
       {item('user', 'var(--info, #3a7ca5)', t('planning.gantt.legend_fitting'))}
       {item('line', 'var(--err)', t('planning.gantt.legend_objectiu'))}
-      {item('line', 'var(--gold)', t('planning.gantt.legend_today'))}
+      {/* PEÇA 2 — sense ítem "Avui": el dia actual es marca amb la data daurada a la capçalera. */}
     </div>
   )
 }
