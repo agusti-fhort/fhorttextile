@@ -400,6 +400,12 @@
       "empty_fitxa": "No tech sheet yet",
       "empty_grading": "No graded table yet",
       "empty_base": "No base measurements yet",
+      "milestones": {
+        "section": "Upcoming milestones",
+        "empty": "No upcoming milestones",
+        "at_risk": "At risk",
+        "type": { "tasca": "Task", "confeccio": "Production", "fitting": "Fitting" }
+      },
       "section_technical": "Technical detail",
       "tech_next_phase": "Next phase",
       "tech_next_phase_none": "None (final phase)",

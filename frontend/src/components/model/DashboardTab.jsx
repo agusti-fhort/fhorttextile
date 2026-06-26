@@ -4,6 +4,7 @@ import Badge from '../ui/Badge'
 import ModelTimeline from './ModelTimeline'
 import WorkPlan from './WorkPlan'
 import WatchpointsPanel from './WatchpointsPanel'
+import ModelMilestones from './ModelMilestones'
 import { formatMinutes } from '../../utils/format'
 
 // Dashboard del model — PEÇA F1 (Q1 "on sóc" + Q4 "què puc fer").
@@ -237,6 +238,9 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
           )}
         </div>
       </section>
+
+      {/* ── Properes fites del MODEL (sota Què tinc fet) ───────────── */}
+      <ModelMilestones modelId={modelId} navigate={navigate} sectionTitle={sectionTitle} />
 
       {/* Q4 (llista plana de F1) ABSORBIT pel contenidor Pla de treball (P2a/P2b). */}
 

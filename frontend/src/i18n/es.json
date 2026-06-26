@@ -400,6 +400,12 @@
       "empty_fitxa": "Aún no hay ficha",
       "empty_grading": "Aún no hay tabla graduada",
       "empty_base": "Aún no hay medidas base",
+      "milestones": {
+        "section": "Próximos hitos",
+        "empty": "Ningún hito próximo",
+        "at_risk": "En riesgo",
+        "type": { "tasca": "Tarea", "confeccio": "Confección", "fitting": "Prueba" }
+      },
       "section_technical": "Detalle técnico",
       "tech_next_phase": "Siguiente fase",
       "tech_next_phase_none": "Ninguna (fase final)",

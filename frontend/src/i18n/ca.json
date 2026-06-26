@@ -400,6 +400,12 @@
       "empty_fitxa": "Encara no hi ha fitxa",
       "empty_grading": "Encara no hi ha taula graduada",
       "empty_base": "Encara no hi ha mesures base",
+      "milestones": {
+        "section": "Properes fites",
+        "empty": "Cap fita propera",
+        "at_risk": "En risc",
+        "type": { "tasca": "Tasca", "confeccio": "Confecció", "fitting": "Fitting" }
+      },
       "section_technical": "Detall tècnic",
       "tech_next_phase": "Següent fase",
       "tech_next_phase_none": "Cap (fase final)",
