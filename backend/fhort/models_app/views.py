@@ -1064,36 +1064,36 @@ def upload_file_view(request, model_id):
     if not uploaded_file:
         return Response({'error': 'fitxer és obligatori'}, status=400)
 
-    tipus = request.data.get('tipus', 'ALTRES')
-    name = request.data.get('nom') or uploaded_file.name
+    from .services_fitxers import save_model_file
 
-    # version: increment the latest of the same type
-    latest = ModelFitxer.objects.filter(model=model, tipus=tipus).order_by('-id').first()
-    try:
-        prev_num = int(latest.versio) if latest and latest.versio else 0
-    except (TypeError, ValueError):
-        prev_num = 0
-    version = str(prev_num + 1)
+    # Contracte Finder: categoria/tipus opcionals (neutres si no es donen). Sense
+    # autoincrement per tipus — la versió la governa el servei via la cadena.
+    tipus = request.data.get('tipus') or None
+    categoria = request.data.get('categoria') or None
+    nom = request.data.get('nom') or uploaded_file.name
 
-    # Map type → category (existing) for consistency with old filters
-    categoria_map = {
-        'PATRO': 'Patro', 'MARCADA': 'Patro', 'ESCALAT': 'Patro',
-        'SKETCH_FLETXES': 'Disseny', 'SKETCH_NET': 'Disseny',
-        'FITXA': 'Document',
-    }
-    categoria = categoria_map.get(tipus, 'Document')
+    # versio_anterior_id opcional → encadena una nova versió d'un fitxer existent.
+    versio_anterior = None
+    versio_anterior_id = request.data.get('versio_anterior_id')
+    if versio_anterior_id:
+        try:
+            versio_anterior = ModelFitxer.objects.get(id=versio_anterior_id, model=model)
+        except ModelFitxer.DoesNotExist:
+            return Response(
+                {'error': 'versio_anterior_id no vàlid per a aquest model'}, status=400)
 
-    mf = ModelFitxer.objects.create(
-        model=model,
-        fitxer=uploaded_file,
-        nom_fitxer=name,
-        tipus=tipus,
+    mf = save_model_file(
+        model, uploaded_file,
+        versio_anterior=versio_anterior,
         categoria=categoria,
-        versio=version,
-        mida_bytes=uploaded_file.size,
-        path_servidor=uploaded_file.name,
-        pujat_per=getattr(request.user, 'profile', None),
+        tipus=tipus,
+        origen='upload',
+        nom=nom,
     )
+    perfil = getattr(request.user, 'profile', None)
+    if perfil is not None:
+        mf.pujat_per = perfil
+        mf.save(update_fields=['pujat_per'])
 
     return Response({
         'id': mf.id,
@@ -1101,6 +1101,8 @@ def upload_file_view(request, model_id):
         'tipus': mf.tipus,
         'categoria': mf.categoria,
         'versio': mf.versio,
+        'is_current': mf.is_current,
+        'versio_anterior': mf.versio_anterior_id,
         'url': request.build_absolute_uri(mf.fitxer.url) if mf.fitxer else None,
     }, status=201)
 
