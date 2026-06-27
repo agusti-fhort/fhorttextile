@@ -1721,6 +1721,12 @@
   "dashboard": {
     "tab_home": "Inici",
     "tab_planning": "Planificació",
+    "upcoming": {
+      "title": "Properament",
+      "empty": "Cap esdeveniment proper.",
+      "fitting": "Programada sessió de fitting per {{data}}",
+      "proto": "Arribada de proto {{nom}} prevista per {{data}}"
+    },
     "greeting_morning": "Bon dia",
     "greeting_afternoon": "Bona tarda",
     "greeting_evening": "Bona nit",

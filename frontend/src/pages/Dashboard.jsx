@@ -13,6 +13,14 @@ const MONO = "IBM Plex Mono, monospace"
 const DASH_TABS = ['home', 'planning']
 const DASH_TAB_LABELS = { home: 'dashboard.tab_home', planning: 'dashboard.tab_planning' }
 
+// "Properament": horitzó del feed futur (dies). Derivat en viu de calendar/events, sense persistència.
+const UPCOMING_DAYS = 60
+// Data local YYYY-MM-DD (no UTC) per acotar el rang i comparar el futur.
+const localISO = (d) => {
+  const z = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`
+}
+
 // Sprint 5 — board per-model 4-col al Dashboard. Cada card = un MODEL, classificat per
 // kanban_state (derivat al backend, by-model 1c) ∈ {pending, open, paused, done}.
 // Columnes: [Pendents | En curs (Open) | Pausats | Fets]. Mateixa paleta que el Kanban jubilat
@@ -399,6 +407,34 @@ export default function Dashboard() {
     risc: scopeRows.filter(m => riskyModelIds.has(m.model_id)).length,
   }), [scopeRows, riskyModelIds])
 
+  // "Properament": el set dels MEUS models de l'abast (segueix el selector) + nom per id (mai codi).
+  const myModelIds = useMemo(() => new Set(scopeRows.map(m => m.model_id)), [scopeRows])
+  const nomById = useMemo(
+    () => Object.fromEntries(scopeRows.map(m => [m.model_id, m.model_nom])), [scopeRows])
+
+  // Feed futur derivat EN VIU de calendar/events (mateixa derivació que ModelMilestones, sense
+  // persistència). Es filtra a posteriori (futur + intersecció amb els meus models) → reprogramat
+  // segueix vigent perquè cada càrrega es deriva fresca.
+  const [futureEvents, setFutureEvents] = useState([])
+  useEffect(() => {
+    const today = new Date()
+    const end = new Date(); end.setDate(end.getDate() + UPCOMING_DAYS)
+    calendar.events({ start: localISO(today), end: localISO(end) })
+      .then(res => setFutureEvents(res.data?.events ?? []))
+      .catch(() => setFutureEvents([]))
+  }, [])
+
+  const upcoming = useMemo(() => {
+    const todayISO = localISO(new Date())
+    return (futureEvents || [])
+      // 2 tipus ara (extensible): fitting (sessió) i confecció (arribada de proto).
+      .filter(ev => (ev.tipus === "fitting" || ev.tipus === "confeccio") && ev.start)
+      .filter(ev => ev.start.slice(0, 10) >= todayISO)          // només futur
+      .filter(ev => myModelIds.has(ev.meta?.model_id))          // intersecció amb els MEUS models
+      .map(ev => ({ id: ev.id, tipus: ev.tipus, day: ev.start.slice(0, 10), model_id: ev.meta?.model_id }))
+      .sort((a, b) => a.day.localeCompare(b.day))               // ascendent per data
+  }, [futureEvents, myModelIds])
+
   // Substrat dels KPIs: by-model de TOT l'abast (scope-only, sense filtres de campanya). Es
   // recarrega en commutar l'abast. all=true per comptar també els models tot-Done. El load es
   // difereix (setTimeout) per no cridar setState síncron dins l'efecte (mateix patró que el board).
@@ -505,25 +541,64 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          {/* KPIs (SOTA el selector) — derivats de l'abast. Senyals d'acció, no recompte de fases. */}
-          <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
-            <KPICard
-              label={t("dashboard.kpi.scope_total")}
-              value={scopeLoading ? "…" : kpi.total}
-              sub={t("dashboard.kpi_sub.scope_total")}
-            />
-            <KPICard
-              label={t("dashboard.kpi.at_risk")}
-              value={scopeLoading ? "…" : kpi.risc}
-              sub={t("dashboard.kpi_sub.at_risk")}
-              color="var(--err)"
-            />
-            <KPICard
-              label={t("dashboard.kpi.in_progress")}
-              value={scopeLoading ? "…" : kpi.open}
-              sub={t("dashboard.kpi_sub.in_progress")}
-              color="var(--gold)"
-            />
+          {/* KPIs 50% esquerre (apilats) · "Properament" 50% dret (mateixa alçada, scroll intern). */}
+          <div style={{ display: "flex", gap: 16, marginBottom: 28, alignItems: "stretch" }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+              <KPICard
+                label={t("dashboard.kpi.scope_total")}
+                value={scopeLoading ? "…" : kpi.total}
+                sub={t("dashboard.kpi_sub.scope_total")}
+              />
+              <KPICard
+                label={t("dashboard.kpi.at_risk")}
+                value={scopeLoading ? "…" : kpi.risc}
+                sub={t("dashboard.kpi_sub.at_risk")}
+                color="var(--err)"
+              />
+              <KPICard
+                label={t("dashboard.kpi.in_progress")}
+                value={scopeLoading ? "…" : kpi.open}
+                sub={t("dashboard.kpi_sub.in_progress")}
+                color="var(--gold)"
+              />
+            </div>
+            {/* Posició relativa + inner absolut: l'alçada la dicten els KPIs; el feed scrolla a dins. */}
+            <div style={{ flex: 1, position: "relative", minHeight: 160 }}>
+              <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+                <div style={{ fontSize: "var(--fs-body)", color: "var(--text-muted)", fontFamily: MONO, marginBottom: 8 }}>
+                  {t("dashboard.upcoming.title")}
+                </div>
+                <div style={{
+                  flex: 1, minHeight: 0, overflowY: "auto",
+                  border: "1px solid var(--border)", borderRadius: 8,
+                  background: "var(--white)", padding: "12px 16px",
+                }}>
+                  {upcoming.length === 0 ? (
+                    <div style={{ color: "var(--text-muted)", fontSize: "var(--fs-body)", fontStyle: "italic" }}>
+                      {t("dashboard.upcoming.empty")}
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {upcoming.map(it => {
+                        const dataFmt = new Date(it.day + "T00:00:00").toLocaleDateString(
+                          i18n.language || "ca", { day: "numeric", month: "long" })
+                        return (
+                          <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--text-main)" }}>
+                            <i className={`ti ${it.tipus === "fitting" ? "ti-ruler-2" : "ti-building-factory"}`}
+                               style={{ fontSize: 15, color: "var(--gray)" }} />
+                            <span style={{ flex: 1, fontSize: "var(--fs-body)" }}>
+                              {it.tipus === "fitting"
+                                ? t("dashboard.upcoming.fitting", { data: dataFmt })
+                                : t("dashboard.upcoming.proto", { nom: nomById[it.model_id] || "—", data: dataFmt })}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Board per-model (a continuació): rep l'abast (responsable=me quan "els meus"). */}

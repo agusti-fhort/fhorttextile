@@ -1721,6 +1721,12 @@
   "dashboard": {
     "tab_home": "Inicio",
     "tab_planning": "Planificación",
+    "upcoming": {
+      "title": "Próximamente",
+      "empty": "Ningún evento próximo.",
+      "fitting": "Sesión de fitting programada para {{data}}",
+      "proto": "Llegada de proto {{nom}} prevista para {{data}}"
+    },
     "greeting_morning": "Buenos días",
     "greeting_afternoon": "Buenas tardes",
     "greeting_evening": "Buenas noches",
