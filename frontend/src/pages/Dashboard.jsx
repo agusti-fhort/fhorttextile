@@ -228,12 +228,8 @@ function ModelBoard({ scope }) {
         </span>
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <FaseChip label={t("dashboard.board.total")} n={faseCounts.total ?? 0} />
-        {PHASES.map(ph => (
-          <FaseChip key={ph} label={t(`model_sheet.dashboard.phase.${ph}`, ph)} n={faseCounts.counts?.[ph] ?? 0} />
-        ))}
-      </div>
+      {/* COMMIT 3 — fila de pastilles de comptes de fase amagada (Total · per-fase). Es conserva
+          el substrat faseCounts (higiene diferida: sense ús visible després d'amagar-les). */}
 
       {/* Filtres de campanya */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
