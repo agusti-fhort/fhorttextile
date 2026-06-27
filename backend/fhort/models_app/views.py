@@ -138,6 +138,14 @@ class ModelFitxerViewSet(viewsets.ModelViewSet):
     ordering_fields = ['data_pujada']
     ordering = ['-data_pujada']
 
+    @action(detail=True, methods=['get'])
+    def versions(self, request, pk=None):
+        """Cadena de versions completa (read-only) del fitxer, ordenada per versio."""
+        from .services_fitxers import get_version_chain
+        chain = get_version_chain(self.get_object())
+        serializer = self.get_serializer(chain, many=True)
+        return Response(serializer.data)
+
 
 # D-12 — Watchpoints: advertències de text lliure que viatgen amb el model a través dels gates.
 class WatchpointViewSet(viewsets.ModelViewSet):
