@@ -52,6 +52,7 @@ const LAYER_ORDER = { template: 0, data: 1, free: 2 }
 // TS-4c — eines per "família" de creació (mateixa mecànica de drag).
 const RECT_TOOLS = ['rect', 'rect_round', 'ellipse']   // drag = bounding box
 const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
+const PRESET_TOOLS = ['preset_callout', 'preset_detail_circle', 'preset_legend']
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(performance.now())}-${Math.floor(Math.random() * 1e9)}`)
 export const toPx = (mm) => mm * MM_TO_PX
 export const toMm = (px) => px / MM_TO_PX
@@ -776,6 +777,36 @@ export default function TechSheetEditor() {
   const mirrorObjects = useCallback((objIds, axis) => {
     updateObjects(objIds, o => ({ [axis]: -1 * (o[axis] || 1) }))
   }, [updateObjects])
+  const createPreset = useCallback((preset, x, y) => {
+    const base = { id: uid(), type: 'group', layer: 'free', x, y, rotation: 0 }
+    if (preset === 'preset_callout') {
+      return {
+        ...base,
+        children: [
+          { id: uid(), type: 'text', layer: 'free', x: 0, y: 0, width: 54, height: 18, text: t('tech_sheet.preset_callout_text'), fontSize: 11, fontFamily: FONT, fill: KONVA_COL.textMain, bgFill: KONVA_COL.white, bgPadding: 4 },
+          { id: uid(), type: 'arrow', layer: 'free', x: 58, y: 7, x2: 92, y2: 7, stroke: KONVA_COL.textMain, fill: KONVA_COL.textMain, strokeWidth: 1.5 },
+        ],
+      }
+    }
+    if (preset === 'preset_detail_circle') {
+      return {
+        ...base,
+        children: [
+          { id: uid(), type: 'ellipse', layer: 'free', x: 18, y: 18, rx: 16, ry: 16, stroke: KONVA_COL.gold, strokeWidth: 2, fill: 'transparent' },
+          { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [34, 18, 72, 18], stroke: KONVA_COL.gold, strokeWidth: 1 },
+        ],
+      }
+    }
+    return {
+      ...base,
+      children: [
+        { id: uid(), type: 'rect', layer: 'free', x: 0, y: 0, width: 78, height: 36, fill: KONVA_COL.white, stroke: KONVA_COL.border, strokeWidth: 1 },
+        { id: uid(), type: 'text', layer: 'free', x: 4, y: 4, width: 68, height: 8, text: t('tech_sheet.preset_legend_title'), fontSize: 9, fontFamily: FONT, fontStyle: 'bold', fill: KONVA_COL.textMain },
+        { id: uid(), type: 'text', layer: 'free', x: 4, y: 15, width: 68, height: 8, text: t('tech_sheet.preset_legend_row_1'), fontSize: 8, fontFamily: FONT, fill: KONVA_COL.textMain },
+        { id: uid(), type: 'text', layer: 'free', x: 4, y: 25, width: 68, height: 8, text: t('tech_sheet.preset_legend_row_2'), fontSize: 8, fontFamily: FONT, fill: KONVA_COL.textMain },
+      ],
+    }
+  }, [t])
   const moveSelectionInFreeLayer = useCallback((direction) => {
     const ids = new Set(selectedIds)
     updatePageObjects(currentPage, objs => {
@@ -1121,6 +1152,11 @@ export default function TechSheetEditor() {
       }
       addObject(obj); setTool('select'); return
     }
+    if (PRESET_TOOLS.includes(tool)) {
+      addObject(createPreset(tool, toMm(pos.x), toMm(pos.y)))
+      setTool('select')
+      return
+    }
     if (RECT_TOOLS.includes(tool) || LINE_TOOLS.includes(tool) || tool === 'draw') {
       drawing.current = { type: tool, startX: pos.x, startY: pos.y, points: [pos.x, pos.y] }
       setDrawTemp({ type: tool, x: pos.x, y: pos.y, w: 0, h: 0, points: [pos.x, pos.y] })
@@ -1365,6 +1401,11 @@ export default function TechSheetEditor() {
     { g: 'text', icon: 'ti-typography', label: t('tech_sheet.tool_group_text'), tools: [
       { k: 'text', icon: 'ti-cursor-text', label: t('tech_sheet.tool_text') },
       { k: 'text_box', icon: 'ti-text-caption', label: t('tech_sheet.tool_text_box') },
+    ] },
+    { g: 'presets', icon: 'ti-components', label: t('tech_sheet.tool_group_presets'), tools: [
+      { k: 'preset_callout', icon: 'ti-message-2-share', label: t('tech_sheet.preset_callout') },
+      { k: 'preset_detail_circle', icon: 'ti-circle-dashed', label: t('tech_sheet.preset_detail_circle') },
+      { k: 'preset_legend', icon: 'ti-list-details', label: t('tech_sheet.preset_legend') },
     ] },
   ]
   const activeTool = (grp) => grp.tools.some(tl => tl.k === tool)
