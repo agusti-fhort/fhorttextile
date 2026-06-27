@@ -599,45 +599,20 @@ export default function TechSheetEditor() {
           else setLockState('error')
         })
         .catch(() => { if (!cancelled) setLockState('error') })
-    } else {
-      fetch(`${API}/api/v1/models/${id}/tech-sheet/`, { headers: authHeaders })
-        .then(r => (r.ok ? r.json() : null))
-        .then(data => {
-          if (cancelled || !data) return
-          setSheet(data)
-          // En mode consulta hidratem aquí; en edició ho fa la resposta del lock.
-          if (!isEditMode) hydrate(data)
-        }).catch(() => {})
-
-      if (isEditMode) {
-        fetch(`${API}/api/v1/models/${id}/tech-sheet/lock/`, { method: 'POST', headers: authHeaders })
-          .then(async r => {
-            if (cancelled) return
-            if (r.ok) { const d = await r.json(); setSheet(d); hydrate(d); setLockState('owned') }
-            else if (r.status === 409) { setConflict(await r.json()); setLockState('conflict') }
-            else setLockState('error')
-          })
-          .catch(() => { if (!cancelled) setLockState('error') })
-      }
     }
 
     return () => {
       cancelled = true
-      if (fttMode) {
-        fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/unlock/`, {
-          method: 'POST', headers: authHeaders, keepalive: true,
-        }).catch(() => {})
-      } else if (isEditMode) {
-        if (taskId) {
-          fetch(`${API}/api/v1/model-task-items/${taskId}/transition/`, {
-            method: 'POST', headers: authHeaders,
-            body: JSON.stringify({ to_status: 'Paused' }), keepalive: true,
-          }).catch(() => {})
-        }
-        fetch(`${API}/api/v1/models/${id}/tech-sheet/unlock/`, {
-          method: 'POST', headers: authHeaders, keepalive: true,
+      // Si venia d'una tasca (Kanban), deixa-la en Pausa; allibera sempre el lock del .ftt.
+      if (taskId) {
+        fetch(`${API}/api/v1/model-task-items/${taskId}/transition/`, {
+          method: 'POST', headers: authHeaders,
+          body: JSON.stringify({ to_status: 'Paused' }), keepalive: true,
         }).catch(() => {})
       }
+      fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/unlock/`, {
+        method: 'POST', headers: authHeaders, keepalive: true,
+      }).catch(() => {})
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, fitxerId])
@@ -692,22 +667,14 @@ export default function TechSheetEditor() {
     saveTimer.current = setTimeout(async () => {
       try {
         const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-        if (fttMode) {
-          // Desa una versió NOVA del .ftt (save_model_file encadena; renova el lock). La resposta
-          // és el nou cap de cadena → s'hi reapunta per als propers desats i per a la versió mostrada.
-          const documentJson = v2ToDocument(serializePages(pages), pageFormat, fttMeta.current, fttUrlToName.current)
-          const r = await fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/`, {
-            method: 'PATCH', headers, body: JSON.stringify({ document_json: documentJson }),
-          })
-          if (r.ok) { const nh = await r.json(); fttHeadId.current = nh.id; setSheet(nh); setSaveState('saved') }
-          else setSaveState('error')
-        } else {
-          const r = await fetch(`${API}/api/v1/models/${id}/tech-sheet/update/`, {
-            method: 'PATCH', headers,
-            body: JSON.stringify({ template_json: { version: 2, pages: serializePages(pages), pageFormat } }),
-          })
-          setSaveState(r.ok ? 'saved' : 'error')
-        }
+        // Desa una versió NOVA del .ftt (save_model_file encadena; renova el lock). La resposta
+        // és el nou cap de cadena → s'hi reapunta per als propers desats i per a la versió mostrada.
+        const documentJson = v2ToDocument(serializePages(pages), pageFormat, fttMeta.current, fttUrlToName.current)
+        const r = await fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/`, {
+          method: 'PATCH', headers, body: JSON.stringify({ document_json: documentJson }),
+        })
+        if (r.ok) { const nh = await r.json(); fttHeadId.current = nh.id; setSheet(nh); setSaveState('saved') }
+        else setSaveState('error')
       } catch { setSaveState('error') }
     }, 2000)
   // eslint-disable-next-line react-hooks/exhaustive-deps

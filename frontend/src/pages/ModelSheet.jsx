@@ -528,15 +528,17 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
 // Consulta des del Model obre sense task_id → mode consulta. L'edició registrada
 // es fa des del Kanban (que passa ?task_id=...). Vegeu TechSheetEditor.
 function TechSheetTab({ modelId, navigate }) {
-  const [sheet, setSheet]   = useState(null)
+  // Cutover .ftt (F8): la fitxa és un ModelFitxer tipus TECHSHEET (no el TechSheet O2O). El
+  // resum llegeix el cap de cadena vigent; els botons van a /fitxa (resolver que obre/crea el .ftt).
+  const [fitxer, setFitxer] = useState(null)
   const [loading, setLoading] = useState(true)
   const token   = localStorage.getItem('access_token')
   const headers = { Authorization: `Bearer ${token}` }
 
   useEffect(() => {
-    fetch(`${API}/api/v1/models/${modelId}/tech-sheet/`, { headers })
+    fetch(`${API}/api/v1/model-fitxers/?model=${modelId}&tipus=TECHSHEET&is_current=true&ordering=-data_pujada`, { headers })
       .then(r => r.ok ? r.json() : null)
-      .then(data => { setSheet(data); setLoading(false) })
+      .then(data => { const list = data?.results || data || []; setFitxer(list[0] || null); setLoading(false) })
       .catch(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelId])
@@ -559,7 +561,7 @@ function TechSheetTab({ modelId, navigate }) {
   }
 
   // --- NO HI HA FITXA ---
-  if (!sheet || !sheet.has_content) {
+  if (!fitxer) {
     return (
       <div style={{ padding: '24px',
         }}>
@@ -578,12 +580,8 @@ function TechSheetTab({ modelId, navigate }) {
   }
 
   // --- HI HA FITXA ---
-  // Nombre de pàgines (calculat al serializer; no enviem template_json sencer).
-  const numPages = sheet.num_pages || '—'
-
-  // Format data
-  const updatedAt = sheet.updated_at
-    ? new Date(sheet.updated_at).toLocaleDateString('ca-ES',
+  const updatedAt = fitxer.data_pujada
+    ? new Date(fitxer.data_pujada).toLocaleDateString('ca-ES',
         { day:'2-digit', month:'2-digit', year:'numeric' })
     : '—'
 
@@ -600,15 +598,9 @@ function TechSheetTab({ modelId, navigate }) {
       }}>
         <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
           display: 'flex', gap: '16px' }}>
-          <span>v{sheet.versio}</span>
-          <span>{sheet.estat}</span>
-          <span>{numPages} pàgines</span>
+          <span>v{fitxer.versio}</span>
+          <span>{fitxer.nom_fitxer}</span>
           <span>Actualitzat: {updatedAt}</span>
-          {sheet.locked_by_username && (
-            <span style={{ color: 'var(--warn)' }}>
-              Editant: {sheet.locked_by_username}
-            </span>
-          )}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
