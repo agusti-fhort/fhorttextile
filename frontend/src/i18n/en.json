@@ -1583,6 +1583,8 @@
     "model_files": "Model files ({{n}})",
     "no_files": "No files.",
     "element": "Element",
+    "selected_objects": "{{n}} objects selected",
+    "mixed_values": "Mixed values",
     "font_size": "Font size",
     "bold": "Bold",
     "text_color": "Text color",

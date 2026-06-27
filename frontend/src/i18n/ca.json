@@ -1583,6 +1583,8 @@
     "model_files": "Fitxers del model ({{n}})",
     "no_files": "Cap fitxer.",
     "element": "Element",
+    "selected_objects": "{{n}} objectes seleccionats",
+    "mixed_values": "Valors mixtos",
     "font_size": "Mida font",
     "bold": "Negreta",
     "text_color": "Color text",

@@ -379,6 +379,16 @@ function dataBlockPlaceholderProps(obj) {
   return { width: toPx(obj.width || 120), height: toPx(obj.height || 40), fill: COL.goldPale, stroke: KONVA_COL.border, dash: [4, 4] }
 }
 
+function blocksTransform(obj) {
+  return obj && (obj.type === 'line' || obj.type === 'arrow' || (obj.type === 'text' && obj.bgFill))
+}
+
+function commonValue(objects, key) {
+  if (!objects.length) return ''
+  const first = objects[0]?.[key] ?? ''
+  return objects.every(o => (o?.[key] ?? '') === first) ? first : ''
+}
+
 async function addObjectToLayer(layer, obj, ctx) {
   if (obj.type === 'text') {
     if (obj.bgFill) {
@@ -557,7 +567,7 @@ export default function TechSheetEditor() {
   const [sheet, setSheet] = useState(null)
   const [pages, setPages] = useState([{ id: uid(), objects: [] }])
   const [currentPage, setCurrentPage] = useState(0)
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedIds, setSelectedIds] = useState([])
   const [tool, setTool] = useState('select')
   // 'loading' | 'owned' | 'conflict' | 'error' | 'readonly'
   const [lockState, setLockState] = useState((isEditMode || fttMode) ? 'loading' : 'readonly')
@@ -602,15 +612,35 @@ export default function TechSheetEditor() {
   }, [])
   const addObject = useCallback((obj) => {
     updatePageObjects(currentPage, objs => [...objs, obj])
-    setSelectedId(obj.id)
+    setSelectedIds([obj.id])
   }, [currentPage, updatePageObjects])
   const updateObject = useCallback((objId, patch) => {
     updatePageObjects(currentPage, objs => objs.map(o => (o.id === objId ? { ...o, ...patch } : o)))
   }, [currentPage, updatePageObjects])
+  const updateObjects = useCallback((objIds, patch) => {
+    const ids = new Set(objIds)
+    updatePageObjects(currentPage, objs => objs.map(o => (
+      ids.has(o.id) ? { ...o, ...(typeof patch === 'function' ? patch(o) : patch) } : o
+    )))
+  }, [currentPage, updatePageObjects])
   const deleteObject = useCallback((objId) => {
     updatePageObjects(currentPage, objs => objs.filter(o => o.id !== objId))
-    setSelectedId(null)
+    setSelectedIds([])
   }, [currentPage, updatePageObjects])
+  const deleteObjects = useCallback((objIds) => {
+    const ids = new Set(objIds)
+    updatePageObjects(currentPage, objs => objs.filter(o => !ids.has(o.id)))
+    setSelectedIds([])
+  }, [currentPage, updatePageObjects])
+  const clearSelection = useCallback(() => setSelectedIds([]), [])
+  const selectOnly = useCallback((objId) => setSelectedIds([objId]), [])
+  const toggleSelection = useCallback((objId) => {
+    setSelectedIds(ids => (ids.includes(objId) ? ids.filter(id => id !== objId) : [...ids, objId]))
+  }, [])
+  const handleSelectObject = useCallback((e, objId) => {
+    if (e?.evt?.shiftKey) toggleSelection(objId)
+    else selectOnly(objId)
+  }, [selectOnly, toggleSelection])
 
   // ── Càrrega inicial: model, sheet, fitxers, size fittings, lock ────────────
   useEffect(() => {
@@ -755,19 +785,17 @@ export default function TechSheetEditor() {
     const tr = trRef.current
     const stage = stageRef.current
     if (!tr || !stage) return
-    const obj = objectsOf(currentPage).find(o => o.id === selectedId)
     // Transformable: text, rect, ellipse, image, data_block (keepRatio). NO: línies, fletxes
     // (resize de punts), text amb fons (Group), plantilla.
-    const noResize = obj && (obj.type === 'line' || obj.type === 'arrow' || (obj.type === 'text' && obj.bgFill))
-    if (selectedId && obj && obj.layer !== 'template' && !noResize) {
-      const node = stage.findOne('#' + selectedId)
-      tr.nodes(node ? [node] : [])
-    } else {
-      tr.nodes([])
-    }
+    const selectedSet = new Set(selectedIds)
+    const nodes = objectsOf(currentPage)
+      .filter(o => selectedSet.has(o.id) && o.layer !== 'template' && !blocksTransform(o))
+      .map(o => stage.findOne('#' + o.id))
+      .filter(Boolean)
+    tr.nodes(nodes)
     tr.getLayer()?.batchDraw()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, currentPage, pages])
+  }, [selectedIds, currentPage, pages])
 
   // ── Teclat: Delete/Backspace esborra l'objecte free seleccionat ────────────
   useEffect(() => {
@@ -777,14 +805,14 @@ export default function TechSheetEditor() {
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
-      if (!selectedId || !locked) return
-      const obj = objectsOf(currentPage).find(o => o.id === selectedId)
-      if (obj && obj.layer === 'free') { e.preventDefault(); deleteObject(selectedId) }
+      if (!selectedIds.length || !locked) return
+      const deletable = objectsOf(currentPage).filter(o => selectedIds.includes(o.id) && o.layer === 'free').map(o => o.id)
+      if (deletable.length) { e.preventDefault(); deleteObjects(deletable) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, currentPage, pages, locked, editingText])
+  }, [selectedIds, currentPage, pages, locked, editingText])
 
   // ── Handlers de node (drag / transform) ────────────────────────────────────
   const handleDragEnd = (obj) => (e) => {
@@ -831,11 +859,11 @@ export default function TechSheetEditor() {
     return stage ? stage.getPointerPosition() : null
   }
   const onStageMouseDown = (e) => {
-    if (!locked) { if (e.target === e.target.getStage()) setSelectedId(null); return }
+    if (!locked) { if (e.target === e.target.getStage()) clearSelection(); return }
     const pos = stagePoint()
     if (!pos) return
     if (tool === 'select') {
-      if (e.target === e.target.getStage()) setSelectedId(null)
+      if (e.target === e.target.getStage()) clearSelection()
       return
     }
     if (tool === 'text' || tool === 'text_box') {
@@ -895,7 +923,7 @@ export default function TechSheetEditor() {
   // ── Edició inline de text (textarea overlay) ───────────────────────────────
   const startTextEdit = (obj) => {
     if (!locked) return
-    setSelectedId(obj.id)
+    selectOnly(obj.id)
     setEditingText({ id: obj.id, value: obj.text || '', x: toPx(obj.x), y: toPx(obj.y), w: toPx(obj.width || 120) })
   }
   const commitTextEdit = () => {
@@ -1000,7 +1028,7 @@ export default function TechSheetEditor() {
     if (!window.confirm(t('tech_sheet.confirm_delete_page'))) return
     setPages(ps => ps.filter((_, i) => i !== index))
     setCurrentPage(ci => Math.min(ci, pages.length - 2))
-    setSelectedId(null)
+    clearSelection()
   }
 
   // ── Export PDF (pdf-lib) ───────────────────────────────────────────────────
@@ -1060,7 +1088,17 @@ export default function TechSheetEditor() {
   }
   const curObjs = objectsOf(currentPage)
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
-  const selObj = curObjs.find(o => o.id === selectedId) || null
+  const selectedSet = new Set(selectedIds)
+  const selectedObjects = curObjs.filter(o => selectedSet.has(o.id))
+  const selObj = selectedObjects.length === 1 ? selectedObjects[0] : null
+  const multiSelected = selectedObjects.length > 1
+  const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow'].includes(o.type))
+  const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse'].includes(o.type))
+  const multiPosition = selectedObjects.filter(o => o.type !== 'line' && o.type !== 'arrow')
+  const multiStrokeValue = commonValue(multiStroke, 'stroke')
+  const multiFillValue = commonValue(multiFill, 'fill')
+  const multiX = commonValue(multiPosition, 'x')
+  const multiY = commonValue(multiPosition, 'y')
 
   // Eines agrupades en desplegables (TS-4c). 'select' és standalone.
   const TOOL_GROUPS = [
@@ -1157,7 +1195,7 @@ export default function TechSheetEditor() {
             <button onClick={addPage} style={{ fontSize: 'var(--fs-caption)', padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>{t('tech_sheet.add_page')}</button>
           )}
           {pages.map((p, i) => (
-            <div key={p.id} onClick={() => { setCurrentPage(i); setSelectedId(null) }} style={{ position: 'relative', cursor: 'pointer' }}>
+            <div key={p.id} onClick={() => { setCurrentPage(i); clearSelection() }} style={{ position: 'relative', cursor: 'pointer' }}>
               <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
                 {thumbnails[i] && <img src={thumbnails[i]} alt={t('tech_sheet.page_n', { n: i + 1 })} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
               </div>
@@ -1188,10 +1226,10 @@ export default function TechSheetEditor() {
                 {ordered.map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
-                    selected={selectedId === o.id}
+                    selected={selectedIds.includes(o.id)}
                     selectable={locked && o.layer !== 'template'}
                     draggable={locked && tool === 'select' && o.layer !== 'template'}
-                    onSelect={() => setSelectedId(o.id)}
+                    onSelect={(e) => handleSelectObject(e, o.id)}
                     onDragEnd={handleDragEnd(o)}
                     onTransformEnd={handleTransformEnd(o)}
                     onDblText={() => startTextEdit(o)} />
@@ -1201,7 +1239,7 @@ export default function TechSheetEditor() {
                 {drawTemp?.type === 'ellipse' && <Ellipse x={drawTemp.x + drawTemp.w / 2} y={drawTemp.y + drawTemp.h / 2} radiusX={drawTemp.w / 2} radiusY={drawTemp.h / 2} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {(drawTemp?.type === 'line' || drawTemp?.type === 'line_dot' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={KONVA_COL.textMain} fill={KONVA_COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
-                <Transformer ref={trRef} rotateEnabled={false} ignoreStroke keepRatio={selObj?.type === 'data_block'}
+                <Transformer ref={trRef} rotateEnabled={false} ignoreStroke keepRatio={selectedObjects.length === 1 && selObj?.type === 'data_block'}
                   boundBoxFunc={(oldB, newB) => (newB.width < 10 || newB.height < 10 ? oldB : newB)} />
               </Layer>
             </Stage>
@@ -1255,6 +1293,39 @@ export default function TechSheetEditor() {
             })}
 
             {/* Propietats de l'objecte seleccionat (TS-4b) */}
+            {multiSelected && locked && (
+              <>
+                <SectionTitle>{t('tech_sheet.selected_objects', { n: selectedObjects.length })}</SectionTitle>
+                {multiStroke.length > 0 && (
+                  <div style={propLabel}>{t('tech_sheet.stroke_color')}
+                    {!multiStrokeValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
+                    <ColorPicker value={multiStrokeValue || KONVA_COL.textMain}
+                      onChange={c => updateObjects(multiStroke.map(o => o.id), o => ({ stroke: c, ...(o.type === 'arrow' ? { fill: c } : {}) }))} />
+                  </div>
+                )}
+                {multiFill.length > 0 && (
+                  <div style={propLabel}>{t('tech_sheet.fill')}
+                    {!multiFillValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
+                    <ColorPicker value={multiFillValue || KONVA_COL.white}
+                      onChange={c => updateObjects(multiFill.map(o => o.id), { fill: c })} />
+                  </div>
+                )}
+                {multiPosition.length === selectedObjects.length && (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <label style={{ ...propLabel, flex: 1 }}>{t('tech_sheet.pos_x')}
+                      <input type="number" step={1} value={multiX === '' ? '' : Math.round(Number(multiX) * 10) / 10}
+                        placeholder={t('tech_sheet.mixed_values')}
+                        onChange={e => { if (e.target.value !== '') updateObjects(selectedIds, { x: Number(e.target.value) || 0 }) }} style={propInput} />
+                    </label>
+                    <label style={{ ...propLabel, flex: 1 }}>{t('tech_sheet.pos_y')}
+                      <input type="number" step={1} value={multiY === '' ? '' : Math.round(Number(multiY) * 10) / 10}
+                        placeholder={t('tech_sheet.mixed_values')}
+                        onChange={e => { if (e.target.value !== '') updateObjects(selectedIds, { y: Number(e.target.value) || 0 }) }} style={propInput} />
+                    </label>
+                  </div>
+                )}
+              </>
+            )}
             {selObj && locked && (
               <>
                 <SectionTitle>{t('tech_sheet.element')} · {selObj.type}</SectionTitle>

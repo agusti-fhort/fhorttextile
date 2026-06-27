@@ -1583,6 +1583,8 @@
     "model_files": "Archivos del modelo ({{n}})",
     "no_files": "Sin archivos.",
     "element": "Elemento",
+    "selected_objects": "{{n}} objetos seleccionados",
+    "mixed_values": "Valores mixtos",
     "font_size": "Tamaño fuente",
     "bold": "Negrita",
     "text_color": "Color texto",
