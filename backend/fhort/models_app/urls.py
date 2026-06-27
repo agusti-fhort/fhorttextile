@@ -164,6 +164,21 @@ try:
 except Exception:
     _techsheet_editor_paths = []
 
+# Documents .ftt sobre el Finder (ModelFitxer tipus TECHSHEET). Crear/carregar/desar.
+try:
+    from .ftt_document_views import (
+        FttDocumentAssetView,
+        FttDocumentCreateView,
+        FttDocumentDetailView,
+    )
+    _ftt_document_paths = [
+        path('models/<int:model_id>/ftt-document/', FttDocumentCreateView.as_view(), name='ftt-document-create'),
+        path('ftt-documents/<int:fitxer_id>/', FttDocumentDetailView.as_view(), name='ftt-document-detail'),
+        path('ftt-documents/<int:fitxer_id>/asset/<str:asset_name>/', FttDocumentAssetView.as_view(), name='ftt-document-asset'),
+    ]
+except Exception:
+    _ftt_document_paths = []
+
 urlpatterns = (
     [
         path('models/next-ref/', next_model_ref),
@@ -199,5 +214,6 @@ urlpatterns = (
     + _sprint17_paths
     + _bulk_paths
     + _techsheet_editor_paths
+    + _ftt_document_paths
     + router.urls
 )

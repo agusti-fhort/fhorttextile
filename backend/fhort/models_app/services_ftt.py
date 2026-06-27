@@ -25,9 +25,27 @@ DOCUMENT_NAME = "document.json"
 PREVIEW_NAME = "preview.png"
 ASSETS_PREFIX = "assets/"
 
+# Esquema del document lògic (document.json), distint del schema_version del contenidor.
+FTT_DOCUMENT_SCHEMA = 1
+DEFAULT_PAGE_FORMAT = "A4L"
+
 
 def _sha256(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def new_empty_document(metadata=None, page_format=DEFAULT_PAGE_FORMAT):
+    """Document.json mínim vàlid: una pàgina buida, metadata buida.
+
+    Estructura v-ftt:
+        {ftt_schema, metadata{}, pageFormat, pages:[{id, objects:[]}]}
+    """
+    return {
+        "ftt_schema": FTT_DOCUMENT_SCHEMA,
+        "metadata": metadata or {},
+        "pageFormat": page_format,
+        "pages": [{"id": "p1", "objects": []}],
+    }
 
 
 def pack(document_json, assets=None, preview=None, app_version=FTT_APP_VERSION):
