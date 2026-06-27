@@ -134,7 +134,7 @@ class ModelFitxerViewSet(viewsets.ModelViewSet):
     serializer_class = ModelFitxerSerializer
     queryset = ModelFitxer.objects.select_related('model', 'pujat_per').all()
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['model', 'categoria', 'tipus', 'enviat_ia']
+    filterset_fields = ['model', 'categoria', 'tipus', 'enviat_ia', 'is_current', 'mimetype']
     ordering_fields = ['data_pujada']
     ordering = ['-data_pujada']
 
