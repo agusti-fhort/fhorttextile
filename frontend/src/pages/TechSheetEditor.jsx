@@ -504,7 +504,7 @@ export default function TechSheetEditor() {
   const [selectedId, setSelectedId] = useState(null)
   const [tool, setTool] = useState('select')
   // 'loading' | 'owned' | 'conflict' | 'error' | 'readonly'
-  const [lockState, setLockState] = useState(isEditMode ? 'loading' : 'readonly')
+  const [lockState, setLockState] = useState((isEditMode || fttMode) ? 'loading' : 'readonly')
   const [conflict, setConflict] = useState(null)
   const [saveState, setSaveState] = useState(null)  // null|'saving'|'saved'|'error'
   const [fitxers, setFitxers] = useState([])
@@ -588,6 +588,17 @@ export default function TechSheetEditor() {
           setSheet(data.fitxer)   // versio ve de ModelFitxer.versio
           hydrate({ template_json: documentToV2(data.document_json, assets) })
         }).catch(() => {})
+
+      // F2: adquireix el lock del document lògic (TTL+force-if-stale al backend; el timer-gap
+      // ja està resolt: desar renova locked_at).
+      fetch(`${API}/api/v1/ftt-documents/${fitxerId}/lock/`, { method: 'POST', headers: authHeaders })
+        .then(async r => {
+          if (cancelled) return
+          if (r.ok) { await r.json(); setLockState('owned') }
+          else if (r.status === 409) { setConflict(await r.json()); setLockState('conflict') }
+          else setLockState('error')
+        })
+        .catch(() => { if (!cancelled) setLockState('error') })
     } else {
       fetch(`${API}/api/v1/models/${id}/tech-sheet/`, { headers: authHeaders })
         .then(r => (r.ok ? r.json() : null))
@@ -616,7 +627,11 @@ export default function TechSheetEditor() {
 
     return () => {
       cancelled = true
-      if (isEditMode) {
+      if (fttMode) {
+        fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/unlock/`, {
+          method: 'POST', headers: authHeaders, keepalive: true,
+        }).catch(() => {})
+      } else if (isEditMode) {
         if (taskId) {
           fetch(`${API}/api/v1/model-task-items/${taskId}/transition/`, {
             method: 'POST', headers: authHeaders,
@@ -680,12 +695,23 @@ export default function TechSheetEditor() {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
       try {
-        const r = await fetch(`${API}/api/v1/models/${id}/tech-sheet/update/`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-          body: JSON.stringify({ template_json: { version: 2, pages: serializePages(pages), pageFormat } }),
-        })
-        setSaveState(r.ok ? 'saved' : 'error')
+        const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+        if (fttMode) {
+          // Desa una versió NOVA del .ftt (save_model_file encadena; renova el lock). La resposta
+          // és el nou cap de cadena → s'hi reapunta per als propers desats i per a la versió mostrada.
+          const documentJson = v2ToDocument(serializePages(pages), pageFormat, fttMeta.current, fttUrlToName.current)
+          const r = await fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/`, {
+            method: 'PATCH', headers, body: JSON.stringify({ document_json: documentJson }),
+          })
+          if (r.ok) { const nh = await r.json(); fttHeadId.current = nh.id; setSheet(nh); setSaveState('saved') }
+          else setSaveState('error')
+        } else {
+          const r = await fetch(`${API}/api/v1/models/${id}/tech-sheet/update/`, {
+            method: 'PATCH', headers,
+            body: JSON.stringify({ template_json: { version: 2, pages: serializePages(pages), pageFormat } }),
+          })
+          setSaveState(r.ok ? 'saved' : 'error')
+        }
       } catch { setSaveState('error') }
     }, 2000)
   // eslint-disable-next-line react-hooks/exhaustive-deps
