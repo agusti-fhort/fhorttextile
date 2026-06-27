@@ -12,17 +12,20 @@ from django.db import models
 
 
 class TechSheet(models.Model):
-    ESTAT_CHOICES = [
-        ('obert', 'Obert'),
-        ('tancat', 'Tancat'),
-    ]
+    """DEPRECAT (Fase 1 .ftt) — el document editable migra a ModelFitxer tipus TECHSHEET
+    (.ftt), versionat amb la invariant is_current/save_model_file. Es manté VIU perquè el
+    frontend (TechSheetEditor.jsx) encara hi llegeix/escriu fins al cutover de la Fase 2;
+    la retirada del model arriba a F2. La migració de dades la fa el command
+    migrate_techsheets_to_ftt.
+
+    `estat` (mort) ja retirat aquí. `versio` es conserva perquè el front encara el pinta
+    (capçalera/nom PDF/badge); es jubila a F2 (versionat real via ModelFitxer.versio)."""
 
     model = models.OneToOneField(
         'models_app.Model',
         on_delete=models.CASCADE,
         related_name='tech_sheet',
     )
-    estat = models.CharField(max_length=10, choices=ESTAT_CHOICES, default='obert')
     versio = models.PositiveIntegerField(default=1)
     template_json = models.JSONField(default=dict, blank=True)
 
@@ -51,7 +54,7 @@ class TechSheet(models.Model):
         verbose_name_plural = 'Fitxes tècniques'
 
     def __str__(self):
-        return f'TechSheet<{self.model_id}> [{self.estat}] v{self.versio}'
+        return f'TechSheet<{self.model_id}> v{self.versio}'
 
 
 class TechSheetTemplate(models.Model):

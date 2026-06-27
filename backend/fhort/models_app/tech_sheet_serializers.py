@@ -14,7 +14,7 @@ class TechSheetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TechSheet
-        fields = ['id', 'model_id', 'estat', 'versio', 'template_json',
+        fields = ['id', 'model_id', 'versio', 'template_json',
                   'locked_by_id', 'locked_by_username', 'updated_at',
                   'num_pages', 'has_content']
 
@@ -23,12 +23,12 @@ class TechSheetSerializer(serializers.ModelSerializer):
 
     def get_has_content(self, obj):
         tj = obj.template_json or {}
-        pages = tj.get('pages') or tj.get('schemas') or []
+        pages = tj.get('pages') or []
         return len(pages) > 0 or bool(tj)
 
     def get_num_pages(self, obj):
         tj = obj.template_json or {}
-        pages = tj.get('pages') or tj.get('schemas') or []
+        pages = tj.get('pages') or []
         return len(pages)
 
 
@@ -45,10 +45,10 @@ class TechSheetTemplateSerializer(serializers.ModelSerializer):
 
     def get_has_content(self, obj):
         tj = obj.template_json or {}
-        pages = tj.get('pages') or tj.get('schemas')
+        pages = tj.get('pages')
         return bool(pages)
 
     def get_num_pages(self, obj):
         tj = obj.template_json or {}
-        pages = tj.get('pages') or tj.get('schemas')
+        pages = tj.get('pages')
         return len(pages) if pages else 0
