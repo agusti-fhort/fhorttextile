@@ -114,7 +114,9 @@ export default function ProjectGantt({ t }) {
     return list
   }, [models, onlyRisk, order, riskFirst, today, filterTechs, filterColleccio, filterTemporada])
 
-  // Rang temporal global (min start, max end) amb 1 dia de marge a banda i banda.
+  // Rang temporal global: min(primera data, avui) i max(última data, avui), amb 60 dies de
+  // marge a banda i banda → AVUI sempre dins el rang i prou aire perquè l'scroll horitzontal
+  // existent mostri context passat i futur encara que les barres caiguin en un interval estret.
   const range = useMemo(() => {
     if (!models.length) return null
     let min = null, max = null
@@ -125,10 +127,14 @@ export default function ProjectGantt({ t }) {
       for (const f of m.fites) { const d = parseISO(f.data); if (d < min) min = d; if (d > max) max = d }
       if (m.data_objectiu) { const d = parseISO(m.data_objectiu); if (d > max) max = d; if (d < min) min = d }
     }
-    min = new Date(min.getTime() - 86400000)
-    max = new Date(max.getTime() + 86400000)
+    const ref = today ? parseISO(today) : new Date()   // avui dins el rang sempre
+    if (min === null || ref < min) min = ref
+    if (max === null || ref > max) max = ref
+    const MARGIN = 60 * 86400000
+    min = new Date(min.getTime() - MARGIN)
+    max = new Date(max.getTime() + MARGIN)
     return { min, max, days: dayDiff(min, max) + 1 }
-  }, [models])
+  }, [models, today])
 
   if (loading) return <Center>{t('planning.loading')}</Center>
   if (!range || !models.length) {
@@ -174,13 +180,14 @@ export default function ProjectGantt({ t }) {
             <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--bg-muted)', zIndex: 9, borderRight: '0.5px solid var(--gray-l)' }} />
             <div style={{ position: 'relative', width: trackW, height: AXIS_H }}>
               {ticks.map(tk => {
-                // PEÇA 2 — AVUI es marca NOMÉS aquí: etiqueta daurada en negreta (sense línia a la graella).
+                // PEÇA 2 — AVUI es distingeix NOMÉS per color daurat (sense pes extra); la resta de
+                // dates van en pes normal.
                 const isToday = today && isoLocal(tk.d) === today
                 return (
                   <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, height: AXIS_H, borderLeft: '0.5px solid var(--gray-l)' }}>
                     {/* data centrada al MIG de la franja del dia (step=1 → PX_PER_DAY/2) */}
                     <span style={{ position: 'absolute', left: (step * PX_PER_DAY) / 2, top: '50%', transform: 'translate(-50%, -50%)',
-                                   fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600,
+                                   fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 400,
                                    color: isToday ? 'var(--gold)' : 'var(--text-main)', whiteSpace: 'nowrap' }}>{fmtDM(tk.d)}</span>
                   </div>
                 )
