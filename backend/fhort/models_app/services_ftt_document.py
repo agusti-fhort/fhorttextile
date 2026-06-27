@@ -62,3 +62,24 @@ def save_document(head_fitxer, document_json, *, assets=None, preview=None):
         versio_anterior=head_fitxer,  # tipus/categoria heretats
         nom=head_fitxer.nom_fitxer,
     )
+
+
+def save_export(source_ftt, file, *, nom=None):
+    """Desa un PDF d'export com a ModelFitxer EXPORT enllaçat a la versió .ftt origen.
+
+    L'export és la SEVA pròpia cadena (versio_anterior=None): el document .ftt NO es toca
+    (el seu is_current es manté). L'enllaç a la versió que el va generar es desa a
+    `generat_des_de`. save_model_file segueix sent l'únic escriptor de is_current/versio;
+    `generat_des_de` s'escriu a part (no és camp de cadena).
+    """
+    filename = nom or getattr(file, "name", None) or "export.pdf"
+    export = save_model_file(
+        source_ftt.model,
+        file,
+        tipus=ModelFitxer.TIPUS_EXPORT,
+        categoria="Document",
+        nom=filename,
+    )
+    export.generat_des_de = source_ftt
+    export.save(update_fields=["generat_des_de"])
+    return export

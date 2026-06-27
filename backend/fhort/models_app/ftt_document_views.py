@@ -82,6 +82,32 @@ class FttDocumentDetailView(APIView):
         return Response(ModelFitxerSerializer(new_head).data, status=status.HTTP_200_OK)
 
 
+class FttDocumentExportView(APIView):
+    """POST ftt-documents/<fitxer_id>/export/ → desa un PDF d'export enllaçat al .ftt.
+
+    Rep el PDF (multipart, camp `file`) generat al client des d'aquesta versió del .ftt i
+    el desa al Finder com a ModelFitxer EXPORT (cadena pròpia). El .ftt no es toca.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, fitxer_id):
+        source = get_object_or_404(
+            ModelFitxer, pk=fitxer_id, tipus=ModelFitxer.TIPUS_TECHSHEET
+        )
+        upload = request.FILES.get("file")
+        if upload is None:
+            return Response(
+                {"detail": "Falta el fitxer PDF (camp `file`)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        nom = request.data.get("nom") or upload.name
+        export = svc.save_export(source, upload, nom=nom)
+        return Response(
+            ModelFitxerSerializer(export).data, status=status.HTTP_201_CREATED
+        )
+
+
 class FttDocumentAssetView(APIView):
     """GET ftt-documents/<fitxer_id>/asset/<name>/ → bytes d'un asset del .ftt."""
 

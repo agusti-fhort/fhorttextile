@@ -346,6 +346,7 @@ class ModelFitxer(models.Model):
     # de BD: no requereixen migració. La invariant is_current/versio (save_model_file)
     # és agnòstica al tipus.
     TIPUS_TECHSHEET = 'TECHSHEET'   # document editable .ftt (fitxa tècnica)
+    TIPUS_EXPORT = 'EXPORT'         # PDF d'export generat des d'un document .ftt
     FTT_EXTENSION = '.ftt'
 
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='fitxers')
@@ -362,6 +363,16 @@ class ModelFitxer(models.Model):
         null=True,
         blank=True,
         related_name='versions_posteriors',
+    )
+    # Enllaç (no cadena): per a artefactes generats des d'un altre fitxer, p.ex. un PDF
+    # EXPORT generat des d'una versió concreta del document .ftt. NO és versio_anterior:
+    # l'export és la seva pròpia cadena i el .ftt origen no es toca (is_current intacte).
+    generat_des_de = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='exports_generats',
     )
     accessible_portal = models.BooleanField(default=False)
     pujat_per = models.ForeignKey(
