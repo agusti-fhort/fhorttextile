@@ -1181,6 +1181,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
 // Finder: llista plana. La icona i l'ordre "Tipus" surten de l'extensió del fitxer,
 // no del rol intern (tipus/categoria, que es conserven al backend però el Finder ignora).
 const PREVIEW_IMG_RE = /\.(jpg|jpeg|png|svg|webp|gif)$/i
+const FILES_MONO = 'IBM Plex Mono, monospace'
 
 function fileExt(nom) {
   const m = (nom || '').match(/\.([a-z0-9]+)$/i)
@@ -1206,6 +1207,7 @@ function TabFiles({ modelId }) {
   const [popup, setPopup] = useState(null)
   const [history, setHistory] = useState(null)   // { fitxer, chain[], loading }
   const [error, setError] = useState('')
+  const [selectedId, setSelectedId] = useState(null)   // Finder: CAP selecció per defecte
 
   useEffect(() => {
     fetch(`${API}/api/v1/model-fitxers/?model=${modelId}&is_current=true&ordering=-data_pujada`, { headers: authHeaders })
@@ -1273,6 +1275,8 @@ function TabFiles({ modelId }) {
     if (orderBy === 'tipus') return fileExt(a.nom_fitxer).localeCompare(fileExt(b.nom_fitxer))
     return (b.data_pujada || '').localeCompare(a.data_pujada || '')   // 'data' — recent primer
   })
+  // Selecció vigent (null si cap, o si el seleccionat ja no hi és, p.ex. després d'eliminar).
+  const selected = sorted.find(f => f.id === selectedId) || null
 
   return (
     <div style={{ width: '100%' }}>
@@ -1391,89 +1395,150 @@ function TabFiles({ modelId }) {
           {t('model_sheet.no_files')}
         </div>
       ) : (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {sorted.map(f => (
-            <FileCard key={f.id} fitxer={f}
-              onPreview={() => setPopup({ url: f.fitxer || f.url, nom: f.nom_fitxer })}
-              onHistory={() => openHistory(f)}
-              onNewVersion={file => handleUpload(file, f.id)}
-              onDelete={() => handleDelete(f.id)} />
-          ))}
+        // Patró Finder: llista (esq) + detall lateral (dre). Cap selecció per defecte.
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+          {/* ESQUERRA — una FILA per fitxer, amb capçaleres de columna. */}
+          <div style={{ flex: '1 1 0', minWidth: 0, border: '0.5px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px',
+              borderBottom: '0.5px solid var(--border)', background: 'var(--bg-muted)',
+              fontSize: 'var(--fs-label)', fontFamily: FILES_MONO, color: 'var(--text-muted)', textTransform: 'uppercase',
+            }}>
+              <span style={{ width: 18, flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 0 }}>{t('model_sheet.files.col_name')}</span>
+              <span style={{ width: 80, flexShrink: 0 }}>{t('model_sheet.files.col_type')}</span>
+              <span style={{ width: 96, flexShrink: 0 }}>{t('model_sheet.files.col_date')}</span>
+              <span style={{ width: 44, flexShrink: 0, textAlign: 'right' }}>{t('model_sheet.files.col_version')}</span>
+            </div>
+            {sorted.map(f => (
+              <FileRow key={f.id} fitxer={f} selected={f.id === selectedId}
+                onSelect={() => setSelectedId(f.id)} />
+            ))}
+          </div>
+          {/* DRETA — detall del fitxer seleccionat; buit discret si cap. */}
+          <div style={{ width: 340, flexShrink: 0 }}>
+            {selected ? (
+              <FileDetail key={selected.id} fitxer={selected}
+                onPreview={() => setPopup({ url: selected.fitxer || selected.url_extern || selected.url, nom: selected.nom_fitxer })}
+                onHistory={() => openHistory(selected)}
+                onNewVersion={file => handleUpload(file, selected.id)}
+                onDelete={() => handleDelete(selected.id)} />
+            ) : (
+              <div style={{
+                border: '0.5px solid var(--border)', borderRadius: 8, padding: '40px 20px',
+                textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', fontStyle: 'italic',
+              }}>
+                <i className="ti ti-click" aria-hidden="true"
+                   style={{ fontSize: 'var(--fs-display)', display: 'block', marginBottom: 8, color: 'var(--gray)' }} />
+                {t('model_sheet.files.select_prompt')}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-function FileCard({ fitxer, onPreview, onHistory, onNewVersion, onDelete }) {
-  const { t } = useTranslation()
-  const isImage = PREVIEW_IMG_RE.test(fitxer.nom_fitxer || '')
-  const icon = iconForExt(fileExt(fitxer.nom_fitxer))
+// Una fila de la llista (esquerra). Columnes: icona · nom · tipus · data · versió.
+function FileRow({ fitxer, selected, onSelect }) {
+  const { t, i18n } = useTranslation()
+  const ext = fileExt(fitxer.nom_fitxer)
+  const date = fitxer.data_pujada
+    ? new Date(fitxer.data_pujada).toLocaleDateString(i18n.language || 'ca', { day: '2-digit', month: '2-digit', year: '2-digit' })
+    : '—'
+  return (
+    <div onClick={onSelect} title={fitxer.nom_fitxer}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', cursor: 'pointer',
+        borderBottom: '0.5px solid var(--border)',
+        background: selected ? 'var(--gold-pale)' : 'transparent',
+        borderLeft: selected ? '2px solid var(--gold)' : '2px solid transparent',
+      }}>
+      <i className={`ti ${iconForExt(ext)}`} aria-hidden="true"
+         style={{ fontSize: 18, color: 'var(--text-muted)', flexShrink: 0, width: 18 }} />
+      <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-body)', color: 'var(--text-main)',
+                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fitxer.nom_fitxer}</span>
+      <span style={{ width: 80, flexShrink: 0, fontSize: 'var(--fs-label)', fontFamily: FILES_MONO,
+                     color: 'var(--text-muted)', textTransform: 'uppercase' }}>{ext || '—'}</span>
+      <span style={{ width: 96, flexShrink: 0, fontSize: 'var(--fs-label)', fontFamily: FILES_MONO,
+                     color: 'var(--text-muted)' }}>{date}</span>
+      <span style={{ width: 44, flexShrink: 0, textAlign: 'right', fontSize: 'var(--fs-label)',
+                     fontFamily: FILES_MONO, color: 'var(--text-muted)' }}>v{fitxer.versio}</span>
+    </div>
+  )
+}
+
+// Línia etiqueta · valor del panell de detall.
+function DetailRow({ label, value }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, padding: '3px 0', fontSize: 'var(--fs-body)' }}>
+      <span style={{ width: 92, flexShrink: 0, color: 'var(--text-muted)', fontFamily: FILES_MONO, fontSize: 'var(--fs-label)' }}>{label}</span>
+      <span style={{ flex: 1, minWidth: 0, color: 'var(--text-main)', wordBreak: 'break-word' }}>{value}</span>
+    </div>
+  )
+}
+
+// Panell de detall (dreta): miniatura en cascada de degradació + característiques + accions.
+function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onDelete }) {
+  const { t, i18n } = useTranslation()
+  const [imgError, setImgError] = useState(false)
+  const ext = fileExt(fitxer.nom_fitxer)
+  const url = fitxer.fitxer || fitxer.url_extern || fitxer.url
+  const mt = fitxer.mimetype || ''
+  // Cascada: imatge → <img>; PDF → icona (no hi ha pdf.js, no rasteritzem); altres → icona.
+  const isImg = (mt.startsWith('image/') || PREVIEW_IMG_RE.test(fitxer.nom_fitxer || '')) && url && !imgError
+  const isPdf = mt === 'application/pdf' || ext === 'pdf'
+  const date = fitxer.data_pujada
+    ? new Date(fitxer.data_pujada).toLocaleDateString(i18n.language || 'ca', { day: '2-digit', month: 'long', year: 'numeric' })
+    : '—'
+
+  const actBtn = {
+    padding: '4px 8px', fontSize: 'var(--fs-body)', border: '0.5px solid var(--border)',
+    background: 'transparent', borderRadius: 4, cursor: 'pointer', color: 'var(--text-muted)',
+  }
 
   return (
-    <div style={{
-      width: 140, border: '0.5px solid var(--border)',
-      borderRadius: 8, overflow: 'hidden', fontSize: 'var(--fs-body)',
-    }}>
-      <div onClick={onPreview}
-        style={{
-          height: 90, background: 'var(--bg-muted)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', position: 'relative',
-        }}>
-        {isImage && (fitxer.fitxer || fitxer.url) ? (
-          <img src={fitxer.fitxer || fitxer.url} alt={fitxer.nom_fitxer}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    <div style={{ border: '0.5px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+      {/* Miniatura */}
+      <div style={{ height: 200, background: 'var(--bg-muted)', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        {isImg ? (
+          <img src={url} alt={fitxer.nom_fitxer} onError={() => setImgError(true)}
+               style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
         ) : (
-          <i className={`ti ${icon}`} aria-hidden="true"
-            style={{ fontSize: 'var(--fs-display)', color: 'var(--text-muted)' }} />
-        )}
-        {fitxer.versio > 1 && (
-          <span style={{
-            position: 'absolute', top: 4, right: 4,
-            background: 'rgba(0,0,0,0.6)', color: 'var(--white)',
-            fontSize: 'var(--fs-label)', padding: '1px 5px', borderRadius: 10,
-          }}>
-            v{fitxer.versio}
-          </span>
+          <>
+            <i className={`ti ${isPdf ? 'ti-file-text' : iconForExt(ext)}`} aria-hidden="true"
+               style={{ fontSize: 'var(--fs-display)', color: 'var(--text-muted)' }} />
+            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              {t('model_sheet.files.no_preview')}
+            </span>
+          </>
         )}
       </div>
-
-      <div style={{ padding: '6px 8px' }}>
-        <div onClick={onHistory}
-          style={{
-            fontSize: 'var(--fs-body)', color: 'var(--text-main)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            marginBottom: 4, cursor: 'pointer',
-          }} title={t('model_sheet.version_history')}>
-          {fitxer.nom_fitxer}
-        </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button type="button" onClick={onPreview}
-            style={{ flex: 1, padding: '3px 0', fontSize: 'var(--fs-body)', border: 'none',
-                     background: 'var(--bg-muted)',
-                     borderRadius: 4, cursor: 'pointer',
-                     }}>
+      {/* Característiques */}
+      <div style={{ padding: '12px 14px' }}>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)',
+                      wordBreak: 'break-word', marginBottom: 8 }}>{fitxer.nom_fitxer}</div>
+        <DetailRow label={t('model_sheet.files.col_type')} value={mt || (ext ? ext.toUpperCase() : '—')} />
+        <DetailRow label={t('model_sheet.files.col_version')} value={`v${fitxer.versio}`} />
+        <DetailRow label={t('model_sheet.files.col_date')} value={date} />
+        {/* Accions (deleguen als endpoints existents; cap canvi de backend). */}
+        <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+          <button type="button" onClick={onPreview} style={{ ...actBtn, color: 'var(--text-main)' }}>
             <i className="ti ti-eye" aria-hidden="true" /> {t('model_sheet.view')}
           </button>
-          <label title={t('model_sheet.new_version')}
-            style={{ padding: '3px 6px', fontSize: 'var(--fs-body)', borderRadius: 4,
-                     cursor: 'pointer', color: 'var(--text-muted)' }}>
-            <i className="ti ti-plus" aria-hidden="true" />
+          <label title={t('model_sheet.new_version')} style={{ ...actBtn }}>
+            <i className="ti ti-plus" aria-hidden="true" /> {t('model_sheet.new_version')}
             <input type="file" style={{ display: 'none' }}
               accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf"
               onChange={e => e.target.files[0] && onNewVersion(e.target.files[0])} />
           </label>
-          <button type="button" onClick={onHistory} title={t('model_sheet.version_history')}
-            style={{ padding: '3px 6px', fontSize: 'var(--fs-body)', border: 'none',
-                     background: 'transparent', borderRadius: 4,
-                     cursor: 'pointer', color: 'var(--text-muted)' }}>
+          <button type="button" onClick={onHistory} title={t('model_sheet.version_history')} style={actBtn}>
             <i className="ti ti-history" aria-hidden="true" />
           </button>
-          <button type="button" onClick={onDelete}
-            style={{ padding: '3px 6px', fontSize: 'var(--fs-body)', border: 'none',
-                     background: 'transparent', borderRadius: 4,
-                     cursor: 'pointer', color: '#c5221f' }}>
+          <button type="button" onClick={onDelete} title={t('model_sheet.files.delete')}
+            style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>
             <i className="ti ti-trash" aria-hidden="true" />
           </button>
         </div>

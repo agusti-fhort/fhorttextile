@@ -529,6 +529,15 @@
     "uploading": "Pujant…",
     "upload": "+ Pujar",
     "no_files": "Cap fitxer pujat.",
+    "files": {
+      "col_name": "Nom",
+      "col_type": "Tipus",
+      "col_date": "Data",
+      "col_version": "Versió",
+      "select_prompt": "Selecciona un fitxer",
+      "no_preview": "Sense vista prèvia",
+      "delete": "Eliminar"
+    },
     "err_unknown": "Error desconegut",
     "ai_description": "Analitza els fitxers pujats (patrons, escalats, sketches) i detecta discrepàncies amb les mesures registrades. Disponible quan hi ha patrons o escalats pujats.",
     "analyzing": "Analitzant…",

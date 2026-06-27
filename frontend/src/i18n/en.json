@@ -529,6 +529,15 @@
     "uploading": "Uploading…",
     "upload": "+ Upload",
     "no_files": "No file uploaded.",
+    "files": {
+      "col_name": "Name",
+      "col_type": "Type",
+      "col_date": "Date",
+      "col_version": "Version",
+      "select_prompt": "Select a file",
+      "no_preview": "No preview",
+      "delete": "Delete"
+    },
     "err_unknown": "Unknown error",
     "ai_description": "Analyzes the uploaded files (patterns, gradings, sketches) and detects discrepancies with the recorded measurements. Available when there are patterns or gradings uploaded.",
     "analyzing": "Analyzing…",

@@ -529,6 +529,15 @@
     "uploading": "Subiendo…",
     "upload": "+ Subir",
     "no_files": "Ningún archivo subido.",
+    "files": {
+      "col_name": "Nombre",
+      "col_type": "Tipo",
+      "col_date": "Fecha",
+      "col_version": "Versión",
+      "select_prompt": "Selecciona un archivo",
+      "no_preview": "Sin vista previa",
+      "delete": "Eliminar"
+    },
     "err_unknown": "Error desconocido",
     "ai_description": "Analiza los archivos subidos (patrones, escalados, sketches) y detecta discrepancias con las medidas registradas. Disponible cuando hay patrones o escalados subidos.",
     "analyzing": "Analizando…",
