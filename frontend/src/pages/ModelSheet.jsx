@@ -1198,6 +1198,7 @@ function iconForExt(ext) {
 
 function TabFiles({ modelId }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
   const authHeaders = { Authorization: `Bearer ${token}` }
 
@@ -1383,7 +1384,7 @@ function TabFiles({ modelId }) {
         }}>
           {uploading ? t('model_sheet.uploading') : t('model_sheet.upload')}
           <input type="file" style={{ display: 'none' }}
-            accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf"
+            accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf,.ftt"
             disabled={uploading}
             onChange={e => e.target.files[0] && handleUpload(e.target.files[0])} />
         </label>
@@ -1422,6 +1423,7 @@ function TabFiles({ modelId }) {
                 onPreview={() => setPopup({ url: selected.fitxer || selected.url_extern || selected.url, nom: selected.nom_fitxer })}
                 onHistory={() => openHistory(selected)}
                 onNewVersion={file => handleUpload(file, selected.id)}
+                onEdit={() => navigate(`/models/${modelId}/ftt/${selected.id}`)}
                 onDelete={() => handleDelete(selected.id)} />
             ) : (
               <div style={{
@@ -1480,10 +1482,12 @@ function DetailRow({ label, value }) {
 }
 
 // Panell de detall (dreta): miniatura en cascada de degradació + característiques + accions.
-function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onDelete }) {
+function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onEdit, onDelete }) {
   const { t, i18n } = useTranslation()
   const [imgError, setImgError] = useState(false)
   const ext = fileExt(fitxer.nom_fitxer)
+  // Document .ftt editable: el botó "Edita" obre l'editor de fitxa sobre aquest ModelFitxer.
+  const isEditable = fitxer.tipus === 'TECHSHEET' || ext === 'ftt'
   const url = fitxer.fitxer || fitxer.url_extern || fitxer.url
   const mt = fitxer.mimetype || ''
   // Cascada: imatge → <img>; PDF → icona (no hi ha pdf.js, no rasteritzem); altres → icona.
@@ -1528,10 +1532,15 @@ function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onDelete }) {
           <button type="button" onClick={onPreview} style={{ ...actBtn, color: 'var(--text-main)' }}>
             <i className="ti ti-eye" aria-hidden="true" /> {t('model_sheet.view')}
           </button>
+          {isEditable && (
+            <button type="button" onClick={onEdit} style={{ ...actBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>
+              <i className="ti ti-edit" aria-hidden="true" /> {t('model_sheet.files.edit')}
+            </button>
+          )}
           <label title={t('model_sheet.new_version')} style={{ ...actBtn }}>
             <i className="ti ti-plus" aria-hidden="true" /> {t('model_sheet.new_version')}
             <input type="file" style={{ display: 'none' }}
-              accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf"
+              accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf,.ftt"
               onChange={e => e.target.files[0] && onNewVersion(e.target.files[0])} />
           </label>
           <button type="button" onClick={onHistory} title={t('model_sheet.version_history')} style={actBtn}>

@@ -536,7 +536,8 @@
       "col_version": "Versió",
       "select_prompt": "Selecciona un fitxer",
       "no_preview": "Sense vista prèvia",
-      "delete": "Eliminar"
+      "delete": "Eliminar",
+      "edit": "Edita"
     },
     "err_unknown": "Error desconegut",
     "ai_description": "Analitza els fitxers pujats (patrons, escalats, sketches) i detecta discrepàncies amb les mesures registrades. Disponible quan hi ha patrons o escalats pujats.",
