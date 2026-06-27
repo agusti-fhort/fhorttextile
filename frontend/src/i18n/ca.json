@@ -1537,6 +1537,7 @@
     "back_to_model": "Tornar al model",
     "exporting": "Exportant…",
     "export_pdf": "Exportar PDF",
+    "export_saved_finder": "PDF desat al Finder",
     "page_of": "Pàgina {{n}} de {{total}}",
     "tool_select": "Seleccionar",
     "tool_image": "Imatge",

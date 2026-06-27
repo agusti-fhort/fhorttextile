@@ -999,10 +999,25 @@ export default function TechSheetEditor() {
       }
       const bytes = await pdf.save()
       const blob = new Blob([bytes], { type: 'application/pdf' })
+      const filename = `${model?.codi_intern || id}_fitxa_v${sheet?.versio ?? 1}.pdf`
+      // Mode .ftt (F4): puja el PDF al Finder com a EXPORT enllaçat a la versió .ftt actual
+      // (cadena pròpia + generat_des_de; el .ftt no es toca). El backend el desa via B6.
+      if (fttMode) {
+        try {
+          const fd = new FormData()
+          fd.append('file', blob, filename)
+          fd.append('nom', filename)
+          await fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/export/`, {
+            method: 'POST', headers: uploadHeaders, body: fd,
+          })
+          flash(t('tech_sheet.export_saved_finder'))
+        } catch { /* silenci */ }
+      }
+      // Descàrrega local (sempre, també en mode .ftt: l'usuari rep el fitxer a l'instant).
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${model?.codi_intern || id}_fitxa_v${sheet?.versio ?? 1}.pdf`
+      a.download = filename
       a.click()
       URL.revokeObjectURL(url)
     } catch { /* silenci */ }
