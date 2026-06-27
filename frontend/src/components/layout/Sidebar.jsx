@@ -47,14 +47,9 @@ const navGroups = [
     { to: '/', labelKey: 'nav.dashboard', icon: 'ti-layout-dashboard' },
     { to: '/models', labelKey: 'nav.models', icon: 'ti-shirt' },
     { to: '/planificacio', labelKey: 'nav.planning', icon: 'ti-subtask', cap: 'plan' },
-    // M1 — el calendari ara és el tab "Calendari" dins Planificació; s'ha retirat l'entrada pròpia
-    // de menú (la ruta /planificacio/calendari segueix viva). Nota: queda dins l'àmbit gated 'plan'.
-    // P4 (Planning-complet) — el calendari de l'EXECUTOR (tasca/hores) és eina del tècnic, NO de
-    // govern: M1 va deixar el tècnic (sense 'plan') sense accés de menú a la seva pròpia agenda, tot
-    // i tenir-hi la ruta. Es recupera amb una entrada gated 'execute' (execute_tasks; el tècnic la
-    // té, NO és 'plan'). Distint del tab "Calendari de projecte" (Gantt, model/dies, govern).
-    { to: '/planificacio/calendari', labelKey: 'nav.my_calendar', icon: 'ti-calendar-week', cap: 'execute' },
-    { to: '/temps', labelKey: 'nav.temps', icon: 'ti-clock' },
+    // Jubilades les entrades "El meu calendari" (/planificacio/calendari) i "Temps" (/temps): la
+    // planificació de l'executor viu ara al Gantt de la home (tab "Planificació"). Les <Route>
+    // segueixen vives (accessibles per URL); només es retira l'entrada de menú.
     { to: '/fittings', labelKey: 'nav.fittings', icon: 'ti-ruler-2' },
   ]},
   { sectionKey: 'nav.section_config_tecnica', items: [

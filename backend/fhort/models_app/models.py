@@ -333,11 +333,21 @@ class ModelFitxer(models.Model):
         ('Document', 'Document'),
     ]
 
+    # Origen del fitxer dins la cadena de versions (manual vs eines IA).
+    ORIGEN_CHOICES = [
+        ('upload', 'Pujada manual'),
+        ('ia_escalat', "IA d'escalat"),
+        ('ia_marcada', 'IA de marcada'),
+        ('ia_ocr', 'IA OCR'),
+    ]
+
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='fitxers')
     nom_fitxer = models.CharField(max_length=255)
     categoria = models.CharField(max_length=20, choices=CATEGORIA_CHOICES)
     tipus = models.CharField(max_length=30, default='ALTRES', blank=True)
-    versio = models.CharField(max_length=10)
+    versio = models.PositiveIntegerField(default=1)
+    # Invariant: exactament un is_current=True per cadena versio_anterior (el cap).
+    is_current = models.BooleanField(default=True, db_index=True)
     path_servidor = models.CharField(max_length=500)
     versio_anterior = models.ForeignKey(
         'self',
@@ -373,6 +383,11 @@ class ModelFitxer(models.Model):
 
     enviat_ia = models.BooleanField(default=False)
     resultat_ia_path = models.CharField(max_length=500, null=True, blank=True)
+
+    # Metadades de la cadena de versions (font: services_fitxers.save_model_file).
+    checksum = models.CharField(max_length=64, blank=True)
+    mimetype = models.CharField(max_length=100, blank=True)
+    origen = models.CharField(max_length=20, choices=ORIGEN_CHOICES, default='upload')
 
     class Meta:
         verbose_name = 'Fitxer de model'

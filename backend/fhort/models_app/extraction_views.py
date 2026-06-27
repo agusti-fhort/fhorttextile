@@ -1389,17 +1389,15 @@ def import_session_confirmar_view(request, token):
             session.avisos = (session.avisos or []) + grading_avisos
 
         # ── 4. PDF/document → ModelFitxer(categoria='Document') amb versionat (re-import = v2).
+        #     Delega la invariant a save_model_file (B2): re-import encadena (versio_anterior)
+        #     i deixa is_current correcte. El naming {codi}_DOCUMENT_{NNN} es passa explícit.
         doc_fitxer = None
         if session.document:
+            from .services_fitxers import save_model_file
             anterior = ModelFitxer.objects.filter(
                 model=model, categoria='Document',
             ).order_by('-id').first()
-            num = 1
-            if anterior:
-                try:
-                    num = int(str(anterior.versio).strip()) + 1
-                except (TypeError, ValueError):
-                    num = 2
+            num = (anterior.versio + 1) if anterior else 1
             ext = os.path.splitext(session.document.name)[1] or '.pdf'
             nom = f"{model.codi_intern}_DOCUMENT_{num:03d}{ext}"
             try:
@@ -1407,13 +1405,14 @@ def import_session_confirmar_view(request, token):
                 doc_bytes = session.document.read()
             finally:
                 session.document.close()
-            doc_fitxer = ModelFitxer(
-                model=model, nom_fitxer=nom, categoria='Document', tipus='DOCUMENT',
-                versio=f'{num:03d}', versio_anterior=anterior, path_servidor=nom,
-                mida_bytes=len(doc_bytes), pujat_per=user_profile,
-                descripcio='Document origen de la importació guiada.',
+            doc_fitxer = save_model_file(
+                model, ContentFile(doc_bytes),
+                versio_anterior=anterior, categoria='Document', tipus='DOCUMENT',
+                origen='upload', nom=nom,
             )
-            doc_fitxer.fitxer.save(nom, ContentFile(doc_bytes), save=True)
+            doc_fitxer.pujat_per = user_profile
+            doc_fitxer.descripcio = 'Document origen de la importació guiada.'
+            doc_fitxer.save(update_fields=['pujat_per', 'descripcio'])
 
         # ── 5. Teixit (si informat al Pas 4) → camps del model.
         teixit = (session.resultat or {}).get('teixit') or {}

@@ -4,9 +4,22 @@ import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import useAuthStore from "../store/auth"
 import { modelTasks, models as modelsApi, customers, calendar } from "../api/endpoints"
+import ProjectGantt from "../components/planning/ProjectGantt"
 
 const API = import.meta.env.VITE_API_URL || ""
 const MONO = "IBM Plex Mono, monospace"
+
+// Tabs de la home del tècnic. Tab 1 = vista d'acció (abast + KPIs + board); tab 2 = el meu Gantt.
+const DASH_TABS = ['home', 'planning']
+const DASH_TAB_LABELS = { home: 'dashboard.tab_home', planning: 'dashboard.tab_planning' }
+
+// "Properament": horitzó del feed futur (dies). Derivat en viu de calendar/events, sense persistència.
+const UPCOMING_DAYS = 60
+// Data local YYYY-MM-DD (no UTC) per acotar el rang i comparar el futur.
+const localISO = (d) => {
+  const z = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`
+}
 
 // Sprint 5 — board per-model 4-col al Dashboard. Cada card = un MODEL, classificat per
 // kanban_state (derivat al backend, by-model 1c) ∈ {pending, open, paused, done}.
@@ -215,12 +228,8 @@ function ModelBoard({ scope }) {
         </span>
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <FaseChip label={t("dashboard.board.total")} n={faseCounts.total ?? 0} />
-        {PHASES.map(ph => (
-          <FaseChip key={ph} label={t(`model_sheet.dashboard.phase.${ph}`, ph)} n={faseCounts.counts?.[ph] ?? 0} />
-        ))}
-      </div>
+      {/* COMMIT 3 — fila de pastilles de comptes de fase amagada (Total · per-fase). Es conserva
+          el substrat faseCounts (higiene diferida: sense ús visible després d'amagar-les). */}
 
       {/* Filtres de campanya */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
@@ -346,9 +355,12 @@ export default function Dashboard() {
   useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
   const [me, setMe] = useState(null)
   const [onboarding, setOnboarding] = useState(null)
+  const [activeTab, setActiveTab] = useState('home')
 
   // Abast [me|all]. null fins que arriba `me` → default per rol (view_team_tasks → tots; si no, meus).
-  const [scope, setScope] = useState(null)
+  // La home va SEMPRE acotada als models on l'usuari és ASSIGNEE de tasca (responsable=me →
+  // ModelTask.assignee, views_b.py:130). Mateix eix que el Gantt mine=. Sense selector d'abast.
+  const scope = 'me'
   const [scopeRows, setScopeRows] = useState([])     // by-model de l'abast (substrat dels KPIs)
   const [scopeLoading, setScopeLoading] = useState(true)
   // Models amb ≥1 tasca en risc (planned_end > data_objectiu), de calendar/events. Es creua amb
@@ -361,13 +373,7 @@ export default function Dashboard() {
       fetch(`${API}/api/v1/me/`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/onboarding/status/`, { headers }).then(r => r.ok ? r.json() : null),
     ]).then(([meRes, onbRes]) => {
-      if (meRes.status === "fulfilled") {
-        setMe(meRes.value)
-        // Default d'abast per rol (només si encara no s'ha fixat): qui veu l'equip
-        // (view_team_tasks) → "tots"; la resta (tècnic) → "els meus". Substrat: §16.C. NO localStorage.
-        const caps = meRes.value?.capabilities || []
-        setScope(prev => prev ?? (caps.includes("view_team_tasks") ? "all" : "me"))
-      }
+      if (meRes.status === "fulfilled") setMe(meRes.value)
       if (onbRes.status === "fulfilled" && onbRes.value) setOnboarding(onbRes.value)
     })
   }, [token])
@@ -392,6 +398,34 @@ export default function Dashboard() {
     open: scopeRows.filter(m => m.kanban_state === "open").length,
     risc: scopeRows.filter(m => riskyModelIds.has(m.model_id)).length,
   }), [scopeRows, riskyModelIds])
+
+  // "Properament": el set dels MEUS models de l'abast (segueix el selector) + nom per id (mai codi).
+  const myModelIds = useMemo(() => new Set(scopeRows.map(m => m.model_id)), [scopeRows])
+  const nomById = useMemo(
+    () => Object.fromEntries(scopeRows.map(m => [m.model_id, m.model_nom])), [scopeRows])
+
+  // Feed futur derivat EN VIU de calendar/events (mateixa derivació que ModelMilestones, sense
+  // persistència). Es filtra a posteriori (futur + intersecció amb els meus models) → reprogramat
+  // segueix vigent perquè cada càrrega es deriva fresca.
+  const [futureEvents, setFutureEvents] = useState([])
+  useEffect(() => {
+    const today = new Date()
+    const end = new Date(); end.setDate(end.getDate() + UPCOMING_DAYS)
+    calendar.events({ start: localISO(today), end: localISO(end) })
+      .then(res => setFutureEvents(res.data?.events ?? []))
+      .catch(() => setFutureEvents([]))
+  }, [])
+
+  const upcoming = useMemo(() => {
+    const todayISO = localISO(new Date())
+    return (futureEvents || [])
+      // 2 tipus ara (extensible): fitting (sessió) i confecció (arribada de proto).
+      .filter(ev => (ev.tipus === "fitting" || ev.tipus === "confeccio") && ev.start)
+      .filter(ev => ev.start.slice(0, 10) >= todayISO)          // només futur
+      .filter(ev => myModelIds.has(ev.meta?.model_id))          // intersecció amb els MEUS models
+      .map(ev => ({ id: ev.id, tipus: ev.tipus, day: ev.start.slice(0, 10), model_id: ev.meta?.model_id }))
+      .sort((a, b) => a.day.localeCompare(b.day))               // ascendent per data
+  }, [futureEvents, myModelIds])
 
   // Substrat dels KPIs: by-model de TOT l'abast (scope-only, sense filtres de campanya). Es
   // recarrega en commutar l'abast. all=true per comptar també els models tot-Done. El load es
@@ -464,8 +498,28 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Tabs de la home: acció (KPIs + board) · el meu Gantt de planificació. */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 24, borderBottom: "0.5px solid var(--border)" }}>
+        {DASH_TABS.map(tab => (
+          <button key={tab} type="button" onClick={() => setActiveTab(tab)}
+            style={{
+              padding: "8px 16px", border: "none", background: "none", cursor: "pointer",
+              fontFamily: MONO, fontSize: "var(--fs-body)",
+              color: activeTab === tab ? "var(--gold)" : "var(--text-muted)",
+              borderBottom: activeTab === tab ? "2px solid var(--gold)" : "2px solid transparent",
+              marginBottom: -1,
+            }}>
+            {t(DASH_TAB_LABELS[tab])}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'planning' ? (
+        // Tab 2 — el meu Gantt: sempre "meu" (mine), sense selector d'abast propi.
+        <ProjectGantt t={t} mine />
+      ) : (
+      <>
       {/* Selector d'abast (DALT): Els meus · Tots. */}
-      {scope !== null && <ScopeSelector scope={scope} onChange={setScope} t={t} />}
 
       {scope === "me" && !scopeLoading && scopeRows.length === 0 ? (
         // Estat buit de "els meus": NO cau a tots; convida a mirar tot l'abast.
@@ -478,30 +532,78 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          {/* KPIs (SOTA el selector) — derivats de l'abast. Senyals d'acció, no recompte de fases. */}
-          <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
-            <KPICard
-              label={t("dashboard.kpi.scope_total")}
-              value={scopeLoading ? "…" : kpi.total}
-              sub={t("dashboard.kpi_sub.scope_total")}
-            />
-            <KPICard
-              label={t("dashboard.kpi.at_risk")}
-              value={scopeLoading ? "…" : kpi.risc}
-              sub={t("dashboard.kpi_sub.at_risk")}
-              color="var(--err)"
-            />
-            <KPICard
-              label={t("dashboard.kpi.in_progress")}
-              value={scopeLoading ? "…" : kpi.open}
-              sub={t("dashboard.kpi_sub.in_progress")}
-              color="var(--gold)"
-            />
+          {/* Banda superior: ABAST (esq) · PROPERAMENT (dre) — dues meitats iguals, top-aligned,
+              cadascuna sota el seu label MONO de secció. */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
+              <div style={{ flex: 1, fontSize: "var(--fs-body)", color: "var(--text-muted)", fontFamily: MONO }}>
+                {t("dashboard.scope.label")}
+              </div>
+              <div style={{ flex: 1, fontSize: "var(--fs-body)", color: "var(--text-muted)", fontFamily: MONO }}>
+                {t("dashboard.upcoming.title")}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 16, alignItems: "stretch" }}>
+              {/* ABAST — els 3 KPIs en HORITZONTAL; alçada = la d'un contenidor KPI. */}
+              <div style={{ flex: 1, display: "flex", gap: 12 }}>
+                <KPICard
+                  label={t("dashboard.kpi.scope_total")}
+                  value={scopeLoading ? "…" : kpi.total}
+                  sub={t("dashboard.kpi_sub.scope_total")}
+                />
+                <KPICard
+                  label={t("dashboard.kpi.at_risk")}
+                  value={scopeLoading ? "…" : kpi.risc}
+                  sub={t("dashboard.kpi_sub.at_risk")}
+                  color="var(--err)"
+                />
+                <KPICard
+                  label={t("dashboard.kpi.in_progress")}
+                  value={scopeLoading ? "…" : kpi.open}
+                  sub={t("dashboard.kpi_sub.in_progress")}
+                  color="var(--gold)"
+                />
+              </div>
+              {/* PROPERAMENT — relatiu + inner absolut: l'alçada la dicta la fila de KPIs; scroll intern. */}
+              <div style={{ flex: 1, position: "relative" }}>
+                <div style={{
+                  position: "absolute", inset: 0, overflowY: "auto",
+                  border: "1px solid var(--border)", borderRadius: 8,
+                  background: "var(--white)", padding: "12px 16px",
+                }}>
+                  {upcoming.length === 0 ? (
+                    <div style={{ color: "var(--text-muted)", fontSize: "var(--fs-body)", fontStyle: "italic" }}>
+                      {t("dashboard.upcoming.empty")}
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {upcoming.map(it => {
+                        const dataFmt = new Date(it.day + "T00:00:00").toLocaleDateString(
+                          i18n.language || "ca", { day: "numeric", month: "long" })
+                        return (
+                          <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--text-main)" }}>
+                            <i className={`ti ${it.tipus === "fitting" ? "ti-ruler-2" : "ti-building-factory"}`}
+                               style={{ fontSize: 15, color: "var(--gray)" }} />
+                            <span style={{ flex: 1, fontSize: "var(--fs-body)" }}>
+                              {it.tipus === "fitting"
+                                ? t("dashboard.upcoming.fitting", { data: dataFmt })
+                                : t("dashboard.upcoming.proto", { nom: nomById[it.model_id] || "—", data: dataFmt })}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Board per-model (a continuació): rep l'abast (responsable=me quan "els meus"). */}
           <ModelBoard scope={scope} />
         </>
+      )}
+      </>
       )}
     </div>
   )

@@ -267,8 +267,7 @@
     "users": "Users & roles",
     "company_calendar": "Company calendar",
     "planning": "Planning",
-    "planning_calendar": "Calendar",
-    "my_calendar": "My calendar"
+    "planning_calendar": "Calendar"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -517,21 +516,28 @@
     "use_ruleset": "Use this set",
     "ruleset_changed": "Rule set updated.",
     "ruleset_err": "Could not change the rule set.",
-    "file_type": {
-      "SKETCH_FLETXES": "Sketch with arrows",
-      "SKETCH_NET": "Clean sketch",
-      "PATRO": "Base pattern",
-      "MARCADA": "Marker",
-      "ESCALAT": "Graded",
-      "FITXA": "Tech sheet",
-      "ALTRES": "Other"
-    },
+    "sort_by": "Sort by",
+    "sort_date": "Date",
+    "sort_name": "Name",
+    "sort_type": "Type",
+    "new_version": "New version",
+    "version_history": "Version history",
+    "current_version": "Current",
     "err_upload": "Error uploading the file",
     "err_load_files": "Error loading files",
     "confirm_delete_file": "Delete this file?",
     "uploading": "Uploading…",
     "upload": "+ Upload",
     "no_files": "No file uploaded.",
+    "files": {
+      "col_name": "Name",
+      "col_type": "Type",
+      "col_date": "Date",
+      "col_version": "Version",
+      "select_prompt": "Select a file",
+      "no_preview": "No preview",
+      "delete": "Delete"
+    },
     "err_unknown": "Unknown error",
     "ai_description": "Analyzes the uploaded files (patterns, gradings, sketches) and detects discrepancies with the recorded measurements. Available when there are patterns or gradings uploaded.",
     "analyzing": "Analyzing…",
@@ -1719,6 +1725,14 @@
     }
   },
   "dashboard": {
+    "tab_home": "Home",
+    "tab_planning": "Planning",
+    "upcoming": {
+      "title": "Upcoming",
+      "empty": "No upcoming events.",
+      "fitting": "Fitting session scheduled for {{data}}",
+      "proto": "Proto arrival of {{nom}} expected on {{data}}"
+    },
     "greeting_morning": "Good morning",
     "greeting_afternoon": "Good afternoon",
     "greeting_evening": "Good evening",

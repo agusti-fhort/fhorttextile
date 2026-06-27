@@ -267,8 +267,7 @@
     "users": "Usuaris i rols",
     "company_calendar": "Calendari d'empresa",
     "planning": "Planificació",
-    "planning_calendar": "Calendari",
-    "my_calendar": "El meu calendari"
+    "planning_calendar": "Calendari"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -517,21 +516,28 @@
     "use_ruleset": "Usar aquest joc",
     "ruleset_changed": "Joc de regles actualitzat.",
     "ruleset_err": "No s'ha pogut canviar el joc de regles.",
-    "file_type": {
-      "SKETCH_FLETXES": "Sketch amb fletxes",
-      "SKETCH_NET": "Sketch net",
-      "PATRO": "Patró base",
-      "MARCADA": "Marcada",
-      "ESCALAT": "Escalat",
-      "FITXA": "Fitxa tècnica",
-      "ALTRES": "Altres"
-    },
+    "sort_by": "Ordena per",
+    "sort_date": "Data",
+    "sort_name": "Nom",
+    "sort_type": "Tipus",
+    "new_version": "Nova versió",
+    "version_history": "Historial de versions",
+    "current_version": "Vigent",
     "err_upload": "Error pujant el fitxer",
     "err_load_files": "Error carregant fitxers",
     "confirm_delete_file": "Eliminar aquest fitxer?",
     "uploading": "Pujant…",
     "upload": "+ Pujar",
     "no_files": "Cap fitxer pujat.",
+    "files": {
+      "col_name": "Nom",
+      "col_type": "Tipus",
+      "col_date": "Data",
+      "col_version": "Versió",
+      "select_prompt": "Selecciona un fitxer",
+      "no_preview": "Sense vista prèvia",
+      "delete": "Eliminar"
+    },
     "err_unknown": "Error desconegut",
     "ai_description": "Analitza els fitxers pujats (patrons, escalats, sketches) i detecta discrepàncies amb les mesures registrades. Disponible quan hi ha patrons o escalats pujats.",
     "analyzing": "Analitzant…",
@@ -1719,6 +1725,14 @@
     }
   },
   "dashboard": {
+    "tab_home": "Inici",
+    "tab_planning": "Planificació",
+    "upcoming": {
+      "title": "Properament",
+      "empty": "Cap esdeveniment proper.",
+      "fitting": "Programada sessió de fitting per {{data}}",
+      "proto": "Arribada de proto {{nom}} prevista per {{data}}"
+    },
     "greeting_morning": "Bon dia",
     "greeting_afternoon": "Bona tarda",
     "greeting_evening": "Bona nit",

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { plan, companyCalendar } from '../../api/endpoints'
 import Center from '../ui/Center'
@@ -44,7 +44,7 @@ function nextFita(m, today) {
   return fut.length ? fut[0] : '9999-12-31'
 }
 
-export default function ProjectGantt({ t }) {
+export default function ProjectGantt({ t, mine = false }) {
   const navigate = useNavigate()
   const [models, setModels] = useState([])
   const [today, setToday] = useState(null)
@@ -60,11 +60,11 @@ export default function ProjectGantt({ t }) {
   const [festius, setFestius] = useState([])   // festius_extra (dates ISO)
 
   useEffect(() => {
-    plan.gantt({})
+    plan.gantt(mine ? { mine: true } : {})
       .then(res => { setModels(res.data?.models || []); setToday(res.data?.today || null) })
       .catch(() => setModels([]))
       .finally(() => setLoading(false))
-  }, [])
+  }, [mine])
 
   // PEÇA 3 — calendari laboral (no-laborables): càrrega única, MATEIXA font que PlanningCalendar.
   useEffect(() => {
@@ -114,7 +114,9 @@ export default function ProjectGantt({ t }) {
     return list
   }, [models, onlyRisk, order, riskFirst, today, filterTechs, filterColleccio, filterTemporada])
 
-  // Rang temporal global (min start, max end) amb 1 dia de marge a banda i banda.
+  // Rang temporal global: min(primera data, avui) i max(última data, avui), amb 60 dies de
+  // marge a banda i banda → AVUI sempre dins el rang i prou aire perquè l'scroll horitzontal
+  // existent mostri context passat i futur encara que les barres caiguin en un interval estret.
   const range = useMemo(() => {
     if (!models.length) return null
     let min = null, max = null
@@ -125,10 +127,28 @@ export default function ProjectGantt({ t }) {
       for (const f of m.fites) { const d = parseISO(f.data); if (d < min) min = d; if (d > max) max = d }
       if (m.data_objectiu) { const d = parseISO(m.data_objectiu); if (d > max) max = d; if (d < min) min = d }
     }
-    min = new Date(min.getTime() - 86400000)
-    max = new Date(max.getTime() + 86400000)
+    const ref = today ? parseISO(today) : new Date()   // avui dins el rang sempre
+    if (min === null || ref < min) min = ref
+    if (max === null || ref > max) max = ref
+    const MARGIN = 60 * 86400000
+    min = new Date(min.getTime() - MARGIN)
+    max = new Date(max.getTime() + MARGIN)
     return { min, max, days: dayDiff(min, max) + 1 }
-  }, [models])
+  }, [models, today])
+
+  const scrollRef = useRef(null)
+  // Posiciona AVUI a prop de l'esquerra del viewport: track-x d'avui (la mateixa x que pinta la línia
+  // daurada) menys 2 dies de marge. Idempotent; degrada net si encara no hi ha layout (guards + rAF).
+  const scrollToToday = useCallback(() => {
+    if (!range || !today || !scrollRef.current) return
+    const tx = dayDiff(range.min, parseISO(today)) * PX_PER_DAY
+    scrollRef.current.scrollLeft = Math.max(0, tx - 2 * PX_PER_DAY)
+  }, [range, today])
+
+  useEffect(() => {
+    const id = requestAnimationFrame(scrollToToday)   // post-layout: el contenidor ja té amplada
+    return () => cancelAnimationFrame(id)
+  }, [scrollToToday])
 
   if (loading) return <Center>{t('planning.loading')}</Center>
   if (!range || !models.length) {
@@ -166,7 +186,18 @@ export default function ProjectGantt({ t }) {
                            filterColleccio={filterColleccio} setFilterColleccio={setFilterColleccio}
                            filterTemporada={filterTemporada} setFilterTemporada={setFilterTemporada} />
       <Legend t={t} />
-      <div style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', overflowX: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+      {/* Botó "Avui": recentra l'scroll horitzontal a la posició d'avui (pastilla outline, tokens). */}
+      <div style={{ marginBottom: 8 }}>
+        <button type="button" onClick={scrollToToday} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '4px 12px', borderRadius: 999, cursor: 'pointer',
+          border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)',
+          fontSize: 'var(--fs-label)', fontFamily: MONO,
+        }}>
+          <i className="ti ti-calendar-event" style={{ fontSize: 14 }} /> {t('planning.gantt.legend_today')}
+        </button>
+      </div>
+      <div ref={scrollRef} style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', overflowX: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
         <div style={{ minWidth: LABEL_W + trackW }}>
           {/* Eix de dies */}
           {/* PEÇA 3 — header sticky-top z=8 (per sobre de les pills z=6 en scroll-Y); cantonada z=9 (màxim) */}
@@ -174,13 +205,14 @@ export default function ProjectGantt({ t }) {
             <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: 'var(--bg-muted)', zIndex: 9, borderRight: '0.5px solid var(--gray-l)' }} />
             <div style={{ position: 'relative', width: trackW, height: AXIS_H }}>
               {ticks.map(tk => {
-                // PEÇA 2 — AVUI es marca NOMÉS aquí: etiqueta daurada en negreta (sense línia a la graella).
+                // PEÇA 2 — AVUI es distingeix NOMÉS per color daurat (sense pes extra); la resta de
+                // dates van en pes normal.
                 const isToday = today && isoLocal(tk.d) === today
                 return (
                   <div key={tk.i} style={{ position: 'absolute', left: tk.i * PX_PER_DAY, top: 0, height: AXIS_H, borderLeft: '0.5px solid var(--gray-l)' }}>
                     {/* data centrada al MIG de la franja del dia (step=1 → PX_PER_DAY/2) */}
                     <span style={{ position: 'absolute', left: (step * PX_PER_DAY) / 2, top: '50%', transform: 'translate(-50%, -50%)',
-                                   fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600,
+                                   fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 400,
                                    color: isToday ? 'var(--gold)' : 'var(--text-main)', whiteSpace: 'nowrap' }}>{fmtDM(tk.d)}</span>
                   </div>
                 )
@@ -299,8 +331,12 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
 
   // Finestres d'espera (confecció externa): es pinten com a segment trencat ratllat.
   const esperes = (m.esperes || []).map(w => ({ l: x(w.from), r: x(w.to) + PX_PER_DAY }))
-  // PEÇA 4 — text de la pastilla (tècnic · next_task · %): desborda la barra; també com a title (hover).
-  const barText = [m.responsable_nom, m.next_task, `${m.pct}%`].filter(Boolean).join(' · ')
+  // PEÇA 4 — text de la pastilla (tècnic · next_task[→ data] · %): desborda la barra; també title (hover).
+  // La capdavantera mostra la data a la qual s'enfronta (planned_end); sense data → només el codi.
+  const nextLabel = m.next_task
+    ? (m.next_task_date ? `${m.next_task} → ${fmtDM(parseISO(m.next_task_date))}` : m.next_task)
+    : null
+  const barText = [m.responsable_nom, nextLabel, `${m.pct}%`].filter(Boolean).join(' · ')
 
   return (
     <div onClick={onClick} title={`${m.codi} · ${m.nom || ''}`} style={{

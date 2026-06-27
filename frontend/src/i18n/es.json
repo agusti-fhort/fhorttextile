@@ -267,8 +267,7 @@
     "users": "Usuarios y roles",
     "company_calendar": "Calendario de empresa",
     "planning": "Planificación",
-    "planning_calendar": "Calendario",
-    "my_calendar": "Mi calendario"
+    "planning_calendar": "Calendario"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -517,21 +516,28 @@
     "use_ruleset": "Usar este conjunto",
     "ruleset_changed": "Conjunto de reglas actualizado.",
     "ruleset_err": "No se ha podido cambiar el conjunto de reglas.",
-    "file_type": {
-      "SKETCH_FLETXES": "Sketch con flechas",
-      "SKETCH_NET": "Sketch limpio",
-      "PATRO": "Patrón base",
-      "MARCADA": "Marcada",
-      "ESCALAT": "Escalado",
-      "FITXA": "Ficha técnica",
-      "ALTRES": "Otros"
-    },
+    "sort_by": "Ordenar por",
+    "sort_date": "Fecha",
+    "sort_name": "Nombre",
+    "sort_type": "Tipo",
+    "new_version": "Nueva versión",
+    "version_history": "Historial de versiones",
+    "current_version": "Vigente",
     "err_upload": "Error al subir el archivo",
     "err_load_files": "Error al cargar los archivos",
     "confirm_delete_file": "¿Eliminar este archivo?",
     "uploading": "Subiendo…",
     "upload": "+ Subir",
     "no_files": "Ningún archivo subido.",
+    "files": {
+      "col_name": "Nombre",
+      "col_type": "Tipo",
+      "col_date": "Fecha",
+      "col_version": "Versión",
+      "select_prompt": "Selecciona un archivo",
+      "no_preview": "Sin vista previa",
+      "delete": "Eliminar"
+    },
     "err_unknown": "Error desconocido",
     "ai_description": "Analiza los archivos subidos (patrones, escalados, sketches) y detecta discrepancias con las medidas registradas. Disponible cuando hay patrones o escalados subidos.",
     "analyzing": "Analizando…",
@@ -1719,6 +1725,14 @@
     }
   },
   "dashboard": {
+    "tab_home": "Inicio",
+    "tab_planning": "Planificación",
+    "upcoming": {
+      "title": "Próximamente",
+      "empty": "Ningún evento próximo.",
+      "fitting": "Sesión de fitting programada para {{data}}",
+      "proto": "Llegada de proto {{nom}} prevista para {{data}}"
+    },
     "greeting_morning": "Buenos días",
     "greeting_afternoon": "Buenas tardes",
     "greeting_evening": "Buenas noches",
