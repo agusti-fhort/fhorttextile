@@ -341,6 +341,13 @@ class ModelFitxer(models.Model):
         ('ia_ocr', 'IA OCR'),
     ]
 
+    # Valors reservats de `tipus` per al sistema de documents .ftt. El camp `tipus`
+    # és CharField lliure (sense choices) → són convencions de codi, no constraints
+    # de BD: no requereixen migració. La invariant is_current/versio (save_model_file)
+    # és agnòstica al tipus.
+    TIPUS_TECHSHEET = 'TECHSHEET'   # document editable .ftt (fitxa tècnica)
+    FTT_EXTENSION = '.ftt'
+
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='fitxers')
     nom_fitxer = models.CharField(max_length=255)
     categoria = models.CharField(max_length=20, choices=CATEGORIA_CHOICES)
