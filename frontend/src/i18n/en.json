@@ -1719,6 +1719,8 @@
     }
   },
   "dashboard": {
+    "tab_home": "Home",
+    "tab_planning": "Planning",
     "greeting_morning": "Good morning",
     "greeting_afternoon": "Good afternoon",
     "greeting_evening": "Good evening",

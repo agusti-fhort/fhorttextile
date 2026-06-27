@@ -44,7 +44,7 @@ function nextFita(m, today) {
   return fut.length ? fut[0] : '9999-12-31'
 }
 
-export default function ProjectGantt({ t }) {
+export default function ProjectGantt({ t, mine = false }) {
   const navigate = useNavigate()
   const [models, setModels] = useState([])
   const [today, setToday] = useState(null)
@@ -60,11 +60,11 @@ export default function ProjectGantt({ t }) {
   const [festius, setFestius] = useState([])   // festius_extra (dates ISO)
 
   useEffect(() => {
-    plan.gantt({})
+    plan.gantt(mine ? { mine: true } : {})
       .then(res => { setModels(res.data?.models || []); setToday(res.data?.today || null) })
       .catch(() => setModels([]))
       .finally(() => setLoading(false))
-  }, [])
+  }, [mine])
 
   // PEÇA 3 — calendari laboral (no-laborables): càrrega única, MATEIXA font que PlanningCalendar.
   useEffect(() => {

@@ -4,9 +4,14 @@ import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import useAuthStore from "../store/auth"
 import { modelTasks, models as modelsApi, customers, calendar } from "../api/endpoints"
+import ProjectGantt from "../components/planning/ProjectGantt"
 
 const API = import.meta.env.VITE_API_URL || ""
 const MONO = "IBM Plex Mono, monospace"
+
+// Tabs de la home del tècnic. Tab 1 = vista d'acció (abast + KPIs + board); tab 2 = el meu Gantt.
+const DASH_TABS = ['home', 'planning']
+const DASH_TAB_LABELS = { home: 'dashboard.tab_home', planning: 'dashboard.tab_planning' }
 
 // Sprint 5 — board per-model 4-col al Dashboard. Cada card = un MODEL, classificat per
 // kanban_state (derivat al backend, by-model 1c) ∈ {pending, open, paused, done}.
@@ -346,6 +351,7 @@ export default function Dashboard() {
   useEffect(() => { if (!token) navigate("/login") }, [token, navigate])
   const [me, setMe] = useState(null)
   const [onboarding, setOnboarding] = useState(null)
+  const [activeTab, setActiveTab] = useState('home')
 
   // Abast [me|all]. null fins que arriba `me` → default per rol (view_team_tasks → tots; si no, meus).
   const [scope, setScope] = useState(null)
@@ -464,6 +470,27 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Tabs de la home: acció (KPIs + board) · el meu Gantt de planificació. */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 24, borderBottom: "0.5px solid var(--border)" }}>
+        {DASH_TABS.map(tab => (
+          <button key={tab} type="button" onClick={() => setActiveTab(tab)}
+            style={{
+              padding: "8px 16px", border: "none", background: "none", cursor: "pointer",
+              fontFamily: MONO, fontSize: "var(--fs-body)",
+              color: activeTab === tab ? "var(--gold)" : "var(--text-muted)",
+              borderBottom: activeTab === tab ? "2px solid var(--gold)" : "2px solid transparent",
+              marginBottom: -1,
+            }}>
+            {t(DASH_TAB_LABELS[tab])}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'planning' ? (
+        // Tab 2 — el meu Gantt: sempre "meu" (mine), sense selector d'abast propi.
+        <ProjectGantt t={t} mine />
+      ) : (
+      <>
       {/* Selector d'abast (DALT): Els meus · Tots. */}
       {scope !== null && <ScopeSelector scope={scope} onChange={setScope} t={t} />}
 
@@ -502,6 +529,8 @@ export default function Dashboard() {
           {/* Board per-model (a continuació): rep l'abast (responsable=me quan "els meus"). */}
           <ModelBoard scope={scope} />
         </>
+      )}
+      </>
       )}
     </div>
   )

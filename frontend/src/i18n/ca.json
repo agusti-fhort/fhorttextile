@@ -1719,6 +1719,8 @@
     }
   },
   "dashboard": {
+    "tab_home": "Inici",
+    "tab_planning": "Planificació",
     "greeting_morning": "Bon dia",
     "greeting_afternoon": "Bona tarda",
     "greeting_evening": "Bona nit",
