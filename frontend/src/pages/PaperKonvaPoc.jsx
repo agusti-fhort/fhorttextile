@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Stage, Layer, Rect, Text, Line } from 'react-konva'
 import paper from 'paper'
+
+const MM_TO_PX = 96 / 25.4
+const toPx = (mm) => mm * MM_TO_PX
+const toMm = (px) => px / MM_TO_PX
 
 const SAMPLE_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 260">
@@ -40,6 +45,9 @@ export default function PaperKonvaPoc() {
   const dragRef = useRef(null)
   const modeRef = useRef('select')
   const [mode, setMode] = useState('select')
+  const [paperActive, setPaperActive] = useState(true)
+  const [konvaClicks, setKonvaClicks] = useState(0)
+  const [lastPoint, setLastPoint] = useState(null)
   const [status, setStatus] = useState(t('poc_paper.status_loading'))
   const [selectedInfo, setSelectedInfo] = useState(t('poc_paper.none_selected'))
   const [exportedSvg, setExportedSvg] = useState('')
@@ -139,6 +147,7 @@ export default function PaperKonvaPoc() {
 
     const tool = new scope.Tool()
     tool.onMouseDown = (event) => {
+      setLastPoint({ x: event.point.x, y: event.point.y })
       const hit = scope.project.hitTest(event.point, { fill: true, stroke: true, segments: true, tolerance: 8 })
       const hitItem = hit?.item
       if (modeRef.current === 'add') {
@@ -228,6 +237,9 @@ export default function PaperKonvaPoc() {
           <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-small)' }}>{status}</span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <button type="button" style={buttonStyle(paperActive)} onClick={() => setPaperActive(v => !v)}>
+            <i className="ti ti-layers-intersect" aria-hidden="true" /> {paperActive ? t('poc_paper.paper_overlay_on') : t('poc_paper.paper_overlay_off')}
+          </button>
           <button type="button" style={buttonStyle(mode === 'select')} onClick={() => setEditMode('select')}>
             <i className="ti ti-pointer" aria-hidden="true" /> {t('poc_paper.mode_select')}
           </button>
@@ -241,21 +253,49 @@ export default function PaperKonvaPoc() {
             <i className="ti ti-file-export" aria-hidden="true" /> {t('poc_paper.export_svg')}
           </button>
         </div>
-        <canvas
-          ref={canvasRef}
-          width={760}
-          height={360}
+        <div
           style={{
+            position: 'relative',
             width: '100%',
             maxWidth: 860,
             height: 360,
-            background: 'var(--cream)',
             border: '1px solid var(--border)',
             borderRadius: 6,
-            touchAction: 'none',
+            overflow: 'hidden',
+            background: 'var(--cream)',
           }}
-        />
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--fs-small)' }}>{selectedInfo}</p>
+        >
+          <Stage
+            width={760}
+            height={360}
+            onMouseDown={() => setKonvaClicks(c => c + 1)}
+            style={{ width: '100%', height: '100%', background: 'var(--cream)' }}
+          >
+            <Layer>
+              <Rect x={toPx(18)} y={toPx(18)} width={toPx(162)} height={toPx(68)} fill="#f7f1df" stroke="#d8c58d" strokeWidth={1} />
+              <Line points={[toPx(28), toPx(72), toPx(168), toPx(72)]} stroke="#d8c58d" strokeWidth={1} dash={[6, 6]} />
+              <Text x={toPx(24)} y={toPx(24)} text={t('poc_paper.konva_underlay')} fontFamily="IBM Plex Mono" fontSize={13} fill="#3f3a2d" />
+              <Text x={toPx(24)} y={toPx(32)} text={t('poc_paper.mm_probe', { px: Math.round(toPx(10) * 10) / 10 })} fontFamily="IBM Plex Mono" fontSize={11} fill="#6b654f" />
+            </Layer>
+          </Stage>
+          <canvas
+            ref={canvasRef}
+            width={760}
+            height={360}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: paperActive ? 'auto' : 'none',
+              touchAction: 'none',
+            }}
+          />
+        </div>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--fs-small)' }}>
+          {selectedInfo} · {t('poc_paper.konva_clicks', { n: konvaClicks })}
+          {lastPoint ? ` · ${t('poc_paper.last_point', { x: Math.round(toMm(lastPoint.x) * 10) / 10, y: Math.round(toMm(lastPoint.y) * 10) / 10 })}` : ''}
+        </p>
         <textarea
           readOnly
           value={exportedSvg}
