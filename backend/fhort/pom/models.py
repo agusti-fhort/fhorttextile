@@ -445,6 +445,44 @@ class GarmentPOMMap(models.Model):
         return f'{anchor} · {self.pom.codi_client}'
 
 
+class ItemBaseMeasurement(models.Model):
+    """Sprint Mesures Base per Item (P2). Valors base TÍPICS de la plantilla de l'Item, per POM.
+
+    Germà de GarmentPOMMap (pertinença pura) que aporta el VALOR: penja NET de l'Item per clau
+    (garment_type_item, pom), SENSE passar pel Model ni per GarmentPOMMap. És plantilla/catàleg
+    (capa Item), no instància: a la sembra (P5) aquests valors es COPIEN a BaseMeasurement del
+    Model (copy-at-the-moment, origen='ITEM_STANDARD'); a partir d'aquí el Model és sobirà.
+
+    La talla a la qual s'expressen aquests valors és GarmentTypeItem.base_size_definition (P1).
+    db_constraint=False al FK cap a 'tasks' (tenant-only) pel mateix motiu que GarmentPOMMap:
+    'pom' és SHARED (taula també a 'public') i un constraint cap a tasks_garmenttypeitem petaria a
+    'public'. El FK és lògic (ORM); el CASCADE l'emula Django al collector."""
+    garment_type_item = models.ForeignKey('tasks.GarmentTypeItem', on_delete=models.CASCADE,
+                                          related_name='base_measurements', db_constraint=False)
+    pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='item_base_measurements')
+    # Valor base a la talla base de l'Item (cm). NULL = POM de l'Item sense valor estàndard encara.
+    base_value_cm = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    # Toleràncies opcionals (mateixa precisió que BaseMeasurement.tolerancia_*); NULL → els
+    # consumidors cauen al default del catàleg (POMMaster.tolerancia_default_*).
+    tol_minus = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    tol_plus = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    # Nomenclatura editable; còpia LITERAL de BaseMeasurement.nom_fitxa (models_app/models.py:515)
+    # perquè la sembra item→model copiï camp-a-camp sense traducció. Se sembra de l'abreviatura del
+    # POM, editable (sobirania de l'item).
+    # DEUTE: renombrar nom_fitxa→anglès a les DUES taules a la sessió Size Check.
+    nom_fitxa = models.CharField(max_length=20, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Mesura base d\'item'
+        verbose_name_plural = 'Mesures base d\'item'
+        ordering = ['garment_type_item', 'pom']
+        unique_together = [('garment_type_item', 'pom')]
+
+    def __str__(self):
+        anchor = self.garment_type_item.code if self.garment_type_item_id else '?'
+        return f'{anchor} · {self.pom.codi_client} = {self.base_value_cm}cm'
+
+
 class GradingRuleSet(models.Model):
     nom = models.CharField(max_length=120)
     garment_group = models.ForeignKey(
@@ -525,7 +563,10 @@ class GradingRule(models.Model):
     talla_base = models.ForeignKey(SizeDefinition, on_delete=models.PROTECT, related_name='regles_base')
     logica = models.CharField(max_length=20, choices=LOGICA_CHOICES)
     # Sprint S16-A — decimals 4 → 2 (real precision for garment measurements in cm)
-    valor_base = models.DecimalField(max_digits=7, decimal_places=2, default=0)
+    # NOTA: el camp `valor_base` s'ha eliminat (Sprint Mesures Base per Item, P0). La talla base
+    # del grading viu a `talla_base`; el VALOR base de cada POM viu a BaseMeasurement (del Model)
+    # i, com a plantilla, a ItemBaseMeasurement (de l'Item). El grading no en depèn (mai es llegia
+    # per a càlcul; només s'emmagatzemava com a fidelitat redundant, sempre 0 a la BD).
     increment = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     valors_step = models.JSONField(null=True, blank=True)
     # Peça A — forma canònica d'aplicació (break ancorat per ETIQUETA, resolt al run de

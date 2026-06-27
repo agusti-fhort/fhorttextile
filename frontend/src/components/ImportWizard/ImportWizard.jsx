@@ -120,6 +120,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
 
   // Pas 5 — guardar
   const [confirming, setConfirming] = useState(false)
+  const [gradingConflict, setGradingConflict] = useState(null)   // P2: 409 {conflict, divergencies}
 
   const configuratSet = useMemo(() => new Set((configurat || []).map(norm)), [configurat])
   const teDesti = (label) => configuratSet.has(norm(label))
@@ -442,14 +443,20 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const teixitInformat = !!(teixit.fabric_main || teixit.fabric_composition ||
     teixit.shrinkage_iso_key || teixit.shrinkage_warp || teixit.shrinkage_pct)
 
-  const handleConfirmar = async () => {
+  // P2 — conflicte conscient de grading (regla importada vs retinguda al model). El backend torna
+  // 409 {conflict, divergencies} si difereixen i no s'ha triat; el tècnic decideix i re-confirmem
+  // amb grading_choice ('importats' | 'heretats'). Patró d'avís-i-confirma (com la Size Library).
+  const handleConfirmar = async (gradingChoice = null) => {
     setConfirming(true); setError('')
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/confirmar/`, {
-        method: 'POST', headers: authHeaders,
+        method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(gradingChoice ? { grading_choice: gradingChoice } : {}),
       })
       const data = await res.json().catch(() => ({}))
+      if (res.status === 409 && data.conflict) { setGradingConflict(data); setConfirming(false); return }
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setConfirming(false); return }
+      setGradingConflict(null)
       onComplete && onComplete(data.model_id)
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setConfirming(false)
@@ -966,14 +973,51 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             {t('import_wizard.mana_doc', { count: pomsActius })}
           </div>
 
+          {/* P2 — conflicte conscient: la regla del document difereix de la retinguda al model.
+              El tècnic tria; la triada esdevé la regla del model (cap sobreescriptura en silenci). */}
+          {gradingConflict && (
+            <div style={{ background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
+                          padding: '12px 14px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600,
+                            fontSize: 'var(--fs-body)', color: '#7a5a00', marginBottom: 6 }}>
+                <i className="ti ti-alert-triangle" aria-hidden="true" />
+                {t('import_wizard.grading_conflict_title')}
+              </div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', marginBottom: 8 }}>
+                {t('import_wizard.grading_conflict_help')}
+              </div>
+              {(gradingConflict.divergencies || []).length > 0 && (
+                <ul style={{ margin: '0 0 10px', paddingLeft: 18, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+                  {gradingConflict.divergencies.slice(0, 6).map((d, i) => (
+                    <li key={i}>{d.pom}: {d.detall}</li>
+                  ))}
+                </ul>
+              )}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="button" onClick={() => handleConfirmar('importats')} disabled={confirming}
+                  style={{ padding: '6px 14px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-body)',
+                           fontWeight: 500, color: 'var(--white)', background: GOLD,
+                           cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                  {t('import_wizard.grading_apply_imported')}
+                </button>
+                <button type="button" onClick={() => handleConfirmar('heretats')} disabled={confirming}
+                  style={{ padding: '6px 14px', borderRadius: 6, border: `0.5px solid ${BORDER}`,
+                           fontSize: 'var(--fs-body)', fontWeight: 500, background: 'var(--white)',
+                           color: 'var(--text-main)', cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                  {t('import_wizard.grading_keep_inherited')}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <button type="button" onClick={() => setStep(4)}
               style={{ padding: '8px 16px', border: `0.5px solid ${BORDER}`, borderRadius: 6,
                        background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>← {t('app.back')}</button>
-            <button type="button" onClick={handleConfirmar} disabled={confirming}
+            <button type="button" onClick={() => handleConfirmar()} disabled={confirming || !!gradingConflict}
               style={{ padding: '8px 24px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-h3)', fontWeight: 600,
-                       color: 'var(--white)', background: confirming ? '#ccc' : GOLD,
-                       cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                       color: 'var(--white)', background: (confirming || gradingConflict) ? '#ccc' : GOLD,
+                       cursor: (confirming || gradingConflict) ? 'not-allowed' : 'pointer' }}>
               {confirming ? t('import_wizard.confirming') : t('import_wizard.confirm_save')}
             </button>
           </div>

@@ -1,14 +1,14 @@
 
 import { useState, useEffect } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams } from "react-router-dom"
 import useAuthStore from "../store/auth"
 import { HTMTooltip } from "../components/HTMTooltip"
+import BackButton from "../components/BackButton"
 
 const API = import.meta.env.VITE_API_URL || ""
 
 export default function GarmentPOMMapEditor() {
   const { id } = useParams()
-  const navigate = useNavigate()
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
 
   const [mapData, setMapData] = useState(null)
@@ -94,10 +94,7 @@ export default function GarmentPOMMapEditor() {
 
   return (
     <div style={{ padding: '24px', maxWidth: 1100, margin: '0 auto' }}>
-      <button onClick={() => navigate(-1)} style={{
-        background: 'none', border: 'none', cursor: 'pointer',
-        color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginBottom: 16,
-      }}>← Tornar</button>
+      <div style={{ marginBottom: 16 }}><BackButton /></div>
 
       <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, color: 'var(--text-main)', margin: '0 0 4px' }}>
         Garment POM Map

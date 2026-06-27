@@ -458,6 +458,79 @@ def _get_or_create_grading_version(sf):
             raise RuntimeError(f"Could not get/create GradingVersion: {e}")
 
 
+def bump_grading_version_and_generate(sf_id, *, base_changed, profile_id=None,
+                                      allow_reopen_sealed=False, nom=None,
+                                      reopen_context=''):
+    """Crea la GradingVersion v+1 d'un SizeFitting i hi propaga el grading.
+
+    PEÇA 1 (sprint paritat Grading): centralitza el versionat funcional que abans vivia
+    DUPLICAT inline a close_piece_fitting i resolve_size_check, i el deixa disponible per a
+    l'acte conscient de propagar (PEÇA 2). Comportament IDÈNTIC al bloc original.
+
+    Ordre (preservat del bloc original, inclòs el camí d'error):
+      1. GUARD D-1: si la versió activa està aprovada (segellada a producció) i no s'autoritza
+         la reobertura → ValueError (mateixa forma). reopen_context és l'etiqueta de traça que
+         s'incrusta a la nota ('PieceFitting <pk>' / 'SizeCheck <pk>').
+      2. Desactiva TOTES les actives (invariant anti multi-activa) i crea la v+1 activa.
+         NO toca `aprovada` (el segellat va a part, via advance_phase_gate).
+      3. Si base_changed → measurements_version++ del model ABANS de propagar (el guard ja ha
+         passat: un guard-raise no incrementa res). generate_graded_specs en deriva
+         `generated_from_version`, per això l'increment ha de precedir la propagació.
+      4. generate_graded_specs poblà la versió nova (que ja és l'activa).
+
+    Retorna la GradingVersion creada.
+    """
+    from django.db.models import F, Max
+    from fhort.fitting.models import GradingVersion, SizeFitting
+    from fhort.models_app.models import Model
+
+    profile = None
+    if profile_id:
+        from fhort.accounts.models import UserProfile
+        profile = UserProfile.objects.filter(pk=profile_id).first()
+
+    # 1. GUARD D-1.
+    sealed_active = (GradingVersion.objects
+                     .filter(size_fitting_id=sf_id, is_active=True, aprovada=True)
+                     .order_by('-version_number').first())
+    if sealed_active is not None and not allow_reopen_sealed:
+        raise ValueError(
+            f"GradingVersion v{sealed_active.version_number} està aprovada "
+            f"(segellada a producció); cal reobertura explícita per superar-la."
+        )
+    reopen_note = None
+    if sealed_active is not None:
+        reopen_note = (f'Reobertura explícita D-1: supera v{sealed_active.version_number} '
+                       f'aprovada ({reopen_context}).')
+        logger.warning(f"D-1: {reopen_note}")
+
+    # 2. Versionat funcional: desactiva totes les actives, crea la nova activa.
+    GradingVersion.objects.filter(size_fitting_id=sf_id, is_active=True).update(is_active=False)
+    max_num = GradingVersion.objects.filter(size_fitting_id=sf_id).aggregate(
+        m=Max('version_number')
+    )['m'] or 0
+    new_version = GradingVersion.objects.create(
+        size_fitting_id=sf_id,
+        version_number=max_num + 1,
+        is_active=True,
+        creat_per=profile,
+        nom=(nom or 'Propagació'),   # default sensat: nom és NOT NULL a la BD (footgun nom=None/buit)
+        notes=reopen_note,
+    )
+
+    # 3. measurements_version++ ABANS de propagar (generate_graded_specs en deriva
+    #    generated_from_version). Només si la base ha canviat.
+    if base_changed:
+        model_id = SizeFitting.objects.values_list('model_id', flat=True).get(pk=sf_id)
+        Model.objects.filter(pk=model_id).update(
+            measurements_version=F('measurements_version') + 1
+        )
+
+    # 4. Pobla la versió nova (ara és l'activa que llegeix _get_or_create_grading_version).
+    generate_graded_specs(sf_id)
+    return new_version
+
+
 def _norm_label(s) -> str:
     """Normalize a size label for matching — same criterion as the run: upper + strip."""
     return str(s).strip().upper()

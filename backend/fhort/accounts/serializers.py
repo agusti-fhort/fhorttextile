@@ -19,11 +19,15 @@ class MeSerializer(serializers.ModelSerializer):
     rol_nom = serializers.SerializerMethodField()
     color_avatar = serializers.SerializerMethodField()
     capabilities = serializers.SerializerMethodField()
+    # id = User.id; profile_id = UserProfile.id. ModelTask.assignee és FK a UserProfile, així que
+    # l'scope viewer del frontend (meva/d'altri) ha de comparar assignee_id amb profile_id,
+    # MAI amb id/user_id (no depèn de cap coincidència profile_id==user_id).
+    profile_id = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
-            'id', 'username', 'first_name', 'last_name', 'email',
+            'id', 'profile_id', 'username', 'first_name', 'last_name', 'email',
             'full_name', 'avatar_url',
             'nom_complet', 'rol_nom', 'color_avatar',
             'capabilities',
@@ -55,6 +59,10 @@ class MeSerializer(serializers.ModelSerializer):
     def get_color_avatar(self, obj):
         profile = self._profile(obj)
         return profile.color_avatar if profile else '#888888'
+
+    def get_profile_id(self, obj):
+        profile = self._profile(obj)
+        return profile.id if profile else None
 
     def get_capabilities(self, obj):
         return sorted(get_capabilities(obj))

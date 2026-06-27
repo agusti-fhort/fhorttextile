@@ -5,15 +5,24 @@ from .views import (
     BaseMeasurementViewSet,
     ModelFitxerViewSet,
     ModelViewSet,
+    WatchpointViewSet,
     ai_analysis_view,
     consumption_delivery_view,
+    model_dashboard_view,
+    model_timeline_view,
     create_model_wizard,
     generate_grading_view,
+    set_size_override_view,
+    escalat_ajustar_talla_view,
+    grading_status_view,
+    base_measurements_reorder_view,
+    base_stages_view,
     iso_shrinkage_view,
     next_model_ref,
     registre_activitat_view,
     suggested_poms_view,
     materialize_poms_view,
+    gravar_pom_view,
     close_table_view,
     reorder_measurements_view,
     set_measurements_view,
@@ -33,13 +42,12 @@ router.register('model-fitxers', ModelFitxerViewSet, basename='model-fitxer')
 router.register('base-measurements', BaseMeasurementViewSet, basename='base-measurement')
 router.register('size-checks', SizeCheckViewSet, basename='size-check')
 router.register('size-check-lines', SizeCheckLineViewSet, basename='size-check-line')
+router.register('watchpoints', WatchpointViewSet, basename='watchpoint')
 
 # Sprint 6 — AI extraction. Paths before the router so 'models/extract-from-file/'
 # is not captured by 'models/<pk>/' of the ModelViewSet detail.
 try:
     from .extraction_views import (
-        extract_from_file_view,
-        create_from_extraction_view,
         delete_model_view,
         import_session_cribratge_view,
         import_session_talles_view,
@@ -52,8 +60,8 @@ try:
         import_session_confirmar_view,
     )
     _sprint6_paths = [
-        path('models/extract-from-file/', extract_from_file_view),
-        path('models/create-from-extraction/', create_from_extraction_view),
+        # P6 — camí d'import VELL retirat (0 consumidors al frontend; el wizard nou és l'únic camí).
+        # `extraction_service`/`EXTRACTION_PROMPT` es MANTENEN: són VIUS (els usa el wizard nou + size-map).
         path('models/<int:model_id>/delete/', delete_model_view, name='delete-model'),
         path('import-sessions/cribratge/', import_session_cribratge_view,
              name='import-session-cribratge'),
@@ -163,6 +171,7 @@ urlpatterns = (
         path('models/<int:model_id>/update-step2/', update_model_step2),
         path('models/<int:model_id>/poms-suggerits/', suggested_poms_view),
         path('models/<int:model_id>/materialitzar-poms/', materialize_poms_view),
+        path('models/<int:model_id>/gravar-pom/', gravar_pom_view),
         path('models/<int:model_id>/tancar-taula/', close_table_view),
         path('models/<int:model_id>/taula-mesures/', measurements_table_view),
         path('models/<int:model_id>/set-measurements/', set_measurements_view),
@@ -171,10 +180,17 @@ urlpatterns = (
         path('models/<int:model_id>/analisi-ia/', ai_analysis_view),
         path('models/<int:model_id>/xat-mesures/', measurements_chat_view),
         path('models/<int:model_id>/generar-grading/', generate_grading_view),
+        path('models/<int:model_id>/set-size-override/', set_size_override_view),
+        path('models/<int:model_id>/escalat/ajustar-talla/', escalat_ajustar_talla_view),
+        path('models/<int:model_id>/grading-status/', grading_status_view),
+        path('models/<int:model_id>/base-measurements/reorder/', base_measurements_reorder_view),
+        path('models/<int:model_id>/base-stages/', base_stages_view),
         path('models/<int:model_id>/pom/<int:pom_id>/regim/', set_pom_regim_view),
         path('models/iso-shrinkage/', iso_shrinkage_view),
         path('models/<int:model_id>/update-fabric/', update_fabric_view),
         path('models/<int:model_id>/albara/', consumption_delivery_view),
+        path('models/<int:model_id>/dashboard/', model_dashboard_view),
+        path('models/<int:model_id>/timeline/', model_timeline_view),
         path('registre-activitat/', registre_activitat_view),
     ]
     + _sprint6_paths

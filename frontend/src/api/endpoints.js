@@ -30,6 +30,10 @@ export const models = {
   taskLog: (id) => client.get(`/api/v1/models/${id}/task-log/`),   // 5B-fix: log de transicions
   // Capa de Projecte: definir tasques d'un model i avançar fase (gate del responsable).
   defineTasks: (id, data) => client.post(`/api/v1/models/${id}/define-tasks/`, data),   // {task_type_ids:[...]}
+  // Porta-menú: obre una tasca concreta del model (crea-si-falta + auto-assign + En curs). {code}
+  openTask: (id, code) => client.post(`/api/v1/models/${id}/open-task/`, { code }),
+  // Acte lleuger de gènesi POM: base+nomenclatura+regles i tanca la tasca pom. No propaga.
+  gravarPom: (id, data) => client.post(`/api/v1/models/${id}/gravar-pom/`, data),
   gate: (id, data) => client.post(`/api/v1/models/${id}/gate/`, data),                   // {to_phase} o {to_phases:[...]}
   regress: (id, data) => client.post(`/api/v1/models/${id}/regress/`, data),             // {to_phase} — retrocés net
   // Tram 2 planificació (gated define_tasks): assigna les no-Done a un tècnic + compute de cua
@@ -38,6 +42,44 @@ export const models = {
   unassign: (id) => client.post(`/api/v1/models/${id}/unassign/`),
   // PG-4b-3b — fixa el règim de grading d'un POM del model (l'usarà 3c). {logica}
   setPomRegim: (modelId, pomId, logica) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, { logica }),
+  // P3 — autoria de la REGLA viva del model per POM: delta + break (+ règim). Patrimoni del model
+  // (origen MANUAL). payload: {logica?, increment_base?, increment_break?, talla_break_label?}.
+  setPomRule: (modelId, pomId, payload) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, payload),
+  // Edita una talla NO-base com a ModelGradingOverride i re-propaga (editor propagat del model).
+  setSizeOverride: (modelId, pomId, sizeLabel, valor) =>
+    client.post(`/api/v1/models/${modelId}/set-size-override/`, { pom_id: pomId, size_label: sizeLabel, valor }),
+  // Taula base amb estadis (històric per presa + tolerància + base vigent). Read-only.
+  baseStages: (modelId) => client.get(`/api/v1/models/${modelId}/base-stages/`),
+  // Peça 2 — propagació conscient (origen Mesures): {new_version:true} crea v+1 sobre la vigent. Sobre
+  // una versió segellada retorna 409 {error:'sealed', version_number} → cal doble confirmació
+  // ({allow_reopen_sealed:true}).
+  generarGrading: (modelId, body) => client.post(`/api/v1/models/${modelId}/generar-grading/`, body || {}),
+  // Fase 2 — ajust de talla a Escalat: ancora la talla i PROPAGA per regla a les germanes (com el
+  // fitting). Retorna {linies:[{id,valor_real}]} per refrescar la fila. Base inclosa.
+  escalatAjustarTalla: (modelId, pomId, talla, valor) =>
+    client.post(`/api/v1/models/${modelId}/escalat/ajustar-talla/`, { pom_id: pomId, talla, valor }),
+  // Fase B — estat de propagació perquè el botó Propagar MIRI ABANS (read-only):
+  // {te_dades_propagades, segellada, version_number}.
+  gradingStatus: (modelId) => client.get(`/api/v1/models/${modelId}/grading-status/`),
+  // Sprint 5 — comptadors de models per fase (board del Dashboard). Respecta els mateixos
+  // filtres que el Model list (customer/collection/data_objectiu_after|before/temporada/...).
+  // → {counts:{<fase>:n}, total}.
+  faseCounts: (params) => client.get('/api/v1/models/fase-counts/', { params }),
+}
+
+// Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).
+export const baseMeasurements = {
+  update: (id, body) => client.patch(`/api/v1/base-measurements/${id}/`, body),
+  // Reordena els POM del model en bloc (ordre ÚNIC i global; es materialitza a Grading en propagar).
+  reorder: (modelId, ids) => client.post(`/api/v1/models/${modelId}/base-measurements/reorder/`, { ids }),
+}
+
+// D-12 — Watchpoints: advertències de text lliure ancorades al model (+ tasca d'origen), open→resolved.
+export const watchpoints = {
+  list: (params) => client.get('/api/v1/watchpoints/', { params }),     // ?model&estat&task
+  create: (data) => client.post('/api/v1/watchpoints/', data),          // {model, task?, text}
+  resolve: (id, data) => client.post(`/api/v1/watchpoints/${id}/resolve/`, data || {}),
+  reopen: (id) => client.post(`/api/v1/watchpoints/${id}/reopen/`),
 }
 
 // Fitxers del model (read-only) — panell info de fitting (5B.6-B1).
@@ -47,6 +89,8 @@ export const modelFitxers = {
 
 export const poms = {
   list: (params) => client.get('/api/v1/poms/', { params }),
+  cerca: (params) => client.get('/api/v1/poms/cerca/', { params }),          // ?q & page_size
+  crearTenant: (data) => client.post('/api/v1/poms/crear-tenant/', data),    // POM tenant-only nou
 }
 
 // CRUD complet (GarmentTypeViewSet és ModelViewSet). S'usa al tram 7 (finder 3 columnes).
@@ -127,6 +171,8 @@ export const modelTasks = {
   remove: (id) => client.delete(`/api/v1/model-task-items/${id}/`),
   // Màquina d'estats (gated execute_tasks). La resposta pot dur paused_task_id (→ toast 3s).
   transition: (id, data) => client.post(`/api/v1/model-task-items/${id}/transition/`, data),  // {to_status}
+  // Self-claim entre tècnics (P4a-back, gated execute_tasks, self-only). Sense body: assignee = jo.
+  claim: (id) => client.post(`/api/v1/model-task-items/${id}/claim/`),
 }
 // Alias retrocompatible (KanbanTasks vell encara importa `tasks`; es reconstrueix al tram 4).
 export const tasks = modelTasks
@@ -135,9 +181,7 @@ export const tasks = modelTasks
 export const taskTypes = {
   list: (params) => client.get('/api/v1/task-types/', { params }),
   get: (id) => client.get(`/api/v1/task-types/${id}/`),
-  create: (data) => client.post('/api/v1/task-types/', data),
-  update: (id, data) => client.patch(`/api/v1/task-types/${id}/`, data),
-  remove: (id) => client.delete(`/api/v1/task-types/${id}/`),
+  // create/update/remove retirats (G8-2): el backend és ReadOnlyModelViewSet (405) i cap pantalla els cridava.
 }
 
 // Capa de Projecte — gate del responsable (cartes sintètiques al kanban).
@@ -199,6 +243,8 @@ export const productions = {
 // Les respostes del motor (compute/preview/apply) porten planned_start/end en ISO LOCAL
 // (Europe/Madrid, sense offset) → pintar directe; NO barrejar amb el serializer de tasca (UTC).
 export const plan = {
+  // M3 — Calendari-Gantt de projecte (gated view_team_tasks). ?model_id&responsable&collection&temporada
+  gantt: (params) => client.get('/api/v1/plan/gantt/', { params }),   // → {models:[...], today}
   // body: {model_ids?:[...], campaign_filter?:{temporada,any}}  (sense res = tot el pendent)
   // → {snapshot_id, result:{placements:[{task_id,model,task_type,assignee,planned_start,planned_end,locked}], warnings, models}}
   compute: (body) => client.post('/api/v1/plan/compute/', body),
@@ -261,6 +307,23 @@ export const garmentTypeItems = {
   create: (data) => client.post('/api/v1/garment-type-items/', data),
   update: (id, data) => client.patch(`/api/v1/garment-type-items/${id}/`, data),
   remove: (id) => client.delete(`/api/v1/garment-type-items/${id}/`),
+}
+
+// Sprint Llibreria d'Items — pertinença POM de l'Item (garment-pom-maps/, ModelViewSet).
+// Escriptura gated CONFIGURE. Reorder = PATCH {ordre} per fila (mateix patró que POMBrowser).
+export const garmentPomMaps = {
+  list: (params) => client.get('/api/v1/garment-pom-maps/', { params }),   // ?garment_type_item & pom
+  create: (data) => client.post('/api/v1/garment-pom-maps/', data),
+  update: (id, data) => client.patch(`/api/v1/garment-pom-maps/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/garment-pom-maps/${id}/`),
+}
+
+// Sprint Llibreria d'Items — valors base de l'Item (item-base-measurements/, ModelViewSet + upsert).
+// upsert keyed (garment_type_item, pom): base_value_cm, tol_minus, tol_plus, nom_fitxa. Gated CONFIGURE.
+export const itemBaseMeasurements = {
+  list: (params) => client.get('/api/v1/item-base-measurements/', { params }),   // ?garment_type_item & pom
+  upsert: (data) => client.post('/api/v1/item-base-measurements/upsert/', data),
+  remove: (id) => client.delete(`/api/v1/item-base-measurements/${id}/`),
 }
 
 // Capa de Projecte — matriu de temps (task-time-estimates/, ModelViewSet).
@@ -372,4 +435,12 @@ export const users = {
   patch: (id, data) => client.patch(`/api/v1/users/${id}/`, data),   // {rol_nom, actiu, permisos}
   bulk: (data) => client.post('/api/v1/users/bulk/', data),   // {user_ids, action, value} -> {updated}
   resetLink: (id) => client.post(`/api/v1/users/${id}/reset-link/`),   // -> {url}
+}
+
+// Sprint M2 — Anàlisi de temps (gated view_team_tasks; set-estimate gated define_tasks).
+export const timeAnalysis = {
+  byPhase: () => client.get('/api/v1/time-analysis/by-phase/'),               // -> {phases, welford_min_samples}
+  tree: (params) => client.get('/api/v1/time-analysis/tree/', { params }),    // ?fase&task_type&garment_type&garment_type_item
+  setEstimate: (data) => client.post('/api/v1/time-analysis/set-estimate/', data),   // {garment_type_item, task_type, minutes}
+  byModel: (params) => client.get('/api/v1/time-analysis/by-model/', { params }),    // ?model&fase → {models:[{label,nom,est,real,n,fases:[{fase,...,tasks:[...]}]}]}
 }

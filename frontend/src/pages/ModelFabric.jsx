@@ -283,7 +283,7 @@ export default function ModelFabric() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <button type="button"
-          onClick={() => navigate(`/models/${id}/mesures`)}
+          onClick={() => navigate(`/models/${id}?tab=Mesures`)}
           style={btnSecondary}>
           ← {t('app.back')}
         </button>

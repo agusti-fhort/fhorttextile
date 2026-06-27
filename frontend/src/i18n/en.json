@@ -1,4 +1,16 @@
 {
+  "grading_propagate": {
+    "button": "Propagate",
+    "running": "Propagating…",
+    "err": "Could not propagate",
+    "warn_title": "A propagated table already exists",
+    "warn_substitute": "Propagating starts a new phase on a clean slate: the current propagated table will be REPLACED (the previous propagation is lost). Continue?",
+    "warn_sealed": "The current version v{{version}} is SEALED (production). Propagating will replace it on a clean slate and production data will be lost. Continue?",
+    "continue": "Continue",
+    "confirm_title": "Confirm propagation",
+    "confirm_sure": "Are you sure? This action starts from a clean slate and cannot be undone.",
+    "confirm_supersede": "Confirm propagation"
+  },
   "size_map_title": "Size systems",
   "size_map_subtitle": "Derived customer runs and canonical systems",
   "size_map_step_target": "Destination",
@@ -192,6 +204,29 @@
     "saving": "Saving…",
     "error_generic": "Could not update the password."
   },
+  "userProfile": {
+    "hd_title": "My profile",
+    "hd_subtitle": "Authenticated user information",
+    "st_loading": "Loading…",
+    "st_error": "Could not load the profile.",
+    "pf_no_role": "No role",
+    "pf_nom_complet": "Full name",
+    "pf_username": "Username",
+    "pf_email": "Email",
+    "pf_rol": "Role",
+    "pf_cost_hora": "Cost/hour",
+    "pf_color": "Avatar color",
+    "pf_logout": "Sign out",
+    "pw_title": "Change password",
+    "pw_subtitle": "Enter your new password. Your current session stays active.",
+    "pw_new": "New password",
+    "pw_confirm": "Confirm password",
+    "pw_submit": "Update password",
+    "pw_saving": "Saving…",
+    "pw_mismatch": "Passwords do not match.",
+    "pw_ok": "Password updated.",
+    "pw_error": "Could not update the password."
+  },
   "nav": {
     "import_collection": "Import collection",
     "section_technical_studio": "Technical Studio",
@@ -201,14 +236,12 @@
     "section_sistema": "System",
     "section_projectes": "Projects",
     "section_config_tecnica": "Technical config",
-    "dashboard": "Dashboard",
+    "dashboard": "Development",
     "models": "Models",
     "models_new": "New model",
-    "registre_activitat": "Activity log",
     "models_from_file": "New from file",
     "fitting": "Size & Fitting",
     "fittings": "Fittings",
-    "tasques": "Tasks",
     "tasques_catalog": "Task catalog",
     "tasques_paquets": "Service packages",
     "kanban": "Kanban",
@@ -234,7 +267,8 @@
     "users": "Users & roles",
     "company_calendar": "Company calendar",
     "planning": "Planning",
-    "planning_calendar": "Calendar"
+    "planning_calendar": "Calendar",
+    "my_calendar": "My calendar"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -286,6 +320,7 @@
     "select_supplier": "Select a supplier",
     "fitting_title": "Fitting sessions",
     "schedule_fitting": "Schedule fitting",
+    "convene_fitting": "Convene fitting",
     "date": "Date",
     "no_fittings": "No fitting session yet.",
     "scheduled": "Fitting scheduled.",
@@ -341,13 +376,95 @@
     "err_delete": "Error deleting the model",
     "err_connection": "Connection error",
     "confirm_delete": "Delete {{codi}}? This action cannot be undone.",
+    "tab_dashboard": "Dashboard",
     "tab_summary": "Summary",
-    "tab_size_check": "Size Check",
-    "tab_production": "Production",
-    "tab_fitting": "Fitting",
+    "tab_grading": "Grading",
     "tab_tech_sheet": "Tech sheet",
     "tab_activity_log": "Activity log",
-    "tab_ai_analysis": "AI analysis",
+    "dashboard": {
+      "err_load": "Error loading the dashboard",
+      "section_status": "Where I am",
+      "ready_for_gate": "Ready to advance phase",
+      "blockers_open": "{{n}} open tasks",
+      "blockers_none": "Nothing is blocking",
+      "section_done": "What I've done",
+      "artefact_fitxa": "Tech sheet",
+      "artefact_grading": "Graded table",
+      "artefact_base": "Base measurements",
+      "version_short": "v{{n}}",
+      "grading_approved": "Approved",
+      "grading_draft": "Draft",
+      "base_active": "{{n}} active measurements",
+      "empty_fitxa": "No tech sheet yet",
+      "empty_grading": "No graded table yet",
+      "empty_base": "No base measurements yet",
+      "milestones": {
+        "section": "Upcoming milestones",
+        "empty": "No upcoming milestones",
+        "at_risk": "At risk",
+        "type": { "tasca": "Task", "confeccio": "Production", "fitting": "Fitting" }
+      },
+      "section_technical": "Technical detail",
+      "tech_next_phase": "Next phase",
+      "tech_next_phase_none": "None (final phase)",
+      "tech_model_id": "Model ID",
+      "tech_size_fitting": "Size fitting ID",
+      "tech_base_size": "Base size",
+      "tech_base_active": "Active base measurements",
+      "tech_tasks_open": "Open tasks",
+      "fitxa_estat": { "obert": "Open", "tancat": "Closed" },
+      "phase": {
+        "Pending": "Pending", "Dev": "Development", "Proto": "Prototype",
+        "SizeSet": "Size set", "PP": "Pre-production", "TOP": "Production"
+      },
+      "task_status": {
+        "Pending": "Pending", "Paused": "Paused", "InProgress": "In progress", "Done": "Done"
+      },
+      "workplan": {
+        "title": "Work plan",
+        "openings": "{{n}} openings",
+        "out_of_charge": "(out of scope)",
+        "play": "Start",
+        "pause": "Pause",
+        "stop": "Finish",
+        "empty": "This model has no tasks assigned yet",
+        "toast_paused": "Paused «{{name}}»",
+        "transition_error": "Could not change the task status",
+        "not_allowed": "You don't have permission to operate this task",
+        "handoff_play": "Reassign and start",
+        "handoff_title": "Reassign task",
+        "handoff_body": "This task belongs to {{name}}. Reassign it to you to work on it?",
+        "handoff_body_unassigned": "This task has no assigned technician. Assign it to you to work on it?",
+        "handoff_confirm": "Reassign and start",
+        "handoff_cancel": "Cancel",
+        "claim_denied": "You can't take a task of this type (it's not in your execution list)",
+        "claim_error": "Could not reassign the task",
+        "progress_label": "{{done}}/{{total}} tasks done",
+        "time_total": "Time accrued on the model"
+      },
+      "timeline": {
+        "section": "What changed",
+        "err_load": "Error loading the activity",
+        "empty": "No changes recorded yet",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "by": "by {{label}}",
+        "now": "just now",
+        "ago_min": "{{n}} min ago",
+        "ago_hour": "{{n}} h ago",
+        "ago_day": "{{n}} days ago",
+        "measure_set": "POM {{pom}} · set to {{val}}",
+        "measure_change": "POM {{pom}} · {{prev}} → {{val}}",
+        "out_of_tolerance": "Out of tolerance",
+        "gate_advance": "Advanced to {{phase}}",
+        "gate_regress": "Reverted to {{phase}}",
+        "task_transition": "{{task}} · {{status}}",
+        "context": {
+          "import": "import", "manual": "manual", "fitting": "fitting",
+          "calculated": "calculated", "standard": "standard"
+        }
+      }
+    },
     "field_internal_ref": "Internal reference",
     "field_collection": "Collection",
     "field_target": "Target",
@@ -387,10 +504,19 @@
     "needed_start": "→ Needed start:",
     "past_date": "⚠ past date",
     "viab_disclaimer": "Indicative estimate · 420 min/day · working days (Mon–Fri) · no holidays",
-    "measures_consult": "Consultation — measurement editing is done in the POM task.",
-    "edit_in_pom": "Edit in the POM task",
-    "no_pom_task": "No POM task",
-    "no_pom_task_title": "This model has no POM task defined",
+    "measures_consult": "Consultation — click “Edit POM” to reopen the base definition.",
+    "measures_editing": "Editing measurements — changes save automatically.",
+    "measures_empty_title": "Measurements not available yet",
+    "measures_empty_body": "Start the POM Definition task to create the model base measurements.",
+    "start_pom": "Start POM Definition",
+    "back_to_consult": "Back to consultation",
+    "edit_measures": "Edit measurements",
+    "edit_pom": "Edit POM",
+    "edit_grading": "Edit grading",
+    "open_task_err": "Could not open the task.",
+    "use_ruleset": "Use this set",
+    "ruleset_changed": "Rule set updated.",
+    "ruleset_err": "Could not change the rule set.",
     "file_type": {
       "SKETCH_FLETXES": "Sketch with arrows",
       "SKETCH_NET": "Clean sketch",
@@ -578,6 +704,10 @@
     "global": "Global",
     "items": "Items",
     "new_item": "New item",
+    "items_title": "Items",
+    "card_poms": "POMs",
+    "card_grading": "Grading",
+    "card_basesize": "Base size",
     "no_items": "No items. Create some to define variants and times.",
     "edit": "Edit",
     "delete": "Delete",
@@ -690,7 +820,141 @@
     "error": "Something went wrong.",
     "col_max_start": "Max start",
     "critical": "Critical",
-    "on_track": "On track"
+    "on_track": "On track",
+    "tabs": {
+      "dashboard": "Dashboard",
+      "planificacio": "Planning",
+      "assignacio": "Assignment",
+      "calendari_projecte": "Project calendar",
+      "informes": "Reports",
+      "registre": "Activity log"
+    },
+    "gov_subtitle": "Governance space: plan, validate phases and track models",
+    "coming_soon": "Coming soon",
+    "informes": {
+      "deadlines": {
+        "title": "Deadline compliance",
+        "subtitle": "Models by predicted end date (scheduler) vs target date.",
+        "on_time": "On time",
+        "at_risk": "At risk",
+        "overdue": "Overdue",
+        "no_deadline": "No deadline"
+      },
+      "cartera": {
+        "title": "Portfolio",
+        "subtitle": "Global state of models grouped; each group with its phase distribution and at-risk models.",
+        "dim_temporada": "Season",
+        "dim_collection": "Collection",
+        "no_temporada": "— no season",
+        "no_collection": "— no collection",
+        "total": "Total",
+        "en_risc": "At risk",
+        "empty": "No models."
+      },
+      "productivity": {
+        "title": "Productivity",
+        "subtitle": "Consolidated actual time (timers) vs estimated per phase, across the whole portfolio.",
+        "estimate": "Estimated",
+        "real": "Actual",
+        "deviation": "Deviation",
+        "tasks": "Tasks",
+        "total": "Total",
+        "empty": "No time logged yet."
+      }
+    },
+    "gantt": {
+      "empty": "No models to show.",
+      "legend_proto": "Proto arrival",
+      "legend_fitting": "Fitting session",
+      "legend_objectiu": "Target date",
+      "legend_today": "Today",
+      "legend_wait": "Wait (production)",
+      "order": {
+        "label": "Sort by",
+        "lliurament": "Delivery",
+        "fita": "Next milestone",
+        "fase": "Phase"
+      },
+      "risk_first": "Risk first",
+      "only_risk": "Only at risk",
+      "risk_flag": "At risk: predicted end exceeds target date",
+      "color": {
+        "label": "Color by",
+        "tecnic": "Technician",
+        "fase": "Phase",
+        "risc": "Risk",
+        "colleccio": "Collection"
+      },
+      "filter": {
+        "all_collections": "All collections",
+        "all_seasons": "All seasons",
+        "techs": "Technicians:"
+      }
+    },
+    "gates": {
+      "title": "Ready to validate",
+      "subtitle": "Models with all tasks done, ready to advance phase",
+      "col_phase": "Current phase",
+      "col_next": "Next",
+      "validate": "Validate gate",
+      "validate_selected": "Validate selected ({{n}})",
+      "at_top": "Already in production",
+      "empty": "No models ready to validate.",
+      "validated_ok": "Gate validated.",
+      "validated_bulk_ok": "{{n}} gates validated.",
+      "validated_bulk_partial": "{{ok}} validated, {{err}} with error.",
+      "error": "Could not validate the gate."
+    },
+    "counters": {
+      "title": "Models by phase"
+    },
+    "risk": {
+      "title": "Models at risk",
+      "subtitle": "Predicted end date exceeds the target date",
+      "col_deviation": "Deviation",
+      "deviation_days": "+{{n}} d",
+      "empty": "No models at risk."
+    },
+    "time": {
+      "title": "Time analysis",
+      "subtitle": "Statistical time per phase (rollup of tasks): empirical when there are samples, otherwise the estimate",
+      "phase": {
+        "disseny": "Design",
+        "dev_tecnic": "Tech. dev",
+        "prototip": "Prototype",
+        "mostres": "Samples",
+        "preproduccio": "Pre-production",
+        "produccio": "Production"
+      },
+      "maturity": {
+        "empiric": "empirical",
+        "seed": "estimated",
+        "empty": "no data",
+        "none": "no data"
+      },
+      "coverage_tip": "{{empiric}} empirical · {{seed}} estimated · {{none}} no data · {{n}} samples",
+      "tree": {
+        "group_by": "Group by",
+        "by_phase": "Phase",
+        "by_garment": "Garment type",
+        "by_model": "Model",
+        "col_item": "Item",
+        "col_task": "Task",
+        "col_estimate": "Estimated",
+        "col_real": "Actual",
+        "col_n": "n",
+        "col_deviation": "Deviation",
+        "set_estimate": "Set estimate",
+        "save": "Save",
+        "cancel": "Cancel",
+        "minutes_ph": "min",
+        "cells_n": "{{n}} cells",
+        "saved_ok": "Estimate saved.",
+        "invalid": "Enter a number of minutes > 0.",
+        "empty": "No time data.",
+        "error": "Could not complete the operation."
+      }
+    }
   },
   "companyCalendar": {
     "title": "Company calendar",
@@ -794,58 +1058,6 @@
     }
   },
   "kanban": {
-    "title": "Task kanban",
-    "subtitle": "My tasks organised by status",
-    "loading": "Loading…",
-    "empty_col": "No tasks",
-    "status": {
-      "Pending": "Pending",
-      "Paused": "Paused",
-      "InProgress": "In progress",
-      "Done": "Done"
-    },
-    "action": {
-      "start": "Start",
-      "resume": "Resume",
-      "pause": "Pause",
-      "finish": "Finish",
-      "reopen": "Reopen",
-      "open_poms": "Open POMs",
-      "open_size_check": "Open size check",
-      "open_tech_sheet": "Open tech sheet"
-    },
-    "toast_paused": "Paused «{{name}}»",
-    "not_allowed": "You're not allowed to run this task type.",
-    "transition_error": "Could not change the status.",
-    "rect": "{{n}} rework",
-    "search_ph": "Search model (code or name)…",
-    "col_models": "Models",
-    "my_models": "My models",
-    "priority_a": "Priority A · to validate",
-    "select_model": "Select a model to see its tasks",
-    "load_more": "Load more",
-    "no_models": "No models with tasks",
-    "phase": "Phase",
-    "tasks_n": "{{n}} tasks",
-    "gate_validate": "Validate",
-    "gate_confirm": "Validate and advance to {{phase}}?",
-    "gate_done": "Phase advanced to {{phase}}.",
-    "gate_error": "Could not validate the gate.",
-    "confirm": "Confirm",
-    "cancel": "Cancel",
-    "sort_by": "Sort by",
-    "sort_default": "Default order",
-    "sort_asc": "Ascending",
-    "sort_desc": "Descending",
-    "sort": {
-      "codi_intern": "Code", "nom_prenda": "Name", "prioritat": "Priority",
-      "data_objectiu": "Target date", "data_entrada": "Entry date", "temporada": "Season"
-    },
-    "filter_temporada": "Season", "filter_estat": "Status", "filter_responsable": "Owner",
-    "resp_me": "Me", "resp_all": "All", "resp_hint": "Models where the user has assigned tasks", "resp_tech_placeholder": "Technician…",
-    "more_filters": "More filters", "clear_filters": "Clear filters",
-    "filter_garment_type": "Garment type", "filter_any": "Year", "filter_prioritat": "Priority",
-    "results_n": "{{n}} results",
     "temporades": { "SS": "SS · Spring/Summer", "FW": "FW · Fall/Winter", "CO": "CO · Cruise", "SP": "SP · Special" },
     "estats": { "Nou": "New", "EnCurs": "In progress", "EnRevisio": "In review", "Tancat": "Closed" }
   },
@@ -868,7 +1080,6 @@
       "temporada": "Season",
       "any": "Year",
       "color_referencia": "Colorway / Reference color",
-      "estat": "Status",
       "prioritat": "Priority",
       "responsable": "Owner",
       "data_entrada": "Entry date",
@@ -1163,11 +1374,45 @@
   "size_map_t_order": "Order",
   "size_map_unmatched": "Unrecognised",
   "size_map_warnings": "warnings",
+  "tasktype": {
+    "size_check": "Measures"
+  },
+  "basestage": {
+    "title": "Base table · stages",
+    "empty": "No base measurements yet.",
+    "current": "current",
+    "col_nomenclatura": "Nomenclature",
+    "stage_measure": "Measure",
+    "select_stage": "Click to view its decision and note",
+    "stage_live": "Active stage: editable",
+    "stage_readonly": "Read-only",
+    "ctx": {
+      "import": "Import",
+      "manual": "Manual",
+      "fitting": "Fitting",
+      "checked": "Size check",
+      "calculated": "Calculated",
+      "standard": "Standard"
+    }
+  },
+  "measuregrid": {
+    "col_pom": "POM",
+    "col_nom": "Name",
+    "nom_save_err": "Could not save the name.",
+    "reorder": "Drag to reorder",
+    "reorder_err": "Could not save the order.",
+    "regle_delta": "Δ",
+    "regle_break": "Break",
+    "regle_from": "from",
+    "regle_none": "—",
+    "regle_save_err": "Could not save the rule."
+  },
   "sizecheck": {
     "col_date": "Date",
     "col_decision": "Decision",
     "col_measure": "Measurement",
     "col_note": "Note",
+    "col_pom": "POM",
     "col_real": "Actual (proto)",
     "col_resolved_by": "Resolved by",
     "col_status": "Status",
@@ -1182,6 +1427,7 @@
     },
     "discard": "Discard",
     "fb_discarded": "Discarded · rescheduled to {{d}} · task pending",
+    "fb_regraded": " · grading regraded (v{{v}})",
     "fb_rejected": "Proto not accepted · rescheduled to {{d}} · task pending",
     "fb_saved": "Saved and propagated · {{n}} measurements",
     "history": "History",
@@ -1195,7 +1441,8 @@
     "reschedule_title": "Reschedule the size check",
     "resolve_error": "Could not be resolved",
     "save": "Save size check",
-    "validated_table": "Validated table"
+    "validated_table": "Validated table",
+    "work_title": "Proto measurement · check"
   },
 
   "time_tracking": {
@@ -1218,21 +1465,47 @@
   "model_measurements": {
     "err_grading": "Error generating grading",
     "notice_no_item": "This model has no item type (garment_type_item) defined: the template POMs are not materialized.",
+    "seed_title": "Start from the item's measurements?",
+    "seed_subtitle": "This model comes from an item with standard base measurements.",
+    "seed_body": "You can seed the model with the item's standard measurements (value, nomenclature and tolerance) or start from scratch and fill them in by hand. Measurements you have already edited on the model are not overwritten.",
+    "seed_confirm": "Seed from item",
+    "seed_cancel": "Start from scratch",
     "title": "Measurements and grading",
+    "pom_title": "POM definition and base size",
+    "pom_subtitle": "Create the model base: POMs, short nomenclature, values and initial rules.",
     "intro": "Enter the base size measurements. The system will compute grading for all sizes.",
     "manual_title": "Enter manually",
     "manual_desc": "The system proposes the standard POMs for {{type}}. Enter the base size values.",
     "this_garment": "this garment type",
     "poms_available": "{{total}} POMs available · {{key}} KEY",
     "import_title": "Import from tech sheet",
+    "import_table": "Import table",
     "import_desc": "Upload a PDF or image of the client tech sheet. The AI will extract measurements, sizes and grading automatically.",
     "suggested_poms": "Suggested POMs for this garment type — click to add to the table:",
     "generating": "⏳ Generating…",
     "generate_grading": "⚡ Auto-generate grading",
     "continue_fabric": "Continue → Fabric",
+    "back_to_model": "↩ Back to model",
     "table_title": "Measurements and grading table",
+    "view_table": "View measurements table",
     "edit_measures": "✏ Edit measurements",
-    "base_prefix": "Base:"
+    "base_prefix": "Base:",
+    "view_grading": "📐 View grading",
+    "propagated_title": "Propagated grading editor",
+    "propagated_hint": "Edit any size (base included): the value propagates by rule to the sibling sizes. Regime changes per POM.",
+    "propagated_hint_ro": "Read-only view of the current grading. Editing opens from the corresponding task.",
+    "propagated_close": "Close",
+    "propagated_empty": "No base measurements to propagate yet.",
+    "propagated_load_err": "Could not load the propagated table.",
+    "regim_err": "Could not change the regime.",
+    "save_pom": "Save POM",
+    "gravar_confirm_title": "Save POM",
+    "gravar_confirm_simple": "The built POMs will be saved to the measurements table. OK?",
+    "gravar_confirm_reseed": "This model already has base measurements. Saving will replace the current measurements with the ones built here.",
+    "gravar_confirm_ok": "Save POM",
+    "gravar_confirm_cancel": "Cancel",
+    "save_pom_err": "Could not save POM.",
+    "unsaved_pom_hint": "Save POM to close the task and enable Measurements."
   },
 
   "model_fabric": {
@@ -1375,6 +1648,56 @@
       "sleeve_cb": "Sleeve length CB ({{cb}}) should be > sleeve length ({{base}})."
     }
   },
+  "item_authoring": {
+    "title_new": "New item",
+    "title_edit": "Edit item · {{code}}",
+    "close": "Close",
+    "step1_context": "Context",
+    "step2_construction": "Construction",
+    "identity": "Item identity",
+    "f_name": "Name",
+    "name_placeholder": "e.g. Party t-shirt",
+    "code_auto_label": "Code (automatic)",
+    "active": "Active",
+    "pick_ruleset": "Pick the grading rule set",
+    "assign": "Assign",
+    "create_ruleset": "Create in Grading Rules",
+    "import_soon": "Import tech sheet",
+    "import_tooltip": "Available soon (Phase C)",
+    "coming_soon": "soon",
+    "confirm_basesize": "Base size",
+    "basesize_from": "Sizes of the {{system}} system",
+    "basesize_none": "This grading rule set has no defined sizes.",
+    "measurements": "Item base measurements",
+    "cancel": "Cancel",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Finish",
+    "need_name": "Give the item a name before assigning a grading rule set.",
+    "load_error": "Could not load the item.",
+    "save_error": "Could not save."
+  },
+  "measurement_base_grid": {
+    "col": {
+      "sheet_name": "Sheet name",
+      "description": "Description",
+      "base_value": "Base value (cm)",
+      "tol_minus": "Tol −",
+      "tol_plus": "Tol +"
+    },
+    "empty": "No POMs yet. Add some to define the item's base measurements.",
+    "add_pom": "Add POM",
+    "search_placeholder": "Search by name or code…",
+    "no_pom_found": "No POM found for \"{{query}}\".",
+    "create_pom": "Create new POM \"{{query}}\"",
+    "delete_row": "Delete row",
+    "drag_handle": "Drag to reorder",
+    "edit_cell": "Edit cell",
+    "discard": "Discard changes",
+    "save": "Save base measurements",
+    "load_error": "Could not load the item's base measurements.",
+    "save_error": "Could not save the item's base measurements."
+  },
   "editable_table": {
     "import_title": "AI-imported table.",
     "import_hint": "Review each row before confirming — AI can make mistakes. Edit, add or remove rows if needed.",
@@ -1387,7 +1710,12 @@
     "create_pom": "Create new POM \"{{query}}\"",
     "col": {
       "sheet_name": "Sheet name",
-      "description": "Description"
+      "description": "Description",
+      "base_value": "Base value",
+      "regime": "Regime",
+      "delta": "Delta",
+      "break_delta": "Break delta",
+      "break_size": "Break size"
     }
   },
   "dashboard": {
@@ -1399,18 +1727,53 @@
     "onboarding_complete_setup": "Complete the initial setup to unlock all features",
     "complete_setup": "Complete setup",
     "kpi": {
-      "total_models": "Total models",
-      "prototype_samples": "In prototype/samples"
+      "scope_total": "Models in scope",
+      "at_risk": "At risk",
+      "in_progress": "In progress"
     },
     "kpi_sub": {
-      "in_system": "in the system",
-      "active_models": "active models",
-      "critical_phase": "models in critical phase"
+      "scope_total": "in the selected scope",
+      "at_risk": "with an overdue task",
+      "in_progress": "with active work"
     },
-    "recent_active_models": "Recent active models",
-    "no_models_in_progress": "No models in progress.",
-    "create_first": "Create the first one",
-    "see_all_models": "See all models"
+    "board": {
+      "title": "Model board",
+      "results_n": "{{n}} models",
+      "total": "Total",
+      "search_ph": "Search model…",
+      "filter_customer": "Customer",
+      "filter_collection": "Collection",
+      "filter_temporada": "Season",
+      "filter_fase": "Phase",
+      "filter_date_from": "Target from",
+      "filter_date_to": "Target to",
+      "clear": "Clear",
+      "load_more": "Load more",
+      "tasks_n": "{{n}} tasks",
+      "empty_col": "—",
+      "state": {
+        "pending": "Pending",
+        "open": "Open",
+        "paused": "Paused",
+        "done": "Done"
+      }
+    },
+    "milestones": {
+      "title": "Upcoming milestones",
+      "empty": "No milestones in the next {{days}} days.",
+      "at_risk": "At risk",
+      "type": {
+        "tasca": "Task",
+        "confeccio": "Production",
+        "fitting": "Fitting"
+      }
+    },
+    "scope": {
+      "label": "Scope",
+      "scope_mine": "Mine",
+      "scope_all": "All",
+      "empty_mine": "You have no assigned models."
+    }
   },
   "alerts": {
     "gravetat": {
@@ -1609,39 +1972,6 @@
     "examples": "Examples: \"POM D is 35.5cm\" · \"Add the waist POM\" · \"Delete Y5\"",
     "input_placeholder": "Type a message… (Enter to send)"
   },
-  "design_freeze": {
-    "returned": "RETURNED",
-    "blockers": "Blocking fields ({{count}})",
-    "warnings": "Warnings ({{count}})",
-    "extracted_data": "Extracted data",
-    "poms_detected": "POMs detected ({{count}})",
-    "grading_included": "· grading table included",
-    "poms_no_base": "POMs without base size value — they will be generated from the client's Grading Rules",
-    "visual_description": "Visual description: ",
-    "continue": "Continue",
-    "field": {
-      "brand": "Brand",
-      "style": "Style",
-      "code": "Code",
-      "season": "Season",
-      "year": "Year",
-      "garment": "Garment",
-      "material": "Material",
-      "composition": "Composition",
-      "base_size": "Base size",
-      "size_run": "Size run",
-      "designer": "Designer",
-      "patternmaker": "Patternmaker"
-    }
-  },
-  "tasks": {
-    "title": "Tasks",
-    "col_task": "Task",
-    "col_model": "Model",
-    "col_phase": "Phase",
-    "col_status": "Status",
-    "empty": "No tasks with status \"{{status}}\""
-  },
   "size_system": {
     "code": "Code",
     "sizes_defined": "{{count}} sizes defined",
@@ -1763,11 +2093,44 @@
     "confirmed_count": "{{count}} confirmed",
     "fabric_informed": "informed",
     "fabric_not_informed": "not informed",
-    "mana_doc": "The document rules: only the {{count}} confirmed POMs will be created (no empty template rows), with closed grading (v1). The PDF is saved as the source document.",
+    "mana_doc": "The document rules: only the {{count}} confirmed POMs will be created (no empty template rows). The model rule (base measure + deltas + breaks) is retained; propagated grading is projected later, consciously. The PDF is saved as the source document.",
     "confirming": "⏳ Saving…",
     "confirm_save": "✓ Confirm and save",
+    "grading_conflict_title": "Grading rule conflict",
+    "grading_conflict_help": "The rule (deltas/breaks) imported from the document differs from the one already living on the model. Choose which becomes the model rule; neither is overwritten silently.",
+    "grading_apply_imported": "Apply the document's",
+    "grading_keep_inherited": "Keep the model's",
     "configure_run_title": "Configure the run in the Size Library",
     "go_to_library": "Go to the Library",
     "modal_body": "You will leave for the Size Library to generate this grading. Once created, you will have to return to this model manually to continue the import."
+  },
+  "dependency": {
+    "title": "Dependency",
+    "ruleset": "Rule set",
+    "no_ruleset": "— none",
+    "editable_hint": "read-only · editable in model edit"
+  },
+  "import_missing": {
+    "title": "Complete the model configuration before defining POMs",
+    "garment_type_item": "Garment type (item)",
+    "base_size": "Base size",
+    "size_run": "Size run (size system)",
+    "grading_rule_set": "Grading rule set",
+    "action": "Complete the model"
+  },
+  "watchpoints": {
+    "title": "Watchpoints",
+    "tab_label": "Watchpoints",
+    "dashboard_title": "NOTICES",
+    "err_save": "Could not save the note.",
+    "open": "open",
+    "show_resolved": "Show resolved ({{n}})",
+    "hide_resolved": "Hide resolved",
+    "placeholder": "Warning for the model (travels with it across gates)…",
+    "add": "Add",
+    "empty": "No open warnings.",
+    "resolve": "Resolve",
+    "reopen": "Reopen",
+    "resolved_by": "resolved by {{who}}"
   }
 }

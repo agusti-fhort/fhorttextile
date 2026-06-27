@@ -212,7 +212,7 @@ def schedule(model_task_qs, now=None, save=True):
         # 4) Col·locar en sèrie des de max(now, fi última col·locada), saltant els busy.
         cursor = now
         for t in ordered_movable:
-            if t.estimated_minutes is None:
+            if not t.estimated_minutes or t.estimated_minutes <= 0:
                 _warn(t, 'sense estimació de temps (no planificable)')
                 continue
             start, end = _place(profile, cursor, t.estimated_minutes, busy)

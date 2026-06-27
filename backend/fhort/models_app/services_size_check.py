@@ -96,7 +96,8 @@ def model_te_deltes(model) -> bool:
 
 
 def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
-                       *, user_profile_id: int | None = None, data_represa=None) -> dict:
+                       *, user_profile_id: int | None = None, data_represa=None,
+                       allow_reopen_sealed: bool = False) -> dict:
     """Resol un SizeCheck Pendent. L'acció sol·licitada (`estat`) i les decisions de línia
     determinen l'estat FINAL i si es propaga al grading:
 
@@ -117,7 +118,7 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
              'data_represa'}.
     """
     from fhort.models_app.models import (
-        BaseMeasurement, Model, SizeCheck, SizeCheckLine,
+        BaseMeasurement, SizeCheck, SizeCheckLine,
     )
 
     if estat not in ('Acceptat', 'Descartat'):
@@ -188,29 +189,23 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
         # Propagació: regradua les talles des de la base nova (mirror de close_piece_fitting).
         # Només si hi ha canvi de base I el model té deltes. NO toca ModelGradingRule.
         if base_changed and te_deltes:
-            from django.db.models import F, Max
-            from fhort.fitting.models import GradingVersion
             from fhort.fitting.services import _resolve_working_size_fitting
-            from fhort.pom.services import generate_graded_specs
+            from fhort.pom.services import bump_grading_version_and_generate
 
             sf = _resolve_working_size_fitting(model)
             if sf is not None:
-                GradingVersion.objects.filter(size_fitting=sf, is_active=True).update(is_active=False)
-                max_num = GradingVersion.objects.filter(size_fitting=sf).aggregate(
-                    m=Max('version_number')
-                )['m'] or 0
-                nv = GradingVersion.objects.create(
-                    size_fitting=sf,
-                    version_number=max_num + 1,
-                    is_active=True,
-                    creat_per=profile,
+                # PEÇA 1: mateix helper que close_piece_fitting (guard D-1 + desactiva actives +
+                # crea v+1 + measurements_version++ si base_changed + re-propaga). Comportament
+                # idèntic al bloc inline anterior; NO toca ModelGradingRule.
+                nv = bump_grading_version_and_generate(
+                    sf.pk,
+                    base_changed=base_changed,
+                    profile_id=user_profile_id,
+                    allow_reopen_sealed=allow_reopen_sealed,
                     nom=f'Size check {sc.pk}',
+                    reopen_context=f'SizeCheck {sc.pk}',
                 )
                 nova_version = nv.version_number
-                Model.objects.filter(pk=model.pk).update(
-                    measurements_version=F('measurements_version') + 1
-                )
-                generate_graded_specs(sf.pk)   # llegeix base nova + regles residents
                 regradat = True
 
         # Finalitza la tasca Kanban size_check → Done. Gate TOU: si no existeix la tasca

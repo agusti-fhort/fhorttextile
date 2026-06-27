@@ -24,7 +24,8 @@ def _valid_phases():
 @transaction.atomic
 def advance_phase_gate(model, to_phase, by_profile, notes=None):
     """Gate del responsable: avança la fase d'un Model SENSE sessió de fitting.
-    Guard de TOP. Escriu fase_actual + GateEvent. NO toca advance_phase de fitting."""
+    Guard de TOP. Escriu fase_actual + GateEvent + segella el grading (D-3 peça 2).
+    Producció (TOP) és TERMINAL: marca estat → Tancat (D-3 peça 4)."""
     phases = _valid_phases()
     if to_phase not in phases:
         raise GateError(f'Fase no vàlida: {to_phase} (∈ {phases})')
@@ -34,10 +35,20 @@ def advance_phase_gate(model, to_phase, by_profile, notes=None):
     # 5B-fix v2: avançar fase NOMÉS canvia el marcador (fase_actual) + GateEvent. Les ModelTask
     # queden SEMPRE obertes (la fase va en paral·lel); cap anul·lació ni tancament de timers.
     model.fase_actual = to_phase
+    # D-3 peça 4: producció (TOP) és terminal — segella el patrimoni del model (segellat del grading,
+    # avall). Bloc 3 (estat→fase): la terminalitat la marca fase==TOP; el camp `estat` ja no es
+    # superficia (es retira al pas de migració diferit), per això ja no s'escriu aquí.
     model.save(update_fields=['fase_actual'])
     GateEvent.objects.create(model=model, from_phase=frm, to_phase=to_phase,
                              kind='advance', by=by_profile, notes=notes)
-    return {'model_id': model.id, 'from_phase': frm, 'to_phase': to_phase}
+    # D-3 peça 2: el segellat del grading és conseqüència de l'avanç de gate (decisió
+    # humana de maduresa), no de tancar la sessió de fitting.
+    from fhort.fitting.services import seal_model_grading
+    sealed_version = seal_model_grading(
+        model, user_profile_id=(by_profile.id if by_profile else None)
+    )
+    return {'model_id': model.id, 'from_phase': frm, 'to_phase': to_phase,
+            'sealed_version': sealed_version}
 
 
 @transaction.atomic

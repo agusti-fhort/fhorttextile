@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, pieceFittings, fittingPhotos, modelFitxers, models } from '../api/endpoints'
+import { fittingSessions, pieceFittings, fittingPhotos, modelFitxers, models, baseMeasurements } from '../api/endpoints'
 import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
-import MeasureTable from './MeasureTable'
+import MeasureGrid from '../components/model/MeasureGrid'
+import EditorHeader from '../components/model/EditorHeader'
+import { buildFittingGroups, buildFittingRows, regimeLeadCol, makeFittingOnSave } from '../components/model/fittingGridAdapter'
 import { thStyle, SaveStatus, useDebouncedSave } from './fittingShared'
 
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
@@ -475,13 +477,8 @@ export default function FittingDetail() {
   const [infoOpen, setInfoOpen] = useState(false)
   // D2 — la revisió és la pantalla principal; la graella (taula de mesures) és opt-in.
   const [reviewMode, setReviewMode] = useState(true)
-  // Valors editables lligats al parent → modificat reactiu i remuntatge net per peça.
-  const [reals, setReals] = useState({})
-  // Ancoratge únic mòbil (PG-4b-3b): conté NOMÉS la id de l'última cel·la editada a mà → negreta.
-  // Les germanes propagades hi queden fora → vermell normal.
-  const [editedIds, setEditedIds] = useState(() => new Set())
-  // Race guard: id de la cel·la amb focus ara mateix; el repintat de propagar no l'ha de sobreescriure.
-  const focusedIdRef = useRef(null)
+  // P5: l'editor és MeasureGrid, que OWNS el seu buffer d'edició (reals/ancoratge/focus interns).
+  // El remuntatge net per peça es fa via key={activePieceId} a MeasureGrid. Aquí ja no cal estat de cel·la.
   // Avís discret si setPomRegim falla (p.ex. 400 sense fallback); no trenca la graella.
   const [regimErr, setRegimErr] = useState(null)
 
@@ -510,14 +507,7 @@ export default function FittingDetail() {
     if (!activePieceId) { setGrid(null); return Promise.resolve() }
     setGridLoading(true)
     return pieceFittings.get(activePieceId)
-      .then(res => {
-        setGrid(res.data)
-        const r = {}
-        for (const l of res.data.lines || []) { r[l.id] = l.valor_real ?? '' }
-        setReals(r)
-        setEditedIds(new Set())   // canvi de peça → cap ancoratge actiu
-        focusedIdRef.current = null
-      })
+      .then(res => { setGrid(res.data) })   // MeasureGrid sembra el seu buffer des de rows (key per peça)
       .finally(() => setGridLoading(false))
   }, [activePieceId])
 
@@ -557,6 +547,8 @@ export default function FittingDetail() {
   for (const l of lines) {
     if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, {
       pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key,
+      // Nomenclatura 2 línies (nom EN canònic dalt · idioma usuari sota) — heretada per MeasureGrid (P5).
+      nom_en: l.nom_en, nom_local: l.nom_local, nom_fitxa: l.nom_fitxa, bm_id: l.bm_id,
       // Règim per POM (mateix valor a cada talla) → etiqueta de regla a la capçalera de fila.
       logica: l.logica, increment_base: l.increment_base,
       increment_break: l.increment_break, talla_break_label: l.talla_break_label,
@@ -573,19 +565,14 @@ export default function FittingDetail() {
     lines.flatMap(l => (l.evolucio || []).map(e => e.version_number))
   )].sort((a, b) => a - b)
 
-  // Funcions planes (NO hooks): es declaren després dels early-returns, com onValue.
-  const onValue = (lineId, v) => setReals(r => ({ ...r, [lineId]: v }))
-  // Tocar una cel·la la converteix en l'ancoratge únic (les anteriors passen a propagades/normal).
-  const onAnchor = (lineId) => setEditedIds(new Set([lineId]))
-  // Aplica les línies que torna propagar; omet la cel·la amb focus (l'usuari pot estar-hi teclejant).
-  const applyPropagar = (linies) => setReals(r => {
-    const next = { ...r }
-    for (const ln of linies) {
-      if (ln.id === focusedIdRef.current) continue
-      next[ln.id] = ln.valor_real ?? ''
-    }
-    return next
-  })
+  // Projecció de l'eix talles×versions al contracte de MeasureGrid (editor únic). Els valors/ancoratge/
+  // focus viuen DINS de MeasureGrid; aquí només es construeixen groups/rows/leadCols/onSave.
+  const gridGroups = buildFittingGroups(sizeLabels, baseLabel, versionNumbers, t)
+  const gridRows = buildFittingRows(pomRows, sizeLabels, versionNumbers)
+  const lineRegimeMap = new Map(lines.map(l => [l.id, l.logica]))
+  const onGridSave = makeFittingOnSave(lineRegimeMap)
+  // P4 — autoria del nom a nivell MODEL: nom_fitxa de BaseMeasurement (NO el POM tenant compartit).
+  const onNomSave = (bmId, value) => baseMeasurements.update(bmId, { nom_fitxa: value || null }).catch(() => {})
 
   // PG-4b-3c — canvi de règim del POM des de la capçalera de fila. Materialitza NOMÉS si difereix
   // (mirar no materialitza). Èxit → actualitza in-place les línies del POM (logica + deltas) perquè
@@ -607,46 +594,42 @@ export default function FittingDetail() {
 
   return (
     <div>
-      {/* Banda d'identificació plana (cream, integrada amb la pàgina; mai card blanca) */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-muted)', padding: '10px 14px', marginBottom: '1rem', borderBottom: '0.5px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-          <button onClick={() => navigate('/fittings')} style={{
-            background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: 0, marginRight: 12,
-          }}>← {t('app.back')}</button>
-          <Badge variant="gate" style={{ marginRight: 6 }}>{session.fase_display || session.fase}</Badge>
-          <Badge variant={estatVariant[session.estat] || 'gray'}>{session.estat_display || session.estat}</Badge>
-        </div>
-        {/* Línia 1 — identitat */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.9rem', flexWrap: 'wrap', marginBottom: 6 }}>
-          {idCodi && <Badge variant="gold" style={{ fontSize: 'var(--fs-body)' }}>{idCodi}</Badge>}
-          {idNom && <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, color: 'var(--text-main)' }}>{idNom}</span>}
-          {collection && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('fitting.id.collection')}: {collection}</span>}
-          {clientRef && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('fitting.id.client_ref')}: {clientRef}</span>}
-        </div>
-        {/* Línia 2 — context de sessió (persona/lloc editables inline; responsable read-only) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', flexWrap: 'wrap' }}>
-          <EditableContextField sessionId={session.id} field="model_persona" label={t('fitting.id.persona')} value={session.model_persona} />
-          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('fitting.id.responsible')}: {session.responsable_nom || '—'}</span>
-          <EditableContextField sessionId={session.id} field="lloc" label={t('fitting.id.location')} value={session.lloc} />
-          {/* Icona Info cablada al panell de fitxers (B1); ti-photo/ti-note stub fins a B2 */}
-          <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
-            {[
-              { icon: 'ti-info-circle', label: t('fitting.id.info'), wired: !!session.model, active: infoOpen, onClick: () => setInfoOpen(o => !o) },
-              { icon: 'ti-photo', label: t('fitting.id.photos'), wired: false },
-              { icon: 'ti-note', label: t('fitting.id.observations'), wired: false },
-            ].map(({ icon, label, wired, active, onClick }) => (
-              <button key={icon} type="button"
-                title={wired ? label : `${label} · (B2)`}
-                onClick={wired ? onClick : () => {}}
-                style={{
-                  background: active ? 'var(--gold-pale)' : 'transparent',
-                  border: `0.5px solid ${active ? 'var(--gold)' : 'var(--border)'}`, borderRadius: 8,
-                  padding: '5px 9px', cursor: 'pointer',
-                  color: active ? 'var(--gold)' : 'var(--text-muted)',
-                }}><i className={`ti ${icon}`} style={{ fontSize: 14 }} /></button>
-            ))}
-          </span>
-        </div>
+      {/* Capçalera UNIFICADA (EditorHeader): identitat de model comuna amb el check + franja
+          contextual de la SESSIÓ (gate/estat · col·lecció/client · persona/responsable/lloc · icones). */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+        <EditorHeader
+          model={{ codi_intern: idCodi, nom_prenda: idNom, base_size_label: model.base_size_label, size_run_model: model.size_run_model }}
+          onBack={() => navigate('/fittings')}
+          context={
+            <>
+              <Badge variant="gate">{session.fase_display || session.fase}</Badge>
+              <Badge variant={estatVariant[session.estat] || 'gray'}>{session.estat_display || session.estat}</Badge>
+              {collection && <span>{t('fitting.id.collection')}: {collection}</span>}
+              {clientRef && <span>{t('fitting.id.client_ref')}: {clientRef}</span>}
+              <EditableContextField sessionId={session.id} field="model_persona" label={t('fitting.id.persona')} value={session.model_persona} />
+              <span>{t('fitting.id.responsible')}: {session.responsable_nom || '—'}</span>
+              <EditableContextField sessionId={session.id} field="lloc" label={t('fitting.id.location')} value={session.lloc} />
+              {/* Icona Info cablada al panell de fitxers (B1); ti-photo/ti-note stub fins a B2 */}
+              <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
+                {[
+                  { icon: 'ti-info-circle', label: t('fitting.id.info'), wired: !!session.model, active: infoOpen, onClick: () => setInfoOpen(o => !o) },
+                  { icon: 'ti-photo', label: t('fitting.id.photos'), wired: false },
+                  { icon: 'ti-note', label: t('fitting.id.observations'), wired: false },
+                ].map(({ icon, label, wired, active, onClick }) => (
+                  <button key={icon} type="button"
+                    title={wired ? label : `${label} · (B2)`}
+                    onClick={wired ? onClick : () => {}}
+                    style={{
+                      background: active ? 'var(--gold-pale)' : 'transparent',
+                      border: `0.5px solid ${active ? 'var(--gold)' : 'var(--border)'}`, borderRadius: 8,
+                      padding: '5px 9px', cursor: 'pointer',
+                      color: active ? 'var(--gold)' : 'var(--text-muted)',
+                    }}><i className={`ti ${icon}`} style={{ fontSize: 14 }} /></button>
+                ))}
+              </span>
+            </>
+          }
+        />
       </div>
 
       {/* Panell info de fitxers del model (toggle des de la icona Info) */}
@@ -689,11 +672,11 @@ export default function FittingDetail() {
               : lines.length === 0
                 ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
                 : (
-                  <MeasureTable
-                    readOnly
+                  <MeasureGrid
                     key={activePieceId}
-                    pomRows={pomRows} sizeLabels={sizeLabels} baseLabel={baseLabel} versionNumbers={versionNumbers}
-                    reals={reals} editedIds={editedIds}
+                    editable={false}
+                    rows={gridRows} groups={gridGroups}
+                    leadCols={[regimeLeadCol(t, onRegimChange, true)]}
                   />
                 )}
           </div>
@@ -745,14 +728,13 @@ export default function FittingDetail() {
           ) : lines.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <MeasureTable
-                key={activePieceId}
-                pomRows={pomRows} sizeLabels={sizeLabels} baseLabel={baseLabel} versionNumbers={versionNumbers}
-                reals={reals} editedIds={editedIds} focusedIdRef={focusedIdRef}
-                onValue={onValue} onAnchor={onAnchor} onPropagated={applyPropagar} onRegimChange={onRegimChange}
-              />
-            </div>
+            <MeasureGrid
+              key={activePieceId}
+              editable
+              rows={gridRows} groups={gridGroups}
+              leadCols={[regimeLeadCol(t, onRegimChange, false)]}
+              onSave={onGridSave} onNomSave={onNomSave}
+            />
           )}
         </Card>
       )}

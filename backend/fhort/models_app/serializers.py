@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import BaseMeasurement, Contracte, LiniaContracte, Model, ModelFitxer, ModelServei
+from .models import BaseMeasurement, Contracte, LiniaContracte, Model, ModelFitxer, Watchpoint
 
 
 class ModelFitxerSerializer(serializers.ModelSerializer):
@@ -34,11 +34,13 @@ class ModelListSerializer(serializers.ModelSerializer):
             'created_at',
             'garment_type',
             'garment_type_item_nom',
-            'estat',
             'fase_actual',
             'responsable',
             'prioritat',
             'data_objectiu',
+            # M1 — predicció del planificador (min start / max end de les tasques; §17). Read-only.
+            'predicted_start',
+            'predicted_end',
             # Pas 5C — cicle
             'entrada_prod',
             'arribada_proto',
@@ -94,6 +96,7 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     garment_type_item_code = serializers.CharField(source='garment_type_item.code', read_only=True)
     size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
     size_system_nom = serializers.CharField(source='size_system.nom', read_only=True)
+    grading_rule_set_nom = serializers.CharField(source='grading_rule_set.nom', read_only=True)  # P8: ruleset vigent (lectura)
     customer_logo = serializers.SerializerMethodField()   # TS-4c: logo del client (URL)
 
     def get_customer_logo(self, obj):
@@ -139,17 +142,18 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
         read_only_fields = ('updated_at',)
 
 
-# Sprint 1C — ModelServei
-class ModelServeiSerializer(serializers.ModelSerializer):
-    servei_nom = serializers.CharField(source='servei.nom', read_only=True)
-    servei_grup = serializers.CharField(source='servei.grup', read_only=True)
+class WatchpointSerializer(serializers.ModelSerializer):
+    created_by_nom = serializers.CharField(source='created_by.nom_complet', read_only=True)
+    resolved_by_nom = serializers.CharField(source='resolved_by.nom_complet', read_only=True)
+    task_type_code = serializers.CharField(source='task.task_type.code', read_only=True)
 
     class Meta:
-        model = ModelServei
+        model = Watchpoint
         fields = [
-            'id', 'model', 'servei', 'servei_nom', 'servei_grup',
-            'nom_servei', 'grup', 'slots_base', 'contractat', 'ampliat',
-            'estat_autoritzacio', 'autoritzat_per', 'data_autoritzacio',
-            'linia_addicional',
+            'id', 'model', 'task', 'task_type_code', 'text', 'estat', 'dades',
+            'created_by', 'created_by_nom', 'created_at',
+            'resolved_by', 'resolved_by_nom', 'resolved_at', 'resolution_note',
         ]
-        read_only_fields = ['nom_servei', 'grup', 'slots_base']
+        # L'estat i l'autoria es gestionen pel servidor (create / accions resolve/reopen).
+        # 'dades' és de sistema (l'omple l'import/recàlcul, F2/F3) → read-only per al client.
+        read_only_fields = ['estat', 'dades', 'created_by', 'created_at', 'resolved_by', 'resolved_at', 'resolution_note']

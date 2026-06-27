@@ -1,4 +1,16 @@
 {
+  "grading_propagate": {
+    "button": "Propagar",
+    "running": "Propagando…",
+    "err": "No se ha podido propagar",
+    "warn_title": "Ya hay una tabla propagada",
+    "warn_substitute": "Propagar inicia una fase nueva sobre lienzo limpio: la tabla propagada actual se SUSTITUIRÁ (se pierde la propagación anterior). ¿Continuar?",
+    "warn_sealed": "La versión vigente v{{version}} está SELLADA (producción). Propagar la sustituirá sobre lienzo limpio y se perderán los datos de producción. ¿Continuar?",
+    "continue": "Continuar",
+    "confirm_title": "Confirma la propagación",
+    "confirm_sure": "¿Estás seguro? Esta acción parte de lienzo limpio y no se puede deshacer.",
+    "confirm_supersede": "Confirmar propagación"
+  },
   "size_map_title": "Sistemas de tallas",
   "size_map_subtitle": "Runs de cliente derivados y sistemas canónicos",
   "size_map_step_target": "Destino",
@@ -192,6 +204,29 @@
     "saving": "Guardando…",
     "error_generic": "No se ha podido actualizar la contraseña."
   },
+  "userProfile": {
+    "hd_title": "Mi perfil",
+    "hd_subtitle": "Información del usuario autenticado",
+    "st_loading": "Cargando…",
+    "st_error": "No se ha podido cargar el perfil.",
+    "pf_no_role": "Sin rol",
+    "pf_nom_complet": "Nombre completo",
+    "pf_username": "Usuario",
+    "pf_email": "Email",
+    "pf_rol": "Rol",
+    "pf_cost_hora": "Coste/hora",
+    "pf_color": "Color avatar",
+    "pf_logout": "Cerrar sesión",
+    "pw_title": "Cambiar contraseña",
+    "pw_subtitle": "Introduce tu nueva contraseña. La sesión actual sigue activa.",
+    "pw_new": "Nueva contraseña",
+    "pw_confirm": "Confirma la contraseña",
+    "pw_submit": "Actualizar contraseña",
+    "pw_saving": "Guardando…",
+    "pw_mismatch": "Las contraseñas no coinciden.",
+    "pw_ok": "Contraseña actualizada.",
+    "pw_error": "No se ha podido actualizar la contraseña."
+  },
   "nav": {
     "import_collection": "Importar colección",
     "section_technical_studio": "Estudio técnico",
@@ -201,14 +236,12 @@
     "section_sistema": "Sistema",
     "section_projectes": "Proyectos",
     "section_config_tecnica": "Configuración técnica",
-    "dashboard": "Dashboard",
+    "dashboard": "Desarrollo",
     "models": "Modelos",
     "models_new": "Nuevo modelo",
-    "registre_activitat": "Registro de actividad",
     "models_from_file": "Nuevo desde archivo",
     "fitting": "Size & Fitting",
     "fittings": "Fittings",
-    "tasques": "Tareas",
     "tasques_catalog": "Catálogo de tareas",
     "tasques_paquets": "Paquetes de servicio",
     "kanban": "Kanban",
@@ -234,7 +267,8 @@
     "users": "Usuarios y roles",
     "company_calendar": "Calendario de empresa",
     "planning": "Planificación",
-    "planning_calendar": "Calendario"
+    "planning_calendar": "Calendario",
+    "my_calendar": "Mi calendario"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -286,6 +320,7 @@
     "select_supplier": "Selecciona un proveedor",
     "fitting_title": "Sesiones de fitting",
     "schedule_fitting": "Programar fitting",
+    "convene_fitting": "Convocar fitting",
     "date": "Fecha",
     "no_fittings": "Ninguna sesión de fitting aún.",
     "scheduled": "Fitting programado.",
@@ -341,13 +376,95 @@
     "err_delete": "Error eliminando el modelo",
     "err_connection": "Error de conexión",
     "confirm_delete": "¿Eliminar {{codi}}? Esta acción no se puede deshacer.",
+    "tab_dashboard": "Dashboard",
     "tab_summary": "Resumen",
-    "tab_size_check": "Size Check",
-    "tab_production": "Producción",
-    "tab_fitting": "Fitting",
+    "tab_grading": "Escalado",
     "tab_tech_sheet": "Ficha técnica",
     "tab_activity_log": "Registro de actividad",
-    "tab_ai_analysis": "Análisis IA",
+    "dashboard": {
+      "err_load": "Error al cargar el dashboard",
+      "section_status": "Dónde estoy",
+      "ready_for_gate": "Se puede avanzar de fase",
+      "blockers_open": "{{n}} tareas abiertas",
+      "blockers_none": "Nada bloquea",
+      "section_done": "Lo que tengo hecho",
+      "artefact_fitxa": "Ficha técnica",
+      "artefact_grading": "Tabla graduada",
+      "artefact_base": "Medidas base",
+      "version_short": "v{{n}}",
+      "grading_approved": "Aprobada",
+      "grading_draft": "Borrador",
+      "base_active": "{{n}} medidas activas",
+      "empty_fitxa": "Aún no hay ficha",
+      "empty_grading": "Aún no hay tabla graduada",
+      "empty_base": "Aún no hay medidas base",
+      "milestones": {
+        "section": "Próximos hitos",
+        "empty": "Ningún hito próximo",
+        "at_risk": "En riesgo",
+        "type": { "tasca": "Tarea", "confeccio": "Confección", "fitting": "Prueba" }
+      },
+      "section_technical": "Detalle técnico",
+      "tech_next_phase": "Siguiente fase",
+      "tech_next_phase_none": "Ninguna (fase final)",
+      "tech_model_id": "ID modelo",
+      "tech_size_fitting": "ID size fitting",
+      "tech_base_size": "Talla base",
+      "tech_base_active": "Medidas base activas",
+      "tech_tasks_open": "Tareas abiertas",
+      "fitxa_estat": { "obert": "Abierta", "tancat": "Cerrada" },
+      "phase": {
+        "Pending": "Pendiente", "Dev": "Desarrollo", "Proto": "Prototipo",
+        "SizeSet": "Juego de tallas", "PP": "Preproducción", "TOP": "Producción"
+      },
+      "task_status": {
+        "Pending": "Pendiente", "Paused": "Pausada", "InProgress": "En curso", "Done": "Hecha"
+      },
+      "workplan": {
+        "title": "Plan de trabajo",
+        "openings": "{{n}} aperturas",
+        "out_of_charge": "(fuera de encargo)",
+        "play": "Iniciar",
+        "pause": "Pausar",
+        "stop": "Finalizar",
+        "empty": "Este modelo aún no tiene tareas asignadas",
+        "toast_paused": "Se ha pausado «{{name}}»",
+        "transition_error": "No se ha podido cambiar el estado de la tarea",
+        "not_allowed": "No tienes permiso para operar esta tarea",
+        "handoff_play": "Reasignar y empezar",
+        "handoff_title": "Reasignar tarea",
+        "handoff_body": "Esta tarea es de {{name}}. ¿La reasignas a ti para trabajarla?",
+        "handoff_body_unassigned": "Esta tarea no tiene técnico asignado. ¿La asignas a ti para trabajarla?",
+        "handoff_confirm": "Reasignar y empezar",
+        "handoff_cancel": "Cancelar",
+        "claim_denied": "No puedes coger una tarea de este tipo (no está en tu lista de ejecución)",
+        "claim_error": "No se ha podido reasignar la tarea",
+        "progress_label": "{{done}}/{{total}} tareas hechas",
+        "time_total": "Tiempo acumulado sobre el modelo"
+      },
+      "timeline": {
+        "section": "Qué ha cambiado",
+        "err_load": "Error al cargar la actividad",
+        "empty": "Aún no hay cambios registrados",
+        "today": "Hoy",
+        "yesterday": "Ayer",
+        "by": "por {{label}}",
+        "now": "ahora mismo",
+        "ago_min": "hace {{n}} min",
+        "ago_hour": "hace {{n}} h",
+        "ago_day": "hace {{n}} días",
+        "measure_set": "POM {{pom}} · definido a {{val}}",
+        "measure_change": "POM {{pom}} · {{prev}} → {{val}}",
+        "out_of_tolerance": "Fuera de tolerancia",
+        "gate_advance": "Avanzado a {{phase}}",
+        "gate_regress": "Vuelto a {{phase}}",
+        "task_transition": "{{task}} · {{status}}",
+        "context": {
+          "import": "importación", "manual": "manual", "fitting": "fitting",
+          "calculated": "calculado", "standard": "estándar"
+        }
+      }
+    },
     "field_internal_ref": "Referencia interna",
     "field_collection": "Colección",
     "field_target": "Target",
@@ -387,10 +504,19 @@
     "needed_start": "→ Inicio necesario:",
     "past_date": "⚠ fecha pasada",
     "viab_disclaimer": "Estimación orientativa · jornada 420 min/día · días laborables (lu-vi) · sin festivos",
-    "measures_consult": "Consulta — la edición de medidas se hace en la tarea de POM.",
-    "edit_in_pom": "Editar en la tarea de POM",
-    "no_pom_task": "Sin tarea de POM",
-    "no_pom_task_title": "Este modelo no tiene ninguna tarea de POM definida",
+    "measures_consult": "Consulta — pulsa «Editar POM» para reabrir la definición de base.",
+    "measures_editing": "Edición de medidas — los cambios se guardan automáticamente.",
+    "measures_empty_title": "Medidas aún no disponibles",
+    "measures_empty_body": "Inicia la tarea Definición POM para crear las medidas base del modelo.",
+    "start_pom": "Iniciar Definición POM",
+    "back_to_consult": "Volver a consulta",
+    "edit_measures": "Editar medidas",
+    "edit_pom": "Editar POM",
+    "edit_grading": "Editar escalado",
+    "open_task_err": "No se ha podido abrir la tarea.",
+    "use_ruleset": "Usar este conjunto",
+    "ruleset_changed": "Conjunto de reglas actualizado.",
+    "ruleset_err": "No se ha podido cambiar el conjunto de reglas.",
     "file_type": {
       "SKETCH_FLETXES": "Sketch con flechas",
       "SKETCH_NET": "Sketch limpio",
@@ -578,6 +704,10 @@
     "global": "Global",
     "items": "Items",
     "new_item": "Nuevo item",
+    "items_title": "Items",
+    "card_poms": "POMs",
+    "card_grading": "Grading",
+    "card_basesize": "Talla base",
     "no_items": "Ningún item. Crea para definir variantes y tiempos.",
     "edit": "Editar",
     "delete": "Eliminar",
@@ -690,7 +820,141 @@
     "error": "Ha ocurrido un error.",
     "col_max_start": "Inicio máximo",
     "critical": "Crítico",
-    "on_track": "En plazo"
+    "on_track": "En plazo",
+    "tabs": {
+      "dashboard": "Panel",
+      "planificacio": "Planificación",
+      "assignacio": "Asignación",
+      "calendari_projecte": "Calendario de proyecto",
+      "informes": "Informes",
+      "registre": "Registro de actividad"
+    },
+    "gov_subtitle": "Espacio de gobierno: planifica, valida fases y haz seguimiento de los modelos",
+    "coming_soon": "Próximamente",
+    "informes": {
+      "deadlines": {
+        "title": "Cumplimiento de plazos",
+        "subtitle": "Modelos según la fecha prevista de fin (planificador) vs la fecha objetivo.",
+        "on_time": "En plazo",
+        "at_risk": "En riesgo",
+        "overdue": "Retrasados",
+        "no_deadline": "Sin plazo"
+      },
+      "cartera": {
+        "title": "Cartera",
+        "subtitle": "Estado global de los modelos agrupados; cada grupo con la distribución por fase y los modelos en riesgo.",
+        "dim_temporada": "Temporada",
+        "dim_collection": "Colección",
+        "no_temporada": "— sin temporada",
+        "no_collection": "— sin colección",
+        "total": "Total",
+        "en_risc": "En riesgo",
+        "empty": "Sin modelos."
+      },
+      "productivity": {
+        "title": "Productividad",
+        "subtitle": "Tiempo real consolidado (timers) vs estimado por fase, sobre toda la cartera.",
+        "estimate": "Estimado",
+        "real": "Real",
+        "deviation": "Desviación",
+        "tasks": "Tareas",
+        "total": "Total",
+        "empty": "Aún sin tiempo registrado."
+      }
+    },
+    "gantt": {
+      "empty": "Ningún modelo para mostrar.",
+      "legend_proto": "Llegada de proto",
+      "legend_fitting": "Sesión de fitting",
+      "legend_objectiu": "Fecha objetivo",
+      "legend_today": "Hoy",
+      "legend_wait": "Espera (confección)",
+      "order": {
+        "label": "Ordenar por",
+        "lliurament": "Entrega",
+        "fita": "Próximo hito",
+        "fase": "Fase"
+      },
+      "risk_first": "Riesgo primero",
+      "only_risk": "Solo en riesgo",
+      "risk_flag": "En riesgo: el fin previsto supera la fecha objetivo",
+      "color": {
+        "label": "Pinta por",
+        "tecnic": "Técnico",
+        "fase": "Fase",
+        "risc": "Riesgo",
+        "colleccio": "Colección"
+      },
+      "filter": {
+        "all_collections": "Todas las colecciones",
+        "all_seasons": "Todas las temporadas",
+        "techs": "Técnicos:"
+      }
+    },
+    "gates": {
+      "title": "Listos para validar",
+      "subtitle": "Modelos con todas las tareas hechas, a punto para avanzar de fase",
+      "col_phase": "Fase actual",
+      "col_next": "Siguiente",
+      "validate": "Validar gate",
+      "validate_selected": "Validar seleccionados ({{n}})",
+      "at_top": "Ya en producción",
+      "empty": "Ningún modelo listo para validar.",
+      "validated_ok": "Gate validado.",
+      "validated_bulk_ok": "{{n}} gates validados.",
+      "validated_bulk_partial": "{{ok}} validados, {{err}} con error.",
+      "error": "No se ha podido validar el gate."
+    },
+    "counters": {
+      "title": "Modelos por fase"
+    },
+    "risk": {
+      "title": "Modelos en riesgo",
+      "subtitle": "La fecha prevista de fin supera la fecha objetivo",
+      "col_deviation": "Desviación",
+      "deviation_days": "+{{n}} d",
+      "empty": "Ningún modelo en riesgo."
+    },
+    "time": {
+      "title": "Análisis de tiempo",
+      "subtitle": "Tiempo estadístico por fase (rollup de las tareas): empírico cuando hay muestras, si no la estimación",
+      "phase": {
+        "disseny": "Diseño",
+        "dev_tecnic": "Dev. técnico",
+        "prototip": "Prototipo",
+        "mostres": "Muestras",
+        "preproduccio": "Preproducción",
+        "produccio": "Producción"
+      },
+      "maturity": {
+        "empiric": "empírico",
+        "seed": "estimado",
+        "empty": "sin datos",
+        "none": "sin dato"
+      },
+      "coverage_tip": "{{empiric}} empíricas · {{seed}} estimadas · {{none}} sin dato · {{n}} muestras",
+      "tree": {
+        "group_by": "Agrupar por",
+        "by_phase": "Fase",
+        "by_garment": "Tipo de prenda",
+        "by_model": "Modelo",
+        "col_item": "Elemento",
+        "col_task": "Tarea",
+        "col_estimate": "Estimado",
+        "col_real": "Real",
+        "col_n": "n",
+        "col_deviation": "Desviación",
+        "set_estimate": "Poner estimación",
+        "save": "Guardar",
+        "cancel": "Cancelar",
+        "minutes_ph": "min",
+        "cells_n": "{{n}} celdas",
+        "saved_ok": "Estimación guardada.",
+        "invalid": "Pon un número de minutos > 0.",
+        "empty": "Sin datos de tiempo.",
+        "error": "No se ha podido completar la operación."
+      }
+    }
   },
   "companyCalendar": {
     "title": "Calendario de empresa",
@@ -794,58 +1058,6 @@
     }
   },
   "kanban": {
-    "title": "Kanban de tareas",
-    "subtitle": "Mis tareas organizadas por estado",
-    "loading": "Cargando…",
-    "empty_col": "Sin tareas",
-    "status": {
-      "Pending": "Pendientes",
-      "Paused": "Pausadas",
-      "InProgress": "En curso",
-      "Done": "Hechas"
-    },
-    "action": {
-      "start": "Iniciar",
-      "resume": "Reanudar",
-      "pause": "Pausar",
-      "finish": "Finalizar",
-      "reopen": "Reabrir",
-      "open_poms": "Abrir medidas",
-      "open_size_check": "Abrir size check",
-      "open_tech_sheet": "Abrir ficha"
-    },
-    "toast_paused": "Se ha pausado «{{name}}»",
-    "not_allowed": "No tienes permiso para ejecutar este tipo de tarea.",
-    "transition_error": "No se ha podido cambiar el estado.",
-    "rect": "{{n}} rectif.",
-    "search_ph": "Buscar modelo (código o nombre)…",
-    "col_models": "Modelos",
-    "my_models": "Mis modelos",
-    "priority_a": "Prioridad A · por validar",
-    "select_model": "Selecciona un modelo para ver sus tareas",
-    "load_more": "Cargar más",
-    "no_models": "Ningún modelo con tareas",
-    "phase": "Fase",
-    "tasks_n": "{{n}} tareas",
-    "gate_validate": "Validar",
-    "gate_confirm": "¿Validar y avanzar a {{phase}}?",
-    "gate_done": "Fase avanzada a {{phase}}.",
-    "gate_error": "No se ha podido validar el gate.",
-    "confirm": "Confirmar",
-    "cancel": "Cancelar",
-    "sort_by": "Ordenar por",
-    "sort_default": "Orden por defecto",
-    "sort_asc": "Ascendente",
-    "sort_desc": "Descendente",
-    "sort": {
-      "codi_intern": "Código", "nom_prenda": "Nombre", "prioritat": "Prioridad",
-      "data_objectiu": "Fecha objetivo", "data_entrada": "Fecha entrada", "temporada": "Temporada"
-    },
-    "filter_temporada": "Temporada", "filter_estat": "Estado", "filter_responsable": "Responsable",
-    "resp_me": "Yo", "resp_all": "Todos", "resp_hint": "Modelos donde el usuario tiene tareas asignadas", "resp_tech_placeholder": "Técnico…",
-    "more_filters": "Más filtros", "clear_filters": "Borrar filtros",
-    "filter_garment_type": "Tipo de prenda", "filter_any": "Año", "filter_prioritat": "Prioridad",
-    "results_n": "{{n}} resultados",
     "temporades": { "SS": "SS · Primavera/Verano", "FW": "FW · Otoño/Invierno", "CO": "CO · Cruise", "SP": "SP · Especial" },
     "estats": { "Nou": "Nuevo", "EnCurs": "En curso", "EnRevisio": "En revisión", "Tancat": "Cerrado" }
   },
@@ -868,7 +1080,6 @@
       "temporada": "Temporada",
       "any": "Año",
       "color_referencia": "Colorway / Color de referencia",
-      "estat": "Estado",
       "prioritat": "Prioridad",
       "responsable": "Responsable",
       "data_entrada": "Fecha de entrada",
@@ -1163,11 +1374,45 @@
   "size_map_t_order": "Orden",
   "size_map_unmatched": "No reconocidas",
   "size_map_warnings": "avisos",
+  "tasktype": {
+    "size_check": "Medidas"
+  },
+  "basestage": {
+    "title": "Tabla base · estadios",
+    "empty": "Aún no hay medidas base.",
+    "current": "vigente",
+    "col_nomenclatura": "Nomenclatura",
+    "stage_measure": "Medida",
+    "select_stage": "Clica para ver su decisión y nota",
+    "stage_live": "Estadio activo: editable",
+    "stage_readonly": "Solo lectura",
+    "ctx": {
+      "import": "Importación",
+      "manual": "Manual",
+      "fitting": "Fitting",
+      "checked": "Size check",
+      "calculated": "Calculado",
+      "standard": "Estándar"
+    }
+  },
+  "measuregrid": {
+    "col_pom": "POM",
+    "col_nom": "Nombre",
+    "nom_save_err": "No se ha podido guardar el nombre.",
+    "reorder": "Arrastra para reordenar",
+    "reorder_err": "No se ha podido guardar el orden.",
+    "regle_delta": "Δ",
+    "regle_break": "Break",
+    "regle_from": "a partir de",
+    "regle_none": "—",
+    "regle_save_err": "No se ha podido guardar la regla."
+  },
   "sizecheck": {
     "col_date": "Fecha",
     "col_decision": "Decisión",
     "col_measure": "Medida",
     "col_note": "Nota",
+    "col_pom": "POM",
     "col_real": "Real (proto)",
     "col_resolved_by": "Resuelto por",
     "col_status": "Estado",
@@ -1182,6 +1427,7 @@
     },
     "discard": "Descartar",
     "fb_discarded": "Descartado · reprogramado a {{d}} · tarea pendiente",
+    "fb_regraded": " · grading regradado (v{{v}})",
     "fb_rejected": "Proto no aceptado · reprogramado a {{d}} · tarea pendiente",
     "fb_saved": "Guardado y propagado · {{n}} medidas",
     "history": "Historial",
@@ -1195,7 +1441,8 @@
     "reschedule_title": "Reprogramar el size check",
     "resolve_error": "No se pudo resolver",
     "save": "Guardar size check",
-    "validated_table": "Tabla validada"
+    "validated_table": "Tabla validada",
+    "work_title": "Medición del proto · validación"
   },
 
   "time_tracking": {
@@ -1218,21 +1465,47 @@
   "model_measurements": {
     "err_grading": "Error generando el grading",
     "notice_no_item": "Este modelo no tiene tipo de ítem (garment_type_item) definido: no se materializan los POMs de la plantilla.",
+    "seed_title": "¿Partir de las medidas del item?",
+    "seed_subtitle": "Este modelo viene de un item con medidas base estándar.",
+    "seed_body": "Puedes sembrar el modelo con las medidas estándar del item (valor, nomenclatura y tolerancia) o empezar de cero y rellenarlas a mano. Las medidas que ya hayas tocado en el modelo no se sobrescriben.",
+    "seed_confirm": "Sembrar del item",
+    "seed_cancel": "Empezar de cero",
     "title": "Medidas y grading",
+    "pom_title": "Definición de POMs y talla base",
+    "pom_subtitle": "Crea la base del modelo: POMs, nomenclatura corta, valores y reglas iniciales.",
     "intro": "Introduce las medidas de la talla base. El sistema calculará el grading para todas las tallas.",
     "manual_title": "Introducir manualmente",
     "manual_desc": "El sistema propone los POMs estándar para {{type}}. Introduce los valores de la talla base.",
     "this_garment": "este tipo de prenda",
     "poms_available": "{{total}} POMs disponibles · {{key}} KEY",
     "import_title": "Importar de ficha técnica",
+    "import_table": "Importar tabla",
     "import_desc": "Sube un PDF o imagen de la ficha técnica del cliente. La IA extraerá las medidas, tallas y grading automáticamente.",
     "suggested_poms": "POMs sugeridos para este tipo de prenda — haz clic para añadir a la tabla:",
     "generating": "⏳ Generando…",
     "generate_grading": "⚡ Generar grading automático",
     "continue_fabric": "Continuar → Tejido",
+    "back_to_model": "↩ Volver al modelo",
     "table_title": "Tabla de medidas y grading",
+    "view_table": "Ver tabla de medidas",
     "edit_measures": "✏ Editar medidas",
-    "base_prefix": "Base:"
+    "base_prefix": "Base:",
+    "view_grading": "📐 Ver escalado",
+    "propagated_title": "Editor de grading propagado",
+    "propagated_hint": "Edita cualquier talla (base incluida): el valor se propaga por regla a las tallas hermanas. El régimen cambia por POM.",
+    "propagated_hint_ro": "Consulta del escalado vigente. La edición se abre desde la tarea correspondiente.",
+    "propagated_close": "Cerrar",
+    "propagated_empty": "Aún no hay medidas base para propagar.",
+    "propagated_load_err": "No se ha podido cargar la tabla propagada.",
+    "regim_err": "No se ha podido cambiar el régimen.",
+    "save_pom": "Grabar POM",
+    "gravar_confirm_title": "Grabar POM",
+    "gravar_confirm_simple": "Los POM construidos se grabarán en la tabla de medidas. ¿De acuerdo?",
+    "gravar_confirm_reseed": "Este modelo ya tiene medidas base. Al grabar, se sustituirán las medidas actuales por las construidas aquí.",
+    "gravar_confirm_ok": "Grabar POM",
+    "gravar_confirm_cancel": "Cancelar",
+    "save_pom_err": "No se ha podido grabar POM.",
+    "unsaved_pom_hint": "Graba POM para cerrar la tarea y activar Medidas."
   },
 
   "model_fabric": {
@@ -1375,6 +1648,56 @@
       "sleeve_cb": "Largo manga CB ({{cb}}) debería ser > Largo manga ({{base}})."
     }
   },
+  "item_authoring": {
+    "title_new": "Nuevo item",
+    "title_edit": "Editar item · {{code}}",
+    "close": "Cerrar",
+    "step1_context": "Contexto",
+    "step2_construction": "Construcción",
+    "identity": "Identidad del item",
+    "f_name": "Nombre",
+    "name_placeholder": "p. ej. Camiseta de fiesta",
+    "code_auto_label": "Código (automático)",
+    "active": "Activo",
+    "pick_ruleset": "Elige el grading rule set",
+    "assign": "Asignar",
+    "create_ruleset": "Crear en Grading Rules",
+    "import_soon": "Importar ficha",
+    "import_tooltip": "Disponible próximamente (Fase C)",
+    "coming_soon": "próximamente",
+    "confirm_basesize": "Talla base",
+    "basesize_from": "Tallas del sistema {{system}}",
+    "basesize_none": "Este grading rule set no tiene tallas definidas.",
+    "measurements": "Medidas base del item",
+    "cancel": "Cancelar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "finish": "Finalizar",
+    "need_name": "Pon un nombre al item antes de asignar un grading rule set.",
+    "load_error": "No se ha podido cargar el item.",
+    "save_error": "No se ha podido guardar."
+  },
+  "measurement_base_grid": {
+    "col": {
+      "sheet_name": "Nombre ficha",
+      "description": "Descripción",
+      "base_value": "Valor base (cm)",
+      "tol_minus": "Tol −",
+      "tol_plus": "Tol +"
+    },
+    "empty": "Aún no hay POMs. Añade alguno para definir las medidas base del item.",
+    "add_pom": "Añadir POM",
+    "search_placeholder": "Busca por nombre o código…",
+    "no_pom_found": "Ningún POM encontrado para \"{{query}}\".",
+    "create_pom": "Crear POM nuevo \"{{query}}\"",
+    "delete_row": "Eliminar fila",
+    "drag_handle": "Arrastra para reordenar",
+    "edit_cell": "Edita la celda",
+    "discard": "Descartar cambios",
+    "save": "Guardar medidas base",
+    "load_error": "No se han podido cargar las medidas base del item.",
+    "save_error": "No se han podido guardar las medidas base del item."
+  },
   "editable_table": {
     "import_title": "Tabla importada por IA.",
     "import_hint": "Revisa cada fila antes de confirmar — la IA puede cometer errores. Edita, añade o elimina filas si hace falta.",
@@ -1387,7 +1710,12 @@
     "create_pom": "Crear POM nuevo \"{{query}}\"",
     "col": {
       "sheet_name": "Nombre ficha",
-      "description": "Descripción"
+      "description": "Descripción",
+      "base_value": "Valor base",
+      "regime": "Régimen",
+      "delta": "Delta",
+      "break_delta": "Delta break",
+      "break_size": "Talla break"
     }
   },
   "dashboard": {
@@ -1399,18 +1727,53 @@
     "onboarding_complete_setup": "Completa el setup inicial para desbloquear todas las funcionalidades",
     "complete_setup": "Completar setup",
     "kpi": {
-      "total_models": "Total modelos",
-      "prototype_samples": "En prototipo/muestras"
+      "scope_total": "Modelos del alcance",
+      "at_risk": "En riesgo",
+      "in_progress": "En curso"
     },
     "kpi_sub": {
-      "in_system": "en el sistema",
-      "active_models": "modelos activos",
-      "critical_phase": "modelos en fase crítica"
+      "scope_total": "en el alcance seleccionado",
+      "at_risk": "con tarea fuera de plazo",
+      "in_progress": "con trabajo activo"
     },
-    "recent_active_models": "Modelos activos recientes",
-    "no_models_in_progress": "Sin modelos en curso.",
-    "create_first": "Crea el primero",
-    "see_all_models": "Ver todos los modelos"
+    "board": {
+      "title": "Tablero de modelos",
+      "results_n": "{{n}} modelos",
+      "total": "Total",
+      "search_ph": "Buscar modelo…",
+      "filter_customer": "Cliente",
+      "filter_collection": "Colección",
+      "filter_temporada": "Temporada",
+      "filter_fase": "Fase",
+      "filter_date_from": "Objetivo desde",
+      "filter_date_to": "Objetivo hasta",
+      "clear": "Limpiar",
+      "load_more": "Cargar más",
+      "tasks_n": "{{n}} tareas",
+      "empty_col": "—",
+      "state": {
+        "pending": "Pendientes",
+        "open": "En curso",
+        "paused": "Pausados",
+        "done": "Hechos"
+      }
+    },
+    "milestones": {
+      "title": "Próximos hitos",
+      "empty": "Ningún hito en los próximos {{days}} días.",
+      "at_risk": "En riesgo",
+      "type": {
+        "tasca": "Tarea",
+        "confeccio": "Confección",
+        "fitting": "Fitting"
+      }
+    },
+    "scope": {
+      "label": "Alcance",
+      "scope_mine": "Los míos",
+      "scope_all": "Todos",
+      "empty_mine": "No tienes ningún modelo asignado."
+    }
   },
   "alerts": {
     "gravetat": {
@@ -1609,39 +1972,6 @@
     "examples": "Ejemplos: \"El POM D es 35.5cm\" · \"Añade el POM de cintura\" · \"Elimina Y5\"",
     "input_placeholder": "Escribe un mensaje… (Enter para enviar)"
   },
-  "design_freeze": {
-    "returned": "DEVUELTO",
-    "blockers": "Campos bloqueantes ({{count}})",
-    "warnings": "Avisos ({{count}})",
-    "extracted_data": "Datos extraídos",
-    "poms_detected": "POMs detectados ({{count}})",
-    "grading_included": "· tabla de grading incluida",
-    "poms_no_base": "POMs sin valor de talla base — se generarán desde las Grading Rules del cliente",
-    "visual_description": "Descripción visual: ",
-    "continue": "Continuar",
-    "field": {
-      "brand": "Marca",
-      "style": "Estilo",
-      "code": "Código",
-      "season": "Temporada",
-      "year": "Año",
-      "garment": "Prenda",
-      "material": "Material",
-      "composition": "Composición",
-      "base_size": "Talla base",
-      "size_run": "Run tallas",
-      "designer": "Diseñador",
-      "patternmaker": "Patronista"
-    }
-  },
-  "tasks": {
-    "title": "Tareas",
-    "col_task": "Tarea",
-    "col_model": "Modelo",
-    "col_phase": "Fase",
-    "col_status": "Estado",
-    "empty": "Sin tareas en estado \"{{status}}\""
-  },
   "size_system": {
     "code": "Código",
     "sizes_defined": "{{count}} tallas definidas",
@@ -1763,11 +2093,44 @@
     "confirmed_count": "{{count}} confirmados",
     "fabric_informed": "informado",
     "fabric_not_informed": "no informado",
-    "mana_doc": "Manda el documento: se crearán solo los {{count}} POMs confirmados (sin filas vacías de plantilla), con grading cerrado (v1). El PDF se guarda como documento origen.",
+    "mana_doc": "Manda el documento: se crearán solo los {{count}} POMs confirmados (sin filas vacías de plantilla). Se retiene la regla del modelo (medida base + deltas + breaks); el grading propagado se proyecta después, conscientemente. El PDF se guarda como documento origen.",
     "confirming": "⏳ Guardando…",
     "confirm_save": "✓ Confirmar y guardar",
+    "grading_conflict_title": "Conflicto de regla de grading",
+    "grading_conflict_help": "La regla (deltas/breaks) importada del documento difiere de la que ya vive en el modelo. Elige cuál pasa a ser la regla del modelo; no se sobrescribirá ninguna en silencio.",
+    "grading_apply_imported": "Aplicar la del documento",
+    "grading_keep_inherited": "Mantener la del modelo",
     "configure_run_title": "Configurar el run en la Size Library",
     "go_to_library": "Ir a la Library",
     "modal_body": "Saldrás hacia la Size Library para generar esta graduación. Una vez creada, tendrás que volver a este modelo manualmente para continuar la importación."
+  },
+  "dependency": {
+    "title": "Dependencia",
+    "ruleset": "Conjunto de reglas",
+    "no_ruleset": "— ninguno",
+    "editable_hint": "lectura · editable en la edición del modelo"
+  },
+  "import_missing": {
+    "title": "Completa la configuración del modelo antes de definir POMs",
+    "garment_type_item": "Tipología de la prenda (tipo)",
+    "base_size": "Talla base",
+    "size_run": "Run de tallas (sistema de tallas)",
+    "grading_rule_set": "Regla de escalado (grading)",
+    "action": "Completa el modelo"
+  },
+  "watchpoints": {
+    "title": "Watchpoints",
+    "tab_label": "Watchpoints",
+    "dashboard_title": "AVISOS",
+    "err_save": "No se ha podido guardar la anotación.",
+    "open": "abiertas",
+    "show_resolved": "Ver resueltas ({{n}})",
+    "hide_resolved": "Ocultar resueltas",
+    "placeholder": "Advertencia para el modelo (viaja con él por los gates)…",
+    "add": "Añadir",
+    "empty": "Ninguna advertencia abierta.",
+    "resolve": "Resolver",
+    "reopen": "Reabrir",
+    "resolved_by": "resuelta por {{who}}"
   }
 }

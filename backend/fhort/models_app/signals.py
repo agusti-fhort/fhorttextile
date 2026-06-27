@@ -125,6 +125,38 @@ def sync_size_fitting(sender, instance, created, **kwargs):
 
 
 @receiver(post_save)
+def recompute_import_watchpoint(sender, instance, **kwargs):
+    """F3 — Watchpoint d'import VIU: en desar un Model, recalcula quins camps de configuració
+    falten i actualitza/resol el Watchpoint d'import obert (task IS NULL + dades not null).
+
+    NO crea Watchpoints aquí (la creació viu a commit_import) ni re-desa el Model: només toca
+    el Watchpoint via queryset .update() → cap recursió de post_save. Idempotent.
+    """
+    try:
+        Model = _get_model_class()
+    except Exception:
+        return
+    if sender is not Model:
+        return
+
+    from fhort.models_app.models import Watchpoint
+    from fhort.models_app.services import model_config_missing, config_missing_text
+
+    open_wps = Watchpoint.objects.filter(
+        model_id=instance.pk, task__isnull=True, dades__isnull=False, estat='open')
+    if not open_wps.exists():
+        return
+
+    missing = model_config_missing(instance)
+    if missing:
+        open_wps.update(dades=missing, text=config_missing_text(missing))
+    else:
+        from django.utils import timezone
+        open_wps.update(dades=[], text=config_missing_text([]),
+                        estat='resolved', resolved_at=timezone.now())
+
+
+@receiver(post_save)
 def update_last_activity(sender, instance, **kwargs):
     """
     On every Model save, update darrera_activitat = now().

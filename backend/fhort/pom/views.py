@@ -1,6 +1,7 @@
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
@@ -13,6 +14,7 @@ from .models import (
     GarmentType,
     GradingRule,
     GradingRuleSet,
+    ItemBaseMeasurement,
     POMCategory,
     POMMaster,
     SizeDefinition,
@@ -25,6 +27,7 @@ from .serializers import (
     GarmentTypeSerializer,
     GradingRuleSerializer,
     GradingRuleSetSerializer,
+    ItemBaseMeasurementSerializer,
     POMCategorySerializer,
     POMMasterSerializer,
     SizeDefinitionSerializer,
@@ -259,3 +262,59 @@ class GarmentPOMMapViewSet(viewsets.ModelViewSet):
     }
     ordering_fields = ['ordre', 'id', 'garment_type_item']
     ordering = ['garment_type_item', 'ordre']
+
+
+class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
+    """Valors base de plantilla per Item (Sprint Mesures Base per Item, P3). Motlle EXACTE de
+    GarmentPOMMapViewSet: lectura autenticada, escriptura gated CONFIGURE (mateixa capability que
+    garment-pom-maps, pom/views.py:get_permissions). Lectura per item via ?garment_type_item=<id>.
+    UPSERT keyed (item, pom) via l'acció dedicada `upsert` (update_or_create, respecta la
+    unique_together) — la columna del POMBrowser ASSIGN (P4) no ha de conèixer l'id de fila."""
+    serializer_class = ItemBaseMeasurementSerializer
+    queryset = (
+        ItemBaseMeasurement.objects
+        .select_related('garment_type_item', 'pom', 'pom__pom_global')
+        .all()
+    )
+
+    def get_permissions(self):
+        # Idèntic a GarmentPOMMapViewSet: lectura autenticada, escriptura CONFIGURE.
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        perm = HasCapability(); self.required_capability = CONFIGURE
+        return [perm]
+
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = {
+        'garment_type_item': ['exact'],
+        'pom': ['exact'],
+    }
+    ordering_fields = ['id', 'garment_type_item', 'pom']
+    ordering = ['garment_type_item', 'pom']
+
+    @action(detail=False, methods=['post'], url_path='upsert')
+    def upsert(self, request):
+        """POST /api/v1/item-base-measurements/upsert/  Body: {garment_type_item, pom,
+        base_value_cm?, tol_minus?, tol_plus?, nom_fitxa?}. update_or_create per (item, pom). Gated
+        CONFIGURE (l'acció no és list/retrieve → get_permissions retorna CONFIGURE)."""
+        from fhort.tasks.models import GarmentTypeItem
+        item_id = request.data.get('garment_type_item')
+        pom_id = request.data.get('pom')
+        if not item_id or not pom_id:
+            return Response({'error': 'garment_type_item i pom requerits.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        # garment_type_item té db_constraint=False (cross-schema) → validem l'existència nosaltres
+        # (la BD no ho faria); pom té constraint real però validem igual per retornar 400 net.
+        if not GarmentTypeItem.objects.filter(pk=item_id).exists():
+            return Response({'error': 'garment_type_item inexistent.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if not POMMaster.objects.filter(pk=pom_id).exists():
+            return Response({'error': 'pom inexistent.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        defaults = {f: request.data.get(f)
+                    for f in ('base_value_cm', 'tol_minus', 'tol_plus', 'nom_fitxa')
+                    if f in request.data}
+        obj, created = ItemBaseMeasurement.objects.update_or_create(
+            garment_type_item_id=item_id, pom_id=pom_id, defaults=defaults)
+        return Response(self.get_serializer(obj).data,
+                        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)

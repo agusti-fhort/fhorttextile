@@ -229,9 +229,10 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
         # cada línia i per a l'ordenació final.
         from fhort.models_app.models import BaseMeasurement
         bm_data = list(BaseMeasurement.objects.filter(model_id=obj.model_id)
-                       .values_list('pom_id', 'ordre', 'nom_fitxa'))
-        ordre_map = {p: o for p, o, _ in bm_data}
-        nom_fitxa_map = {p: nf for p, _, nf in bm_data}
+                       .values_list('pom_id', 'ordre', 'nom_fitxa', 'id'))
+        ordre_map = {p: o for p, o, _, _ in bm_data}
+        nom_fitxa_map = {p: nf for p, _, nf, _ in bm_data}
+        bm_id_map = {p: i for p, _, _, i in bm_data}   # P4 — autoria de nom a nivell MODEL (BaseMeasurement)
 
         out = []
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
@@ -253,7 +254,11 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 'id': line.id,
                 'pom_id': line.pom_id,
                 'codi': pom.pom_code if pom else '',
-                'nom': (nom_fitxa_map.get(line.pom_id) or (pom.pom_code if pom else '')),
+                'nom': (nom_fitxa_map.get(line.pom_id) or (pom.pom_code if pom else '')),  # nom_fitxa (croquis)
+                'nom_en': pom.name_en if pom else '',        # nom canònic EN (línia superior, nomenclatura 2 línies)
+                'nom_local': pom.name_cat if pom else '',    # nom en idioma usuari (línia inferior, canònic = sembra)
+                'nom_fitxa': nom_fitxa_map.get(line.pom_id),  # P4 — override d'autoria a nivell MODEL (precedència)
+                'bm_id': bm_id_map.get(line.pom_id),          # P4 — id de BaseMeasurement per editar el nom del model
                 'is_key': pom.is_key_measure if pom else False,
                 'size_label': line.size_label,
                 'valor_teoric': line.valor_teoric,

@@ -23,6 +23,7 @@ from .serializers import (CompanyCalendarSerializer, JornadaSerializer,
 from . import plan_service
 from fhort.tasks.models import ModelTask, PlanSnapshot, Production
 from fhort.fitting.models import FittingSession
+from fhort.models_app.models import Model
 
 
 class _Configure(HasCapability):
@@ -242,6 +243,7 @@ def calendar_events_view(request):
 
     # Rang opcional sobre la data LOCAL de planned_start (inclusiu a banda i banda).
     start_raw, end_raw = request.query_params.get('start'), request.query_params.get('end')
+    model_id_raw = request.query_params.get('model_id')   # acota a UN model (bloc fites del ModelSheet)
     try:
         start_d = _date.fromisoformat(start_raw) if start_raw else None
         end_d = _date.fromisoformat(end_raw) if end_raw else None
@@ -252,6 +254,8 @@ def calendar_events_view(request):
         qs = qs.filter(planned_start__date__gte=start_d)
     if end_d:
         qs = qs.filter(planned_start__date__lte=end_d)
+    if model_id_raw:
+        qs = qs.filter(model_id=model_id_raw)
 
     events = []
     for tk in qs:
@@ -293,6 +297,8 @@ def calendar_events_view(request):
         prods = prods.filter(expected_at__gte=start_d)
     if end_d:
         prods = prods.filter(requested_at__date__lte=end_d)
+    if model_id_raw:
+        prods = prods.filter(model_id=model_id_raw)
     for p in prods:
         req_d = timezone.localtime(p.requested_at).date()
         # Marcador d'UN SOL DIA al dia d'entrega (expected_at), com fa fitting. Ja no es pinta com a
@@ -341,6 +347,8 @@ def calendar_events_view(request):
         fitting_qs = fitting_qs.filter(data__gte=start_d)
     if end_d:
         fitting_qs = fitting_qs.filter(data__lte=end_d)
+    if model_id_raw:
+        fitting_qs = fitting_qs.filter(model_id=model_id_raw)
     # Scope (mateix criteri que les tasques): sense view_team_tasks → només on sóc assistent.
     if VIEW_TEAM_TASKS not in get_capabilities(request.user):
         profile = getattr(request.user, 'profile', None)
@@ -418,8 +426,8 @@ def calendar_events_view(request):
                 'meta': meta_base,
             })
 
-    # ── Agregació per convocatòria (C4): UN event per (convocatòria × assistent); si la
-    # convocatòria no té cap assistent intern → UN event únic (tecnic_id=None, color fix). ──
+    # ── Convocatòria (C4 + G7/4b): per cada (convocatòria × assistent) emetem UN marcador per
+    # SESSIÓ REAL del grup (no un bloc/rang). Sense assistent intern → marcadors amb tecnic_id=None. ──
     for convocatoria, grup in conv_groups.items():
         per_att = {}   # att_id -> {'att', 'sessions'}
         for s in grup:
@@ -431,59 +439,62 @@ def calendar_events_view(request):
                 if per_att else [(None, list(grup))])
         for att, sessions in emis:
             sessions_grup = sorted(sessions, key=lambda x: (x.data, x.start_time or _dt.time.min))
-            primera = sessions_grup[0]
             # E4: n = sessions NO anul·lades (les Anul·lades ja s'han exclòs del queryset).
             n = len(sessions_grup)
-            grp_tancada = all(s.estat == 'Tancada' for s in sessions_grup)
-            # E2: durada del bloc = suma d'efectives (real per Tancades, prevista per vives).
-            total_eff = sum(_eff_minutes(s) for s in sessions_grup)
-            if primera.start_time and total_eff:
-                start_base = timezone.make_aware(
-                    _dt.datetime.combine(primera.data, primera.start_time))
-                end_base = start_base + _dt.timedelta(minutes=total_eff)
-                start_dt = timezone.localtime(start_base).isoformat()
-                end_dt = timezone.localtime(end_base).isoformat()
-                all_day = False
-            else:
-                start_dt = primera.data.isoformat()
-                end_dt = sessions_grup[-1].data.isoformat()
-                all_day = True
-            avis = any(
-                bool(expected_by_key.get((s.model_id, s.fase)) and s.data and
-                     s.data < expected_by_key[(s.model_id, s.fase)])
-                for s in sessions_grup if s.model_id)
-            meta = {
-                'convocatoria': str(convocatoria),
-                'n_models': n,
-                'model_ids': [s.model_id for s in sessions_grup],
-                'fase': primera.fase,
-                'lloc': primera.lloc,
-                'avis_abans_confeccio': avis,
-                'tancada': grp_tancada,
-                'durada_real_min': total_eff,
-            }
-            titol = f'Fitting · {n} models · {primera.fase}'
-            if att is not None:
-                events.append({
-                    'id': f'fitting-conv-{convocatoria}-{att.id}',
-                    'tipus': 'fitting', 'tancada': grp_tancada,
-                    'start': start_dt, 'end': end_dt, 'titol': titol,
-                    'tecnic_id': att.id,
-                    'tecnic_nom': att.user.get_full_name() or att.user.username,
-                    'color': COLOR_FITTING_CLOSED if grp_tancada else (att.color_avatar or '#888888'),
-                    'link': '/fittings', 'en_risc': False, 'all_day': all_day,
-                    'meta': meta,
-                })
-            else:
-                events.append({
-                    'id': f'fitting-conv-{convocatoria}',
-                    'tipus': 'fitting', 'tancada': grp_tancada,
-                    'start': start_dt, 'end': end_dt, 'titol': titol,
-                    'tecnic_id': None, 'tecnic_nom': None,
-                    'color': COLOR_FITTING_CLOSED if grp_tancada else COLOR_FITTING,
-                    'link': '/fittings', 'en_risc': False, 'all_day': all_day,
-                    'meta': meta,
-                })
+            model_ids_grup = [s.model_id for s in sessions_grup]
+            # G7 (Bloc 4 / 4b): UN marcador per cada FittingSession REAL del grup, cada un al
+            # seu propi dia (start==end, com el fitting individual a dalt). NO un rang/bloc:
+            # els dies SENSE sessió queden buits (abans inRange replicava l'all-day a tot el
+            # rang primera→última). Cada marcador conserva meta de convocatòria (UUID + n_models)
+            # perquè el front pugui agrupar-los visualment si vol.
+            for s in sessions_grup:
+                s_tancada = s.estat == 'Tancada'
+                eff = _eff_minutes(s)
+                if s.start_time and eff:
+                    base = timezone.make_aware(_dt.datetime.combine(s.data, s.start_time))
+                    start_dt = timezone.localtime(base).isoformat()
+                    end_dt = timezone.localtime(base + _dt.timedelta(minutes=eff)).isoformat()
+                    all_day = False
+                else:
+                    start_dt = s.data.isoformat()
+                    end_dt = s.data.isoformat()
+                    all_day = True
+                avis = bool(s.model_id and expected_by_key.get((s.model_id, s.fase)) and
+                            s.data and s.data < expected_by_key[(s.model_id, s.fase)])
+                meta = {
+                    'convocatoria': str(convocatoria),
+                    'n_models': n,
+                    'model_id': s.model_id,
+                    'model_ids': model_ids_grup,
+                    'fase': s.fase,
+                    'lloc': s.lloc,
+                    'avis_abans_confeccio': avis,
+                    'tancada': s_tancada,
+                    'duracio_minuts': s.duracio_minuts,
+                    'durada_real': eff if (s.started_at and s.finished_at) else None,
+                }
+                titol = f'Fitting · {n} models · {s.fase}'
+                if att is not None:
+                    events.append({
+                        'id': f'fitting-conv-{convocatoria}-{att.id}-{s.id}',
+                        'tipus': 'fitting', 'tancada': s_tancada,
+                        'start': start_dt, 'end': end_dt, 'titol': titol,
+                        'tecnic_id': att.id,
+                        'tecnic_nom': att.user.get_full_name() or att.user.username,
+                        'color': COLOR_FITTING_CLOSED if s_tancada else (att.color_avatar or '#888888'),
+                        'link': '/fittings', 'en_risc': False, 'all_day': all_day,
+                        'meta': meta,
+                    })
+                else:
+                    events.append({
+                        'id': f'fitting-conv-{convocatoria}-{s.id}',
+                        'tipus': 'fitting', 'tancada': s_tancada,
+                        'start': start_dt, 'end': end_dt, 'titol': titol,
+                        'tecnic_id': None, 'tecnic_nom': None,
+                        'color': COLOR_FITTING_CLOSED if s_tancada else COLOR_FITTING,
+                        'link': '/fittings', 'en_risc': False, 'all_day': all_day,
+                        'meta': meta,
+                    })
 
     return Response({'events': events}, status=http_status.HTTP_200_OK)
 
@@ -605,3 +616,94 @@ def plan_assign_batch_view(request):
     except ValueError as e:
         return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
     return Response(out, status=http_status.HTTP_200_OK)
+
+
+# ── Sprint M3 — Calendari-Gantt de projecte (una barra per MODEL, eix=dies) ──────────────────
+class _ViewTeamTasks(HasCapability):
+    required_capability = VIEW_TEAM_TASKS
+
+
+def _effective_responsable(tasks, model):
+    """Tècnic que 'porta' el model (color del Gantt): assignee de tasca InProgress → assignee
+    no-Done majoritari → Model.responsable. Retorna (id, nom, color) o (None, None, None)."""
+    from collections import Counter
+    for tk in tasks:                                   # 1) tasca activa
+        if tk.status == 'InProgress' and tk.assignee_id:
+            a = tk.assignee
+            return a.id, a.nom_complet, a.color_avatar
+    cnt = Counter(tk.assignee_id for tk in tasks if tk.status != 'Done' and tk.assignee_id)
+    if cnt:                                            # 2) no-Done majoritari
+        aid = cnt.most_common(1)[0][0]
+        a = next(tk.assignee for tk in tasks if tk.assignee_id == aid)
+        return a.id, a.nom_complet, a.color_avatar
+    if model.responsable_id:                           # 3) responsable del model
+        r = model.responsable
+        return r.id, r.nom_complet, r.color_avatar
+    return None, None, None
+
+
+@api_view(['GET'])
+@permission_classes([_ViewTeamTasks])
+def gantt_view(request):
+    """GET /api/v1/plan/gantt/ — Gantt de projecte: UNA barra per model, eix=DIES (no hores).
+    Per model: start (consumption_started_at real | predicted_start), end (predicted_end), pct
+    (tasques Done/total), fase, responsable efectiu (color=tècnic), data_objectiu (línia vermella),
+    fites [{tipus proto|fitting, data, estat}], esperes [{from,to}] (finestra de confecció externa
+    Production: requested_at → delivered_at|expected_at). Filtres: ?model_id ?responsable
+    ?collection ?temporada. Gated view_team_tasks. CAPA DE LECTURA (drag = sprint posterior)."""
+    qp = request.query_params
+    qs = (Model.objects.all().select_related('responsable')
+          .prefetch_related('model_tasks', 'model_tasks__assignee', 'model_tasks__task_type',
+                            'productions', 'fitting_sessions'))
+    if qp.get('model_id'):
+        qs = qs.filter(pk=qp['model_id'])
+    if qp.get('responsable'):
+        qs = qs.filter(responsable_id=qp['responsable'])
+    if qp.get('collection'):
+        qs = qs.filter(collection=qp['collection'])
+    if qp.get('temporada'):
+        qs = qs.filter(temporada=qp['temporada'])
+
+    out = []
+    for m in qs:
+        tasks = list(m.model_tasks.all())
+        total = len(tasks)
+        done = sum(1 for tk in tasks if tk.status == 'Done')
+        # Maduresa = % de tasques Done sobre el total. Base consistent (recompte/recompte),
+        # FITAT 0-100 per construcció. (Abans es barrejava minuts consumits/estimats → >100%.)
+        pct = round(100 * done / total) if total else 0
+        # Pròxima tasca pendent (primera no-Done en ordre [model, order]) → etiqueta de la pastilla.
+        next_task = next((tk.task_type.code for tk in tasks if tk.status != 'Done'), None)
+        start = m.consumption_started_at.date() if m.consumption_started_at else m.predicted_start
+        end = m.predicted_end or start
+        start = start or end
+        if not start or not end:
+            continue                                   # sense cap data ancorable → fora del Gantt
+        resp_id, resp_nom, resp_color = _effective_responsable(tasks, m)
+        objectiu = m.data_objectiu
+        fites, esperes = [], []
+        for p in m.productions.all():
+            d = p.delivered_at.date() if p.delivered_at else p.expected_at
+            if d:
+                fites.append({'tipus': 'proto', 'data': d.isoformat(), 'estat': p.status})
+            w_from = p.requested_at.date() if p.requested_at else None
+            w_to = p.delivered_at.date() if p.delivered_at else p.expected_at
+            if w_from and w_to and w_to > w_from:
+                esperes.append({'from': w_from.isoformat(), 'to': w_to.isoformat(), 'tipus': 'confeccio'})
+        for f in m.fitting_sessions.all():
+            if f.data:
+                fites.append({'tipus': 'fitting', 'data': f.data.isoformat(), 'estat': f.estat})
+        fites.sort(key=lambda x: x['data'])
+        out.append({
+            'model_id': m.id, 'codi': m.codi_intern, 'nom': m.nom_prenda,
+            'fase': m.fase_actual, 'pct': pct,
+            'start': start.isoformat(), 'end': end.isoformat(),
+            'data_objectiu': objectiu.isoformat() if objectiu else None,
+            'responsable_id': resp_id, 'responsable_nom': resp_nom, 'responsable_color': resp_color,
+            'next_task': next_task,
+            'en_risc': bool(end and objectiu and end > objectiu),
+            'collection': m.collection or '', 'temporada': m.temporada,
+            'fites': fites, 'esperes': esperes,
+        })
+    out.sort(key=lambda x: x['end'])                   # default: data de fi (lliurament) asc
+    return Response({'models': out, 'today': _date.today().isoformat()})

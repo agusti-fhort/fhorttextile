@@ -1,35 +1,31 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
-import { garmentTypes, garmentTypeItems, taskTimeEstimates, taskTypes } from '../api/endpoints'
+import { garmentTypes, garmentTypeItems } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
 import { selS, primaryBtn } from '../components/ui/buttons'
 
-// Fase catàlegs — Pas 3 (FUSIONAT) · Garment Types: mestre-detall amb 3 nivells dins el detall:
-// (1) capçalera del type · (2) GRAELLA editable items × 9 task_types (matriu de temps integrada,
-// desat per fila) · (3) gestió d'items (+ Item / editar / esborrar). Plantilla Peça 0.
-// El temps és PREVIST (estimació base; s'ajusta amb dades reals — no es mostren camps Welford).
+// Fase catàlegs · Garment Types: mestre-detall. Esquerra = llista de garment types; dreta =
+// capçalera del type + GRAELLA DE CARDS d'item (porta d'entrada a la pàgina d'autoria + termòmetre
+// de completesa). B3b: la matriu de temps (TaskTimeEstimate) s'ha tret d'aquí (anirà a Planning);
+// model i endpoints intactes al backend.
 const MONO = 'IBM Plex Mono, monospace'
 const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 'var(--fs-h3)', padding: 2 }
 const actBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
   padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
 }
-const thS = {
-  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', padding: '8px 6px',
-  textTransform: 'uppercase', letterSpacing: '.03em', borderBottom: '0.5px solid var(--gray-l)', whiteSpace: 'nowrap',
-}
-const tdS = { padding: '6px 8px', fontSize: 'var(--fs-body)', borderBottom: '0.5px solid var(--gray-l)', verticalAlign: 'middle' }
 
 export default function GarmentTypes() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
 
   const [types, setTypes] = useState([])
-  const [cols, setCols] = useState([])             // 9 TaskTypes (columnes de la matriu)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [feedback, setFeedback] = useState(null)
@@ -40,11 +36,7 @@ export default function GarmentTypes() {
   const [selectedId, setSelectedId] = useState(null)
   const [items, setItems] = useState([])
   const [detailLoading, setDetailLoading] = useState(false)
-  const [cells, setCells] = useState({})           // { itemId: { ttId: { id?, value:'' } } }
-  const [dirty, setDirty] = useState({})           // { itemId: true }
-  const [savingRow, setSavingRow] = useState(null)
   const [typeModal, setTypeModal] = useState(null)
-  const [itemModal, setItemModal] = useState(null)
 
   const loadTypes = useCallback(() => {
     setError(false)
@@ -55,37 +47,22 @@ export default function GarmentTypes() {
 
   useEffect(() => {
     let alive = true
-    Promise.all([
-      garmentTypes.list({ ordering: 'codi_client', page_size: 500 }),
-      taskTypes.list({ ordering: 'default_order', page_size: 100 }),
-    ]).then(([gt, tt]) => {
-      if (!alive) return
-      setTypes(gt.data?.results ?? (Array.isArray(gt.data) ? gt.data : []))
-      setCols(tt.data?.results ?? (Array.isArray(tt.data) ? tt.data : []))
-    }).catch(() => { if (alive) setError(true) }).finally(() => { if (alive) setLoading(false) })
+    garmentTypes.list({ ordering: 'codi_client', page_size: 500 })
+      .then(gt => { if (alive) setTypes(gt.data?.results ?? (Array.isArray(gt.data) ? gt.data : [])) })
+      .catch(() => { if (alive) setError(true) })
+      .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [])
 
-  // Carrega items + cel·les de temps del type seleccionat (matriu).
+  // Carrega els items del type seleccionat (amb l'estat de completesa: grading_rule_set_nom,
+  // base_size_label, poms_count — camps read-only del serializer, B3b).
   const loadDetail = useCallback((typeId) => {
-    if (!typeId) { setItems([]); setCells({}); setDirty({}); return Promise.resolve() }
+    if (!typeId) { setItems([]); return Promise.resolve() }
     setDetailLoading(true)
-    return Promise.all([
-      garmentTypeItems.list({ garment_type: typeId, ordering: 'complexity_order', page_size: 500 }),
-      taskTimeEstimates.list({ page_size: 2000 }),
-    ]).then(([itRes, teRes]) => {
-      const its = itRes.data?.results ?? (Array.isArray(itRes.data) ? itRes.data : [])
-      const tes = teRes.data?.results ?? (Array.isArray(teRes.data) ? teRes.data : [])
-      const ids = new Set(its.map(i => i.id))
-      const map = {}
-      its.forEach(i => { map[i.id] = {} })
-      tes.forEach(c => {
-        if (ids.has(c.garment_type_item)) {
-          map[c.garment_type_item][c.task_type] = { id: c.id, value: c.estimated_minutes == null ? '' : String(c.estimated_minutes) }
-        }
-      })
-      setItems(its); setCells(map); setDirty({})
-    }).catch(() => { setItems([]); setCells({}) }).finally(() => setDetailLoading(false))
+    return garmentTypeItems.list({ garment_type: typeId, ordering: 'complexity_order', page_size: 500 })
+      .then(itRes => setItems(itRes.data?.results ?? (Array.isArray(itRes.data) ? itRes.data : [])))
+      .catch(() => setItems([]))
+      .finally(() => setDetailLoading(false))
   }, [])
 
   useEffect(() => { loadDetail(selectedId) }, [selectedId, loadDetail])
@@ -119,41 +96,6 @@ export default function GarmentTypes() {
       .then(() => setFeedback({ type: 'ok', text: t('garment_types.item_deleted') }))
       .catch(() => setFeedback({ type: 'err', text: t('garment_types.error') }))
       .finally(() => setSaving(false))
-  }
-
-  const setCell = (itemId, ttId, value) => {
-    setCells(c => ({ ...c, [itemId]: { ...(c[itemId] || {}), [ttId]: { ...(c[itemId]?.[ttId] || {}), value } } }))
-    setDirty(d => ({ ...d, [itemId]: true }))
-  }
-
-  const saveRow = (item) => {
-    setSavingRow(item.id); setFeedback(null)
-    const row = cells[item.id] || {}
-    const ops = []
-    for (const tt of cols) {
-      const cell = row[tt.id] || { value: '' }
-      const val = String(cell.value ?? '').trim()
-      if (val === '') {
-        if (cell.id) ops.push(taskTimeEstimates.remove(cell.id))
-      } else {
-        const num = parseInt(val, 10)
-        if (isNaN(num) || num < 0) continue
-        if (cell.id) ops.push(taskTimeEstimates.update(cell.id, { estimated_minutes: num }))
-        else ops.push(taskTimeEstimates.create({ garment_type_item: item.id, task_type: tt.id, estimated_minutes: num }))
-      }
-    }
-    Promise.all(ops)
-      .then(() => taskTimeEstimates.list({ garment_type_item: item.id, page_size: 100 }))   // recarrega NOMÉS la fila
-      .then(res => {
-        const tes = res.data?.results ?? (Array.isArray(res.data) ? res.data : [])
-        const m = {}
-        tes.forEach(c => { m[c.task_type] = { id: c.id, value: c.estimated_minutes == null ? '' : String(c.estimated_minutes) } })
-        setCells(c => ({ ...c, [item.id]: m }))
-        setDirty(d => { const n = { ...d }; delete n[item.id]; return n })
-        setFeedback({ type: 'ok', text: t('garment_types.row_saved', { item: item.code }) })
-      })
-      .catch(() => setFeedback({ type: 'err', text: t('garment_types.error') }))
-      .finally(() => setSavingRow(null))
   }
 
   return (
@@ -229,68 +171,32 @@ export default function GarmentTypes() {
                       </div>
                     </div>
 
-                    {/* (3) gestió d'items: + Item */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('garment_types.matrix')} · {items.length} {t('garment_types.items').toLowerCase()}</span>
-                      {canEdit && <button onClick={() => setItemModal({ mode: 'create' })} style={{ ...primaryBtn, marginLeft: 0 }}>
+                    {/* gestió d'items: títol + Nou item */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('garment_types.items_title')} · {items.length}</span>
+                      {canEdit && <button onClick={() => navigate(`/garment-type-items/nou/${selected.id}`)} style={{ ...primaryBtn, marginLeft: 0 }}>
                         <i className="ti ti-plus" style={{ fontSize: 13 }} />{t('garment_types.new_item')}
                       </button>}
                     </div>
 
-                    {/* (2) GRAELLA editable items × 9 task_types */}
+                    {/* GRAELLA DE CARDS d'item: porta d'entrada a l'autoria + termòmetre de completesa */}
                     {detailLoading ? <Center>{t('garment_types.loading')}</Center>
-                      : items.length === 0 ? <Center>{t('garment_types.no_items')}</Center>
-                        : (
-                          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
-                            <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: MONO }}>
-                              <thead>
-                                <tr>
-                                  <th style={{ ...thS, position: 'sticky', left: 0, background: 'var(--white)', zIndex: 1, minWidth: 150, textAlign: 'left' }}>{t('garment_types.item')}</th>
-                                  {cols.map(c => <th key={c.id} style={{ ...thS, textAlign: 'center', minWidth: 60 }} title={c.name}>{c.code}</th>)}
-                                  <th style={thS}></th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {items.map(it => (
-                                  <tr key={it.id}>
-                                    <td style={{ ...tdS, position: 'sticky', left: 0, background: dirty[it.id] ? 'var(--warn-bg)' : 'var(--white)', zIndex: 1 }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                          <div style={{ fontWeight: 600 }}>{it.code}{!it.active && <span style={{ marginLeft: 5, fontSize: 'var(--fs-caption)', color: 'var(--gray)' }}>({t('garment_types.inactive')})</span>}</div>
-                                          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>{it.name}</div>
-                                        </div>
-                                        {canEdit && (
-                                          <>
-                                            <button onClick={() => setItemModal({ mode: 'edit', item: it })} title={t('garment_types.edit')} style={iconBtn}><i className="ti ti-pencil" /></button>
-                                            <button onClick={() => deleteItem(it)} title={t('garment_types.delete')} style={{ ...iconBtn, color: 'var(--err)' }}><i className="ti ti-trash" /></button>
-                                          </>
-                                        )}
-                                      </div>
-                                    </td>
-                                    {cols.map(c => {
-                                      const cell = cells[it.id]?.[c.id] || { value: '' }
-                                      return (
-                                        <td key={c.id} style={{ ...tdS, textAlign: 'center', padding: 4 }}>
-                                          <input type="number" min="0" value={cell.value} disabled={!canEdit || savingRow === it.id}
-                                            onChange={e => setCell(it.id, c.id, e.target.value)}
-                                            style={{ width: 50, textAlign: 'right', fontFamily: MONO, fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 4, padding: '3px 4px', background: 'var(--white)' }} />
-                                        </td>
-                                      )
-                                    })}
-                                    <td style={{ ...tdS, textAlign: 'right' }}>
-                                      {canEdit && (
-                                        <button onClick={() => saveRow(it)} disabled={!dirty[it.id] || savingRow === it.id}
-                                          style={{ ...primaryBtn, marginLeft: 0, padding: '5px 12px', opacity: (!dirty[it.id] || savingRow === it.id) ? 0.4 : 1, cursor: (!dirty[it.id] || savingRow === it.id) ? 'not-allowed' : 'pointer' }}>
-                                          {savingRow === it.id ? t('garment_types.saving') : t('garment_types.save')}
-                                        </button>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
+                      : items.length === 0 ? (
+                        <div style={{ border: '0.5px dashed var(--gray-l)', borderRadius: 12, padding: '2rem', textAlign: 'center', color: 'var(--gray)' }}>
+                          <div style={{ marginBottom: 12, fontSize: 'var(--fs-body)' }}>{t('garment_types.no_items')}</div>
+                          {canEdit && <button onClick={() => navigate(`/garment-type-items/nou/${selected.id}`)} style={{ ...primaryBtn, marginLeft: 0 }}>
+                            <i className="ti ti-plus" style={{ fontSize: 13 }} />{t('garment_types.new_item')}
+                          </button>}
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+                          {items.map(it => (
+                            <ItemCard key={it.id} it={it} t={t} canEdit={canEdit}
+                              onEdit={() => navigate(`/garment-type-items/${it.id}/editar`)}
+                              onDelete={() => deleteItem(it)} />
+                          ))}
+                        </div>
+                      )}
                   </div>
                 )}
               </div>
@@ -301,12 +207,6 @@ export default function GarmentTypes() {
         <TypeModal mode={typeModal.mode} tt={typeModal.tt} t={t} saving={saving} setSaving={setSaving}
           onCancel={() => setTypeModal(null)}
           onSaved={(msg) => { setTypeModal(null); loadTypes().then(() => setFeedback({ type: 'ok', text: msg })) }}
-          onError={(text) => setFeedback({ type: 'err', text })} />
-      )}
-      {itemModal && selected && (
-        <ItemModal mode={itemModal.mode} item={itemModal.item} typeId={selected.id} t={t} saving={saving} setSaving={setSaving}
-          onCancel={() => setItemModal(null)}
-          onSaved={(msg) => { setItemModal(null); loadDetail(selected.id).then(() => setFeedback({ type: 'ok', text: msg })) }}
           onError={(text) => setFeedback({ type: 'err', text })} />
       )}
     </div>
@@ -366,47 +266,6 @@ function TypeModal({ mode, tt, t, saving, setSaving, onCancel, onSaved, onError 
   )
 }
 
-function ItemModal({ mode, item, typeId, t, saving, setSaving, onCancel, onSaved, onError }) {
-  const isEdit = mode === 'edit'
-  const [code, setCode] = useState(item?.code || '')
-  const [name, setName] = useState(item?.name || '')
-  const [order, setOrder] = useState(item?.complexity_order ?? 0)
-  const [active, setActive] = useState(item?.active ?? true)
-  const invalid = (!isEdit && !code.trim()) || !name.trim()
-
-  const submit = () => {
-    if (invalid) { onError(t('garment_types.required_item')); return }
-    setSaving(true)
-    const payload = isEdit
-      ? { name: name.trim(), complexity_order: Number(order) || 0, active }              // code read-only en editar
-      : { garment_type: typeId, code: code.trim(), name: name.trim(), complexity_order: Number(order) || 0, active }
-    const req = isEdit ? garmentTypeItems.update(item.id, payload) : garmentTypeItems.create(payload)
-    req
-      .then(() => onSaved(isEdit ? t('garment_types.item_saved') : t('garment_types.item_created')))
-      .catch(e => onError(e?.response?.data?.code?.[0] || e?.response?.data?.non_field_errors?.[0] || t('garment_types.error')))
-      .finally(() => setSaving(false))
-  }
-
-  return (
-    <Modal title={isEdit ? t('garment_types.edit_item_title') : t('garment_types.new_item_title')}
-      cancelLabel={t('garment_types.cancel')} confirmLabel={isEdit ? t('garment_types.save') : t('garment_types.create')}
-      onCancel={onCancel} onConfirm={submit} confirmDisabled={saving || invalid}>
-      <Field label={t('garment_types.it_code')}>
-        <input value={code} disabled={isEdit} onChange={e => setCode(e.target.value)} placeholder="chino" style={{ ...selS, width: '100%', opacity: isEdit ? 0.6 : 1 }} />
-        {isEdit && <Hint>{t('garment_types.code_locked')}</Hint>}
-      </Field>
-      <Field label={t('garment_types.it_name')}><input value={name} onChange={e => setName(e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
-      <Field label={t('garment_types.it_order')}>
-        <input type="number" value={order} onChange={e => setOrder(e.target.value)} style={{ ...selS, width: '100%' }} />
-        <Hint>{t('garment_types.order_hint')}</Hint>
-      </Field>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginTop: 4 }}>
-        <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /><span>{t('garment_types.active')}</span>
-      </label>
-    </Modal>
-  )
-}
-
 function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 12 }}>
@@ -415,6 +274,58 @@ function Field({ label, children }) {
     </div>
   )
 }
-function Hint({ children }) {
-  return <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginTop: 4 }}>{children}</div>
+
+// Card curta d'item: porta d'entrada a la pàgina d'autoria + termòmetre de completesa
+// (POMs · grading · talla base). NO repeteix el detall que s'edita dins (B3).
+function ItemCard({ it, t, canEdit, onEdit, onDelete }) {
+  const hasGrading = !!it.grading_rule_set_nom
+  const hasBase = it.base_size_label != null
+  const hasPoms = (it.poms_count || 0) > 0
+  const facets = [hasPoms, hasGrading, hasBase]
+  const done = facets.filter(Boolean).length
+  return (
+    <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)' }}>
+            {it.name}{!it.active && <span style={{ marginLeft: 5, fontSize: 'var(--fs-caption)', color: 'var(--gray)' }}>({t('garment_types.inactive')})</span>}
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>{it.code}</div>
+        </div>
+        {/* termòmetre: 3 punts (POMs · grading · talla base) */}
+        <div style={{ display: 'flex', gap: 3, flexShrink: 0, marginTop: 3 }} title={`${done}/3`}>
+          {facets.map((on, i) => (
+            <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: on ? 'var(--gold)' : 'transparent', border: `1px solid ${on ? 'var(--gold)' : 'var(--gray-l)'}` }} />
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontFamily: MONO }}>
+        <StatusLine label={t('garment_types.card_poms')} value={String(it.poms_count ?? 0)} on={hasPoms} />
+        <StatusLine label={t('garment_types.card_grading')} value={it.grading_rule_set_nom || '—'} on={hasGrading} />
+        <StatusLine label={t('garment_types.card_basesize')} value={it.base_size_label || '—'} on={hasBase} />
+      </div>
+      {canEdit && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 'auto', paddingTop: 4 }}>
+          <button onClick={onEdit} style={{ ...actBtn, flex: 1, color: 'var(--gold)', borderColor: 'var(--gold)' }}>
+            <i className="ti ti-pencil" /> {t('garment_types.edit')}
+          </button>
+          <button onClick={onDelete} title={t('garment_types.delete')} style={{ ...iconBtn, color: 'var(--err)' }}>
+            <i className="ti ti-trash" />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StatusLine({ label, value, on }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 'var(--fs-label)' }}>
+      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{
+        color: on ? 'var(--text-main)' : 'var(--gray)', fontWeight: on ? 600 : 400,
+        textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150,
+      }}>{value}</span>
+    </div>
+  )
 }

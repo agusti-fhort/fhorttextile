@@ -1,27 +1,9 @@
 from rest_framework.routers import DefaultRouter
 
-from .views import (
-    TascaViewSet,
-    TimerEntradaViewSet,
-)
+from .views import TimerEntradaViewSet
 
 router = DefaultRouter()
 router.register('timers', TimerEntradaViewSet, basename='timer')
-
-# Sprint 1C — new endpoints (the sprint1c TascaViewSet is richer than the one in views.py).
-# If sprint1c does not exist yet, we fall back to the legacy TascaViewSet.
-try:
-    from fhort.tasks.views_sprint1c import TascaViewSet as _Sprint1CTascaViewSet, PaquetServeiViewSet
-    router.register(r'tasques', _Sprint1CTascaViewSet, basename='tasca')
-    router.register(r'paquets-servei', PaquetServeiViewSet, basename='paquet-servei')
-except Exception:
-    router.register('tasques', TascaViewSet, basename='tasca')
-
-try:
-    from fhort.models_app.views import ModelServeiViewSet
-    router.register(r'model-serveis', ModelServeiViewSet, basename='model-servei')
-except Exception:
-    pass
 
 # model-fitxers already registered in fhort.models_app.urls
 
@@ -64,18 +46,38 @@ urlpatterns = router.urls
 # Sprint B — define tasks of a model (bulk/individual). Requires define_tasks capability.
 try:
     from fhort.tasks.views_b import (define_model_tasks_view, transition_task_view,
-                                     assign_model_view, unassign_model_view,
-                                     model_task_log_view)
+                                     claim_task_view, assign_model_view, unassign_model_view,
+                                     model_task_log_view, open_model_task_view)
     from django.urls import path as _path_b
     _sprintb_paths = [
         _path_b('models/<int:model_id>/define-tasks/', define_model_tasks_view),
         _path_b('models/<int:model_id>/task-log/', model_task_log_view),
         _path_b('model-task-items/<int:pk>/transition/', transition_task_view),
+        # P4a-back — self-claim entre tècnics (handoff §6). Gated execute_tasks (NO define_tasks).
+        _path_b('model-task-items/<int:pk>/claim/', claim_task_view),
+        # Porta-menú — obrir una tasca concreta del model (crea-si-falta + En curs). execute_tasks.
+        _path_b('models/<int:model_id>/open-task/', open_model_task_view),
         # Tram 2 — assignar/desassignar model a tècnic (compute de cua sencera). define_tasks.
         _path_b('models/<int:model_id>/assign/', assign_model_view),
         _path_b('models/<int:model_id>/unassign/', unassign_model_view),
     ]
     urlpatterns = _sprintb_paths + urlpatterns
+except Exception:
+    pass
+
+# Sprint M2 — Anàlisi de temps: rollup per fase + arbre drill-down (gated view_team_tasks).
+try:
+    from fhort.tasks.views_b import (time_by_phase_view, time_tree_view, time_set_estimate_view,
+                                     time_by_model_view)
+    from django.urls import path as _path_m2
+    _sprintm2_paths = [
+        _path_m2('time-analysis/by-phase/', time_by_phase_view),
+        _path_m2('time-analysis/tree/', time_tree_view),
+        _path_m2('time-analysis/set-estimate/', time_set_estimate_view),
+        # Planning-complet P1 — eix MODEL (ModelTask→fase→task_type; dimensió que TaskTimeEstimate no té).
+        _path_m2('time-analysis/by-model/', time_by_model_view),
+    ]
+    urlpatterns = _sprintm2_paths + urlpatterns
 except Exception:
     pass
 

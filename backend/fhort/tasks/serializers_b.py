@@ -19,16 +19,18 @@ class ModelTaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = ModelTask
         fields = ['id', 'model', 'model_codi', 'task_type', 'task_type_code', 'task_type_name',
-                  'status', 'assignee', 'order', 'created_at', 'updated_at',
+                  'status', 'origen', 'assignee', 'order', 'created_at', 'updated_at',
                   'started_at', 'finished_at', 'estimated_minutes', 'rectifications',
                   'planned_start', 'planned_end', 'planned_locked']
         # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
+        # origen el fixa el backend en crear (prevista per defecte; ad_hoc des de l'arbre global,
+        # Sprint 4) → read-only per al client.
         # planned_* els escriu el MOTOR (planning), no el client → read-only.
         # ⚠️ Fus horari: aquí planned_start/end surten en UTC (USE_TZ=True). El front de
         # planificació NO ha de barrejar aquesta font amb les respostes del motor
         # (plan/compute|preview|apply, que van en ISO LOCAL). Aquests camps són per a
         # referència/llista; el Gantt pinta des de plan/compute (local).
-        read_only_fields = ['created_at', 'updated_at',
+        read_only_fields = ['created_at', 'updated_at', 'origen',
                             'started_at', 'finished_at', 'estimated_minutes',
                             'planned_start', 'planned_end', 'planned_locked']
 
@@ -62,9 +64,46 @@ class ProductionSerializer(serializers.ModelSerializer):
 
 
 class GarmentTypeItemSerializer(serializers.ModelSerializer):
+    # Sprint Llibreria d'Items (B3b): camps de completesa READ-ONLY per a la graella de cards de
+    # Garment Types (nom del ruleset, etiqueta de la talla base, compte de POMs). Additius; no
+    # afecten el write path (la pàgina d'autoria escriu via els FK grading_rule_set/base_size_definition).
+    grading_rule_set_nom = serializers.SerializerMethodField()
+    base_size_label = serializers.SerializerMethodField()
+    poms_count = serializers.SerializerMethodField()
+
     class Meta:
         model = GarmentTypeItem
-        fields = ['id', 'garment_type', 'code', 'name', 'complexity_order', 'active']
+        # Sprint Llibreria d'Items (B3a): exposa el context de grading de l'Item (FK ruleset) i
+        # la talla base, escrivibles per la pàgina d'autoria (Fase B). Tots dos nullable.
+        fields = ['id', 'garment_type', 'code', 'name', 'complexity_order', 'active',
+                  'grading_rule_set', 'base_size_definition',
+                  'grading_rule_set_nom', 'base_size_label', 'poms_count']
+
+    def get_grading_rule_set_nom(self, obj):
+        return obj.grading_rule_set.nom if obj.grading_rule_set_id else None
+
+    def get_base_size_label(self, obj):
+        return obj.base_size_definition.etiqueta if obj.base_size_definition_id else None
+
+    def get_poms_count(self, obj):
+        # Pertinença POM de l'item (GarmentPOMMap.related_name='pom_maps').
+        return obj.pom_maps.count()
+
+    def validate(self, attrs):
+        # B3a — DRF no crida Model.clean() sol; l'invoquem aquí perquè el constrenyiment d'A3
+        # (base_size_definition.size_system == grading_rule_set.size_system) es validi al desar
+        # via serializer. Fusiona els attrs entrants amb la instància existent (PATCH parcial) i
+        # delega al clean() del model (font única; cas null = skip, sense error).
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        grs = attrs.get('grading_rule_set', getattr(self.instance, 'grading_rule_set', None))
+        bsd = attrs.get('base_size_definition', getattr(self.instance, 'base_size_definition', None))
+        probe = GarmentTypeItem(grading_rule_set=grs, base_size_definition=bsd)
+        try:
+            probe.clean()
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(
+                getattr(e, 'message_dict', None) or {'base_size_definition': e.messages})
+        return attrs
 
 
 class TaskTimeEstimateSerializer(serializers.ModelSerializer):

@@ -15,8 +15,13 @@ const thS = {
   borderBottom: '1px solid var(--border)',
 }
 const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 'var(--fs-body)' }
+// Règims editables a mà (les NORMES de gradació, mirall de GradingRule.LOGICA_CHOICES). FIXED és una
+// norma igual que LINEAR/STEP → canviable des del desplegable. ZERO/EXCEPTION NO s'ofereixen com a tria
+// nova (ZERO = nínxol "sempre 0"; EXCEPTION = tipus APLICAT per cel·la pel motor —override/excepció—,
+// no un règim de POM); si una fila ja en porta un, es manté com a opció perquè el valor real no s'emmascari.
+const REGIME_OPTIONS = ['LINEAR', 'STEP', 'FIXED']
 const btnPrimary = (disabled) => ({
-  background: disabled ? '#ccc' : 'var(--gold)', color: 'var(--white)',
+  background: disabled ? 'var(--bg-muted)' : 'var(--gold)', color: disabled ? 'var(--text-muted)' : 'var(--white)',
   border: 'none', borderRadius: 6, padding: '7px 18px',
   fontSize: 'var(--fs-body)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
 })
@@ -34,6 +39,8 @@ export default function EditableTable({
   modelId,
   isImport = false,
   readOnly = false,
+  saveLabel,
+  onPomSave,
   onSaved,
 }) {
   const { t } = useTranslation()
@@ -109,6 +116,28 @@ export default function EditableTable({
     return (last - first).toFixed(1)
   }
 
+  const buildPayload = () => {
+    const measurements = localRows
+      .filter(r => r.base_value_cm != null && r.base_value_cm !== '')
+      .map(r => ({
+        pom_id: r.pom_id,
+        base_value_cm: r.base_value_cm,
+        notes: r.notes || '',
+        nom_fitxa: r.nom_fitxa || '',
+      }))
+    const keep_pom_ids = localRows.map(r => r.pom_id).filter(Boolean)
+    const rules = localRows
+      .filter(r => r.pom_id)
+      .map(r => ({
+        pom_id: r.pom_id,
+        logica: r.logica || 'LINEAR',
+        increment_base: r.increment_base ?? null,
+        increment_break: r.increment_break ?? null,
+        talla_break_label: r.talla_break_label || null,
+      }))
+    return { measurements, keep_pom_ids, rules }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     const token = localStorage.getItem('access_token')
@@ -116,22 +145,18 @@ export default function EditableTable({
     const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
     try {
-      const measurements = localRows
-        .filter(r => r.base_value_cm != null)
-        .map(r => ({
-          pom_id: r.pom_id,
-          base_value_cm: r.base_value_cm,
-          notes: r.notes || '',
-          nom_fitxa: r.nom_fitxa || '',
-        }))
+      const payload = buildPayload()
 
-      // keep_pom_ids = TOTS els POMs que segueixen a la taula (amb valor o buits/TEMPLATE). El
-      // backend desactiva (is_active=False) els que NO hi siguin → persisteix la X d'eliminar fila.
-      const keep_pom_ids = localRows.map(r => r.pom_id).filter(Boolean)
+      if (onPomSave) {
+        await onPomSave(payload)
+        setDirty(false)
+        if (onSaved) onSaved(localRows)
+        return
+      }
 
       await fetch(`${API}/api/v1/models/${modelId}/set-measurements/`, {
         method: 'POST', headers: authHeaders,
-        body: JSON.stringify({ measurements, keep_pom_ids }),
+        body: JSON.stringify(payload),
       })
 
       const order = localRows.map(r => r.id).filter(id => id && !String(id).startsWith('tmp-'))
@@ -151,17 +176,19 @@ export default function EditableTable({
     }
   }
 
-  const colCount = (readOnly ? 0 : 2) + 4 + sizeRun.length + 1
+  const displaySize = baseSize || sizeRun?.[0]
+  const colCount = (readOnly ? 0 : 2) + 7
+  const stickyHd = (left, w) => ({ ...thS, position: 'sticky', left, zIndex: 3, width: w, minWidth: w, background: 'var(--bg-muted)' })
 
   return (
     <div>
       {isImport && (
         <div style={{
-          background: '#fff9e6', border: '1px solid #f0c040',
+          background: 'var(--warn-bg)', border: '1px solid var(--warn)',
           borderRadius: 8, padding: '10px 16px', marginBottom: 12,
           fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <i className="ti ti-alert-triangle" style={{ color: '#c8900a', fontSize: 16 }} />
+          <i className="ti ti-alert-triangle" style={{ color: 'var(--warn)', fontSize: 16 }} />
           <span>
             <strong>{t('editable_table.import_title')}</strong>{' '}
             {t('editable_table.import_hint')}
@@ -171,10 +198,7 @@ export default function EditableTable({
 
       <div style={{ overflowX: 'auto', width: '100%' }}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <table style={{
-            width: '100%', borderCollapse: 'collapse',
-            fontSize: 'var(--fs-body)', 
-          }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
             <thead>
               <tr style={{
                 background: 'var(--bg-muted)',
@@ -182,19 +206,15 @@ export default function EditableTable({
               }}>
                 {!readOnly && <th style={thS}></th>}
                 <th style={thS}>#</th>
-                <th style={thS}>{t('editable_table.col.sheet_name')}</th>
-                <th style={thS}>POM</th>
-                <th style={{ ...thS, minWidth: 200 }}>{t('editable_table.col.description')}</th>
-                {sizeRun.map(s => (
-                  <th key={s} style={{
-                    ...thS, textAlign: 'right', minWidth: 60,
-                    background: s === baseSize ? '#fdf6ee' : undefined,
-                    color: s === baseSize ? '#7a4a10' : undefined,
-                  }}>
-                    {s}{s === baseSize ? ' ★' : ''}
-                  </th>
-                ))}
-                <th style={{ ...thS, textAlign: 'right', color: 'var(--text-muted)' }}>Δ</th>
+                <th style={stickyHd(0, 90)}>{t('measuregrid.col_pom')}</th>
+                <th style={stickyHd(90, 190)}>{t('measuregrid.col_nom')}</th>
+                <th style={{ ...thS, textAlign: 'right', minWidth: 90, background: 'var(--gold-pale)' }}>
+                  {displaySize || t('editable_table.col.base_value')}
+                </th>
+                <th style={{ ...thS, minWidth: 92 }}>{t('editable_table.col.regime')}</th>
+                <th style={{ ...thS, textAlign: 'right', minWidth: 82 }}>{t('editable_table.col.delta')}</th>
+                <th style={{ ...thS, textAlign: 'right', minWidth: 82 }}>{t('editable_table.col.break_delta')}</th>
+                <th style={{ ...thS, minWidth: 100 }}>{t('editable_table.col.break_size')}</th>
                 {!readOnly && <th style={thS}></th>}
               </tr>
             </thead>
@@ -204,8 +224,7 @@ export default function EditableTable({
                   <SortableRow
                     key={row.id}
                     row={row}
-                    sizeRun={sizeRun}
-                    baseSize={baseSize}
+                    displaySize={displaySize}
                     readOnly={readOnly}
                     onCellChange={handleCellChange}
                     onDelete={handleDeleteRow}
@@ -227,15 +246,17 @@ export default function EditableTable({
         </DndContext>
       </div>
 
-      {!readOnly && dirty && (
+      {!readOnly && (dirty || onPomSave) && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-          <button type="button" onClick={() => { setLocalRows(rows); setDirty(false) }}
-            style={btnSecondary}>
-            ↩ {t('editable_table.discard')}
-          </button>
+          {dirty && (
+            <button type="button" onClick={() => { setLocalRows(rows); setDirty(false) }}
+              style={btnSecondary}>
+              <i className="ti ti-arrow-back-up" /> {t('editable_table.discard')}
+            </button>
+          )}
           <button type="button" onClick={handleSave} disabled={saving}
             style={btnPrimary(saving)}>
-            {saving ? t('common.saving') : `✓ ${t('editable_table.confirm_table')}`}
+            {saving ? t('common.saving') : saveLabel || t('editable_table.confirm_table')}
           </button>
         </div>
       )}
@@ -243,7 +264,7 @@ export default function EditableTable({
   )
 }
 
-function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete, delta }) {
+function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -256,6 +277,12 @@ function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete,
     borderBottom: '0.5px solid var(--border)',
   }
 
+  const rowBg = isDragging ? 'var(--bg-muted)' : 'var(--white)'
+  const stickyTd = (left, w) => ({
+    ...tdS, position: 'sticky', left, zIndex: 1, width: w, minWidth: w,
+    background: rowBg, borderBottom: '0.5px solid var(--border)',
+  })
+
   return (
     <tr ref={setNodeRef} style={style}>
       {!readOnly && (
@@ -267,40 +294,67 @@ function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete,
         </td>
       )}
       <td style={{ ...tdS, color: 'var(--text-muted)' }}>{(row.ordre ?? 0) + 1}</td>
-      <td style={tdS}>
-        <EditableCell value={row.nom_fitxa}
+      <td style={stickyTd(0, 90)}>
+        <EditableCell value={row.nom_fitxa || row.pom_code}
           onChange={v => onCellChange(row.id, 'nom_fitxa', v)}
           mono gold readOnly={readOnly} />
-      </td>
-      <td style={{ ...tdS, fontSize: 'var(--fs-body)',
-                   color: 'var(--text-muted)' }}>
-        {row.pom_code}
         {row.is_key && (
-          <span style={{
-            marginLeft: 5, fontSize: 'var(--fs-caption)', padding: '1px 4px', borderRadius: 3,
-            background: '#fdf6ee', color: 'var(--gold)', border: '0.5px solid #e0c8a0',
-            fontWeight: 600, letterSpacing: '.06em', verticalAlign: 'middle',
-          }}>KEY</span>
+          <i className="ti ti-star" title="KEY"
+            style={{ fontSize: 9, marginLeft: 5, color: 'var(--gold)', verticalAlign: 'middle' }} />
         )}
       </td>
-      <td style={tdS}>
-        <EditableCell value={row.nom_ca || row.nom_en}
-          onChange={v => onCellChange(row.id, 'nom_ca', v)} readOnly={readOnly} />
+      <td style={stickyTd(90, 190)}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>
+          {row.nom_en || row.nom_ca || row.pom_code}
+        </div>
+        {(row.nom_ca && row.nom_ca !== row.nom_en) && (
+          <div style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }}>
+            {row.nom_ca}
+          </div>
+        )}
       </td>
-      {sizeRun.map(s => (
-        <td key={s} style={{
-          ...tdS, textAlign: 'right',
-          background: s === baseSize ? '#fefaf5' : undefined,
-        }}>
-          <EditableCell
-            value={s === baseSize ? row.base_value_cm : row.graded?.[s]}
-            onChange={v => onCellChange(row.id, s === baseSize ? 'base_value_cm' : `graded.${s}`, v)}
-            mono right readOnly={readOnly} />
-        </td>
-      ))}
-      <td style={{ ...tdS, textAlign: 'right', 
-                   color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
-        {delta}
+      <td style={{ ...tdS, textAlign: 'right', background: 'var(--gold-pale)' }}>
+        <EditableCell
+          value={row.base_value_cm}
+          onChange={v => onCellChange(row.id, 'base_value_cm', v)}
+          mono right readOnly={readOnly} />
+      </td>
+      <td style={tdS}>
+        {(() => {
+          const cur = row.logica || 'LINEAR'
+          // No emmascarar: si la fila ja porta un valor fora de les normes editables (ZERO/EXCEPTION),
+          // s'afegeix com a opció perquè es vegi el valor real i es pugui canviar a LINEAR/STEP/FIXED.
+          const opts = REGIME_OPTIONS.includes(cur) ? REGIME_OPTIONS : [...REGIME_OPTIONS, cur]
+          return (
+            <select
+              value={cur}
+              disabled={readOnly}
+              onChange={e => onCellChange(row.id, 'logica', e.target.value)}
+              style={{
+                font: 'inherit', border: '1px solid var(--border)', borderRadius: 4,
+                padding: '2px 4px', background: readOnly ? 'transparent' : 'var(--white)',
+                color: 'var(--text-main)',
+              }}
+            >
+              {opts.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          )
+        })()}
+      </td>
+      <td style={{ ...tdS, textAlign: 'right' }}>
+        <EditableCell value={row.increment_base ?? ''}
+          onChange={v => onCellChange(row.id, 'increment_base', v)}
+          mono right readOnly={readOnly} />
+      </td>
+      <td style={{ ...tdS, textAlign: 'right' }}>
+        <EditableCell value={row.increment_break}
+          onChange={v => onCellChange(row.id, 'increment_break', v)}
+          mono right readOnly={readOnly} />
+      </td>
+      <td style={tdS}>
+        <EditableCell value={row.talla_break_label || ''}
+          onChange={v => onCellChange(row.id, 'talla_break_label', v)}
+          readOnly={readOnly} />
       </td>
       {!readOnly && (
         <td style={tdS}>
@@ -308,7 +362,7 @@ function SortableRow({ row, sizeRun, baseSize, readOnly, onCellChange, onDelete,
             style={{ background: 'none', border: 'none', cursor: 'pointer',
                      color: 'var(--text-muted)', fontSize: 'var(--fs-h3)', padding: '2px 4px' }}
             title={t('editable_table.delete_row')}>
-            ✕
+            <i className="ti ti-x" />
           </button>
         </td>
       )}
@@ -347,6 +401,7 @@ function EditableCell({ value, onChange, mono, gold, right, readOnly }) {
     <input
       autoFocus
       type={typeof value === 'number' ? 'number' : 'text'}
+      inputMode={typeof value === 'number' ? 'decimal' : undefined}
       step="0.1"
       value={val}
       onChange={e => setVal(e.target.value)}
@@ -361,7 +416,7 @@ function EditableCell({ value, onChange, mono, gold, right, readOnly }) {
         border: '1px solid var(--gold)', borderRadius: 3,
         fontSize: 'var(--fs-body)', fontFamily: mono ? 'monospace' : undefined,
         textAlign: right ? 'right' : undefined,
-        background: '#fdf6ee',
+        background: 'var(--gold-pale)',
       }}
     />
   )
@@ -441,7 +496,7 @@ function AddPOMInline({ onAdd }) {
           position: 'absolute', top: '100%', left: 0, marginTop: 4,
           background: 'var(--bg-main)',
           border: '0.5px solid var(--border)', borderRadius: 6,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)', zIndex: 100, minWidth: 280,
+          zIndex: 100, minWidth: 280,
         }}>
           {results.map(p => (
             <div key={p.id}

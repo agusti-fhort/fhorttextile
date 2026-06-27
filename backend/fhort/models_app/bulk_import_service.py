@@ -17,8 +17,9 @@ COLUMNS = [
     'run_talles', 'talla_base', 'codi_client', 'col·leccio', 'color_referencia',
     'es_conjunt', 'referencia_conjunt', 'piece_number',
 ]
-OBLIGATORIES = ['nom_prenda', 'familia', 'tipus', 'any', 'temporada', 'target',
-                'construccio', 'run_talles', 'talla_base']
+# Mínim viable per crear un Model (F5): la resta és opcional (informatiu o configuració, no
+# bloquejant). El matching de talles és condicional i la config es completa després al model.
+OBLIGATORIES = ['nom_prenda', 'any', 'temporada']
 DROPDOWN_COLS = ['familia', 'tipus', 'any', 'temporada', 'target', 'construccio']
 META_SHEET = '_meta'
 PLANTILLA_SHEET = 'Plantilla'
@@ -99,26 +100,38 @@ def generate_template_bytes(customer):
     from openpyxl import Workbook
     from openpyxl.worksheet.datavalidation import DataValidation
     from openpyxl.utils import get_column_letter, quote_sheetname
+    from openpyxl.styles import Font
     from fhort.models_app.models import Model
 
     cat = build_catalog()
     wb = Workbook()
 
-    # Full Plantilla (capçalera + files buides).
+    # Full Plantilla (capçalera + files buides). Els obligatoris van en NEGRETA (no canvia el TEXT
+    # de la capçalera → el parse, que llegeix per nom de columna, no es trenca).
     ws = wb.active
     ws.title = PLANTILLA_SHEET
+    bold = Font(bold=True)
     for ci, name in enumerate(COLUMNS, start=1):
-        ws.cell(row=1, column=ci, value=name)
+        cell = ws.cell(row=1, column=ci, value=name)
+        if name in OBLIGATORIES:
+            cell.font = bold
 
-    # Full Instruccions.
-    inst = wb.create_sheet('Instruccions')
+    # Full Instruccions com a FULL 1 (index=0): el primer que veu l'usuari. Reflecteix les 3 capes
+    # de camp (obligatori mínim · opcional informatiu · opcional configuració "com més millor").
+    inst = wb.create_sheet('Instruccions', 0)
     inst['A1'] = f"Aquesta plantilla és per a: {customer.codi} — {customer.nom}"
-    inst['A3'] = "Omple una fila per model. Les columnes amb desplegable només accepten valors de la llista."
-    inst['A5'] = "Formats de run de talles (separa per comes):"
-    inst['A6'] = "Dona alpha: S,M,L,XL   ·   Dona numèric EU: 34,36,38,40"
-    inst['A7'] = "Nen edat: 2,4,6,8,10   ·   Bebè mesos: 0M-1M,1M-3M,3M-6M"
-    inst['A9'] = "La 'talla_base' ha de ser una de les talles del 'run_talles'."
-    inst['A11'] = "Conjunts (combo): omple 'referencia_conjunt' igual a totes les peces i 'piece_number' (1,2,...)."
+    inst['A3'] = "Omple una fila per model. Com més camps omplis, més complet entrarà el model; només 3 són obligatoris."
+    inst['A5'] = "OBLIGATORI (mínim per importar): nom_prenda, any, temporada."
+    inst['A6'] = "OPCIONAL informatiu: familia, tipus, codi_client, col·leccio, color_referencia."
+    inst['A7'] = "OPCIONAL configuració (recomanat, NO bloquejant): target, construccio, run_talles, talla_base, es_conjunt, referencia_conjunt, piece_number."
+    inst['A9'] = "Els camps obligatoris van en NEGRETA a la capçalera. Les columnes amb desplegable només accepten valors de la llista."
+    inst['A11'] = "Formats de run de talles (separa per comes):"
+    inst['A12'] = "Dona alpha: S,M,L,XL   ·   Dona numèric EU: 34,36,38,40"
+    inst['A13'] = "Nen edat: 2,4,6,8,10   ·   Bebè mesos: 0M-1M,1M-3M,3M-6M"
+    inst['A15'] = "La 'talla_base' ha de ser una de les talles del 'run_talles'."
+    inst['A17'] = "Conjunts (combo): omple 'referencia_conjunt' igual a totes les peces i 'piece_number' (1,2,...)."
+    # L'usuari obre directament sobre Instruccions.
+    wb.active = 0
 
     # Fulls ocults de fonts per a les DataValidation.
     YEARS = [datetime.date.today().year + d for d in (-2, -1, 0, 1, 2)]
@@ -371,9 +384,10 @@ def commit_import(imp, creat_per_profile):
     """Crea els Models + SizeFittings de les files OK/AVIS dins una sola transacció.
     Genera codi_intern al pipeline (bulk_create bypassa el signal). Retorna stats."""
     from django.db import transaction
-    from fhort.models_app.models import Model, GarmentSet, BulkCollectionRow
+    from fhort.models_app.models import Model, GarmentSet, BulkCollectionRow, Watchpoint
     from fhort.fitting.models import SizeFitting
-    from fhort.models_app.services import reserve_sequence_range
+    from fhort.models_app.services import (
+        reserve_sequence_range, model_config_missing, config_missing_text)
 
     cat = build_catalog()
     customer = imp.customer
@@ -454,6 +468,17 @@ def commit_import(imp, creat_per_profile):
                for _row, m in all_models]
         if sfs:
             SizeFitting.objects.bulk_create(sfs)
+
+        # 5b) F3 — Watchpoint d'import VIU: per cada model amb config incompleta, un avís
+        # estructurat (task=None → origen sistema; dades = claus que falten de model_config_missing).
+        # Es recalcularà/resoldrà sol via post_save (signals.py) en omplir-se els camps. bulk_create
+        # bypassa signals, per això la creació es fa aquí explícitament.
+        wps = [Watchpoint(model=m, task=None, dades=missing,
+                          text=config_missing_text(missing), estat='open')
+               for _row, m in all_models
+               for missing in [model_config_missing(m)] if missing]
+        if wps:
+            Watchpoint.objects.bulk_create(wps)
 
         # 6) Enllaçar BulkCollectionRow.model_creat.
         for row, m in all_models:

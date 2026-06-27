@@ -421,56 +421,6 @@ class ImportSession(models.Model):
         return f'ImportSession {self.token} [{self.estat}]'
 
 
-class ModelServei(models.Model):
-    """Services assigned to a Model. Child table of the Servei tab."""
-    model = models.ForeignKey(
-        'Model', on_delete=models.CASCADE, related_name='serveis_model',
-    )
-    servei = models.ForeignKey(
-        'tasks.PaquetServei', on_delete=models.PROTECT, related_name='models_servei',
-    )
-    nom_servei = models.CharField(max_length=200, null=True, blank=True)
-    grup = models.CharField(max_length=50, null=True, blank=True)
-    slots_base = models.FloatField(null=True, blank=True)
-    contractat = models.BooleanField(default=True)
-    ampliat = models.BooleanField(default=False)
-    estat_autoritzacio = models.CharField(
-        max_length=20,
-        choices=[
-            ('Pendent', 'Pendent'),
-            ('Autoritzat', 'Autoritzat'),
-            ('Rebutjat', 'Rebutjat'),
-        ],
-        null=True, blank=True,
-    )
-    autoritzat_per = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True, blank=True,
-        on_delete=models.SET_NULL,
-        related_name='autorizacions_servei',
-    )
-    data_autoritzacio = models.DateTimeField(null=True, blank=True)
-    linia_addicional = models.CharField(max_length=100, null=True, blank=True)
-
-    class Meta:
-        ordering = ['servei__ordre_popup', 'id']
-        verbose_name = 'Servei del model'
-        verbose_name_plural = 'Serveis del model'
-
-    def save(self, *args, **kwargs):
-        if self.servei_id:
-            if not self.nom_servei:
-                self.nom_servei = self.servei.nom
-            if not self.grup:
-                self.grup = self.servei.grup
-            if self.slots_base is None:
-                self.slots_base = self.servei.slots_base
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.model.codi} — {self.nom_servei or self.servei.nom}"
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Sprint 3 — Grading engine
 # ─────────────────────────────────────────────────────────────────────────────
@@ -486,6 +436,7 @@ class BaseMeasurement(models.Model):
         ('CALCULATED', 'Calculat des de talla base + delta'),
         ('TEMPLATE',   'Materialitzat de plantilla (sense valor encara)'),
         ('CHECKED',    'Validat en size check (proto a talla base)'),
+        ('ITEM_STANDARD', 'Sembrat de l\'estàndard de l\'item (copy-at-the-moment)'),
     ]
 
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='base_measurements')
@@ -851,6 +802,39 @@ class SizeCheckLine(models.Model):
 
     def __str__(self):
         return f'{self.size_check_id} · {self.pom.codi_client}'
+
+
+class Watchpoint(models.Model):
+    """D-12 — advertència de TEXT LLIURE que viatja amb el MODEL a través dels gates. Ancorada al
+    model i, com a ORIGEN, a la tasca/ronda on es va crear (referència; travessa gates igualment).
+    Cicle open→resolved (qui/quan/per què). NO va a la fitxa tècnica; viu a l'historial perquè un
+    altre tècnic entengui l'advertència."""
+    ESTAT_CHOICES = [('open', 'Oberta'), ('resolved', 'Resolta')]
+    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='watchpoints')
+    # Origen: la tasca/ronda on es va crear (la referència es conserva encara que la tasca es tanqui).
+    task = models.ForeignKey('tasks.ModelTask', on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name='watchpoints')
+    text = models.TextField()
+    # F2 — Watchpoint estructurat: si 'dades' és no-null, és un Watchpoint de SISTEMA (no human-authored;
+    # p.ex. l'import viu) i conté dades per renderitzar per clau en l'idioma del lector (llista de claus de
+    # config que falten, de model_config_missing). Combinat amb task IS NULL identifica l'origen import.
+    dades = models.JSONField(null=True, blank=True)
+    estat = models.CharField(max_length=10, choices=ESTAT_CHOICES, default='open')
+    created_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='watchpoints_creats')
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='watchpoints_resolts')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolution_note = models.TextField(blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Watchpoint'
+        verbose_name_plural = 'Watchpoints'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Watchpoint #{self.pk} ({self.estat}) · model {self.model_id}'
 
 
 # Fitxa tècnica editable (editor full-screen). Definit a tech_sheet_models.py i importat

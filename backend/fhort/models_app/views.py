@@ -1,27 +1,48 @@
 import datetime
+from decimal import Decimal, InvalidOperation
 
 from django.db import connection, transaction
 from rest_framework import viewsets
-from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes, action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
+import django_filters
 
-from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer
+from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
+from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
 from .serializers import (
     BaseMeasurementSerializer,
     ModelDetailSerializer,
     ModelFitxerSerializer,
     ModelListSerializer,
+    WatchpointSerializer,
 )
+
+
+class ModelFilter(django_filters.FilterSet):
+    """Filtres del Model list. Additiu sobre els exactes històrics (estat/fase_actual/
+    garment_type/responsable/temporada/any): afegeix campanya (customer/collection) i un
+    rang de dates sobre data_objectiu per al board per-model del Dashboard (Sprint 5).
+      - ?customer=<id>                  exacte (FK)
+      - ?collection=<text>              icontains (CharField lliure)
+      - ?data_objectiu_after=YYYY-MM-DD&data_objectiu_before=YYYY-MM-DD  rang inclusiu
+    """
+    collection = django_filters.CharFilter(field_name='collection', lookup_expr='icontains')
+    data_objectiu = django_filters.DateFromToRangeFilter(field_name='data_objectiu')
+
+    class Meta:
+        model = Model
+        fields = ['fase_actual', 'garment_type', 'responsable', 'temporada', 'any',
+                  'customer', 'collection', 'data_objectiu']
 
 
 class ModelViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estat', 'fase_actual', 'garment_type', 'responsable', 'temporada', 'any']
+    filterset_class = ModelFilter
     search_fields = ['codi_intern', 'codi_client', 'nom_prenda']
     ordering_fields = ['prioritat', 'data_objectiu', 'data_entrada']
     ordering = ['-prioritat']
@@ -69,6 +90,44 @@ class ModelViewSet(viewsets.ModelViewSet):
             return ModelListSerializer
         return ModelDetailSerializer
 
+    @action(detail=False, methods=['get'], url_path='fase-counts')
+    def fase_counts(self, request):
+        """GET /api/v1/models/fase-counts/ — comptadors de models per fase.
+
+        Respecta EXACTAMENT els mateixos filtres que el board (filter_queryset → mateix
+        FilterSet + search). Es calcula a la BD (values+annotate), sense carregar files,
+        per escalar a 600+ models. Retorna {counts:{<fase>:n}, total}.
+
+        ABAST "els meus" (Sprint board tècnic): ?responsable=me | <profile_id> filtra els
+        models on l'usuari (o el perfil) és ASSIGNEE d'≥1 ModelTask — MATEIXA semàntica que
+        by-model (views_b.py), NO Model.responsable (director). Es treu del filterset (que el
+        llegiria com a FK director i petaria amb 'me') i s'aplica a mà, perquè els KPIs/chips
+        quadrin amb el board quan es commuta a "els meus".
+
+        L'acció no és 'list' → get_queryset() torna el queryset pla (sense les anotacions
+        de cicle de la llista). order_by() buit abans de values() perquè un OrderingFilter
+        actiu no trenqui el GROUP BY.
+        """
+        from django.db.models import Count
+        from fhort.tasks.models import ModelTask
+        # Treu 'responsable' del GET abans del filterset (s'aplica a mà, semàntica assignee).
+        responsable = request.query_params.get('responsable')
+        if responsable is not None:
+            mutable = request._request.GET.copy()
+            mutable.pop('responsable', None)
+            request._request.GET = mutable
+        qs = self.filter_queryset(self.get_queryset()).order_by()
+        if responsable == 'me':
+            profile = getattr(request.user, 'profile', None)
+            qs = (qs.filter(id__in=ModelTask.objects.filter(assignee=profile).values('model_id'))
+                  if profile is not None else qs.none())
+        elif responsable and responsable.isdigit():
+            qs = qs.filter(id__in=ModelTask.objects.filter(
+                assignee_id=int(responsable)).values('model_id'))
+        rows = qs.values('fase_actual').annotate(n=Count('id'))
+        counts = {r['fase_actual']: r['n'] for r in rows}
+        return Response({'counts': counts, 'total': sum(counts.values())})
+
 
 class ModelFitxerViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -78,6 +137,41 @@ class ModelFitxerViewSet(viewsets.ModelViewSet):
     filterset_fields = ['model', 'categoria', 'tipus', 'enviat_ia']
     ordering_fields = ['data_pujada']
     ordering = ['-data_pujada']
+
+
+# D-12 — Watchpoints: advertències de text lliure que viatgen amb el model a través dels gates.
+class WatchpointViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = WatchpointSerializer
+    queryset = Watchpoint.objects.select_related('created_by', 'resolved_by', 'task__task_type').all()
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['model', 'estat', 'task']
+    ordering_fields = ['created_at']
+    ordering = ['-created_at']
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=getattr(self.request.user, 'profile', None))
+
+    @action(detail=True, methods=['post'])
+    def resolve(self, request, pk=None):
+        from django.utils import timezone
+        wp = self.get_object()
+        wp.estat = 'resolved'
+        wp.resolved_by = getattr(request.user, 'profile', None)
+        wp.resolved_at = timezone.now()
+        wp.resolution_note = (request.data.get('resolution_note') or '').strip()
+        wp.save(update_fields=['estat', 'resolved_by', 'resolved_at', 'resolution_note'])
+        return Response(self.get_serializer(wp).data)
+
+    @action(detail=True, methods=['post'])
+    def reopen(self, request, pk=None):
+        wp = self.get_object()
+        wp.estat = 'open'
+        wp.resolved_by = None
+        wp.resolved_at = None
+        wp.resolution_note = ''
+        wp.save(update_fields=['estat', 'resolved_by', 'resolved_at', 'resolution_note'])
+        return Response(self.get_serializer(wp).data)
 
 
 # Sprint S14B — BaseMeasurement CRUD
@@ -110,25 +204,6 @@ class BaseMeasurementViewSet(viewsets.ModelViewSet):
         serializer.instance._changed_by = self.request.user
         serializer.save()
 
-
-
-# Sprint 1C — ModelServeiViewSet
-from rest_framework import viewsets, permissions
-from django_filters.rest_framework import DjangoFilterBackend
-
-class ModelServeiViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['model', 'servei', 'contractat', 'estat_autoritzacio']
-    ordering = ['servei__ordre_popup']
-
-    def get_queryset(self):
-        from .models import ModelServei
-        return ModelServei.objects.select_related('servei', 'model').all()
-
-    def get_serializer_class(self):
-        from .serializers import ModelServeiSerializer
-        return ModelServeiSerializer
 
 
 def _resolve_customer_code(customer_id):
@@ -443,40 +518,78 @@ def suggested_poms_view(request, model_id):
 @permission_classes([IsAuthenticated])
 def materialize_poms_view(request, model_id):
     """POST /api/v1/models/<id>/materialitzar-poms/ — instancia la pertinença de POMs de l'item
-    com a BaseMeasurement BUIDES (base_value_cm=None, origen='TEMPLATE'), copiant is_key/ordre de
-    la plantilla GarmentPOMMap. Idempotent (get_or_create per (model,pom)): no toca files existents
-    (amb o sense valor). Les buides NO disparen log (guard al signal). Sense garment_type_item → avís."""
+    com a BaseMeasurement, copiant is_key/ordre de la plantilla GarmentPOMMap.
+
+    B4 — SEMBRA item→model (copy-at-the-moment): si l'item té valors base (ItemBaseMeasurement),
+    copia valor + nom_fitxa + tolerància a la BaseMeasurement amb origen='ITEM_STANDARD'. Si no en
+    té, materialitza BUIDA (origen='TEMPLATE', base_value_cm=None) com abans.
+
+    SOBIRANIA DEL MODEL (idempotent): NOMÉS sembra on no hi ha res o on hi ha un TEMPLATE BUIT.
+    Una fila amb origen més específic (MANUAL/IMPORTED/FITTED) o amb valor ja posat NO es trepitja:
+    a partir del primer valor, el Model és sobirà. Re-executar no clobera res."""
+    from django.db import transaction
     try:
         model = Model.objects.get(id=model_id)
     except Model.DoesNotExist:
         return Response({'error': 'Model no trobat'}, status=404)
 
     if not model.garment_type_item_id:
-        return Response({'materialized': 0, 'skipped': 0,
+        return Response({'materialized': 0, 'seeded': 0, 'skipped': 0,
                          'warning': 'Garment type item no definit'})
 
-    from fhort.pom.models import GarmentPOMMap
+    from fhort.pom.models import GarmentPOMMap, ItemBaseMeasurement
     from fhort.models_app.models import BaseMeasurement
 
     maps = (GarmentPOMMap.objects
             .filter(garment_type_item=model.garment_type_item)
             .select_related('pom').order_by('ordre'))
-    materialized = skipped = 0
-    for m in maps:
-        _, created = BaseMeasurement.objects.get_or_create(
-            model=model, pom=m.pom,
-            defaults={
-                'base_value_cm': None,        # materialitzada sense valor
-                'origen': 'TEMPLATE',
-                'is_key': m.is_key,
-                'ordre': m.ordre,
-            },
-        )
-        if created:
-            materialized += 1
-        else:
-            skipped += 1
-    return Response({'materialized': materialized, 'skipped': skipped,
+    # Valors base de l'item per pom (plantilla → instància).
+    ibms = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(
+        garment_type_item=model.garment_type_item)}
+
+    materialized = seeded = skipped = 0
+    with transaction.atomic():
+        for m in maps:
+            ibm = ibms.get(m.pom_id)
+            has_value = ibm is not None and ibm.base_value_cm is not None
+            existing = BaseMeasurement.objects.filter(model=model, pom=m.pom).first()
+
+            if existing is None:
+                if has_value:
+                    BaseMeasurement.objects.create(
+                        model=model, pom=m.pom,
+                        base_value_cm=ibm.base_value_cm,
+                        nom_fitxa=ibm.nom_fitxa or '',
+                        tolerancia_minus=ibm.tol_minus,
+                        tolerancia_plus=ibm.tol_plus,
+                        origen='ITEM_STANDARD', is_key=m.is_key, ordre=m.ordre,
+                    )
+                    seeded += 1
+                else:
+                    BaseMeasurement.objects.create(
+                        model=model, pom=m.pom,
+                        base_value_cm=None, origen='TEMPLATE',
+                        is_key=m.is_key, ordre=m.ordre,
+                    )
+                    materialized += 1
+                continue
+
+            # Ja existeix: sobirania. Només sembra si és un TEMPLATE BUIT i l'item porta valor.
+            is_empty_template = existing.origen == 'TEMPLATE' and existing.base_value_cm is None
+            if has_value and is_empty_template:
+                existing.base_value_cm = ibm.base_value_cm
+                existing.nom_fitxa = ibm.nom_fitxa or existing.nom_fitxa
+                existing.tolerancia_minus = ibm.tol_minus
+                existing.tolerancia_plus = ibm.tol_plus
+                existing.origen = 'ITEM_STANDARD'
+                existing.save(update_fields=[
+                    'base_value_cm', 'nom_fitxa', 'tolerancia_minus',
+                    'tolerancia_plus', 'origen', 'updated_at'])
+                seeded += 1
+            else:
+                skipped += 1   # res a sembrar, o fila sobirana (MANUAL/IMPORTED/FITTED/amb valor)
+
+    return Response({'materialized': materialized, 'seeded': seeded, 'skipped': skipped,
                      'total_template': maps.count()})
 
 
@@ -567,12 +680,15 @@ def measurements_table_view(request, model_id):
 
     graded_by_pom = {}
     try:
-        from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
-        sf = SizeFitting.objects.filter(model=model).first()
+        from fhort.fitting.models import GradedSpec
+        from fhort.fitting.services import (
+            _resolve_working_size_fitting, vigent_grading_version,
+        )
+        # Versió vigent: criteri ÚNIC compartit amb graded-table (SizeFitting de treball
+        # + is_active prioritari, fallback a la més recent). Abans: first()/-data divergent.
+        sf = _resolve_working_size_fitting(model)
         if sf:
-            gv = GradingVersion.objects.filter(
-                size_fitting=sf
-            ).order_by('-data').first()
+            gv = vigent_grading_version(sf)
             if gv:
                 for spec in GradedSpec.objects.filter(grading_version=gv):
                     pom_id = spec.pom_id
@@ -584,10 +700,23 @@ def measurements_table_view(request, model_id):
     except Exception:
         pass
 
+    # Règim per POM (logica/increments/break) per a l'editor propagat: resolutor canònic
+    # (ModelGradingRule resident → fallback GradingRule del rule_set), batched una sola vegada.
+    rules_by_pom = {}
+    try:
+        from fhort.pom.services import _load_grading_rules
+        rules_by_pom = _load_grading_rules(model)
+    except Exception:
+        rules_by_pom = {}
+
+    def _flt(v):
+        return float(v) if v is not None else None
+
     rows = []
     for bm in base_measurements:
         pom = bm.pom
         pg = getattr(pom, 'pom_global', None)
+        rule = rules_by_pom.get(pom.id)
         rows.append({
             'id': bm.id,
             'ordre': bm.ordre,
@@ -602,6 +731,11 @@ def measurements_table_view(request, model_id):
             'origen': bm.origen,
             'notes': bm.notes or '',
             'graded': graded_by_pom.get(pom.id, {}),
+            # Règim (additiu; consumidors antics ignoren camps desconeguts).
+            'logica': getattr(rule, 'logica', None) if rule else None,
+            'increment_base': _flt(getattr(rule, 'increment_base', None)) if rule else None,
+            'increment_break': _flt(getattr(rule, 'increment_break', None)) if rule else None,
+            'talla_break_label': getattr(rule, 'talla_break_label', None) if rule else None,
         })
 
     base_size = model.base_size_label
@@ -687,6 +821,7 @@ def set_measurements_view(request, model_id):
                     defaults={
                         'base_value_cm': float(value),
                         'notes': m.get('notes', ''),
+                        'nom_fitxa': m.get('nom_fitxa', '') or '',
                         'origen': 'MANUAL',
                         # Re-entrar un valor reactiva una fila prèviament eliminada.
                         'is_active': True,
@@ -714,6 +849,175 @@ def set_measurements_view(request, model_id):
     return Response({'created': created, 'updated': updated, 'deactivated': deactivated,
                      'errors': errors},
                     status=201 if not errors else 207)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def gravar_pom_view(request, model_id):
+    """POST /api/v1/models/<id>/gravar-pom/
+
+    Acte lleuger de genesi POM: persisteix base + nomenclatura + regles residents i tanca
+    la ModelTask `pom` a Done. No tanca SizeFitting, no genera GradedSpec i no propaga.
+    """
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'}, status=403)
+
+    measurements = request.data.get('measurements', [])
+    rules = request.data.get('rules', [])
+    keep_pom_ids = request.data.get('keep_pom_ids', None)
+    if not measurements and keep_pom_ids is None:
+        return Response({'error': 'measurements és obligatori'}, status=400)
+
+    from fhort.pom.models import GradingRule, POMMaster
+    from fhort.models_app.models import BaseMeasurement, ModelGradingRule
+
+    def _to_float(value, field_name, errors):
+        if value in (None, ''):
+            return None
+        try:
+            return float(str(value).replace(',', '.'))
+        except (TypeError, ValueError):
+            errors.append(f'{field_name} ha de ser numèric')
+            return None
+
+    def _to_decimal(value, field_name, errors):
+        if value in (None, ''):
+            return None
+        try:
+            return Decimal(str(value).replace(',', '.'))
+        except (InvalidOperation, TypeError, ValueError):
+            errors.append(f'{field_name} ha de ser numèric')
+            return None
+
+    def _break_pos(label):
+        if not label or not model.size_run_model:
+            return None
+        run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
+        return run.index(label) if label in run else None
+
+    errors = []
+    prepared = []
+    for m in measurements:
+        pom_id = m.get('pom_id')
+        value = _to_float(m.get('base_value_cm'), 'base_value_cm', errors)
+        if not pom_id or value is None:
+            errors.append('pom_id i base_value_cm obligatoris')
+            continue
+        prepared.append((m, value))
+
+    if not prepared:
+        errors.append('Cal introduir almenys una mida base abans de gravar POM')
+    if errors:
+        return Response({'errors': errors}, status=400)
+
+    created = updated = deactivated = rules_saved = 0
+    try:
+        with transaction.atomic():
+            had_base_before = BaseMeasurement.objects.filter(
+                model=model, is_active=True, base_value_cm__isnull=False,
+            ).exists()
+
+            for m, value in prepared:
+                try:
+                    pom = POMMaster.objects.get(id=m.get('pom_id'))
+                except POMMaster.DoesNotExist:
+                    errors.append(f"POMMaster {m.get('pom_id')} no trobat")
+                    continue
+
+                bm = BaseMeasurement.objects.filter(model=model, pom=pom).first()
+                if bm is None:
+                    bm = BaseMeasurement(model=model, pom=pom, created_by=request.user)
+                    created += 1
+                else:
+                    updated += 1
+                bm.base_value_cm = value
+                bm.notes = m.get('notes', '') or ''
+                bm.nom_fitxa = m.get('nom_fitxa', '') or ''
+                bm.origen = 'MANUAL'
+                bm.is_active = True
+                bm.tolerancia_minus = pom.tolerancia_default_minus
+                bm.tolerancia_plus = pom.tolerancia_default_plus
+                bm._changed_by = request.user
+                bm._motiu = 'gravar_pom'
+                bm.save()
+
+            if errors:
+                raise ValueError('; '.join(errors))
+
+            if keep_pom_ids is not None:
+                keep = [int(x) for x in keep_pom_ids]
+                deactivated = (BaseMeasurement.objects
+                               .filter(model=model, is_active=True)
+                               .exclude(pom_id__in=keep)
+                               .update(is_active=False))
+
+            valid_logiques = {code for code, _ in GradingRule.LOGICA_CHOICES}
+            for r in rules:
+                pom_id = r.get('pom_id')
+                if not pom_id:
+                    continue
+                logica = (r.get('logica') or '').strip().upper() or None
+                if logica is not None and logica not in valid_logiques:
+                    errors.append(f"logica ha de ser un de: {', '.join(sorted(valid_logiques))}")
+                    continue
+                src = (GradingRule.objects.filter(
+                           rule_set_id=model.grading_rule_set_id, pom_id=pom_id).first()
+                       if model.grading_rule_set_id else None)
+                rule = ModelGradingRule.objects.filter(model=model, pom_id=pom_id).first()
+                if rule is None:
+                    rule = ModelGradingRule(
+                        model=model, pom_id=pom_id, actiu=True,
+                        logica=(src.logica if src else 'LINEAR'),
+                        increment=(src.increment if src else 0),
+                        valors_step=(src.valors_step if src else None),
+                        increment_base=(src.increment_base if src else None),
+                        increment_break=(src.increment_break if src else None),
+                        talla_break_label=(src.talla_break_label if src else None),
+                        talla_break_pos=(src.talla_break_pos if src else None),
+                    )
+                if logica is not None:
+                    rule.logica = logica
+                if 'increment_base' in r:
+                    rule.increment_base = _to_decimal(r.get('increment_base'), 'increment_base', errors)
+                if 'increment_break' in r:
+                    rule.increment_break = _to_decimal(r.get('increment_break'), 'increment_break', errors)
+                if 'talla_break_label' in r:
+                    label = (r.get('talla_break_label') or '').strip() or None
+                    rule.talla_break_label = label
+                    rule.talla_break_pos = _break_pos(label)
+                rule.origen = 'MANUAL'
+                rule.actiu = True
+                rule.save()
+                rules_saved += 1
+
+            if errors:
+                raise ValueError('; '.join(errors))
+
+            if not BaseMeasurement.objects.filter(
+                model=model, is_active=True, base_value_cm__isnull=False,
+            ).exists():
+                raise ValueError('Cal introduir mides abans de gravar POM')
+
+            pom_task = _close_pom_task_for_model(model, profile)
+            if pom_task.get('reason') == 'no_pom_task':
+                raise ValueError('Cal obrir la tasca POM abans de gravar-la')
+    except ValueError as e:
+        return Response({'error': str(e)}, status=400)
+
+    return Response({
+        'created': created,
+        'updated': updated,
+        'deactivated': deactivated,
+        'rules_saved': rules_saved,
+        'reseed': had_base_before,
+        'pom_task': pom_task,
+    }, status=200)
 
 
 @api_view(['POST'])
@@ -1047,7 +1351,7 @@ def generate_grading_view(request, model_id):
     if not model.size_run_model or not model.base_size_label:
         return Response({'error': 'Cal configurar talles i talla base'}, status=400)
 
-    from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
+    from fhort.fitting.models import SizeFitting, GradedSpec
     from fhort.pom.services import generate_graded_specs
 
     base_measurements_qs = BaseMeasurement.objects.filter(model=model, is_active=True)
@@ -1074,17 +1378,75 @@ def generate_grading_view(request, model_id):
         except Exception as e:
             return Response({'error': f'Error creant SizeFitting: {e}'}, status=500)
 
-    # Call the existing engine
-    try:
-        graded_count = generate_graded_specs(sf.id)
-    except ValueError as e:
-        return Response({'error': str(e)}, status=400)
-    except Exception as e:
-        return Response({'error': f'Error generant grading: {e}'}, status=500)
+    new_version = bool(request.data.get('new_version', False))
+    allow_reopen_sealed = bool(request.data.get('allow_reopen_sealed', False))
+
+    # Crida el motor. new_version=True → acte conscient de PROPAGAR (Peça 2): crea v+1 via el
+    # helper bump_grading_version_and_generate (base_changed=False: propagar NO toca la base, no
+    # incrementa measurements_version). Sobre una versió SEGELLADA (aprovada) sense autorització
+    # → 409 conscient perquè el frontend demani la doble confirmació. new_version=False →
+    # comportament clàssic (reutilitza la versió vigent): NO es toca per als usos vells.
+    if new_version:
+        from fhort.fitting.models import GradingVersion
+        from fhort.pom.services import bump_grading_version_and_generate
+        sealed_active = (GradingVersion.objects
+                         .filter(size_fitting=sf, is_active=True, aprovada=True)
+                         .order_by('-version_number').first())
+        if sealed_active is not None and not allow_reopen_sealed:
+            return Response({
+                'error': 'sealed',
+                'version_number': sealed_active.version_number,
+                'message': (f'La versió vigent v{sealed_active.version_number} està segellada '
+                            f'(aprovada a producció); cal confirmació explícita per superar-la.'),
+            }, status=409)
+        profile = getattr(request.user, 'profile', None)
+        # LLENÇ NET (LLEI): propagar inicia una FASE NOVA des de base+regla, esborrant els ajustos per
+        # cel·la (ModelGradingOverride) de la propagació anterior; el motor (helper) regenera de zero.
+        # NO és un eix de versions per comparar: el botó ja ha advertit (2 passos) abans d'arribar aquí.
+        from fhort.models_app.models import ModelGradingOverride
+        ModelGradingOverride.objects.filter(model=model).delete()
+        try:
+            new_v = bump_grading_version_and_generate(
+                sf.id,
+                base_changed=False,
+                profile_id=(profile.id if profile else None),
+                allow_reopen_sealed=allow_reopen_sealed,
+                nom='Propagació conscient',
+                reopen_context='Propagació conscient',
+            )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+        except Exception as e:
+            return Response({'error': f'Error generant grading: {e}'}, status=500)
+        graded_count = GradedSpec.objects.filter(grading_version=new_v).count()
+        # Watchpoint informatiu de traça quan s'ha superat una versió segellada (NO bloca).
+        if sealed_active is not None and allow_reopen_sealed:
+            from fhort.tasks.models import ModelTask
+            scaling_task = (ModelTask.objects
+                            .filter(model=model, task_type__code='scaling')
+                            .order_by('-id').first())
+            Watchpoint.objects.create(
+                model=model,
+                task=scaling_task,
+                text=(f'Versió segellada v{sealed_active.version_number} superada per '
+                      f'{str(profile) if profile else "usuari desconegut"} '
+                      f'propagant a v{new_v.version_number}.'),
+                estat='open',
+                created_by=profile,
+            )
+    else:
+        try:
+            graded_count = generate_graded_specs(sf.id)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+        except Exception as e:
+            return Response({'error': f'Error generant grading: {e}'}, status=500)
 
     # Build a measurements-table-style response
     size_run = [s.strip() for s in model.size_run_model.split('·') if s.strip()]
-    gv = GradingVersion.objects.filter(size_fitting=sf).order_by('-data').first()
+    # Versió vigent: mateix criteri únic que els lectors graded-table/taula-mesures.
+    from fhort.fitting.services import vigent_grading_version
+    gv = vigent_grading_version(sf)
 
     rows = []
     for bm in (
@@ -1116,6 +1478,399 @@ def generate_grading_view(request, model_id):
         'graded_count': graded_count,
         'size_run': size_run,
         'base_size': model.base_size_label,
+        'rows': rows,
+    })
+
+
+class _ExecuteTasksCap(HasCapability):
+    required_capability = EXECUTE_TASKS
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasksCap])
+def set_size_override_view(request, model_id):
+    """POST /api/v1/models/<model_id>/set-size-override/  Body: {pom_id, size_label, valor}
+
+    Edita el valor d'UNA talla NO-base com a ModelGradingOverride (per-model,
+    traçable) i RE-PROPAGA el grading (generate_graded_specs) sobre la
+    GradingVersion vigent (criteri de PEÇA 0). L'override té precedència màxima
+    al motor (override→exception→regla→FIXED), per tant editar una 2a talla
+    manté la 1a. NO toca GradedSpec directament (és sortida del motor) ni
+    PieceFittingLine. Idempotent per (model, pom, size_label).
+    """
+    from fhort.models_app.models import ModelGradingOverride, MeasurementChangeLog
+    from fhort.pom.models import POMMaster
+    from fhort.pom.services import generate_graded_specs
+    from fhort.fitting.services import _resolve_working_size_fitting, vigent_grading_version
+    from fhort.fitting.models import GradedSpec
+
+    # 1. Model
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    # 2. Payload
+    data = request.data or {}
+    pom_id = data.get('pom_id')
+    size_label = (data.get('size_label') or '').strip()
+    valor = data.get('valor')
+    if pom_id is None or not size_label or valor is None:
+        return Response({'error': 'Calen pom_id, size_label i valor.'}, status=400)
+    try:
+        valor = round(float(valor), 2)
+    except (TypeError, ValueError):
+        return Response({'error': 'valor ha de ser numèric.'}, status=400)
+
+    # 3. La talla base s'edita com a mesura base (BaseMeasurement), no com a override.
+    base_size = (model.base_size_label or '').strip()
+    if not base_size:
+        return Response({'error': 'El model no té talla base definida.'}, status=400)
+    if size_label == base_size:
+        return Response(
+            {'error': "La talla base s'edita com a mesura base, no com a override de talla."},
+            status=400,
+        )
+
+    # 4. La talla ha de ser al size run del model.
+    size_run = [s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()]
+    if size_label not in size_run:
+        return Response({'error': f"La talla '{size_label}' no és al size run del model."}, status=400)
+
+    # 5. POM
+    try:
+        pom = POMMaster.objects.get(id=pom_id)
+    except POMMaster.DoesNotExist:
+        return Response({'error': 'POM no trobat.'}, status=404)
+
+    profile = getattr(request.user, 'profile', None)
+
+    with transaction.atomic():
+        # 6. Override upsert idempotent (origen MODEL, no sessió → fitting_ref=None). Aquest és
+        #    l'ÚNIC camí que escriu ModelGradingOverride per talla des de PEÇA 4 (la sessió de
+        #    fitting ja no n'escriu; vegeu close_piece_fitting).
+        prev = (ModelGradingOverride.objects
+                .filter(model=model, pom=pom, size_label=size_label)
+                .values_list('value_cm', flat=True).first())
+        ModelGradingOverride.objects.update_or_create(
+            model=model, pom=pom, size_label=size_label,
+            defaults={
+                'value_cm': valor,
+                'motiu': 'Edició manual de talla (taula propagada)',
+                'fitting_ref': None,
+                'created_by': profile,
+            },
+        )
+
+        # 7. Rastre F1: talla editada = esdeveniment. El signal post_save NOMÉS cobreix
+        #    BaseMeasurement; per a una talla no-base el registrem explícitament aquí.
+        if prev is None or abs(float(prev) - valor) > 1e-9:
+            MeasurementChangeLog.objects.create(
+                model=model, pom=pom, base_measurement=None,
+                valor_anterior=(float(prev) if prev is not None else None),
+                valor_nou=valor,
+                context='manual',
+                motiu=f'Override talla {size_label}',
+                created_by=request.user if getattr(request.user, 'is_authenticated', False) else None,
+            )
+
+        # 8. Re-propaga sobre la GradingVersion vigent (l'override mana al motor).
+        sf = _resolve_working_size_fitting(model)
+        if sf is None:
+            return Response(
+                {'error': 'El model no té SizeFitting; genera el grading abans d\'editar talles.'},
+                status=400,
+            )
+        try:
+            generate_graded_specs(sf.id)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+
+    # 9. Retorna el GradedSpec resultant de la talla editada (reflecteix l'override).
+    gv = vigent_grading_version(sf)
+    graded = (GradedSpec.objects
+              .filter(grading_version=gv, pom=pom, size_label=size_label)
+              .values_list('graded_value_cm', flat=True).first()) if gv else None
+    return Response({
+        'ok': True,
+        'model_id': model.id,
+        'pom_id': pom.id,
+        'size_label': size_label,
+        'override_value_cm': valor,
+        'grading_version_id': gv.id if gv else None,
+        'graded_value_cm': float(graded) if graded is not None else None,
+    }, status=200)
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasksCap])
+def escalat_ajustar_talla_view(request, model_id):
+    """POST /api/v1/models/<model_id>/escalat/ajustar-talla/  Body: {pom_id, talla, valor}
+
+    Convergència amb el fitting (piece-fitting-lines/propagar): ancora la talla editada i PROPAGA
+    EL DELTA per regla a les germanes, com fa el fitting amb propaga_ancoratges. A nivell de MODEL
+    no hi ha PieceFittingLine; el magatzem que sobreviu la re-derivació amb la regla intacta és la
+    BASE (BaseMeasurement): propaga_ancoratges desplaça tota la corba mantenint els deltes de la
+    regla, per tant n'hi ha prou d'escriure la nova base i re-derivar (generate_graded_specs).
+
+      · LINEAR/canònic, talla no-base → propaga_ancoratges → nova base → BaseMeasurement → re-deriva.
+      · talla BASE (editable, el fitting no la bloqueja) → escriu BaseMeasurement directament.
+      · STEP/FIXED/ZERO o sense regla → NO propaga (com el fitting): override puntual de la cel·la.
+
+    Re-deriva amb el motor PUR existent (generate_graded_specs); NO duplica lògica de grading ni
+    crea versió nova (l'acte conscient de versionar és Propagar, generate_grading_view). Retorna
+    'linies' [{id, valor_real}] per refrescar la fila sencera (mirall de /propagar).
+    """
+    from fhort.models_app.models import ModelGradingOverride, MeasurementChangeLog
+    from fhort.pom.models import POMMaster
+    from fhort.pom.services import generate_graded_specs, _load_grading_rules
+    from fhort.pom.grading_utils import propaga_ancoratges
+    from fhort.fitting.services import _resolve_working_size_fitting, vigent_grading_version
+    from fhort.fitting.models import GradedSpec
+
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    data = request.data or {}
+    pom_id = data.get('pom_id')
+    talla = (data.get('talla') or '').strip()
+    valor = data.get('valor')
+    if pom_id is None or not talla:
+        return Response({'error': 'Calen pom_id i talla.'}, status=400)
+
+    base_size = (model.base_size_label or '').strip()
+    if not base_size:
+        return Response({'error': 'El model no té talla base definida.'}, status=400)
+    size_run = [s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()]
+    if talla not in size_run:
+        return Response({'error': f"La talla '{talla}' no és al size run del model."}, status=400)
+    try:
+        pom = POMMaster.objects.get(id=pom_id)
+    except POMMaster.DoesNotExist:
+        return Response({'error': 'POM no trobat.'}, status=404)
+
+    sf = _resolve_working_size_fitting(model)
+    if sf is None:
+        return Response(
+            {'error': "El model no té SizeFitting; genera el grading abans d'escalar."}, status=400)
+
+    profile = getattr(request.user, 'profile', None)
+    auth_user = request.user if getattr(request.user, 'is_authenticated', False) else None
+
+    # Valor buit → cap escriptura (mirall del fitting: ancoratge None no propaga). Retorna l'estat actual.
+    if valor in (None, ''):
+        propagat, motiu = False, 'sense_ancoratge'
+    else:
+        try:
+            valor = round(float(valor), 2)
+        except (TypeError, ValueError):
+            return Response({'error': 'valor ha de ser numèric.'}, status=400)
+
+        rule = _load_grading_rules(model).get(pom.id)
+        logica = getattr(rule, 'logica', None) if rule else None
+        canonic = getattr(rule, 'increment_base', None) is not None if rule else False
+        # LINEAR/canònic → propaga per regla (com el fitting, que sobreescriu TOTES les germanes);
+        # STEP/FIXED/ZERO o sense regla → NO propaga (només la cel·la editada).
+        propaga = rule is not None and (logica != 'STEP') and (canonic or logica == 'LINEAR')
+
+        with transaction.atomic():
+            if propaga:
+                # Nova base de la corba ancorada a l'edició (per a la base, l'ancoratge ÉS la base).
+                nova_base = (valor if talla == base_size
+                             else propaga_ancoratges(rule, talla, valor, size_run).get(base_size))
+                if nova_base is None:
+                    return Response({'error': "No s'ha pogut derivar la base des de la talla ancorada."}, status=400)
+                _write_base(model, pom, round(float(nova_base), 2), auth_user,
+                            f'Escalat · ajust talla {talla} (propaga per regla)')
+                # La corba de la regla mana: neteja els pins per cel·la del POM (el fitting sobreescriu
+                # els valor_real de les germanes; aquí l'equivalent és treure els overrides residuals).
+                ModelGradingOverride.objects.filter(model=model, pom=pom).delete()
+                propagat, motiu = True, (logica or 'CANONIC')
+            elif talla == base_size:
+                # Base sense règim LINEAR: desa la base; germanes intactes (mirall del fitting STEP).
+                _write_base(model, pom, valor, auth_user, f'Escalat · base {talla}')
+                propagat, motiu = False, (logica or 'BASE')
+            else:
+                # STEP/FIXED/ZERO o sense regla → override puntual (germanes intactes, com el fitting).
+                prev = (ModelGradingOverride.objects
+                        .filter(model=model, pom=pom, size_label=talla)
+                        .values_list('value_cm', flat=True).first())
+                ModelGradingOverride.objects.update_or_create(
+                    model=model, pom=pom, size_label=talla,
+                    defaults={'value_cm': valor, 'motiu': 'Escalat · ajust talla (sense propagació)',
+                              'fitting_ref': None, 'created_by': profile},
+                )
+                if prev is None or abs(float(prev) - valor) > 1e-9:
+                    MeasurementChangeLog.objects.create(
+                        model=model, pom=pom, base_measurement=None,
+                        valor_anterior=(float(prev) if prev is not None else None), valor_nou=valor,
+                        context='manual', motiu=f'Escalat talla {talla}', created_by=auth_user)
+                propagat, motiu = False, (logica or 'sense_regla')
+
+            try:
+                generate_graded_specs(sf.id)
+            except ValueError as e:
+                return Response({'error': str(e)}, status=400)
+
+    # Files actualitzades del POM (mirall de 'linies' de /propagar): {id, valor_real} per talla.
+    gv = vigent_grading_version(sf)
+    graded = {}
+    if gv:
+        for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom):
+            graded[spec.size_label] = (
+                float(spec.graded_value_cm) if spec.graded_value_cm is not None else None)
+    linies = [{'id': f'{pom.id}:{s}', 'valor_real': graded.get(s)} for s in size_run]
+    return Response({'ok': True, 'propagat': propagat, 'motiu': motiu,
+                     'grading_version_id': gv.id if gv else None, 'linies': linies}, status=200)
+
+
+def _write_base(model, pom, valor, auth_user, motiu):
+    """Escriu BaseMeasurement(model, pom).base_value_cm i deixa que el signal F1 registri el canvi."""
+    from fhort.models_app.models import BaseMeasurement
+    bm, _created = BaseMeasurement.objects.get_or_create(
+        model=model, pom=pom, defaults={'base_value_cm': valor, 'origen': 'STANDARD'})
+    bm.base_value_cm = valor
+    bm._changed_by = auth_user
+    bm._motiu = motiu
+    bm.save()
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def grading_status_view(request, model_id):
+    """GET /api/v1/models/<model_id>/grading-status/  (read-only)
+
+    Perquè el botó "Propagar a grading" MIRI ABANS d'executar (avís de 2 passos): retorna si ja hi
+    ha una propagació vigent (que es SUBSTITUIRÀ sobre llenç net) i si està segellada (producció).
+    """
+    from fhort.fitting.models import GradedSpec
+    from fhort.fitting.services import _resolve_working_size_fitting, vigent_grading_version
+
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    sf = _resolve_working_size_fitting(model)
+    gv = vigent_grading_version(sf) if sf else None
+    te_dades = bool(gv and GradedSpec.objects.filter(grading_version=gv).exists())
+    return Response({
+        'te_dades_propagades': te_dades,
+        'segellada': bool(gv and gv.aprovada),
+        'version_number': gv.version_number if gv else None,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasksCap])
+def base_measurements_reorder_view(request, model_id):
+    """POST /api/v1/models/<model_id>/base-measurements/reorder/  Body: {ids: [bm_id, ...] ordenats}
+
+    Desa BaseMeasurement.ordre = posició a la llista (ordre ÚNIC i global del model). Totes les taules
+    llegeixen order_by('ordre') → reordenar a Mesures es materialitza a Grading EN PROPAGAR (la fase
+    nova sobre llenç net hereta l'ordre vigent). Reescriptura en bloc, atòmica, sense col·lisions.
+    """
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+    ids = request.data.get('ids')
+    if not isinstance(ids, list) or not ids:
+        return Response({'error': 'Cal una llista ids ordenada.'}, status=400)
+    bms = {bm.id: bm for bm in BaseMeasurement.objects.filter(model=model, id__in=ids)}
+    with transaction.atomic():
+        for pos, bid in enumerate(ids):
+            bm = bms.get(bid)
+            if bm is not None and bm.ordre != pos:
+                bm.ordre = pos
+                bm.save(update_fields=['ordre'])
+    return Response({'ok': True, 'n': len(bms)})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def base_stages_view(request, model_id):
+    """Taula base amb ESTADIS (talla base): columnes teòriques que CREIXEN, una per presa
+    que ha escrit base (de l'històric MeasurementChangeLog), + tolerància + base vigent.
+
+    Read-only i NOMÉS de la talla base — no toca la taula propagada (grading). Cada estadi
+    és un snapshot per carry-forward dels valors base fins aquell moment; l'últim estadi
+    coincideix amb la base vigent (BaseMeasurement).
+    """
+    from fhort.models_app.models import MeasurementChangeLog
+    try:
+        model = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    bms = list(BaseMeasurement.objects.filter(model=model, is_active=True)
+               .select_related('pom', 'pom__pom_global').order_by('ordre', 'pom__codi_client'))
+
+    def _tol(bm):
+        pom = bm.pom
+        tm = bm.tolerancia_minus if bm.tolerancia_minus is not None else getattr(pom, 'tolerancia_default_minus', None)
+        tp = bm.tolerancia_plus if bm.tolerancia_plus is not None else getattr(pom, 'tolerancia_default_plus', None)
+        return (float(tm) if tm is not None else 0.6, float(tp) if tp is not None else 0.6)
+
+    # Estadis = events de MeasurementChangeLog agrupats per (context, segon), en ordre d'aparició.
+    logs = (MeasurementChangeLog.objects.filter(model=model)
+            .select_related('pom').order_by('created_at', 'id'))
+    events, ev_index, changes_by_ev = [], {}, {}
+    for c in logs:
+        if c.valor_nou is None:
+            continue
+        bucket = c.created_at.replace(microsecond=0).isoformat()
+        key = f'{c.context}@{bucket}'
+        if key not in ev_index:
+            ev_index[key] = len(events)
+            events.append({'key': key, 'context': c.context, 'at': c.created_at.isoformat()})
+            changes_by_ev[key] = {}
+        changes_by_ev[key][c.pom_id] = float(c.valor_nou)
+
+    # Snapshots acumulats (carry-forward) per estadi.
+    snapshot, stages, stage_snaps = {}, [], []
+    for ev in events:
+        snapshot.update(changes_by_ev[ev['key']])
+        stages.append(ev)
+        stage_snaps.append(dict(snapshot))
+
+    # FaseD — descarta els estadis (columnes de presa) sense CAP valor displayable per a les files
+    # mostrades (p.ex. events de POMs després desactivats): no es pinten columnes buides.
+    displayed = {bm.pom_id for bm in bms}
+    keep = [i for i in range(len(stages))
+            if any(stage_snaps[i].get(pid) is not None for pid in displayed)]
+    stages = [stages[i] for i in keep]
+    stage_snaps = [stage_snaps[i] for i in keep]
+
+    rows = []
+    for bm in bms:
+        pom = bm.pom
+        pg = getattr(pom, 'pom_global', None)
+        tm, tp = _tol(bm)
+        takes = {}
+        for i, st in enumerate(stages):
+            v = stage_snaps[i].get(pom.id)
+            if v is not None:
+                takes[st['key']] = v
+        rows.append({
+            'pom_id': pom.id,
+            'pom_code': pom.codi_client,
+            'nom_fitxa': bm.nom_fitxa or '',
+            'nom_ca': pg.nom_ca if pg else pom.nom_client,
+            'nom_en': pg.nom_en if pg else pom.nom_client,
+            'is_key': bm.is_key,
+            'tol_minus': tm,
+            'tol_plus': tp,
+            'base_value_cm': float(bm.base_value_cm) if bm.base_value_cm is not None else None,
+            'base_measurement_id': bm.id,
+            'takes': takes,
+        })
+
+    return Response({
+        'base_size': model.base_size_label,
+        'stages': stages,
         'rows': rows,
     })
 
@@ -1240,6 +1995,241 @@ def consumption_delivery_view(request, model_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def model_dashboard_view(request, model_id):
+    """Dashboard del model — PEÇA B1 (versió mínima: Q1 + Q4).
+
+    Endpoint compositor read-only que agrega, per a UN model, l'estat de treball
+    (Q1: on sóc / què bloqueja / artefactes vigents) i les tasques (Q4: què puc fer).
+    NO inclou timeline (Q2), alertes/handoffs (Q3) ni esforç/cost (⑤ M, que ja serveix
+    consumption_delivery_view → no es duplica). Tot intra-tenant, cap escriptura a BD.
+
+    Degradació amb gràcia: un model nou (sense tasques/SF/fitxa/base) retorna 200 amb els
+    sub-blocs en null/buit/0, MAI un 500. Reusa els resolutors canònics ja existents."""
+    from django.shortcuts import get_object_or_404
+    from fhort.tasks.services_d import model_ready_for_gate
+    from fhort.fitting.services import _resolve_working_size_fitting, _active_grading_version
+    from fhort.fitting.models import POMAlert
+
+    model = get_object_or_404(
+        Model.objects.prefetch_related('model_tasks__task_type'),
+        id=model_id,
+    )
+
+    # --- Q1: on sóc / què bloqueja ---
+    tasks = sorted(model.model_tasks.all(), key=lambda t: (t.order, t.id))
+    tasks_open = sum(1 for t in tasks if t.status != 'Done')
+
+    phases = [c[0] for c in Model.FASE_CHOICES]
+    try:
+        idx = phases.index(model.fase_actual)
+        next_phase = phases[idx + 1] if idx + 1 < len(phases) else None
+    except ValueError:
+        next_phase = None
+
+    on_soc = {
+        'fase': model.fase_actual,
+        'estat': model.estat,
+        'ready_for_gate': model_ready_for_gate(model.id),
+        'next_phase': next_phase,
+        'blockers': {'tasks_open': tasks_open},
+    }
+
+    # --- Q1: artefactes vigents (cada accés a una relació opcional tolera absència) ---
+    ts = getattr(model, 'tech_sheet', None)   # reverse O2O: None si no existeix (igual que consumption_record)
+    fitxa = {'versio': ts.versio, 'estat': ts.estat} if ts is not None else None
+
+    grading = None
+    sf = _resolve_working_size_fitting(model)   # resolutor canònic: grading és per SizeFitting, no per Model
+    if sf is not None:
+        gv = _active_grading_version(sf)
+        if gv is not None:
+            grading = {
+                'version_number': gv.version_number,
+                'aprovada': gv.aprovada,
+                'size_fitting_id': sf.id,
+            }
+
+    n_active = model.base_measurements.filter(
+        is_active=True, base_value_cm__isnull=False,
+    ).count()
+    base = {'base_size_label': model.base_size_label, 'n_active': n_active}
+
+    artefactes_vigents = {'fitxa': fitxa, 'grading': grading, 'base': base}
+
+    # --- Q4: tasques (Pla de treball) — ordre CANÒNIC + temps consumit + obertures + assignee ---
+    # Additiu: es mantenen TOTS els camps antics (id, task_type, task_type_code, status,
+    # assignee_id, order). Ordre per task_type.default_order/code (clau canònica de l'scheduler,
+    # P0), NO per ModelTask.order. Temps i obertures es deriven sense camp nou (P0.1) amb consultes
+    # SEPARADES per evitar el join cartesià Timer×Transition (RISC confirmat a P0.1).
+    from django.db.models import Sum, Count
+    from fhort.tasks.models import ModelTask as _ModelTask, TimerEntrada, TaskTransition
+
+    pla_tasks = (_ModelTask.objects
+                 .filter(model_id=model.id)
+                 .select_related('task_type', 'assignee')
+                 .order_by('task_type__default_order', 'task_type__code'))
+    # Temps consumit: Sum(timers.minuts) per tasca (== helper canònic _real_minutes). 1 query.
+    temps_per_task = {r['model_task_id']: (r['s'] or 0) for r in (
+        TimerEntrada.objects.filter(model_task__model_id=model.id)
+        .values('model_task_id').annotate(s=Sum('minuts')))}
+    # Obertures: count de transicions a InProgress per tasca (cada Play hi deixa una fila). 1 query.
+    obertures_per_task = {r['model_task_id']: r['c'] for r in (
+        TaskTransition.objects.filter(model_task__model_id=model.id, to_status='InProgress')
+        .values('model_task_id').annotate(c=Count('id')))}
+
+    tasques = [{
+        'id': t.id,
+        'task_type': t.task_type.name if t.task_type_id else None,
+        'task_type_code': t.task_type.code if t.task_type_id else None,
+        'task_type_name': t.task_type.name if t.task_type_id else None,
+        'default_order': t.task_type.default_order if t.task_type_id else None,
+        'status': t.status,
+        'assignee_id': t.assignee_id,
+        'assignee_nom': (t.assignee.nom_complet if t.assignee_id else None),
+        'temps_consumit_min': int(temps_per_task.get(t.id, 0)),
+        'obertures': int(obertures_per_task.get(t.id, 0)),
+        'order': t.order,
+    } for t in pla_tasks]
+
+    # --- Q3: atenció tècnica — alertes POM PENDENTS de resoldre ---
+    # Anomalia de dades coneguda (ANOTAR): els ESTAT_CHOICES del model són
+    # Pendent/Acceptat/Corregit, però els disparadors vius escriuen valors fora-de-choice
+    # ('Obert' a FITTING pom/s10_views.py:144 i MANUAL pom/s11_views.py:191; 'Resolt' al
+    # resoldre pom/s11_views.py:96). Per NO amagar alertes reals, "pendent" = NO resolt:
+    # excloem el conjunt de resolts → surten 'Pendent', 'Obert' i qualsevol valor inesperat
+    # (en un panell d'atenció és més segur surar que amagar). select_related(pom) evita N+1.
+    RESOLVED_ALERT_STATES = ('Acceptat', 'Corregit', 'Resolt')
+    alertes = [{
+        'id': a.id,
+        'tipus': a.tipus,
+        'pom_codi': a.pom.codi_client if a.pom_id else None,
+        'valor_detectat': str(a.valor_detectat) if a.valor_detectat is not None else None,
+        'valor_esperat': str(a.valor_esperat) if a.valor_esperat is not None else None,
+        'desviacio_cm': str(a.desviacio_cm) if a.desviacio_cm is not None else None,
+        'tolerancia_cm': str(a.tolerancia_cm) if a.tolerancia_cm is not None else None,
+        'missatge': a.missatge or '',
+        'data_creacio': a.data_creacio,
+    } for a in (POMAlert.objects
+                .filter(model_id=model.id)
+                .exclude(estat__in=RESOLVED_ALERT_STATES)
+                .select_related('pom')
+                .order_by('-data_creacio'))]
+    atencio = {'alertes': alertes, 'n_pendents': len(alertes)}
+
+    return Response({
+        'model_id': model.id,
+        'on_soc': on_soc,
+        'artefactes_vigents': artefactes_vigents,
+        'tasques': tasques,
+        'atencio': atencio,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def model_timeline_view(request, model_id):
+    """Timeline del model — PEÇA B2 (Q2 "què ha canviat").
+
+    Merge ordenat per temps (desc) de les TRES fonts append-only `a` del model:
+    canvis de mesura (MeasurementChangeLog), moviments de gate (GateEvent) i
+    transicions de tasca (TaskTransition). Es projecten a UNA forma comuna
+    {at, kind, actor, payload} discriminable per `kind`, i es retornen en UNA
+    sola llista. NO inclou fonts `b` (pujades d'artefacte) ni `c` (arribades/
+    handoffs) — v1 = només les 3 `a`. NO last-seen per-usuari (v1 = "últims canvis").
+    Tot intra-tenant, read-only, cap escriptura a BD.
+
+    Degradació amb gràcia: model nou sense events → 200 amb events:[]; cada
+    projecció tolera FK null (actor null si SET_NULL; pom/task_type → null al payload)."""
+    from django.shortcuts import get_object_or_404
+    from .models import MeasurementChangeLog
+    from fhort.tasks.models import GateEvent, TaskTransition
+
+    model = get_object_or_404(Model, id=model_id)
+
+    try:
+        limit = int(request.query_params.get('limit', 50))
+    except (TypeError, ValueError):
+        limit = 50
+    limit = max(1, min(limit, 200))   # sostre de seguretat: "últims canvis", no historial sencer
+
+    # actor unificat. measure_change → created_by és auth.User; gate/task → by és UserProfile.
+    def actor_user(u):
+        if u is None:
+            return None
+        return {'id': u.id, 'label': u.get_full_name() or u.get_username()}
+
+    def actor_profile(p):
+        if p is None:
+            return None
+        label = p.nom_complet or (p.user.get_username() if p.user_id else str(p.id))
+        return {'id': p.id, 'label': label}
+
+    events = []
+
+    # Font 1 — MeasurementChangeLog (FK directa `model`). select_related evita N+1 sobre pom/created_by.
+    for c in (MeasurementChangeLog.objects
+              .filter(model_id=model.id)
+              .select_related('pom', 'created_by')
+              .order_by('-created_at')[:limit]):
+        events.append({
+            'at': c.created_at,
+            'kind': 'measure_change',
+            'actor': actor_user(c.created_by),
+            'payload': {
+                'pom_id': c.pom_id,
+                'pom_codi': c.pom.codi_client if c.pom_id else None,
+                'valor_anterior': c.valor_anterior,
+                'valor_nou': c.valor_nou,
+                'context': c.context,
+                'fora_de_tolerancia': c.fora_de_tolerancia,
+                'motiu': c.motiu,
+            },
+        })
+
+    # Font 2 — GateEvent (FK directa `model`). kind discrimina gate_advance / gate_regress.
+    for g in (GateEvent.objects
+              .filter(model_id=model.id)
+              .select_related('by', 'by__user')
+              .order_by('-at')[:limit]):
+        events.append({
+            'at': g.at,
+            'kind': 'gate_advance' if g.kind == 'advance' else 'gate_regress',
+            'actor': actor_profile(g.by),
+            'payload': {
+                'from_phase': g.from_phase,
+                'to_phase': g.to_phase,
+                'notes': g.notes,
+            },
+        })
+
+    # Font 3 — TaskTransition (FK INDIRECTA: filtrar per model_task__model). select_related al type.
+    for tr in (TaskTransition.objects
+               .filter(model_task__model_id=model.id)
+               .select_related('by', 'by__user', 'model_task__task_type')
+               .order_by('-at')[:limit]):
+        tt = tr.model_task.task_type if tr.model_task.task_type_id else None
+        events.append({
+            'at': tr.at,
+            'kind': 'task_transition',
+            'actor': actor_profile(tr.by),
+            'payload': {
+                'task_type_code': tt.code if tt else None,
+                'task_type_name': tt.name if tt else None,
+                'from_status': tr.from_status,
+                'to_status': tr.to_status,
+            },
+        })
+
+    # Merge: cada font ja acotada a `limit` → ordenar per temps desc i retallar a `limit` global.
+    # Correcte: els `limit` events més recents en total no poden venir més de `limit` d'una font.
+    events.sort(key=lambda e: e['at'], reverse=True)
+    events = events[:limit]
+
+    return Response({'model_id': model.id, 'events': events})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def registre_activitat_view(request):
     """Sprint 4.5: llista global de ConsumptionRecord del tenant.
     Filtres: ?period=YYYY-MM &tecnic_id=<int> &page=<int> &page_size=<int>
@@ -1323,20 +2313,38 @@ def registre_activitat_view(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def set_pom_regim_view(request, model_id, pom_id):
-    """PG-4b-3a — UPSERT del règim (logica) d'UNA ModelGradingRule resident per (model, pom).
+    """PG-4b-3a / P3 — UPSERT de la REGLA resident (ModelGradingRule) per (model, pom).
 
-    Body: {logica: 'LINEAR'|'STEP'}. Si la resident existeix → actualitza logica + origen='MANUAL'.
-    Si no → la materialitza copiant els camps canònics del fallback GradingRule del rule_set
-    (segur: amb logica='STEP' el motor ignora increment_base — es conserva latent). Sense fallback
-    → 400 (no es crea cap resident buida). Innocu sobre el grading persistent (no toca
-    measurements_version / GradedSpec / GradingVersion; només el proper generate_graded_specs).
+    La regla (règim + deltes + break) és patrimoni VIU del MODEL (origen='MANUAL'); el motor la
+    llegeix via _load_grading_rules→_apply_rule (NO es toca el CÀLCUL). Body (tots opcionals;
+    s'actualitza només el que ve):
+      - logica: 'LINEAR' | 'STEP'
+      - increment_base: float|null   (delta base, p.ex. 4)
+      - increment_break: float|null  (delta a partir del trencament, p.ex. 2.5)
+      - talla_break_label: str|null  (talla d'inici del break; del run del model)
+    Si la resident no existeix: es materialitza des del fallback del catàleg; si tampoc n'hi ha,
+    es crea de nou (autoria manual de la regla des de zero). Innocu sobre el grading persistent
+    (no toca GradedSpec/GradingVersion; només el proper generate_graded_specs).
     """
     from fhort.models_app.models import ModelGradingRule
     from fhort.pom.models import GradingRule
 
-    logica = (request.data.get('logica') or '').strip().upper()
-    if logica not in ('LINEAR', 'STEP'):
-        return Response({'detail': "logica ha de ser 'LINEAR' o 'STEP'."}, status=400)
+    data = request.data
+    has = lambda k: k in data   # noqa: E731 — actualització selectiva per presència de camp
+
+    valid_logiques = {code for code, _ in GradingRule.LOGICA_CHOICES}
+    logica = (data.get('logica') or '').strip().upper() if has('logica') else None
+    if logica is not None and logica not in valid_logiques:
+        return Response({'detail': f"logica ha de ser un de: {', '.join(sorted(valid_logiques))}"}, status=400)
+
+    def _num(k):
+        v = data.get(k)
+        if v in (None, ''):
+            return None
+        try:
+            return float(str(v).replace(',', '.'))
+        except (TypeError, ValueError):
+            return 'ERR'
 
     model = Model.objects.filter(pk=model_id).first()
     if model is None:
@@ -1344,24 +2352,40 @@ def set_pom_regim_view(request, model_id, pom_id):
 
     with transaction.atomic():
         rule = ModelGradingRule.objects.filter(model=model, pom_id=pom_id).first()
-        if rule is not None:
-            rule.logica = logica
-            rule.origen = 'MANUAL'
-            rule.save(update_fields=['logica', 'origen', 'updated_at'])
-        else:
+        if rule is None:
+            # Sembra des del fallback del catàleg si n'hi ha; si no, regla nova (autoria de zero).
             src = (GradingRule.objects.filter(
                        rule_set_id=model.grading_rule_set_id, pom_id=pom_id).first()
                    if model.grading_rule_set_id else None)
-            if src is None:
-                return Response(
-                    {'detail': "No hi ha regla de fallback per a aquest POM; cal definir-la "
-                               "al catàleg abans de triar-ne el règim."}, status=400)
-            rule = ModelGradingRule.objects.create(
-                model=model, pom_id=pom_id, logica=logica, origen='MANUAL', actiu=True,
-                increment=src.increment, valors_step=src.valors_step,
-                increment_base=src.increment_base, increment_break=src.increment_break,
-                talla_break_label=src.talla_break_label, talla_break_pos=src.talla_break_pos,
+            rule = ModelGradingRule(
+                model=model, pom_id=pom_id, actiu=True,
+                logica=(src.logica if src else 'LINEAR'),
+                increment=(src.increment if src else 0),
+                valors_step=(src.valors_step if src else None),
+                increment_base=(src.increment_base if src else None),
+                increment_break=(src.increment_break if src else None),
+                talla_break_label=(src.talla_break_label if src else None),
+                talla_break_pos=(src.talla_break_pos if src else None),
             )
+
+        if logica is not None:
+            rule.logica = logica
+        for k in ('increment_base', 'increment_break'):
+            if has(k):
+                val = _num(k)
+                if val == 'ERR':
+                    return Response({'detail': f"{k} ha de ser numèric."}, status=400)
+                setattr(rule, k, val)
+        if has('talla_break_label'):
+            tbl = (data.get('talla_break_label') or '').strip() or None
+            rule.talla_break_label = tbl
+            rule.talla_break_pos = None
+            if tbl and model.size_run_model:
+                run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
+                if tbl in run:
+                    rule.talla_break_pos = run.index(tbl)
+        rule.origen = 'MANUAL'
+        rule.save()
 
     return Response({
         'model': model.id,

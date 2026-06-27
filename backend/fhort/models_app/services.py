@@ -64,6 +64,53 @@ def reserve_sequence_range(customer, year, season, n):
     return (first, last)
 
 
+# Claus estables dels 4 camps de configuració d'un Model. Ordre = ordre lògic
+# d'ompliment (tipologia → talla base → run/sistema → regla d'escalat). FONT ÚNICA:
+# reusada pel Watchpoint d'import (creació/recàlcul) i pel gate suau de POMs.
+CONFIG_KEYS = ['garment_type_item', 'base_size', 'size_run', 'grading_rule_set']
+
+
+def model_config_missing(model):
+    """Retorna QUINS dels 4 camps de configuració del model encara són buits, per clau
+    estable (subconjunt ordenat de CONFIG_KEYS). Llista buida = configuració completa.
+
+    Pura lectura, sense efectes ni queries addicionals (usa els *_id ja carregats):
+    - 'garment_type_item' → garment_type_item FK no assignada (la tipologia).
+    - 'base_size'         → base_size_label buit (etiqueta de la talla base).
+    - 'size_run'          → size_run_model buit O size_system FK no assignada (el run de talles).
+    - 'grading_rule_set'  → grading_rule_set FK no assignada (la regla d'escalat).
+    """
+    missing = []
+    if model.garment_type_item_id is None:
+        missing.append('garment_type_item')
+    if not (model.base_size_label or '').strip():
+        missing.append('base_size')
+    if not (model.size_run_model or '').strip() or model.size_system_id is None:
+        missing.append('size_run')
+    if model.grading_rule_set_id is None:
+        missing.append('grading_rule_set')
+    return missing
+
+
+# Etiquetes curtes (CA) per al text de fallback del Watchpoint d'import. El front re-renderitza
+# per clau en l'idioma del lector quan hi ha 'dades'; aquest text és el resum llegible de reserva.
+_CONFIG_LABELS_CA = {
+    'garment_type_item': 'tipologia de la peça',
+    'base_size': 'talla base',
+    'size_run': 'run de talles',
+    'grading_rule_set': "regla d'escalat",
+}
+
+
+def config_missing_text(missing):
+    """Text de fallback (CA) per al Watchpoint d'import segons les claus que falten.
+    Llista buida → missatge de configuració completa."""
+    if not missing:
+        return 'Configuració del model completa.'
+    labels = ', '.join(_CONFIG_LABELS_CA.get(k, k) for k in missing)
+    return f'Completa la configuració del model abans de definir POMs: {labels}.'
+
+
 def materialize_model_grading_rules(model, source_rules, origen):
     """Materialitza regles de grading residents al model des d'un iterable de
     GradingRule. Wipe-and-recreate: el set resultant és EXACTAMENT source_rules.

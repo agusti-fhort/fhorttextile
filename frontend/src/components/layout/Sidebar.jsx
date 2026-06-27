@@ -46,10 +46,14 @@ const navGroups = [
   { sectionKey: 'nav.section_projectes', items: [
     { to: '/', labelKey: 'nav.dashboard', icon: 'ti-layout-dashboard' },
     { to: '/models', labelKey: 'nav.models', icon: 'ti-shirt' },
-    { to: '/registre-activitat', labelKey: 'nav.registre_activitat', icon: 'ti-clipboard-list' },
-    { to: '/tasques/kanban', labelKey: 'nav.kanban', icon: 'ti-layout-kanban' },
     { to: '/planificacio', labelKey: 'nav.planning', icon: 'ti-subtask', cap: 'plan' },
-    { to: '/planificacio/calendari', labelKey: 'nav.planning_calendar', icon: 'ti-calendar' },
+    // M1 — el calendari ara és el tab "Calendari" dins Planificació; s'ha retirat l'entrada pròpia
+    // de menú (la ruta /planificacio/calendari segueix viva). Nota: queda dins l'àmbit gated 'plan'.
+    // P4 (Planning-complet) — el calendari de l'EXECUTOR (tasca/hores) és eina del tècnic, NO de
+    // govern: M1 va deixar el tècnic (sense 'plan') sense accés de menú a la seva pròpia agenda, tot
+    // i tenir-hi la ruta. Es recupera amb una entrada gated 'execute' (execute_tasks; el tècnic la
+    // té, NO és 'plan'). Distint del tab "Calendari de projecte" (Gantt, model/dies, govern).
+    { to: '/planificacio/calendari', labelKey: 'nav.my_calendar', icon: 'ti-calendar-week', cap: 'execute' },
     { to: '/temps', labelKey: 'nav.temps', icon: 'ti-clock' },
     { to: '/fittings', labelKey: 'nav.fittings', icon: 'ti-ruler-2' },
   ]},
@@ -58,7 +62,6 @@ const navGroups = [
     { to: '/poms', labelKey: 'nav.poms_list', icon: 'ti-ruler-measure' },
     { to: '/size-library', labelKey: 'nav.size_library', icon: 'ti-books' },
     { to: '/poms/grading', labelKey: 'nav.grading', icon: 'ti-chart-dots' },
-    { to: '/task-types', labelKey: 'nav.tasques_catalog', icon: 'ti-list-details' },
   ]},
   // Estudi tècnic — gestió INTERNA del tenant (NO el backoffice futur de tots els tenants).
   // Futur (previst, no implementat): Configuració de l'Estudi · Equip/usuaris · Catàleg de serveis/tasques.
@@ -70,6 +73,8 @@ const navGroups = [
     { to: '/onboarding', labelKey: 'nav.onboarding', icon: 'ti-rocket', cap: 'onboarding' },
     { to: '/configuracio/calendari', labelKey: 'nav.company_calendar', icon: 'ti-calendar-cog', cap: 'configure' },
     { to: '/configuracio/usuaris', labelKey: 'nav.users', icon: 'ti-users', cap: 'manage_users' },
+    // G9 "consulta sí / edició no": catàleg de tasques consultable per a tothom (sense `cap`).
+    { to: '/task-types', labelKey: 'nav.tasques_catalog', icon: 'ti-list-details' },
     { to: '/perfil', labelKey: 'nav.perfil', icon: 'ti-user' },
   ]},
 ]
@@ -195,6 +200,7 @@ export default function Sidebar() {
   const canManageUsers = !!user?.capabilities?.includes('manage_users')
   const canConfigure = !!user?.capabilities?.includes('configure')
   const canPlan = !!user?.capabilities?.some(c => c === 'define_tasks' || c === 'configure')
+  const canExecute = !!user?.capabilities?.includes('execute_tasks')
   const [expanded, setExpanded] = useState({['nav.models']: true})
   const [logoutHover, setLogoutHover] = useState(false)
   const [onboardingPct, setOnboardingPct] = useState(100)
@@ -228,6 +234,7 @@ export default function Sidebar() {
     const allowed = (it) => {
       switch (it.cap) {
         case 'plan': return canPlan
+        case 'execute': return canExecute
         case 'configure': return canConfigure
         case 'manage_users': return canManageUsers
         case 'onboarding': return onboardingPct < 100
@@ -237,7 +244,7 @@ export default function Sidebar() {
     return navGroups
       .map(g => ({ sectionKey: g.sectionKey, items: g.items.filter(allowed) }))
       .filter(g => g.items.length > 0)
-  }, [canPlan, canConfigure, canManageUsers, onboardingPct])
+  }, [canPlan, canExecute, canConfigure, canManageUsers, onboardingPct])
 
   const allItems = useMemo(() => groups.flatMap(g => g.items), [groups])
 

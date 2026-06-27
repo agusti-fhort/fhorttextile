@@ -1,4 +1,16 @@
 {
+  "grading_propagate": {
+    "button": "Propagar",
+    "running": "Propagant…",
+    "err": "No s'ha pogut propagar",
+    "warn_title": "Ja hi ha taula propagada",
+    "warn_substitute": "Propagar inicia una fase nova sobre llenç net: la taula propagada actual es SUBSTITUIRÀ (es perd la propagació anterior). Vols continuar?",
+    "warn_sealed": "La versió vigent v{{version}} està SEGELLADA (producció). Propagar la substituirà sobre llenç net i es perdran les dades de producció. Vols continuar?",
+    "continue": "Continua",
+    "confirm_title": "Confirma la propagació",
+    "confirm_sure": "N'estàs segur? Aquesta acció parteix de llenç net i no es pot desfer.",
+    "confirm_supersede": "Confirma propagació"
+  },
   "size_map_title": "Sistemes de talles",
   "size_map_subtitle": "Runs de client derivats i sistemes canònics",
   "size_map_step_target": "Destí",
@@ -192,6 +204,29 @@
     "saving": "Desant…",
     "error_generic": "No s'ha pogut actualitzar la contrasenya."
   },
+  "userProfile": {
+    "hd_title": "El meu perfil",
+    "hd_subtitle": "Informació de l'usuari autenticat",
+    "st_loading": "Carregant…",
+    "st_error": "No s'ha pogut carregar el perfil.",
+    "pf_no_role": "Sense rol",
+    "pf_nom_complet": "Nom complet",
+    "pf_username": "Usuari",
+    "pf_email": "Email",
+    "pf_rol": "Rol",
+    "pf_cost_hora": "Cost/hora",
+    "pf_color": "Color avatar",
+    "pf_logout": "Tancar sessió",
+    "pw_title": "Canviar contrasenya",
+    "pw_subtitle": "Introdueix la teva nova contrasenya. La sessió actual continua activa.",
+    "pw_new": "Nova contrasenya",
+    "pw_confirm": "Confirma la contrasenya",
+    "pw_submit": "Actualitzar contrasenya",
+    "pw_saving": "Desant…",
+    "pw_mismatch": "Les contrasenyes no coincideixen.",
+    "pw_ok": "Contrasenya actualitzada.",
+    "pw_error": "No s'ha pogut actualitzar la contrasenya."
+  },
   "nav": {
     "import_collection": "Importar col·lecció",
     "section_technical_studio": "Estudi tècnic",
@@ -201,14 +236,12 @@
     "section_sistema": "Sistema",
     "section_projectes": "Projectes",
     "section_config_tecnica": "Configuració tècnica",
-    "dashboard": "Dashboard",
+    "dashboard": "Desenvolupament",
     "models": "Models",
     "models_new": "Nou model",
-    "registre_activitat": "Registre d'activitat",
     "models_from_file": "Nou des de fitxer",
     "fitting": "Size & Fitting",
     "fittings": "Fittings",
-    "tasques": "Tasques",
     "tasques_catalog": "Catàleg de tasques",
     "tasques_paquets": "Paquets de servei",
     "kanban": "Kanban",
@@ -234,7 +267,8 @@
     "users": "Usuaris i rols",
     "company_calendar": "Calendari d'empresa",
     "planning": "Planificació",
-    "planning_calendar": "Calendari"
+    "planning_calendar": "Calendari",
+    "my_calendar": "El meu calendari"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -286,6 +320,7 @@
     "select_supplier": "Selecciona un proveïdor",
     "fitting_title": "Sessions de fitting",
     "schedule_fitting": "Programar fitting",
+    "convene_fitting": "Convocar fitting",
     "date": "Data",
     "no_fittings": "Cap sessió de fitting encara.",
     "scheduled": "Fitting programat.",
@@ -341,13 +376,95 @@
     "err_delete": "Error esborrant el model",
     "err_connection": "Error de connexió",
     "confirm_delete": "Esborrar {{codi}}? Aquesta acció no es pot desfer.",
+    "tab_dashboard": "Dashboard",
     "tab_summary": "Resum",
-    "tab_size_check": "Size Check",
-    "tab_production": "Producció",
-    "tab_fitting": "Fitting",
+    "tab_grading": "Escalat",
     "tab_tech_sheet": "Fitxa tècnica",
     "tab_activity_log": "Registre d'activitat",
-    "tab_ai_analysis": "Anàlisi IA",
+    "dashboard": {
+      "err_load": "Error carregant el dashboard",
+      "section_status": "On sóc",
+      "ready_for_gate": "Es pot avançar de fase",
+      "blockers_open": "{{n}} tasques obertes",
+      "blockers_none": "Res no bloqueja",
+      "section_done": "Què tinc fet",
+      "artefact_fitxa": "Fitxa tècnica",
+      "artefact_grading": "Taula graduada",
+      "artefact_base": "Mesures base",
+      "version_short": "v{{n}}",
+      "grading_approved": "Aprovada",
+      "grading_draft": "Esborrany",
+      "base_active": "{{n}} mesures actives",
+      "empty_fitxa": "Encara no hi ha fitxa",
+      "empty_grading": "Encara no hi ha taula graduada",
+      "empty_base": "Encara no hi ha mesures base",
+      "milestones": {
+        "section": "Properes fites",
+        "empty": "Cap fita propera",
+        "at_risk": "En risc",
+        "type": { "tasca": "Tasca", "confeccio": "Confecció", "fitting": "Fitting" }
+      },
+      "section_technical": "Detall tècnic",
+      "tech_next_phase": "Següent fase",
+      "tech_next_phase_none": "Cap (fase final)",
+      "tech_model_id": "ID model",
+      "tech_size_fitting": "ID size fitting",
+      "tech_base_size": "Talla base",
+      "tech_base_active": "Mesures base actives",
+      "tech_tasks_open": "Tasques obertes",
+      "fitxa_estat": { "obert": "Oberta", "tancat": "Tancada" },
+      "phase": {
+        "Pending": "Pendent", "Dev": "Desenvolupament", "Proto": "Prototip",
+        "SizeSet": "Joc de talles", "PP": "Preproducció", "TOP": "Producció"
+      },
+      "task_status": {
+        "Pending": "Pendent", "Paused": "Pausada", "InProgress": "En curs", "Done": "Feta"
+      },
+      "workplan": {
+        "title": "Pla de treball",
+        "openings": "{{n}} obertures",
+        "out_of_charge": "(fora d'encàrrec)",
+        "play": "Iniciar",
+        "pause": "Pausar",
+        "stop": "Finalitzar",
+        "empty": "Aquest model encara no té tasques assignades",
+        "toast_paused": "S'ha pausat «{{name}}»",
+        "transition_error": "No s'ha pogut canviar l'estat de la tasca",
+        "not_allowed": "No tens permís per operar aquesta tasca",
+        "handoff_play": "Reassignar i començar",
+        "handoff_title": "Reassignar tasca",
+        "handoff_body": "Aquesta tasca és de {{name}}. La reassignes a tu per treballar-la?",
+        "handoff_body_unassigned": "Aquesta tasca no té tècnic assignat. L'assignes a tu per treballar-la?",
+        "handoff_confirm": "Reassignar i començar",
+        "handoff_cancel": "Cancel·lar",
+        "claim_denied": "No pots agafar una tasca d'aquest tipus (no és a la teva llista d'execució)",
+        "claim_error": "No s'ha pogut reassignar la tasca",
+        "progress_label": "{{done}}/{{total}} tasques fetes",
+        "time_total": "Temps acumulat sobre el model"
+      },
+      "timeline": {
+        "section": "Què ha canviat",
+        "err_load": "Error carregant l'activitat",
+        "empty": "Encara no hi ha canvis registrats",
+        "today": "Avui",
+        "yesterday": "Ahir",
+        "by": "per {{label}}",
+        "now": "ara mateix",
+        "ago_min": "fa {{n}} min",
+        "ago_hour": "fa {{n}} h",
+        "ago_day": "fa {{n}} dies",
+        "measure_set": "POM {{pom}} · definit a {{val}}",
+        "measure_change": "POM {{pom}} · {{prev}} → {{val}}",
+        "out_of_tolerance": "Fora de tolerància",
+        "gate_advance": "Avançat a {{phase}}",
+        "gate_regress": "Tornat a {{phase}}",
+        "task_transition": "{{task}} · {{status}}",
+        "context": {
+          "import": "importació", "manual": "manual", "fitting": "fitting",
+          "calculated": "calculat", "standard": "estàndard"
+        }
+      }
+    },
     "field_internal_ref": "Referència interna",
     "field_collection": "Col·lecció",
     "field_target": "Target",
@@ -387,10 +504,19 @@
     "needed_start": "→ Inici necessari:",
     "past_date": "⚠ data passada",
     "viab_disclaimer": "Estimació orientativa · jornada 420 min/dia · dies laborables (dl-dv) · sense festius",
-    "measures_consult": "Consulta — l'edició de mides es fa a la tasca de POM.",
-    "edit_in_pom": "Editar a la tasca de POM",
-    "no_pom_task": "Sense tasca de POM",
-    "no_pom_task_title": "Aquest model no té cap tasca de POM definida",
+    "measures_consult": "Consulta — prem «Editar POM» per reobrir la definició de base.",
+    "measures_editing": "Edició de mides — els canvis es desen automàticament.",
+    "measures_empty_title": "Mesures encara no disponibles",
+    "measures_empty_body": "Inicia la tasca Definició POM per crear les mides base del model.",
+    "start_pom": "Iniciar Definició POM",
+    "back_to_consult": "Tornar a consulta",
+    "edit_measures": "Editar mides",
+    "edit_pom": "Editar POM",
+    "edit_grading": "Editar escalat",
+    "open_task_err": "No s'ha pogut obrir la tasca.",
+    "use_ruleset": "Usar aquest joc",
+    "ruleset_changed": "Joc de regles actualitzat.",
+    "ruleset_err": "No s'ha pogut canviar el joc de regles.",
     "file_type": {
       "SKETCH_FLETXES": "Sketch amb fletxes",
       "SKETCH_NET": "Sketch net",
@@ -578,6 +704,10 @@
     "global": "Global",
     "items": "Items",
     "new_item": "Nou item",
+    "items_title": "Items",
+    "card_poms": "POMs",
+    "card_grading": "Grading",
+    "card_basesize": "Talla base",
     "no_items": "Cap item. Crea'n per definir variants i temps.",
     "edit": "Editar",
     "delete": "Esborrar",
@@ -690,7 +820,141 @@
     "error": "Hi ha hagut un error.",
     "col_max_start": "Inici màxim",
     "critical": "Crític",
-    "on_track": "En termini"
+    "on_track": "En termini",
+    "tabs": {
+      "dashboard": "Tauler",
+      "planificacio": "Planificació",
+      "assignacio": "Assignació",
+      "calendari_projecte": "Calendari de projecte",
+      "informes": "Informes",
+      "registre": "Registre d'activitat"
+    },
+    "gov_subtitle": "Espai de govern: planifica, valida fases i fes el seguiment dels models",
+    "coming_soon": "Pròximament",
+    "informes": {
+      "deadlines": {
+        "title": "Compliment de terminis",
+        "subtitle": "Models segons la data prevista de fi (planificador) vs la data objectiu.",
+        "on_time": "En temps",
+        "at_risk": "En risc",
+        "overdue": "Endarrerits",
+        "no_deadline": "Sense termini"
+      },
+      "cartera": {
+        "title": "Cartera",
+        "subtitle": "Estat global dels models agrupats; cada grup amb la distribució per fase i els models en risc.",
+        "dim_temporada": "Temporada",
+        "dim_collection": "Col·lecció",
+        "no_temporada": "— sense temporada",
+        "no_collection": "— sense col·lecció",
+        "total": "Total",
+        "en_risc": "En risc",
+        "empty": "Sense models."
+      },
+      "productivity": {
+        "title": "Productivitat",
+        "subtitle": "Temps real consolidat (timers) vs estimat per fase, sobre tota la cartera.",
+        "estimate": "Estimat",
+        "real": "Real",
+        "deviation": "Desviació",
+        "tasks": "Tasques",
+        "total": "Total",
+        "empty": "Encara sense temps registrat."
+      }
+    },
+    "gantt": {
+      "empty": "Cap model per mostrar.",
+      "legend_proto": "Arribada de proto",
+      "legend_fitting": "Sessió de fitting",
+      "legend_objectiu": "Data objectiu",
+      "legend_today": "Avui",
+      "legend_wait": "Espera (confecció)",
+      "order": {
+        "label": "Ordena per",
+        "lliurament": "Lliurament",
+        "fita": "Pròxima fita",
+        "fase": "Fase"
+      },
+      "risk_first": "Risc primer",
+      "only_risk": "Només en risc",
+      "risk_flag": "En risc: la fi prevista supera la data objectiu",
+      "color": {
+        "label": "Pinta per",
+        "tecnic": "Tècnic",
+        "fase": "Fase",
+        "risc": "Risc",
+        "colleccio": "Col·lecció"
+      },
+      "filter": {
+        "all_collections": "Totes les col·leccions",
+        "all_seasons": "Totes les temporades",
+        "techs": "Tècnics:"
+      }
+    },
+    "gates": {
+      "title": "Llestos per validar",
+      "subtitle": "Models amb totes les tasques fetes, a punt per avançar de fase",
+      "col_phase": "Fase actual",
+      "col_next": "Següent",
+      "validate": "Validar gate",
+      "validate_selected": "Validar seleccionats ({{n}})",
+      "at_top": "Ja a producció",
+      "empty": "Cap model llest per validar.",
+      "validated_ok": "Gate validat.",
+      "validated_bulk_ok": "{{n}} gates validats.",
+      "validated_bulk_partial": "{{ok}} validats, {{err}} amb error.",
+      "error": "No s'ha pogut validar el gate."
+    },
+    "counters": {
+      "title": "Models per fase"
+    },
+    "risk": {
+      "title": "Models en risc",
+      "subtitle": "La data prevista de fi supera la data objectiu",
+      "col_deviation": "Desviació",
+      "deviation_days": "+{{n}} d",
+      "empty": "Cap model en risc."
+    },
+    "time": {
+      "title": "Anàlisi de temps",
+      "subtitle": "Temps estadístic per fase (rollup de les tasques): empíric quan hi ha mostres, si no l'estimació",
+      "phase": {
+        "disseny": "Disseny",
+        "dev_tecnic": "Dev. tècnic",
+        "prototip": "Prototip",
+        "mostres": "Mostres",
+        "preproduccio": "Preproducció",
+        "produccio": "Producció"
+      },
+      "maturity": {
+        "empiric": "empíric",
+        "seed": "estimat",
+        "empty": "sense dades",
+        "none": "sense dada"
+      },
+      "coverage_tip": "{{empiric}} empíriques · {{seed}} estimades · {{none}} sense dada · {{n}} mostres",
+      "tree": {
+        "group_by": "Agrupar per",
+        "by_phase": "Fase",
+        "by_garment": "Tipus de peça",
+        "by_model": "Model",
+        "col_item": "Element",
+        "col_task": "Tasca",
+        "col_estimate": "Estimat",
+        "col_real": "Real",
+        "col_n": "n",
+        "col_deviation": "Desviació",
+        "set_estimate": "Posar estimació",
+        "save": "Desar",
+        "cancel": "Cancel·lar",
+        "minutes_ph": "min",
+        "cells_n": "{{n}} cel·les",
+        "saved_ok": "Estimació desada.",
+        "invalid": "Posa un nombre de minuts > 0.",
+        "empty": "Sense dades de temps.",
+        "error": "No s'ha pogut completar l'operació."
+      }
+    }
   },
   "companyCalendar": {
     "title": "Calendari d'empresa",
@@ -794,58 +1058,6 @@
     }
   },
   "kanban": {
-    "title": "Kanban de tasques",
-    "subtitle": "Les meves tasques organitzades per estat",
-    "loading": "Carregant…",
-    "empty_col": "Sense tasques",
-    "status": {
-      "Pending": "Pendents",
-      "Paused": "Pausades",
-      "InProgress": "En curs",
-      "Done": "Fetes"
-    },
-    "action": {
-      "start": "Iniciar",
-      "resume": "Reprendre",
-      "pause": "Pausar",
-      "finish": "Finalitzar",
-      "reopen": "Reobrir",
-      "open_poms": "Obrir mides",
-      "open_size_check": "Obrir size check",
-      "open_tech_sheet": "Obrir fitxa"
-    },
-    "toast_paused": "S'ha pausat «{{name}}»",
-    "not_allowed": "No tens permès executar aquest tipus de tasca.",
-    "transition_error": "No s'ha pogut canviar l'estat.",
-    "rect": "{{n}} rectif.",
-    "search_ph": "Cerca model (codi o nom)…",
-    "col_models": "Models",
-    "my_models": "Els meus models",
-    "priority_a": "Prioritat A · per validar",
-    "select_model": "Selecciona un model per veure'n les tasques",
-    "load_more": "Carrega'n més",
-    "no_models": "Cap model amb tasques",
-    "phase": "Fase",
-    "tasks_n": "{{n}} tasques",
-    "gate_validate": "Validar",
-    "gate_confirm": "Validar i avançar a {{phase}}?",
-    "gate_done": "Fase avançada a {{phase}}.",
-    "gate_error": "No s'ha pogut validar el gate.",
-    "confirm": "Confirma",
-    "cancel": "Cancel·la",
-    "sort_by": "Ordena per",
-    "sort_default": "Ordre per defecte",
-    "sort_asc": "Ascendent",
-    "sort_desc": "Descendent",
-    "sort": {
-      "codi_intern": "Codi", "nom_prenda": "Nom", "prioritat": "Prioritat",
-      "data_objectiu": "Data objectiu", "data_entrada": "Data entrada", "temporada": "Temporada"
-    },
-    "filter_temporada": "Temporada", "filter_estat": "Estat", "filter_responsable": "Responsable",
-    "resp_me": "Jo", "resp_all": "Tots", "resp_hint": "Models on l'usuari té tasques assignades", "resp_tech_placeholder": "Tècnic…",
-    "more_filters": "Més filtres", "clear_filters": "Esborra filtres",
-    "filter_garment_type": "Tipus de peça", "filter_any": "Any", "filter_prioritat": "Prioritat",
-    "results_n": "{{n}} resultats",
     "temporades": { "SS": "SS · Primavera/Estiu", "FW": "FW · Tardor/Hivern", "CO": "CO · Cruise", "SP": "SP · Especial" },
     "estats": { "Nou": "Nou", "EnCurs": "En curs", "EnRevisio": "En revisió", "Tancat": "Tancat" }
   },
@@ -868,7 +1080,6 @@
       "temporada": "Temporada",
       "any": "Any",
       "color_referencia": "Colorway / Color de referència",
-      "estat": "Estat",
       "prioritat": "Prioritat",
       "responsable": "Responsable",
       "data_entrada": "Data d'entrada",
@@ -1163,11 +1374,45 @@
   "size_map_t_order": "Ordre",
   "size_map_unmatched": "No reconegudes",
   "size_map_warnings": "avisos",
+  "tasktype": {
+    "size_check": "Mesures"
+  },
+  "basestage": {
+    "title": "Taula base · estadis",
+    "empty": "Encara no hi ha mesures base.",
+    "current": "vigent",
+    "col_nomenclatura": "Nomenclatura",
+    "stage_measure": "Mesura",
+    "select_stage": "Clica per veure'n la decisió i la nota",
+    "stage_live": "Estadi actiu: editable",
+    "stage_readonly": "Només lectura",
+    "ctx": {
+      "import": "Importació",
+      "manual": "Manual",
+      "fitting": "Fitting",
+      "checked": "Size check",
+      "calculated": "Calculat",
+      "standard": "Estàndard"
+    }
+  },
+  "measuregrid": {
+    "col_pom": "POM",
+    "col_nom": "Nom",
+    "nom_save_err": "No s'ha pogut desar el nom.",
+    "reorder": "Arrossega per reordenar",
+    "reorder_err": "No s'ha pogut desar l'ordre.",
+    "regle_delta": "Δ",
+    "regle_break": "Break",
+    "regle_from": "a partir de",
+    "regle_none": "—",
+    "regle_save_err": "No s'ha pogut desar la regla."
+  },
   "sizecheck": {
     "col_date": "Data",
     "col_decision": "Decisió",
     "col_measure": "Mesura",
     "col_note": "Nota",
+    "col_pom": "POM",
     "col_real": "Real (proto)",
     "col_resolved_by": "Resolt per",
     "col_status": "Estat",
@@ -1182,6 +1427,7 @@
     },
     "discard": "Descartar",
     "fb_discarded": "Descartat · reagendat a {{d}} · tasca pendent",
+    "fb_regraded": " · grading regradat (v{{v}})",
     "fb_rejected": "Proto no acceptat · reagendat a {{d}} · tasca pendent",
     "fb_saved": "Gravat i propagat · {{n}} mesures",
     "history": "Històric",
@@ -1195,7 +1441,8 @@
     "reschedule_title": "Reagendar el size check",
     "resolve_error": "No s'ha pogut resoldre",
     "save": "Gravar size check",
-    "validated_table": "Taula validada"
+    "validated_table": "Taula validada",
+    "work_title": "Mesura del proto · validació"
   },
 
   "time_tracking": {
@@ -1218,21 +1465,47 @@
   "model_measurements": {
     "err_grading": "Error generant grading",
     "notice_no_item": "Aquest model no té tipus d'ítem (garment_type_item) definit: no es materialitzen els POMs de la plantilla.",
+    "seed_title": "Partir de les mides de l'item?",
+    "seed_subtitle": "Aquest model ve d'un item amb mides base estàndard.",
+    "seed_body": "Pots sembrar el model amb les mides estàndard de l'item (valor, nomenclatura i tolerància) o començar de zero i omplir-les a mà. Les mides que ja hagis tocat al model no es trepitgen.",
+    "seed_confirm": "Sembrar de l'item",
+    "seed_cancel": "Començar de zero",
     "title": "Mesures i grading",
+    "pom_title": "Definició de POMs i talla base",
+    "pom_subtitle": "Crea la base del model: POMs, nomenclatura curta, valors i regles inicials.",
     "intro": "Introdueix les mesures de la talla base. El sistema calcularà el grading per a totes les talles.",
     "manual_title": "Introduir manualment",
     "manual_desc": "El sistema proposa els POMs estàndard per a {{type}}. Introdueix els valors de la talla base.",
     "this_garment": "aquest tipus de peça",
     "poms_available": "{{total}} POMs disponibles · {{key}} KEY",
     "import_title": "Importar de fitxa tècnica",
+    "import_table": "Importar taula",
     "import_desc": "Puja un PDF o imatge de la fitxa tècnica del client. La IA extraurà les mesures, talles i grading automàticament.",
     "suggested_poms": "POMs suggerits per a aquest tipus de peça — clica per afegir a la taula:",
     "generating": "⏳ Generant…",
     "generate_grading": "⚡ Generar grading automàtic",
     "continue_fabric": "Continuar → Teixit",
+    "back_to_model": "↩ Tornar al model",
     "table_title": "Taula de mesures i grading",
+    "view_table": "Veure taula de mesures",
     "edit_measures": "✏ Editar mesures",
-    "base_prefix": "Base:"
+    "base_prefix": "Base:",
+    "view_grading": "📐 Veure escalat",
+    "propagated_title": "Editor de grading propagat",
+    "propagated_hint": "Edita qualsevol talla (base inclosa): el valor es propaga per regla a les talles germanes. El règim canvia per POM.",
+    "propagated_hint_ro": "Consulta de l'escalat vigent. L'edició s'obre des de la tasca corresponent.",
+    "propagated_close": "Tancar",
+    "propagated_empty": "Encara no hi ha mesures base per propagar.",
+    "propagated_load_err": "No s'ha pogut carregar la taula propagada.",
+    "regim_err": "No s'ha pogut canviar el règim.",
+    "save_pom": "Gravar POM",
+    "gravar_confirm_title": "Gravar POM",
+    "gravar_confirm_simple": "Els POM construïts es gravaran a la taula de mesures. D'acord?",
+    "gravar_confirm_reseed": "Aquest model ja té mesures base. En gravar, se substituiran les mesures actuals per les construïdes aquí.",
+    "gravar_confirm_ok": "Gravar POM",
+    "gravar_confirm_cancel": "Cancel·lar",
+    "save_pom_err": "No s'ha pogut gravar POM.",
+    "unsaved_pom_hint": "Grava POM per tancar la tasca i activar Mesures."
   },
 
   "model_fabric": {
@@ -1375,6 +1648,56 @@
       "sleeve_cb": "Llarg màniga CB ({{cb}}) hauria de ser > Llarg màniga ({{base}})."
     }
   },
+  "item_authoring": {
+    "title_new": "Nou item",
+    "title_edit": "Editar item · {{code}}",
+    "close": "Tancar",
+    "step1_context": "Context",
+    "step2_construction": "Construcció",
+    "identity": "Identitat de l'item",
+    "f_name": "Nom",
+    "name_placeholder": "p. ex. Samarreta de festa",
+    "code_auto_label": "Codi (automàtic)",
+    "active": "Actiu",
+    "pick_ruleset": "Tria el grading rule set",
+    "assign": "Assignar",
+    "create_ruleset": "Crear a Grading Rules",
+    "import_soon": "Importar fitxa",
+    "import_tooltip": "Disponible properament (Fase C)",
+    "coming_soon": "properament",
+    "confirm_basesize": "Talla base",
+    "basesize_from": "Talles del sistema {{system}}",
+    "basesize_none": "Aquest grading rule set no té talles definides.",
+    "measurements": "Mides base de l'item",
+    "cancel": "Cancel·lar",
+    "back": "Enrere",
+    "next": "Següent",
+    "finish": "Finalitzar",
+    "need_name": "Posa un nom a l'item abans d'assignar un grading rule set.",
+    "load_error": "No s'ha pogut carregar l'item.",
+    "save_error": "No s'ha pogut desar."
+  },
+  "measurement_base_grid": {
+    "col": {
+      "sheet_name": "Nom fitxa",
+      "description": "Descripció",
+      "base_value": "Valor base (cm)",
+      "tol_minus": "Tol −",
+      "tol_plus": "Tol +"
+    },
+    "empty": "Encara no hi ha cap POM. Afegeix-ne per definir les mides base de l'item.",
+    "add_pom": "Afegir POM",
+    "search_placeholder": "Cerca per nom o codi…",
+    "no_pom_found": "Cap POM trobat per \"{{query}}\".",
+    "create_pom": "Crear POM nou \"{{query}}\"",
+    "delete_row": "Eliminar fila",
+    "drag_handle": "Arrossega per reordenar",
+    "edit_cell": "Edita la cel·la",
+    "discard": "Descartar canvis",
+    "save": "Desar mides base",
+    "load_error": "No s'han pogut carregar les mides base de l'item.",
+    "save_error": "No s'han pogut desar les mides base de l'item."
+  },
   "editable_table": {
     "import_title": "Taula importada per IA.",
     "import_hint": "Revisa cada fila abans de confirmar — la IA pot cometre errors. Edita, afegeix o elimina files si cal.",
@@ -1387,7 +1710,12 @@
     "create_pom": "Crear POM nou \"{{query}}\"",
     "col": {
       "sheet_name": "Nom fitxa",
-      "description": "Descripció"
+      "description": "Descripció",
+      "base_value": "Valor base",
+      "regime": "Règim",
+      "delta": "Delta",
+      "break_delta": "Delta break",
+      "break_size": "Talla break"
     }
   },
   "dashboard": {
@@ -1399,18 +1727,53 @@
     "onboarding_complete_setup": "Completa el setup inicial per desbloquejar totes les funcionalitats",
     "complete_setup": "Completar setup",
     "kpi": {
-      "total_models": "Total models",
-      "prototype_samples": "En prototip/mostres"
+      "scope_total": "Models de l'abast",
+      "at_risk": "En risc",
+      "in_progress": "En curs"
     },
     "kpi_sub": {
-      "in_system": "al sistema",
-      "active_models": "models actius",
-      "critical_phase": "models en fase crítica"
+      "scope_total": "a l'abast seleccionat",
+      "at_risk": "amb tasca fora de termini",
+      "in_progress": "amb feina activa"
     },
-    "recent_active_models": "Models actius recents",
-    "no_models_in_progress": "Sense models en curs.",
-    "create_first": "Crea el primer",
-    "see_all_models": "Veure tots els models"
+    "board": {
+      "title": "Tauler de models",
+      "results_n": "{{n}} models",
+      "total": "Total",
+      "search_ph": "Cerca model…",
+      "filter_customer": "Client",
+      "filter_collection": "Col·lecció",
+      "filter_temporada": "Temporada",
+      "filter_fase": "Fase",
+      "filter_date_from": "Objectiu des de",
+      "filter_date_to": "Objectiu fins a",
+      "clear": "Neteja",
+      "load_more": "Carrega'n més",
+      "tasks_n": "{{n}} tasques",
+      "empty_col": "—",
+      "state": {
+        "pending": "Pendents",
+        "open": "En curs",
+        "paused": "Pausats",
+        "done": "Fets"
+      }
+    },
+    "milestones": {
+      "title": "Properes fites",
+      "empty": "Cap fita en els propers {{days}} dies.",
+      "at_risk": "En risc",
+      "type": {
+        "tasca": "Tasca",
+        "confeccio": "Confecció",
+        "fitting": "Fitting"
+      }
+    },
+    "scope": {
+      "label": "Abast",
+      "scope_mine": "Els meus",
+      "scope_all": "Tots",
+      "empty_mine": "No tens cap model assignat."
+    }
   },
   "alerts": {
     "gravetat": {
@@ -1609,39 +1972,6 @@
     "examples": "Exemples: \"El POM D és 35.5cm\" · \"Afegeix el POM de cintura\" · \"Elimina Y5\"",
     "input_placeholder": "Escriu un missatge… (Enter per enviar)"
   },
-  "design_freeze": {
-    "returned": "RETORNAT",
-    "blockers": "Camps bloquejants ({{count}})",
-    "warnings": "Avisos ({{count}})",
-    "extracted_data": "Dades extretes",
-    "poms_detected": "POMs detectats ({{count}})",
-    "grading_included": "· taula de grading inclosa",
-    "poms_no_base": "POMs sense valor de talla base — es generaran des de les Grading Rules del client",
-    "visual_description": "Descripció visual: ",
-    "continue": "Continuar",
-    "field": {
-      "brand": "Marca",
-      "style": "Estil",
-      "code": "Codi",
-      "season": "Temporada",
-      "year": "Any",
-      "garment": "Prenda",
-      "material": "Material",
-      "composition": "Composició",
-      "base_size": "Talla base",
-      "size_run": "Run talles",
-      "designer": "Dissenyador",
-      "patternmaker": "Patronista"
-    }
-  },
-  "tasks": {
-    "title": "Tasques",
-    "col_task": "Tasca",
-    "col_model": "Model",
-    "col_phase": "Fase",
-    "col_status": "Estat",
-    "empty": "Sense tasques en estat \"{{status}}\""
-  },
   "size_system": {
     "code": "Codi",
     "sizes_defined": "{{count}} talles definides",
@@ -1763,11 +2093,44 @@
     "confirmed_count": "{{count}} confirmats",
     "fabric_informed": "informat",
     "fabric_not_informed": "no informat",
-    "mana_doc": "Mana el document: es crearan només els {{count}} POMs confirmats (sense files buides de plantilla), amb grading tancat (v1). El PDF es desa com a document origen.",
+    "mana_doc": "Mana el document: es crearan només els {{count}} POMs confirmats (sense files buides de plantilla). Es reté la regla del model (mesura base + deltes + breaks); el grading propagat es projecta després, conscientment. El PDF es desa com a document origen.",
     "confirming": "⏳ Guardant…",
     "confirm_save": "✓ Confirmar i guardar",
+    "grading_conflict_title": "Conflicte de regla de grading",
+    "grading_conflict_help": "La regla (deltes/breaks) importada del document difereix de la que ja viu al model. Tria quina passa a ser la regla del model; no se sobreescriurà cap en silenci.",
+    "grading_apply_imported": "Aplicar la del document",
+    "grading_keep_inherited": "Mantenir la del model",
     "configure_run_title": "Configurar el run a la Size Library",
     "go_to_library": "Anar a la Library",
     "modal_body": "Sortiràs cap a la Size Library per generar aquesta graduació. Quan l'hagis creada, hauràs de tornar a aquest model manualment per continuar la importació."
+  },
+  "dependency": {
+    "title": "Dependència",
+    "ruleset": "Joc de regles",
+    "no_ruleset": "— cap",
+    "editable_hint": "lectura · editable a l'edició del model"
+  },
+  "import_missing": {
+    "title": "Completa la configuració del model abans de definir POMs",
+    "garment_type_item": "Tipologia de la peça (tipus)",
+    "base_size": "Talla base",
+    "size_run": "Run de talles (sistema de talles)",
+    "grading_rule_set": "Regla d'escalat (grading)",
+    "action": "Completa el model"
+  },
+  "watchpoints": {
+    "title": "Watchpoints",
+    "tab_label": "Watchpoints",
+    "dashboard_title": "AVISOS",
+    "err_save": "No s'ha pogut desar l'anotació.",
+    "open": "obertes",
+    "show_resolved": "Veure resoltes ({{n}})",
+    "hide_resolved": "Amaga resoltes",
+    "placeholder": "Advertència per al model (viatja amb ell pels gates)…",
+    "add": "Afegir",
+    "empty": "Cap advertència oberta.",
+    "resolve": "Resoldre",
+    "reopen": "Reobrir",
+    "resolved_by": "resolta per {{who}}"
   }
 }

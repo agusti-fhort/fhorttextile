@@ -1,118 +1,6 @@
 from django.db import models
 
 
-class Tasca(models.Model):
-    """Task catalog (tenant). Merges legacy TascaCataleg + process metadata."""
-    # --- Legacy TascaCataleg ---
-    tasca_global = models.ForeignKey(
-        'pom.TascaGlobal',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='catalegs_tenant',
-    )
-    nom_custom = models.CharField(max_length=200, null=True, blank=True)
-    minuts_estandard = models.PositiveIntegerField(null=True, blank=True)
-    activa = models.BooleanField(default=True)
-    ordre = models.PositiveIntegerField(default=0)
-
-    # --- Sprint 1B: process metadata ---
-    nom_tasca = models.CharField(max_length=200, null=True, blank=True)
-    tipus_tasca = models.CharField(
-        max_length=20,
-        choices=[
-            ('Interna', 'Interna'),
-            ('Externa', 'Externa'),
-            ('Validació', 'Validació'),
-        ],
-        default='Interna',
-    )
-    fase = models.CharField(
-        max_length=20,
-        choices=[
-            ('Disseny', 'Disseny'),
-            ('Tècnic', 'Tècnic'),
-            ('Prototip', 'Prototip'),
-            ('Mostres', 'Mostres'),
-            ('Preproducció', 'Preproducció'),
-            ('Producció', 'Producció'),
-        ],
-        default='Disseny',
-    )
-    ordre_base = models.IntegerField(default=0)
-    slots_base = models.FloatField(
-        default=0.0,
-        help_text="Referència orientativa. Els slots reals vénen de la tipologia del model.",
-    )
-    facturable = models.BooleanField(
-        default=True,
-        help_text="Els gates i tasques de validació no son facturables.",
-    )
-    bloqueja_model = models.BooleanField(default=False)
-    gate = models.BooleanField(default=False)
-    resultat_gate = models.CharField(
-        max_length=20,
-        choices=[('OK', 'OK'), ('NO_OK', 'No OK'), ('EXCEPCIO', 'Excepció')],
-        null=True, blank=True,
-    )
-    notes = models.TextField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-
-    class Meta:
-        verbose_name = 'Tasca (catàleg tenant)'
-        verbose_name_plural = 'Tasques (catàleg tenant)'
-        ordering = ['ordre_base', 'ordre']
-
-    def __str__(self):
-        if self.nom_tasca:
-            return f"[{self.fase}] {self.nom_tasca}"
-        if self.nom_custom:
-            return self.nom_custom
-        return self.tasca_global.codi if self.tasca_global_id else f'Tasca#{self.pk}'
-
-
-class TipologiaModel(models.Model):
-    """Model typology with load slots per production route.
-
-    NOTE: the spec asked for IntegerField but the real master-data values
-    contain decimals (3.5, 5.0, 6.5) — we use DecimalField to avoid losing
-    precision. Likewise, patrons_aprox is a range ("10-14"), hence CharField.
-    """
-
-    codi = models.CharField(max_length=40, unique=True)
-    nom = models.CharField(max_length=200, blank=True)
-    familia = models.CharField(max_length=80, blank=True)
-    familia_codi = models.CharField(max_length=20, blank=True)
-    garment_type = models.ForeignKey(
-        'pom.GarmentType',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='tipologies',
-    )
-
-    complexitat = models.CharField(max_length=40, null=True, blank=True)
-    patrons_aprox = models.CharField(max_length=20, null=True, blank=True)
-
-    slots_cad_client = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    slots_digitalitzacio = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    slots_des_de_zero = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    slots_conf_proto = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    slots_conf_proto_sample = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    slots_conf_proto_sample_size = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-
-    actiu = models.BooleanField(default=True)
-    notes = models.TextField(blank=True)
-
-    class Meta:
-        verbose_name = 'Tipologia de model'
-        verbose_name_plural = 'Tipologies de model'
-        ordering = ['familia_codi', 'codi']
-
-    def __str__(self):
-        return f'{self.codi} · {self.nom}'
-
-
 class TimerEntrada(models.Model):
     model_task = models.ForeignKey('ModelTask', on_delete=models.CASCADE, related_name='timers')
     tecnic = models.ForeignKey('accounts.UserProfile', on_delete=models.PROTECT, related_name='timers')
@@ -130,64 +18,36 @@ class TimerEntrada(models.Model):
         return f'{self.tecnic} · {self.model_task} · {self.inici:%Y-%m-%d %H:%M}'
 
 
-
-class PaquetServei(models.Model):
-    """Offered service package. Groups tasks that are applied together."""
-    nom = models.CharField(max_length=200, unique=True)
-    actiu = models.BooleanField(default=True)
-    grup = models.CharField(
-        max_length=50,
-        choices=[
-            ('Patronatge', 'Patronatge'),
-            ('Tech Pack', 'Tech Pack'),
-            ('Mostres', 'Mostres'),
-            ('Producció', 'Producció'),
-        ],
-        null=True, blank=True,
-    )
-    multiplicador = models.FloatField(null=True, blank=True)
-    slots_base = models.FloatField(null=True, blank=True)
-    ordre_popup = models.IntegerField(null=True, blank=True)
-    descripcio = models.TextField(null=True, blank=True)
-    notes_comercials = models.TextField(null=True, blank=True)
-
-    class Meta:
-        ordering = ['ordre_popup', 'nom']
-        verbose_name = 'Paquet de servei'
-        verbose_name_plural = 'Paquets de servei'
-
-    def __str__(self):
-        return self.nom
-
-
-class PaquetServeiTasca(models.Model):
-    """Link between PaquetServei and Tasca. Defines the order and whether it is optional."""
-    paquet = models.ForeignKey(
-        PaquetServei, on_delete=models.CASCADE, related_name='tasques',
-    )
-    tasca = models.ForeignKey(
-        Tasca, on_delete=models.CASCADE, related_name='paquets',
-    )
-    ordre = models.IntegerField()
-    opcional = models.BooleanField(default=False)
-    notes = models.TextField(null=True, blank=True)
-
-    class Meta:
-        ordering = ['ordre']
-        unique_together = [['paquet', 'tasca']]
-        verbose_name = 'Tasca de paquet'
-        verbose_name_plural = 'Tasques de paquet'
-
-    def __str__(self):
-        return f"{self.paquet.nom} — {self.tasca.nom_tasca} (#{self.ordre})"
-
-
 class TaskType(models.Model):
-    """Catàleg de tipus de tasca (per-tenant, editable). Pla i simple."""
+    """Catàleg CANÒNIC de tipus de tasca (propietat del sistema; el tenant no l'edita).
+    PLA per disseny: l'arbre de 2 nivells (pare→subtasca) és UX del frontend, no jerarquia de BD.
+    `default_order` és l'ordre canònic global. Gate i espera NO són tasca → no hi ha és_gate ni
+    bloqueja_model aquí. Camps de procés (fase/tipus/eina/mode/facturable) sembrats per code."""
+    FASE_CHOICES = [
+        ('Disseny', 'Disseny'),
+        ('Dev. tècnic', 'Dev. tècnic'),
+        ('Prototip', 'Prototip'),
+        ('Mostres', 'Mostres'),
+        ('Preproducció', 'Preproducció'),
+        ('Producció', 'Producció'),
+    ]
+    TIPUS_CHOICES = [
+        ('Interna', 'Interna'),
+        ('Externa-lliure', 'Externa-lliure'),
+    ]
     code = models.SlugField(max_length=50, unique=True)
     name = models.CharField(max_length=200)
     default_order = models.PositiveIntegerField(default=0)
     active = models.BooleanField(default=True)
+    # --- Catàleg canònic (Sprint catàleg de tasques) ---
+    fase = models.CharField(max_length=20, choices=FASE_CHOICES, default='Dev. tècnic')
+    tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES, default='Interna')
+    eina = models.CharField(max_length=30, null=True, blank=True,
+                            help_text="Slug de l'eina que transporta la tasca. null = transport "
+                                      "manual / eina futura.")
+    mode = models.CharField(max_length=40, null=True, blank=True,
+                            help_text="Context d'obertura de l'eina (sub-mode). null si sense eina.")
+    facturable = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['default_order', 'code']
@@ -202,9 +62,15 @@ class ModelTask(models.Model):
     """Instància de tasca d'un model. Estats nous (Sprint B); temps/log a Sprint C."""
     STATUS_CHOICES = [('Pending', 'Pending'), ('Paused', 'Paused'),
                       ('InProgress', 'InProgress'), ('Done', 'Done')]
+    # Origen de la tasca: 'prevista' = creada pel flux normal del PM (define-tasks /
+    # assign-batch / open-task des d'una eina); 'ad_hoc' = iniciada fora de l'encàrrec
+    # (arbre global / tasca externa lliure). El rending "fora d'encàrrec" (filet grana)
+    # i la tasca ad-hoc en depenen. Default 'prevista' perquè tot el flux actual és d'encàrrec.
+    ORIGEN_CHOICES = [('prevista', 'Prevista'), ('ad_hoc', 'Ad-hoc')]
     model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE, related_name='model_tasks')
     task_type = models.ForeignKey(TaskType, on_delete=models.PROTECT, related_name='instances')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    origen = models.CharField(max_length=20, choices=ORIGEN_CHOICES, default='prevista')
     assignee = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
                                  null=True, blank=True, related_name='assigned_tasks')
     order = models.PositiveIntegerField(default=0)
@@ -356,11 +222,52 @@ class GarmentTypeItem(models.Model):
                          help_text="Ordre de complexitat creixent dins la família")
     active = models.BooleanField(default=True)
 
+    # Sprint Mesures Base per Item (P1) — talla base de la plantilla de l'Item: la talla a la qual
+    # s'expressen els valors base d'ItemBaseMeasurement (P2). FK NORMAL (constraint real) cap a
+    # pom.SizeDefinition, igual que `garment_type` → pom.GarmentType (pom viu al schema del tenant).
+    # on_delete=SET_NULL: pointer OPCIONAL i tou — esborrar una talla del catàleg NO bloqueja (PROTECT)
+    # ni destrueix l'Item (CASCADE); només neteja el pointer (el camp ja és nullable).
+    # Sprint Llibreria d'Items (A3) — porta TANCADA: el lligam Item→GradingRuleSet JA existeix
+    # (grading_rule_set, sota). base_size_definition es CONSTRENY al size_system d'aquell ruleset
+    # via clean() (no constraint de BD, cross-table fràgil). Validació amb skip si algun és NULL.
+    base_size_definition = models.ForeignKey(
+        'pom.SizeDefinition', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='base_for_items',
+        help_text="Talla base de la plantilla de l'Item (on s'expressen els valors base). Es "
+                  "constreny al size_system del grading_rule_set (validat a clean()).")
+
+    # Sprint Llibreria d'Items (A3) — context de grading de l'Item: UN sol ruleset.
+    # FK MUTABLE (es pot canviar; les regles no s'apliquen fins desplegar-les al model) i de
+    # moment NULLABLE: els items-llavor existents queden a NULL fins que la pàgina (Fase B) els
+    # assigni ruleset; una 2a migració (post-Fase B) la farà NOT NULL quan tots en tinguin.
+    # on_delete=PROTECT: esborrar un ruleset referenciat per items ha de BLOQUEJAR (no esborrar
+    # items ni deixar-los orfes). Cross-app tasks→pom amb constraint REAL (pom viu al schema del
+    # tenant), igual que base_size_definition (P1).
+    grading_rule_set = models.ForeignKey(
+        'pom.GradingRuleSet', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='garment_type_items',
+        help_text="Context de grading de l'Item (un sol ruleset). Mutable; obligatori a la pàgina "
+                  "(Fase B). Constreny base_size_definition al seu size_system.")
+
     class Meta:
         ordering = ['garment_type', 'complexity_order', 'code']
         unique_together = [('garment_type', 'code')]
         verbose_name = 'Garment type item'
         verbose_name_plural = 'Garment type items'
+
+    def clean(self):
+        # A3 — coherència talla base ↔ sistema de talles del ruleset. SKIP si algun dels dos és
+        # NULL (els items-llavor amb tots dos a NULL han de poder desar-se). Es revalida sempre que
+        # es desa (p.ex. en canviar el ruleset mutable). No és constraint de BD (cross-table fràgil).
+        super().clean()
+        if self.base_size_definition_id and self.grading_rule_set_id:
+            if self.base_size_definition.size_system_id != self.grading_rule_set.size_system_id:
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    'base_size_definition': (
+                        "La talla base ha de pertànyer al mateix sistema de talles que el "
+                        "grading rule set de l'Item.")
+                })
 
     def __str__(self):
         return f'{self.garment_type_id}/{self.code}'
@@ -413,3 +320,23 @@ class PlanSnapshot(models.Model):
 
     def __str__(self):
         return f'Plan {self.id} @ {self.computed_at:%Y-%m-%d %H:%M}'
+
+
+class TimeSeed(models.Model):
+    """Llavor de temps del tenant (cascada graó 3): minuts per defecte quan no hi ha cap
+    cel·la (item×task) ni empíric global. HETEROGÈNIA (model híbrid c): uns nodes definits a
+    nivell de task_type, altres a nivell de fase. Dada de tenant EVOLUTIVA, separada del
+    catàleg canònic TaskType (que es manté read-only)."""
+    SCOPE_CHOICES = [('task', 'task'), ('phase', 'phase')]
+    scope = models.CharField(max_length=10, choices=SCOPE_CHOICES)
+    key = models.CharField(max_length=50,
+            help_text="TaskType.code si scope='task'; TaskType.fase (nom de fase) si scope='phase'.")
+    minuts = models.PositiveIntegerField()
+
+    class Meta:
+        unique_together = [('scope', 'key')]
+        verbose_name = 'Time seed'
+        verbose_name_plural = 'Time seeds'
+
+    def __str__(self):
+        return f'{self.scope}:{self.key}={self.minuts}'

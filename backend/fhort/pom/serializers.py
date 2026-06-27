@@ -7,6 +7,7 @@ from .models import (
     GarmentTypeGlobal,
     GradingRule,
     GradingRuleSet,
+    ItemBaseMeasurement,
     POMCategory,
     POMGlobal,
     POMMaster,
@@ -160,7 +161,7 @@ class GradingRuleSerializer(serializers.ModelSerializer):
             'pom_nom_en', 'pom_nom_ca', 'pom_abbreviation',
             'pom_code_global', 'pom_categoria',
             'talla_base', 'talla_base_etiqueta',
-            'logica', 'valor_base', 'increment', 'valors_step', 'actiu',
+            'logica', 'increment', 'valors_step', 'actiu',
             'increment_base', 'increment_break', 'talla_break_label', 'talla_break_pos',  # Peça A (vista)
         )
         read_only_fields = ('rule_set',)
@@ -285,4 +286,18 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
             'descripcio_en', 'descripcio_ca',
             'body_measure_iso_codi', 'body_measure_iso_nom',
             'is_key', 'obligatori', 'ordre', 'pendent_revisio',
+        )
+
+
+class ItemBaseMeasurementSerializer(serializers.ModelSerializer):
+    """Valor base + toleràncies de la plantilla de l'Item, per (item, pom). Sprint Mesures Base
+    per Item (P3). Inclou display del POM (codi/nom) per a la columna del POMBrowser ASSIGN (P4)."""
+    pom_codi = serializers.CharField(source='pom.codi_client', read_only=True)
+    pom_nom = serializers.CharField(source='pom.nom_client', read_only=True)
+
+    class Meta:
+        model = ItemBaseMeasurement
+        fields = (
+            'id', 'garment_type_item', 'pom', 'pom_codi', 'pom_nom',
+            'base_value_cm', 'tol_minus', 'tol_plus', 'nom_fitxa',
         )

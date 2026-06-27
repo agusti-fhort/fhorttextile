@@ -9,7 +9,7 @@ from django.db.models import Count, Q, ProtectedError
 
 from rest_framework.exceptions import ValidationError
 from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TASKS,
-                                         CLOSE_GATES, SCHEDULE_FITTINGS, CONFIGURE,
+                                         CLOSE_GATES, SCHEDULE_FITTINGS, CONFIGURE, VIEW_TEAM_TASKS,
                                          get_allowed_task_types, scope_model_task_queryset)
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
@@ -26,28 +26,16 @@ from .services_e import (request_production, set_production_status,
 from .services_g import lookup_estimated_minutes
 
 
-class TaskTypeViewSet(viewsets.ModelViewSet):
-    """Catàleg de tipus de tasca (editable). Lectura: autenticat. Escriptura: define_tasks."""
+class TaskTypeViewSet(viewsets.ReadOnlyModelViewSet):
+    """Catàleg CANÒNIC de tipus de tasca (propietat del sistema). READ-ONLY via API:
+    el tenant no l'edita (només list/retrieve, autenticat). L'alta/enriquiment del catàleg
+    viu a migracions de seed (patró POMGlobal), no a un CRUD del tenant. Escriure-hi
+    (POST/PUT/PATCH/DELETE) retorna 405 per a tothom, inclòs admin."""
     queryset = TaskType.objects.all()
     serializer_class = TaskTypeSerializer
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['active']
-
-    def get_permissions(self):
-        if self.action in ('list', 'retrieve'):
-            return [IsAuthenticated()]
-        perm = HasCapability(); self.required_capability = DEFINE_TASKS
-        return [perm]
-
-    def destroy(self, request, *args, **kwargs):
-        # FK ModelTask.task_type = PROTECT → si el tipus té instàncies, l'esborrat falla.
-        # Retornem 409 net (en lloc d'un 500 cru) perquè el front en mostri el missatge.
-        try:
-            return super().destroy(request, *args, **kwargs)
-        except ProtectedError:
-            return Response(
-                {'detail': "No es pot esborrar: hi ha tasques que l'usen. Desactiva'l en lloc d'esborrar."},
-                status=status.HTTP_409_CONFLICT)
 
 
 class ModelTaskViewSet(viewsets.ModelViewSet):
@@ -104,6 +92,8 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             ?temporada= (SS/FW/CO/SP)  ?estat= (Nou/EnCurs/EnRevisio/Tancat)
             ?fase_actual= (Proto/Fit/SizeSet/PP/TOP)  ?garment_type=<id>  ?any=<int>
             ?prioritat=<int>  ?responsable=<userprofile_id> | me (perfil de request.user)
+            ?customer=<id>  ?collection=<text icontains>  (campanya del board, Sprint 5)
+            ?data_objectiu_after=YYYY-MM-DD  ?data_objectiu_before=YYYY-MM-DD (rang inclusiu)
 
         Resposta (paginada, mateixa paginació del projecte):
           [{ model_id, model_codi, model_nom, fase, counts:{pending,paused,in_progress,done},
@@ -159,6 +149,24 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         if prioritat and prioritat.isdigit():
             qs = qs.filter(model__prioritat=int(prioritat))
 
+        # --- Filtres de campanya del board (Sprint 5): mirall additiu del filterset del Model
+        # list, perquè el board del Dashboard pugui acotar per client/col·lecció/data-objectiu
+        # igual que els comptadors per fase. Valors invàlids ignorats silenciosament. ---
+        customer = qp.get('customer')
+        if customer and customer.isdigit():
+            qs = qs.filter(model__customer_id=int(customer))
+        collection = (qp.get('collection') or '').strip()
+        if collection:
+            qs = qs.filter(model__collection__icontains=collection)
+        from datetime import date as _date
+        for param, lookup in (('data_objectiu_after', 'gte'), ('data_objectiu_before', 'lte')):
+            raw = qp.get(param)
+            if raw:
+                try:
+                    qs = qs.filter(**{f'model__data_objectiu__{lookup}': _date.fromisoformat(raw)})
+                except ValueError:
+                    pass   # data mal formada → s'ignora (no trenca la consulta)
+
         agg = (qs.values(
                    'model_id', 'model__codi_intern', 'model__nom_prenda', 'model__fase_actual',
                    'model__estat', 'model__temporada', 'model__prioritat', 'model__data_objectiu',
@@ -187,6 +195,22 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             # Per defecte només models amb alguna tasca no-Done (HAVING sobre els comptadors).
             agg = agg.filter(Q(pending__gt=0) | Q(paused__gt=0) | Q(in_progress__gt=0))
 
+        def kanban_state(pending, paused, in_progress, done):
+            """Estat-kanban derivat del model (única font de veritat al backend, Sprint 5 1c).
+            ∈ {pending, open, paused, done}. Ordre: feina viva mana sobre l'estàtica.
+              open    si in_progress>0
+              paused  si paused>0 i in_progress=0
+              pending si queda pendent (i res actiu/pausat)
+              done    si tot Done (cap pending/paused/in_progress)
+            Així el frontend no recalcula la classificació."""
+            if in_progress > 0:
+                return 'open'
+            if paused > 0:
+                return 'paused'
+            if pending > 0:
+                return 'pending'
+            return 'done'
+
         def shape(row):
             return {
                 'model_id': row['model_id'],
@@ -199,6 +223,8 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                     'in_progress': row['in_progress'],
                     'done': row['done'],
                 },
+                'kanban_state': kanban_state(
+                    row['pending'], row['paused'], row['in_progress'], row['done']),
                 # Extres additius (la UI els pot etiquetar sense una segona crida):
                 'prioritat': row['model__prioritat'],
                 'temporada': row['model__temporada'],
@@ -382,6 +408,122 @@ def transition_task_view(request, pk):
     except TransitionError as e:
         return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
     return Response(result, status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def claim_task_view(request, pk):
+    """POST /api/v1/model-task-items/<pk>/claim/   (sense body rellevant)
+
+    Self-claim entre tècnics (handoff §6): qui pot EXECUTAR una tasca pot fer-se-la SEVA, encara
+    que avui sigui d'un altre tècnic. És una porta NOVA i acotada — NO afluixa el PATCH genèric
+    (segueix gated define_tasks per a la planificació massiva) ni l'scope de llista (les cues
+    personals segueixen scopades). Mirall de transition_task_view (mateix estil de la casa:
+    view de funció + _ExecuteTasks + profile de request.user).
+
+    - Obté la tasca per pk DIRECTAMENT (NO via get_queryset() scopat): el dashboard del model és
+      transparent (decisió Agus) i el claim opera sobre el model sencer; el scope de llista
+      amagaria la tasca d'altri i tornaria un 404 fals.
+    - GUARD allow-list: el task_type ha de ser executable per qui reclama (admin = bypass dins
+      get_allowed_task_types). Mateix patró que la validació InProgress de transition_task_view.
+    - SELF-ONLY: assignee = el profile de request.user SEMPRE; MAI llegeix cap assignee del body
+      (a diferència del PATCH genèric, no es pot assignar a un tercer).
+    - Idempotent: si ja és teva, no-op (retorna-la tal qual, sense recompute).
+    - NO toca status (claim = fer-la meva; el Play/transition el dispara el front DESPRÉS, P3).
+    - Reassignació real (old != new) → dispara la MATEIXA cascada que perform_update
+      (cleanup_queue_order + recompute_for_technicians dels dos tècnics); no es duplica lògica.
+    """
+    from .models import ModelTask
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        task = ModelTask.objects.select_related('task_type').get(pk=pk)
+    except ModelTask.DoesNotExist:
+        return Response({'error': 'ModelTask no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+    # GUARD allow-list: no pots agafar una tasca d'un tipus que no executes (admin = bypass).
+    if task.task_type.code not in get_allowed_task_types(request.user):
+        return Response(
+            {'error': f"No pots agafar una tasca del tipus '{task.task_type.code}' "
+                      f"(no és a la teva allow-list d'execució)."},
+            status=http_status.HTTP_403_FORBIDDEN)
+    old_assignee_id = task.assignee_id
+    # Idempotent: ja és teva → no-op (cap reassignació, cap recompute).
+    if old_assignee_id == profile.id:
+        return Response(ModelTaskSerializer(task).data, status=http_status.HTTP_200_OK)
+    # Self-claim: SEMPRE a mi mateix. Mai un tercer.
+    task.assignee = profile
+    task.save(update_fields=['assignee', 'updated_at'])
+    # Mateixa cascada que ModelTaskViewSet.perform_update: old != new → neteja l'ordre manual i
+    # recalcula la cua SENCERA dels DOS tècnics. Reusem el servei de planificació (no dupliquem).
+    from fhort.planning.plan_service import recompute_for_technicians, cleanup_queue_order
+    cleanup_queue_order([old_assignee_id, profile.id], [task.model_id])
+    recompute_for_technicians([old_assignee_id, profile.id])
+    return Response(ModelTaskSerializer(task).data, status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def open_model_task_view(request, model_id):
+    """POST /api/v1/models/<model_id>/open-task/  Body: {"code": "pom"}
+
+    PORTA-MENÚ (zoom-in): obre una tasca CONCRETA del model des del menú, encara que NO estigui
+    assignada al tècnic actual. Orquestra (sense lògica nova) els camins ja vius:
+      1. CREA-si-falta la ModelTask del tipus `code` (idempotent per (model, task_type), igual que
+         define-tasks: order al final + snapshot d'estimació).
+      2. La posa En curs reusant `transition_task` (auto-assign + timer + exclusió un-InProgress).
+         Si ja és En curs d'un altre tècnic → la fa SEVA (claim, sense re-transicionar). Si ja és
+         meva i En curs → no-op.
+    Retorna {task_id, code, created, status} perquè el front navegui a l'eina amb el task_id.
+    """
+    code = (request.data or {}).get('code')
+    if not code:
+        return Response({'error': 'Cal el code del tipus de tasca.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        model = Model.objects.get(pk=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    try:
+        tt = TaskType.objects.get(code=code, active=True)
+    except TaskType.DoesNotExist:
+        return Response({'error': f"Tipus de tasca '{code}' no trobat o inactiu."}, status=http_status.HTTP_404_NOT_FOUND)
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'}, status=http_status.HTTP_403_FORBIDDEN)
+    # GUARD allow-list: només pots obrir un tipus que executes (admin = bypass) — igual que claim.
+    if code not in get_allowed_task_types(request.user):
+        return Response({'error': f"No pots obrir una tasca del tipus '{code}' (no és a la teva allow-list)."},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    # 1. Crea-si-falta (mirall de define_model_tasks_view).
+    task = ModelTask.objects.filter(model=model, task_type=tt).first()
+    created = False
+    if task is None:
+        order = ModelTask.objects.filter(model=model).count()
+        est = lookup_estimated_minutes(model, tt)
+        task = ModelTask.objects.create(model=model, task_type=tt, order=order,
+                                        status='Pending', estimated_minutes=est)
+        created = True
+    # 2. En curs (reusa transition_task) o claim si ja és En curs d'un altre.
+    if task.status != 'InProgress':
+        try:
+            transition_task(task, 'InProgress', profile)
+        except TransitionError as e:
+            return Response({'error': str(e)}, status=http_status.HTTP_409_CONFLICT)
+    elif task.assignee_id != profile.id:
+        old_assignee_id = task.assignee_id
+        task.assignee = profile
+        task.save(update_fields=['assignee', 'updated_at'])
+        from fhort.planning.plan_service import recompute_for_technicians, cleanup_queue_order
+        cleanup_queue_order([old_assignee_id, profile.id], [task.model_id])
+        recompute_for_technicians([old_assignee_id, profile.id])
+    task.refresh_from_db()
+    # F4 — gate SUPER SUAU: informem de quins camps de config falten (font única F1), però NO bloquegem
+    # l'obertura de la tasca. El Watchpoint persistent (F2/F3) ja mostra l'avís accionable; el tècnic decideix.
+    from fhort.models_app.services import model_config_missing
+    return Response({'task_id': task.id, 'code': code, 'created': created, 'status': task.status,
+                     'missing_config': model_config_missing(model)},
+                    status=http_status.HTTP_200_OK)
 
 
 class _CloseGates(HasCapability):
@@ -601,7 +743,9 @@ class _Configure(HasCapability):
 
 
 class GarmentTypeItemViewSet(viewsets.ModelViewSet):
-    queryset = GarmentTypeItem.objects.select_related('garment_type').all()
+    # B3b: select_related dels FK de completesa (ruleset/talla base) per evitar N+1 a la graella.
+    queryset = GarmentTypeItem.objects.select_related(
+        'garment_type', 'grading_rule_set', 'base_size_definition').all()
     serializer_class = GarmentTypeItemSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['garment_type', 'active']
@@ -628,3 +772,254 @@ class TaskTimeEstimateViewSet(viewsets.ModelViewSet):
 # Sprint B (motor): plan/compute + preview + apply + snapshots s'han mogut a
 # fhort/planning/views.py (motor determinista sobre el calendari laboral).
 # El plan/compute per-model-en-sèrie (Sprint H, services_h.py) queda jubilat.
+
+
+# ── Sprint M2 — Anàlisi de temps (rollup task_type→fase + arbre drill-down) ──────────────────
+# El motor de temps (Welford) viu a nivell de cel·la (garment_type_item × task_type). Aquí
+# s'AGREGA cap amunt per fase (TaskType.fase), de manera consultiva. Cap escriptura del motor.
+
+class _ViewTeamTasks(HasCapability):
+    required_capability = VIEW_TEAM_TASKS
+
+
+def _cell_effective_and_maturity(cell):
+    """(minuts|None, maduresa) d'una cel·la TaskTimeEstimate. maduresa ∈ empiric|seed|none.
+    Mirall de services_i.effective_minutes però retornant també l'origen (per a la cobertura)."""
+    from .services_i import WELFORD_MIN_SAMPLES
+    if cell.n >= WELFORD_MIN_SAMPLES and cell.mean_minutes > 0:
+        emp = int(round(cell.mean_minutes))
+        if emp > 0:
+            return emp, 'empiric'
+    seed = cell.estimated_minutes
+    if seed and seed > 0:
+        return int(seed), 'seed'
+    return None, 'none'
+
+
+# Acumulador genèric d'un node (fase, task_type, …): mitjana ponderada per n + cobertura.
+def _acc_factory():
+    return {'cells_total': 0, 'cells_empiric': 0, 'cells_seed': 0, 'cells_none': 0,
+            'n_total': 0, '_wsum': 0.0, '_w': 0, '_vsum': 0, '_vcount': 0}
+
+
+def _acc_add(a, cell):
+    """Acumula una cel·la TaskTimeEstimate al node. Pes = n (empíric) | 1 (seed)."""
+    a['cells_total'] += 1
+    a['n_total'] += cell.n
+    val, mat = _cell_effective_and_maturity(cell)
+    a['cells_' + mat] += 1
+    if val is not None:
+        w = cell.n if mat == 'empiric' else 1
+        a['_wsum'] += val * w
+        a['_w'] += w
+        a['_vsum'] += val
+        a['_vcount'] += 1
+
+
+def _acc_metrics(a):
+    """Projecta un acumulador a minuts ponderats + mitjana simple + maduresa + cobertura."""
+    return {
+        'minutes': int(round(a['_wsum'] / a['_w'])) if a['_w'] > 0 else None,
+        'avg_minutes': int(round(a['_vsum'] / a['_vcount'])) if a['_vcount'] else None,
+        'maturity': 'empiric' if a['cells_empiric'] > 0 else ('seed' if a['cells_seed'] > 0 else 'empty'),
+        'cells_total': a['cells_total'], 'cells_empiric': a['cells_empiric'],
+        'cells_seed': a['cells_seed'], 'cells_none': a['cells_none'], 'n_total': a['n_total'],
+    }
+
+
+def _phase_rollup(cells):
+    """Rollup task_type→fase sobre un iterable de TaskTimeEstimate (amb task_type carregat).
+    Retorna {fase: acumulador}."""
+    from collections import defaultdict
+    acc = defaultdict(_acc_factory)
+    for c in cells:
+        _acc_add(acc[c.task_type.fase], c)
+    return acc
+
+
+def _phase_summary(fase, a):
+    """Projecta l'acumulador d'una fase a la forma servible (None-safe)."""
+    return {'fase': fase, **_acc_metrics(a if a else _acc_factory())}
+
+
+@api_view(['GET'])
+@permission_classes([_ViewTeamTasks])
+def time_by_phase_view(request):
+    """GET /api/v1/time-analysis/by-phase/ — temps estadístic agregat per fase (rollup
+    task_type→fase). Inclou TOTES les fases del catàleg; les buides surten amb maturity='empty'.
+    Gated view_team_tasks (manager/admin)."""
+    from .services_i import WELFORD_MIN_SAMPLES
+    cells = TaskTimeEstimate.objects.select_related('task_type').all()
+    acc = _phase_rollup(cells)
+    phases = [_phase_summary(fase, acc.get(fase)) for fase, _label in TaskType.FASE_CHOICES]
+    return Response({'phases': phases, 'welford_min_samples': WELFORD_MIN_SAMPLES})
+
+
+def _cell_item_payload(c):
+    """Projecta una cel·la a la fulla de l'arbre: estimat (seed) vs real (mean) vs n vs desviació."""
+    val, mat = _cell_effective_and_maturity(c)
+    seed = int(c.estimated_minutes) if (c.estimated_minutes and c.estimated_minutes > 0) else None
+    mean = int(round(c.mean_minutes)) if (c.n > 0 and c.mean_minutes > 0) else None
+    item = c.garment_type_item
+    gt = getattr(item, 'garment_type', None) if item else None
+    gt_nom = ''
+    if gt:
+        gt_nom = (gt.nom_client or gt.nom_ca or gt.nom_es or gt.nom_en or gt.codi_client
+                  or f'#{gt.id}')
+    return {
+        'garment_type_item_id': c.garment_type_item_id,
+        'item_nom': getattr(item, 'name', '') if item else '',
+        'garment_type_id': getattr(gt, 'id', None),
+        'garment_type_nom': gt_nom,
+        'task_type_code': c.task_type.code,
+        'estimated_minutes': seed,
+        'mean_minutes': mean,
+        'effective_minutes': val,
+        'n': c.n,
+        'desviacio_min': (mean - seed) if (mean is not None and seed is not None) else None,
+        'desviacio_pct': int(round((mean - seed) / seed * 100)) if (mean is not None and seed) else None,
+        'maturity': mat,
+    }
+
+
+@api_view(['GET'])
+@permission_classes([_ViewTeamTasks])
+def time_tree_view(request):
+    """GET /api/v1/time-analysis/tree/ — arbre consultiu fase→task_type→item amb temps estimat
+    (seed) vs real (mean) vs n vs desviació vs maduresa per cel·la. Reusa el rollup ponderat del
+    commit 1 a cada node. Filtres opcionals: ?fase= ?task_type=(code) ?garment_type=
+    ?garment_type_item=. Gated view_team_tasks."""
+    from .services_i import WELFORD_MIN_SAMPLES
+    qs = TaskTimeEstimate.objects.select_related(
+        'task_type', 'garment_type_item', 'garment_type_item__garment_type').all()
+    fase = request.query_params.get('fase')
+    if fase:
+        qs = qs.filter(task_type__fase=fase)
+    tt = request.query_params.get('task_type')
+    if tt:
+        qs = qs.filter(task_type__code=tt)
+    gt = request.query_params.get('garment_type')
+    if gt:
+        qs = qs.filter(garment_type_item__garment_type_id=gt)
+    gti = request.query_params.get('garment_type_item')
+    if gti:
+        qs = qs.filter(garment_type_item_id=gti)
+
+    phases = {}   # fase → {'acc', 'tts': {tt_id: {'code','name','fase','acc','items'}}}
+    for c in qs:
+        ph = phases.setdefault(c.task_type.fase, {'acc': _acc_factory(), 'tts': {}})
+        _acc_add(ph['acc'], c)
+        node = ph['tts'].setdefault(c.task_type_id, {
+            'code': c.task_type.code, 'name': c.task_type.name, 'fase': c.task_type.fase,
+            'acc': _acc_factory(), 'items': []})
+        _acc_add(node['acc'], c)
+        node['items'].append(_cell_item_payload(c))
+
+    out = []
+    for fase, _label in TaskType.FASE_CHOICES:
+        ph = phases.get(fase)
+        if not ph:
+            continue   # fase sense cel·les (després de filtrar) → fora de l'arbre
+        tts = []
+        for node in ph['tts'].values():
+            node['items'].sort(key=lambda x: (x['item_nom'] or ''))
+            tts.append({'code': node['code'], 'name': node['name'], 'fase': node['fase'],
+                        **_acc_metrics(node['acc']), 'items': node['items']})
+        tts.sort(key=lambda x: x['code'])
+        out.append({'fase': fase, **_acc_metrics(ph['acc']), 'task_types': tts})
+    return Response({'phases': out, 'welford_min_samples': WELFORD_MIN_SAMPLES})
+
+
+@api_view(['POST'])
+@permission_classes([_DefineTasks])
+def time_set_estimate_view(request):
+    """POST /api/v1/time-analysis/set-estimate/ — captura-PM (graó 4 de la cascada de temps):
+    fixa el seed (estimated_minutes) d'una cel·la (garment_type_item × task_type), creant-la si no
+    existeix. NO toca mai l'empíric (n/mean/m2). Body: {garment_type_item, task_type(code), minutes}.
+    Gated define_tasks. Retorna la fulla actualitzada (mateixa forma que l'arbre)."""
+    gti = request.data.get('garment_type_item')
+    code = request.data.get('task_type')
+    minutes = request.data.get('minutes')
+    if not gti or not code:
+        return Response({'error': 'garment_type_item i task_type requerits.'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        minutes = int(minutes)
+    except (TypeError, ValueError):
+        return Response({'error': 'minutes ha de ser un enter.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    if minutes <= 0:
+        return Response({'error': 'minutes ha de ser > 0.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        tt = TaskType.objects.get(code=code)
+    except TaskType.DoesNotExist:
+        return Response({'error': 'task_type no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    if not GarmentTypeItem.objects.filter(pk=gti).exists():
+        return Response({'error': 'garment_type_item no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    cell, _created = TaskTimeEstimate.objects.get_or_create(garment_type_item_id=gti, task_type=tt)
+    cell.estimated_minutes = minutes
+    cell.save(update_fields=['estimated_minutes'])   # NOMÉS el seed; mai n/mean/m2
+    cell = TaskTimeEstimate.objects.select_related(
+        'task_type', 'garment_type_item', 'garment_type_item__garment_type').get(pk=cell.pk)
+    return Response(_cell_item_payload(cell), status=http_status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([_ViewTeamTasks])
+def time_by_model_view(request):
+    """GET /api/v1/time-analysis/by-model/ — anàlisi de temps amb el MODEL com a eix.
+
+    L'eix tècnic (TaskTimeEstimate, `garment_type_item × task_type`) NO té dimensió model
+    (`unique_together=[('garment_type_item','task_type')]`); per tant el "per model" NO es pot
+    derivar de l'arbre `tree`/`by-phase`. La dimensió model viu a `ModelTask.model` (snapshot
+    `estimated_minutes` per tasca) + `TimerEntrada.minuts` (real consolidat). Aquesta vista
+    reusa la MATEIXA mètrica est/real/n/desviació/maduresa de l'arbre, agrupant
+    model → fase → task_type (cada model té com a molt una ModelTask per task_type:
+    `unique_together=[('model','task_type')]`, doncs el task_type és la fulla).
+
+    Filtres opcionals: ?model=id ?fase=. Gated view_team_tasks (com la resta d'anàlisi de temps)."""
+    from django.db.models import Sum
+    from .models import TimerEntrada
+    qs = ModelTask.objects.select_related('task_type', 'model').all()
+    model_id = request.query_params.get('model')
+    if model_id:
+        qs = qs.filter(model_id=model_id)
+    fase = request.query_params.get('fase')
+    if fase:
+        qs = qs.filter(task_type__fase=fase)
+    # Real consolidat per ModelTask = Sum(timers.minuts); timers oberts (minuts NULL) fora (B1-a).
+    # Mateixa regla que l'albarà (models_app/views.py) i el helper canònic _real_minutes. 1 query.
+    real_per_task = {r['model_task_id']: (r['s'] or 0) for r in (
+        TimerEntrada.objects.filter(model_task__in=qs)
+        .values('model_task_id').annotate(s=Sum('minuts')))}
+
+    fase_order = {f: i for i, (f, _l) in enumerate(TaskType.FASE_CHOICES)}
+    models = {}   # model_id → {label, nom, est, real, n, fases: {fase: {...}}}
+    for tk in qs:
+        m = models.setdefault(tk.model_id, {
+            'model_id': tk.model_id, 'label': tk.model.codi_intern,
+            'nom': tk.model.nom_prenda or '', 'est': 0, 'real': 0, 'n': 0, 'fases': {}})
+        ph = m['fases'].setdefault(tk.task_type.fase, {
+            'fase': tk.task_type.fase, 'est': 0, 'real': 0, 'n': 0, 'tasks': []})
+        est = int(tk.estimated_minutes or 0)
+        real = int(real_per_task.get(tk.id, 0))
+        ph['tasks'].append({
+            'task_type_code': tk.task_type.code, 'task_type_name': tk.task_type.name,
+            'status': tk.status,
+            'estimated_minutes': est or None, 'real_minutes': real or None,
+            'desviacio_min': (real - est) if (est and real) else None,
+            'desviacio_pct': int(round((real - est) / est * 100)) if (est and real) else None,
+            'maturity': 'empiric' if real else ('seed' if est else 'none'),
+        })
+        for node in (m, ph):
+            node['est'] += est
+            node['real'] += real
+            node['n'] += 1
+
+    out = []
+    for m in sorted(models.values(), key=lambda x: x['label']):
+        fases = sorted(m['fases'].values(), key=lambda x: fase_order.get(x['fase'], 99))
+        for ph in fases:
+            ph['tasks'].sort(key=lambda x: x['task_type_code'])
+        out.append({'model_id': m['model_id'], 'label': m['label'], 'nom': m['nom'],
+                    'est': m['est'], 'real': m['real'], 'n': m['n'], 'fases': fases})
+    return Response({'models': out})

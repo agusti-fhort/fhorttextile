@@ -7,6 +7,7 @@ from .views import (
     GarmentTypeViewSet,
     GradingRuleSetViewSet,
     GradingRuleViewSet,
+    ItemBaseMeasurementViewSet,
     POMCategoryViewSet,
     POMMasterViewSet,
     SizeDefinitionViewSet,
@@ -23,6 +24,7 @@ router.register('garment-types', GarmentTypeViewSet, basename='garment-type')
 router.register('grading-rule-sets', GradingRuleSetViewSet, basename='grading-rule-set')
 router.register('grading-rules', GradingRuleViewSet, basename='grading-rule')
 router.register('garment-pom-maps', GarmentPOMMapViewSet, basename='garment-pom-map')
+router.register('item-base-measurements', ItemBaseMeasurementViewSet, basename='item-base-measurement')
 
 # Sprint 7A — POM wizard. The 'poms/suggerits/', 'poms/cerca/' and
 # 'poms/crear-tenant/' paths would collide with POMMasterViewSet detail (poms/<pk>/);

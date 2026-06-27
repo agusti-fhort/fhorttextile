@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { fittingSessions, models } from '../api/endpoints'
 import Card from '../components/ui/Card'
@@ -26,13 +26,15 @@ const fieldStyle = { marginBottom: '1rem' }
 export default function FittingSessionNew() {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const [sp] = useSearchParams()
+  const prefillModel = sp.get('model') || ''   // convocat des del llenç del model (porta-menú)
   const [modelList, setModelList] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
     fase: 'Proto',
     data: todayISO(),
-    model: '',
+    model: prefillModel,
     model_persona: '',
     assistents: '',
     lloc: '',

@@ -338,24 +338,26 @@ def create_piece_fitting(session_id: int, model_id: int, *, created_by_id: int |
     return pf, n
 
 
-def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = None) -> dict:
-    """Close a PieceFitting, applying validated real values with FUNCTIONAL versioning.
+def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = None,
+                        allow_reopen_sealed: bool = False) -> dict:
+    """Close a PieceFitting, applying validated BASE real values with FUNCTIONAL versioning.
 
-    For each line where valor_real differs from valor_teoric:
-      - BASE size  → promote to BaseMeasurement (root change) → F1 signal logs the
-        change, measurements_version++, grading regenerated from the new base.
-      - NON-base   → ModelGradingOverride (per-model, traceable), root untouched.
-      - Welford fed with the real value (keyed by codi_client).
-    Any validated change → a NEW GradingVersion (v+1) is created and the previous one
-    deactivated (conserved). The brain stub is called once if anything changed.
+    PEÇA 4: la sessió de fitting toca NOMÉS la talla base. Per cada línia de la talla
+    BASE on valor_real difereix de valor_teoric:
+      - promociona a BaseMeasurement (canvi d'arrel) → el senyal F1 registra el canvi,
+        measurements_version++, i el grading es regenera des de la base nova.
+      - Welford s'alimenta amb el valor_real base (keyed by codi_client).
+    Les talles NO-base s'IGNOREN aquí: els breaks per talla es fan a l'editor propagat
+    del model (ModelGradingOverride via set-size-override, PEÇA 1/2), no en tancar la
+    sessió. Qualsevol canvi base → NOVA GradingVersion (v+1) i es desactiva l'anterior
+    (conservada); re-propaga la base a totes les talles (override→exception→regla→FIXED).
+    El brain stub es crida un cop si hi ha hagut canvi.
 
     Returns: {'changed', 'base_changed', 'override_changed', 'new_version'}.
+    'override_changed' es manté per compat. de forma però SEMPRE és False (PEÇA 4).
     """
-    from django.db.models import F, Max
-    from fhort.fitting.models import (
-        PieceFitting, PieceFittingLine, GradingVersion,
-    )
-    from fhort.models_app.models import Model, BaseMeasurement, ModelGradingOverride
+    from fhort.fitting.models import PieceFitting, PieceFittingLine
+    from fhort.models_app.models import BaseMeasurement
 
     pf = PieceFitting.objects.select_related(
         'model', 'grading_version', 'grading_version__size_fitting',
@@ -383,34 +385,28 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
             continue
         if abs(line.valor_real - line.valor_teoric) < 1e-6:
             continue  # no change on this line
-        changed += 1
         is_base = line.size_label.strip() == base_size
+        if not is_base:
+            # PEÇA 4: la sessió de fitting toca NOMÉS la talla base. Els ajustos per talla
+            # (breaks) es fan a l'editor propagat del model (ModelGradingOverride, via
+            # set-size-override — PEÇA 1/2), no en tancar una sessió. Abans aquí s'escrivia
+            # un ModelGradingOverride per talla; s'ha retirat per desfer el deute sessió→override.
+            # Per tant una talla no-base ni compta com a canvi, ni alimenta Welford, ni versiona.
+            continue
+        changed += 1
 
-        if is_base:
-            # Root change → BaseMeasurement (the F1 signal writes the change log).
-            bm, _created = BaseMeasurement.objects.get_or_create(
-                model=model, pom=line.pom,
-                defaults={'base_value_cm': line.valor_real, 'origen': 'FITTED'},
-            )
-            bm.base_value_cm = line.valor_real
-            bm.origen = 'FITTED'
-            bm._changed_by = auth_user
-            bm._fitting_ref = sf            # MeasurementChangeLog.fitting_ref (→ SizeFitting)
-            bm._motiu = f'Fitting · sessió {pf.session_id} · peça {pf.pk}'
-            bm.save()
-            base_changed = True
-        else:
-            # Per-model override (does NOT touch the shared rule_set or the root).
-            ModelGradingOverride.objects.update_or_create(
-                model=model, pom=line.pom, size_label=line.size_label,
-                defaults={
-                    'value_cm': line.valor_real,
-                    'motiu': f'Fitting · sessió {pf.session_id} · peça {pf.pk}',
-                    'fitting_ref': pf,
-                    'created_by': profile,
-                },
-            )
-            override_changed = True
+        # Root change → BaseMeasurement (the F1 signal writes the change log).
+        bm, _created = BaseMeasurement.objects.get_or_create(
+            model=model, pom=line.pom,
+            defaults={'base_value_cm': line.valor_real, 'origen': 'FITTED'},
+        )
+        bm.base_value_cm = line.valor_real
+        bm.origen = 'FITTED'
+        bm._changed_by = auth_user
+        bm._fitting_ref = sf            # MeasurementChangeLog.fitting_ref (→ SizeFitting)
+        bm._motiu = f'Fitting · sessió {pf.session_id} · peça {pf.pk}'
+        bm.save()
+        base_changed = True
 
         # Welford (keyed by codi_client within the tenant).
         if model.garment_type_id:
@@ -428,29 +424,20 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
 
     new_version_number = None
     if changed:
-        # Functional versioning: deactivate ALL active versions (handles the
-        # legacy multi-active anomaly), then create the new active one.
-        GradingVersion.objects.filter(size_fitting=sf, is_active=True).update(is_active=False)
-        max_num = GradingVersion.objects.filter(size_fitting=sf).aggregate(
-            m=Max('version_number')
-        )['m'] or 0
-        new_version = GradingVersion.objects.create(
-            size_fitting=sf,
-            version_number=max_num + 1,
-            is_active=True,
-            creat_per=profile,
+        # PEÇA 1: versionat funcional centralitzat al helper (guard D-1 + desactiva actives +
+        # crea v+1 + measurements_version++ si base_changed + re-propaga). Mateix comportament
+        # que el bloc inline anterior; ara compartit amb resolve_size_check i la propagació
+        # conscient (PEÇA 2).
+        from fhort.pom.services import bump_grading_version_and_generate
+        new_version = bump_grading_version_and_generate(
+            sf.pk,
+            base_changed=base_changed,
+            profile_id=user_profile_id,
+            allow_reopen_sealed=allow_reopen_sealed,
             nom=f'Fitting sessió {pf.session_id}',
+            reopen_context=f'PieceFitting {pf.pk}',
         )
         new_version_number = new_version.version_number
-
-        if base_changed:
-            Model.objects.filter(pk=model.pk).update(
-                measurements_version=F('measurements_version') + 1
-            )
-
-        # Regenerate grading into the NEW active version (reads new base + overrides).
-        from fhort.pom.services import generate_graded_specs
-        generate_graded_specs(sf.pk)
 
         # Brain stub (decoupled; no propagation yet).
         from fhort.fitting.brain import on_fitting_measurement_changed
@@ -519,6 +506,52 @@ def _active_grading_version(sf):
         .order_by('-version_number')
         .first()
     )
+
+
+def vigent_grading_version(sf):
+    """GradingVersion VIGENT d'un SizeFitting per a SUPERFÍCIES DE LECTURA
+    (graded-table, taula-mesures, resposta de generar-grading): criteri ÚNIC compartit
+    perquè tots els lectors coincideixin en "quina versió mana".
+
+    is_active prioritari (via _active_grading_version, que desempata per -version_number);
+    si cap versió és activa (anomalia de dades), fallback a la més recent
+    (-version_number, després -data). NO es muta _active_grading_version perquè
+    seal_model_grading / close_piece_fitting / generate_grading_view n'exigeixen
+    estrictament l'activa.
+    """
+    from fhort.fitting.models import GradingVersion
+    gv = _active_grading_version(sf)
+    if gv is None:
+        gv = (
+            GradingVersion.objects
+            .filter(size_fitting=sf)
+            .order_by('-version_number', '-data')
+            .first()
+        )
+    return gv
+
+
+def seal_model_grading(model, *, user_profile_id=None, now=None):
+    """Segella (aprovada=True) la GradingVersion activa del SizeFitting de treball del model.
+
+    D-3: el segellat és CONSEQÜÈNCIA de l'avanç de gate (decisió humana de maduresa),
+    no de tancar una sessió de fitting. Retorna el pk de la versió segellada, o None si
+    el model no té SizeFitting de treball ni versió activa.
+    """
+    from django.utils import timezone
+    if now is None:
+        now = timezone.now()
+    sf = _resolve_working_size_fitting(model)
+    if sf is None:
+        return None
+    version = _active_grading_version(sf)
+    if version is None:
+        return None
+    version.aprovada = True
+    version.aprovada_per_id = user_profile_id
+    version.data_aprovacio = now
+    version.save(update_fields=['aprovada', 'aprovada_per', 'data_aprovacio'])
+    return version.pk
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -655,7 +688,6 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
     Per-piece TOP guard: a piece already at 'TOP' asked to advance from TOP is a
     no-op (skipped, reported), not an error.
     """
-    from django.utils import timezone
     from fhort.fitting.models import FittingSession, PieceFitting
     from fhort.models_app.models import Model
 
@@ -687,44 +719,25 @@ def advance_phase(session_id: int, nova_fase: str, *, user_profile_id: int | Non
             f"No es pot avançar: cap confecció entregada per a la fase actual dels models {missing}."
         )
 
-    now = timezone.now()
+    # D-3: 'sealed' i 'advanced' queden SEMPRE buits a posta (fitting ja no segella ni
+    # avança fase; vegeu peces 2 i 3). Es conserven al result per estabilitat de la forma.
     sealed = []
     advanced = []
     skipped_top = []
 
     for pf in pieces:
-        # TODO(§3.3 — deute conscient): Model.fase_actual el deriva avui tasks
-        # (recalculate_current_phase via signal). Amb tasks=0 no hi ha conflicte;
-        # la reconciliació múscul↔tasques és posterior. Escriptura directa a posta.
         model = pf.model
         if model.fase_actual == 'TOP':
             skipped_top.append(model.pk)
             continue
 
-        # Seal the vigent (active) GradingVersion of this piece's SizeFitting.
-        version = _active_grading_version(pf.grading_version.size_fitting)
-        if version is not None:
-            version.aprovada = True
-            version.aprovada_per_id = user_profile_id
-            version.data_aprovacio = now
-            version.save(update_fields=['aprovada', 'aprovada_per', 'data_aprovacio'])
-            sealed.append(version.pk)
-
-        prev_phase = model.fase_actual
-        Model.objects.filter(pk=model.pk).update(fase_actual=nova_fase)
-        advanced.append(model.pk)
-
-        try:
-            from fhort.tasks.models import GateEvent
-            GateEvent.objects.create(
-                model_id=model.pk,
-                from_phase=prev_phase,
-                to_phase=nova_fase,
-                by_id=user_profile_id,
-                notes='(via fitting)',
-            )
-        except Exception:
-            pass  # no trencar el fitting si el log falla
+        # D-3 peça 2: el segellat del grading (aprovada=True) ja NO es fa en tancar la
+        # sessió de fitting; és conseqüència de l'avanç de gate
+        # (tasks.advance_phase_gate → fitting.seal_model_grading).
+        # D-3 peça 3: fitting.advance_phase TAMPOC escriu Model.fase_actual ni crea
+        # GateEvent. L'avanç de fase és competència EXCLUSIVA de l'avanç de gate
+        # (tasks.advance_phase_gate, únic amo de fase_actual). La sessió de fitting és
+        # només indicador de maduresa i es tanca amb _seal_session.
 
     _seal_session(session)
 

@@ -41,579 +41,6 @@ def parse_any(raw):
         return _dt.date.today().year
 
 
-def _create_pom_alert(model, pom_master, client_code, description, confidence, match_type):
-    """Create a POMAlert for uncertain matches (MEDIUM/LOW) or newly created POMs."""
-    try:
-        from fhort.fitting.models import POMAlert
-        # Real POMAlert.tipus choices: 'desviacio', 'fora_rang', 'manca', 'conflicte'.
-        # New POMs → 'manca' (not in the catalog); medium matches → 'conflicte'.
-        tipus = 'manca' if match_type == 'auto_created' else 'conflicte'
-        if match_type == 'auto_created':
-            missatge = (
-                f'POM nou creat automàticament: "{client_code}" ({description}). '
-                f'Cal completar la descripció, creixements i vincular al catàleg global.'
-            )
-        else:
-            missatge = (
-                f'POM "{client_code}" ({description}) importat amb confiança {confidence} '
-                f'via {match_type}. Assignat a: {pom_master.codi_client} ({pom_master.nom_client}). '
-                f"Verificar que l'assignació és correcta."
-            )
-        POMAlert.objects.create(
-            model=model,
-            pom=pom_master,
-            tipus=tipus,
-            missatge=missatge,
-            origen='IMPORTACIO',
-            estat='Pendent',
-            creat_per='sistema',
-        )
-    except Exception:
-        # Do not block the import if creating the alert fails.
-        pass
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-@parser_classes([MultiPartParser, FormParser])
-def extract_from_file_view(request):
-    """
-    POST /api/v1/models/extract-from-file/
-    Multipart: file (required), generate_thumbnail (optional, default=true)
-
-    Return the extraction JSON + the Design Freeze gate result.
-    Does not create any Model — it is a preview/analysis operation.
-    """
-    file_obj = request.FILES.get('file')
-    if not file_obj:
-        return Response({'error': 'Cal adjuntar un fitxer (camp "file")'}, status=400)
-
-    max_size_mb = 20
-    if file_obj.size > max_size_mb * 1024 * 1024:
-        return Response({'error': f'El fitxer supera el màxim de {max_size_mb}MB'}, status=400)
-
-    allowed_extensions = {'.pdf', '.png', '.jpg', '.jpeg', '.webp'}
-    import os
-    ext = os.path.splitext(file_obj.name)[1].lower()
-    if ext not in allowed_extensions:
-        return Response(
-            {'error': f'Format no suportat: {ext}. Acceptats: {", ".join(allowed_extensions)}'},
-            status=400
-        )
-
-    try:
-        file_bytes = file_obj.read()
-    except Exception as e:
-        return Response({'error': f'Error llegint el fitxer: {e}'}, status=400)
-
-    wizard_context = {
-        'target_codi':        request.data.get('target_codi', ''),
-        'garment_type_codi':  request.data.get('garment_type_codi', ''),
-        'garment_type_nom':   request.data.get('garment_type_nom', ''),
-        'size_system_codi':   request.data.get('size_system_codi', ''),
-        'size_system_id':     request.data.get('size_system_id', ''),
-        'size_run':           request.data.get('size_run', ''),
-        'base_size':          request.data.get('base_size', ''),
-        'construction_codi':  request.data.get('construction_codi', ''),
-        'fit_type_codi':      request.data.get('fit_type_codi', ''),
-    }
-
-    try:
-        from fhort.models_app.extraction_service import extract_from_file, check_design_freeze
-        extracted = extract_from_file(file_bytes, file_obj.name, wizard_context)
-        design_freeze = check_design_freeze(extracted)
-    except ValueError as e:
-        return Response({'error': str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).exception("Error en extracció de fitxa tècnica")
-        return Response({'error': f'Error intern: {e}'}, status=500)
-
-    return Response({
-        'filename': file_obj.name,
-        'file_size_kb': round(file_obj.size / 1024, 1),
-        'extracted': extracted,
-        'design_freeze': design_freeze,
-        'wizard_context': wizard_context,
-    })
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def create_from_extraction_view(request):
-    """
-    POST /api/v1/models/create-from-extraction/
-    Body: {extracted: {...}, overrides: {...}}
-
-    Create a Model + BaseMeasurements from the extraction JSON.
-    Only works if design_freeze.pass == true.
-    """
-    extracted = request.data.get('extracted')
-    overrides = request.data.get('overrides', {})
-    wizard_context = request.data.get('wizard_context', {}) or {}
-
-    if not extracted:
-        return Response({'error': 'Cal proporcionar el camp "extracted"'}, status=400)
-
-    from fhort.models_app.extraction_service import check_design_freeze
-    df = check_design_freeze(extracted)
-    if not df['pass']:
-        return Response({
-            'error': 'El document no passa el gate de Design Freeze',
-            'blockers': df['blockers'],
-        }, status=422)
-
-    def val(field, fallback=None):
-        v = extracted.get(field)
-        if isinstance(v, dict):
-            return v.get('value') or fallback
-        return v or fallback
-
-    # Apply user overrides, with fallback to wizard_context
-    style_name = overrides.get('style_name') or val('style_name') or val('style_code')
-    temporada = overrides.get('temporada') or val('season', 'SS')
-    any_ = overrides.get('any') or val('year')
-    base_size = overrides.get('base_size') or val('base_size') or wizard_context.get('base_size')
-
-    # Fix A — normalized size_run (wizard as the last safety net)
-    size_run_raw = (
-        overrides.get('size_run')
-        or val('size_run')
-        or wizard_context.get('size_run')
-    )
-    size_run = normalize_size_run(size_run_raw)
-
-    # Fix D — correct year (2 digits → 4, fallback to the current year)
-    any_value = parse_any(any_)
-
-    # Fix C — codi_client required for the pre_save signal (generates codi_intern)
-    codi_client = (overrides.get('codi_client') or '').strip().upper()
-    if not codi_client:
-        ref = val('style_reference') or val('style_code') or ''
-        codi_client = _re.sub(r'[^A-Z0-9]', '', str(ref).upper())[:6]
-    if not codi_client:
-        codi_client = _re.sub(r'[^A-Z]', '', str(style_name or 'IMP').upper())[:3]
-    if not codi_client:
-        codi_client = 'IMP'
-
-    # codi_tenant i prefix del codi_intern: ja NO es deriven aquí. Aquest flux d'import encara
-    # no porta selector de Customer, així que cau al self-customer del tenant (helper
-    # customer_code_for via el signal). codi_client segueix guardant la referència/SKU del client.
-
-    try:
-        from django_tenants.utils import schema_context
-        from fhort.models_app.models import Model, BaseMeasurement, ModelFitxer
-        from fhort.pom.models import POMMaster, GarmentType
-
-        tenant_schema = request.tenant.schema_name if hasattr(request, 'tenant') else 'fhort'
-
-        with schema_context(tenant_schema):
-            # garment_type is NOT NULL on the Model. Priorities:
-            # 1) wizard_context.garment_type_codi → exact match by codi_client
-            # 2) overrides.garment_type → match by name/code (heuristic)
-            # 3) val('garment_type_code') / val('garment_type') → heuristic match
-            # 4) first available GarmentType as fallback
-            gt = None
-            wiz_gt_codi = (wizard_context.get('garment_type_codi') or '').strip()
-            if wiz_gt_codi:
-                gt = GarmentType.objects.filter(codi_client__iexact=wiz_gt_codi).first()
-
-            if gt is None:
-                gt_hint = (
-                    overrides.get('garment_type')
-                    or val('garment_type_code')
-                    or val('garment_type')
-                    or ''
-                )
-                if gt_hint:
-                    gt = (
-                        GarmentType.objects.filter(codi_client__iexact=gt_hint).first()
-                        or GarmentType.objects.filter(nom_client__icontains=gt_hint).first()
-                        or GarmentType.objects.filter(codi_client__icontains=gt_hint).first()
-                    )
-            if gt is None:
-                gt = GarmentType.objects.first()
-            if gt is None:
-                return Response(
-                    {'error': 'No hi ha cap GarmentType configurat al tenant; cal sembrar-ne almenys un.'},
-                    status=422,
-                )
-
-            # Create the model — or use the existing one if overrides.model_id
-            model_id_override = overrides.get('model_id')
-            if model_id_override:
-                try:
-                    model = Model.objects.get(id=int(model_id_override))
-                    if base_size:
-                        model.base_size_label = base_size
-                    if size_run:
-                        model.size_run_model = size_run
-                    model.save()
-                except Model.DoesNotExist:
-                    return Response(
-                        {'error': f'Model {model_id_override} no trobat'},
-                        status=404,
-                    )
-            else:
-                from fhort.models_app.services import get_self_customer
-                model = Model.objects.create(
-                    nom_prenda=style_name,
-                    temporada=temporada[:2].upper() if temporada else 'SS',
-                    any=any_value,
-                    base_size_label=base_size,
-                    size_run_model=size_run,
-                    codi_client=codi_client,
-                    # customer → self-customer (sense selector en aquest flux); el signal genera
-                    # codi_intern i codi_tenant a partir del seu codi. Fallback elegant.
-                    customer=get_self_customer(),
-                    sequencial=overrides.get('sequencial', 1),
-                    responsable_id=request.user.id,
-                    garment_type=gt,
-                )
-
-            # === SIZE SYSTEM ===
-            # Priority:
-            #   1) explicit override (size_system = id)
-            #   2) wizard_context.size_system_id (id) or size_system_codi (codi)
-            #   3) heuristic (alpha + garment group).
-            from fhort.pom.models import SizeSystem
-            size_system_assigned = None
-            size_system_id = overrides.get('size_system') or wizard_context.get('size_system_id')
-            wiz_ss_codi = (wizard_context.get('size_system_codi') or '').strip()
-            ss = None
-            if size_system_id:
-                try:
-                    ss = SizeSystem.objects.get(id=size_system_id)
-                except Exception:
-                    ss = None
-            if ss is None and wiz_ss_codi:
-                ss = SizeSystem.objects.filter(codi__iexact=wiz_ss_codi).first()
-            if ss is not None:
-                model.size_system = ss
-                model.save(update_fields=['size_system'])
-                size_system_assigned = ss.codi
-            else:
-                sizes_list = [s for s in (size_run or '').split('·') if s]
-                has_alpha = any(
-                    s.upper() in ('XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL')
-                    for s in sizes_list
-                )
-                garment_group_code = (extracted.get('garment_group_code') or '').upper()
-                if has_alpha and garment_group_code in (
-                    'DRESSES', 'TOPS', 'BOTTOMS', 'OUTERWEAR'
-                ):
-                    ss = SizeSystem.objects.filter(codi='ALPHA_EU_W').first()
-                    if ss:
-                        model.size_system = ss
-                        model.save(update_fields=['size_system'])
-                        size_system_assigned = ss.codi
-
-            # Matching POMMaster: usa la funció de mòdul find_pom_master (extreta per
-            # poder-la reutilitzar des de l'extracció per sessió, W2).
-            poms_created = 0
-            poms_skipped = []
-            match_log = []
-
-            for i, pom_data in enumerate(extracted.get('poms', [])):
-                base_value = pom_data.get('base_value_cm')
-                if not base_value:
-                    continue
-
-                code = pom_data.get('code', '') or ''
-                description = pom_data.get('description', '') or ''
-
-                pm, match_type, confidence = find_pom_master(code, description)
-
-                if not pm:
-                    # No match — create a new POMMaster marked as pending review.
-                    nou_codi = f"{code}-M{model.id}"
-                    if POMMaster.objects.filter(codi_client=nou_codi).exists():
-                        nou_codi = f"{code}-M{model.id}-{_dt.datetime.now().strftime('%H%M%S')}"
-                    pm = POMMaster.objects.create(
-                        pom_global=None,
-                        codi_client=nou_codi,
-                        nom_client=description or code,
-                        notes=(
-                            f"Creat automàticament des d'importació. "
-                            f"Codi original: {code}. Requereix revisió."
-                        ),
-                        actiu=True,
-                        pendent_revisio=True,
-                        origen_import=f"{model.nom_prenda} ({model.codi_intern})",
-                    )
-                    match_type = 'auto_created'
-                    confidence = 'LOW'
-                    match_log.append({
-                        'code': code,
-                        'pom': nou_codi,
-                        'match_type': match_type,
-                        'confidence': confidence,
-                        'action': 'NOU POM creat — pendent de revisió',
-                    })
-                else:
-                    match_log.append({
-                        'code': code,
-                        'pom': pm.codi_client,
-                        'match_type': match_type,
-                        'confidence': confidence,
-                    })
-
-                # Sprint 5B.1: tolerance from the AI extraction if present, else the catalogue POM.
-                tol_minus = pom_data.get('tolerance_minus')
-                tol_plus = pom_data.get('tolerance_plus')
-                if tol_minus is None:
-                    tol_minus = pm.tolerancia_default_minus
-                if tol_plus is None:
-                    tol_plus = pm.tolerancia_default_plus
-                BaseMeasurement.objects.update_or_create(
-                    model=model, pom=pm,
-                    defaults={
-                        'base_value_cm': base_value,
-                        'nom_fitxa': code,
-                        'origen': 'IMPORTED',
-                        'is_active': True,
-                        'notes': description,
-                        'ordre': i,
-                        'tolerancia_minus': tol_minus,
-                        'tolerancia_plus': tol_plus,
-                    },
-                )
-                poms_created += 1
-
-                # Create an alert for uncertain matches or new POMs.
-                if confidence in ('MEDIUM', 'LOW'):
-                    _create_pom_alert(
-                        model, pm, code, description, confidence, match_type,
-                    )
-
-                # Notify superadmin for new POMs (auto_created).
-                if match_type == 'auto_created':
-                    try:
-                        from fhort.accounts.models import UserProfile
-                        from django.core.mail import send_mail
-                        from django.conf import settings
-
-                        admin_emails = list(
-                            UserProfile.objects
-                            .filter(rol_nom__iexact='admin', actiu=True)
-                            .values_list('user__email', flat=True)
-                        )
-                        admin_emails = [e for e in admin_emails if e]
-
-                        if admin_emails and getattr(settings, 'EMAIL_HOST', None):
-                            send_mail(
-                                subject=f'[FHORT] Nou POM pendent de revisió: {code}',
-                                message=(
-                                    f"S'ha creat un nou POM durant la importació:\n\n"
-                                    f"Codi client: {code}\n"
-                                    f"Descripció: {description}\n"
-                                    f"Model: {model.nom_prenda} ({model.codi_intern})\n\n"
-                                    f"Accedeix al sistema per revisar i incorporar al catàleg global."
-                                ),
-                                from_email=getattr(
-                                    settings, 'DEFAULT_FROM_EMAIL',
-                                    'noreply@fhorttextile.tech',
-                                ),
-                                recipient_list=admin_emails,
-                                fail_silently=True,
-                            )
-                    except Exception:
-                        pass  # No bloquejar si falla l'email
-
-            # Extract and save images from the PDF if it arrives in the request
-            try:
-                from fhort.models_app.extraction_service import extract_images_from_pdf
-                from django.core.files.base import ContentFile
-
-                pdf_file = request.FILES.get('file')
-                if pdf_file and pdf_file.name.endswith('.pdf'):
-                    pdf_bytes = pdf_file.read()
-                    imatges = extract_images_from_pdf(pdf_bytes, model.codi_intern)
-
-                    for img_data in imatges:
-                        ultima = ModelFitxer.objects.filter(
-                            model=model, tipus=img_data['tipus']
-                        ).order_by('-id').first()
-                        num = 1
-                        if ultima and ultima.nom_fitxer:
-                            try:
-                                num = int(ultima.nom_fitxer.split('_')[-1].split('.')[0]) + 1
-                            except Exception:
-                                num = 2
-
-                        nom = f'{model.codi_intern}_{img_data["tipus"]}_{num:03d}.{img_data["ext"]}'
-                        content = ContentFile(img_data['bytes'], name=nom)
-                        mf = ModelFitxer(
-                            model=model,
-                            nom_fitxer=nom,
-                            categoria=img_data['categoria'],
-                            tipus=img_data['tipus'],
-                            versio=f'{num:03d}',
-                            mida_bytes=len(img_data['bytes']),
-                            path_servidor=nom,
-                        )
-                        mf.fitxer.save(nom, content, save=True)
-            except Exception:
-                pass
-
-            # === GRADING: create SizeFitting → GradingVersion → GradedSpecs ===
-            from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
-
-            grading_table = extracted.get('grading_table', []) or []
-            graded_created = 0
-            graded_skipped = []
-
-            if grading_table and poms_created > 0:
-                try:
-                    from fhort.accounts.models import UserProfile
-                    user_profile = UserProfile.objects.filter(user=request.user).first()
-                except Exception:
-                    user_profile = None
-
-                if user_profile is None:
-                    # SizeFitting.creat_per is NOT NULL — we cannot create the chain.
-                    graded_skipped.append({
-                        'reason': "No s'ha trobat UserProfile per a l'usuari; "
-                                  'cal crear SizeFitting i grading manualment.',
-                    })
-                else:
-                    try:
-                        sf_codi = f"IMP-{model.id}-{_dt.date.today().strftime('%y%m%d')}"
-
-                        size_fitting, _ = SizeFitting.objects.get_or_create(
-                            model=model,
-                            codi=sf_codi,
-                            defaults={
-                                'numero': 1,
-                                'tipus': 'Proto',
-                                'estat': 'BaseOberta',
-                                'creat_per': user_profile,
-                                'notes': 'Creat automàticament durant importació de fitxa tècnica',
-                            },
-                        )
-
-                        grading_version, _ = GradingVersion.objects.get_or_create(
-                            size_fitting=size_fitting,
-                            version_number=1,
-                            defaults={
-                                'nom': 'Importació automàtica',
-                                'aprovada': False,
-                                'creat_per': user_profile,
-                                'notes': 'Generat des de fitxa tècnica. Revisar i aprovar.',
-                                'is_active': True,
-                            },
-                        )
-
-                        # Map nom_fitxa → POMMaster from the already-created BaseMeasurements.
-                        bm_map = {
-                            bm.nom_fitxa: bm.pom
-                            for bm in BaseMeasurement.objects.filter(model=model)
-                            if bm.nom_fitxa
-                        }
-
-                        # B1 — If the wizard defined size_run, we limit grading
-                        # to those sizes (filters out extra columns from the document).
-                        # If size_run is empty, we keep the current behavior:
-                        # we import every size that appears in the document.
-                        wiz_size_run_str = wizard_context.get('size_run', '') or ''
-                        wiz_size_labels = {
-                            s.strip().upper()
-                            for s in wiz_size_run_str.split('·')
-                            if s.strip()
-                        }
-
-                        for row in grading_table:
-                            code = row.get('code', '') or ''
-                            values_by_size = row.get('values_by_size', {}) or {}
-
-                            if not values_by_size:
-                                continue
-
-                            pom_master = bm_map.get(code)
-                            if not pom_master:
-                                graded_skipped.append({
-                                    'code': code,
-                                    'reason': 'No BaseMeasurement per aquest codi — POM no importat',
-                                })
-                                continue
-
-                            bm = BaseMeasurement.objects.filter(
-                                model=model, pom=pom_master,
-                            ).first()
-                            base_val = float(bm.base_value_cm) if bm else None
-
-                            for size_label, value in values_by_size.items():
-                                if value is None:
-                                    continue
-                                if (
-                                    wiz_size_labels
-                                    and str(size_label).strip().upper() not in wiz_size_labels
-                                ):
-                                    continue
-                                try:
-                                    v = float(value)
-                                    grading_type = (
-                                        'FIXED'
-                                        if base_val is not None and abs(v - base_val) < 0.01
-                                        else 'LINEAR'
-                                    )
-                                    GradedSpec.objects.update_or_create(
-                                        grading_version=grading_version,
-                                        pom=pom_master,
-                                        size_label=str(size_label).strip(),
-                                        defaults={
-                                            'graded_value_cm': v,
-                                            'grading_type_applied': grading_type,
-                                            'increment_applied_cm': 0,
-                                            'is_active': True,
-                                        },
-                                    )
-                                    graded_created += 1
-                                except Exception as e:
-                                    graded_skipped.append({
-                                        'code': code,
-                                        'size': size_label,
-                                        'reason': str(e),
-                                    })
-
-                    except Exception as e:
-                        graded_skipped.append({
-                            'reason': f'Error creant SizeFitting/GradingVersion: {e}',
-                        })
-
-            poms_pendents = [
-                m['code'] for m in match_log
-                if m.get('match_type') == 'auto_created'
-            ]
-            return Response({
-                'model_id': model.id,
-                'model_codi': model.codi_intern,
-                'poms_created': poms_created,
-                'poms_skipped': poms_skipped,
-                'match_log': match_log,
-                'graded_created': graded_created,
-                'graded_skipped': graded_skipped,
-                'size_run': model.size_run_model,
-                'size_system': size_system_assigned,
-                'size_discrepancy': extracted.get('size_discrepancy'),
-                'poms_pendents': poms_pendents,
-                'message': (
-                    f'Model creat. {poms_created} POMs importats, '
-                    f'{graded_created} valors de grading, '
-                    f'{len(poms_skipped)} POMs pendents de revisió.'
-                    + (
-                        f' {len(poms_pendents)} POMs nous pendents de revisió.'
-                        if poms_pendents else ''
-                    )
-                ),
-            }, status=201)
-
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).exception("Error creant model des d'extracció")
-        return Response({'error': str(e)}, status=500)
-
-
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def delete_model_view(request, model_id):
@@ -1713,8 +1140,8 @@ def import_session_confirmar_view(request, token):
       1. Mana el document: crea NOMÉS BaseMeasurement dels POMs confirmats (Pas 2). NO
          materialitza la plantilla de l'item (no crida materialize_poms_view) i elimina les
          files buides de plantilla preexistents (base_value_cm=None).
-      2. Grading final tancat: SizeFitting + GradingVersion v1 + GradedSpec des dels valors
-         del Pas 3.
+      2. SizeFitting contenidor (sense GradingVersion/GradedSpec): el grading PROPAGAT no es
+         reté; es projecta conscientment des de la regla del model (deltes+breaks), D-10.
       3. NO sessions de fitting (cap FittingSession).
       4. PDF → ModelFitxer(categoria='Document', versio NNN, naming {codi}_DOCUMENT_{NNN});
          re-import → versio_anterior apunta a l'anterior.
@@ -1727,7 +1154,7 @@ def import_session_confirmar_view(request, token):
     from fhort.models_app.models import ImportSession, BaseMeasurement, ModelFitxer
     from fhort.accounts.models import UserProfile
     from fhort.pom.models import POMMaster
-    from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
+    from fhort.fitting.models import SizeFitting
     from fhort.models_app.matching import match_size_system
 
     session = ImportSession.objects.filter(token=token).select_related('model').first()
@@ -1823,7 +1250,8 @@ def import_session_confirmar_view(request, token):
             confirmed_pom_ids.append(pid)
             n_bm += 1
 
-        # ── 2 + 3. Grading final TANCAT (SizeFitting + GradingVersion v1 + GradedSpec). Cap FittingSession.
+        # ── 2. Identificador del contenidor SF (NO es crea encara: si hi ha conflicte de grading
+        # sense decisió, retornem 409 + rollback i NO volem deixar cap SizeFitting orfe).
         next_num = 1
         while SizeFitting.objects.filter(model=model, numero=next_num).exists():
             next_num += 1
@@ -1831,42 +1259,13 @@ def import_session_confirmar_view(request, token):
         while SizeFitting.objects.filter(codi=sf_codi).exists():
             next_num += 1
             sf_codi = f"IMP-{model.id}-{next_num}"
-        size_fitting = SizeFitting.objects.create(
-            model=model, numero=next_num, codi=sf_codi, tipus='SizeSet',
-            estat='Tancat', base_tancada=True, creat_per=user_profile,
-            notes="Importació guiada (wizard). Grading tancat des de la fitxa.",
-        )
-        grading_version = GradingVersion.objects.create(
-            size_fitting=size_fitting, version_number=1, nom='Importació (v1)',
-            aprovada=True, is_active=True, creat_per=user_profile,
-            notes='Generat des de la importació guiada de fitxa tècnica.',
-        )
 
-        n_specs = 0
-        for pid in confirmed_pom_ids:
-            pm = POMMaster.objects.filter(id=pid).first()
-            if not pm:
-                continue
-            base_val = valors.get(pid, {}).get(base_size)
-            for talla, val in (valors.get(pid) or {}).items():
-                if val in (None, ''):
-                    continue
-                try:
-                    v = float(val)
-                except (TypeError, ValueError):
-                    continue
-                bv = None
-                try:
-                    bv = float(base_val) if base_val not in (None, '') else None
-                except (TypeError, ValueError):
-                    bv = None
-                gtype = 'FIXED' if (bv is not None and abs(v - bv) < 0.01) else 'LINEAR'
-                GradedSpec.objects.update_or_create(
-                    grading_version=grading_version, pom=pm, size_label=str(talla).strip(),
-                    defaults={'graded_value_cm': v, 'grading_type_applied': gtype,
-                              'increment_applied_cm': 0, 'is_active': True},
-                )
-                n_specs += 1
+        # P2 — snapshot de la regla RETINGUDA/HERETADA del model ABANS de qualsevol wipe
+        # (materialize_model_grading_rules és esborra-i-recrea). Serveix per detectar el conflicte
+        # conscient amb la regla IMPORTADA del document, sense sobreescriure en silenci.
+        from fhort.pom.grading_utils import grading_rules_match
+        retingut_snapshot = list(model.grading_rules.select_related('pom').all())
+        grading_choice = (request.data.get('grading_choice') or '').strip().lower()
 
         # ── 3b. Derivar la regla de grading des dels valors i re-apuntar-hi el model.
         # La derivació (detect_grading per POM + dedup + anti-proliferació 1D + crear/
@@ -1879,6 +1278,8 @@ def import_session_confirmar_view(request, token):
         new_rule_set = None
         n_rules = 0
         grading_avisos = []
+        conflict_divs = None        # P2: divergències importat-vs-retingut sense decisió → 409
+        aplicar_importada = True    # P2: per defecte (model nou / sense conflicte) s'aplica la importada
         prev_grs_id = model.grading_rule_set_id  # per restaurar la FK si el desament peta
         try:
             with transaction.atomic():
@@ -1893,10 +1294,30 @@ def import_session_confirmar_view(request, token):
                     construction_codi=model.construction,
                     fit_type_codi=model.fit_type,
                     nom=f"Importació fitxa · {model.codi_intern}",
-                    nom_sufix_unic=size_fitting.codi,
+                    nom_sufix_unic=sf_codi,
                     avisos=grading_avisos,
                 )
-                if new_rule_set is not None:
+                # P2 — CONFLICTE conscient: regla IMPORTADA (del document) vs RETINGUDA del model.
+                # Comparació per FORMA (grading_rules_match, util pur — NO toca el motor). Si
+                # difereixen i el tècnic no ha decidit, NO sobreescriure (→ 409 + rollback a fora).
+                if new_rule_set is not None and retingut_snapshot:
+                    ok_ret, divs_ret = grading_rules_match(
+                        retingut_snapshot, new_rule_set.regles.all())
+                    if not ok_ret:
+                        if grading_choice == 'heretats':
+                            aplicar_importada = False
+                            grading_avisos.append(
+                                "Regla del model mantinguda (heretada): la regla importada del "
+                                "document s'ha descartat per decisió del tècnic.")
+                        elif grading_choice == 'importats':
+                            grading_avisos.append(
+                                "Regla importada del document aplicada per decisió del tècnic "
+                                "(substitueix la regla retinguda del model).")
+                        else:
+                            aplicar_importada = False
+                            conflict_divs = divs_ret
+
+                if aplicar_importada and new_rule_set is not None and conflict_divs is None:
                     model.grading_rule_set = new_rule_set
                     model.save(update_fields=['grading_rule_set'])
                     # PG-2 Cas A: materialitza les regles residents (origen=IMPORTED). El motor
@@ -1904,13 +1325,11 @@ def import_session_confirmar_view(request, token):
                     from fhort.models_app.services import materialize_model_grading_rules
                     materialize_model_grading_rules(
                         model, new_rule_set.regles.all(), origen='IMPORTED')
-                    # PG-3 Cas A: compara el grading materialitzat (del document) amb el canònic
-                    # de la Library que encaixaria i emet advertència. NOMÉS informa: embolcallat
-                    # en try propi perquè un error de comparació NO faci rollback del grading ja
-                    # materialitzat (degradació gràcil — no bloqueja, no muta grading).
+                    # PG-3 Cas A: eix COMPLEMENTARI (importat vs CANÒNIC-Library, NO vs retingut):
+                    # compara el grading materialitzat amb el canònic que encaixaria i emet
+                    # advertència. NOMÉS informa (try propi: un error de comparació no fa rollback).
                     try:
-                        from fhort.pom.grading_utils import (
-                            cerca_canonic_equivalent, grading_rules_match)
+                        from fhort.pom.grading_utils import cerca_canonic_equivalent
                         canonic = cerca_canonic_equivalent(model)
                         if canonic is None:
                             grading_avisos.append(
@@ -1937,7 +1356,34 @@ def import_session_confirmar_view(request, token):
             new_rule_set = None
             grading_avisos.append(
                 f"Grading no derivat (error en desar regles: {e}); es manté el ruleset previ.")
-        n_rules = new_rule_set.regles.count() if new_rule_set else 0
+        n_rules = (new_rule_set.regles.count()
+                   if (new_rule_set and aplicar_importada and conflict_divs is None) else 0)
+
+        # P2 — conflicte de grading SENSE decisió del tècnic: NO sobreescriure res. Rollback de tot
+        # l'import (cap estat a mig fer, cap SizeFitting orfe) i 409 perquè el wizard demani la tria;
+        # el tècnic re-confirma amb grading_choice. Reusa el patró d'avís-i-confirma de la Size Library.
+        if conflict_divs is not None:
+            transaction.set_rollback(True)
+            return Response({
+                'conflict': True,
+                'tipus': 'grading',
+                'divergencies': [
+                    {'pom': d['pom_codi'], 'detall': d['detall']} for d in conflict_divs],
+                'message': ('La regla de grading importada del document difereix de la regla '
+                            'retinguda al model. Tria quina aplicar.'),
+            }, status=409)
+
+        # ── 3. SizeFitting CONTENIDOR per a la projecció CONSCIENT (D-10) — només quan no hi ha
+        # conflicte pendent. L'import reté base + deltes + breaks (ModelGradingRule); el grading
+        # PROPAGAT no es reté: el projecta el motor després, des de la regla vigent del model
+        # (generate_grading_view crea/omple la versió sobre AQUEST SF). Estat/segellat (D-1) NO aquí.
+        size_fitting = SizeFitting.objects.create(
+            model=model, numero=next_num, codi=sf_codi, tipus='SizeSet',
+            estat='Tancat', base_tancada=True, creat_per=user_profile,
+            notes="Importació guiada (wizard). Contenidor; grading propagat NO retingut "
+                  "(es projecta conscientment des de la regla del model, D-10).",
+        )
+        n_specs = 0   # cap valor propagat persistit a l'import
 
         if grading_avisos:
             session.avisos = (session.avisos or []) + grading_avisos
@@ -1993,8 +1439,11 @@ def import_session_confirmar_view(request, token):
         'size_fitting': size_fitting.codi,
         'document_fitxer': (doc_fitxer.nom_fitxer if doc_fitxer else None),
         'teixit_aplicat': teixit_aplicat,
-        'grading_rule_set': (new_rule_set.nom if new_rule_set else None),
+        'grading_rule_set': (new_rule_set.nom
+                             if (new_rule_set and aplicar_importada and conflict_divs is None)
+                             else None),
         'grading_rules': n_rules,
         'grading_avisos': grading_avisos,
-        'message': f'Importació confirmada: {n_bm} POMs, {n_specs} valors de grading (tancat).',
+        'message': f'Importació confirmada: {n_bm} POMs, regla (deltes+breaks) retinguda al model; '
+                   f'grading propagat pendent de projecció conscient.',
     }, status=201)
