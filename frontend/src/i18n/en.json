@@ -2163,6 +2163,14 @@
     "grading_rule_set": "Grading rule set",
     "action": "Complete the model"
   },
+  "poc_paper": {
+    "kicker": "Phase 4 PoC",
+    "title": "Paper.js inside the tech sheet editor",
+    "description": "Isolated test to validate Paper.js as a vector editing substrate before integrating it into the Konva editor.",
+    "paper_canvas": "Paper.js canvas",
+    "status_loading": "Initializing…",
+    "status_ready": "Paper.js loaded"
+  },
   "watchpoints": {
     "title": "Watchpoints",
     "tab_label": "Watchpoints",

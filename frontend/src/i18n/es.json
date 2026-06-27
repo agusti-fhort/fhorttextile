@@ -2163,6 +2163,14 @@
     "grading_rule_set": "Regla de escalado (grading)",
     "action": "Completa el modelo"
   },
+  "poc_paper": {
+    "kicker": "PoC Fase 4",
+    "title": "Paper.js dentro del editor de ficha",
+    "description": "Prueba aislada para validar Paper.js como sustrato vectorial antes de integrarlo en el editor Konva.",
+    "paper_canvas": "Canvas Paper.js",
+    "status_loading": "Inicializando…",
+    "status_ready": "Paper.js cargado"
+  },
   "watchpoints": {
     "title": "Watchpoints",
     "tab_label": "Watchpoints",
