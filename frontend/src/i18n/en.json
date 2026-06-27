@@ -2168,8 +2168,20 @@
     "title": "Paper.js inside the tech sheet editor",
     "description": "Isolated test to validate Paper.js as a vector editing substrate before integrating it into the Konva editor.",
     "paper_canvas": "Paper.js canvas",
+    "none_selected": "No path selected",
+    "path_selected": "Selected path · {{n}} points",
+    "mode_select": "Select",
+    "mode_add": "Add point",
+    "mode_delete": "Delete point",
+    "export_svg": "Export SVG",
+    "export_placeholder": "The exported SVG will appear here.",
     "status_loading": "Initializing…",
-    "status_ready": "Paper.js loaded"
+    "status_ready": "Paper.js loaded",
+    "status_path_selected": "Path selected",
+    "status_path_changed": "Path edited",
+    "status_point_added": "Point added",
+    "status_point_deleted": "Point deleted",
+    "status_exported": "SVG exported"
   },
   "watchpoints": {
     "title": "Watchpoints",

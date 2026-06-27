@@ -2168,8 +2168,20 @@
     "title": "Paper.js dentro del editor de ficha",
     "description": "Prueba aislada para validar Paper.js como sustrato vectorial antes de integrarlo en el editor Konva.",
     "paper_canvas": "Canvas Paper.js",
+    "none_selected": "Ningún path seleccionado",
+    "path_selected": "Path seleccionado · {{n}} puntos",
+    "mode_select": "Seleccionar",
+    "mode_add": "Añadir punto",
+    "mode_delete": "Borrar punto",
+    "export_svg": "Exportar SVG",
+    "export_placeholder": "El SVG exportado aparecerá aquí.",
     "status_loading": "Inicializando…",
-    "status_ready": "Paper.js cargado"
+    "status_ready": "Paper.js cargado",
+    "status_path_selected": "Path seleccionado",
+    "status_path_changed": "Path editado",
+    "status_point_added": "Punto añadido",
+    "status_point_deleted": "Punto borrado",
+    "status_exported": "SVG exportado"
   },
   "watchpoints": {
     "title": "Watchpoints",

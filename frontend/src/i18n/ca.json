@@ -2168,8 +2168,20 @@
     "title": "Paper.js dins l'editor de fitxa",
     "description": "Prova aïllada per validar Paper.js com a substrat vectorial abans d'integrar-lo a l'editor Konva.",
     "paper_canvas": "Canvas Paper.js",
+    "none_selected": "Cap path seleccionat",
+    "path_selected": "Path seleccionat · {{n}} punts",
+    "mode_select": "Seleccionar",
+    "mode_add": "Afegir punt",
+    "mode_delete": "Esborrar punt",
+    "export_svg": "Exportar SVG",
+    "export_placeholder": "L'SVG exportat apareixerà aquí.",
     "status_loading": "Inicialitzant…",
-    "status_ready": "Paper.js carregat"
+    "status_ready": "Paper.js carregat",
+    "status_path_selected": "Path seleccionat",
+    "status_path_changed": "Path editat",
+    "status_point_added": "Punt afegit",
+    "status_point_deleted": "Punt esborrat",
+    "status_exported": "SVG exportat"
   },
   "watchpoints": {
     "title": "Watchpoints",
