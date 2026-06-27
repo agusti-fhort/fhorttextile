@@ -4,7 +4,35 @@ DocumentTemplate és el magatzem de plantilles de document .ftt del tenant: molt
 plantilles reutilitzables (a diferència de TechSheetTemplate, O2O amb Customer, 1 per
 client). Substitueix TechSheetTemplate, que queda deprecat i es retirarà a la neteja final.
 """
+from django.conf import settings
 from django.db import models
+
+
+class FttDocumentLock(models.Model):
+    """Lock cooperatiu sobre un document .ftt lògic.
+
+    La identitat del document és l'ARREL de la cadena versio_anterior (la v1), que no
+    canvia encara que el cap avanci de versió → el lock sobreviu als 'desa'. És cooperatiu
+    (porta UX, no transaccional fort) amb caducitat (TTL) perquè una pestanya tancada sense
+    unlock no bloquegi per sempre. NO toca ModelFitxer: taula dedicada.
+    """
+
+    document_root = models.OneToOneField(
+        'models_app.ModelFitxer',
+        on_delete=models.CASCADE,
+        related_name='ftt_lock',
+    )
+    locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ftt_documents_locked',
+    )
+    locked_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return 'lock(doc=%s, by=%s)' % (self.document_root_id, self.locked_by_id)
 
 
 class DocumentTemplate(models.Model):

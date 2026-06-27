@@ -171,10 +171,14 @@ try:
         FttDocumentCreateView,
         FttDocumentDetailView,
         FttDocumentExportView,
+        FttDocumentLockView,
+        FttDocumentUnlockView,
     )
     _ftt_document_paths = [
         path('models/<int:model_id>/ftt-document/', FttDocumentCreateView.as_view(), name='ftt-document-create'),
         path('ftt-documents/<int:fitxer_id>/', FttDocumentDetailView.as_view(), name='ftt-document-detail'),
+        path('ftt-documents/<int:fitxer_id>/lock/', FttDocumentLockView.as_view(), name='ftt-document-lock'),
+        path('ftt-documents/<int:fitxer_id>/unlock/', FttDocumentUnlockView.as_view(), name='ftt-document-unlock'),
         path('ftt-documents/<int:fitxer_id>/export/', FttDocumentExportView.as_view(), name='ftt-document-export'),
         path('ftt-documents/<int:fitxer_id>/asset/<str:asset_name>/', FttDocumentAssetView.as_view(), name='ftt-document-asset'),
     ]
