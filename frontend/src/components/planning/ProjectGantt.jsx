@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { plan, companyCalendar } from '../../api/endpoints'
 import Center from '../ui/Center'
@@ -136,6 +136,20 @@ export default function ProjectGantt({ t, mine = false }) {
     return { min, max, days: dayDiff(min, max) + 1 }
   }, [models, today])
 
+  const scrollRef = useRef(null)
+  // Posiciona AVUI a prop de l'esquerra del viewport: track-x d'avui (la mateixa x que pinta la línia
+  // daurada) menys 2 dies de marge. Idempotent; degrada net si encara no hi ha layout (guards + rAF).
+  const scrollToToday = useCallback(() => {
+    if (!range || !today || !scrollRef.current) return
+    const tx = dayDiff(range.min, parseISO(today)) * PX_PER_DAY
+    scrollRef.current.scrollLeft = Math.max(0, tx - 2 * PX_PER_DAY)
+  }, [range, today])
+
+  useEffect(() => {
+    const id = requestAnimationFrame(scrollToToday)   // post-layout: el contenidor ja té amplada
+    return () => cancelAnimationFrame(id)
+  }, [scrollToToday])
+
   if (loading) return <Center>{t('planning.loading')}</Center>
   if (!range || !models.length) {
     return <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>{t('planning.gantt.empty')}</div>
@@ -172,7 +186,18 @@ export default function ProjectGantt({ t, mine = false }) {
                            filterColleccio={filterColleccio} setFilterColleccio={setFilterColleccio}
                            filterTemporada={filterTemporada} setFilterTemporada={setFilterTemporada} />
       <Legend t={t} />
-      <div style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', overflowX: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+      {/* Botó "Avui": recentra l'scroll horitzontal a la posició d'avui (pastilla outline, tokens). */}
+      <div style={{ marginBottom: 8 }}>
+        <button type="button" onClick={scrollToToday} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '4px 12px', borderRadius: 999, cursor: 'pointer',
+          border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)',
+          fontSize: 'var(--fs-label)', fontFamily: MONO,
+        }}>
+          <i className="ti ti-calendar-event" style={{ fontSize: 14 }} /> {t('planning.gantt.legend_today')}
+        </button>
+      </div>
+      <div ref={scrollRef} style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', overflowX: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
         <div style={{ minWidth: LABEL_W + trackW }}>
           {/* Eix de dies */}
           {/* PEÇA 3 — header sticky-top z=8 (per sobre de les pills z=6 en scroll-Y); cantonada z=9 (màxim) */}
