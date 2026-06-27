@@ -27,6 +27,27 @@ que F2 haurà de fer en el cutover de l'editor.
 - `TechSheet.estat` — mort (0 escriptors, 0 lectors al front). Retirat (migració 0049).
 - Fallback legacy `schemas` als serializers — 0 files l'usen. Retirat.
 
+## ✅ Estat post-Fase 2 (cutover de l'editor fet)
+
+L'editor de fitxa per-model treballa **100% sobre `.ftt`**:
+- `/models/:id/fitxa` → `FttResolver` (resol/crea el `.ftt`) → `/models/:id/ftt/:fitxerId`.
+- Load/save/lock/export via `ftt-documents/`. `versio` = `ModelFitxer.versio`. Botó "Edita" al
+  Finder + grup "Disseny" al menú.
+- Backend: model `TechSheet` **eliminat** (migració 0050 amb data-migration idempotent
+  prependida per a seguretat a PROD) i endpoints `tech-sheet/` retirats.
+
+### 🔴 Encara pendent (cutover propi, decisió de disseny)
+- **`TechSheetTemplate` → `DocumentTemplate`**: l'editor de plantilla per Customer
+  (`/clients/:id/plantilla`, `TechSheetTemplateEditor`) i els 2 endpoints `tech-sheet-template/`
+  segueixen **vius**. Migrar-hi implica decidir com mapeja el concepte "una plantilla per client
+  (template_json)" al magatzem genèric `DocumentTemplate` (FileField `.ftt` + `metadata_schema`).
+  No fet a Fase 2 (decisió ⚖️ oberta).
+- **Eines de girar/simetria i importació de mesures/grading** a l'editor: anotades, no entren a F2.
+- **Poda d'assets no referenciats** en desar: `save_document` fusiona assets sense podar; imatges
+  noves es desen inline (no extretes a `assets/`). Refinament futur.
+- **Proliferació de versions per autosave**: cada desat crea una versió `.ftt`. El Finder només
+  mostra `is_current`; consolidació draft-vs-versió a decidir.
+
 ## Punts d'enganxament per a F2 (del diagnòstic)
 
 - Editor → llegir `.ftt`: `GET ftt-documents/<id>/` retorna `document_json` + URLs d'assets;
