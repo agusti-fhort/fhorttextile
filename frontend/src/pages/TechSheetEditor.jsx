@@ -306,6 +306,136 @@ function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, groupProps, 
   )
 }
 
+// ─── Descriptor compartit objecte → Konva ───────────────────────────────────
+// Live i offscreen consumeixen aquests helpers perquè pantalla i PDF no derivin.
+function textBoxParts(obj) {
+  const pad = obj.bgPadding || 4
+  const fs = obj.fontSize || 11
+  const w = toPx(obj.width || 120)
+  return {
+    group: { x: toPx(obj.x), y: toPx(obj.y) },
+    bg: { x: -pad, y: -pad, width: w + pad * 2, height: fs * 1.6 + pad * 2, fill: obj.bgFill, cornerRadius: 3 },
+    text: {
+      text: obj.text || '', width: w, fontSize: fs, fontFamily: obj.fontFamily || FONT,
+      fontStyle: obj.fontStyle || 'normal', fill: obj.fill || KONVA_COL.textMain,
+    },
+  }
+}
+
+function textProps(obj) {
+  return {
+    x: toPx(obj.x), y: toPx(obj.y), width: obj.width ? toPx(obj.width) : undefined,
+    text: obj.text || '', fontSize: obj.fontSize || 11, fontFamily: obj.fontFamily || FONT,
+    fontStyle: obj.fontStyle || 'normal', fill: obj.fill || KONVA_COL.textMain,
+  }
+}
+
+function rectProps(obj) {
+  return {
+    x: toPx(obj.x), y: toPx(obj.y), width: toPx(obj.width), height: toPx(obj.height),
+    fill: obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined,
+    stroke: obj.stroke || KONVA_COL.gold, strokeWidth: obj.strokeWidth || 1,
+    cornerRadius: obj.cornerRadius || 0,
+  }
+}
+
+function ellipseProps(obj) {
+  return {
+    x: toPx(obj.x), y: toPx(obj.y), radiusX: toPx(obj.rx), radiusY: toPx(obj.ry),
+    fill: obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined,
+    stroke: obj.stroke || KONVA_COL.textMain, strokeWidth: obj.strokeWidth || 1.5,
+  }
+}
+
+function lineProps(obj) {
+  return {
+    x: 0, y: 0, points: (obj.points || []).map(toPx),
+    stroke: obj.stroke || KONVA_COL.textMain, strokeWidth: obj.strokeWidth || 1,
+    dash: obj.dash || undefined, lineCap: 'round', lineJoin: 'round',
+  }
+}
+
+function arrowProps(obj) {
+  return {
+    x: 0, y: 0, points: [toPx(obj.x), toPx(obj.y), toPx(obj.x2), toPx(obj.y2)],
+    stroke: obj.stroke || KONVA_COL.textMain, fill: obj.fill || obj.stroke || KONVA_COL.textMain,
+    strokeWidth: obj.strokeWidth || 1.5, pointerLength: 8, pointerWidth: 6,
+    pointerAtBeginning: !!obj.arrow2,
+  }
+}
+
+function imageProps(obj) {
+  return {
+    x: toPx(obj.x), y: toPx(obj.y),
+    width: toPx(obj.width), height: toPx(obj.height || obj.width),
+  }
+}
+
+function dataBlockGroupProps(obj) {
+  return { x: toPx(obj.x), y: toPx(obj.y), scaleX: obj.scale || 1, scaleY: obj.scale || 1 }
+}
+
+function dataBlockPlaceholderProps(obj) {
+  return { width: toPx(obj.width || 120), height: toPx(obj.height || 40), fill: COL.goldPale, stroke: KONVA_COL.border, dash: [4, 4] }
+}
+
+async function addObjectToLayer(layer, obj, ctx) {
+  if (obj.type === 'text') {
+    if (obj.bgFill) {
+      const p = textBoxParts(obj)
+      const g = new Konva.Group(p.group)
+      g.add(new Konva.Rect(p.bg))
+      g.add(new Konva.Text({ ...p.text, listening: false }))
+      layer.add(g)
+      return
+    }
+    layer.add(new Konva.Text(textProps(obj)))
+    return
+  }
+  if (obj.type === 'rect') {
+    layer.add(new Konva.Rect(rectProps(obj)))
+    return
+  }
+  if (obj.type === 'ellipse') {
+    layer.add(new Konva.Ellipse(ellipseProps(obj)))
+    return
+  }
+  if (obj.type === 'line') {
+    layer.add(new Konva.Line(lineProps(obj)))
+    return
+  }
+  if (obj.type === 'arrow') {
+    layer.add(new Konva.Arrow(arrowProps(obj)))
+    return
+  }
+  if (obj.type === 'data_block') {
+    let built = null
+    let logoEl = null
+    if (obj.kind === 'header') {
+      if (ctx?.customerLogoUrl) { try { logoEl = await loadImageEl(ctx.customerLogoUrl) } catch { logoEl = null } }
+      built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl)
+    } else if (obj.kind === 'graded_table') {
+      const data = ctx?.tableData?.[obj.id]
+      if (data) built = buildTablePrimitives(data)
+    }
+    if (built) {
+      const g = new Konva.Group(dataBlockGroupProps(obj))
+      addPrimsToGroup(g, built.prims)
+      if (logoEl) g.add(new Konva.Image({ image: logoEl, x: built.totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, width: 40 * MM_TO_PX, height: 16 * MM_TO_PX }))
+      layer.add(g)
+    }
+    return
+  }
+  if (obj.type === 'image') {
+    const src = obj.src
+    if (!src) return
+    try {
+      const el = await loadImageEl(src)
+      layer.add(new Konva.Image({ ...imageProps(obj), image: el }))
+    } catch { /* imatge no carregada → s'omet */ }
+  }
+}
+
 // ─── Render offscreen d'una pàgina a dataURL (export PDF + miniatures) ───
 // ctx = { tableData:{objId:json}, modelData, versio }. Dibuixa els blocs de dades
 // natius amb les mateixes primitives que el canvas viu (cap PNG congelat).
@@ -320,68 +450,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
   const ordered = [...(page.objects || [])].sort(
     (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   for (const o of ordered) {
-    if (o.type === 'text') {
-      // text_box: rect de fons darrere el text.
-      if (o.bgFill) {
-        const pad = o.bgPadding || 4, fs = o.fontSize || 11, w = toPx(o.width || 120)
-        layer.add(new Konva.Rect({ x: toPx(o.x) - pad, y: toPx(o.y) - pad, width: w + pad * 2, height: fs * 1.6 + pad * 2, fill: o.bgFill, cornerRadius: 3 }))
-      }
-      layer.add(new Konva.Text({
-        x: toPx(o.x), y: toPx(o.y), width: o.width ? toPx(o.width) : undefined,
-        text: o.text || '', fontSize: o.fontSize || 11, fontFamily: o.fontFamily || FONT,
-        fontStyle: o.fontStyle || 'normal', fill: o.fill || KONVA_COL.textMain,
-      }))
-    } else if (o.type === 'rect') {
-      layer.add(new Konva.Rect({
-        x: toPx(o.x), y: toPx(o.y), width: toPx(o.width), height: toPx(o.height),
-        fill: o.fill && o.fill !== 'transparent' ? o.fill : undefined,
-        stroke: o.stroke || KONVA_COL.gold, strokeWidth: o.strokeWidth || 1, cornerRadius: o.cornerRadius || 0,
-      }))
-    } else if (o.type === 'ellipse') {
-      layer.add(new Konva.Ellipse({
-        x: toPx(o.x), y: toPx(o.y), radiusX: toPx(o.rx), radiusY: toPx(o.ry),
-        fill: o.fill && o.fill !== 'transparent' ? o.fill : undefined,
-        stroke: o.stroke || KONVA_COL.textMain, strokeWidth: o.strokeWidth || 1.5,
-      }))
-    } else if (o.type === 'line') {
-      layer.add(new Konva.Line({
-        points: (o.points || []).map(toPx), stroke: o.stroke || KONVA_COL.textMain,
-        strokeWidth: o.strokeWidth || 1, dash: o.dash || undefined, lineCap: 'round', lineJoin: 'round',
-      }))
-    } else if (o.type === 'arrow') {
-      layer.add(new Konva.Arrow({
-        points: [toPx(o.x), toPx(o.y), toPx(o.x2), toPx(o.y2)],
-        stroke: o.stroke || KONVA_COL.textMain, fill: o.fill || o.stroke || KONVA_COL.textMain,
-        strokeWidth: o.strokeWidth || 1.5, pointerLength: 8, pointerWidth: 6, pointerAtBeginning: !!o.arrow2,
-      }))
-    } else if (o.type === 'data_block') {
-      // Blocs vius natius: mateixes primitives que el canvas. Group posicionat en px.
-      let built = null
-      let logoEl = null
-      if (o.kind === 'header') {
-        if (ctx?.customerLogoUrl) { try { logoEl = await loadImageEl(ctx.customerLogoUrl) } catch { logoEl = null } }
-        built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl)
-      } else if (o.kind === 'graded_table') {
-        const data = ctx?.tableData?.[o.id]
-        if (data) built = buildTablePrimitives(data)
-      }
-      if (built) {
-        const g = new Konva.Group({ x: toPx(o.x), y: toPx(o.y), scaleX: o.scale || 1, scaleY: o.scale || 1 })
-        addPrimsToGroup(g, built.prims)
-        if (logoEl) g.add(new Konva.Image({ image: logoEl, x: built.totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, width: 40 * MM_TO_PX, height: 16 * MM_TO_PX }))
-        layer.add(g)
-      }
-    } else if (o.type === 'image') {
-      const src = o.src
-      if (!src) continue
-      try {
-        const el = await loadImageEl(src)
-        layer.add(new Konva.Image({
-          x: toPx(o.x), y: toPx(o.y),
-          width: toPx(o.width), height: toPx(o.height || o.width), image: el,
-        }))
-      } catch { /* imatge no carregada → s'omet */ }
-    }
+    await addObjectToLayer(layer, o, ctx)
   }
   layer.draw()
   const url = stage.toDataURL({ pixelRatio, mimeType: 'image/png' })
@@ -404,13 +473,13 @@ export function serializePages(pages) {
 // ════════════════════════ Nodes Konva interactius (live) ════════════════════
 function ImageObj({ obj, src, common }) {
   const img = useImage(src)
+  const props = imageProps(obj)
   if (!img) {
     // Placeholder mentre carrega / si falla.
-    return <Rect {...common} width={toPx(obj.width)} height={toPx(obj.height || obj.width)}
+    return <Rect {...common} width={props.width} height={props.height}
       fill={COL.goldPale} stroke={KONVA_COL.border} dash={[4, 4]} />
   }
-  return <KonvaImage {...common} image={img}
-    width={toPx(obj.width)} height={toPx(obj.height || obj.width)} />
+  return <KonvaImage {...common} image={img} width={props.width} height={props.height} />
 }
 
 export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
@@ -431,7 +500,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     if (!data) {
       return (
         <Group {...common}>
-          <Rect width={toPx(obj.width || 120)} height={toPx(obj.height || 40)} fill={COL.goldPale} stroke={KONVA_COL.border} dash={[4, 4]} />
+          <Rect {...dataBlockPlaceholderProps(obj)} />
           <Text x={6} y={6} text={data === null ? 'Sense grading actiu' : 'Carregant taula…'} fontSize={12} fontFamily={FONT} fill={KONVA_COL.textMuted} listening={false} />
         </Group>
       )
@@ -441,41 +510,28 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   if (obj.type === 'text') {
     // Text amb fons (text_box): Group amb un Rect darrere; no redimensionable per Transformer.
     if (obj.bgFill) {
-      const w = toPx(obj.width || 120), fs = obj.fontSize || 11, pad = obj.bgPadding || 4
+      const p = textBoxParts(obj)
       return (
         <Group {...common} onDblClick={onDblText} onDblTap={onDblText}>
-          <Rect x={-pad} y={-pad} width={w + pad * 2} height={fs * 1.6 + pad * 2} fill={obj.bgFill} cornerRadius={3} />
-          <Text text={obj.text || ''} width={w} fontSize={fs} fontFamily={obj.fontFamily || FONT}
-            fontStyle={obj.fontStyle || 'normal'} fill={obj.fill || KONVA_COL.textMain} listening={false} />
+          <Rect {...p.bg} />
+          <Text {...p.text} listening={false} />
         </Group>
       )
     }
-    return <Text {...common} text={obj.text || ''} width={obj.width ? toPx(obj.width) : undefined}
-      fontSize={obj.fontSize || 11} fontFamily={obj.fontFamily || FONT} fontStyle={obj.fontStyle || 'normal'}
-      fill={obj.fill || KONVA_COL.textMain}
+    return <Text {...common} {...textProps(obj)}
       onDblClick={onDblText} onDblTap={onDblText} />
   }
   if (obj.type === 'rect') {
-    return <Rect {...common} width={toPx(obj.width)} height={toPx(obj.height)}
-      fill={obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined}
-      stroke={obj.stroke || KONVA_COL.gold} strokeWidth={obj.strokeWidth || 1} cornerRadius={obj.cornerRadius || 0} />
+    return <Rect {...common} {...rectProps(obj)} />
   }
   if (obj.type === 'ellipse') {
-    return <Ellipse {...common} radiusX={toPx(obj.rx)} radiusY={toPx(obj.ry)}
-      fill={obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined}
-      stroke={obj.stroke || KONVA_COL.textMain} strokeWidth={obj.strokeWidth || 1.5} />
+    return <Ellipse {...common} {...ellipseProps(obj)} />
   }
   if (obj.type === 'line') {
-    return <Line {...common} x={0} y={0} points={(obj.points || []).map(toPx)}
-      stroke={obj.stroke || KONVA_COL.textMain} strokeWidth={obj.strokeWidth || 1} dash={obj.dash || undefined}
-      lineCap="round" lineJoin="round" hitStrokeWidth={10} />
+    return <Line {...common} {...lineProps(obj)} hitStrokeWidth={10} />
   }
   if (obj.type === 'arrow') {
-    return <Arrow {...common} x={0} y={0}
-      points={[toPx(obj.x), toPx(obj.y), toPx(obj.x2), toPx(obj.y2)]}
-      stroke={obj.stroke || KONVA_COL.textMain} fill={obj.fill || obj.stroke || KONVA_COL.textMain}
-      strokeWidth={obj.strokeWidth || 1.5} pointerLength={8} pointerWidth={6}
-      pointerAtBeginning={!!obj.arrow2} hitStrokeWidth={10} />
+    return <Arrow {...common} {...arrowProps(obj)} hitStrokeWidth={10} />
   }
   if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
