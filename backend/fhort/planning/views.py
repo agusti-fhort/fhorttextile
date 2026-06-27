@@ -643,18 +643,32 @@ def _effective_responsable(tasks, model):
 
 
 @api_view(['GET'])
-@permission_classes([_ViewTeamTasks])
+@permission_classes([IsAuthenticated])
 def gantt_view(request):
     """GET /api/v1/plan/gantt/ — Gantt de projecte: UNA barra per model, eix=DIES (no hores).
     Per model: start (consumption_started_at real | predicted_start), end (predicted_end), pct
     (tasques Done/total), fase, responsable efectiu (color=tècnic), data_objectiu (línia vermella),
     fites [{tipus proto|fitting, data, estat}], esperes [{from,to}] (finestra de confecció externa
     Production: requested_at → delivered_at|expected_at). Filtres: ?model_id ?responsable
-    ?collection ?temporada. Gated view_team_tasks. CAPA DE LECTURA (drag = sprint posterior)."""
+    ?collection ?temporada. CAPA DE LECTURA (drag = sprint posterior).
+
+    Visibilitat (2 modes):
+      - sense ?mine → Gantt d'EQUIP: exigeix view_team_tasks (comportament PM idèntic a abans).
+      - ?mine=true → Gantt PERSONAL: acotat als models on l'usuari és assignee de tasca (reusa
+        scope_model_task_queryset, mateix scope que el tauler/calendari). NO exigeix view_team_tasks.
+    """
     qp = request.query_params
+    mine = qp.get('mine') == 'true'
+    if not mine and VIEW_TEAM_TASKS not in get_capabilities(request.user):
+        return Response({'detail': "No tens permís per veure el Gantt d'equip."},
+                        status=http_status.HTTP_403_FORBIDDEN)
     qs = (Model.objects.all().select_related('responsable')
           .prefetch_related('model_tasks', 'model_tasks__assignee', 'model_tasks__task_type',
                             'productions', 'fitting_sessions'))
+    if mine:
+        # Models on l'usuari és assignee de tasca (font única de scope, igual que el tauler).
+        my_models = scope_model_task_queryset(ModelTask.objects.all(), request.user).values('model_id')
+        qs = qs.filter(pk__in=my_models)
     if qp.get('model_id'):
         qs = qs.filter(pk=qp['model_id'])
     if qp.get('responsable'):
