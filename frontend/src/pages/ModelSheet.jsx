@@ -1479,7 +1479,8 @@ function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onEdit, onDele
   const [imgError, setImgError] = useState(false)
   const ext = fileExt(fitxer.nom_fitxer)
   // Document .ftt editable: el botó "Edita" obre l'editor de fitxa sobre aquest ModelFitxer.
-  const isEditable = fitxer.tipus === 'TECHSHEET' || ext === 'ftt'
+  const isTechSheet = fitxer.tipus === 'TECHSHEET' || ext === 'ftt'
+  const isEditable = isTechSheet
   const url = fitxer.fitxer || fitxer.url_extern || fitxer.url
   const mt = fitxer.mimetype || ''
   // Cascada: imatge → <img>; PDF → icona (no hi ha pdf.js, no rasteritzem); altres → icona.
@@ -1521,27 +1522,44 @@ function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onEdit, onDele
         <DetailRow label={t('model_sheet.files.col_date')} value={date} />
         {/* Accions (deleguen als endpoints existents; cap canvi de backend). */}
         <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
-          <button type="button" onClick={onPreview} style={{ ...actBtn, color: 'var(--text-main)' }}>
-            <i className="ti ti-eye" aria-hidden="true" /> {t('model_sheet.view')}
-          </button>
-          {isEditable && (
-            <button type="button" onClick={onEdit} style={{ ...actBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>
-              <i className="ti ti-edit" aria-hidden="true" /> {t('model_sheet.files.edit')}
-            </button>
+          {isTechSheet ? (
+            <>
+              <button type="button" onClick={onEdit} style={{ ...actBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>
+                <i className="ti ti-edit" aria-hidden="true" /> {t('model_sheet.files.edit')}
+              </button>
+              <button type="button" onClick={onHistory} style={actBtn}>
+                <i className="ti ti-history" aria-hidden="true" /> {t('model_sheet.version_history')}
+              </button>
+              <button type="button" onClick={onDelete}
+                style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>
+                <i className="ti ti-trash" aria-hidden="true" /> {t('model_sheet.files.delete')}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={onPreview} style={{ ...actBtn, color: 'var(--text-main)' }}>
+                <i className="ti ti-eye" aria-hidden="true" /> {t('model_sheet.view')}
+              </button>
+              {isEditable && (
+                <button type="button" onClick={onEdit} style={{ ...actBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>
+                  <i className="ti ti-edit" aria-hidden="true" /> {t('model_sheet.files.edit')}
+                </button>
+              )}
+              <label title={t('model_sheet.new_version')} style={{ ...actBtn }}>
+                <i className="ti ti-plus" aria-hidden="true" /> {t('model_sheet.new_version')}
+                <input type="file" style={{ display: 'none' }}
+                  accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf,.ftt"
+                  onChange={e => e.target.files[0] && onNewVersion(e.target.files[0])} />
+              </label>
+              <button type="button" onClick={onHistory} title={t('model_sheet.version_history')} style={actBtn}>
+                <i className="ti ti-history" aria-hidden="true" />
+              </button>
+              <button type="button" onClick={onDelete} title={t('model_sheet.files.delete')}
+                style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>
+                <i className="ti ti-trash" aria-hidden="true" />
+              </button>
+            </>
           )}
-          <label title={t('model_sheet.new_version')} style={{ ...actBtn }}>
-            <i className="ti ti-plus" aria-hidden="true" /> {t('model_sheet.new_version')}
-            <input type="file" style={{ display: 'none' }}
-              accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf,.ftt"
-              onChange={e => e.target.files[0] && onNewVersion(e.target.files[0])} />
-          </label>
-          <button type="button" onClick={onHistory} title={t('model_sheet.version_history')} style={actBtn}>
-            <i className="ti ti-history" aria-hidden="true" />
-          </button>
-          <button type="button" onClick={onDelete} title={t('model_sheet.files.delete')}
-            style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>
-            <i className="ti ti-trash" aria-hidden="true" />
-          </button>
         </div>
       </div>
     </div>
