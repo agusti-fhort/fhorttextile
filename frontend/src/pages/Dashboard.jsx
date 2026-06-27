@@ -362,7 +362,9 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('home')
 
   // Abast [me|all]. null fins que arriba `me` → default per rol (view_team_tasks → tots; si no, meus).
-  const [scope, setScope] = useState(null)
+  // La home va SEMPRE acotada als models on l'usuari és ASSIGNEE de tasca (responsable=me →
+  // ModelTask.assignee, views_b.py:130). Mateix eix que el Gantt mine=. Sense selector d'abast.
+  const scope = 'me'
   const [scopeRows, setScopeRows] = useState([])     // by-model de l'abast (substrat dels KPIs)
   const [scopeLoading, setScopeLoading] = useState(true)
   // Models amb ≥1 tasca en risc (planned_end > data_objectiu), de calendar/events. Es creua amb
@@ -375,13 +377,7 @@ export default function Dashboard() {
       fetch(`${API}/api/v1/me/`, { headers }).then(r => r.json()),
       fetch(`${API}/api/v1/onboarding/status/`, { headers }).then(r => r.ok ? r.json() : null),
     ]).then(([meRes, onbRes]) => {
-      if (meRes.status === "fulfilled") {
-        setMe(meRes.value)
-        // Default d'abast per rol (només si encara no s'ha fixat): qui veu l'equip
-        // (view_team_tasks) → "tots"; la resta (tècnic) → "els meus". Substrat: §16.C. NO localStorage.
-        const caps = meRes.value?.capabilities || []
-        setScope(prev => prev ?? (caps.includes("view_team_tasks") ? "all" : "me"))
-      }
+      if (meRes.status === "fulfilled") setMe(meRes.value)
       if (onbRes.status === "fulfilled" && onbRes.value) setOnboarding(onbRes.value)
     })
   }, [token])
@@ -528,7 +524,6 @@ export default function Dashboard() {
       ) : (
       <>
       {/* Selector d'abast (DALT): Els meus · Tots. */}
-      {scope !== null && <ScopeSelector scope={scope} onChange={setScope} t={t} />}
 
       {scope === "me" && !scopeLoading && scopeRows.length === 0 ? (
         // Estat buit de "els meus": NO cau a tots; convida a mirar tot l'abast.
