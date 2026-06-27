@@ -56,6 +56,45 @@ export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.r
 export const toPx = (mm) => mm * MM_TO_PX
 export const toMm = (px) => px / MM_TO_PX
 
+// ── .ftt ↔ v2 (cutover F2) ───────────────────────────────────────────────────
+// El backend (ftt-documents/) serveix document.json (v-ftt) + un mapa d'assets {nom→URL}.
+// L'editor pinta el format v2 (clau `pages`), on image.src ha de ser una URL carregable;
+// per desar es torna a 'assets/<nom>'. Anàleg JS de services_ftt.document_to_v2/v2_to_document.
+export function documentToV2(documentJson, assets = {}) {
+  const urlOf = (name) => assets[name] || ('assets/' + name)
+  return {
+    version: 2,
+    pageFormat: documentJson?.pageFormat || 'A4L',
+    pages: (documentJson?.pages || []).map(p => ({
+      id: p.id,
+      objects: (p.objects || []).map(o => (
+        typeof o.src === 'string' && o.src.startsWith('assets/')
+          ? { ...o, src: urlOf(o.src.slice(7)) }
+          : o
+      )),
+    })),
+  }
+}
+
+// Inversa per desar: pages v2 (ja serialitzades) → document.json. `urlToName` retorna les URLs
+// d'assets carregats a 'assets/<nom>'; les imatges noves (dataURL) es desen inline (extracció
+// a assets diferida — vegeu nota Fase 1).
+export function v2ToDocument(v2Pages, pageFormat, metadata = {}, urlToName = {}) {
+  return {
+    ftt_schema: 1,
+    metadata: metadata || {},
+    pageFormat: pageFormat || 'A4L',
+    pages: (v2Pages || []).map(p => ({
+      id: p.id,
+      objects: (p.objects || []).map(o => (
+        typeof o.src === 'string' && urlToName[o.src]
+          ? { ...o, src: 'assets/' + urlToName[o.src] }
+          : o
+      )),
+    })),
+  }
+}
+
 // ─── (TS-2) El pipeline SVG→PNG de taules s'ha retirat: les taules ara són blocs
 // Konva natius (vegeu buildTablePrimitives / GradedTableNode). Es mantenen només els
 // helpers d'imatge (loadImageEl/useImage) per a croquis i fitxers del model. ───
@@ -447,10 +486,12 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
 // ════════════════════════════════ Component ═════════════════════════════════
 export default function TechSheetEditor() {
   const { t } = useTranslation()
-  const { id } = useParams()
+  const { id, fitxerId } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const taskId = searchParams.get('task_id')
+  // Mode .ftt: l'editor llegeix/desa el document .ftt (ModelFitxer) en comptes del TechSheet (O2O).
+  const fttMode = !!fitxerId
   const isEditMode = !!taskId
   const token = localStorage.getItem('access_token')
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
@@ -490,6 +531,11 @@ export default function TechSheetEditor() {
   const fileRef = useRef(null)
   const saveTimer = useRef(null)
   const skipSave = useRef(true)        // salta l'autosave del primer load
+  // Mode .ftt: estat del document (assets carregats + metadata + cap de cadena actual).
+  const fttAssets = useRef({})         // {nom: URL} dels assets servits pel backend
+  const fttUrlToName = useRef({})      // {URL: nom} per desar (URL → 'assets/<nom>')
+  const fttMeta = useRef({})           // metadata del document.json (es conserva en desar)
+  const fttHeadId = useRef(fitxerId || null)  // cap de cadena vigent (canvia en desar: nova versió)
   const drawing = useRef(null)         // {type, points, id} mentre es dibuixa
   const [drawTemp, setDrawTemp] = useState(null)
 
@@ -527,28 +573,45 @@ export default function TechSheetEditor() {
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (!cancelled && d) setSizeFittings(d.results || d || []) }).catch(() => {})
 
-    fetch(`${API}/api/v1/models/${id}/tech-sheet/`, { headers: authHeaders })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (cancelled || !data) return
-        setSheet(data)
-        // En mode consulta hidratem aquí; en edició ho fa la resposta del lock.
-        // NOTA: el TechSheetSerializer actual NO exposa `template_json` als seus fields,
-        // així que `data.template_json` és undefined i hydrate cau a "pàgina buida".
-        // hydrate és forward-compatible: en quant el backend exposi template_json
-        // (clau v2 `pages`), la càrrega funcionarà sense tocar el frontend. (Vegeu informe.)
-        if (!isEditMode) hydrate(data)
-      }).catch(() => {})
+    if (fttMode) {
+      // Mode .ftt (F1): carrega el document des de ftt-documents/<fitxerId>/ i el porta a v2.
+      // El lock i el desat els afegeix F2; F1 obre en consulta.
+      fetch(`${API}/api/v1/ftt-documents/${fitxerId}/`, { headers: authHeaders })
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => {
+          if (cancelled || !data) return
+          const assets = data.assets || {}
+          fttAssets.current = assets
+          fttUrlToName.current = Object.fromEntries(Object.entries(assets).map(([n, u]) => [u, n]))
+          fttMeta.current = data.document_json?.metadata || {}
+          fttHeadId.current = data.fitxer?.id || fitxerId
+          setSheet(data.fitxer)   // versio ve de ModelFitxer.versio
+          hydrate({ template_json: documentToV2(data.document_json, assets) })
+        }).catch(() => {})
+    } else {
+      fetch(`${API}/api/v1/models/${id}/tech-sheet/`, { headers: authHeaders })
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => {
+          if (cancelled || !data) return
+          setSheet(data)
+          // En mode consulta hidratem aquí; en edició ho fa la resposta del lock.
+          // NOTA: el TechSheetSerializer actual NO exposa `template_json` als seus fields,
+          // així que `data.template_json` és undefined i hydrate cau a "pàgina buida".
+          // hydrate és forward-compatible: en quant el backend exposi template_json
+          // (clau v2 `pages`), la càrrega funcionarà sense tocar el frontend. (Vegeu informe.)
+          if (!isEditMode) hydrate(data)
+        }).catch(() => {})
 
-    if (isEditMode) {
-      fetch(`${API}/api/v1/models/${id}/tech-sheet/lock/`, { method: 'POST', headers: authHeaders })
-        .then(async r => {
-          if (cancelled) return
-          if (r.ok) { const d = await r.json(); setSheet(d); hydrate(d); setLockState('owned') }
-          else if (r.status === 409) { setConflict(await r.json()); setLockState('conflict') }
-          else setLockState('error')
-        })
-        .catch(() => { if (!cancelled) setLockState('error') })
+      if (isEditMode) {
+        fetch(`${API}/api/v1/models/${id}/tech-sheet/lock/`, { method: 'POST', headers: authHeaders })
+          .then(async r => {
+            if (cancelled) return
+            if (r.ok) { const d = await r.json(); setSheet(d); hydrate(d); setLockState('owned') }
+            else if (r.status === 409) { setConflict(await r.json()); setLockState('conflict') }
+            else setLockState('error')
+          })
+          .catch(() => { if (!cancelled) setLockState('error') })
+      }
     }
 
     return () => {
@@ -566,7 +629,7 @@ export default function TechSheetEditor() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id, fitxerId])
 
   // Carrega el template_json v2 a l'estat. tj buit/absent → 1 pàgina buida.
   function hydrate(sheetData) {

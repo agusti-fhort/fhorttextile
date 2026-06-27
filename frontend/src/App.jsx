@@ -123,6 +123,12 @@ export default function App() {
             <TechSheetEditor />
           </ProtectedRoute>
         } />
+        {/* Editor de document .ftt (ModelFitxer tipus TECHSHEET): mateix editor, font .ftt. */}
+        <Route path="/models/:id/ftt/:fitxerId" element={
+          <ProtectedRoute>
+            <TechSheetEditor />
+          </ProtectedRoute>
+        } />
         {/* Plantilla de fitxa per client (TS-3): mateix editor full-screen, FORA del Shell. */}
         <Route path="/clients/:id/plantilla" element={
           <ProtectedRoute>
