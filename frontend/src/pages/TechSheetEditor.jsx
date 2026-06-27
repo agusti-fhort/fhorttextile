@@ -313,7 +313,7 @@ function textBoxParts(obj) {
   const fs = obj.fontSize || 11
   const w = toPx(obj.width || 120)
   return {
-    group: { x: toPx(obj.x), y: toPx(obj.y) },
+    group: { x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0 },
     bg: { x: -pad, y: -pad, width: w + pad * 2, height: fs * 1.6 + pad * 2, fill: obj.bgFill, cornerRadius: 3 },
     text: {
       text: obj.text || '', width: w, fontSize: fs, fontFamily: obj.fontFamily || FONT,
@@ -324,7 +324,7 @@ function textBoxParts(obj) {
 
 function textProps(obj) {
   return {
-    x: toPx(obj.x), y: toPx(obj.y), width: obj.width ? toPx(obj.width) : undefined,
+    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, width: obj.width ? toPx(obj.width) : undefined,
     text: obj.text || '', fontSize: obj.fontSize || 11, fontFamily: obj.fontFamily || FONT,
     fontStyle: obj.fontStyle || 'normal', fill: obj.fill || KONVA_COL.textMain,
   }
@@ -332,7 +332,7 @@ function textProps(obj) {
 
 function rectProps(obj) {
   return {
-    x: toPx(obj.x), y: toPx(obj.y), width: toPx(obj.width), height: toPx(obj.height),
+    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, width: toPx(obj.width), height: toPx(obj.height),
     fill: obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined,
     stroke: obj.stroke || KONVA_COL.gold, strokeWidth: obj.strokeWidth || 1,
     cornerRadius: obj.cornerRadius || 0,
@@ -341,7 +341,7 @@ function rectProps(obj) {
 
 function ellipseProps(obj) {
   return {
-    x: toPx(obj.x), y: toPx(obj.y), radiusX: toPx(obj.rx), radiusY: toPx(obj.ry),
+    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, radiusX: toPx(obj.rx), radiusY: toPx(obj.ry),
     fill: obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined,
     stroke: obj.stroke || KONVA_COL.textMain, strokeWidth: obj.strokeWidth || 1.5,
   }
@@ -349,7 +349,7 @@ function ellipseProps(obj) {
 
 function lineProps(obj) {
   return {
-    x: 0, y: 0, points: (obj.points || []).map(toPx),
+    x: 0, y: 0, rotation: obj.rotation || 0, points: (obj.points || []).map(toPx),
     stroke: obj.stroke || KONVA_COL.textMain, strokeWidth: obj.strokeWidth || 1,
     dash: obj.dash || undefined, lineCap: 'round', lineJoin: 'round',
   }
@@ -357,7 +357,7 @@ function lineProps(obj) {
 
 function arrowProps(obj) {
   return {
-    x: 0, y: 0, points: [toPx(obj.x), toPx(obj.y), toPx(obj.x2), toPx(obj.y2)],
+    x: 0, y: 0, rotation: obj.rotation || 0, points: [toPx(obj.x), toPx(obj.y), toPx(obj.x2), toPx(obj.y2)],
     stroke: obj.stroke || KONVA_COL.textMain, fill: obj.fill || obj.stroke || KONVA_COL.textMain,
     strokeWidth: obj.strokeWidth || 1.5, pointerLength: 8, pointerWidth: 6,
     pointerAtBeginning: !!obj.arrow2,
@@ -366,13 +366,13 @@ function arrowProps(obj) {
 
 function imageProps(obj) {
   return {
-    x: toPx(obj.x), y: toPx(obj.y),
+    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0,
     width: toPx(obj.width), height: toPx(obj.height || obj.width),
   }
 }
 
 function dataBlockGroupProps(obj) {
-  return { x: toPx(obj.x), y: toPx(obj.y), scaleX: obj.scale || 1, scaleY: obj.scale || 1 }
+  return { x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scale || 1, scaleY: obj.scale || 1 }
 }
 
 function dataBlockPlaceholderProps(obj) {
@@ -495,7 +495,7 @@ function ImageObj({ obj, src, common }) {
 export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
   const common = {
     id: obj.id,
-    x: toPx(obj.x), y: toPx(obj.y),
+    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0,
     draggable,
     onClick: selectable ? onSelect : undefined,
     onTap: selectable ? onSelect : undefined,
@@ -833,20 +833,21 @@ export default function TechSheetEditor() {
   const handleTransformEnd = (obj) => (e) => {
     const node = e.target
     const sx = node.scaleX(), sy = node.scaleY()
+    const rotation = node.rotation()
     node.scaleX(1); node.scaleY(1)
     // Blocs de dades: el resize baka l'escala a obj.scale (coherent amb l'auto-fit),
     // no a width/height. node.scaleX() ja és l'escala absoluta nova (Konva multiplica
     // sobre l'escala base del Group), per tant s'hi assigna directament.
     if (obj.type === 'data_block') {
-      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), scale: Math.max(0.1, Math.max(sx, sy)) })
+      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, scale: Math.max(0.1, Math.max(sx, sy)) })
       return
     }
     if (obj.type === 'ellipse') {
-      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rx: Math.max(1, toMm(node.radiusX() * sx)), ry: Math.max(1, toMm(node.radiusY() * sy)) })
+      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, rx: Math.max(1, toMm(node.radiusX() * sx)), ry: Math.max(1, toMm(node.radiusY() * sy)) })
       return
     }
     const patch = {
-      x: toMm(node.x()), y: toMm(node.y()),
+      x: toMm(node.x()), y: toMm(node.y()), rotation,
       width: Math.max(2, toMm(node.width() * sx)),
     }
     if (obj.type !== 'text') patch.height = Math.max(2, toMm(node.height() * sy))
@@ -1239,7 +1240,7 @@ export default function TechSheetEditor() {
                 {drawTemp?.type === 'ellipse' && <Ellipse x={drawTemp.x + drawTemp.w / 2} y={drawTemp.y + drawTemp.h / 2} radiusX={drawTemp.w / 2} radiusY={drawTemp.h / 2} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {(drawTemp?.type === 'line' || drawTemp?.type === 'line_dot' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={KONVA_COL.textMain} fill={KONVA_COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
-                <Transformer ref={trRef} rotateEnabled={false} ignoreStroke keepRatio={selectedObjects.length === 1 && selObj?.type === 'data_block'}
+                <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={selectedObjects.length === 1 && selObj?.type === 'data_block'}
                   boundBoxFunc={(oldB, newB) => (newB.width < 10 || newB.height < 10 ? oldB : newB)} />
               </Layer>
             </Stage>
@@ -1379,6 +1380,12 @@ export default function TechSheetEditor() {
                         onChange={e => updateObject(selObj.id, { y: Number(e.target.value) || 0 })} style={propInput} />
                     </label>
                   </div>
+                )}
+                {!blocksTransform(selObj) && (
+                  <label style={propLabel}>{t('tech_sheet.rotation_deg')}
+                    <input type="number" min={0} max={360} step={1} value={Math.round(selObj.rotation || 0)}
+                      onChange={e => updateObject(selObj.id, { rotation: ((Number(e.target.value) || 0) % 360 + 360) % 360 })} style={propInput} />
+                  </label>
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
                   <button onClick={() => deleteObject(selObj.id)}

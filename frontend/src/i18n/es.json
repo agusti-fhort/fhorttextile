@@ -1594,6 +1594,7 @@
     "scale_pct": "Escala (%)",
     "pos_x": "X (mm)",
     "pos_y": "Y (mm)",
+    "rotation_deg": "∠ (grados)",
     "pick_size_fitting": "Elige un size fitting",
     "flash_no_logo": "Este cliente no tiene logo. Súbelo desde Clientes.",
     "flash_no_grading": "Este size fitting no tiene grading activo.",
