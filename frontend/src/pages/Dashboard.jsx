@@ -536,35 +536,42 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          {/* KPIs 50% esquerre (apilats) · "Properament" 50% dret (mateixa alçada, scroll intern). */}
-          <div style={{ display: "flex", gap: 16, marginBottom: 28, alignItems: "stretch" }}>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
-              <KPICard
-                label={t("dashboard.kpi.scope_total")}
-                value={scopeLoading ? "…" : kpi.total}
-                sub={t("dashboard.kpi_sub.scope_total")}
-              />
-              <KPICard
-                label={t("dashboard.kpi.at_risk")}
-                value={scopeLoading ? "…" : kpi.risc}
-                sub={t("dashboard.kpi_sub.at_risk")}
-                color="var(--err)"
-              />
-              <KPICard
-                label={t("dashboard.kpi.in_progress")}
-                value={scopeLoading ? "…" : kpi.open}
-                sub={t("dashboard.kpi_sub.in_progress")}
-                color="var(--gold)"
-              />
+          {/* Banda superior: ABAST (esq) · PROPERAMENT (dre) — dues meitats iguals, top-aligned,
+              cadascuna sota el seu label MONO de secció. */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
+              <div style={{ flex: 1, fontSize: "var(--fs-body)", color: "var(--text-muted)", fontFamily: MONO }}>
+                {t("dashboard.scope.label")}
+              </div>
+              <div style={{ flex: 1, fontSize: "var(--fs-body)", color: "var(--text-muted)", fontFamily: MONO }}>
+                {t("dashboard.upcoming.title")}
+              </div>
             </div>
-            {/* Posició relativa + inner absolut: l'alçada la dicten els KPIs; el feed scrolla a dins. */}
-            <div style={{ flex: 1, position: "relative", minHeight: 160 }}>
-              <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
-                <div style={{ fontSize: "var(--fs-body)", color: "var(--text-muted)", fontFamily: MONO, marginBottom: 8 }}>
-                  {t("dashboard.upcoming.title")}
-                </div>
+            <div style={{ display: "flex", gap: 16, alignItems: "stretch" }}>
+              {/* ABAST — els 3 KPIs en HORITZONTAL; alçada = la d'un contenidor KPI. */}
+              <div style={{ flex: 1, display: "flex", gap: 12 }}>
+                <KPICard
+                  label={t("dashboard.kpi.scope_total")}
+                  value={scopeLoading ? "…" : kpi.total}
+                  sub={t("dashboard.kpi_sub.scope_total")}
+                />
+                <KPICard
+                  label={t("dashboard.kpi.at_risk")}
+                  value={scopeLoading ? "…" : kpi.risc}
+                  sub={t("dashboard.kpi_sub.at_risk")}
+                  color="var(--err)"
+                />
+                <KPICard
+                  label={t("dashboard.kpi.in_progress")}
+                  value={scopeLoading ? "…" : kpi.open}
+                  sub={t("dashboard.kpi_sub.in_progress")}
+                  color="var(--gold)"
+                />
+              </div>
+              {/* PROPERAMENT — relatiu + inner absolut: l'alçada la dicta la fila de KPIs; scroll intern. */}
+              <div style={{ flex: 1, position: "relative" }}>
                 <div style={{
-                  flex: 1, minHeight: 0, overflowY: "auto",
+                  position: "absolute", inset: 0, overflowY: "auto",
                   border: "1px solid var(--border)", borderRadius: 8,
                   background: "var(--white)", padding: "12px 16px",
                 }}>
