@@ -236,6 +236,9 @@
     "section_sistema": "Sistema",
     "section_projectes": "Projectes",
     "section_config_tecnica": "Configuració tècnica",
+    "section_disseny": "Disseny",
+    "documents": "Documents",
+    "patro_dxf": "Patró DXF",
     "dashboard": "Desenvolupament",
     "models": "Models",
     "models_new": "Nou model",
@@ -1302,6 +1305,7 @@
   "common": {
     "cancel": "Cancel·lar",
     "confirm": "Confirmar",
+    "coming_soon": "Disponible properament.",
     "dismiss": "D'acord",
     "error": "Error",
     "loading": "Carregant…",

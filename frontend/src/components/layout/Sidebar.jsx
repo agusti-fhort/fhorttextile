@@ -58,6 +58,11 @@ const navGroups = [
     { to: '/size-library', labelKey: 'nav.size_library', icon: 'ti-books' },
     { to: '/poms/grading', labelKey: 'nav.grading', icon: 'ti-chart-dots' },
   ]},
+  // Disseny — documents .ftt (fitxes/maquetació) i patró DXF. Consulta oberta (sense `cap`).
+  { sectionKey: 'nav.section_disseny', items: [
+    { to: '/disseny/documents', labelKey: 'nav.documents', icon: 'ti-file-text' },
+    { to: '/disseny/patro-dxf', labelKey: 'nav.patro_dxf', icon: 'ti-vector' },
+  ]},
   // Estudi tècnic — gestió INTERNA del tenant (NO el backoffice futur de tots els tenants).
   // Futur (previst, no implementat): Configuració de l'Estudi · Equip/usuaris · Catàleg de serveis/tasques.
   { sectionKey: 'nav.section_technical_studio', items: [
