@@ -1595,6 +1595,8 @@
     "pos_x": "X (mm)",
     "pos_y": "Y (mm)",
     "rotation_deg": "∠ (degrees)",
+    "mirror_h": "Mirror H",
+    "mirror_v": "Mirror V",
     "pick_size_fitting": "Choose a size fitting",
     "flash_no_logo": "This client has no logo. Upload it from Clients.",
     "flash_no_grading": "This size fitting has no active grading.",

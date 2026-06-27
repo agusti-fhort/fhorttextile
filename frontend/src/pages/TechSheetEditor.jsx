@@ -279,10 +279,10 @@ function addPrimsToGroup(group, prims) {
 }
 
 // Bloc de taula graduada — Konva natiu (no imatge). NO fa fetch: rep tableData del pare.
-function GradedTableNode({ tableData, scale = 1, groupProps, isSelected }) {
+function GradedTableNode({ tableData, groupProps, isSelected }) {
   const { prims, totalW, totalH } = useMemo(() => buildTablePrimitives(tableData), [tableData])
   return (
-    <Group {...groupProps} scaleX={scale} scaleY={scale}>
+    <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
       {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={TBL.OUTER} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
@@ -313,7 +313,7 @@ function textBoxParts(obj) {
   const fs = obj.fontSize || 11
   const w = toPx(obj.width || 120)
   return {
-    group: { x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0 },
+    group: { x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1 },
     bg: { x: -pad, y: -pad, width: w + pad * 2, height: fs * 1.6 + pad * 2, fill: obj.bgFill, cornerRadius: 3 },
     text: {
       text: obj.text || '', width: w, fontSize: fs, fontFamily: obj.fontFamily || FONT,
@@ -324,7 +324,7 @@ function textBoxParts(obj) {
 
 function textProps(obj) {
   return {
-    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, width: obj.width ? toPx(obj.width) : undefined,
+    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1, width: obj.width ? toPx(obj.width) : undefined,
     text: obj.text || '', fontSize: obj.fontSize || 11, fontFamily: obj.fontFamily || FONT,
     fontStyle: obj.fontStyle || 'normal', fill: obj.fill || KONVA_COL.textMain,
   }
@@ -332,7 +332,7 @@ function textProps(obj) {
 
 function rectProps(obj) {
   return {
-    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, width: toPx(obj.width), height: toPx(obj.height),
+    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1, width: toPx(obj.width), height: toPx(obj.height),
     fill: obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined,
     stroke: obj.stroke || KONVA_COL.gold, strokeWidth: obj.strokeWidth || 1,
     cornerRadius: obj.cornerRadius || 0,
@@ -341,7 +341,7 @@ function rectProps(obj) {
 
 function ellipseProps(obj) {
   return {
-    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, radiusX: toPx(obj.rx), radiusY: toPx(obj.ry),
+    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1, radiusX: toPx(obj.rx), radiusY: toPx(obj.ry),
     fill: obj.fill && obj.fill !== 'transparent' ? obj.fill : undefined,
     stroke: obj.stroke || KONVA_COL.textMain, strokeWidth: obj.strokeWidth || 1.5,
   }
@@ -349,7 +349,7 @@ function ellipseProps(obj) {
 
 function lineProps(obj) {
   return {
-    x: 0, y: 0, rotation: obj.rotation || 0, points: (obj.points || []).map(toPx),
+    x: 0, y: 0, rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1, points: (obj.points || []).map(toPx),
     stroke: obj.stroke || KONVA_COL.textMain, strokeWidth: obj.strokeWidth || 1,
     dash: obj.dash || undefined, lineCap: 'round', lineJoin: 'round',
   }
@@ -357,7 +357,7 @@ function lineProps(obj) {
 
 function arrowProps(obj) {
   return {
-    x: 0, y: 0, rotation: obj.rotation || 0, points: [toPx(obj.x), toPx(obj.y), toPx(obj.x2), toPx(obj.y2)],
+    x: 0, y: 0, rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1, points: [toPx(obj.x), toPx(obj.y), toPx(obj.x2), toPx(obj.y2)],
     stroke: obj.stroke || KONVA_COL.textMain, fill: obj.fill || obj.stroke || KONVA_COL.textMain,
     strokeWidth: obj.strokeWidth || 1.5, pointerLength: 8, pointerWidth: 6,
     pointerAtBeginning: !!obj.arrow2,
@@ -366,13 +366,14 @@ function arrowProps(obj) {
 
 function imageProps(obj) {
   return {
-    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0,
+    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
     width: toPx(obj.width), height: toPx(obj.height || obj.width),
   }
 }
 
 function dataBlockGroupProps(obj) {
-  return { x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scale || 1, scaleY: obj.scale || 1 }
+  const scale = obj.scale || 1
+  return { x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: scale * (obj.scaleX || 1), scaleY: scale * (obj.scaleY || 1) }
 }
 
 function dataBlockPlaceholderProps(obj) {
@@ -487,15 +488,17 @@ function ImageObj({ obj, src, common }) {
   if (!img) {
     // Placeholder mentre carrega / si falla.
     return <Rect {...common} width={props.width} height={props.height}
+      scaleX={props.scaleX} scaleY={props.scaleY}
       fill={COL.goldPale} stroke={KONVA_COL.border} dash={[4, 4]} />
   }
-  return <KonvaImage {...common} image={img} width={props.width} height={props.height} />
+  return <KonvaImage {...common} image={img} width={props.width} height={props.height}
+    scaleX={props.scaleX} scaleY={props.scaleY} />
 }
 
 export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
   const common = {
     id: obj.id,
-    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0,
+    x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
     draggable,
     onClick: selectable ? onSelect : undefined,
     onTap: selectable ? onSelect : undefined,
@@ -503,19 +506,20 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     onTransformEnd,
   }
   if (obj.type === 'data_block') {
+    const dataCommon = { ...common, ...dataBlockGroupProps(obj) }
     if (obj.kind === 'header') {
-      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} groupProps={common} isSelected={selected} />
+      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} groupProps={dataCommon} isSelected={selected} />
     }
     const data = tableData?.[obj.id]
     if (!data) {
       return (
-        <Group {...common}>
+        <Group {...dataCommon}>
           <Rect {...dataBlockPlaceholderProps(obj)} />
           <Text x={6} y={6} text={data === null ? 'Sense grading actiu' : 'Carregant taula…'} fontSize={12} fontFamily={FONT} fill={KONVA_COL.textMuted} listening={false} />
         </Group>
       )
     }
-    return <GradedTableNode tableData={data} scale={obj.scale || 1} groupProps={common} isSelected={selected} />
+    return <GradedTableNode tableData={data} groupProps={dataCommon} isSelected={selected} />
   }
   if (obj.type === 'text') {
     // Text amb fons (text_box): Group amb un Rect darrere; no redimensionable per Transformer.
@@ -641,6 +645,9 @@ export default function TechSheetEditor() {
     if (e?.evt?.shiftKey) toggleSelection(objId)
     else selectOnly(objId)
   }, [selectOnly, toggleSelection])
+  const mirrorObjects = useCallback((objIds, axis) => {
+    updateObjects(objIds, o => ({ [axis]: -1 * (o[axis] || 1) }))
+  }, [updateObjects])
 
   // ── Càrrega inicial: model, sheet, fitxers, size fittings, lock ────────────
   useEffect(() => {
@@ -833,24 +840,27 @@ export default function TechSheetEditor() {
   const handleTransformEnd = (obj) => (e) => {
     const node = e.target
     const sx = node.scaleX(), sy = node.scaleY()
+    const absSx = Math.abs(sx), absSy = Math.abs(sy)
+    const scaleX = sx < 0 ? -1 : 1
+    const scaleY = sy < 0 ? -1 : 1
     const rotation = node.rotation()
     node.scaleX(1); node.scaleY(1)
     // Blocs de dades: el resize baka l'escala a obj.scale (coherent amb l'auto-fit),
     // no a width/height. node.scaleX() ja és l'escala absoluta nova (Konva multiplica
     // sobre l'escala base del Group), per tant s'hi assigna directament.
     if (obj.type === 'data_block') {
-      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, scale: Math.max(0.1, Math.max(sx, sy)) })
+      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, scaleX, scaleY, scale: Math.max(0.1, Math.max(absSx, absSy)) })
       return
     }
     if (obj.type === 'ellipse') {
-      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, rx: Math.max(1, toMm(node.radiusX() * sx)), ry: Math.max(1, toMm(node.radiusY() * sy)) })
+      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, scaleX, scaleY, rx: Math.max(1, toMm(node.radiusX() * absSx)), ry: Math.max(1, toMm(node.radiusY() * absSy)) })
       return
     }
     const patch = {
-      x: toMm(node.x()), y: toMm(node.y()), rotation,
-      width: Math.max(2, toMm(node.width() * sx)),
+      x: toMm(node.x()), y: toMm(node.y()), rotation, scaleX, scaleY,
+      width: Math.max(2, toMm(node.width() * absSx)),
     }
-    if (obj.type !== 'text') patch.height = Math.max(2, toMm(node.height() * sy))
+    if (obj.type !== 'text') patch.height = Math.max(2, toMm(node.height() * absSy))
     updateObject(obj.id, patch)
   }
 
@@ -1096,6 +1106,7 @@ export default function TechSheetEditor() {
   const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow'].includes(o.type))
   const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse'].includes(o.type))
   const multiPosition = selectedObjects.filter(o => o.type !== 'line' && o.type !== 'arrow')
+  const mirrorableIds = selectedObjects.filter(o => !blocksTransform(o)).map(o => o.id)
   const multiStrokeValue = commonValue(multiStroke, 'stroke')
   const multiFillValue = commonValue(multiFill, 'fill')
   const multiX = commonValue(multiPosition, 'x')
@@ -1297,6 +1308,18 @@ export default function TechSheetEditor() {
             {multiSelected && locked && (
               <>
                 <SectionTitle>{t('tech_sheet.selected_objects', { n: selectedObjects.length })}</SectionTitle>
+                {mirrorableIds.length === selectedObjects.length && (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                    <button type="button" onClick={() => mirrorObjects(mirrorableIds, 'scaleX')}
+                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
+                      <i className="ti ti-flip-horizontal" aria-hidden="true" /> {t('tech_sheet.mirror_h')}
+                    </button>
+                    <button type="button" onClick={() => mirrorObjects(mirrorableIds, 'scaleY')}
+                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
+                      <i className="ti ti-flip-vertical" aria-hidden="true" /> {t('tech_sheet.mirror_v')}
+                    </button>
+                  </div>
+                )}
                 {multiStroke.length > 0 && (
                   <div style={propLabel}>{t('tech_sheet.stroke_color')}
                     {!multiStrokeValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
@@ -1379,6 +1402,18 @@ export default function TechSheetEditor() {
                       <input type="number" step={1} value={Math.round((selObj.y || 0) * 10) / 10}
                         onChange={e => updateObject(selObj.id, { y: Number(e.target.value) || 0 })} style={propInput} />
                     </label>
+                  </div>
+                )}
+                {!blocksTransform(selObj) && (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                    <button type="button" onClick={() => mirrorObjects([selObj.id], 'scaleX')}
+                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
+                      <i className="ti ti-flip-horizontal" aria-hidden="true" /> {t('tech_sheet.mirror_h')}
+                    </button>
+                    <button type="button" onClick={() => mirrorObjects([selObj.id], 'scaleY')}
+                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
+                      <i className="ti ti-flip-vertical" aria-hidden="true" /> {t('tech_sheet.mirror_v')}
+                    </button>
                   </div>
                 )}
                 {!blocksTransform(selObj) && (
