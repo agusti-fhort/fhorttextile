@@ -11,10 +11,13 @@ Un fitxer .ftt és un zip estàndard amb aquesta estructura:
 hashlib de la llibreria estàndard. Això les fa testables aïlladament i sense dependència
 nova. El desempaquetat viu al backend; el client mai rep el zip (rep document.json + URLs).
 """
+import base64
 import hashlib
 import io
 import json
+import re
 import zipfile
+from urllib.parse import unquote_to_bytes
 
 FTT_MAGIC = "FTT"
 FTT_SCHEMA_VERSION = 1
@@ -87,6 +90,90 @@ def pack(document_json, assets=None, preview=None, app_version=FTT_APP_VERSION):
         if preview is not None:
             zf.writestr(PREVIEW_NAME, preview)
     return buf.getvalue()
+
+
+# ── Mapatge template_json v2 ↔ document.json v-ftt ───────────────────────────
+# El template_json v2 de l'editor és {version:2, pages:[{id,objects}], pageFormat}. Els
+# binaris inline (image.src com a dataURL) es treuen a assets/<hash>.<ext> deixant
+# src='assets/<nom>' → document.json lleuger i binaris fora del JSON.
+
+_DATAURL_RE = re.compile(r"^data:(?P<mime>[^;,]*);?(?P<b64>base64)?,(?P<data>.*)$", re.DOTALL)
+_MIME_EXT = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/svg+xml": "svg",
+}
+
+
+def _decode_dataurl(src):
+    """Retorna (bytes, mime) d'un dataURL, o None si no ho és."""
+    m = _DATAURL_RE.match(src)
+    if not m:
+        return None
+    raw = m.group("data")
+    if m.group("b64"):
+        data = base64.b64decode(raw)
+    else:
+        data = unquote_to_bytes(raw)
+    return data, (m.group("mime") or "application/octet-stream")
+
+
+def v2_to_document(template_json, metadata=None):
+    """template_json v2 → (document_json v-ftt, assets:{nom->bytes}).
+
+    Extreu cada binari inline (objecte amb `src` dataURL) a assets/<sha16>.<ext> i hi
+    deixa `src='assets/<nom>'`. La resta de l'objecte es conserva intacta.
+    """
+    page_format = template_json.get("pageFormat") or DEFAULT_PAGE_FORMAT
+    assets = {}
+    pages_out = []
+    for page in template_json.get("pages") or []:
+        objs_out = []
+        for obj in page.get("objects") or []:
+            obj = dict(obj)
+            src = obj.get("src")
+            if isinstance(src, str) and src.startswith("data:"):
+                decoded = _decode_dataurl(src)
+                if decoded is not None:
+                    data, mime = decoded
+                    name = "%s.%s" % (_sha256(data)[:16], _MIME_EXT.get(mime, "bin"))
+                    assets[name] = data
+                    obj["src"] = ASSETS_PREFIX + name
+            objs_out.append(obj)
+        pages_out.append({"id": page.get("id"), "objects": objs_out})
+    document = {
+        "ftt_schema": FTT_DOCUMENT_SCHEMA,
+        "metadata": metadata or {},
+        "pageFormat": page_format,
+        "pages": pages_out,
+    }
+    return document, assets
+
+
+def document_to_v2(document_json, asset_src=None):
+    """document.json v-ftt → template_json v2 (per carregar a l'editor).
+
+    `asset_src(nom) -> str` reescriu les refs `assets/<nom>` (p.ex. a URL absoluta servida
+    pel backend). Per defecte les deixa com `assets/<nom>`.
+    """
+    pages_out = []
+    for page in document_json.get("pages") or []:
+        objs_out = []
+        for obj in page.get("objects") or []:
+            obj = dict(obj)
+            src = obj.get("src")
+            if isinstance(src, str) and src.startswith(ASSETS_PREFIX) and asset_src is not None:
+                obj["src"] = asset_src(src[len(ASSETS_PREFIX):])
+            objs_out.append(obj)
+        pages_out.append({"id": page.get("id"), "objects": objs_out})
+    return {
+        "version": 2,
+        "pageFormat": document_json.get("pageFormat") or DEFAULT_PAGE_FORMAT,
+        "pages": pages_out,
+    }
 
 
 def unpack(blob):
