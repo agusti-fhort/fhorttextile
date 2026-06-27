@@ -306,8 +306,12 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
 
   // Finestres d'espera (confecció externa): es pinten com a segment trencat ratllat.
   const esperes = (m.esperes || []).map(w => ({ l: x(w.from), r: x(w.to) + PX_PER_DAY }))
-  // PEÇA 4 — text de la pastilla (tècnic · next_task · %): desborda la barra; també com a title (hover).
-  const barText = [m.responsable_nom, m.next_task, `${m.pct}%`].filter(Boolean).join(' · ')
+  // PEÇA 4 — text de la pastilla (tècnic · next_task[→ data] · %): desborda la barra; també title (hover).
+  // La capdavantera mostra la data a la qual s'enfronta (planned_end); sense data → només el codi.
+  const nextLabel = m.next_task
+    ? (m.next_task_date ? `${m.next_task} → ${fmtDM(parseISO(m.next_task_date))}` : m.next_task)
+    : null
+  const barText = [m.responsable_nom, nextLabel, `${m.pct}%`].filter(Boolean).join(' · ')
 
   return (
     <div onClick={onClick} title={`${m.codi} · ${m.nom || ''}`} style={{
