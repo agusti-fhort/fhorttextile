@@ -145,19 +145,12 @@ except Exception:
 # amb el detall del router (models/<pk>/), però es prepended per consistència amb la resta.
 try:
     from .tech_sheet_editor_views import (
-        TechSheetDetailView,
-        TechSheetLockView,
-        TechSheetUnlockView,
-        TechSheetUpdateView,
         get_or_create_template,
         update_template,
     )
     _techsheet_editor_paths = [
-        path('models/<int:model_id>/tech-sheet/',        TechSheetDetailView.as_view(), name='tech-sheet-detail'),
-        path('models/<int:model_id>/tech-sheet/lock/',   TechSheetLockView.as_view(),   name='tech-sheet-lock'),
-        path('models/<int:model_id>/tech-sheet/unlock/', TechSheetUnlockView.as_view(), name='tech-sheet-unlock'),
-        path('models/<int:model_id>/tech-sheet/update/', TechSheetUpdateView.as_view(), name='tech-sheet-update'),
-        # Plantilles de fitxa per Customer (TS-3).
+        # Fitxa per-model jubilada (Fase 2 .ftt) → els endpoints viuen a ftt-documents/.
+        # Es mantenen només les plantilles de fitxa per Customer (TS-3).
         path('customers/<int:customer_id>/tech-sheet-template/',        get_or_create_template, name='tech-sheet-template-detail'),
         path('customers/<int:customer_id>/tech-sheet-template/update/', update_template,        name='tech-sheet-template-update'),
     ]
