@@ -68,7 +68,6 @@ TENANT_APPS = [
     'fhort.pom',
     'fhort.fitting',
     'fhort.tasks',
-    'fhort.files',
     'fhort.planning',
 ]
 
