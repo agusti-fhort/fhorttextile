@@ -687,7 +687,11 @@ def gantt_view(request):
         # FITAT 0-100 per construcció. (Abans es barrejava minuts consumits/estimats → >100%.)
         pct = round(100 * done / total) if total else 0
         # Pròxima tasca pendent (primera no-Done en ordre [model, order]) → etiqueta de la pastilla.
-        next_task = next((tk.task_type.code for tk in tasks if tk.status != 'Done'), None)
+        # Reusem la MATEIXA tasca per exposar-ne el planned_end (data a la qual s'enfronta el model).
+        next_tk = next((tk for tk in tasks if tk.status != 'Done'), None)
+        next_task = next_tk.task_type.code if next_tk else None
+        next_task_date = (next_tk.planned_end.date().isoformat()
+                          if next_tk and next_tk.planned_end else None)
         start = m.consumption_started_at.date() if m.consumption_started_at else m.predicted_start
         end = m.predicted_end or start
         start = start or end
@@ -714,7 +718,7 @@ def gantt_view(request):
             'start': start.isoformat(), 'end': end.isoformat(),
             'data_objectiu': objectiu.isoformat() if objectiu else None,
             'responsable_id': resp_id, 'responsable_nom': resp_nom, 'responsable_color': resp_color,
-            'next_task': next_task,
+            'next_task': next_task, 'next_task_date': next_task_date,
             'en_risc': bool(end and objectiu and end > objectiu),
             'collection': m.collection or '', 'temporada': m.temporada,
             'fites': fites, 'esperes': esperes,
