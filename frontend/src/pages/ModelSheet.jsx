@@ -1204,6 +1204,7 @@ function TabFiles({ modelId }) {
   const [orderBy, setOrderBy] = useState('data')
   const [uploading, setUploading] = useState(false)
   const [popup, setPopup] = useState(null)
+  const [history, setHistory] = useState(null)   // { fitxer, chain[], loading }
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -1213,11 +1214,14 @@ function TabFiles({ modelId }) {
       .catch(() => setError(t('model_sheet.err_load_files')))
   }, [modelId])
 
-  const handleUpload = async (file) => {
+  // versioAnteriorId opcional: encadena una nova versió i, com que la llista mostra només
+  // is_current, el nou cap substitueix el predecessor a la llista.
+  const handleUpload = async (file, versioAnteriorId = null) => {
     setUploading(true)
     const formData = new FormData()
     formData.append('fitxer', file)
     formData.append('nom', file.name)
+    if (versioAnteriorId) formData.append('versio_anterior_id', versioAnteriorId)
     try {
       const r = await fetch(`${API}/api/v1/models/${modelId}/upload-fitxer/`, {
         method: 'POST',
@@ -1226,7 +1230,9 @@ function TabFiles({ modelId }) {
       })
       const d = await r.json()
       if (r.ok) {
-        setFitxers(prev => [d, ...prev])
+        setFitxers(prev => versioAnteriorId
+          ? [d, ...prev.filter(f => f.id !== versioAnteriorId)]
+          : [d, ...prev])
       } else {
         setError(JSON.stringify(d))
       }
@@ -1234,6 +1240,17 @@ function TabFiles({ modelId }) {
       setError(t('model_sheet.err_upload'))
     } finally {
       setUploading(false)
+    }
+  }
+
+  const openHistory = async (fitxer) => {
+    setHistory({ fitxer, chain: [], loading: true })
+    try {
+      const r = await fetch(`${API}/api/v1/model-fitxers/${fitxer.id}/versions/`, { headers: authHeaders })
+      const d = await r.json()
+      setHistory({ fitxer, chain: (d.results || d || []), loading: false })
+    } catch {
+      setHistory({ fitxer, chain: [], loading: false })
     }
   }
 
@@ -1291,6 +1308,55 @@ function TabFiles({ modelId }) {
         </div>
       )}
 
+      {history && (
+        <div onClick={() => setHistory(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+            zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--white)', borderRadius: 8, padding: 16,
+                     minWidth: 360, maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500 }}>{t('model_sheet.version_history')}</span>
+              <button type="button" onClick={() => setHistory(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-h2)' }}>✕</button>
+            </div>
+            {history.loading ? (
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>…</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[...history.chain].sort((a, b) => (b.versio || 0) - (a.versio || 0)).map(v => (
+                  <div key={v.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '6px 10px', borderRadius: 6,
+                      border: '0.5px solid var(--border)',
+                      background: v.is_current ? 'var(--bg-muted)' : 'transparent',
+                    }}>
+                    <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500, minWidth: 32 }}>v{v.versio}</span>
+                    <span style={{
+                      flex: 1, fontSize: 'var(--fs-body)', color: 'var(--text-main)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }} title={v.nom_fitxer}>{v.nom_fitxer}</span>
+                    {v.is_current && (
+                      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+                        {t('model_sheet.current_version')}
+                      </span>
+                    )}
+                    <button type="button"
+                      onClick={() => setPopup({ url: v.fitxer || v.url, nom: v.nom_fitxer })}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                      <i className="ti ti-eye" aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_sheet.sort_by')}</span>
         {ORDERS.map(o => (
@@ -1329,6 +1395,8 @@ function TabFiles({ modelId }) {
           {sorted.map(f => (
             <FileCard key={f.id} fitxer={f}
               onPreview={() => setPopup({ url: f.fitxer || f.url, nom: f.nom_fitxer })}
+              onHistory={() => openHistory(f)}
+              onNewVersion={file => handleUpload(file, f.id)}
               onDelete={() => handleDelete(f.id)} />
           ))}
         </div>
@@ -1337,7 +1405,7 @@ function TabFiles({ modelId }) {
   )
 }
 
-function FileCard({ fitxer, onPreview, onDelete }) {
+function FileCard({ fitxer, onPreview, onHistory, onNewVersion, onDelete }) {
   const { t } = useTranslation()
   const isImage = PREVIEW_IMG_RE.test(fitxer.nom_fitxer || '')
   const icon = iconForExt(fileExt(fitxer.nom_fitxer))
@@ -1372,20 +1440,35 @@ function FileCard({ fitxer, onPreview, onDelete }) {
       </div>
 
       <div style={{ padding: '6px 8px' }}>
-        <div style={{
-          fontSize: 'var(--fs-body)', color: 'var(--text-main)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          marginBottom: 4,
-        }} title={fitxer.nom_fitxer}>
+        <div onClick={onHistory}
+          style={{
+            fontSize: 'var(--fs-body)', color: 'var(--text-main)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            marginBottom: 4, cursor: 'pointer',
+          }} title={t('model_sheet.version_history')}>
           {fitxer.nom_fitxer}
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button type="button" onClick={onPreview}
             style={{ flex: 1, padding: '3px 0', fontSize: 'var(--fs-body)', border: 'none',
                      background: 'var(--bg-muted)',
                      borderRadius: 4, cursor: 'pointer',
                      }}>
             <i className="ti ti-eye" aria-hidden="true" /> {t('model_sheet.view')}
+          </button>
+          <label title={t('model_sheet.new_version')}
+            style={{ padding: '3px 6px', fontSize: 'var(--fs-body)', borderRadius: 4,
+                     cursor: 'pointer', color: 'var(--text-muted)' }}>
+            <i className="ti ti-plus" aria-hidden="true" />
+            <input type="file" style={{ display: 'none' }}
+              accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf"
+              onChange={e => e.target.files[0] && onNewVersion(e.target.files[0])} />
+          </label>
+          <button type="button" onClick={onHistory} title={t('model_sheet.version_history')}
+            style={{ padding: '3px 6px', fontSize: 'var(--fs-body)', border: 'none',
+                     background: 'transparent', borderRadius: 4,
+                     cursor: 'pointer', color: 'var(--text-muted)' }}>
+            <i className="ti ti-history" aria-hidden="true" />
           </button>
           <button type="button" onClick={onDelete}
             style={{ padding: '3px 6px', fontSize: 'var(--fs-body)', border: 'none',
