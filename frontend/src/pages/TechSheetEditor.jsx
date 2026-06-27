@@ -648,6 +648,29 @@ export default function TechSheetEditor() {
   const mirrorObjects = useCallback((objIds, axis) => {
     updateObjects(objIds, o => ({ [axis]: -1 * (o[axis] || 1) }))
   }, [updateObjects])
+  const moveSelectionInFreeLayer = useCallback((direction) => {
+    const ids = new Set(selectedIds)
+    updatePageObjects(currentPage, objs => {
+      const next = [...objs]
+      if (direction === 'forward') {
+        for (let i = next.length - 2; i >= 0; i -= 1) {
+          if (!ids.has(next[i].id) || next[i].layer !== 'free') continue
+          const j = next.findIndex((o, idx) => idx > i && o.layer === 'free')
+          if (j !== -1 && !ids.has(next[j].id)) [next[i], next[j]] = [next[j], next[i]]
+        }
+      } else {
+        for (let i = 1; i < next.length; i += 1) {
+          if (!ids.has(next[i].id) || next[i].layer !== 'free') continue
+          let j = -1
+          for (let p = i - 1; p >= 0; p -= 1) {
+            if (next[p].layer === 'free') { j = p; break }
+          }
+          if (j !== -1 && !ids.has(next[j].id)) [next[i], next[j]] = [next[j], next[i]]
+        }
+      }
+      return next
+    })
+  }, [currentPage, selectedIds, updatePageObjects])
 
   // ── Càrrega inicial: model, sheet, fitxers, size fittings, lock ────────────
   useEffect(() => {
@@ -1107,6 +1130,7 @@ export default function TechSheetEditor() {
   const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse'].includes(o.type))
   const multiPosition = selectedObjects.filter(o => o.type !== 'line' && o.type !== 'arrow')
   const mirrorableIds = selectedObjects.filter(o => !blocksTransform(o)).map(o => o.id)
+  const freeSelectedIds = selectedObjects.filter(o => o.layer === 'free').map(o => o.id)
   const multiStrokeValue = commonValue(multiStroke, 'stroke')
   const multiFillValue = commonValue(multiFill, 'fill')
   const multiX = commonValue(multiPosition, 'x')
@@ -1320,6 +1344,18 @@ export default function TechSheetEditor() {
                     </button>
                   </div>
                 )}
+                {freeSelectedIds.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                    <button type="button" onClick={() => moveSelectionInFreeLayer('backward')}
+                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
+                      <i className="ti ti-arrow-down" aria-hidden="true" /> {t('tech_sheet.send_backward')}
+                    </button>
+                    <button type="button" onClick={() => moveSelectionInFreeLayer('forward')}
+                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
+                      <i className="ti ti-arrow-up" aria-hidden="true" /> {t('tech_sheet.bring_forward')}
+                    </button>
+                  </div>
+                )}
                 {multiStroke.length > 0 && (
                   <div style={propLabel}>{t('tech_sheet.stroke_color')}
                     {!multiStrokeValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
@@ -1413,6 +1449,18 @@ export default function TechSheetEditor() {
                     <button type="button" onClick={() => mirrorObjects([selObj.id], 'scaleY')}
                       style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
                       <i className="ti ti-flip-vertical" aria-hidden="true" /> {t('tech_sheet.mirror_v')}
+                    </button>
+                  </div>
+                )}
+                {selObj.layer === 'free' && (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                    <button type="button" onClick={() => moveSelectionInFreeLayer('backward')}
+                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
+                      <i className="ti ti-arrow-down" aria-hidden="true" /> {t('tech_sheet.send_backward')}
+                    </button>
+                    <button type="button" onClick={() => moveSelectionInFreeLayer('forward')}
+                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
+                      <i className="ti ti-arrow-up" aria-hidden="true" /> {t('tech_sheet.bring_forward')}
                     </button>
                   </div>
                 )}

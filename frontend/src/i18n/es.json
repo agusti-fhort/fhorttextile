@@ -1597,6 +1597,8 @@
     "rotation_deg": "∠ (grados)",
     "mirror_h": "Espejo H",
     "mirror_v": "Espejo V",
+    "bring_forward": "Adelante",
+    "send_backward": "Atrás",
     "pick_size_fitting": "Elige un size fitting",
     "flash_no_logo": "Este cliente no tiene logo. Súbelo desde Clientes.",
     "flash_no_grading": "Este size fitting no tiene grading activo.",
