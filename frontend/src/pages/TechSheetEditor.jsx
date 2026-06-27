@@ -81,6 +81,16 @@ function localizeObject(obj, origin) {
   return { ...obj, x: (obj.x || 0) - origin.x, y: (obj.y || 0) - origin.y }
 }
 
+function translateObject(obj, dx, dy) {
+  if (obj.type === 'line') {
+    return { ...obj, points: (obj.points || []).map((v, i) => v + (i % 2 === 0 ? dx : dy)) }
+  }
+  if (obj.type === 'arrow') {
+    return { ...obj, x: obj.x + dx, y: obj.y + dy, x2: obj.x2 + dx, y2: obj.y2 + dy }
+  }
+  return { ...obj, x: (obj.x || 0) + dx, y: (obj.y || 0) + dy }
+}
+
 function groupPointToGlobal(group, x, y) {
   const sx = group.scaleX || 1
   const sy = group.scaleY || 1
@@ -820,6 +830,55 @@ export default function TechSheetEditor() {
     setSelectedIds(children.map(child => child.id))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, pages, updatePageObjects])
+  const alignSelection = useCallback((mode) => {
+    const ids = new Set(selectedIds)
+    const selected = objectsOf(currentPage).filter(o => ids.has(o.id))
+    if (selected.length < 2) return
+    const byId = Object.fromEntries(selected.map(o => [o.id, objectBounds(o)]))
+    const all = Object.values(byId)
+    const minX = Math.min(...all.map(b => b.minX))
+    const maxX = Math.max(...all.map(b => b.maxX))
+    const minY = Math.min(...all.map(b => b.minY))
+    const maxY = Math.max(...all.map(b => b.maxY))
+    updatePageObjects(currentPage, objs => objs.map(o => {
+      if (!ids.has(o.id)) return o
+      const b = byId[o.id]
+      let dx = 0, dy = 0
+      if (mode === 'left') dx = minX - b.minX
+      if (mode === 'center') dx = (minX + maxX) / 2 - (b.minX + b.maxX) / 2
+      if (mode === 'right') dx = maxX - b.maxX
+      if (mode === 'top') dy = minY - b.minY
+      if (mode === 'middle') dy = (minY + maxY) / 2 - (b.minY + b.maxY) / 2
+      if (mode === 'bottom') dy = maxY - b.maxY
+      return translateObject(o, dx, dy)
+    }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pages, selectedIds, updatePageObjects])
+  const distributeSelection = useCallback((axis) => {
+    const ids = new Set(selectedIds)
+    const selected = objectsOf(currentPage).filter(o => ids.has(o.id))
+    if (selected.length < 3) return
+    const entries = selected.map(o => ({ obj: o, bounds: objectBounds(o) }))
+      .sort((a, b) => axis === 'h' ? a.bounds.minX - b.bounds.minX : a.bounds.minY - b.bounds.minY)
+    const first = entries[0]
+    const last = entries[entries.length - 1]
+    const start = axis === 'h' ? first.bounds.minX : first.bounds.minY
+    const end = axis === 'h' ? last.bounds.maxX : last.bounds.maxY
+    const totalSize = entries.reduce((sum, e) => sum + (axis === 'h' ? e.bounds.maxX - e.bounds.minX : e.bounds.maxY - e.bounds.minY), 0)
+    const gap = (end - start - totalSize) / (entries.length - 1)
+    let cursor = start
+    const deltaById = {}
+    for (const e of entries) {
+      const currentStart = axis === 'h' ? e.bounds.minX : e.bounds.minY
+      deltaById[e.obj.id] = cursor - currentStart
+      cursor += (axis === 'h' ? e.bounds.maxX - e.bounds.minX : e.bounds.maxY - e.bounds.minY) + gap
+    }
+    updatePageObjects(currentPage, objs => objs.map(o => {
+      if (!ids.has(o.id)) return o
+      return axis === 'h' ? translateObject(o, deltaById[o.id], 0) : translateObject(o, 0, deltaById[o.id])
+    }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pages, selectedIds, updatePageObjects])
 
   // ── Càrrega inicial: model, sheet, fitxers, size fittings, lock ────────────
   useEffect(() => {
@@ -1489,6 +1548,32 @@ export default function TechSheetEditor() {
                   style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
                   <i className="ti ti-box-multiple" aria-hidden="true" /> {t('tech_sheet.group')}
                 </button>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 8 }}>
+                  <button type="button" onClick={() => alignSelection('left')} title={t('tech_sheet.align_left')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
+                    <i className="ti ti-align-left" aria-hidden="true" />
+                  </button>
+                  <button type="button" onClick={() => alignSelection('center')} title={t('tech_sheet.align_center')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
+                    <i className="ti ti-align-center" aria-hidden="true" />
+                  </button>
+                  <button type="button" onClick={() => alignSelection('right')} title={t('tech_sheet.align_right')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
+                    <i className="ti ti-align-right" aria-hidden="true" />
+                  </button>
+                  <button type="button" onClick={() => distributeSelection('h')} title={t('tech_sheet.distribute_h')} disabled={selectedObjects.length < 3} style={{ ...propInput, cursor: selectedObjects.length < 3 ? 'default' : 'pointer', marginTop: 0, opacity: selectedObjects.length < 3 ? 0.45 : 1 }}>
+                    <i className="ti ti-distribute-horizontal" aria-hidden="true" />
+                  </button>
+                  <button type="button" onClick={() => alignSelection('top')} title={t('tech_sheet.align_top')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
+                    <i className="ti ti-align-top" aria-hidden="true" />
+                  </button>
+                  <button type="button" onClick={() => alignSelection('middle')} title={t('tech_sheet.align_middle')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
+                    <i className="ti ti-align-middle" aria-hidden="true" />
+                  </button>
+                  <button type="button" onClick={() => alignSelection('bottom')} title={t('tech_sheet.align_bottom')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
+                    <i className="ti ti-align-bottom" aria-hidden="true" />
+                  </button>
+                  <button type="button" onClick={() => distributeSelection('v')} title={t('tech_sheet.distribute_v')} disabled={selectedObjects.length < 3} style={{ ...propInput, cursor: selectedObjects.length < 3 ? 'default' : 'pointer', marginTop: 0, opacity: selectedObjects.length < 3 ? 0.45 : 1 }}>
+                    <i className="ti ti-distribute-vertical" aria-hidden="true" />
+                  </button>
+                </div>
                 {mirrorableIds.length === selectedObjects.length && (
                   <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                     <button type="button" onClick={() => mirrorObjects(mirrorableIds, 'scaleX')}
