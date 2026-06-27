@@ -1178,14 +1178,21 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
   )
 }
 
-const TIPUS_CONFIG = {
-  SKETCH_FLETXES: { label: 'Sketch amb fletxes', icon: 'ti-pencil',             color: 'var(--gold)' },
-  SKETCH_NET:     { label: 'Sketch net',         icon: 'ti-eye',                color: '#137333' },
-  PATRO:          { label: 'Patró base',         icon: 'ti-vector-triangle',    color: '#185fa5' },
-  MARCADA:        { label: 'Marcada',            icon: 'ti-layout',             color: '#7a4a10' },
-  ESCALAT:        { label: 'Escalat',            icon: 'ti-arrows-maximize',    color: '#5f3dc4' },
-  FITXA:          { label: 'Fitxa tècnica',      icon: 'ti-file-text',          color: '#333' },
-  ALTRES:         { label: 'Altres',             icon: 'ti-file',               color: '#888' },
+// Finder: llista plana. La icona i l'ordre "Tipus" surten de l'extensió del fitxer,
+// no del rol intern (tipus/categoria, que es conserven al backend però el Finder ignora).
+const PREVIEW_IMG_RE = /\.(jpg|jpeg|png|svg|webp|gif)$/i
+
+function fileExt(nom) {
+  const m = (nom || '').match(/\.([a-z0-9]+)$/i)
+  return m ? m[1].toLowerCase() : ''
+}
+
+function iconForExt(ext) {
+  if (['jpg', 'jpeg', 'png', 'svg', 'webp', 'gif'].includes(ext)) return 'ti-photo'
+  if (ext === 'pdf') return 'ti-file-text'
+  if (ext === 'dxf') return 'ti-vector-triangle'
+  if (['xlsx', 'xls', 'csv'].includes(ext)) return 'ti-table'
+  return 'ti-file'
 }
 
 function TabFiles({ modelId }) {
@@ -1193,30 +1200,23 @@ function TabFiles({ modelId }) {
   const token = localStorage.getItem('access_token')
   const authHeaders = { Authorization: `Bearer ${token}` }
 
-  const [fitxers, setFitxers] = useState({})
-  const [uploading, setUploading] = useState(null)
+  const [fitxers, setFitxers] = useState([])
+  const [orderBy, setOrderBy] = useState('data')
+  const [uploading, setUploading] = useState(false)
   const [popup, setPopup] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    Promise.all(
-      Object.keys(TIPUS_CONFIG).map(tipus =>
-        fetch(`${API}/api/v1/model-fitxers/?model=${modelId}&tipus=${tipus}`, { headers: authHeaders })
-          .then(r => r.json())
-          .then(d => [tipus, d.results || d || []])
-      )
-    ).then(results => {
-      const byType = {}
-      results.forEach(([tipus, items]) => { byType[tipus] = items })
-      setFitxers(byType)
-    }).catch(() => setError(t('model_sheet.err_load_files')))
+    fetch(`${API}/api/v1/model-fitxers/?model=${modelId}&is_current=true&ordering=-data_pujada`, { headers: authHeaders })
+      .then(r => r.json())
+      .then(d => setFitxers(d.results || d || []))
+      .catch(() => setError(t('model_sheet.err_load_files')))
   }, [modelId])
 
-  const handleUpload = async (tipus, file) => {
-    setUploading(tipus)
+  const handleUpload = async (file) => {
+    setUploading(true)
     const formData = new FormData()
     formData.append('fitxer', file)
-    formData.append('tipus', tipus)
     formData.append('nom', file.name)
     try {
       const r = await fetch(`${API}/api/v1/models/${modelId}/upload-fitxer/`, {
@@ -1226,30 +1226,36 @@ function TabFiles({ modelId }) {
       })
       const d = await r.json()
       if (r.ok) {
-        setFitxers(prev => ({
-          ...prev,
-          [tipus]: [d, ...(prev[tipus] || [])],
-        }))
+        setFitxers(prev => [d, ...prev])
       } else {
         setError(JSON.stringify(d))
       }
     } catch {
       setError(t('model_sheet.err_upload'))
     } finally {
-      setUploading(null)
+      setUploading(false)
     }
   }
 
-  const handleDelete = async (fitxerId, tipus) => {
+  const handleDelete = async (fitxerId) => {
     if (!window.confirm(t('model_sheet.confirm_delete_file'))) return
     await fetch(`${API}/api/v1/model-fitxers/${fitxerId}/`, {
       method: 'DELETE', headers: authHeaders,
     })
-    setFitxers(prev => ({
-      ...prev,
-      [tipus]: (prev[tipus] || []).filter(f => f.id !== fitxerId),
-    }))
+    setFitxers(prev => prev.filter(f => f.id !== fitxerId))
   }
+
+  const ORDERS = [
+    { key: 'data', label: t('model_sheet.sort_date') },
+    { key: 'tipus', label: t('model_sheet.sort_type') },
+    { key: 'nom', label: t('model_sheet.sort_name') },
+  ]
+
+  const sorted = [...fitxers].sort((a, b) => {
+    if (orderBy === 'nom') return (a.nom_fitxer || '').localeCompare(b.nom_fitxer || '')
+    if (orderBy === 'tipus') return fileExt(a.nom_fitxer).localeCompare(fileExt(b.nom_fitxer))
+    return (b.data_pujada || '').localeCompare(a.data_pujada || '')   // 'data' — recent primer
+  })
 
   return (
     <div style={{ width: '100%' }}>
@@ -1274,7 +1280,7 @@ function TabFiles({ modelId }) {
               <button type="button" onClick={() => setPopup(null)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-h2)' }}>✕</button>
             </div>
-            {popup.url?.match(/\.(jpg|jpeg|png|svg)$/i) ? (
+            {PREVIEW_IMG_RE.test(popup.url || '') ? (
               <img src={popup.url} alt={popup.nom}
                 style={{ maxWidth: '80vw', maxHeight: '80vh', objectFit: 'contain' }} />
             ) : (
@@ -1285,54 +1291,56 @@ function TabFiles({ modelId }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        {Object.entries(TIPUS_CONFIG).map(([tipus, config]) => (
-          <div key={tipus}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <i className={`ti ${config.icon}`} aria-hidden="true"
-                style={{ fontSize: 'var(--fs-h2)', color: config.color }} />
-              <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500 }}>{t(`model_sheet.file_type.${tipus}`)}</span>
-              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-                ({(fitxers[tipus] || []).length})
-              </span>
-              <label style={{
-                marginLeft: 'auto', padding: '4px 12px', fontSize: 'var(--fs-body)',
-                border: '0.5px solid var(--border)', borderRadius: 6,
-                cursor: 'pointer', color: 'var(--text-muted)',
-                background: uploading === tipus ? 'var(--bg-muted)' : 'transparent',
-              }}>
-                {uploading === tipus ? t('model_sheet.uploading') : t('model_sheet.upload')}
-                <input type="file" style={{ display: 'none' }}
-                  accept=".pdf,.png,.jpg,.jpeg,.svg,.dxf"
-                  disabled={uploading === tipus}
-                  onChange={e => e.target.files[0] && handleUpload(tipus, e.target.files[0])} />
-              </label>
-            </div>
-
-            {(fitxers[tipus] || []).length === 0 ? (
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
-                            padding: '8px 0', fontStyle: 'italic' }}>
-                {t('model_sheet.no_files')}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {(fitxers[tipus] || []).map(f => (
-                  <FileCard key={f.id} fitxer={f} config={config}
-                    onPreview={() => setPopup({ url: f.fitxer || f.url, nom: f.nom_fitxer })}
-                    onDelete={() => handleDelete(f.id, tipus)} />
-                ))}
-              </div>
-            )}
-          </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_sheet.sort_by')}</span>
+        {ORDERS.map(o => (
+          <button key={o.key} type="button" onClick={() => setOrderBy(o.key)}
+            style={{
+              padding: '3px 12px', fontSize: 'var(--fs-body)', borderRadius: 6, cursor: 'pointer',
+              border: '0.5px solid var(--border)',
+              background: orderBy === o.key ? 'var(--bg-muted)' : 'transparent',
+              color: orderBy === o.key ? 'var(--text-main)' : 'var(--text-muted)',
+              fontWeight: orderBy === o.key ? 500 : 400,
+            }}>
+            {o.label}
+          </button>
         ))}
+        <label style={{
+          marginLeft: 'auto', padding: '4px 12px', fontSize: 'var(--fs-body)',
+          border: '0.5px solid var(--border)', borderRadius: 6,
+          cursor: 'pointer', color: 'var(--text-muted)',
+          background: uploading ? 'var(--bg-muted)' : 'transparent',
+        }}>
+          {uploading ? t('model_sheet.uploading') : t('model_sheet.upload')}
+          <input type="file" style={{ display: 'none' }}
+            accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf"
+            disabled={uploading}
+            onChange={e => e.target.files[0] && handleUpload(e.target.files[0])} />
+        </label>
       </div>
+
+      {sorted.length === 0 ? (
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+                      padding: '8px 0', fontStyle: 'italic' }}>
+          {t('model_sheet.no_files')}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {sorted.map(f => (
+            <FileCard key={f.id} fitxer={f}
+              onPreview={() => setPopup({ url: f.fitxer || f.url, nom: f.nom_fitxer })}
+              onDelete={() => handleDelete(f.id)} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-function FileCard({ fitxer, config, onPreview, onDelete }) {
+function FileCard({ fitxer, onPreview, onDelete }) {
   const { t } = useTranslation()
-  const isImage = fitxer.nom_fitxer?.match(/\.(jpg|jpeg|png|svg)$/i)
+  const isImage = PREVIEW_IMG_RE.test(fitxer.nom_fitxer || '')
+  const icon = iconForExt(fileExt(fitxer.nom_fitxer))
 
   return (
     <div style={{
@@ -1349,8 +1357,8 @@ function FileCard({ fitxer, config, onPreview, onDelete }) {
           <img src={fitxer.fitxer || fitxer.url} alt={fitxer.nom_fitxer}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <i className={`ti ${config.icon}`} aria-hidden="true"
-            style={{ fontSize: 'var(--fs-display)', color: config.color }} />
+          <i className={`ti ${icon}`} aria-hidden="true"
+            style={{ fontSize: 'var(--fs-display)', color: 'var(--text-muted)' }} />
         )}
         {fitxer.versio > 1 && (
           <span style={{

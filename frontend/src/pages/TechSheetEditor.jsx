@@ -519,7 +519,7 @@ export default function TechSheetEditor() {
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (!cancelled && d) setModel(d) }).catch(() => {})
 
-    fetch(`${API}/api/v1/model-fitxers/?model=${id}&ordering=-data_pujada`, { headers: authHeaders })
+    fetch(`${API}/api/v1/model-fitxers/?model=${id}&is_current=true&ordering=-data_pujada`, { headers: authHeaders })
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (!cancelled && d) setFitxers(d.results || d || []) }).catch(() => {})
 
