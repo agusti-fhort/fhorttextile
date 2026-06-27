@@ -862,3 +862,6 @@ class Watchpoint(models.Model):
 # Fitxa tècnica editable (editor full-screen). Definit a tech_sheet_models.py i importat
 # aquí perquè Django el descobreixi dins l'app `models_app` (migracions → models_app/).
 from .tech_sheet_models import TechSheet  # noqa: E402,F401
+
+# Sistema de documents .ftt: magatzem de plantilles del tenant (mateixa raó d'import).
+from .ftt_models import DocumentTemplate  # noqa: E402,F401

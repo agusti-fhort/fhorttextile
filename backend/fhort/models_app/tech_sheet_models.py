@@ -55,7 +55,11 @@ class TechSheet(models.Model):
 
 
 class TechSheetTemplate(models.Model):
-    """Plantilla de fitxa tècnica per Customer (TS-3). Una per client; la del Customer
+    """DEPRECAT (Fase 1 .ftt) — substituït per models_app.ftt_models.DocumentTemplate
+    (magatzem de moltes plantilles del tenant). Es manté mentre el flux TechSheet (O2O)
+    encara hi llegeix; la retirada neta arriba a la jubilació final (B8). 0 files a BD.
+
+    Plantilla de fitxa tècnica per Customer (TS-3). Una per client; la del Customer
     is_self=True actua com a default del tenant. S'aplica en crear la TechSheet d'un model
     (copia template_json). Mateix format v2 (clau `pages`) que TechSheet — opac per al backend."""
     customer = models.OneToOneField(
