@@ -606,10 +606,6 @@ export default function TechSheetEditor() {
           if (cancelled || !data) return
           setSheet(data)
           // En mode consulta hidratem aquí; en edició ho fa la resposta del lock.
-          // NOTA: el TechSheetSerializer actual NO exposa `template_json` als seus fields,
-          // així que `data.template_json` és undefined i hydrate cau a "pàgina buida".
-          // hydrate és forward-compatible: en quant el backend exposi template_json
-          // (clau v2 `pages`), la càrrega funcionarà sense tocar el frontend. (Vegeu informe.)
           if (!isEditMode) hydrate(data)
         }).catch(() => {})
 
