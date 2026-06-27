@@ -56,6 +56,100 @@ export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.r
 export const toPx = (mm) => mm * MM_TO_PX
 export const toMm = (px) => px / MM_TO_PX
 
+function mapObjectTree(obj, mapper) {
+  const mapped = mapper(obj)
+  if (!Array.isArray(mapped.children)) return mapped
+  return { ...mapped, children: mapped.children.map(child => mapObjectTree(child, mapper)) }
+}
+
+function flattenObjects(objects = []) {
+  return objects.flatMap(o => [o, ...flattenObjects(o.children || [])])
+}
+
+function serializeObject(obj) {
+  const base = obj.type === 'data_block' ? (({ src, ...rest }) => rest)(obj) : obj
+  return mapObjectTree(base, o => (o.type === 'data_block' ? (({ src, ...rest }) => rest)(o) : o))
+}
+
+function localizeObject(obj, origin) {
+  if (obj.type === 'line') {
+    return { ...obj, points: (obj.points || []).map((v, i) => v - (i % 2 === 0 ? origin.x : origin.y)) }
+  }
+  if (obj.type === 'arrow') {
+    return { ...obj, x: obj.x - origin.x, y: obj.y - origin.y, x2: obj.x2 - origin.x, y2: obj.y2 - origin.y }
+  }
+  return { ...obj, x: (obj.x || 0) - origin.x, y: (obj.y || 0) - origin.y }
+}
+
+function groupPointToGlobal(group, x, y) {
+  const sx = group.scaleX || 1
+  const sy = group.scaleY || 1
+  const r = ((group.rotation || 0) * Math.PI) / 180
+  const px = x * sx
+  const py = y * sy
+  return {
+    x: (group.x || 0) + px * Math.cos(r) - py * Math.sin(r),
+    y: (group.y || 0) + px * Math.sin(r) + py * Math.cos(r),
+  }
+}
+
+function globalizeObject(obj, group) {
+  const scaleX = (obj.scaleX || 1) * (group.scaleX || 1)
+  const scaleY = (obj.scaleY || 1) * (group.scaleY || 1)
+  const rotation = (obj.rotation || 0) + (group.rotation || 0)
+  const scaledSize = {
+    ...(obj.width != null ? { width: obj.width * Math.abs(group.scaleX || 1) } : {}),
+    ...(obj.height != null ? { height: obj.height * Math.abs(group.scaleY || 1) } : {}),
+    ...(obj.rx != null ? { rx: obj.rx * Math.abs(group.scaleX || 1) } : {}),
+    ...(obj.ry != null ? { ry: obj.ry * Math.abs(group.scaleY || 1) } : {}),
+    ...(obj.scale != null ? { scale: obj.scale * Math.max(Math.abs(group.scaleX || 1), Math.abs(group.scaleY || 1)) } : {}),
+  }
+  if (obj.type === 'line') {
+    return {
+      ...obj, ...scaledSize, rotation, scaleX, scaleY,
+      points: (obj.points || []).reduce((pts, _v, i, arr) => {
+        if (i % 2 !== 0) return pts
+        const p = groupPointToGlobal(group, arr[i], arr[i + 1])
+        return [...pts, p.x, p.y]
+      }, []),
+    }
+  }
+  if (obj.type === 'arrow') {
+    const a = groupPointToGlobal(group, obj.x || 0, obj.y || 0)
+    const b = groupPointToGlobal(group, obj.x2 || 0, obj.y2 || 0)
+    return { ...obj, ...scaledSize, x: a.x, y: a.y, x2: b.x, y2: b.y, rotation, scaleX, scaleY }
+  }
+  const p = groupPointToGlobal(group, obj.x || 0, obj.y || 0)
+  return { ...obj, ...scaledSize, x: p.x, y: p.y, rotation, scaleX, scaleY }
+}
+
+function objectBounds(obj) {
+  if (obj.type === 'line') {
+    const xs = (obj.points || []).filter((_v, i) => i % 2 === 0)
+    const ys = (obj.points || []).filter((_v, i) => i % 2 === 1)
+    return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) }
+  }
+  if (obj.type === 'arrow') {
+    return { minX: Math.min(obj.x, obj.x2), minY: Math.min(obj.y, obj.y2), maxX: Math.max(obj.x, obj.x2), maxY: Math.max(obj.y, obj.y2) }
+  }
+  if (obj.type === 'ellipse') {
+    return { minX: obj.x - obj.rx, minY: obj.y - obj.ry, maxX: obj.x + obj.rx, maxY: obj.y + obj.ry }
+  }
+  if (obj.type === 'group') {
+    const childBounds = (obj.children || []).map(child => objectBounds(globalizeObject(child, obj))).filter(Boolean)
+    if (!childBounds.length) return { minX: obj.x || 0, minY: obj.y || 0, maxX: obj.x || 0, maxY: obj.y || 0 }
+    return {
+      minX: Math.min(...childBounds.map(b => b.minX)),
+      minY: Math.min(...childBounds.map(b => b.minY)),
+      maxX: Math.max(...childBounds.map(b => b.maxX)),
+      maxY: Math.max(...childBounds.map(b => b.maxY)),
+    }
+  }
+  const w = (obj.width || 10) * Math.abs(obj.scaleX || 1) * (obj.scale || 1)
+  const h = (obj.height || 10) * Math.abs(obj.scaleY || 1) * (obj.scale || 1)
+  return { minX: obj.x || 0, minY: obj.y || 0, maxX: (obj.x || 0) + w, maxY: (obj.y || 0) + h }
+}
+
 // ── .ftt ↔ v2 (cutover F2) ───────────────────────────────────────────────────
 // El backend (ftt-documents/) serveix document.json (v-ftt) + un mapa d'assets {nom→URL}.
 // L'editor pinta el format v2 (clau `pages`), on image.src ha de ser una URL carregable;
@@ -67,11 +161,11 @@ export function documentToV2(documentJson, assets = {}) {
     pageFormat: documentJson?.pageFormat || 'A4L',
     pages: (documentJson?.pages || []).map(p => ({
       id: p.id,
-      objects: (p.objects || []).map(o => (
-        typeof o.src === 'string' && o.src.startsWith('assets/')
-          ? { ...o, src: urlOf(o.src.slice(7)) }
-          : o
-      )),
+      objects: (p.objects || []).map(o => mapObjectTree(o, obj => (
+        typeof obj.src === 'string' && obj.src.startsWith('assets/')
+          ? { ...obj, src: urlOf(obj.src.slice(7)) }
+          : obj
+      ))),
     })),
   }
 }
@@ -86,11 +180,11 @@ export function v2ToDocument(v2Pages, pageFormat, metadata = {}, urlToName = {})
     pageFormat: pageFormat || 'A4L',
     pages: (v2Pages || []).map(p => ({
       id: p.id,
-      objects: (p.objects || []).map(o => (
-        typeof o.src === 'string' && urlToName[o.src]
-          ? { ...o, src: 'assets/' + urlToName[o.src] }
-          : o
-      )),
+      objects: (p.objects || []).map(o => mapObjectTree(o, obj => (
+        typeof obj.src === 'string' && urlToName[obj.src]
+          ? { ...obj, src: 'assets/' + urlToName[obj.src] }
+          : obj
+      ))),
     })),
   }
 }
@@ -391,6 +485,17 @@ function commonValue(objects, key) {
 }
 
 async function addObjectToLayer(layer, obj, ctx) {
+  if (obj.type === 'group') {
+    const g = new Konva.Group({
+      x: toPx(obj.x || 0), y: toPx(obj.y || 0), rotation: obj.rotation || 0,
+      scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
+    })
+    const orderedChildren = [...(obj.children || [])].sort(
+      (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
+    for (const child of orderedChildren) await addObjectToLayer(g, child, ctx)
+    layer.add(g)
+    return
+  }
   if (obj.type === 'text') {
     if (obj.bgFill) {
       const p = textBoxParts(obj)
@@ -474,10 +579,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
 export function serializePages(pages) {
   return pages.map(p => ({
     id: p.id,
-    objects: (p.objects || []).map(o => {
-      if (o.type === 'data_block') { const { src, ...rest } = o; return rest }
-      return o
-    }),
+    objects: (p.objects || []).map(serializeObject),
   }))
 }
 
@@ -549,6 +651,22 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   }
   if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
+  }
+  if (obj.type === 'group') {
+    const orderedChildren = [...(obj.children || [])].sort(
+      (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
+    return (
+      <Group {...common}>
+        {orderedChildren.map(child => (
+          <ObjectNode key={child.id} obj={child} src={child.src}
+            tableData={tableData} modelData={modelData} versio={versio}
+            placeholderMode={placeholderMode} customerLogoUrl={customerLogoUrl}
+            selected={false} selectable={false} draggable={false}
+            onSelect={undefined} onDragEnd={undefined} onTransformEnd={undefined}
+            onDblText={undefined} />
+        ))}
+      </Group>
+    )
   }
   return null
 }
@@ -671,6 +789,37 @@ export default function TechSheetEditor() {
       return next
     })
   }, [currentPage, selectedIds, updatePageObjects])
+  const groupSelection = useCallback(() => {
+    const ids = new Set(selectedIds)
+    const selected = objectsOf(currentPage).filter(o => ids.has(o.id) && o.layer !== 'template')
+    if (selected.length < 2) return
+    const bounds = selected.map(objectBounds).filter(Boolean)
+    const origin = { x: Math.min(...bounds.map(b => b.minX)), y: Math.min(...bounds.map(b => b.minY)) }
+    const groupId = uid()
+    const group = {
+      id: groupId, type: 'group', layer: 'free', x: origin.x, y: origin.y, rotation: 0,
+      children: selected.map(o => localizeObject(o, origin)),
+    }
+    updatePageObjects(currentPage, objs => {
+      const firstIndex = objs.findIndex(o => ids.has(o.id))
+      const rest = objs.filter(o => !ids.has(o.id))
+      const next = [...rest]
+      next.splice(Math.max(0, firstIndex), 0, group)
+      return next
+    })
+    setSelectedIds([groupId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pages, selectedIds, updatePageObjects])
+  const ungroupObject = useCallback((groupId) => {
+    const group = objectsOf(currentPage).find(o => o.id === groupId && o.type === 'group')
+    if (!group) return
+    const children = (group.children || []).map(child => globalizeObject(child, group))
+    updatePageObjects(currentPage, objs => {
+      return objs.flatMap(o => (o.id === groupId ? children : [o]))
+    })
+    setSelectedIds(children.map(child => child.id))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pages, updatePageObjects])
 
   // ── Càrrega inicial: model, sheet, fitxers, size fittings, lock ────────────
   useEffect(() => {
@@ -756,7 +905,7 @@ export default function TechSheetEditor() {
 
   // ── Re-fetch dels data_block (taula graduada) en carregar → cache JSON viu ──
   useEffect(() => {
-    const pending = pages.flatMap(p => (p.objects || []))
+    const pending = pages.flatMap(p => flattenObjects(p.objects || []))
       .filter(o => o.type === 'data_block' && o.kind === 'graded_table' && o.size_fitting_id && !(o.id in tableData))
     if (!pending.length) return
     let cancelled = false
@@ -868,6 +1017,10 @@ export default function TechSheetEditor() {
     const scaleY = sy < 0 ? -1 : 1
     const rotation = node.rotation()
     node.scaleX(1); node.scaleY(1)
+    if (obj.type === 'group') {
+      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, scaleX: sx, scaleY: sy })
+      return
+    }
     // Blocs de dades: el resize baka l'escala a obj.scale (coherent amb l'auto-fit),
     // no a width/height. node.scaleX() ja és l'escala absoluta nova (Konva multiplica
     // sobre l'escala base del Group), per tant s'hi assigna directament.
@@ -1332,6 +1485,10 @@ export default function TechSheetEditor() {
             {multiSelected && locked && (
               <>
                 <SectionTitle>{t('tech_sheet.selected_objects', { n: selectedObjects.length })}</SectionTitle>
+                <button type="button" onClick={groupSelection}
+                  style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
+                  <i className="ti ti-box-multiple" aria-hidden="true" /> {t('tech_sheet.group')}
+                </button>
                 {mirrorableIds.length === selectedObjects.length && (
                   <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                     <button type="button" onClick={() => mirrorObjects(mirrorableIds, 'scaleX')}
@@ -1469,6 +1626,12 @@ export default function TechSheetEditor() {
                     <input type="number" min={0} max={360} step={1} value={Math.round(selObj.rotation || 0)}
                       onChange={e => updateObject(selObj.id, { rotation: ((Number(e.target.value) || 0) % 360 + 360) % 360 })} style={propInput} />
                   </label>
+                )}
+                {selObj.type === 'group' && (
+                  <button type="button" onClick={() => ungroupObject(selObj.id)}
+                    style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
+                    <i className="ti ti-unlink" aria-hidden="true" /> {t('tech_sheet.ungroup')}
+                  </button>
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
                   <button onClick={() => deleteObject(selObj.id)}

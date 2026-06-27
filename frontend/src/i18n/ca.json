@@ -1599,6 +1599,8 @@
     "mirror_v": "Mirall V",
     "bring_forward": "Endavant",
     "send_backward": "Enrere",
+    "group": "Agrupar",
+    "ungroup": "Desagrupar",
     "pick_size_fitting": "Tria un size fitting",
     "flash_no_logo": "Aquest client no té logo. Puja'l des de Clients.",
     "flash_no_grading": "Aquest size fitting no té grading actiu.",
