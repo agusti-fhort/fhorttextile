@@ -13,7 +13,7 @@ const SAMPLE_SVG = `
   <path d="M432 112 L488 150 L420 166" fill="none" stroke="#9c7a2f" stroke-width="3" stroke-linecap="round"/>
 </svg>`
 
-const CALLIE_DEFAULT_URL = '/media/CALLIE.svg'
+const CALLIE_DEFAULT_URL = '/CALLIE.svg'
 
 const PAPER_COL = {
   stroke: '#9c7a2f',
@@ -36,6 +36,8 @@ function inspectSvgText(svgText) {
 function countPaperItems(scope) {
   return {
     paths: scope.project.getItems({ class: scope.Path }).length,
+    compoundPaths: scope.project.getItems({ class: scope.CompoundPath }).length,
+    shapes: scope.project.getItems({ class: scope.Shape }).length,
     rasters: scope.project.getItems({ class: scope.Raster }).length,
     groups: scope.project.getItems({ class: scope.Group }).length,
   }
