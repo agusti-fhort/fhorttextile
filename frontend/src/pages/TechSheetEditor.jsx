@@ -72,6 +72,20 @@ function clampZoom(value) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value))
 }
 
+function svgAspectRatio(svgText) {
+  const parsed = new DOMParser().parseFromString(svgText, 'image/svg+xml')
+  if (parsed.querySelector('parsererror') || parsed.documentElement.nodeName !== 'svg') return null
+  const svg = parsed.documentElement
+  const viewBox = svg.getAttribute('viewBox')
+  if (viewBox) {
+    const nums = viewBox.trim().split(/[\s,]+/).map(Number)
+    if (nums.length === 4 && nums[2] > 0 && nums[3] > 0) return nums[2] / nums[3]
+  }
+  const width = parseFloat(svg.getAttribute('width'))
+  const height = parseFloat(svg.getAttribute('height'))
+  return width > 0 && height > 0 ? width / height : null
+}
+
 function mapObjectTree(obj, mapper) {
   const mapped = mapper(obj)
   if (!Array.isArray(mapped.children)) return mapped
@@ -767,6 +781,7 @@ export default function TechSheetEditor() {
   const viewportRef = useRef(null)
   const wrapRef = useRef(null)
   const fileRef = useRef(null)
+  const flatFileRef = useRef(null)
   const saveTimer = useRef(null)
   const skipSave = useRef(true)        // salta l'autosave del primer load
   // Mode .ftt: estat del document (assets carregats + metadata + cap de cadena actual).
@@ -1311,6 +1326,39 @@ export default function TechSheetEditor() {
     addObject(obj)
     setEditingFlatId(obj.id)
   }
+  const importFlatSvgText = (svgText) => {
+    if (!locked) return
+    const ratio = svgAspectRatio(svgText)
+    if (!ratio) {
+      flash(t('tech_sheet.flat_import_invalid'))
+      return
+    }
+    if (selObj?.type === 'sketch_svg') {
+      updateObject(selObj.id, { svg: svgText })
+      setEditingText(null)
+      setTool('select')
+      setEditingFlatId(selObj.id)
+      return
+    }
+    const maxW = 110
+    const maxH = 78
+    const width = ratio >= maxW / maxH ? maxW : maxH * ratio
+    const height = width / ratio
+    const obj = {
+      id: uid(), type: 'sketch_svg', layer: 'free',
+      x: 54, y: 44, width, height,
+      svg: svgText,
+    }
+    addObject(obj)
+    setEditingFlatId(obj.id)
+  }
+  const handleFlatSvgFile = (file) => {
+    if (!file || !locked) return
+    const fr = new FileReader()
+    fr.onload = () => importFlatSvgText(String(fr.result || ''))
+    fr.onerror = () => flash(t('tech_sheet.flat_import_error'))
+    fr.readAsText(file)
+  }
   const editSelectedFlat = () => {
     if (!locked || selObj?.type !== 'sketch_svg') return
     setEditingText(null)
@@ -1475,6 +1523,7 @@ export default function TechSheetEditor() {
     pathSelected: t('tech_sheet.flat_path_selected'),
     noPath: t('tech_sheet.flat_no_path'),
     changed: t('tech_sheet.flat_changed'),
+    importError: t('tech_sheet.flat_import_error'),
     done: t('tech_sheet.flat_done'),
     cancel: t('tech_sheet.flat_cancel'),
   }
@@ -1701,6 +1750,12 @@ export default function TechSheetEditor() {
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
               <i className="ti ti-vector" style={{ fontSize: 13 }} /> {t('tech_sheet.flat_insert')}
             </button>
+            <button onClick={() => flatFileRef.current?.click()} disabled={!locked}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
+              <i className="ti ti-file-import" style={{ fontSize: 13 }} /> {t('tech_sheet.flat_import')}
+            </button>
+            <input ref={flatFileRef} type="file" accept=".svg,image/svg+xml" hidden
+              onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFlatSvgFile(f) }} />
             {!sizeFittings.length && <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.no_size_fitting')}</p>}
 
             {/* Fitxers del model */}
@@ -1848,10 +1903,16 @@ export default function TechSheetEditor() {
                   </label>
                 )}
                 {selObj.type === 'sketch_svg' && (
-                  <button type="button" onClick={editSelectedFlat}
-                    style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
-                    <i className="ti ti-vector-bezier" aria-hidden="true" /> {t('tech_sheet.flat_edit_nodes')}
-                  </button>
+                  <>
+                    <button type="button" onClick={editSelectedFlat}
+                      style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
+                      <i className="ti ti-vector-bezier" aria-hidden="true" /> {t('tech_sheet.flat_edit_nodes')}
+                    </button>
+                    <button type="button" onClick={() => flatFileRef.current?.click()}
+                      style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
+                      <i className="ti ti-file-import" aria-hidden="true" /> {t('tech_sheet.flat_replace_svg')}
+                    </button>
+                  </>
                 )}
                 {/* Posició X/Y (mm) per a objectes posicionats (no línia/fletxa). */}
                 {selObj.type !== 'line' && selObj.type !== 'arrow' && (

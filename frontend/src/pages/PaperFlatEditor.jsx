@@ -18,6 +18,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
   const zoomRef = useRef(zoom)
   const refreshHandlesRef = useRef(null)
   const [status, setStatus] = useState(labels?.loading || '')
+  const [canCommit, setCanCommit] = useState(false)
 
   useEffect(() => {
     labelsRef.current = labels
@@ -26,6 +27,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas || !flat?.svg) return undefined
+    setCanCommit(false)
 
     const scope = new paper.PaperScope()
     scope.setup(canvas)
@@ -34,6 +36,15 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
     const uiLayer = new scope.Layer({ name: 'flat-ui' })
     sketchLayerRef.current = sketchLayer
     uiLayerRef.current = uiLayer
+    const cleanup = () => {
+      scope.remove()
+      scopeRef.current = null
+      sketchLayerRef.current = null
+      uiLayerRef.current = null
+      selectedPathRef.current = null
+      dragRef.current = null
+      refreshHandlesRef.current = null
+    }
 
     const clearHandles = () => {
       uiLayer.removeChildren()
@@ -84,7 +95,15 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
     }
 
     sketchLayer.activate()
-    const imported = scope.project.importSVG(flat.svg, { insert: true, expandShapes: true })
+    let imported = null
+    try {
+      imported = scope.project.importSVG(flat.svg, { insert: true, expandShapes: true })
+    } catch {
+      setStatus(labelsRef.current?.importError || '')
+      sketchLayerRef.current = null
+      return cleanup
+    }
+    setCanCommit(true)
     const bounds = imported.bounds
     const toViewPx = (mm) => toPx(mm) * zoomRef.current
     const targetW = Math.max(1, toViewPx(flat.width || 80))
@@ -131,15 +150,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
     }
     tool.activate()
 
-    return () => {
-      scope.remove()
-      scopeRef.current = null
-      sketchLayerRef.current = null
-      uiLayerRef.current = null
-      selectedPathRef.current = null
-      dragRef.current = null
-      refreshHandlesRef.current = null
-    }
+    return cleanup
   }, [flat, pageW, pageH, toPx])
 
   useEffect(() => {
@@ -163,7 +174,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
 
   const commit = () => {
     const sketchLayer = sketchLayerRef.current
-    if (!sketchLayer) return
+    if (!sketchLayer || !canCommit) return
     const svg = sketchLayer.exportSVG({ asString: true, bounds: 'content' })
     onCommit(svg)
   }
@@ -178,7 +189,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
       />
       <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', alignItems: 'center', gap: 6, padding: 6, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)', boxShadow: '0 2px 8px rgba(0,0,0,.08)' }}>
         <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', minWidth: 120 }}>{status}</span>
-        <button type="button" onClick={commit} style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)', border: 'none', borderRadius: 5, background: 'var(--gold)', color: 'var(--white)', padding: '5px 8px', cursor: 'pointer' }}>
+        <button type="button" onClick={commit} disabled={!canCommit} style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)', border: 'none', borderRadius: 5, background: 'var(--gold)', color: 'var(--white)', padding: '5px 8px', cursor: canCommit ? 'pointer' : 'default', opacity: canCommit ? 1 : 0.45 }}>
           <i className="ti ti-check" aria-hidden="true" /> {labels?.done}
         </button>
         <button type="button" onClick={onCancel} style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--white)', color: 'var(--text-main)', padding: '5px 8px', cursor: 'pointer' }}>
