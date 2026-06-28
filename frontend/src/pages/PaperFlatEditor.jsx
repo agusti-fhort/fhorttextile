@@ -98,12 +98,13 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, onCommit, on
 
     const tool = new scope.Tool()
     tool.onMouseDown = (event) => {
-      const hit = scope.project.hitTest(event.point, { fill: true, stroke: true, segments: true, tolerance: 8 })
-      const hitItem = hit?.item
-      if (hitItem?.data?.kind) {
-        dragRef.current = hitItem.data
+      const uiHit = uiLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
+      if (uiHit?.item?.data?.kind) {
+        dragRef.current = uiHit.item.data
         return
       }
+      const hit = sketchLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
+      const hitItem = hit?.item
       const path = hitItem?.className === 'Path' && hitItem.layer === sketchLayer
         ? hitItem
         : hitItem?.parent?.getItem?.({ class: scope.Path })
