@@ -722,10 +722,10 @@ function SketchSvgObj({ obj, common }) {
     scaleX={props.scaleX} scaleY={props.scaleY} />
 }
 
-function PathObj({ obj, common }) {
+function PathObj({ obj, common, onDblVector }) {
   const paths = obj.paths || []
   return (
-    <Group {...common}>
+    <Group {...common} onDblClick={onDblVector} onDblTap={onDblVector}>
       {paths.map((path, i) => {
         const props = pathChildProps(obj, path)
         return props.data ? <Path key={i} {...props} hitStrokeWidth={10} /> : null
@@ -734,7 +734,7 @@ function PathObj({ obj, common }) {
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText, onDblVector }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -787,7 +787,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     return <Arrow {...common} {...arrowProps(obj)} hitStrokeWidth={10} />
   }
   if (obj.type === 'path') {
-    return <PathObj obj={obj} common={common} />
+    return <PathObj obj={obj} common={common} onDblVector={onDblVector} />
   }
   if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
@@ -806,7 +806,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
             placeholderMode={placeholderMode} customerLogoUrl={customerLogoUrl}
             selected={false} selectable={false} draggable={false}
             onSelect={undefined} onDragEnd={undefined} onTransformEnd={undefined}
-            onDblText={undefined} />
+            onDblText={undefined} onDblVector={undefined} />
         ))}
       </Group>
     )
@@ -1467,6 +1467,13 @@ export default function TechSheetEditor() {
     setTool('select')
     setEditingFlatId(selObj.id)
   }
+  const startVectorEdit = (obj) => {
+    if (!locked || !['sketch_svg', 'path'].includes(obj?.type)) return
+    setEditingText(null)
+    setTool('select')
+    selectOnly(obj.id)
+    setEditingFlatId(obj.id)
+  }
   const commitFlatEdit = (payload) => {
     if (!editingFlatId) return
     if (payload && typeof payload === 'object' && Array.isArray(payload.paths)) {
@@ -1810,7 +1817,8 @@ export default function TechSheetEditor() {
                     onSelect={(e) => handleSelectObject(e, o.id)}
                     onDragEnd={handleDragEnd(o)}
                     onTransformEnd={handleTransformEnd(o)}
-                    onDblText={() => startTextEdit(o)} />
+                    onDblText={() => startTextEdit(o)}
+                    onDblVector={() => startVectorEdit(o)} />
                 ))}
                 {/* Forma temporal mentre es dibuixa */}
                 {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}

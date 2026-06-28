@@ -7,6 +7,34 @@ const PAPER_COL = {
   helper: '#868685',
 }
 
+function flatBounds(flat) {
+  if (flat?.type !== 'path') {
+    return {
+      minX: flat?.x || 0,
+      minY: flat?.y || 0,
+      maxX: (flat?.x || 0) + (flat?.width || 80),
+      maxY: (flat?.y || 0) + (flat?.height || 60),
+    }
+  }
+  const pts = (flat.paths || []).flatMap(path => (path.segments || []).flatMap(seg => {
+    const p = { x: seg.x || 0, y: seg.y || 0 }
+    return [
+      p,
+      { x: p.x + (seg.inX || 0), y: p.y + (seg.inY || 0) },
+      { x: p.x + (seg.outX || 0), y: p.y + (seg.outY || 0) },
+    ]
+  }))
+  if (!pts.length) return { minX: flat.x || 0, minY: flat.y || 0, maxX: flat.x || 0, maxY: flat.y || 0 }
+  const sx = Math.abs(flat.scaleX || 1)
+  const sy = Math.abs(flat.scaleY || 1)
+  return {
+    minX: (flat.x || 0) + Math.min(...pts.map(p => p.x)) * sx,
+    minY: (flat.y || 0) + Math.min(...pts.map(p => p.y)) * sy,
+    maxX: (flat.x || 0) + Math.max(...pts.map(p => p.x)) * sx,
+    maxY: (flat.y || 0) + Math.max(...pts.map(p => p.y)) * sy,
+  }
+}
+
 export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onCancel, labels }) {
   const canvasRef = useRef(null)
   const scopeRef = useRef(null)
@@ -20,6 +48,14 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
   const [status, setStatus] = useState(labels?.loading || '')
   const [canCommit, setCanCommit] = useState(false)
   const isStructuredPath = flat?.type === 'path'
+  const bounds = flatBounds(flat)
+  const pad = 18
+  const left = Math.max(0, toPx(bounds.minX) * zoom - pad)
+  const top = Math.max(0, toPx(bounds.minY) * zoom - pad)
+  const right = Math.min(pageW * zoom, toPx(bounds.maxX) * zoom + pad)
+  const bottom = Math.min(pageH * zoom, toPx(bounds.maxY) * zoom + pad)
+  const overlayW = Math.max(48, right - left)
+  const overlayH = Math.max(48, bottom - top)
 
   useEffect(() => {
     labelsRef.current = labels
@@ -257,12 +293,12 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
   }
 
   return (
-    <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
+    <div style={{ position: 'absolute', left, top, width: overlayW, height: overlayH, zIndex: 20, overflow: 'hidden' }}>
       <canvas
         ref={canvasRef}
         width={pageW * zoom}
         height={pageH * zoom}
-        style={{ position: 'absolute', inset: 0, width: pageW * zoom, height: pageH * zoom, touchAction: 'none', cursor: 'crosshair' }}
+        style={{ position: 'absolute', left: -left, top: -top, width: pageW * zoom, height: pageH * zoom, touchAction: 'none', cursor: 'crosshair' }}
       />
       <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', alignItems: 'center', gap: 6, padding: 6, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)', boxShadow: '0 2px 8px rgba(0,0,0,.08)' }}>
         <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', minWidth: 120 }}>{status}</span>
