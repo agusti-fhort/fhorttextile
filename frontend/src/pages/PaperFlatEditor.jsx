@@ -7,7 +7,7 @@ const PAPER_COL = {
   helper: '#868685',
 }
 
-export default function PaperFlatEditor({ flat, pageW, pageH, toPx, onCommit, onCancel, labels }) {
+export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onCancel, labels }) {
   const canvasRef = useRef(null)
   const scopeRef = useRef(null)
   const sketchLayerRef = useRef(null)
@@ -15,6 +15,8 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, onCommit, on
   const selectedPathRef = useRef(null)
   const dragRef = useRef(null)
   const labelsRef = useRef(labels)
+  const zoomRef = useRef(zoom)
+  const refreshHandlesRef = useRef(null)
   const [status, setStatus] = useState(labels?.loading || '')
 
   useEffect(() => {
@@ -73,6 +75,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, onCommit, on
       sketchLayer.activate()
       scope.view.update()
     }
+    refreshHandlesRef.current = refreshHandles
 
     const selectPath = (item) => {
       selectedPathRef.current = item
@@ -83,13 +86,14 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, onCommit, on
     sketchLayer.activate()
     const imported = scope.project.importSVG(flat.svg, { insert: true, expandShapes: true })
     const bounds = imported.bounds
-    const targetW = Math.max(1, toPx(flat.width || 80))
-    const targetH = Math.max(1, toPx(flat.height || 60))
+    const toViewPx = (mm) => toPx(mm) * zoomRef.current
+    const targetW = Math.max(1, toViewPx(flat.width || 80))
+    const targetH = Math.max(1, toViewPx(flat.height || 60))
     const scale = Math.min(targetW / bounds.width, targetH / bounds.height)
     if (Number.isFinite(scale) && scale > 0) imported.scale(scale)
     imported.position = new scope.Point(
-      toPx(flat.x || 0) + targetW / 2,
-      toPx(flat.y || 0) + targetH / 2,
+      toViewPx(flat.x || 0) + targetW / 2,
+      toViewPx(flat.y || 0) + targetH / 2,
     )
 
     const firstPath = imported.getItems({ class: scope.Path }).find(path => path.segments?.length)
@@ -134,8 +138,28 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, onCommit, on
       uiLayerRef.current = null
       selectedPathRef.current = null
       dragRef.current = null
+      refreshHandlesRef.current = null
     }
   }, [flat, pageW, pageH, toPx])
+
+  useEffect(() => {
+    const previousZoom = zoomRef.current
+    if (previousZoom === zoom) return
+    zoomRef.current = zoom
+
+    const scope = scopeRef.current
+    const sketchLayer = sketchLayerRef.current
+    const canvas = canvasRef.current
+    if (!scope || !sketchLayer || !canvas) return
+
+    const ratio = zoom / previousZoom
+    canvas.width = pageW * zoom
+    canvas.height = pageH * zoom
+    scope.view.viewSize = new scope.Size(pageW * zoom, pageH * zoom)
+    sketchLayer.scale(ratio, new scope.Point(0, 0))
+    refreshHandlesRef.current?.()
+    scope.view.update()
+  }, [pageH, pageW, zoom])
 
   const commit = () => {
     const sketchLayer = sketchLayerRef.current
@@ -148,9 +172,9 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, onCommit, on
     <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
       <canvas
         ref={canvasRef}
-        width={pageW}
-        height={pageH}
-        style={{ position: 'absolute', inset: 0, width: pageW, height: pageH, touchAction: 'none', cursor: 'crosshair' }}
+        width={pageW * zoom}
+        height={pageH * zoom}
+        style={{ position: 'absolute', inset: 0, width: pageW * zoom, height: pageH * zoom, touchAction: 'none', cursor: 'crosshair' }}
       />
       <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', alignItems: 'center', gap: 6, padding: 6, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)', boxShadow: '0 2px 8px rgba(0,0,0,.08)' }}>
         <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', minWidth: 120 }}>{status}</span>

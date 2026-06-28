@@ -51,6 +51,9 @@ export const COL = {
 const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685' }
 
 const LAYER_ORDER = { template: 0, data: 1, free: 2 }
+const ZOOM_MIN = 0.25
+const ZOOM_MAX = 4
+const ZOOM_STEP = 0.1
 // TS-4c — eines per "família" de creació (mateixa mecànica de drag).
 const RECT_TOOLS = ['rect', 'rect_round', 'ellipse']   // drag = bounding box
 const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
@@ -63,6 +66,10 @@ const EMPTY_FLAT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180
 
 function svgDataUrl(svg) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg || '')}`
+}
+
+function clampZoom(value) {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value))
 }
 
 function mapObjectTree(obj, mapper) {
@@ -745,6 +752,7 @@ export default function TechSheetEditor() {
   const [pickFitting, setPickFitting] = useState(false)
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
   const [editingFlatId, setEditingFlatId] = useState(null)
+  const [zoom, setZoom] = useState(1)
   const [pageFormat, setPageFormat] = useState('A4L')   // TS-4b: format del document sencer
   const [openGroup, setOpenGroup] = useState(null)      // TS-4c: grup d'eines desplegat
   const toolbarRef = useRef(null)
@@ -756,6 +764,7 @@ export default function TechSheetEditor() {
   const customerLogoUrl = model?.customer_logo || null   // TS-4c
   const stageRef = useRef(null)
   const trRef = useRef(null)
+  const viewportRef = useRef(null)
   const wrapRef = useRef(null)
   const fileRef = useRef(null)
   const saveTimer = useRef(null)
@@ -797,6 +806,15 @@ export default function TechSheetEditor() {
     setSelectedIds([])
   }, [currentPage, updatePageObjects])
   const clearSelection = useCallback(() => setSelectedIds([]), [])
+  const setZoomClamped = useCallback((next) => {
+    setZoom(current => clampZoom(typeof next === 'function' ? next(current) : next))
+  }, [])
+  const fitZoomToViewport = useCallback(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const pad = 48
+    setZoomClamped(Math.min((viewport.clientWidth - pad) / pageW, (viewport.clientHeight - pad) / pageH))
+  }, [pageH, pageW, setZoomClamped])
   const selectOnly = useCallback((objId) => setSelectedIds([objId]), [])
   const toggleSelection = useCallback((objId) => {
     setSelectedIds(ids => (ids.includes(objId) ? ids.filter(id => id !== objId) : [...ids, objId]))
@@ -1253,6 +1271,12 @@ export default function TechSheetEditor() {
     updateObject(editingText.id, { text: editingText.value })
     setEditingText(null)
   }
+  const onViewportWheel = (e) => {
+    if (!e.ctrlKey && !e.metaKey) return
+    e.preventDefault()
+    const direction = e.deltaY > 0 ? -1 : 1
+    setZoomClamped(z => z + direction * ZOOM_STEP)
+  }
 
   // ── Imatge: fitxer local (botó/drop) i fitxers del model ───────────────────
   const addImageFromDataURL = (dataURL) => {
@@ -1423,6 +1447,7 @@ export default function TechSheetEditor() {
     return { text: t('tech_sheet.badge_lock_error'), bg: COL.bg, fg: COL.textMuted }
   })()
   const saveLabel = saveState === 'saving' ? t('tech_sheet.saving') : saveState === 'saved' ? t('tech_sheet.saved') : saveState === 'error' ? t('tech_sheet.save_error') : null
+  const zoomLabel = `${Math.round(zoom * 100)}%`
 
   const headerBtn = {
     display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '5px 10px',
@@ -1541,6 +1566,28 @@ export default function TechSheetEditor() {
           {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+          <button type="button" onClick={() => setZoomClamped(z => z - ZOOM_STEP)} title={t('tech_sheet.zoom_out')}
+            style={{ ...headerBtn, padding: '5px 7px' }}>
+            <i className="ti ti-minus" aria-hidden="true" style={{ fontSize: 14 }} />
+          </button>
+          <span title={t('tech_sheet.zoom_level')} style={{ minWidth: 44, textAlign: 'center', fontSize: 'var(--fs-body)', color: COL.textMain }}>
+            {zoomLabel}
+          </span>
+          <button type="button" onClick={() => setZoomClamped(z => z + ZOOM_STEP)} title={t('tech_sheet.zoom_in')}
+            style={{ ...headerBtn, padding: '5px 7px' }}>
+            <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 14 }} />
+          </button>
+          <button type="button" onClick={() => setZoomClamped(1)} title={t('tech_sheet.zoom_reset')}
+            style={{ ...headerBtn, padding: '5px 7px' }}>
+            100%
+          </button>
+          <button type="button" onClick={fitZoomToViewport} title={t('tech_sheet.zoom_fit')}
+            style={{ ...headerBtn, padding: '5px 7px' }}>
+            <i className="ti ti-arrows-maximize" aria-hidden="true" style={{ fontSize: 14 }} />
+          </button>
+        </div>
+
         <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>
           v{sheet?.versio ?? 1} · {badge.text}
         </span>
@@ -1568,14 +1615,15 @@ export default function TechSheetEditor() {
         </div>
 
         {/* ── Centre: Stage Konva ── */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COL.bg, minWidth: 0, overflow: 'auto', position: 'relative' }}>
+        <div ref={viewportRef} onWheel={onViewportWheel} style={{ flex: 1, background: COL.bg, minWidth: 0, overflow: 'auto', position: 'relative', padding: 24, boxSizing: 'border-box' }}>
           {lockState === 'readonly' && (
             <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-body)', color: COL.textMuted }}>
               <i className="ti ti-eye" style={{ marginRight: 6 }} />{t('tech_sheet.readonly_overlay')}
             </div>
           )}
+          <div style={{ width: pageW * zoom, height: pageH * zoom, position: 'relative', margin: '0 auto' }}>
           <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()}
-            style={{ position: 'relative', width: pageW, height: pageH, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: 'var(--white)', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
+            style={{ position: 'relative', width: pageW, height: pageH, transform: `scale(${zoom})`, transformOrigin: 'top left', boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: 'var(--white)', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
             <Stage ref={stageRef} width={pageW} height={pageH}
               onMouseDown={onStageMouseDown} onMouseMove={onStageMouseMove} onMouseUp={onStageMouseUp}>
               {/* Fons blanc + 3 capes en ordre z. Konva no agrupa per `layer`:
@@ -1613,19 +1661,21 @@ export default function TechSheetEditor() {
                 style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 'var(--fs-body)', color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: 'var(--white)', zIndex: 10 }}
               />
             )}
-            {editingFlat && (
-              <Suspense fallback={<div style={{ position: 'absolute', inset: 0, zIndex: 20, background: 'rgba(255,255,255,.65)', display: 'grid', placeItems: 'center', color: COL.textMuted, fontSize: 'var(--fs-body)' }}>{t('tech_sheet.flat_loading')}</div>}>
-                <PaperFlatEditor
-                  flat={editingFlat}
-                  pageW={pageW}
-                  pageH={pageH}
-                  toPx={toPx}
-                  labels={paperFlatLabels}
-                  onCommit={commitFlatEdit}
-                  onCancel={() => setEditingFlatId(null)}
-                />
-              </Suspense>
-            )}
+          </div>
+          {editingFlat && (
+            <Suspense fallback={<div style={{ position: 'absolute', inset: 0, zIndex: 20, background: 'rgba(255,255,255,.65)', display: 'grid', placeItems: 'center', color: COL.textMuted, fontSize: 'var(--fs-body)' }}>{t('tech_sheet.flat_loading')}</div>}>
+              <PaperFlatEditor
+                flat={editingFlat}
+                pageW={pageW}
+                pageH={pageH}
+                zoom={zoom}
+                toPx={toPx}
+                labels={paperFlatLabels}
+                onCommit={commitFlatEdit}
+                onCancel={() => setEditingFlatId(null)}
+              />
+            </Suspense>
+          )}
           </div>
         </div>
 

@@ -1637,6 +1637,11 @@
     "flat_changed": "Flat edited",
     "flat_done": "Done",
     "flat_cancel": "Cancel",
+    "zoom_level": "Zoom",
+    "zoom_in": "Zoom in",
+    "zoom_out": "Zoom out",
+    "zoom_reset": "Zoom 100%",
+    "zoom_fit": "Fit to screen",
     "more_colors": "More colors"
   },
   "estat_badge": {
