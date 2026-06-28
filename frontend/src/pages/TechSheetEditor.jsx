@@ -1515,7 +1515,17 @@ export default function TechSheetEditor() {
     if (d.type === 'rect' || d.type === 'rect_round') {
       const x = Math.min(d.startX, pos.x), y = Math.min(d.startY, pos.y)
       const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
-      if (w > 3 && h > 3) obj = { ...base, type: 'rect', x: toMm(x), y: toMm(y), width: toMm(w), height: toMm(h), fill: 'transparent', stroke: KONVA_COL.gold, strokeWidth: 1, ...(d.type === 'rect_round' ? { cornerRadius: 8 } : {}) }
+      // R2: un clic o drag massa petit creava un rect "invisible" (cap objecte). Ara sempre
+      // es crea: amb la mida arrossegada o, si és menyspreable, una de per defecte al punt
+      // clicat. Traç una mica més gruixut perquè es vegi clar.
+      const small = w <= 3 || h <= 3
+      obj = {
+        ...base, type: 'rect',
+        x: toMm(small ? d.startX : x), y: toMm(small ? d.startY : y),
+        width: small ? 40 : toMm(w), height: small ? 28 : toMm(h),
+        fill: 'transparent', stroke: KONVA_COL.gold, strokeWidth: 1.5,
+        ...(d.type === 'rect_round' ? { cornerRadius: 8 } : {}),
+      }
     } else if (d.type === 'ellipse') {
       const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
       if (w > 3 && h > 3) obj = { ...base, type: 'ellipse', x: toMm((d.startX + pos.x) / 2), y: toMm((d.startY + pos.y) / 2), rx: toMm(w / 2), ry: toMm(h / 2), stroke: KONVA_COL.textMain, strokeWidth: 1.5, fill: 'transparent' }
