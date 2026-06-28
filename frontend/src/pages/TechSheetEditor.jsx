@@ -1491,7 +1491,9 @@ export default function TechSheetEditor() {
         id: uid(), type: 'text', layer: 'free', x: toMm(pos.x), y: toMm(pos.y),
         width: 120, height: 30, text: 'Doble clic per editar', fontSize: 11,
         fontFamily: FONT, fill: KONVA_COL.textMain,
-        ...(tool === 'text_box' ? { bgFill: KONVA_COL.white, bgPadding: 4 } : {}),
+        // PAL-2: el text_box neix TRANSPARENT (com el rect), no blanc opac. Segueix sent un
+        // text_box (bgFill present → caixa amb Rect darrere) i el color és editable a la barra.
+        ...(tool === 'text_box' ? { bgFill: 'transparent', bgPadding: 4 } : {}),
       }
       addObject(obj); setTool('select'); return
     }
