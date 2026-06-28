@@ -543,11 +543,14 @@ function pathToData(path) {
 }
 
 function pathChildProps(obj, path) {
+  const fill = normalizePaint(path.fill ?? obj.fill)
+  const stroke = normalizePaint(path.stroke ?? obj.stroke)
   return {
     data: pathToData(path),
-    fill: obj.fill ?? path.fill ?? 'transparent',
-    stroke: obj.stroke ?? path.stroke ?? KONVA_COL.textMain,
-    strokeWidth: obj.strokeWidth ?? path.strokeWidth ?? 1.2,
+    fill: fill || undefined,
+    stroke: stroke || undefined,
+    strokeWidth: path.strokeWidth ?? obj.strokeWidth ?? 1.2,
+    fillRule: normalizeFillRule(path.fillRule),
     lineCap: 'round',
     lineJoin: 'round',
   }
@@ -826,12 +829,75 @@ function paperColorToCss(color, fallback) {
   }
 }
 
+function normalizePaint(value) {
+  if (value == null || value === '' || value === 'none' || value === 'transparent') return null
+  if (typeof value === 'string' && value.startsWith('url(')) return null
+  return value
+}
+
+function normalizeFillRule(value) {
+  return value === 'evenodd' ? 'evenodd' : 'nonzero'
+}
+
+function parseStyleDeclarations(body) {
+  return Object.fromEntries(
+    body.split(';')
+      .map(part => part.trim())
+      .filter(Boolean)
+      .map(part => {
+        const sep = part.indexOf(':')
+        if (sep === -1) return null
+        return [part.slice(0, sep).trim(), part.slice(sep + 1).trim()]
+      })
+      .filter(Boolean)
+  )
+}
+
+function inlineSvgClassStyles(svgText) {
+  if (typeof DOMParser === 'undefined') return svgText
+  let doc
+  try {
+    doc = new DOMParser().parseFromString(svgText, 'image/svg+xml')
+  } catch {
+    return svgText
+  }
+  if (doc.querySelector('parsererror')) return svgText
+  const classStyles = {}
+  doc.querySelectorAll('style').forEach(styleEl => {
+    const css = styleEl.textContent || ''
+    css.replace(/([^{}]+)\{([^{}]+)\}/g, (_match, selectorText, body) => {
+      const declarations = parseStyleDeclarations(body)
+      selectorText.split(',').map(s => s.trim()).forEach(selector => {
+        const className = selector.match(/^\.([\w-]+)$/)?.[1]
+        if (!className) return
+        classStyles[className] = { ...(classStyles[className] || {}), ...declarations }
+      })
+      return ''
+    })
+  })
+  const paintAttrs = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'fill-rule', 'clip-rule']
+  doc.querySelectorAll('path, polygon, polyline, line, rect').forEach(el => {
+    const merged = {}
+    ;(el.getAttribute('class') || '').split(/\s+/).filter(Boolean).forEach(className => {
+      Object.assign(merged, classStyles[className] || {})
+    })
+    paintAttrs.forEach(attr => {
+      if (merged[attr] != null && !el.hasAttribute(attr)) el.setAttribute(attr, merged[attr])
+    })
+  })
+  try {
+    return new XMLSerializer().serializeToString(doc)
+  } catch {
+    return svgText
+  }
+}
+
 async function legacySketchSvgToPath(obj, scope) {
   if (obj.type !== 'sketch_svg' || !obj.svg) return obj
   scope.project.clear()
   let imported
   try {
-    imported = scope.project.importSVG(obj.svg, { insert: true, expandShapes: true })
+    imported = scope.project.importSVG(inlineSvgClassStyles(obj.svg), { insert: true, expandShapes: true })
   } catch {
     return obj
   }
@@ -844,8 +910,9 @@ async function legacySketchSvgToPath(obj, scope) {
   const strokeScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2
   const paths = imported.getItems({ class: scope.Path }).filter(path => path.segments?.length).map(path => ({
     closed: !!path.closed,
-    stroke: paperColorToCss(path.strokeColor, KONVA_COL.textMain),
-    fill: path.fillColor ? paperColorToCss(path.fillColor, 'transparent') : 'transparent',
+    stroke: normalizePaint(path.strokeColor ? paperColorToCss(path.strokeColor, null) : null),
+    fill: normalizePaint(path.fillColor ? paperColorToCss(path.fillColor, null) : null),
+    fillRule: normalizeFillRule(path.fillRule),
     strokeWidth: Math.max(0.2, (path.strokeWidth || 1) * strokeScale),
     segments: path.segments.map(seg => ({
       x: (seg.point.x - bounds.x) * scaleX,
@@ -861,9 +928,9 @@ async function legacySketchSvgToPath(obj, scope) {
     ...obj,
     type: 'path',
     paths,
-    stroke: paths[0].stroke,
-    fill: paths[0].fill,
-    strokeWidth: paths[0].strokeWidth,
+    stroke: undefined,
+    fill: undefined,
+    strokeWidth: undefined,
     svg: undefined,
     width: undefined,
     height: undefined,
@@ -892,6 +959,17 @@ async function convertLegacySketchSvgs(pages) {
   }
   scope.remove()
   return nextPages
+}
+
+async function convertLegacySketchSvgObject(obj) {
+  const mod = await import('paper')
+  const paper = mod.default || mod
+  const scope = new paper.PaperScope()
+  const canvas = document.createElement('canvas')
+  scope.setup(canvas)
+  const converted = await legacySketchSvgToPath(obj, scope)
+  scope.remove()
+  return converted
 }
 
 // ════════════════════════════════ Component ═════════════════════════════════
@@ -1513,36 +1591,46 @@ export default function TechSheetEditor() {
     addObject(obj)
     setEditingFlatId(obj.id)
   }
-  const importFlatSvgText = (svgText) => {
+  const importFlatSvgText = async (svgText) => {
     if (!locked) return
     const ratio = svgAspectRatio(svgText)
     if (!ratio) {
       flash(t('tech_sheet.flat_import_invalid'))
       return
     }
-    if (selObj?.type === 'sketch_svg') {
-      updateObject(selObj.id, { svg: svgText })
+    const maxW = 110
+    const maxH = 78
+    const width = ratio >= maxW / maxH ? maxW : maxH * ratio
+    const height = width / ratio
+    if (['sketch_svg', 'path'].includes(selObj?.type)) {
+      const source = {
+        id: selObj.id, type: 'sketch_svg', layer: selObj.layer || 'free',
+        x: selObj.x || 54, y: selObj.y || 44,
+        width: selObj.width || width, height: selObj.height || height,
+        svg: svgText,
+      }
+      const converted = await convertLegacySketchSvgObject(source)
+      updateObject(selObj.id, converted)
       setEditingText(null)
       setTool('select')
       setEditingFlatId(selObj.id)
       return
     }
-    const maxW = 110
-    const maxH = 78
-    const width = ratio >= maxW / maxH ? maxW : maxH * ratio
-    const height = width / ratio
-    const obj = {
+    const source = {
       id: uid(), type: 'sketch_svg', layer: 'free',
       x: 54, y: 44, width, height,
       svg: svgText,
     }
+    const obj = await convertLegacySketchSvgObject(source)
     addObject(obj)
     setEditingFlatId(obj.id)
   }
   const handleFlatSvgFile = (file) => {
     if (!file || !locked) return
     const fr = new FileReader()
-    fr.onload = () => importFlatSvgText(String(fr.result || ''))
+    fr.onload = () => {
+      importFlatSvgText(String(fr.result || '')).catch(() => flash(t('tech_sheet.flat_import_error')))
+    }
     fr.onerror = () => flash(t('tech_sheet.flat_import_error'))
     fr.readAsText(file)
   }
