@@ -1828,9 +1828,10 @@ export default function TechSheetEditor() {
     cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
   const paletteBtnOn = { borderColor: COL.gold, background: COL.goldPale, color: COL.gold }
-  // Barra contextual (C4): franja GRIS CLAR (decisió Agus) per diferenciar-la de la closca fosca.
-  const CTX_BG = '#d4d6d3', CTX_BORDER = '#b9bcb8', CTX_TEXT = '#1d1d1b'
-  const ctxBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 26, height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: '#ececea', color: CTX_TEXT, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' }
+  // Barra contextual (C4): FOSCA com la resta de la closca (PAL-A), discreta, separada de la topbar
+  // i del viewport per un filet molt fi (1px COL.border subtil) — com la barra d'estat inferior.
+  const CTX_BG = COL.sidebar, CTX_BORDER = COL.border, CTX_TEXT = COL.textMain
+  const ctxBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 26, height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: COL.bg, color: CTX_TEXT, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' }
   const curObjs = objectsOf(currentPage)
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   const selectedSet = new Set(selectedIds)
@@ -1909,7 +1910,7 @@ export default function TechSheetEditor() {
       {/* ── Barra contextual (C4) — gris clar; opcions de l'eina/objecte actiu ── */}
       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px', minHeight: 32, background: CTX_BG, borderBottom: `1px solid ${CTX_BORDER}`, color: CTX_TEXT, fontSize: 'var(--fs-body)' }}>
         {!locked ? (
-          <span style={{ color: '#5a5d59' }}><i className="ti ti-eye" style={{ marginRight: 5 }} />{t('tech_sheet.readonly_overlay')}</span>
+          <span style={{ color: COL.textMuted }}><i className="ti ti-eye" style={{ marginRight: 5 }} />{t('tech_sheet.readonly_overlay')}</span>
         ) : multiSelected ? (
           <>
             <span style={{ fontWeight: 600 }}>{t('tech_sheet.selected_objects', { n: selectedObjects.length })}</span>
@@ -1940,11 +1941,11 @@ export default function TechSheetEditor() {
         ) : tool !== 'select' ? (
           <span><i className={`ti ${activeToolDef.icon}`} style={{ marginRight: 5 }} />{t('tech_sheet.ctx_tool', { tool: activeToolDef.label })}</span>
         ) : (
-          <span style={{ color: '#5a5d59' }}>{t('tech_sheet.ctx_idle')}</span>
+          <span style={{ color: COL.textMuted }}>{t('tech_sheet.ctx_idle')}</span>
         )}
         <select value={pageFormat} onChange={e => setPageFormat(e.target.value)} disabled={!locked}
           title={t('tech_sheet.page_format')}
-          style={{ marginLeft: 'auto', height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: '#ececea', color: CTX_TEXT, fontFamily: FONT, fontSize: 'var(--fs-body)', cursor: locked ? 'pointer' : 'default' }}>
+          style={{ marginLeft: 'auto', height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: COL.bg, color: CTX_TEXT, fontFamily: FONT, fontSize: 'var(--fs-body)', cursor: locked ? 'pointer' : 'default' }}>
           {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
       </div>
