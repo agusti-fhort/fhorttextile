@@ -1879,42 +1879,14 @@ export default function TechSheetEditor() {
           {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
         </span>
         <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
-        {saveLabel && <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{saveLabel}</span>}
-        {notice && <span style={{ fontSize: 'var(--fs-body)', color: '#fcd34d', background: '#3a2e12', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
 
-        {/* Eines: ara viuen a la paleta vertical esquerra (C2). */}
+        {/* Eines → paleta esquerra (C2). Zoom/estat/notice → barra d'estat inferior (C3). */}
 
         {/* Format de pàgina (tot el document) */}
         <select value={pageFormat} onChange={e => setPageFormat(e.target.value)} disabled={!locked}
           title={t('tech_sheet.page_format')} style={{ ...headerBtn, padding: '5px 8px', marginLeft: locked ? 0 : 16, cursor: locked ? 'pointer' : 'default' }}>
           {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
-          <button type="button" onClick={() => setZoomClamped(z => z - ZOOM_STEP)} title={t('tech_sheet.zoom_out')}
-            style={{ ...headerBtn, padding: '5px 7px' }}>
-            <i className="ti ti-minus" aria-hidden="true" style={{ fontSize: 14 }} />
-          </button>
-          <span title={t('tech_sheet.zoom_level')} style={{ minWidth: 44, textAlign: 'center', fontSize: 'var(--fs-body)', color: COL.textMain }}>
-            {zoomLabel}
-          </span>
-          <button type="button" onClick={() => setZoomClamped(z => z + ZOOM_STEP)} title={t('tech_sheet.zoom_in')}
-            style={{ ...headerBtn, padding: '5px 7px' }}>
-            <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 14 }} />
-          </button>
-          <button type="button" onClick={() => setZoomClamped(1)} title={t('tech_sheet.zoom_reset')}
-            style={{ ...headerBtn, padding: '5px 7px' }}>
-            100%
-          </button>
-          <button type="button" onClick={fitZoomToViewport} title={t('tech_sheet.zoom_fit')}
-            style={{ ...headerBtn, padding: '5px 7px' }}>
-            <i className="ti ti-arrows-maximize" aria-hidden="true" style={{ fontSize: 14 }} />
-          </button>
-        </div>
-
-        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>
-          v{sheet?.versio ?? 1} · {badge.text}
-        </span>
       </header>
 
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
@@ -1942,26 +1914,6 @@ export default function TechSheetEditor() {
               onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFile(f) }} />
           </div>
         )}
-
-        {/* ── Esquerra: pàgines ── */}
-        <div style={{ width: 96, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', padding: '8px 5px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ color: COL.gold, fontSize: 'var(--fs-caption)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tech_sheet.pages')}</div>
-          {locked && (
-            <button onClick={addPage} style={{ fontSize: 'var(--fs-caption)', padding: '3px 4px', border: `1px solid ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer' }}>{t('tech_sheet.add_page')}</button>
-          )}
-          {pages.map((p, i) => (
-            <div key={p.id} onClick={() => { setCurrentPage(i); clearSelection() }} style={{ position: 'relative', cursor: 'pointer' }}>
-              <div style={{ width: 84, height: 60, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
-                {thumbnails[i] && <img src={thumbnails[i]} alt={t('tech_sheet.page_n', { n: i + 1 })} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
-              </div>
-              <div style={{ fontSize: 'var(--fs-caption)', color: COL.textMuted, textAlign: 'center', marginTop: 1 }}>{t('tech_sheet.page_n', { n: i + 1 })}</div>
-              {locked && pages.length > 1 && (
-                <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title={t('tech_sheet.delete_page')}
-                  style={{ position: 'absolute', top: 2, right: 2, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 'var(--fs-caption)', lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: 2, cursor: 'pointer' }}>×</button>
-              )}
-            </div>
-          ))}
-        </div>
 
         {/* ── Centre: Stage Konva ── */}
         <div ref={viewportRef} onWheel={onViewportWheel} style={{ flex: 1, background: COL.work, minWidth: 0, overflow: 'auto', position: 'relative', padding: 24, boxSizing: 'border-box' }}>
@@ -2277,6 +2229,47 @@ export default function TechSheetEditor() {
           </div>
         </aside>
       </main>
+
+      {/* ── Tira de pàgines horitzontal (C3) ── */}
+      <div style={{ flexShrink: 0, background: COL.bg, borderTop: `1px solid ${COL.border}`, display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', overflowX: 'auto' }}>
+        <span style={{ flexShrink: 0, color: COL.gold, fontSize: 'var(--fs-caption)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tech_sheet.pages')}</span>
+        {pages.map((p, i) => (
+          <div key={p.id} onClick={() => { setCurrentPage(i); clearSelection() }} title={t('tech_sheet.page_n', { n: i + 1 })} style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+            <div style={{ width: 56, height: 40, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
+              {thumbnails[i] && <img src={thumbnails[i]} alt={t('tech_sheet.page_n', { n: i + 1 })} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
+            </div>
+            {locked && pages.length > 1 && (
+              <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title={t('tech_sheet.delete_page')}
+                style={{ position: 'absolute', top: -4, right: -4, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 'var(--fs-caption)', lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: '50%', cursor: 'pointer' }}>×</button>
+            )}
+          </div>
+        ))}
+        {locked && (
+          <button onClick={addPage} title={t('tech_sheet.add_page')} style={{ flexShrink: 0, width: 56, height: 40, border: `1px dashed ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>+</button>
+        )}
+      </div>
+
+      {/* ── Barra d'estat inferior (C3) ── */}
+      <footer style={{ flexShrink: 0, background: COL.sidebar, borderTop: `1px solid ${COL.border}`, display: 'flex', alignItems: 'center', gap: 12, padding: '4px 12px', color: COL.textMuted, fontSize: 'var(--fs-label)' }}>
+        <span style={{ fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>
+          v{sheet?.versio ?? 1} · {badge.text}
+        </span>
+        {saveLabel && <span>{saveLabel}</span>}
+        {notice && <span style={{ color: '#fcd34d', background: '#3a2e12', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button type="button" onClick={() => setZoomClamped(z => z - ZOOM_STEP)} title={t('tech_sheet.zoom_out')} style={{ ...headerBtn, padding: '3px 6px' }}>
+            <i className="ti ti-minus" aria-hidden="true" style={{ fontSize: 13 }} />
+          </button>
+          <span title={t('tech_sheet.zoom_level')} style={{ minWidth: 42, textAlign: 'center', fontSize: 'var(--fs-body)', color: COL.textMain }}>{zoomLabel}</span>
+          <button type="button" onClick={() => setZoomClamped(z => z + ZOOM_STEP)} title={t('tech_sheet.zoom_in')} style={{ ...headerBtn, padding: '3px 6px' }}>
+            <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 13 }} />
+          </button>
+          <button type="button" onClick={() => setZoomClamped(1)} title={t('tech_sheet.zoom_reset')} style={{ ...headerBtn, padding: '3px 7px' }}>100%</button>
+          <button type="button" onClick={fitZoomToViewport} title={t('tech_sheet.zoom_fit')} style={{ ...headerBtn, padding: '3px 6px' }}>
+            <i className="ti ti-arrows-maximize" aria-hidden="true" style={{ fontSize: 13 }} />
+          </button>
+        </div>
+      </footer>
 
       {/* Selector de size fitting (>1) */}
       {pickFitting && (
