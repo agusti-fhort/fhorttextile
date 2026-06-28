@@ -19,6 +19,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
   const refreshHandlesRef = useRef(null)
   const [status, setStatus] = useState(labels?.loading || '')
   const [canCommit, setCanCommit] = useState(false)
+  const isStructuredPath = flat?.type === 'path'
 
   useEffect(() => {
     labelsRef.current = labels
@@ -26,7 +27,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !flat?.svg) return undefined
+    if (!canvas || (!flat?.svg && !isStructuredPath)) return undefined
     setCanCommit(false)
 
     const scope = new paper.PaperScope()
@@ -94,26 +95,66 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
       setStatus(labelsRef.current?.pathSelected || '')
     }
 
+    const toViewPx = (mm) => toPx(mm) * zoomRef.current
+    const rotation = ((flat.rotation || 0) * Math.PI) / 180
+    const scaleX = flat.scaleX || 1
+    const scaleY = flat.scaleY || 1
+    const cos = Math.cos(rotation)
+    const sin = Math.sin(rotation)
+    const transformVector = (x = 0, y = 0) => {
+      const sx = x * scaleX
+      const sy = y * scaleY
+      return { x: sx * cos - sy * sin, y: sx * sin + sy * cos }
+    }
+    const localToView = (x = 0, y = 0) => {
+      const v = transformVector(x, y)
+      return new scope.Point(toViewPx((flat.x || 0) + v.x), toViewPx((flat.y || 0) + v.y))
+    }
+    const handleToView = (x = 0, y = 0) => {
+      const v = transformVector(x, y)
+      return new scope.Point(toViewPx(v.x), toViewPx(v.y))
+    }
+
     sketchLayer.activate()
     let imported = null
-    try {
-      imported = scope.project.importSVG(flat.svg, { insert: true, expandShapes: true })
-    } catch {
-      setStatus(labelsRef.current?.importError || '')
-      sketchLayerRef.current = null
-      return cleanup
+    if (isStructuredPath) {
+      imported = new scope.Group()
+      ;(flat.paths || []).forEach((pathData, index) => {
+        const path = new scope.Path({
+          closed: !!pathData.closed,
+          strokeColor: flat.stroke || pathData.stroke || '#1f2937',
+          strokeWidth: toViewPx(flat.strokeWidth || pathData.strokeWidth || 1.2),
+          fillColor: (flat.fill ?? pathData.fill) && (flat.fill ?? pathData.fill) !== 'transparent' ? (flat.fill ?? pathData.fill) : null,
+        })
+        path.data = { index }
+        ;(pathData.segments || []).forEach(seg => {
+          path.add(new scope.Segment(
+            localToView(seg.x, seg.y),
+            handleToView(seg.inX, seg.inY),
+            handleToView(seg.outX, seg.outY),
+          ))
+        })
+        imported.addChild(path)
+      })
+    } else {
+      try {
+        imported = scope.project.importSVG(flat.svg, { insert: true, expandShapes: true })
+      } catch {
+        setStatus(labelsRef.current?.importError || '')
+        sketchLayerRef.current = null
+        return cleanup
+      }
+      const bounds = imported.bounds
+      const targetW = Math.max(1, toViewPx(flat.width || 80))
+      const targetH = Math.max(1, toViewPx(flat.height || 60))
+      const scale = Math.min(targetW / bounds.width, targetH / bounds.height)
+      if (Number.isFinite(scale) && scale > 0) imported.scale(scale)
+      imported.position = new scope.Point(
+        toViewPx(flat.x || 0) + targetW / 2,
+        toViewPx(flat.y || 0) + targetH / 2,
+      )
     }
     setCanCommit(true)
-    const bounds = imported.bounds
-    const toViewPx = (mm) => toPx(mm) * zoomRef.current
-    const targetW = Math.max(1, toViewPx(flat.width || 80))
-    const targetH = Math.max(1, toViewPx(flat.height || 60))
-    const scale = Math.min(targetW / bounds.width, targetH / bounds.height)
-    if (Number.isFinite(scale) && scale > 0) imported.scale(scale)
-    imported.position = new scope.Point(
-      toViewPx(flat.x || 0) + targetW / 2,
-      toViewPx(flat.y || 0) + targetH / 2,
-    )
 
     const firstPath = imported.getItems({ class: scope.Path }).find(path => path.segments?.length)
     if (firstPath) selectPath(firstPath)
@@ -151,7 +192,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
     tool.activate()
 
     return cleanup
-  }, [flat, pageW, pageH, toPx])
+  }, [flat, pageW, pageH, toPx, isStructuredPath])
 
   useEffect(() => {
     const previousZoom = zoomRef.current
@@ -175,6 +216,42 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
   const commit = () => {
     const sketchLayer = sketchLayerRef.current
     if (!sketchLayer || !canCommit) return
+    if (isStructuredPath) {
+      const scope = scopeRef.current
+      if (!scope) return
+      const z = zoomRef.current || 1
+      const rotation = -(((flat.rotation || 0) * Math.PI) / 180)
+      const scaleX = flat.scaleX || 1
+      const scaleY = flat.scaleY || 1
+      const cos = Math.cos(rotation)
+      const sin = Math.sin(rotation)
+      const fromViewMm = (point) => ({ x: point.x / toPx(1) / z, y: point.y / toPx(1) / z })
+      const pointToLocal = (point) => {
+        const p = fromViewMm(point)
+        const dx = p.x - (flat.x || 0)
+        const dy = p.y - (flat.y || 0)
+        return { x: (dx * cos - dy * sin) / scaleX, y: (dx * sin + dy * cos) / scaleY }
+      }
+      const handleToLocal = (point) => {
+        const p = fromViewMm(point)
+        return { x: (p.x * cos - p.y * sin) / scaleX, y: (p.x * sin + p.y * cos) / scaleY }
+      }
+      const paths = sketchLayer.getItems({ class: scope.Path }).filter(path => path.segments?.length).map((path, index) => {
+        const source = flat.paths?.[path.data?.index ?? index] || {}
+        return {
+          ...source,
+          closed: path.closed,
+          segments: path.segments.map(seg => {
+            const p = pointToLocal(seg.point)
+            const hin = handleToLocal(seg.handleIn)
+            const hout = handleToLocal(seg.handleOut)
+            return { x: p.x, y: p.y, inX: hin.x, inY: hin.y, outX: hout.x, outY: hout.y }
+          }),
+        }
+      })
+      onCommit({ paths })
+      return
+    }
     const svg = sketchLayer.exportSVG({ asString: true, bounds: 'content' })
     onCommit(svg)
   }

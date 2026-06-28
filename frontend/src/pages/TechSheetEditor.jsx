@@ -1405,9 +1405,25 @@ export default function TechSheetEditor() {
   const insertFlatSketch = () => {
     if (!locked) return
     const obj = {
-      id: uid(), type: 'sketch_svg', layer: 'free',
-      x: 54, y: 44, width: 90, height: 60,
-      svg: EMPTY_FLAT_SVG,
+      id: uid(), type: 'path', layer: 'free',
+      x: 54, y: 44,
+      stroke: KONVA_COL.textMain,
+      strokeWidth: 1.2,
+      fill: 'transparent',
+      paths: [{
+        closed: true,
+        stroke: KONVA_COL.textMain,
+        strokeWidth: 1.2,
+        fill: 'transparent',
+        segments: [
+          { x: 12, y: 10, inX: 0, inY: 0, outX: 10, outY: -4 },
+          { x: 46, y: 8, inX: -10, inY: -3, outX: 12, outY: 3 },
+          { x: 74, y: 18, inX: -6, inY: -5, outX: 5, outY: 14 },
+          { x: 80, y: 54, inX: 3, inY: -12, outX: -9, outY: 6 },
+          { x: 50, y: 64, inX: 12, inY: 5, outX: -13, outY: 3 },
+          { x: 16, y: 56, inX: 12, inY: 6, outX: -6, outY: -14 },
+        ],
+      }],
     }
     addObject(obj)
     setEditingFlatId(obj.id)
@@ -1446,13 +1462,19 @@ export default function TechSheetEditor() {
     fr.readAsText(file)
   }
   const editSelectedFlat = () => {
-    if (!locked || selObj?.type !== 'sketch_svg') return
+    if (!locked || !['sketch_svg', 'path'].includes(selObj?.type)) return
     setEditingText(null)
     setTool('select')
     setEditingFlatId(selObj.id)
   }
-  const commitFlatEdit = (svg) => {
+  const commitFlatEdit = (payload) => {
     if (!editingFlatId) return
+    if (payload && typeof payload === 'object' && Array.isArray(payload.paths)) {
+      updateObject(editingFlatId, { paths: payload.paths })
+      setEditingFlatId(null)
+      return
+    }
+    const svg = payload
     const current = objectsOf(currentPage).find(o => o.id === editingFlatId)
     const ratio = svgAspectRatio(svg)
     const patch = { svg }
@@ -1617,7 +1639,7 @@ export default function TechSheetEditor() {
   const multiFillValue = commonValue(multiFill, 'fill')
   const multiX = commonValue(multiPosition, 'x')
   const multiY = commonValue(multiPosition, 'y')
-  const editingFlat = editingFlatId ? curObjs.find(o => o.id === editingFlatId && o.type === 'sketch_svg') : null
+  const editingFlat = editingFlatId ? curObjs.find(o => o.id === editingFlatId && ['sketch_svg', 'path'].includes(o.type)) : null
   const paperFlatLabels = {
     loading: t('tech_sheet.flat_loading'),
     pathSelected: t('tech_sheet.flat_path_selected'),
@@ -2002,16 +2024,18 @@ export default function TechSheetEditor() {
                       onChange={e => updateObject(selObj.id, { scale: Math.max(0.1, (Number(e.target.value) || 100) / 100) })} style={propInput} />
                   </label>
                 )}
-                {selObj.type === 'sketch_svg' && (
+                {(selObj.type === 'sketch_svg' || selObj.type === 'path') && (
                   <>
                     <button type="button" onClick={editSelectedFlat}
                       style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
                       <i className="ti ti-vector-bezier" aria-hidden="true" /> {t('tech_sheet.flat_edit_nodes')}
                     </button>
-                    <button type="button" onClick={() => flatFileRef.current?.click()}
-                      style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
-                      <i className="ti ti-file-import" aria-hidden="true" /> {t('tech_sheet.flat_replace_svg')}
-                    </button>
+                    {selObj.type === 'sketch_svg' && (
+                      <button type="button" onClick={() => flatFileRef.current?.click()}
+                        style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
+                        <i className="ti ti-file-import" aria-hidden="true" /> {t('tech_sheet.flat_replace_svg')}
+                      </button>
+                    )}
                   </>
                 )}
                 {/* Posició X/Y (mm) per a objectes posicionats (no línia/fletxa). */}
