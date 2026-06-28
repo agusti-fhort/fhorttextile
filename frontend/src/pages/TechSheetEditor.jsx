@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group } from 'react-konva'
+import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group, Path } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
 
@@ -171,6 +171,23 @@ function objectBounds(obj) {
   }
   if (obj.type === 'arrow') {
     return { minX: Math.min(obj.x, obj.x2), minY: Math.min(obj.y, obj.y2), maxX: Math.max(obj.x, obj.x2), maxY: Math.max(obj.y, obj.y2) }
+  }
+  if (obj.type === 'path') {
+    const pts = (obj.paths || []).flatMap(path => (path.segments || []).flatMap(seg => {
+      const p = { x: seg.x || 0, y: seg.y || 0 }
+      const hin = { x: p.x + (seg.inX || 0), y: p.y + (seg.inY || 0) }
+      const hout = { x: p.x + (seg.outX || 0), y: p.y + (seg.outY || 0) }
+      return [p, hin, hout]
+    }))
+    if (!pts.length) return { minX: obj.x || 0, minY: obj.y || 0, maxX: obj.x || 0, maxY: obj.y || 0 }
+    const sx = Math.abs(obj.scaleX || 1)
+    const sy = Math.abs(obj.scaleY || 1)
+    return {
+      minX: (obj.x || 0) + Math.min(...pts.map(p => p.x)) * sx,
+      minY: (obj.y || 0) + Math.min(...pts.map(p => p.y)) * sy,
+      maxX: (obj.x || 0) + Math.max(...pts.map(p => p.x)) * sx,
+      maxY: (obj.y || 0) + Math.max(...pts.map(p => p.y)) * sy,
+    }
   }
   if (obj.type === 'ellipse') {
     return { minX: obj.x - obj.rx, minY: obj.y - obj.ry, maxX: obj.x + obj.rx, maxY: obj.y + obj.ry }
@@ -498,6 +515,44 @@ function arrowProps(obj) {
   }
 }
 
+function pathToData(path) {
+  const segments = path.segments || []
+  if (!segments.length) return ''
+  const fmt = (n) => Math.round(toPx(n || 0) * 1000) / 1000
+  const parts = [`M ${fmt(segments[0].x)} ${fmt(segments[0].y)}`]
+  for (let i = 1; i < segments.length; i += 1) {
+    const prev = segments[i - 1]
+    const seg = segments[i]
+    const hasCurve = prev.outX || prev.outY || seg.inX || seg.inY
+    if (hasCurve) {
+      parts.push(`C ${fmt((prev.x || 0) + (prev.outX || 0))} ${fmt((prev.y || 0) + (prev.outY || 0))} ${fmt((seg.x || 0) + (seg.inX || 0))} ${fmt((seg.y || 0) + (seg.inY || 0))} ${fmt(seg.x)} ${fmt(seg.y)}`)
+    } else {
+      parts.push(`L ${fmt(seg.x)} ${fmt(seg.y)}`)
+    }
+  }
+  if (path.closed && segments.length > 1) {
+    const last = segments[segments.length - 1]
+    const first = segments[0]
+    const hasClosingCurve = last.outX || last.outY || first.inX || first.inY
+    if (hasClosingCurve) {
+      parts.push(`C ${fmt((last.x || 0) + (last.outX || 0))} ${fmt((last.y || 0) + (last.outY || 0))} ${fmt((first.x || 0) + (first.inX || 0))} ${fmt((first.y || 0) + (first.inY || 0))} ${fmt(first.x)} ${fmt(first.y)}`)
+    }
+    parts.push('Z')
+  }
+  return parts.join(' ')
+}
+
+function pathChildProps(obj, path) {
+  return {
+    data: pathToData(path),
+    fill: obj.fill ?? path.fill ?? 'transparent',
+    stroke: obj.stroke ?? path.stroke ?? KONVA_COL.textMain,
+    strokeWidth: obj.strokeWidth ?? path.strokeWidth ?? 1.2,
+    lineCap: 'round',
+    lineJoin: 'round',
+  }
+}
+
 function imageProps(obj) {
   return {
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -562,6 +617,18 @@ async function addObjectToLayer(layer, obj, ctx) {
   }
   if (obj.type === 'arrow') {
     layer.add(new Konva.Arrow(arrowProps(obj)))
+    return
+  }
+  if (obj.type === 'path') {
+    const g = new Konva.Group({
+      x: toPx(obj.x || 0), y: toPx(obj.y || 0), rotation: obj.rotation || 0,
+      scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
+    })
+    for (const path of obj.paths || []) {
+      const props = pathChildProps(obj, path)
+      if (props.data) g.add(new Konva.Path(props))
+    }
+    layer.add(g)
     return
   }
   if (obj.type === 'data_block') {
@@ -655,6 +722,18 @@ function SketchSvgObj({ obj, common }) {
     scaleX={props.scaleX} scaleY={props.scaleY} />
 }
 
+function PathObj({ obj, common }) {
+  const paths = obj.paths || []
+  return (
+    <Group {...common}>
+      {paths.map((path, i) => {
+        const props = pathChildProps(obj, path)
+        return props.data ? <Path key={i} {...props} hitStrokeWidth={10} /> : null
+      })}
+    </Group>
+  )
+}
+
 export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText }) {
   const common = {
     id: obj.id,
@@ -706,6 +785,9 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   }
   if (obj.type === 'arrow') {
     return <Arrow {...common} {...arrowProps(obj)} hitStrokeWidth={10} />
+  }
+  if (obj.type === 'path') {
+    return <PathObj obj={obj} common={common} />
   }
   if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
@@ -1181,6 +1263,10 @@ export default function TechSheetEditor() {
       updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, scaleX: sx, scaleY: sy })
       return
     }
+    if (obj.type === 'path') {
+      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, scaleX: sx, scaleY: sy })
+      return
+    }
     // Blocs de dades: el resize baka l'escala a obj.scale (coherent amb l'auto-fit),
     // no a width/height. node.scaleX() ja és l'escala absoluta nova (Konva multiplica
     // sobre l'escala base del Group), per tant s'hi assigna directament.
@@ -1522,8 +1608,8 @@ export default function TechSheetEditor() {
   const selectedObjects = curObjs.filter(o => selectedSet.has(o.id))
   const selObj = selectedObjects.length === 1 ? selectedObjects[0] : null
   const multiSelected = selectedObjects.length > 1
-  const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow'].includes(o.type))
-  const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse'].includes(o.type))
+  const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
+  const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse', 'path'].includes(o.type))
   const multiPosition = selectedObjects.filter(o => o.type !== 'line' && o.type !== 'arrow')
   const mirrorableIds = selectedObjects.filter(o => !blocksTransform(o)).map(o => o.id)
   const freeSelectedIds = selectedObjects.filter(o => o.layer === 'free').map(o => o.id)
@@ -1894,7 +1980,7 @@ export default function TechSheetEditor() {
                     </div>
                   </>
                 )}
-                {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'line' || selObj.type === 'arrow') && (
+                {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'line' || selObj.type === 'arrow' || selObj.type === 'path') && (
                   <>
                     <div style={propLabel}>{t('tech_sheet.stroke_color')}
                       <ColorPicker value={selObj.stroke || KONVA_COL.textMain} onChange={c => updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
@@ -1905,7 +1991,7 @@ export default function TechSheetEditor() {
                     </label>
                   </>
                 )}
-                {(selObj.type === 'rect' || selObj.type === 'ellipse') && (
+                {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'path') && (
                   <div style={propLabel}>{t('tech_sheet.fill')}
                     <ColorPicker value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : KONVA_COL.white} onChange={c => updateObject(selObj.id, { fill: c })} />
                   </div>
