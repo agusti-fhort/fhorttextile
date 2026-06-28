@@ -1020,8 +1020,6 @@ export default function TechSheetEditor() {
   const [editingFlatId, setEditingFlatId] = useState(null)
   const [zoom, setZoom] = useState(1)
   const [pageFormat, setPageFormat] = useState('A4L')   // TS-4b: format del document sencer
-  const [openGroup, setOpenGroup] = useState(null)      // TS-4c: grup d'eines desplegat
-  const toolbarRef = useRef(null)
 
   const locked = lockState === 'owned'
   const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
@@ -1305,14 +1303,6 @@ export default function TechSheetEditor() {
     setPageFormat((tj && tj.pageFormat) || 'A4L')
     setCurrentPage(0)
   }
-
-  // Tanca el desplegable d'eines en clicar fora de la toolbar.
-  useEffect(() => {
-    if (!openGroup) return
-    const onDocDown = (e) => { if (toolbarRef.current && !toolbarRef.current.contains(e.target)) setOpenGroup(null) }
-    document.addEventListener('mousedown', onDocDown)
-    return () => document.removeEventListener('mousedown', onDocDown)
-  }, [openGroup])
 
   // ── Re-fetch dels data_block (taula graduada) en carregar → cache JSON viu ──
   useEffect(() => {
@@ -1816,6 +1806,13 @@ export default function TechSheetEditor() {
     borderRadius: 6, border: `1px solid ${COL.border}`, background: 'transparent',
     cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
+  // Botó de la paleta d'eines vertical (C2): icona quadrada; eina activa ressaltada amb accent gold.
+  const paletteBtn = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
+    borderRadius: 6, border: `1px solid transparent`, background: 'transparent',
+    cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
+  }
+  const paletteBtnOn = { borderColor: COL.gold, background: COL.goldPale, color: COL.gold }
   const curObjs = objectsOf(currentPage)
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   const selectedSet = new Set(selectedIds)
@@ -1866,7 +1863,6 @@ export default function TechSheetEditor() {
       { k: 'preset_legend', icon: 'ti-list-details', label: t('tech_sheet.preset_legend') },
     ] },
   ]
-  const activeTool = (grp) => grp.tools.some(tl => tl.k === tool)
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
@@ -1886,42 +1882,7 @@ export default function TechSheetEditor() {
         {saveLabel && <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{saveLabel}</span>}
         {notice && <span style={{ fontSize: 'var(--fs-body)', color: '#fcd34d', background: '#3a2e12', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
 
-        {/* Eines (només en edició): select + grups desplegables + imatge */}
-        {locked && (
-          <div ref={toolbarRef} style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
-            <button onClick={() => { setTool('select'); setOpenGroup(null) }} title={t('tech_sheet.tool_select')}
-              style={{ ...headerBtn, padding: '5px 8px', borderColor: tool === 'select' ? COL.gold : COL.border, background: tool === 'select' ? COL.goldPale : 'transparent', color: tool === 'select' ? COL.gold : COL.textMain }}>
-              <i className="ti ti-pointer" style={{ fontSize: 15 }} />
-            </button>
-            {TOOL_GROUPS.map(grp => {
-              const on = activeTool(grp)
-              return (
-                <div key={grp.g} style={{ position: 'relative', display: 'inline-block' }}>
-                  <button onClick={() => setOpenGroup(openGroup === grp.g ? null : grp.g)} title={grp.label}
-                    style={{ ...headerBtn, padding: '5px 7px', borderColor: on ? COL.gold : COL.border, background: on ? COL.goldPale : 'transparent', color: on ? COL.gold : COL.textMain }}>
-                    <i className={`ti ${grp.icon}`} style={{ fontSize: 15 }} />
-                    <i className="ti ti-chevron-down" style={{ fontSize: 10 }} />
-                  </button>
-                  {openGroup === grp.g && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: COL.field, border: `1px solid ${COL.border}`, borderRadius: 6, zIndex: 50, minWidth: 160, boxShadow: '0 4px 16px rgba(0,0,0,.45)', overflow: 'hidden' }}>
-                      {grp.tools.map(tl => (
-                        <button key={tl.k} onClick={() => { setTool(tl.k); setOpenGroup(null) }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: tool === tl.k ? COL.goldPale : 'transparent', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-body)', fontFamily: FONT, color: COL.textMain }}>
-                          <i className={`ti ${tl.icon}`} style={{ fontSize: 14 }} />{tl.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-            <button onClick={() => fileRef.current?.click()} title={t('tech_sheet.tool_image')} style={{ ...headerBtn, padding: '5px 8px' }}>
-              <i className="ti ti-photo" style={{ fontSize: 15 }} />
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" hidden
-              onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFile(f) }} />
-          </div>
-        )}
+        {/* Eines: ara viuen a la paleta vertical esquerra (C2). */}
 
         {/* Format de pàgina (tot el document) */}
         <select value={pageFormat} onChange={e => setPageFormat(e.target.value)} disabled={!locked}
@@ -1957,6 +1918,31 @@ export default function TechSheetEditor() {
       </header>
 
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        {/* ── Paleta d'eines vertical (C2) ── */}
+        {locked && (
+          <div style={{ width: 46, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', padding: '8px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+            <button onClick={() => setTool('select')} title={t('tech_sheet.tool_select')}
+              style={{ ...paletteBtn, ...(tool === 'select' ? paletteBtnOn : {}) }}>
+              <i className="ti ti-pointer" style={{ fontSize: 17 }} />
+            </button>
+            {TOOL_GROUPS.flatMap(grp => [
+              <div key={`sep-${grp.g}`} style={{ width: 26, height: 1, background: COL.border, margin: '3px 0' }} />,
+              ...grp.tools.map(tl => (
+                <button key={tl.k} onClick={() => setTool(tl.k)} title={tl.label}
+                  style={{ ...paletteBtn, ...(tool === tl.k ? paletteBtnOn : {}) }}>
+                  <i className={`ti ${tl.icon}`} style={{ fontSize: 17 }} />
+                </button>
+              )),
+            ])}
+            <div style={{ width: 26, height: 1, background: COL.border, margin: '3px 0' }} />
+            <button onClick={() => fileRef.current?.click()} title={t('tech_sheet.tool_image')} style={paletteBtn}>
+              <i className="ti ti-photo" style={{ fontSize: 17 }} />
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" hidden
+              onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFile(f) }} />
+          </div>
+        )}
+
         {/* ── Esquerra: pàgines ── */}
         <div style={{ width: 96, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', padding: '8px 5px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ color: COL.gold, fontSize: 'var(--fs-caption)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tech_sheet.pages')}</div>
