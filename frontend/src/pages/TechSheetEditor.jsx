@@ -1454,7 +1454,12 @@ export default function TechSheetEditor() {
   // ── Stage: dibuix de rect/línia/draw + crear text + deselecció ─────────────
   const stagePoint = () => {
     const stage = stageRef.current
-    return stage ? stage.getPointerPosition() : null
+    if (!stage) return null
+    const p = stage.getPointerPosition()
+    // R1: el Stage s'escala per `zoom` (Konva re-pinta nítid). getPointerPosition retorna
+    // l'espai escalat → dividim per zoom per obtenir coords de CONTINGUT (px base), que és el
+    // que esperen toMm i el dibuix de formes.
+    return p ? { x: p.x / zoom, y: p.y / zoom } : null
   }
   const onStageMouseDown = (e) => {
     if (editingFlatId) return
@@ -1969,8 +1974,10 @@ export default function TechSheetEditor() {
           )}
           <div style={{ width: pageW * zoom, height: pageH * zoom, position: 'relative', margin: '0 auto' }}>
           <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()}
-            style={{ position: 'relative', width: pageW, height: pageH, transform: `scale(${zoom})`, transformOrigin: 'top left', boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: 'var(--white)', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
-            <Stage ref={stageRef} width={pageW} height={pageH}
+            style={{ position: 'relative', width: pageW * zoom, height: pageH * zoom, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: 'var(--white)', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
+            {/* R1: el zoom el fa Konva (scaleX/scaleY) re-pintant els vectors a la mida real ×
+                devicePixelRatio → NÍTID a qualsevol zoom. Ja no s'escala el bitmap per CSS. */}
+            <Stage ref={stageRef} width={pageW * zoom} height={pageH * zoom} scaleX={zoom} scaleY={zoom}
               onMouseDown={onStageMouseDown} onMouseMove={onStageMouseMove} onMouseUp={onStageMouseUp}>
               {/* Fons blanc + 3 capes en ordre z. Konva no agrupa per `layer`:
                   ordenem els objectes i pintem en una sola Layer (z per ordre d'array). */}
@@ -2005,7 +2012,7 @@ export default function TechSheetEditor() {
                 onChange={e => setEditingText(s => ({ ...s, value: e.target.value }))}
                 onBlur={commitTextEdit}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitTextEdit() } if (e.key === 'Escape') setEditingText(null) }}
-                style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 'var(--fs-body)', color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: 'var(--white)', zIndex: 10 }}
+                style={{ position: 'absolute', left: editingText.x * zoom, top: editingText.y * zoom, width: Math.max(80, editingText.w) * zoom, fontFamily: FONT, fontSize: `${12 * zoom}px`, color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: 'var(--white)', zIndex: 10 }}
               />
             )}
           </div>
