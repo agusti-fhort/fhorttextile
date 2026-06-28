@@ -1629,6 +1629,14 @@
     "tmpl_header_help": "La cabecera muestra placeholders ({model.codi}…) que se resolverán en cada modelo que use esta plantilla.",
     "tmpl_loading": "Cargando plantilla…",
     "badge_lock_error": "Error de bloqueo",
+    "flat_insert": "Flat vectorial",
+    "flat_edit_nodes": "Editar nodos",
+    "flat_loading": "Cargando flat…",
+    "flat_path_selected": "Path seleccionado",
+    "flat_no_path": "Ningún path editable",
+    "flat_changed": "Flat editado",
+    "flat_done": "Hecho",
+    "flat_cancel": "Cancelar",
     "more_colors": "Más colores"
   },
   "estat_badge": {

@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
+
+const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
 // ════════════════════════════════════════════════════════════════════════════
 // TechSheetEditor — TS-1 (motor Konva). Substitueix l'antic editor de maquetació.
@@ -56,6 +58,12 @@ const PRESET_TOOLS = ['preset_callout', 'preset_detail_circle', 'preset_legend']
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(performance.now())}-${Math.floor(Math.random() * 1e9)}`)
 export const toPx = (mm) => mm * MM_TO_PX
 export const toMm = (px) => px / MM_TO_PX
+
+const EMPTY_FLAT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 120"><path d="M34 94 C42 32 72 18 91 28 C114 16 145 33 150 94 C119 103 67 103 34 94 Z" fill="none" stroke="#1d1d1b" stroke-width="3" stroke-linejoin="round"/></svg>'
+
+function svgDataUrl(svg) {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg || '')}`
+}
 
 function mapObjectTree(obj, mapper) {
   const mapped = mapper(obj)
@@ -561,6 +569,12 @@ async function addObjectToLayer(layer, obj, ctx) {
       layer.add(new Konva.Image({ ...imageProps(obj), image: el }))
     } catch { /* imatge no carregada → s'omet */ }
   }
+  if (obj.type === 'sketch_svg') {
+    try {
+      const el = await loadImageEl(svgDataUrl(obj.svg))
+      layer.add(new Konva.Image({ ...imageProps(obj), image: el }))
+    } catch { /* flat no carregat → s'omet */ }
+  }
 }
 
 // ─── Render offscreen d'una pàgina a dataURL (export PDF + miniatures) ───
@@ -603,6 +617,18 @@ function ImageObj({ obj, src, common }) {
     return <Rect {...common} width={props.width} height={props.height}
       scaleX={props.scaleX} scaleY={props.scaleY}
       fill={COL.goldPale} stroke={KONVA_COL.border} dash={[4, 4]} />
+  }
+  return <KonvaImage {...common} image={img} width={props.width} height={props.height}
+    scaleX={props.scaleX} scaleY={props.scaleY} />
+}
+
+function SketchSvgObj({ obj, common }) {
+  const img = useImage(svgDataUrl(obj.svg))
+  const props = imageProps(obj)
+  if (!img) {
+    return <Rect {...common} width={props.width} height={props.height}
+      scaleX={props.scaleX} scaleY={props.scaleY}
+      fill="transparent" stroke={KONVA_COL.border} dash={[4, 4]} />
   }
   return <KonvaImage {...common} image={img} width={props.width} height={props.height}
     scaleX={props.scaleX} scaleY={props.scaleY} />
@@ -663,6 +689,9 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
   }
+  if (obj.type === 'sketch_svg') {
+    return <SketchSvgObj obj={obj} common={common} />
+  }
   if (obj.type === 'group') {
     const orderedChildren = [...(obj.children || [])].sort(
       (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
@@ -715,6 +744,7 @@ export default function TechSheetEditor() {
   const [addingTable, setAddingTable] = useState(false)
   const [pickFitting, setPickFitting] = useState(false)
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
+  const [editingFlatId, setEditingFlatId] = useState(null)
   const [pageFormat, setPageFormat] = useState('A4L')   // TS-4b: format del document sencer
   const [openGroup, setOpenGroup] = useState(null)      // TS-4c: grup d'eines desplegat
   const toolbarRef = useRef(null)
@@ -758,8 +788,9 @@ export default function TechSheetEditor() {
   }, [currentPage, updatePageObjects])
   const deleteObject = useCallback((objId) => {
     updatePageObjects(currentPage, objs => objs.filter(o => o.id !== objId))
+    if (editingFlatId === objId) setEditingFlatId(null)
     setSelectedIds([])
-  }, [currentPage, updatePageObjects])
+  }, [currentPage, editingFlatId, updatePageObjects])
   const deleteObjects = useCallback((objIds) => {
     const ids = new Set(objIds)
     updatePageObjects(currentPage, objs => objs.filter(o => !ids.has(o.id)))
@@ -1054,6 +1085,11 @@ export default function TechSheetEditor() {
     const tr = trRef.current
     const stage = stageRef.current
     if (!tr || !stage) return
+    if (editingFlatId) {
+      tr.nodes([])
+      tr.getLayer()?.batchDraw()
+      return
+    }
     // Transformable: text, rect, ellipse, image, data_block (keepRatio). NO: línies, fletxes
     // (resize de punts), text amb fons (Group), plantilla.
     const selectedSet = new Set(selectedIds)
@@ -1064,11 +1100,12 @@ export default function TechSheetEditor() {
     tr.nodes(nodes)
     tr.getLayer()?.batchDraw()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, currentPage, pages])
+  }, [selectedIds, currentPage, pages, editingFlatId])
 
   // ── Teclat: Delete/Backspace esborra l'objecte free seleccionat ────────────
   useEffect(() => {
     const onKey = (e) => {
+      if (editingFlatId) return
       if (editingText) return
       // No esborrar mentre s'escriu en un camp del panell (X/Y, escala, format…).
       const tag = e.target?.tagName
@@ -1081,7 +1118,7 @@ export default function TechSheetEditor() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, currentPage, pages, locked, editingText])
+  }, [selectedIds, currentPage, pages, locked, editingText, editingFlatId])
 
   // ── Handlers de node (drag / transform) ────────────────────────────────────
   const handleDragEnd = (obj) => (e) => {
@@ -1136,6 +1173,7 @@ export default function TechSheetEditor() {
     return stage ? stage.getPointerPosition() : null
   }
   const onStageMouseDown = (e) => {
+    if (editingFlatId) return
     if (!locked) { if (e.target === e.target.getStage()) clearSelection(); return }
     const pos = stagePoint()
     if (!pos) return
@@ -1163,6 +1201,7 @@ export default function TechSheetEditor() {
     }
   }
   const onStageMouseMove = () => {
+    if (editingFlatId) return
     if (!drawing.current) return
     const pos = stagePoint()
     if (!pos) return
@@ -1177,6 +1216,7 @@ export default function TechSheetEditor() {
     }
   }
   const onStageMouseUp = () => {
+    if (editingFlatId) return
     const d = drawing.current
     if (!d) return
     drawing.current = null
@@ -1236,6 +1276,27 @@ export default function TechSheetEditor() {
     if (!locked) return
     if (!customerLogoUrl) { flash(t('tech_sheet.flash_no_logo')); return }
     addObject({ id: uid(), type: 'image', kind: 'logo', layer: 'free', x: 10, y: 8, width: 40, height: 20, src: customerLogoUrl })
+  }
+  const insertFlatSketch = () => {
+    if (!locked) return
+    const obj = {
+      id: uid(), type: 'sketch_svg', layer: 'free',
+      x: 54, y: 44, width: 90, height: 60,
+      svg: EMPTY_FLAT_SVG,
+    }
+    addObject(obj)
+    setEditingFlatId(obj.id)
+  }
+  const editSelectedFlat = () => {
+    if (!locked || selObj?.type !== 'sketch_svg') return
+    setEditingText(null)
+    setTool('select')
+    setEditingFlatId(selObj.id)
+  }
+  const commitFlatEdit = (svg) => {
+    if (!editingFlatId) return
+    updateObject(editingFlatId, { svg })
+    setEditingFlatId(null)
   }
   const addModelFitxer = async (f) => {
     if (!locked) return
@@ -1383,6 +1444,15 @@ export default function TechSheetEditor() {
   const multiFillValue = commonValue(multiFill, 'fill')
   const multiX = commonValue(multiPosition, 'x')
   const multiY = commonValue(multiPosition, 'y')
+  const editingFlat = editingFlatId ? curObjs.find(o => o.id === editingFlatId && o.type === 'sketch_svg') : null
+  const paperFlatLabels = {
+    loading: t('tech_sheet.flat_loading'),
+    pathSelected: t('tech_sheet.flat_path_selected'),
+    noPath: t('tech_sheet.flat_no_path'),
+    changed: t('tech_sheet.flat_changed'),
+    done: t('tech_sheet.flat_done'),
+    cancel: t('tech_sheet.flat_cancel'),
+  }
 
   // Eines agrupades en desplegables (TS-4c). 'select' és standalone.
   const TOOL_GROUPS = [
@@ -1512,7 +1582,7 @@ export default function TechSheetEditor() {
                   ordenem els objectes i pintem en una sola Layer (z per ordre d'array). */}
               <Layer>
                 <Rect x={0} y={0} width={pageW} height={pageH} fill={KONVA_COL.white} listening={false} />
-                {ordered.map(o => (
+                {ordered.filter(o => o.id !== editingFlatId).map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
                     selected={selectedIds.includes(o.id)}
@@ -1543,6 +1613,19 @@ export default function TechSheetEditor() {
                 style={{ position: 'absolute', left: editingText.x, top: editingText.y, width: Math.max(80, editingText.w), fontFamily: FONT, fontSize: 'var(--fs-body)', color: COL.textMain, border: `1px solid ${COL.gold}`, padding: 2, resize: 'none', outline: 'none', background: 'var(--white)', zIndex: 10 }}
               />
             )}
+            {editingFlat && (
+              <Suspense fallback={<div style={{ position: 'absolute', inset: 0, zIndex: 20, background: 'rgba(255,255,255,.65)', display: 'grid', placeItems: 'center', color: COL.textMuted, fontSize: 'var(--fs-body)' }}>{t('tech_sheet.flat_loading')}</div>}>
+                <PaperFlatEditor
+                  flat={editingFlat}
+                  pageW={pageW}
+                  pageH={pageH}
+                  toPx={toPx}
+                  labels={paperFlatLabels}
+                  onCommit={commitFlatEdit}
+                  onCancel={() => setEditingFlatId(null)}
+                />
+              </Suspense>
+            )}
           </div>
         </div>
 
@@ -1563,6 +1646,10 @@ export default function TechSheetEditor() {
             <button onClick={onAddTableClick} disabled={!locked || addingTable || !sizeFittings.length}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>
               <i className="ti ti-table" style={{ fontSize: 13 }} /> {addingTable ? t('tech_sheet.adding') : t('tech_sheet.graded_table')}
+            </button>
+            <button onClick={insertFlatSketch} disabled={!locked}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
+              <i className="ti ti-vector" style={{ fontSize: 13 }} /> {t('tech_sheet.flat_insert')}
             </button>
             {!sizeFittings.length && <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.no_size_fitting')}</p>}
 
@@ -1709,6 +1796,12 @@ export default function TechSheetEditor() {
                     <input type="number" min={10} max={200} step={5} value={Math.round((selObj.scale || 1) * 100)}
                       onChange={e => updateObject(selObj.id, { scale: Math.max(0.1, (Number(e.target.value) || 100) / 100) })} style={propInput} />
                   </label>
+                )}
+                {selObj.type === 'sketch_svg' && (
+                  <button type="button" onClick={editSelectedFlat}
+                    style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
+                    <i className="ti ti-vector-bezier" aria-hidden="true" /> {t('tech_sheet.flat_edit_nodes')}
+                  </button>
                 )}
                 {/* Posició X/Y (mm) per a objectes posicionats (no línia/fletxa). */}
                 {selObj.type !== 'line' && selObj.type !== 'arrow' && (

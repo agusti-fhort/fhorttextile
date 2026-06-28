@@ -1629,6 +1629,14 @@
     "tmpl_header_help": "The header shows placeholders ({model.codi}…) that resolve for each model using this template.",
     "tmpl_loading": "Loading template…",
     "badge_lock_error": "Lock error",
+    "flat_insert": "Vector flat",
+    "flat_edit_nodes": "Edit nodes",
+    "flat_loading": "Loading flat…",
+    "flat_path_selected": "Path selected",
+    "flat_no_path": "No editable path",
+    "flat_changed": "Flat edited",
+    "flat_done": "Done",
+    "flat_cancel": "Cancel",
     "more_colors": "More colors"
   },
   "estat_badge": {
