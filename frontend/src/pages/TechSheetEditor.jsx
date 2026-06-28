@@ -1367,7 +1367,21 @@ export default function TechSheetEditor() {
   }
   const commitFlatEdit = (svg) => {
     if (!editingFlatId) return
-    updateObject(editingFlatId, { svg })
+    const current = objectsOf(currentPage).find(o => o.id === editingFlatId)
+    const ratio = svgAspectRatio(svg)
+    const patch = { svg }
+    if (current && ratio) {
+      const currentW = Math.max(2, current.width || 90)
+      const currentH = Math.max(2, current.height || 60)
+      if (ratio >= currentW / currentH) {
+        patch.width = currentW
+        patch.height = Math.max(2, currentW / ratio)
+      } else {
+        patch.height = currentH
+        patch.width = Math.max(2, currentH * ratio)
+      }
+    }
+    updateObject(editingFlatId, patch)
     setEditingFlatId(null)
   }
   const addModelFitxer = async (f) => {
