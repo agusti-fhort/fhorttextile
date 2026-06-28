@@ -152,7 +152,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
     }
 
     sketchLayer.activate()
-    let imported = null
+    let imported
     if (isStructuredPath) {
       imported = new scope.Group()
       ;(flat.paths || []).forEach((pathData, index) => {

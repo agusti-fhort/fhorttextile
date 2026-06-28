@@ -829,7 +829,7 @@ function paperColorToCss(color, fallback) {
 async function legacySketchSvgToPath(obj, scope) {
   if (obj.type !== 'sketch_svg' || !obj.svg) return obj
   scope.project.clear()
-  let imported = null
+  let imported
   try {
     imported = scope.project.importSVG(obj.svg, { insert: true, expandShapes: true })
   } catch {
