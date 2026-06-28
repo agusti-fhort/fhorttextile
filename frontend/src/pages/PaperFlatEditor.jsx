@@ -5,7 +5,13 @@ const PAPER_COL = {
   node: '#185fa5',
   handle: '#c27a2a',
   helper: '#868685',
+  white: '#ffffff',
 }
+
+const NODE_SIZE = 7
+const HANDLE_SIZE = 6
+const HIT_SIZE = 18
+const DEFAULT_HANDLE_OFFSET = 22
 
 function flatBounds(flat) {
   if (flat?.type !== 'path') {
@@ -41,6 +47,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
   const sketchLayerRef = useRef(null)
   const uiLayerRef = useRef(null)
   const selectedPathRef = useRef(null)
+  const selectedSegmentRef = useRef(0)
   const dragRef = useRef(null)
   const labelsRef = useRef(labels)
   const zoomRef = useRef(zoom)
@@ -79,6 +86,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
       sketchLayerRef.current = null
       uiLayerRef.current = null
       selectedPathRef.current = null
+      selectedSegmentRef.current = 0
       dragRef.current = null
       refreshHandlesRef.current = null
     }
@@ -97,27 +105,69 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
       }
       path.selected = true
       uiLayer.activate()
+      const selectedIndex = Math.min(selectedSegmentRef.current, Math.max(0, path.segments.length - 1))
       path.segments.forEach((segment, index) => {
         const point = segment.point
-        const handleInPoint = point.add(segment.handleIn)
-        const handleOutPoint = point.add(segment.handleOut)
-        const anchor = new scope.Path.Circle({
-          center: point,
-          radius: 4,
-          fillColor: PAPER_COL.node,
-          strokeColor: 'white',
-          strokeWidth: 1,
+        const selected = index === selectedIndex
+        const handleInVector = segment.handleIn.isZero() && selected
+          ? new scope.Point(-DEFAULT_HANDLE_OFFSET, 0)
+          : segment.handleIn
+        const handleOutVector = segment.handleOut.isZero() && selected
+          ? new scope.Point(DEFAULT_HANDLE_OFFSET, 0)
+          : segment.handleOut
+        const handleInPoint = point.add(handleInVector)
+        const handleOutPoint = point.add(handleOutVector)
+        const anchor = new scope.Path.Rectangle({
+          point: point.subtract(new scope.Point(NODE_SIZE / 2, NODE_SIZE / 2)),
+          size: new scope.Size(NODE_SIZE, NODE_SIZE),
+          fillColor: selected ? PAPER_COL.node : PAPER_COL.white,
+          strokeColor: PAPER_COL.node,
+          strokeWidth: 1.2,
         })
         anchor.data = { kind: 'segment', index }
-        if (!segment.handleIn.isZero()) {
-          new scope.Path.Line({ from: point, to: handleInPoint, strokeColor: PAPER_COL.helper, strokeWidth: 1, dashArray: [4, 4] })
-          const handle = new scope.Path.Circle({ center: handleInPoint, radius: 3.5, fillColor: PAPER_COL.handle })
-          handle.data = { kind: 'handleIn', index }
+        if (selected) {
+          const hit = new scope.Path.Rectangle({
+            point: point.subtract(new scope.Point(HIT_SIZE / 2, HIT_SIZE / 2)),
+            size: new scope.Size(HIT_SIZE, HIT_SIZE),
+            fillColor: PAPER_COL.white,
+            opacity: 0.001,
+          })
+          hit.data = { kind: 'segment', index }
+          hit.sendToBack()
         }
-        if (!segment.handleOut.isZero()) {
+        if (selected) {
+          new scope.Path.Line({ from: point, to: handleInPoint, strokeColor: PAPER_COL.helper, strokeWidth: 1, dashArray: [4, 4] })
+          const inHandle = new scope.Path.Rectangle({
+            point: handleInPoint.subtract(new scope.Point(HANDLE_SIZE / 2, HANDLE_SIZE / 2)),
+            size: new scope.Size(HANDLE_SIZE, HANDLE_SIZE),
+            fillColor: PAPER_COL.white,
+            strokeColor: PAPER_COL.handle,
+            strokeWidth: 1.2,
+          })
+          inHandle.data = { kind: 'handleIn', index, x: handleInVector.x, y: handleInVector.y }
+          const inHit = new scope.Path.Rectangle({
+            point: handleInPoint.subtract(new scope.Point(HIT_SIZE / 2, HIT_SIZE / 2)),
+            size: new scope.Size(HIT_SIZE, HIT_SIZE),
+            fillColor: PAPER_COL.white,
+            opacity: 0.001,
+          })
+          inHit.data = inHandle.data
           new scope.Path.Line({ from: point, to: handleOutPoint, strokeColor: PAPER_COL.helper, strokeWidth: 1, dashArray: [4, 4] })
-          const handle = new scope.Path.Circle({ center: handleOutPoint, radius: 3.5, fillColor: PAPER_COL.handle })
-          handle.data = { kind: 'handleOut', index }
+          const outHandle = new scope.Path.Rectangle({
+            point: handleOutPoint.subtract(new scope.Point(HANDLE_SIZE / 2, HANDLE_SIZE / 2)),
+            size: new scope.Size(HANDLE_SIZE, HANDLE_SIZE),
+            fillColor: PAPER_COL.white,
+            strokeColor: PAPER_COL.handle,
+            strokeWidth: 1.2,
+          })
+          outHandle.data = { kind: 'handleOut', index, x: handleOutVector.x, y: handleOutVector.y }
+          const outHit = new scope.Path.Rectangle({
+            point: handleOutPoint.subtract(new scope.Point(HIT_SIZE / 2, HIT_SIZE / 2)),
+            size: new scope.Size(HIT_SIZE, HIT_SIZE),
+            fillColor: PAPER_COL.white,
+            opacity: 0.001,
+          })
+          outHit.data = outHandle.data
         }
       })
       sketchLayer.activate()
@@ -127,6 +177,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
 
     const selectPath = (item) => {
       selectedPathRef.current = item
+      selectedSegmentRef.current = 0
       refreshHandles()
       setStatus(labelsRef.current?.pathSelected || '')
     }
@@ -200,7 +251,10 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
     tool.onMouseDown = (event) => {
       const uiHit = uiLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
       if (uiHit?.item?.data?.kind) {
-        dragRef.current = uiHit.item.data
+        const data = uiHit.item.data
+        selectedSegmentRef.current = data.index
+        dragRef.current = { ...data }
+        refreshHandles()
         return
       }
       const hit = sketchLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
@@ -217,8 +271,11 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
       const segment = path.segments[drag.index]
       if (!segment) return
       if (drag.kind === 'segment') segment.point = segment.point.add(event.delta)
-      if (drag.kind === 'handleIn') segment.handleIn = segment.handleIn.add(event.delta)
-      if (drag.kind === 'handleOut') segment.handleOut = segment.handleOut.add(event.delta)
+      if (drag.kind === 'handleIn' || drag.kind === 'handleOut') {
+        drag.x = (drag.x || 0) + event.delta.x
+        drag.y = (drag.y || 0) + event.delta.y
+        segment[drag.kind] = new scope.Point(drag.x, drag.y)
+      }
       setStatus(labelsRef.current?.changed || '')
       refreshHandles()
     }
