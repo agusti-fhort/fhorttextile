@@ -40,9 +40,21 @@ export const PAGE_FORMATS = {
 }
 
 export const FONT = 'IBM Plex Mono, monospace'
+// Re-tema DARK (C1). Editor-local: COL només l'usen els editors de fitxa (aquest +
+// TechSheetTemplateEditor); cap altra pantalla. Per això NO toquem els tokens globals de
+// :root (--border/--text-main/--text-muted) i la resta de l'app queda intacta. Decisió Agus
+// (invertida): fons de TREBALL charcoal MÉS CLAR (`work`), CLOSCA charcoal MÉS FOSC
+// (`sidebar`/`bg`); controls amb interior fosc (`field`) i text clar; gold = accent.
 export const COL = {
-  sidebar: '#f0dfc0', gold: 'var(--gold)', goldPale: '#f5e6d0',
-  border: 'var(--border)', textMain: 'var(--text-main)', textMuted: 'var(--text-muted)', bg: '#f5f0e8',
+  sidebar: '#1b1f24',   // closca fosca: topbar
+  gold: 'var(--gold)',  // accent (es manté)
+  goldPale: '#3a3322',  // fons d'estat actiu (tint daurat fosc)
+  border: '#3a424c',    // vora subtil sobre fosc
+  textMain: '#e8e5df',  // text clar
+  textMuted: '#9aa1aa', // text clar atenuat
+  bg: '#20262d',        // closca: asides, columnes, panells
+  work: '#2d343c',      // fons de treball (viewport, darrere el paper) — MÉS CLAR
+  field: '#13171b',     // interior de controls (inputs, dropdowns, botons neutres)
 }
 // Paleta LITERAL del canvas: Konva pinta sobre <canvas> via ctx.fillStyle i NO resol
 // CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
@@ -1857,9 +1869,9 @@ export default function TechSheetEditor() {
   const activeTool = (grp) => grp.tools.some(tl => tl.k === tool)
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: '#faf7f2', fontFamily: FONT }}>
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
       {/* ── Topbar ── */}
-      <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.7rem 1.2rem', borderBottom: `1px solid #e3cfa3`, background: COL.sidebar, color: COL.textMain }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COL.border}`, background: COL.sidebar, color: COL.textMain }}>
         <button onClick={() => navigate(`/models/${id}`)} style={headerBtn}>
           <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('tech_sheet.back_to_model')}
         </button>
@@ -1872,7 +1884,7 @@ export default function TechSheetEditor() {
         </span>
         <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
         {saveLabel && <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{saveLabel}</span>}
-        {notice && <span style={{ fontSize: 'var(--fs-body)', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
+        {notice && <span style={{ fontSize: 'var(--fs-body)', color: '#fcd34d', background: '#3a2e12', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
 
         {/* Eines (només en edició): select + grups desplegables + imatge */}
         {locked && (
@@ -1891,7 +1903,7 @@ export default function TechSheetEditor() {
                     <i className="ti ti-chevron-down" style={{ fontSize: 10 }} />
                   </button>
                   {openGroup === grp.g && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, zIndex: 50, minWidth: 160, boxShadow: '0 2px 8px rgba(0,0,0,.08)', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: COL.field, border: `1px solid ${COL.border}`, borderRadius: 6, zIndex: 50, minWidth: 160, boxShadow: '0 4px 16px rgba(0,0,0,.45)', overflow: 'hidden' }}>
                       {grp.tools.map(tl => (
                         <button key={tl.k} onClick={() => { setTool(tl.k); setOpenGroup(null) }}
                           style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: tool === tl.k ? COL.goldPale : 'transparent', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-body)', fontFamily: FONT, color: COL.textMain }}>
@@ -1966,9 +1978,9 @@ export default function TechSheetEditor() {
         </div>
 
         {/* ── Centre: Stage Konva ── */}
-        <div ref={viewportRef} onWheel={onViewportWheel} style={{ flex: 1, background: COL.bg, minWidth: 0, overflow: 'auto', position: 'relative', padding: 24, boxSizing: 'border-box' }}>
+        <div ref={viewportRef} onWheel={onViewportWheel} style={{ flex: 1, background: COL.work, minWidth: 0, overflow: 'auto', position: 'relative', padding: 24, boxSizing: 'border-box' }}>
           {lockState === 'readonly' && (
-            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-body)', color: COL.textMuted }}>
+            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: COL.sidebar, border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-body)', color: COL.textMuted }}>
               <i className="ti ti-eye" style={{ marginRight: 6 }} />{t('tech_sheet.readonly_overlay')}
             </div>
           )}
@@ -2070,7 +2082,7 @@ export default function TechSheetEditor() {
               return (
                 <button key={f.id} onClick={() => addModelFitxer(f)} disabled={!hasUrl || !locked}
                   title={f.nom_fitxer}
-                  style={{ width: '100%', textAlign: 'left', fontSize: 'var(--fs-label)', padding: '5px 6px', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 4, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: (!hasUrl || !locked) ? 'default' : 'pointer', opacity: (!hasUrl || !locked) ? 0.5 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  style={{ width: '100%', textAlign: 'left', fontSize: 'var(--fs-label)', padding: '5px 6px', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 4, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: (!hasUrl || !locked) ? 'default' : 'pointer', opacity: (!hasUrl || !locked) ? 0.5 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   <i className="ti ti-photo-plus" style={{ fontSize: 11, marginRight: 5 }} />{f.nom_fitxer}
                 </button>
               )
@@ -2283,12 +2295,12 @@ export default function TechSheetEditor() {
       {/* Selector de size fitting (>1) */}
       {pickFitting && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setPickFitting(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--white)', borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.pick_size_fitting')}</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {sizeFittings.map(sf => (
                 <button key={sf.id} onClick={() => { setPickFitting(false); insertGradedTable(sf.id) }}
-                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: '#fafafa', color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
                   {sf.codi}{sf.tipus ? ` · ${sf.tipus}` : ''}
                 </button>
               ))}
@@ -2309,7 +2321,7 @@ export function ColorPicker({ value, onChange }) {
     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginTop: 3 }}>
       {QUICK_COLORS.map(c => (
         <button key={c} type="button" onClick={() => onChange(c)} title={c}
-          style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: value === c ? '2px solid var(--text-main)' : '1px solid var(--border)', cursor: 'pointer', padding: 0 }} />
+          style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: value === c ? `2px solid ${COL.textMain}` : `1px solid ${COL.border}`, cursor: 'pointer', padding: 0 }} />
       ))}
       <input type="color" value={value || KONVA_COL.textMain} onChange={e => onChange(e.target.value)} title={t('tech_sheet.more_colors')}
         style={{ width: 22, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} />
@@ -2321,4 +2333,4 @@ export function SectionTitle({ children }) {
   return <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
 }
 export const propLabel = { display: 'block', fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 8 }
-export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: 'var(--white)', color: COL.textMain, boxSizing: 'border-box' }
+export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: COL.field, color: COL.textMain, boxSizing: 'border-box' }

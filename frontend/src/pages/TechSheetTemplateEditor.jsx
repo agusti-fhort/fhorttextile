@@ -291,8 +291,8 @@ export default function TechSheetTemplateEditor() {
   ]
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: '#faf7f2', fontFamily: FONT }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.7rem 1.2rem', borderBottom: '1px solid #e3cfa3', background: COL.sidebar, color: COL.textMain }}>
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COL.border}`, background: COL.sidebar, color: COL.textMain }}>
         <button onClick={() => navigate('/clients')} style={headerBtn}>
           <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('app.back')}
         </button>
@@ -302,7 +302,7 @@ export default function TechSheetTemplateEditor() {
         <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 600 }}>{t('tech_sheet.tmpl_title')} · {customerData?.nom || `#${customerId}`}</span>
         <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
         {saveLabel && <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{saveLabel}</span>}
-        {notice && <span style={{ fontSize: 'var(--fs-body)', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
+        {notice && <span style={{ fontSize: 'var(--fs-body)', color: '#fcd34d', background: '#3a2e12', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
         {canEdit && (
           <div style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
             {TOOLS.map(tl => (
@@ -340,9 +340,9 @@ export default function TechSheetTemplateEditor() {
         </div>
 
         {/* Stage */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COL.bg, minWidth: 0, overflow: 'auto', position: 'relative' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: COL.work, minWidth: 0, overflow: 'auto', position: 'relative' }}>
           {!canEdit && (
-            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-body)', color: COL.textMuted }}>
+            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: COL.sidebar, border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-body)', color: COL.textMuted }}>
               <i className="ti ti-eye" style={{ marginRight: 6 }} />{t('tech_sheet.tmpl_readonly')}
             </div>
           )}
