@@ -1020,6 +1020,11 @@ export default function TechSheetEditor() {
   const [editingFlatId, setEditingFlatId] = useState(null)
   const [zoom, setZoom] = useState(1)
   const [pageFormat, setPageFormat] = useState('A4L')   // TS-4b: format del document sencer
+  // PAL-1: paleta amb flyouts (estil Adobe). flyoutOpen = id del flyout desplegat; flyoutSel =
+  // última eina triada per flyout (la que queda visible al botó col·lapsat).
+  const [flyoutOpen, setFlyoutOpen] = useState(null)
+  const [flyoutSel, setFlyoutSel] = useState({})
+  const [flyoutRect, setFlyoutRect] = useState(null)   // rect del botó (popover en position:fixed)
 
   const locked = lockState === 'owned'
   const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
@@ -1031,6 +1036,17 @@ export default function TechSheetEditor() {
   const viewportRef = useRef(null)
   const wrapRef = useRef(null)
   const fileRef = useRef(null)
+  const holdTimer = useRef(null)        // PAL-1: timer del press-and-hold per obrir flyout
+  const suppressClick = useRef(false)   // PAL-1: evita activar l'eina si el hold ja ha obert el flyout
+  // PAL-1: tancar el flyout obert en clicar fora del seu contenidor.
+  useEffect(() => {
+    if (!flyoutOpen) return
+    const onDown = (e) => {
+      if (!(e.target.closest && e.target.closest(`[data-flyout="${flyoutOpen}"]`))) setFlyoutOpen(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [flyoutOpen])
   const flatFileRef = useRef(null)
   const saveTimer = useRef(null)
   const skipSave = useRef(true)        // salta l'autosave del primer load
@@ -1828,6 +1844,8 @@ export default function TechSheetEditor() {
     cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
   const paletteBtnOn = { borderColor: COL.gold, background: COL.goldPale, color: COL.gold }
+  // PAL-1: eina futura sense handler — placeholder visible però deshabilitat.
+  const paletteBtnSoon = { color: COL.textMuted, opacity: 0.4, cursor: 'default' }
   // Barra contextual (C4): FOSCA com la resta de la closca (PAL-A), discreta, separada de la topbar
   // i del viewport per un filet molt fi (1px COL.border subtil) — com la barra d'estat inferior.
   const CTX_BG = COL.sidebar, CTX_BORDER = COL.border, CTX_TEXT = COL.textMain
@@ -1858,34 +1876,91 @@ export default function TechSheetEditor() {
     cancel: t('tech_sheet.flat_cancel'),
   }
 
-  // Eines agrupades en desplegables (TS-4c). 'select' és standalone.
-  const TOOL_GROUPS = [
-    { g: 'shapes', icon: 'ti-shape', label: t('tech_sheet.tool_group_shapes'), tools: [
-      { k: 'rect', icon: 'ti-square', label: t('tech_sheet.tool_rect') },
-      { k: 'rect_round', icon: 'ti-square-rounded', label: t('tech_sheet.tool_rect_round') },
-      { k: 'ellipse', icon: 'ti-circle', label: t('tech_sheet.tool_ellipse') },
+  // PAL-1: PALETA D'EINES (estil Adobe) — 6 categories amb separadors; els grups amb múltiples
+  // eines són FLYOUTS (icona + ▸; clic al triangle o press-and-hold desplega; l'última usada queda
+  // visible). Es conserven els tool keys i TOTS els handlers (RECT_TOOLS/LINE_TOOLS/PRESET_TOOLS,
+  // onStageMouseDown…): això és només presentació + agrupació. Les eines sense handler avui es
+  // marquen `soon` (placeholder deshabilitat) i NO s'hi cabla cap comportament (són tandes futures).
+  const PALETTE = [
+    { cat: 'select', items: [
+      { kind: 'tool', k: 'select', icon: 'ti-pointer-2', label: t('tech_sheet.tool_select') },
+      { kind: 'tool', k: 'node', icon: 'ti-vector', label: t('tech_sheet.tool_node'), soon: true },
+      { kind: 'tool', k: 'subpath', icon: 'ti-vector-spline', label: t('tech_sheet.tool_subpath'), soon: true },
     ] },
-    { g: 'draw', icon: 'ti-pencil', label: t('tech_sheet.tool_group_draw'), tools: [
-      { k: 'line', icon: 'ti-minus', label: t('tech_sheet.tool_line') },
-      { k: 'line_dot', icon: 'ti-line-dashed', label: t('tech_sheet.tool_line_dot') },
-      { k: 'arrow', icon: 'ti-arrow-right', label: t('tech_sheet.tool_arrow') },
-      { k: 'arrow2', icon: 'ti-arrows-horizontal', label: t('tech_sheet.tool_arrow2') },
-      { k: 'draw', icon: 'ti-scribble', label: t('tech_sheet.tool_draw') },
+    { cat: 'draw', items: [
+      { kind: 'tool', k: 'draw', icon: 'ti-pencil', label: t('tech_sheet.tool_draw') },
+      { kind: 'tool', k: 'pen', icon: 'ti-vector-bezier', label: t('tech_sheet.tool_pen'), soon: true },
+      { kind: 'flyout', id: 'shapes', label: t('tech_sheet.tool_group_shapes'), tools: [
+        { k: 'rect', icon: 'ti-square', label: t('tech_sheet.tool_rect') },
+        { k: 'rect_round', icon: 'ti-square-rounded', label: t('tech_sheet.tool_rect_round') },
+        { k: 'ellipse', icon: 'ti-circle', label: t('tech_sheet.tool_ellipse') },
+      ] },
+      { kind: 'flyout', id: 'lines', label: t('tech_sheet.tool_group_lines'), tools: [
+        { k: 'line', icon: 'ti-line', label: t('tech_sheet.tool_line') },
+        { k: 'line_dot', icon: 'ti-line-dashed', label: t('tech_sheet.tool_line_dot') },
+      ] },
+      { kind: 'flyout', id: 'arrows', label: t('tech_sheet.tool_group_arrows'), tools: [
+        { k: 'arrow', icon: 'ti-arrow-right', label: t('tech_sheet.tool_arrow') },
+        { k: 'arrow2', icon: 'ti-arrows-horizontal', label: t('tech_sheet.tool_arrow2') },
+      ] },
     ] },
-    { g: 'text', icon: 'ti-typography', label: t('tech_sheet.tool_group_text'), tools: [
-      { k: 'text', icon: 'ti-cursor-text', label: t('tech_sheet.tool_text') },
-      { k: 'text_box', icon: 'ti-text-caption', label: t('tech_sheet.tool_text_box') },
+    { cat: 'text', items: [
+      { kind: 'flyout', id: 'text', label: t('tech_sheet.tool_group_text'), tools: [
+        { k: 'text', icon: 'ti-text-recognition', label: t('tech_sheet.tool_text') },
+        { k: 'text_box', icon: 'ti-text-scan-2', label: t('tech_sheet.tool_text_box') },
+      ] },
     ] },
-    { g: 'presets', icon: 'ti-components', label: t('tech_sheet.tool_group_presets'), tools: [
-      { k: 'preset_callout', icon: 'ti-message-2-share', label: t('tech_sheet.preset_callout') },
-      { k: 'preset_detail_circle', icon: 'ti-circle-dashed', label: t('tech_sheet.preset_detail_circle') },
-      { k: 'preset_legend', icon: 'ti-list-details', label: t('tech_sheet.preset_legend') },
+    { cat: 'annot', items: [
+      { kind: 'tool', k: 'cota_pom', icon: 'ti-ruler-measure', label: t('tech_sheet.tool_cota_pom'), soon: true },
+      { kind: 'tool', k: 'note', icon: 'ti-arrow-guide', label: t('tech_sheet.tool_note'), soon: true },
+      { kind: 'flyout', id: 'presets', label: t('tech_sheet.tool_group_presets'), tools: [
+        { k: 'preset_callout', icon: 'ti-message-2-share', label: t('tech_sheet.preset_callout') },
+        { k: 'preset_detail_circle', icon: 'ti-circle-dashed', label: t('tech_sheet.preset_detail_circle') },
+        { k: 'preset_legend', icon: 'ti-list-details', label: t('tech_sheet.preset_legend') },
+      ] },
+    ] },
+    { cat: 'modify', items: [
+      { kind: 'flyout', id: 'pathfinder', label: t('tech_sheet.tool_group_pathfinder'), soon: true, tools: [
+        { k: 'path_union', icon: 'ti-layers-union', label: t('tech_sheet.tool_path_union') },
+        { k: 'path_subtract', icon: 'ti-layers-subtract', label: t('tech_sheet.tool_path_subtract') },
+        { k: 'path_intersect', icon: 'ti-layers-intersect', label: t('tech_sheet.tool_path_intersect') },
+        { k: 'path_difference', icon: 'ti-layers-difference', label: t('tech_sheet.tool_path_difference') },
+      ] },
+      { kind: 'tool', k: 'rotate', icon: 'ti-rotate', label: t('tech_sheet.tool_rotate'), soon: true },
+      { kind: 'tool', k: 'resize', icon: 'ti-resize', label: t('tech_sheet.tool_resize'), soon: true },
+      { kind: 'action', action: 'mirror_h', icon: 'ti-flip-horizontal', label: t('tech_sheet.mirror_h') },
+      { kind: 'action', action: 'mirror_v', icon: 'ti-flip-vertical', label: t('tech_sheet.mirror_v') },
+      { kind: 'tool', k: 'crop', icon: 'ti-crop', label: t('tech_sheet.tool_crop'), soon: true },
+    ] },
+    { cat: 'nav', items: [
+      { kind: 'tool', k: 'pan', icon: 'ti-hand-stop', label: t('tech_sheet.tool_pan'), soon: true },
+      { kind: 'action', action: 'zoom_fit', icon: 'ti-zoom', label: t('tech_sheet.tool_zoom') },
+      { kind: 'tool', k: 'cursor_precise', icon: 'ti-crosshair', label: t('tech_sheet.tool_cursor_precise'), soon: true },
     ] },
   ]
-  // Etiqueta/icona de l'eina activa (per a la barra contextual C4).
-  const activeToolDef = tool === 'select'
-    ? { icon: 'ti-pointer', label: t('tech_sheet.tool_select') }
-    : (TOOL_GROUPS.flatMap(g => g.tools).find(tl => tl.k === tool) || { icon: 'ti-tool', label: tool })
+  // PEU de la paleta — swatches (sense estat de color global avui → placeholders marcats `soon`).
+  const PALETTE_SWATCHES = [
+    { id: 'fill', icon: 'ti-square-filled', label: t('tech_sheet.swatch_fill') },
+    { id: 'stroke', icon: 'ti-border-style', label: t('tech_sheet.swatch_stroke') },
+    { id: 'swap', icon: 'ti-arrows-exchange', label: t('tech_sheet.swatch_swap') },
+  ]
+  // Eines funcionals planes (per resoldre icona/etiqueta de l'eina activa a la barra contextual).
+  const flatTools = PALETTE.flatMap(c => c.items.flatMap(it => it.kind === 'flyout' ? it.tools : (it.kind === 'tool' ? [it] : [])))
+  const activeToolDef = flatTools.find(tl => tl.k === tool) || { icon: 'ti-pointer-2', label: t('tech_sheet.tool_select') }
+  // Accions de paleta (no són modes d'eina): operen sobre la selecció / viewport amb handlers existents.
+  const runPaletteAction = (action) => {
+    if (action === 'mirror_h') mirrorObjects(mirrorableIds, 'scaleX')
+    else if (action === 'mirror_v') mirrorObjects(mirrorableIds, 'scaleY')
+    else if (action === 'zoom_fit') fitZoomToViewport()
+  }
+  const paletteActionDisabled = (action) =>
+    (action === 'mirror_h' || action === 'mirror_v') ? mirrorableIds.length === 0 : false
+  // Flyout: eina visible (col·lapsada) = l'activa si pertany al grup, si no l'última triada, si no la 1a.
+  const flyoutVisible = (fl) => fl.tools.find(tl => tl.k === tool) || fl.tools.find(tl => tl.k === flyoutSel[fl.id]) || fl.tools[0]
+  const cancelHold = () => { if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null } }
+  const openFlyout = (id, rect) => { setFlyoutRect(rect); setFlyoutOpen(id) }
+  const startHold = (id, rect) => { cancelHold(); holdTimer.current = setTimeout(() => { suppressClick.current = true; openFlyout(id, rect) }, 300) }
+  const pickFlyoutTool = (fl, k) => { setFlyoutSel(s => ({ ...s, [fl.id]: k })); setTool(k); setFlyoutOpen(null); cancelHold() }
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
@@ -1951,21 +2026,63 @@ export default function TechSheetEditor() {
       </div>
 
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {/* ── Paleta d'eines vertical (C2) ── */}
+        {/* ── Paleta d'eines vertical (C2) — 6 categories + flyouts estil Adobe (PAL-1) ── */}
         {locked && (
-          <div style={{ width: 46, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', padding: '8px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-            <button onClick={() => setTool('select')} title={t('tech_sheet.tool_select')}
-              style={{ ...paletteBtn, ...(tool === 'select' ? paletteBtnOn : {}) }}>
-              <i className="ti ti-pointer" style={{ fontSize: 17 }} />
-            </button>
-            {TOOL_GROUPS.flatMap(grp => [
-              <div key={`sep-${grp.g}`} style={{ width: 26, height: 1, background: COL.border, margin: '3px 0' }} />,
-              ...grp.tools.map(tl => (
-                <button key={tl.k} onClick={() => setTool(tl.k)} title={tl.label}
-                  style={{ ...paletteBtn, ...(tool === tl.k ? paletteBtnOn : {}) }}>
-                  <i className={`ti ${tl.icon}`} style={{ fontSize: 17 }} />
-                </button>
-              )),
+          <div style={{ width: 46, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', overflowX: 'visible', padding: '8px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+            {PALETTE.flatMap((cat, ci) => [
+              ci > 0 ? <div key={`sep-${cat.cat}`} style={{ width: 26, height: 1, background: COL.border, margin: '3px 0' }} /> : null,
+              ...cat.items.map((it, ii) => {
+                const key = `${cat.cat}-${ii}`
+                if (it.kind === 'tool') {
+                  return (
+                    <button key={key} disabled={it.soon} onClick={() => !it.soon && setTool(it.k)}
+                      title={it.soon ? `${it.label} · ${t('tech_sheet.coming_soon')}` : it.label}
+                      style={{ ...paletteBtn, ...(tool === it.k ? paletteBtnOn : {}), ...(it.soon ? paletteBtnSoon : {}) }}>
+                      <i className={`ti ${it.icon}`} style={{ fontSize: 17 }} />
+                    </button>
+                  )
+                }
+                if (it.kind === 'action') {
+                  const dis = paletteActionDisabled(it.action)
+                  return (
+                    <button key={key} disabled={dis} onClick={() => !dis && runPaletteAction(it.action)}
+                      title={it.label}
+                      style={{ ...paletteBtn, ...(dis ? paletteBtnSoon : {}) }}>
+                      <i className={`ti ${it.icon}`} style={{ fontSize: 17 }} />
+                    </button>
+                  )
+                }
+                // flyout
+                const vis = flyoutVisible(it)
+                const groupActive = it.tools.some(tl => tl.k === tool)
+                return (
+                  <div key={key} data-flyout={it.id} style={{ position: 'relative' }}>
+                    <button disabled={it.soon}
+                      onMouseDown={e => !it.soon && startHold(it.id, e.currentTarget.getBoundingClientRect())}
+                      onMouseUp={cancelHold} onMouseLeave={cancelHold}
+                      onClick={() => { if (suppressClick.current) { suppressClick.current = false; return } if (it.soon) return; pickFlyoutTool(it, vis.k) }}
+                      title={it.soon ? `${it.label} · ${t('tech_sheet.coming_soon')}` : `${it.label} — ${vis.label}`}
+                      style={{ ...paletteBtn, ...(groupActive ? paletteBtnOn : {}), ...(it.soon ? paletteBtnSoon : {}) }}>
+                      <i className={`ti ${vis.icon}`} style={{ fontSize: 17 }} />
+                      {/* triangle ▸ indicador de flyout */}
+                      <i className="ti ti-caret-right-filled"
+                        onClick={e => { e.stopPropagation(); cancelHold(); suppressClick.current = false; if (!it.soon) openFlyout(it.id, e.currentTarget.parentElement.getBoundingClientRect()) }}
+                        style={{ position: 'absolute', right: 1, bottom: 0, fontSize: 8, lineHeight: 1, opacity: it.soon ? 0.4 : 0.7 }} />
+                    </button>
+                    {flyoutOpen === it.id && flyoutRect && (
+                      <div data-flyout={it.id} style={{ position: 'fixed', left: flyoutRect.right + 4, top: flyoutRect.top, zIndex: 60, display: 'flex', gap: 2, padding: 4, background: COL.sidebar, border: `1px solid ${COL.border}`, borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.35)' }}>
+                        {it.tools.map(tl => (
+                          <button key={tl.k} disabled={it.soon} onClick={() => !it.soon && pickFlyoutTool(it, tl.k)}
+                            title={it.soon ? `${tl.label} · ${t('tech_sheet.coming_soon')}` : tl.label}
+                            style={{ ...paletteBtn, ...(tool === tl.k ? paletteBtnOn : {}), ...(it.soon ? paletteBtnSoon : {}) }}>
+                            <i className={`ti ${tl.icon}`} style={{ fontSize: 17 }} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              }),
             ])}
             <div style={{ width: 26, height: 1, background: COL.border, margin: '3px 0' }} />
             <button onClick={() => fileRef.current?.click()} title={t('tech_sheet.tool_image')} style={paletteBtn}>
@@ -1973,6 +2090,14 @@ export default function TechSheetEditor() {
             </button>
             <input ref={fileRef} type="file" accept="image/*" hidden
               onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFile(f) }} />
+            {/* PEU: swatches (placeholders sense estat de color global — PAL-1) */}
+            <div style={{ width: 26, height: 1, background: COL.border, margin: '3px 0' }} />
+            {PALETTE_SWATCHES.map(sw => (
+              <button key={sw.id} disabled title={`${sw.label} · ${t('tech_sheet.coming_soon')}`}
+                style={{ ...paletteBtn, ...paletteBtnSoon }}>
+                <i className={`ti ${sw.icon}`} style={{ fontSize: 17 }} />
+              </button>
+            ))}
           </div>
         )}
 
