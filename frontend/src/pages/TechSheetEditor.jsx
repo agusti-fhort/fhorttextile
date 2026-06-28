@@ -814,6 +814,86 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   return null
 }
 
+function hasLegacySketchSvg(objects = []) {
+  return objects.some(obj => obj.type === 'sketch_svg' || hasLegacySketchSvg(obj.children || []))
+}
+
+function paperColorToCss(color, fallback) {
+  try {
+    return color?.toCSS ? color.toCSS(true) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+async function legacySketchSvgToPath(obj, scope) {
+  if (obj.type !== 'sketch_svg' || !obj.svg) return obj
+  scope.project.clear()
+  let imported = null
+  try {
+    imported = scope.project.importSVG(obj.svg, { insert: true, expandShapes: true })
+  } catch {
+    return obj
+  }
+  const bounds = imported.bounds
+  if (!bounds?.width || !bounds?.height) return obj
+  const width = Math.max(2, obj.width || 80)
+  const height = Math.max(2, obj.height || 60)
+  const scaleX = width / bounds.width
+  const scaleY = height / bounds.height
+  const strokeScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2
+  const paths = imported.getItems({ class: scope.Path }).filter(path => path.segments?.length).map(path => ({
+    closed: !!path.closed,
+    stroke: paperColorToCss(path.strokeColor, KONVA_COL.textMain),
+    fill: path.fillColor ? paperColorToCss(path.fillColor, 'transparent') : 'transparent',
+    strokeWidth: Math.max(0.2, (path.strokeWidth || 1) * strokeScale),
+    segments: path.segments.map(seg => ({
+      x: (seg.point.x - bounds.x) * scaleX,
+      y: (seg.point.y - bounds.y) * scaleY,
+      inX: seg.handleIn.x * scaleX,
+      inY: seg.handleIn.y * scaleY,
+      outX: seg.handleOut.x * scaleX,
+      outY: seg.handleOut.y * scaleY,
+    })),
+  }))
+  if (!paths.length) return obj
+  return {
+    ...obj,
+    type: 'path',
+    paths,
+    stroke: paths[0].stroke,
+    fill: paths[0].fill,
+    strokeWidth: paths[0].strokeWidth,
+    svg: undefined,
+    width: undefined,
+    height: undefined,
+  }
+}
+
+async function convertLegacySketchSvgs(pages) {
+  if (!pages.some(page => hasLegacySketchSvg(page.objects || []))) return pages
+  const mod = await import('paper')
+  const paper = mod.default || mod
+  const scope = new paper.PaperScope()
+  const canvas = document.createElement('canvas')
+  scope.setup(canvas)
+  const convertObject = async (obj) => {
+    const converted = await legacySketchSvgToPath(obj, scope)
+    if (!Array.isArray(converted.children)) return converted
+    const children = []
+    for (const child of converted.children) children.push(await convertObject(child))
+    return { ...converted, children }
+  }
+  const nextPages = []
+  for (const page of pages) {
+    const objects = []
+    for (const obj of page.objects || []) objects.push(await convertObject(obj))
+    nextPages.push({ ...page, objects })
+  }
+  scope.remove()
+  return nextPages
+}
+
 // ════════════════════════════════ Component ═════════════════════════════════
 export default function TechSheetEditor() {
   const { t } = useTranslation()
@@ -1122,11 +1202,16 @@ export default function TechSheetEditor() {
   function hydrate(sheetData) {
     const tj = sheetData?.template_json
     skipSave.current = true
+    let rawPages = null
     if (tj && tj.version === 2 && Array.isArray(tj.pages) && tj.pages.length) {
-      setPages(tj.pages.map(p => ({ id: p.id || uid(), objects: (p.objects || []).map(o => ({ ...o, id: o.id || uid() })) })))
+      rawPages = tj.pages.map(p => ({ id: p.id || uid(), objects: (p.objects || []).map(o => ({ ...o, id: o.id || uid() })) }))
     } else {
-      setPages([{ id: uid(), objects: [] }])
+      rawPages = [{ id: uid(), objects: [] }]
     }
+    setPages(rawPages)
+    convertLegacySketchSvgs(rawPages).then(converted => {
+      if (converted !== rawPages) setPages(converted)
+    }).catch(() => {})
     setPageFormat((tj && tj.pageFormat) || 'A4L')
     setCurrentPage(0)
   }
