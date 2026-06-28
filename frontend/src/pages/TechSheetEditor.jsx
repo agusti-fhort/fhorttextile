@@ -1813,6 +1813,9 @@ export default function TechSheetEditor() {
     cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
   const paletteBtnOn = { borderColor: COL.gold, background: COL.goldPale, color: COL.gold }
+  // Barra contextual (C4): franja GRIS CLAR (decisió Agus) per diferenciar-la de la closca fosca.
+  const CTX_BG = '#d4d6d3', CTX_BORDER = '#b9bcb8', CTX_TEXT = '#1d1d1b'
+  const ctxBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 26, height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: '#ececea', color: CTX_TEXT, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' }
   const curObjs = objectsOf(currentPage)
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   const selectedSet = new Set(selectedIds)
@@ -1863,6 +1866,10 @@ export default function TechSheetEditor() {
       { k: 'preset_legend', icon: 'ti-list-details', label: t('tech_sheet.preset_legend') },
     ] },
   ]
+  // Etiqueta/icona de l'eina activa (per a la barra contextual C4).
+  const activeToolDef = tool === 'select'
+    ? { icon: 'ti-pointer', label: t('tech_sheet.tool_select') }
+    : (TOOL_GROUPS.flatMap(g => g.tools).find(tl => tl.k === tool) || { icon: 'ti-tool', label: tool })
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
@@ -1880,14 +1887,52 @@ export default function TechSheetEditor() {
         </span>
         <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
 
-        {/* Eines → paleta esquerra (C2). Zoom/estat/notice → barra d'estat inferior (C3). */}
+        {/* Eines → paleta esquerra (C2). Zoom/estat/notice → barra d'estat (C3).
+            Format de pàgina + opcions contextuals → barra contextual (C4). */}
+      </header>
 
-        {/* Format de pàgina (tot el document) */}
+      {/* ── Barra contextual (C4) — gris clar; opcions de l'eina/objecte actiu ── */}
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px', minHeight: 32, background: CTX_BG, borderBottom: `1px solid ${CTX_BORDER}`, color: CTX_TEXT, fontSize: 'var(--fs-body)' }}>
+        {!locked ? (
+          <span style={{ color: '#5a5d59' }}><i className="ti ti-eye" style={{ marginRight: 5 }} />{t('tech_sheet.readonly_overlay')}</span>
+        ) : multiSelected ? (
+          <>
+            <span style={{ fontWeight: 600 }}>{t('tech_sheet.selected_objects', { n: selectedObjects.length })}</span>
+            <span style={{ width: 1, height: 16, background: CTX_BORDER }} />
+            <button onClick={() => alignSelection('left')} title={t('tech_sheet.align_left')} style={ctxBtn}><i className="ti ti-align-left" /></button>
+            <button onClick={() => alignSelection('center')} title={t('tech_sheet.align_center')} style={ctxBtn}><i className="ti ti-align-center" /></button>
+            <button onClick={() => alignSelection('right')} title={t('tech_sheet.align_right')} style={ctxBtn}><i className="ti ti-align-right" /></button>
+            <button onClick={() => alignSelection('top')} title={t('tech_sheet.align_top')} style={ctxBtn}><i className="ti ti-align-top" /></button>
+            <button onClick={() => alignSelection('middle')} title={t('tech_sheet.align_middle')} style={ctxBtn}><i className="ti ti-align-middle" /></button>
+            <button onClick={() => alignSelection('bottom')} title={t('tech_sheet.align_bottom')} style={ctxBtn}><i className="ti ti-align-bottom" /></button>
+          </>
+        ) : selObj ? (
+          <>
+            <span style={{ fontWeight: 600 }}>{t('tech_sheet.element')} · {selObj.type}</span>
+            {['rect', 'ellipse', 'line', 'arrow', 'path'].includes(selObj.type) && (
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{t('tech_sheet.stroke_color')}
+                <input type="color" value={selObj.stroke && selObj.stroke !== 'transparent' ? selObj.stroke : '#1d1d1b'}
+                  onChange={e => updateObject(selObj.id, selObj.type === 'arrow' ? { stroke: e.target.value, fill: e.target.value } : { stroke: e.target.value })}
+                  style={{ width: 26, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} /></label>
+            )}
+            {['rect', 'ellipse', 'path', 'text'].includes(selObj.type) && (
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{t('tech_sheet.fill')}
+                <input type="color" value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : '#ffffff'}
+                  onChange={e => updateObject(selObj.id, { fill: e.target.value })}
+                  style={{ width: 26, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} /></label>
+            )}
+          </>
+        ) : tool !== 'select' ? (
+          <span><i className={`ti ${activeToolDef.icon}`} style={{ marginRight: 5 }} />{t('tech_sheet.ctx_tool', { tool: activeToolDef.label })}</span>
+        ) : (
+          <span style={{ color: '#5a5d59' }}>{t('tech_sheet.ctx_idle')}</span>
+        )}
         <select value={pageFormat} onChange={e => setPageFormat(e.target.value)} disabled={!locked}
-          title={t('tech_sheet.page_format')} style={{ ...headerBtn, padding: '5px 8px', marginLeft: locked ? 0 : 16, cursor: locked ? 'pointer' : 'default' }}>
+          title={t('tech_sheet.page_format')}
+          style={{ marginLeft: 'auto', height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: '#ececea', color: CTX_TEXT, fontFamily: FONT, fontSize: 'var(--fs-body)', cursor: locked ? 'pointer' : 'default' }}>
           {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
-      </header>
+      </div>
 
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* ── Paleta d'eines vertical (C2) ── */}
@@ -1984,6 +2029,35 @@ export default function TechSheetEditor() {
         {/* ── Dreta: capes / inserir / propietats ── */}
         <aside style={{ width: 180, flexShrink: 0, borderLeft: `1px solid ${COL.border}`, background: COL.bg, display: 'flex', flexDirection: 'column', minHeight: 0, fontFamily: FONT }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
+            {/* Capes (C4): llista d'objectes de la pàgina (front a dalt) + z-order. */}
+            <SectionTitle>{t('tech_sheet.layers')}</SectionTitle>
+            {ordered.length === 0 ? (
+              <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.layers_empty')}</p>
+            ) : (
+              <div style={{ marginBottom: 8, border: `1px solid ${COL.border}`, borderRadius: 5, overflow: 'hidden' }}>
+                {[...ordered].reverse().map(o => {
+                  const on = selectedIds.includes(o.id)
+                  const icon = { text: 'ti-cursor-text', rect: 'ti-square', ellipse: 'ti-circle', line: 'ti-minus', arrow: 'ti-arrow-right', image: 'ti-photo', path: 'ti-vector', sketch_svg: 'ti-vector', data_block: 'ti-table', group: 'ti-box-multiple' }[o.type] || 'ti-shape'
+                  const label = o.type === 'text' ? (o.text || t('tech_sheet.tool_text')) : o.type
+                  return (
+                    <div key={o.id} onClick={() => selectOnly(o.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', cursor: 'pointer', background: on ? COL.goldPale : 'transparent', color: on ? COL.gold : COL.textMain, borderBottom: `1px solid ${COL.border}` }}>
+                      <i className={`ti ${icon}`} style={{ fontSize: 13, flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontSize: 'var(--fs-label)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+                      {locked && o.layer === 'free' && (
+                        <>
+                          <button onClick={(e) => { e.stopPropagation(); selectOnly(o.id); moveSelectionInFreeLayer('forward') }} title={t('tech_sheet.bring_forward')}
+                            style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className="ti ti-arrow-up" style={{ fontSize: 13 }} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); selectOnly(o.id); moveSelectionInFreeLayer('backward') }} title={t('tech_sheet.send_backward')}
+                            style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className="ti ti-arrow-down" style={{ fontSize: 13 }} /></button>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
             {/* Inserir blocs de dades */}
             <SectionTitle>{t('tech_sheet.insert_data_block')}</SectionTitle>
             <button onClick={insertHeader} disabled={!locked}
