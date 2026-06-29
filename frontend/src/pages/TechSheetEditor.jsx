@@ -1927,24 +1927,6 @@ export default function TechSheetEditor() {
         { k: 'preset_legend', icon: 'ti-list-details', label: t('tech_sheet.preset_legend') },
       ] },
     ] },
-    { cat: 'modify', items: [
-      { kind: 'flyout', id: 'pathfinder', label: t('tech_sheet.tool_group_pathfinder'), soon: true, tools: [
-        { k: 'path_union', icon: 'ti-layers-union', label: t('tech_sheet.tool_path_union') },
-        { k: 'path_subtract', icon: 'ti-layers-subtract', label: t('tech_sheet.tool_path_subtract') },
-        { k: 'path_intersect', icon: 'ti-layers-intersect', label: t('tech_sheet.tool_path_intersect') },
-        { k: 'path_difference', icon: 'ti-layers-difference', label: t('tech_sheet.tool_path_difference') },
-      ] },
-      { kind: 'tool', k: 'rotate', icon: 'ti-rotate', label: t('tech_sheet.tool_rotate'), soon: true },
-      { kind: 'tool', k: 'resize', icon: 'ti-resize', label: t('tech_sheet.tool_resize'), soon: true },
-      { kind: 'action', action: 'mirror_h', icon: 'ti-flip-horizontal', label: t('tech_sheet.mirror_h') },
-      { kind: 'action', action: 'mirror_v', icon: 'ti-flip-vertical', label: t('tech_sheet.mirror_v') },
-      { kind: 'tool', k: 'crop', icon: 'ti-crop', label: t('tech_sheet.tool_crop'), soon: true },
-    ] },
-    { cat: 'nav', items: [
-      { kind: 'tool', k: 'pan', icon: 'ti-hand-stop', label: t('tech_sheet.tool_pan'), soon: true },
-      { kind: 'action', action: 'zoom_fit', icon: 'ti-zoom', label: t('tech_sheet.tool_zoom') },
-      { kind: 'tool', k: 'cursor_precise', icon: 'ti-crosshair', label: t('tech_sheet.tool_cursor_precise'), soon: true },
-    ] },
   ]
   // PEU de la paleta — swatches (sense estat de color global avui → placeholders marcats `soon`).
   const PALETTE_SWATCHES = [
@@ -1955,14 +1937,6 @@ export default function TechSheetEditor() {
   // Eines funcionals planes (per resoldre icona/etiqueta de l'eina activa a la barra contextual).
   const flatTools = PALETTE.flatMap(c => c.items.flatMap(it => it.kind === 'flyout' ? it.tools : (it.kind === 'tool' ? [it] : [])))
   const activeToolDef = flatTools.find(tl => tl.k === tool) || { icon: 'ti-pointer-2', label: t('tech_sheet.tool_select') }
-  // Accions de paleta (no són modes d'eina): operen sobre la selecció / viewport amb handlers existents.
-  const runPaletteAction = (action) => {
-    if (action === 'mirror_h') mirrorObjects(mirrorableIds, 'scaleX')
-    else if (action === 'mirror_v') mirrorObjects(mirrorableIds, 'scaleY')
-    else if (action === 'zoom_fit') fitZoomToViewport()
-  }
-  const paletteActionDisabled = (action) =>
-    (action === 'mirror_h' || action === 'mirror_v') ? mirrorableIds.length === 0 : false
   // Flyout: eina visible (col·lapsada) = l'activa si pertany al grup, si no l'última triada, si no la 1a.
   const flyoutVisible = (fl) => fl.tools.find(tl => tl.k === tool) || fl.tools.find(tl => tl.k === flyoutSel[fl.id]) || fl.tools[0]
   const cancelHold = () => { if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null } }
@@ -2106,16 +2080,6 @@ export default function TechSheetEditor() {
                     <button key={key} disabled={it.soon} onClick={() => !it.soon && setTool(it.k)}
                       title={it.soon ? `${it.label} · ${t('tech_sheet.coming_soon')}` : it.label}
                       style={{ ...paletteBtn, ...(tool === it.k ? paletteBtnOn : {}), ...(it.soon ? paletteBtnSoon : {}) }}>
-                      <i className={`ti ${it.icon}`} style={{ fontSize: 17 }} />
-                    </button>
-                  )
-                }
-                if (it.kind === 'action') {
-                  const dis = paletteActionDisabled(it.action)
-                  return (
-                    <button key={key} disabled={dis} onClick={() => !dis && runPaletteAction(it.action)}
-                      title={it.label}
-                      style={{ ...paletteBtn, ...(dis ? paletteBtnSoon : {}) }}>
                       <i className={`ti ${it.icon}`} style={{ fontSize: 17 }} />
                     </button>
                   )
