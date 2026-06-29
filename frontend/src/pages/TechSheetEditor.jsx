@@ -80,6 +80,8 @@ const ZOOM_STEP = 0.1
 // TS-4c — eines per "família" de creació (mateixa mecànica de drag).
 const RECT_TOOLS = ['rect', 'rect_round', 'ellipse']   // drag = bounding box
 const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
+// Peça C: eines que mostren cursor de creu (dibuix + nodes). 'select' → fletxa; 'pan' → grab.
+const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, 'draw', 'pen', 'node', 'subpath']
 const PRESET_TOOLS = ['preset_callout', 'preset_detail_circle', 'preset_legend']
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(performance.now())}-${Math.floor(Math.random() * 1e9)}`)
 export const toPx = (mm) => mm * MM_TO_PX
@@ -2259,7 +2261,10 @@ export default function TechSheetEditor() {
 
   // PEÇA P/C: pan actiu (eina 'pan' o espai) i cursor del viewport segons l'eina activa.
   const panActive = locked && (tool === 'pan' || spaceHeld)
-  const viewportCursor = panActive ? (panning ? 'grabbing' : 'grab') : (locked && tool !== 'select' ? 'crosshair' : 'default')
+  const viewportCursor = !locked ? 'default'
+    : panActive ? (panning ? 'grabbing' : 'grab')
+    : CROSSHAIR_TOOLS.includes(tool) ? 'crosshair'
+    : 'default'
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
