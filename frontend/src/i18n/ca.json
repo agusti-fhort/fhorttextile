@@ -388,6 +388,7 @@
       "tree_title": "Iniciar una tasca",
       "tree_start_task": "Iniciar",
       "tree_unassigned": "Sense assignar",
+      "tree_assigned_to": "Assignada a: {{name}}",
       "tree_no_permission": "No tens permís per iniciar aquesta tasca",
       "tree_start_error": "No s'ha pogut iniciar la tasca",
       "tree_phase_design": "Disseny",

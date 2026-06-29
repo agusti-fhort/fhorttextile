@@ -388,6 +388,7 @@
       "tree_title": "Iniciar una tarea",
       "tree_start_task": "Iniciar",
       "tree_unassigned": "Sin asignar",
+      "tree_assigned_to": "Asignada a: {{name}}",
       "tree_no_permission": "No tienes permiso para iniciar esta tarea",
       "tree_start_error": "No se ha podido iniciar la tarea",
       "tree_phase_design": "Diseño",
