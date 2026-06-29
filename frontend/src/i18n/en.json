@@ -1634,6 +1634,8 @@
     "stroke_width": "Stroke width",
     "fill": "Fill",
     "scale_pct": "Scale (%)",
+    "dimensions_position": "Dimensions and position",
+    "keep_ratio": "Keep ratio",
     "pos_x": "X (mm)",
     "pos_y": "Y (mm)",
     "rotation_deg": "∠ (degrees)",

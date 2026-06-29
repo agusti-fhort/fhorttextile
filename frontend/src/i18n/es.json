@@ -1634,6 +1634,8 @@
     "stroke_width": "Grosor trazo",
     "fill": "Relleno",
     "scale_pct": "Escala (%)",
+    "dimensions_position": "Dimensiones y posición",
+    "keep_ratio": "Mantener proporción",
     "pos_x": "X (mm)",
     "pos_y": "Y (mm)",
     "rotation_deg": "∠ (grados)",

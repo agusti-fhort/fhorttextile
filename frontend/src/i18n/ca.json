@@ -1634,6 +1634,8 @@
     "stroke_width": "Gruix traç",
     "fill": "Emplenat",
     "scale_pct": "Escala (%)",
+    "dimensions_position": "Dimensions i posició",
+    "keep_ratio": "Mantenir proporció",
     "pos_x": "X (mm)",
     "pos_y": "Y (mm)",
     "rotation_deg": "∠ (graus)",

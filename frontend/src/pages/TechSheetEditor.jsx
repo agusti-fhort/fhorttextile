@@ -1026,6 +1026,7 @@ export default function TechSheetEditor() {
   const [flyoutSel, setFlyoutSel] = useState({})
   const [flyoutRect, setFlyoutRect] = useState(null)   // rect del botó (popover en position:fixed)
   const [ribbonGroup, setRibbonGroup] = useState('file')
+  const [ratioLocked, setRatioLocked] = useState(true)
 
   const locked = lockState === 'owned'
   const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
@@ -1241,6 +1242,96 @@ export default function TechSheetEditor() {
     }))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, pages, selectedIds, updatePageObjects])
+
+  const dimensionInfo = (obj) => {
+    if (!obj) return null
+    const b = objectBounds(obj)
+    const w = Math.max(0, b.maxX - b.minX)
+    const h = Math.max(0, b.maxY - b.minY)
+    const positionByBounds = obj.type === 'line' || obj.type === 'arrow'
+    return {
+      width: w,
+      height: h,
+      x: positionByBounds ? b.minX : (obj.x || 0),
+      y: positionByBounds ? b.minY : (obj.y || 0),
+      canResize: !['line', 'arrow'].includes(obj.type),
+    }
+  }
+  const moveObjectTo = (obj, key, value) => {
+    const next = Number(value)
+    if (!Number.isFinite(next)) return
+    if (obj.type === 'line' || obj.type === 'arrow') {
+      const b = objectBounds(obj)
+      const dx = key === 'x' ? next - b.minX : 0
+      const dy = key === 'y' ? next - b.minY : 0
+      updateObject(obj.id, translateObject(obj, dx, dy))
+      return
+    }
+    updateObject(obj.id, { [key]: next })
+  }
+  const pathLocalBounds = (obj) => {
+    const pts = (obj.paths || []).flatMap(path => (path.segments || []).flatMap(seg => [
+      { x: seg.x || 0, y: seg.y || 0 },
+      { x: (seg.x || 0) + (seg.inX || 0), y: (seg.y || 0) + (seg.inY || 0) },
+      { x: (seg.x || 0) + (seg.outX || 0), y: (seg.y || 0) + (seg.outY || 0) },
+    ]))
+    if (!pts.length) return null
+    return {
+      minX: Math.min(...pts.map(p => p.x)),
+      minY: Math.min(...pts.map(p => p.y)),
+    }
+  }
+  const resizeObjectTo = (obj, width, height) => {
+    const nextW = Number(width)
+    const nextH = Number(height)
+    if (!Number.isFinite(nextW) || !Number.isFinite(nextH) || nextW <= 0 || nextH <= 0) return
+    const current = dimensionInfo(obj)
+    if (!current || !current.canResize || current.width <= 0 || current.height <= 0) return
+    const sx = nextW / current.width
+    const sy = nextH / current.height
+    if (obj.type === 'rect' || obj.type === 'image' || obj.type === 'sketch_svg' || obj.type === 'text') {
+      updateObject(obj.id, { width: nextW, ...(obj.type !== 'text' ? { height: nextH } : {}) })
+      return
+    }
+    if (obj.type === 'ellipse') {
+      updateObject(obj.id, { rx: nextW / 2, ry: nextH / 2 })
+      return
+    }
+    if (obj.type === 'data_block' || obj.type === 'group') {
+      updateObject(obj.id, {
+        scaleX: (obj.scaleX || 1) * sx,
+        scaleY: (obj.scaleY || 1) * sy,
+      })
+      return
+    }
+    if (obj.type === 'path') {
+      const lb = pathLocalBounds(obj)
+      if (!lb) return
+      updateObject(obj.id, {
+        paths: (obj.paths || []).map(path => ({
+          ...path,
+          segments: (path.segments || []).map(seg => ({
+            ...seg,
+            x: lb.minX + ((seg.x || 0) - lb.minX) * sx,
+            y: lb.minY + ((seg.y || 0) - lb.minY) * sy,
+            inX: (seg.inX || 0) * sx,
+            inY: (seg.inY || 0) * sy,
+            outX: (seg.outX || 0) * sx,
+            outY: (seg.outY || 0) * sy,
+          })),
+        })),
+      })
+    }
+  }
+  const resizeObjectAxis = (obj, axis, rawValue) => {
+    const current = dimensionInfo(obj)
+    const next = Number(rawValue)
+    if (!current || !current.canResize || !Number.isFinite(next) || next <= 0) return
+    const ratio = current.width > 0 && current.height > 0 ? current.width / current.height : 1
+    const nextW = axis === 'width' ? next : (ratioLocked ? next * ratio : current.width)
+    const nextH = axis === 'height' ? next : (ratioLocked ? next / ratio : current.height)
+    resizeObjectTo(obj, nextW, nextH)
+  }
 
   // ── Càrrega inicial: model, sheet, fitxers, size fittings, lock ────────────
   useEffect(() => {
@@ -1874,6 +1965,7 @@ export default function TechSheetEditor() {
     if (!selectedDeletableIds.length) return
     deleteObjects(selectedDeletableIds)
   }
+  const selDim = dimensionInfo(selObj)
   const paperFlatLabels = {
     loading: t('tech_sheet.flat_loading'),
     pathSelected: t('tech_sheet.flat_path_selected'),
@@ -2279,60 +2371,6 @@ export default function TechSheetEditor() {
             {multiSelected && locked && (
               <>
                 <SectionTitle>{t('tech_sheet.selected_objects', { n: selectedObjects.length })}</SectionTitle>
-                <button type="button" onClick={groupSelection}
-                  style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
-                  <i className="ti ti-box-multiple" aria-hidden="true" /> {t('tech_sheet.group')}
-                </button>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 8 }}>
-                  <button type="button" onClick={() => alignSelection('left')} title={t('tech_sheet.align_left')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
-                    <i className="ti ti-align-left" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => alignSelection('center')} title={t('tech_sheet.align_center')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
-                    <i className="ti ti-align-center" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => alignSelection('right')} title={t('tech_sheet.align_right')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
-                    <i className="ti ti-align-right" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => distributeSelection('h')} title={t('tech_sheet.distribute_h')} disabled={selectedObjects.length < 3} style={{ ...propInput, cursor: selectedObjects.length < 3 ? 'default' : 'pointer', marginTop: 0, opacity: selectedObjects.length < 3 ? 0.45 : 1 }}>
-                    <i className="ti ti-distribute-horizontal" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => alignSelection('top')} title={t('tech_sheet.align_top')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
-                    <i className="ti ti-align-top" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => alignSelection('middle')} title={t('tech_sheet.align_middle')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
-                    <i className="ti ti-align-middle" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => alignSelection('bottom')} title={t('tech_sheet.align_bottom')} style={{ ...propInput, cursor: 'pointer', marginTop: 0 }}>
-                    <i className="ti ti-align-bottom" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => distributeSelection('v')} title={t('tech_sheet.distribute_v')} disabled={selectedObjects.length < 3} style={{ ...propInput, cursor: selectedObjects.length < 3 ? 'default' : 'pointer', marginTop: 0, opacity: selectedObjects.length < 3 ? 0.45 : 1 }}>
-                    <i className="ti ti-distribute-vertical" aria-hidden="true" />
-                  </button>
-                </div>
-                {mirrorableIds.length === selectedObjects.length && (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                    <button type="button" onClick={() => mirrorObjects(mirrorableIds, 'scaleX')}
-                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
-                      <i className="ti ti-flip-horizontal" aria-hidden="true" /> {t('tech_sheet.mirror_h')}
-                    </button>
-                    <button type="button" onClick={() => mirrorObjects(mirrorableIds, 'scaleY')}
-                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
-                      <i className="ti ti-flip-vertical" aria-hidden="true" /> {t('tech_sheet.mirror_v')}
-                    </button>
-                  </div>
-                )}
-                {freeSelectedIds.length > 0 && (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                    <button type="button" onClick={() => moveSelectionInFreeLayer('backward')}
-                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
-                      <i className="ti ti-arrow-down" aria-hidden="true" /> {t('tech_sheet.send_backward')}
-                    </button>
-                    <button type="button" onClick={() => moveSelectionInFreeLayer('forward')}
-                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
-                      <i className="ti ti-arrow-up" aria-hidden="true" /> {t('tech_sheet.bring_forward')}
-                    </button>
-                  </div>
-                )}
                 {multiStroke.length > 0 && (
                   <div style={propLabel}>{t('tech_sheet.stroke_color')}
                     {!multiStrokeValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
@@ -2366,6 +2404,39 @@ export default function TechSheetEditor() {
             {selObj && locked && (
               <>
                 <SectionTitle>{t('tech_sheet.element')} · {selObj.type}</SectionTitle>
+                {selDim && (
+                  <div style={{ border: `1px solid ${COL.border}`, borderRadius: 5, background: '#f8f9fa', padding: 8, marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ color: COL.gold, fontSize: 'var(--fs-label)', fontWeight: 700, textTransform: 'uppercase' }}>{t('tech_sheet.dimensions_position')}</span>
+                      <button type="button" onClick={() => setRatioLocked(v => !v)} title={t('tech_sheet.keep_ratio')}
+                        style={{ width: 24, height: 22, border: `1px solid ${ratioLocked ? COL.gold : COL.border}`, borderRadius: 4, background: ratioLocked ? COL.goldPale : COL.field, color: ratioLocked ? COL.gold : COL.textMuted, cursor: 'pointer' }}>
+                        <i className={`ti ${ratioLocked ? 'ti-lock' : 'ti-lock-open'}`} aria-hidden="true" />
+                      </button>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      <label style={propLabel}>W
+                        <input type="number" min={0.1} step={1} disabled={!selDim.canResize}
+                          value={selDim.canResize ? Math.round(selDim.width * 10) / 10 : ''}
+                          placeholder="—"
+                          onChange={e => resizeObjectAxis(selObj, 'width', e.target.value)} style={propInput} />
+                      </label>
+                      <label style={propLabel}>H
+                        <input type="number" min={0.1} step={1} disabled={!selDim.canResize}
+                          value={selDim.canResize ? Math.round(selDim.height * 10) / 10 : ''}
+                          placeholder="—"
+                          onChange={e => resizeObjectAxis(selObj, 'height', e.target.value)} style={propInput} />
+                      </label>
+                      <label style={propLabel}>{t('tech_sheet.pos_x')}
+                        <input type="number" step={1} value={Math.round(selDim.x * 10) / 10}
+                          onChange={e => moveObjectTo(selObj, 'x', e.target.value)} style={propInput} />
+                      </label>
+                      <label style={propLabel}>{t('tech_sheet.pos_y')}
+                        <input type="number" step={1} value={Math.round(selDim.y * 10) / 10}
+                          onChange={e => moveObjectTo(selObj, 'y', e.target.value)} style={propInput} />
+                      </label>
+                    </div>
+                  </div>
+                )}
                 {selObj.type === 'text' && (
                   <>
                     <label style={propLabel}>{t('tech_sheet.font_size')}
@@ -2418,54 +2489,11 @@ export default function TechSheetEditor() {
                     )}
                   </>
                 )}
-                {/* Posició X/Y (mm) per a objectes posicionats (no línia/fletxa). */}
-                {selObj.type !== 'line' && selObj.type !== 'arrow' && (
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <label style={{ ...propLabel, flex: 1 }}>{t('tech_sheet.pos_x')}
-                      <input type="number" step={1} value={Math.round((selObj.x || 0) * 10) / 10}
-                        onChange={e => updateObject(selObj.id, { x: Number(e.target.value) || 0 })} style={propInput} />
-                    </label>
-                    <label style={{ ...propLabel, flex: 1 }}>{t('tech_sheet.pos_y')}
-                      <input type="number" step={1} value={Math.round((selObj.y || 0) * 10) / 10}
-                        onChange={e => updateObject(selObj.id, { y: Number(e.target.value) || 0 })} style={propInput} />
-                    </label>
-                  </div>
-                )}
-                {!blocksTransform(selObj) && (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                    <button type="button" onClick={() => mirrorObjects([selObj.id], 'scaleX')}
-                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
-                      <i className="ti ti-flip-horizontal" aria-hidden="true" /> {t('tech_sheet.mirror_h')}
-                    </button>
-                    <button type="button" onClick={() => mirrorObjects([selObj.id], 'scaleY')}
-                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
-                      <i className="ti ti-flip-vertical" aria-hidden="true" /> {t('tech_sheet.mirror_v')}
-                    </button>
-                  </div>
-                )}
-                {selObj.layer === 'free' && (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                    <button type="button" onClick={() => moveSelectionInFreeLayer('backward')}
-                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
-                      <i className="ti ti-arrow-down" aria-hidden="true" /> {t('tech_sheet.send_backward')}
-                    </button>
-                    <button type="button" onClick={() => moveSelectionInFreeLayer('forward')}
-                      style={{ ...propInput, flex: 1, cursor: 'pointer', marginTop: 0 }}>
-                      <i className="ti ti-arrow-up" aria-hidden="true" /> {t('tech_sheet.bring_forward')}
-                    </button>
-                  </div>
-                )}
                 {!blocksTransform(selObj) && (
                   <label style={propLabel}>{t('tech_sheet.rotation_deg')}
                     <input type="number" min={0} max={360} step={1} value={Math.round(selObj.rotation || 0)}
                       onChange={e => updateObject(selObj.id, { rotation: ((Number(e.target.value) || 0) % 360 + 360) % 360 })} style={propInput} />
                   </label>
-                )}
-                {selObj.type === 'group' && (
-                  <button type="button" onClick={() => ungroupObject(selObj.id)}
-                    style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
-                    <i className="ti ti-unlink" aria-hidden="true" /> {t('tech_sheet.ungroup')}
-                  </button>
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
                   <button onClick={() => deleteObject(selObj.id)}
