@@ -1025,6 +1025,7 @@ export default function TechSheetEditor() {
   const [flyoutOpen, setFlyoutOpen] = useState(null)
   const [flyoutSel, setFlyoutSel] = useState({})
   const [flyoutRect, setFlyoutRect] = useState(null)   // rect del botó (popover en position:fixed)
+  const [ribbonGroup, setRibbonGroup] = useState('file')
 
   const locked = lockState === 'owned'
   const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
@@ -1868,6 +1869,11 @@ export default function TechSheetEditor() {
   const multiX = commonValue(multiPosition, 'x')
   const multiY = commonValue(multiPosition, 'y')
   const editingFlat = editingFlatId ? curObjs.find(o => o.id === editingFlatId && ['sketch_svg', 'path'].includes(o.type)) : null
+  const selectedDeletableIds = selectedObjects.filter(o => o.layer === 'free' || o.type === 'data_block').map(o => o.id)
+  const deleteSelection = () => {
+    if (!selectedDeletableIds.length) return
+    deleteObjects(selectedDeletableIds)
+  }
   const paperFlatLabels = {
     loading: t('tech_sheet.flat_loading'),
     pathSelected: t('tech_sheet.flat_path_selected'),
@@ -1963,6 +1969,95 @@ export default function TechSheetEditor() {
   const openFlyout = (id, rect) => { setFlyoutRect(rect); setFlyoutOpen(id) }
   const startHold = (id, rect) => { cancelHold(); holdTimer.current = setTimeout(() => { suppressClick.current = true; openFlyout(id, rect) }, 300) }
   const pickFlyoutTool = (fl, k) => { setFlyoutSel(s => ({ ...s, [fl.id]: k })); setTool(k); setFlyoutOpen(null); cancelHold() }
+  const ribbonTabs = [
+    { id: 'file', label: t('tech_sheet.ribbon_file') },
+    { id: 'page', label: t('tech_sheet.ribbon_page') },
+    { id: 'insert', label: t('tech_sheet.ribbon_insert') },
+    { id: 'organize', label: t('tech_sheet.ribbon_organize') },
+  ]
+  const ribbonTabStyle = (active) => ({
+    minWidth: 86, height: 28, border: `1px solid ${active ? COL.gold : 'transparent'}`,
+    borderBottomColor: active ? COL.gold : COL.border, borderRadius: '5px 5px 0 0',
+    background: active ? COL.goldPale : 'transparent', color: active ? COL.gold : COL.textMain,
+    fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: active ? 700 : 500,
+    cursor: 'pointer',
+  })
+  const ribbonToolStyle = (disabled = false, active = false) => ({
+    width: 72, minHeight: 50, display: 'flex', flexDirection: 'column', alignItems: 'center',
+    justifyContent: 'center', gap: 3, padding: '5px 4px', border: `1px solid ${active ? COL.gold : COL.border}`,
+    borderRadius: 5, background: active ? COL.goldPale : COL.field, color: active ? COL.gold : COL.textMain,
+    fontFamily: FONT, fontSize: 'var(--fs-caption)', lineHeight: 1.05, textAlign: 'center',
+    cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.42 : 1,
+  })
+  const ribbonSelectStyle = {
+    height: 50, minWidth: 86, border: `1px solid ${COL.border}`, borderRadius: 5,
+    background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)',
+    padding: '0 6px',
+  }
+  const ribbonTool = ({ key, icon, label, onClick, disabled, active, title }) => (
+    <button key={key} type="button" onClick={onClick} disabled={disabled} title={title || label}
+      style={ribbonToolStyle(disabled, active)}>
+      <i className={`ti ${icon}`} aria-hidden="true" style={{ fontSize: 18 }} />
+      <span>{label}</span>
+    </button>
+  )
+  const renderRibbonContent = () => {
+    if (!locked) {
+      return <span style={{ color: COL.textMuted, padding: '0 8px' }}><i className="ti ti-eye" aria-hidden="true" style={{ marginRight: 5 }} />{t('tech_sheet.readonly_overlay')}</span>
+    }
+    if (ribbonGroup === 'file') {
+      return [
+        ribbonTool({ key: 'export', icon: 'ti-file-download', label: t('tech_sheet.export_pdf'), onClick: onExport, disabled: exporting }),
+        ribbonTool({ key: 'autosave', icon: saveState === 'error' ? 'ti-alert-triangle' : 'ti-device-floppy', label: saveLabel || t('tech_sheet.autosave'), disabled: true, title: t('tech_sheet.autosave_title') }),
+        ribbonTool({ key: 'version', icon: 'ti-history', label: `v${sheet?.versio ?? 1}`, disabled: true, title: t('tech_sheet.version_current') }),
+      ]
+    }
+    if (ribbonGroup === 'page') {
+      return [
+        ribbonTool({ key: 'add-page', icon: 'ti-file-plus', label: t('tech_sheet.add_page'), onClick: addPage }),
+        ribbonTool({ key: 'delete-page', icon: 'ti-file-minus', label: t('tech_sheet.delete_page'), onClick: () => removePage(currentPage), disabled: pages.length <= 1 }),
+        <select key="format" value={pageFormat} onChange={e => setPageFormat(e.target.value)} title={t('tech_sheet.page_format')} style={ribbonSelectStyle}>
+          {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>,
+        ribbonTool({ key: 'zoom-out', icon: 'ti-minus', label: t('tech_sheet.zoom_out'), onClick: () => setZoomClamped(z => z - ZOOM_STEP) }),
+        ribbonTool({ key: 'zoom-in', icon: 'ti-plus', label: t('tech_sheet.zoom_in'), onClick: () => setZoomClamped(z => z + ZOOM_STEP) }),
+        ribbonTool({ key: 'zoom-100', icon: 'ti-zoom-reset', label: '100%', onClick: () => setZoomClamped(1), active: zoom === 1 }),
+        ribbonTool({ key: 'zoom-fit', icon: 'ti-arrows-maximize', label: t('tech_sheet.zoom_fit'), onClick: fitZoomToViewport }),
+      ]
+    }
+    if (ribbonGroup === 'insert') {
+      return [
+        ribbonTool({ key: 'header', icon: 'ti-layout-navbar', label: t('tech_sheet.model_header'), onClick: insertHeader }),
+        ribbonTool({ key: 'logo', icon: 'ti-photo', label: t('tech_sheet.client_logo'), onClick: insertLogo, title: customerLogoUrl ? t('tech_sheet.insert_logo_title') : t('tech_sheet.no_logo_title') }),
+        ribbonTool({ key: 'table', icon: 'ti-table', label: t('tech_sheet.graded_table'), onClick: onAddTableClick, disabled: addingTable || !sizeFittings.length }),
+        ribbonTool({ key: 'flat', icon: 'ti-vector', label: t('tech_sheet.flat_insert'), onClick: insertFlatSketch }),
+        ribbonTool({ key: 'import-flat', icon: 'ti-file-import', label: t('tech_sheet.flat_import'), onClick: () => flatFileRef.current?.click() }),
+        ribbonTool({ key: 'image', icon: 'ti-photo-plus', label: t('tech_sheet.tool_image'), onClick: () => fileRef.current?.click() }),
+        ...fitxers.slice(0, 4).map(f => ribbonTool({
+          key: `fitxer-${f.id}`, icon: 'ti-file-plus', label: f.nom_fitxer || t('tech_sheet.model_file'),
+          onClick: () => addModelFitxer(f), disabled: !(f.url_extern || f.fitxer),
+          title: f.nom_fitxer,
+        })),
+      ]
+    }
+    return [
+      ribbonTool({ key: 'align-left', icon: 'ti-align-left', label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-center', icon: 'ti-align-center', label: t('tech_sheet.align_center_short'), onClick: () => alignSelection('center'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-right', icon: 'ti-align-right', label: t('tech_sheet.align_right_short'), onClick: () => alignSelection('right'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-top', icon: 'ti-align-top', label: t('tech_sheet.align_top_short'), onClick: () => alignSelection('top'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-middle', icon: 'ti-align-middle', label: t('tech_sheet.align_middle_short'), onClick: () => alignSelection('middle'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-bottom', icon: 'ti-align-bottom', label: t('tech_sheet.align_bottom_short'), onClick: () => alignSelection('bottom'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'dist-h', icon: 'ti-distribute-horizontal', label: t('tech_sheet.distribute_h_short'), onClick: () => distributeSelection('h'), disabled: selectedObjects.length < 3 }),
+      ribbonTool({ key: 'dist-v', icon: 'ti-distribute-vertical', label: t('tech_sheet.distribute_v_short'), onClick: () => distributeSelection('v'), disabled: selectedObjects.length < 3 }),
+      ribbonTool({ key: 'group', icon: 'ti-box-multiple', label: t('tech_sheet.group'), onClick: groupSelection, disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'ungroup', icon: 'ti-unlink', label: t('tech_sheet.ungroup'), onClick: () => ungroupObject(selObj.id), disabled: selObj?.type !== 'group' }),
+      ribbonTool({ key: 'mirror-h', icon: 'ti-flip-horizontal', label: t('tech_sheet.mirror_h'), onClick: () => mirrorObjects(mirrorableIds, 'scaleX'), disabled: mirrorableIds.length === 0 }),
+      ribbonTool({ key: 'mirror-v', icon: 'ti-flip-vertical', label: t('tech_sheet.mirror_v'), onClick: () => mirrorObjects(mirrorableIds, 'scaleY'), disabled: mirrorableIds.length === 0 }),
+      ribbonTool({ key: 'backward', icon: 'ti-arrow-down', label: t('tech_sheet.send_backward'), onClick: () => moveSelectionInFreeLayer('backward'), disabled: freeSelectedIds.length === 0 }),
+      ribbonTool({ key: 'forward', icon: 'ti-arrow-up', label: t('tech_sheet.bring_forward'), onClick: () => moveSelectionInFreeLayer('forward'), disabled: freeSelectedIds.length === 0 }),
+      ribbonTool({ key: 'delete', icon: 'ti-trash', label: t('app.delete'), onClick: deleteSelection, disabled: selectedDeletableIds.length === 0 }),
+    ]
+  }
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
@@ -1970,10 +2065,6 @@ export default function TechSheetEditor() {
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COL.border}`, background: COL.sidebar, color: COL.textMain }}>
         <button onClick={() => navigate(`/models/${id}`)} style={headerBtn}>
           <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('tech_sheet.back_to_model')}
-        </button>
-        <button onClick={onExport} disabled={exporting}
-          style={{ ...headerBtn, background: COL.gold, border: 'none', color: 'var(--white)', opacity: exporting ? 0.5 : 1 }}>
-          <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? t('tech_sheet.exporting') : t('tech_sheet.export_pdf')}
         </button>
         <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 600 }}>
           {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
@@ -1984,47 +2075,22 @@ export default function TechSheetEditor() {
             Format de pàgina + opcions contextuals → barra contextual (C4). */}
       </header>
 
-      {/* ── Barra contextual (C4) — gris clar; opcions de l'eina/objecte actiu ── */}
-      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px', minHeight: 32, background: CTX_BG, borderBottom: `1px solid ${CTX_BORDER}`, color: CTX_TEXT, fontSize: 'var(--fs-body)' }}>
-        {!locked ? (
-          <span style={{ color: COL.textMuted }}><i className="ti ti-eye" style={{ marginRight: 5 }} />{t('tech_sheet.readonly_overlay')}</span>
-        ) : multiSelected ? (
-          <>
-            <span style={{ fontWeight: 600 }}>{t('tech_sheet.selected_objects', { n: selectedObjects.length })}</span>
-            <span style={{ width: 1, height: 16, background: CTX_BORDER }} />
-            <button onClick={() => alignSelection('left')} title={t('tech_sheet.align_left')} style={ctxBtn}><i className="ti ti-align-left" /></button>
-            <button onClick={() => alignSelection('center')} title={t('tech_sheet.align_center')} style={ctxBtn}><i className="ti ti-align-center" /></button>
-            <button onClick={() => alignSelection('right')} title={t('tech_sheet.align_right')} style={ctxBtn}><i className="ti ti-align-right" /></button>
-            <button onClick={() => alignSelection('top')} title={t('tech_sheet.align_top')} style={ctxBtn}><i className="ti ti-align-top" /></button>
-            <button onClick={() => alignSelection('middle')} title={t('tech_sheet.align_middle')} style={ctxBtn}><i className="ti ti-align-middle" /></button>
-            <button onClick={() => alignSelection('bottom')} title={t('tech_sheet.align_bottom')} style={ctxBtn}><i className="ti ti-align-bottom" /></button>
-          </>
-        ) : selObj ? (
-          <>
-            <span style={{ fontWeight: 600 }}>{t('tech_sheet.element')} · {selObj.type}</span>
-            {['rect', 'ellipse', 'line', 'arrow', 'path'].includes(selObj.type) && (
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{t('tech_sheet.stroke_color')}
-                <input type="color" value={selObj.stroke && selObj.stroke !== 'transparent' ? selObj.stroke : '#1d1d1b'}
-                  onChange={e => updateObject(selObj.id, selObj.type === 'arrow' ? { stroke: e.target.value, fill: e.target.value } : { stroke: e.target.value })}
-                  style={{ width: 26, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} /></label>
-            )}
-            {['rect', 'ellipse', 'path', 'text'].includes(selObj.type) && (
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{t('tech_sheet.fill')}
-                <input type="color" value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : '#ffffff'}
-                  onChange={e => updateObject(selObj.id, { fill: e.target.value })}
-                  style={{ width: 26, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} /></label>
-            )}
-          </>
-        ) : tool !== 'select' ? (
-          <span><i className={`ti ${activeToolDef.icon}`} style={{ marginRight: 5 }} />{t('tech_sheet.ctx_tool', { tool: activeToolDef.label })}</span>
-        ) : (
-          <span style={{ color: COL.textMuted }}>{t('tech_sheet.ctx_idle')}</span>
-        )}
-        <select value={pageFormat} onChange={e => setPageFormat(e.target.value)} disabled={!locked}
-          title={t('tech_sheet.page_format')}
-          style={{ marginLeft: 'auto', height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: COL.bg, color: CTX_TEXT, fontFamily: FONT, fontSize: 'var(--fs-body)', cursor: locked ? 'pointer' : 'default' }}>
-          {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
+      {/* ── Ribbon SolidWorks: fila 1 grups, fila 2 comandaments ── */}
+      <div style={{ flexShrink: 0, background: CTX_BG, borderBottom: `1px solid ${CTX_BORDER}`, color: CTX_TEXT }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, minHeight: 31, padding: '3px 12px 0' }}>
+          {ribbonTabs.map(tab => (
+            <button key={tab.id} type="button" onClick={() => setRibbonGroup(tab.id)}
+              style={ribbonTabStyle(ribbonGroup === tab.id)}>
+              {tab.label}
+            </button>
+          ))}
+          <span style={{ marginLeft: 'auto', color: COL.textMuted, fontSize: 'var(--fs-label)' }}>
+            {multiSelected ? t('tech_sheet.selected_objects', { n: selectedObjects.length }) : selObj ? `${t('tech_sheet.element')} · ${selObj.type}` : tool !== 'select' ? t('tech_sheet.ctx_tool', { tool: activeToolDef.label }) : t('tech_sheet.ctx_idle')}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 64, padding: '6px 12px 8px', overflowX: 'auto' }}>
+          {renderRibbonContent()}
+        </div>
       </div>
 
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
