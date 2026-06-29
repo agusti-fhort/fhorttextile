@@ -20,7 +20,7 @@ const API = import.meta.env.VITE_API_URL || ''
 // redirigeix a /mesures (App.jsx), aquí ja no hi ha cap branca 'Size Check'.
 // 'Anàlisi IA' OCULTAT del menú (peça F): inert avui. El case i el component TabAIAnalysis es
 // conserven (no destructiu); simplement no apareix a la banda de pestanyes.
-const TABS = ['Dashboard', 'Tasques', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat"]
+const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Tasques']
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
   'Dashboard': 'model_sheet.tab_dashboard',
