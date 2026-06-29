@@ -41,6 +41,15 @@ export const PAGE_FORMATS = {
 }
 
 export const FONT = 'IBM Plex Mono, monospace'
+// Peça 3: conjunt reduït de fonts (només fonts ja carregades + famílies genèriques web-safe; cap
+// font externa nova). El valor és el fontFamily que Konva/CSS resoldran.
+const FONT_OPTIONS = [
+  { value: 'IBM Plex Mono, monospace', label: 'IBM Plex Mono' },
+  { value: 'Montserrat, sans-serif', label: 'Montserrat' },
+  { value: 'Arial, Helvetica, sans-serif', label: 'Arial' },
+  { value: 'Georgia, serif', label: 'Georgia' },
+  { value: 'Courier New, monospace', label: 'Courier New' },
+]
 // T1 (DECISIONS §3): la pell de la closca de l'editor usa els TOKENS GLOBALS de la plataforma
 // (:root a index.css) per coherència amb la resta del SaaS — substitueix els literals dark/
 // SolidWorks dels commits f77309e/233f10f-9c3c0de. COL és el mapa DOM→token (var() resol al DOM);
@@ -483,6 +492,7 @@ function textBoxParts(obj) {
     text: {
       text: obj.text || '', width: w, fontSize: fs, fontFamily: obj.fontFamily || FONT,
       fontStyle: obj.fontStyle || 'normal', fill: obj.fill || KONVA_COL.textMain,
+      align: obj.align || 'left', textDecoration: obj.textDecoration || '',
     },
   }
 }
@@ -492,6 +502,7 @@ function textProps(obj) {
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1, width: obj.width ? toPx(obj.width) : undefined,
     text: obj.text || '', fontSize: obj.fontSize || 11, fontFamily: obj.fontFamily || FONT,
     fontStyle: obj.fontStyle || 'normal', fill: obj.fill || KONVA_COL.textMain,
+    align: obj.align || 'left', textDecoration: obj.textDecoration || '',
   }
 }
 
@@ -2581,22 +2592,47 @@ export default function TechSheetEditor() {
                     </div>
                   </div>
                 )}
-                {selObj.type === 'text' && (
-                  <>
-                    <label style={propLabel}>{t('tech_sheet.font_size')}
-                      <input type="number" min={6} max={48} value={selObj.fontSize || 11}
-                        onChange={e => updateObject(selObj.id, { fontSize: Number(e.target.value) || 11 })} style={propInput} />
-                    </label>
-                    <label style={{ ...propLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <input type="checkbox" checked={selObj.fontStyle === 'bold'}
-                        onChange={e => updateObject(selObj.id, { fontStyle: e.target.checked ? 'bold' : 'normal' })} />
-                      {t('tech_sheet.bold')}
-                    </label>
-                    <div style={propLabel}>{t('tech_sheet.text_color')}
-                      <ColorPicker value={selObj.fill || KONVA_COL.textMain} onChange={c => updateObject(selObj.id, { fill: c })} />
-                    </div>
-                  </>
-                )}
+                {selObj.type === 'text' && (() => {
+                  // Peça 3: tipografia completa. fontStyle combina bold+italic ('bold italic');
+                  // textDecoration porta el subratllat; align l'alineació del Konva Text.
+                  const fstyle = selObj.fontStyle || 'normal'
+                  const isBold = fstyle.includes('bold')
+                  const isItalic = fstyle.includes('italic')
+                  const isUnderline = (selObj.textDecoration || '').includes('underline')
+                  const align = selObj.align || 'left'
+                  const setStyle = (bold, italic) => updateObject(selObj.id, { fontStyle: [bold && 'bold', italic && 'italic'].filter(Boolean).join(' ') || 'normal' })
+                  const tbtn = (on) => ({ flex: 1, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? COL.gold : COL.border}`, borderRadius: 5, background: on ? COL.goldPale : COL.field, color: on ? COL.gold : COL.textMain, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' })
+                  return (
+                    <>
+                      <label style={propLabel}>{t('tech_sheet.font_family')}
+                        <select value={selObj.fontFamily || FONT} onChange={e => updateObject(selObj.id, { fontFamily: e.target.value })} style={propInput}>
+                          {FONT_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                        </select>
+                      </label>
+                      <label style={propLabel}>{t('tech_sheet.font_size')}
+                        <input type="number" min={6} max={48} value={selObj.fontSize || 11}
+                          onChange={e => updateObject(selObj.id, { fontSize: Number(e.target.value) || 11 })} style={propInput} />
+                      </label>
+                      <div style={propLabel}>{t('tech_sheet.font_style')}
+                        <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
+                          <button type="button" title={t('tech_sheet.bold')} onClick={() => setStyle(!isBold, isItalic)} style={{ ...tbtn(isBold), fontWeight: 700 }}>B</button>
+                          <button type="button" title={t('tech_sheet.italic')} onClick={() => setStyle(isBold, !isItalic)} style={{ ...tbtn(isItalic), fontStyle: 'italic' }}>I</button>
+                          <button type="button" title={t('tech_sheet.underline')} onClick={() => updateObject(selObj.id, { textDecoration: isUnderline ? '' : 'underline' })} style={{ ...tbtn(isUnderline), textDecoration: 'underline' }}>U</button>
+                        </div>
+                      </div>
+                      <div style={propLabel}>{t('tech_sheet.text_align')}
+                        <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
+                          <button type="button" title={t('tech_sheet.align_left')} onClick={() => updateObject(selObj.id, { align: 'left' })} style={tbtn(align === 'left')}><i className="ti ti-align-left" /></button>
+                          <button type="button" title={t('tech_sheet.align_center')} onClick={() => updateObject(selObj.id, { align: 'center' })} style={tbtn(align === 'center')}><i className="ti ti-align-center" /></button>
+                          <button type="button" title={t('tech_sheet.align_right')} onClick={() => updateObject(selObj.id, { align: 'right' })} style={tbtn(align === 'right')}><i className="ti ti-align-right" /></button>
+                        </div>
+                      </div>
+                      <div style={propLabel}>{t('tech_sheet.text_color')}
+                        <ColorPicker value={selObj.fill || KONVA_COL.textMain} onChange={c => updateObject(selObj.id, { fill: c })} />
+                      </div>
+                    </>
+                  )
+                })()}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'line' || selObj.type === 'arrow' || selObj.type === 'path') && (
                   <>
                     <div style={propLabel}>{t('tech_sheet.stroke_color')}
