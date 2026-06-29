@@ -45,15 +45,17 @@ export const FONT = 'IBM Plex Mono, monospace'
 // SolidWorks dels commits f77309e/233f10f-9c3c0de. COL és el mapa DOM→token (var() resol al DOM);
 // KONVA_COL (canvas) NO es toca.
 export const COL = {
-  sidebar: 'var(--bg-sidebar)',  // closca: topbar/peu — càlid, com la nav de la plataforma
-  gold: 'var(--gold)',           // accent
+  sidebar: 'var(--white)',       // topbar/ribbon/peu: BLANC com la navbar del dashboard (no beix)
+  gold: 'var(--gold)',           // accent (només per a accions principals)
   goldPale: 'var(--gold-pale)',  // estat actiu amb tint gold suau
   border: 'var(--border)',       // filet/vora subtil de la plataforma
   textMain: 'var(--text-main)',  // text principal
   textMuted: 'var(--text-muted)',// text secundari
-  bg: 'var(--bg-muted)',         // asides, columnes, panells
-  work: 'var(--bg-muted)',       // fons de treball darrere el paper
-  field: 'var(--white)',         // interior de controls
+  bg: 'var(--bg-card)',          // contenidors (paleta/dock/tira/panells): blanc-card amb filet
+  // Fons de treball darrere el paper = el gris clar NEUTRE del dashboard (<main> usa --gray-l),
+  // no --bg-muted (que és beix càlid i reintroduiria el to taronjós). Així el paper blanc destaca.
+  work: 'var(--gray-l)',
+  field: 'var(--white)',         // interior de controls: blanc net
 }
 // Paleta LITERAL del canvas: Konva pinta sobre <canvas> via ctx.fillStyle i NO resol
 // CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
