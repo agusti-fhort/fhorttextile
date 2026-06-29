@@ -12,6 +12,7 @@ import RuleSetCard from '../components/model/RuleSetCard'
 import { models, watchpoints, modelTasks } from '../api/endpoints'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
+import TasksTab from '../components/model/TasksTab'
 
 const API = import.meta.env.VITE_API_URL || ''
 // Menú net (PEÇA 5): Size Check absorbit a Mesures (taula base amb estadis), Producció retirat;
@@ -19,10 +20,11 @@ const API = import.meta.env.VITE_API_URL || ''
 // redirigeix a /mesures (App.jsx), aquí ja no hi ha cap branca 'Size Check'.
 // 'Anàlisi IA' OCULTAT del menú (peça F): inert avui. El case i el component TabAIAnalysis es
 // conserven (no destructiu); simplement no apareix a la banda de pestanyes.
-const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat"]
+const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Tasques']
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
   'Dashboard': 'model_sheet.tab_dashboard',
+  'Tasques': 'model_sheet.tab_tasks',
   'Resum': 'model_sheet.tab_summary',
   'Mesures': 'model.tabs.mesures',
   'Escalat': 'model_sheet.tab_grading',
@@ -380,6 +382,14 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             wpVersion={wpVersion}
           />
         )}
+        {activeTab === 'Tasques' && (
+          <TasksTab
+            modelId={parseInt(id)}
+            onOpenTab={setActiveTab}
+            modelTaskRows={modelTaskRows}
+            onTasksChanged={reloadTasks}
+          />
+        )}
         {activeTab === 'Resum' && (
           <div>
             {/* P4: edició del MODEL aquí (a Resum), no a la capçalera global. */}
@@ -528,15 +538,17 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
 // Consulta des del Model obre sense task_id → mode consulta. L'edició registrada
 // es fa des del Kanban (que passa ?task_id=...). Vegeu TechSheetEditor.
 function TechSheetTab({ modelId, navigate }) {
-  const [sheet, setSheet]   = useState(null)
+  // Cutover .ftt (F8): la fitxa és un ModelFitxer tipus TECHSHEET (no el TechSheet O2O). El
+  // resum llegeix el cap de cadena vigent; els botons van a /fitxa (resolver que obre/crea el .ftt).
+  const [fitxer, setFitxer] = useState(null)
   const [loading, setLoading] = useState(true)
   const token   = localStorage.getItem('access_token')
   const headers = { Authorization: `Bearer ${token}` }
 
   useEffect(() => {
-    fetch(`${API}/api/v1/models/${modelId}/tech-sheet/`, { headers })
+    fetch(`${API}/api/v1/model-fitxers/?model=${modelId}&tipus=TECHSHEET&is_current=true&ordering=-data_pujada`, { headers })
       .then(r => r.ok ? r.json() : null)
-      .then(data => { setSheet(data); setLoading(false) })
+      .then(data => { const list = data?.results || data || []; setFitxer(list[0] || null); setLoading(false) })
       .catch(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelId])
@@ -559,7 +571,7 @@ function TechSheetTab({ modelId, navigate }) {
   }
 
   // --- NO HI HA FITXA ---
-  if (!sheet || !sheet.has_content) {
+  if (!fitxer) {
     return (
       <div style={{ padding: '24px',
         }}>
@@ -578,12 +590,8 @@ function TechSheetTab({ modelId, navigate }) {
   }
 
   // --- HI HA FITXA ---
-  // Nombre de pàgines (calculat al serializer; no enviem template_json sencer).
-  const numPages = sheet.num_pages || '—'
-
-  // Format data
-  const updatedAt = sheet.updated_at
-    ? new Date(sheet.updated_at).toLocaleDateString('ca-ES',
+  const updatedAt = fitxer.data_pujada
+    ? new Date(fitxer.data_pujada).toLocaleDateString('ca-ES',
         { day:'2-digit', month:'2-digit', year:'numeric' })
     : '—'
 
@@ -600,15 +608,9 @@ function TechSheetTab({ modelId, navigate }) {
       }}>
         <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
           display: 'flex', gap: '16px' }}>
-          <span>v{sheet.versio}</span>
-          <span>{sheet.estat}</span>
-          <span>{numPages} pàgines</span>
+          <span>v{fitxer.versio}</span>
+          <span>{fitxer.nom_fitxer}</span>
           <span>Actualitzat: {updatedAt}</span>
-          {sheet.locked_by_username && (
-            <span style={{ color: 'var(--warn)' }}>
-              Editant: {sheet.locked_by_username}
-            </span>
-          )}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
@@ -1198,6 +1200,7 @@ function iconForExt(ext) {
 
 function TabFiles({ modelId }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
   const authHeaders = { Authorization: `Bearer ${token}` }
 
@@ -1383,7 +1386,7 @@ function TabFiles({ modelId }) {
         }}>
           {uploading ? t('model_sheet.uploading') : t('model_sheet.upload')}
           <input type="file" style={{ display: 'none' }}
-            accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf"
+            accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf,.ftt"
             disabled={uploading}
             onChange={e => e.target.files[0] && handleUpload(e.target.files[0])} />
         </label>
@@ -1422,6 +1425,7 @@ function TabFiles({ modelId }) {
                 onPreview={() => setPopup({ url: selected.fitxer || selected.url_extern || selected.url, nom: selected.nom_fitxer })}
                 onHistory={() => openHistory(selected)}
                 onNewVersion={file => handleUpload(file, selected.id)}
+                onEdit={() => navigate(`/models/${modelId}/ftt/${selected.id}`)}
                 onDelete={() => handleDelete(selected.id)} />
             ) : (
               <div style={{
@@ -1480,10 +1484,13 @@ function DetailRow({ label, value }) {
 }
 
 // Panell de detall (dreta): miniatura en cascada de degradació + característiques + accions.
-function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onDelete }) {
+function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onEdit, onDelete }) {
   const { t, i18n } = useTranslation()
   const [imgError, setImgError] = useState(false)
   const ext = fileExt(fitxer.nom_fitxer)
+  // Document .ftt editable: el botó "Edita" obre l'editor de fitxa sobre aquest ModelFitxer.
+  const isTechSheet = fitxer.tipus === 'TECHSHEET' || ext === 'ftt'
+  const isEditable = isTechSheet
   const url = fitxer.fitxer || fitxer.url_extern || fitxer.url
   const mt = fitxer.mimetype || ''
   // Cascada: imatge → <img>; PDF → icona (no hi ha pdf.js, no rasteritzem); altres → icona.
@@ -1525,22 +1532,44 @@ function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onDelete }) {
         <DetailRow label={t('model_sheet.files.col_date')} value={date} />
         {/* Accions (deleguen als endpoints existents; cap canvi de backend). */}
         <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
-          <button type="button" onClick={onPreview} style={{ ...actBtn, color: 'var(--text-main)' }}>
-            <i className="ti ti-eye" aria-hidden="true" /> {t('model_sheet.view')}
-          </button>
-          <label title={t('model_sheet.new_version')} style={{ ...actBtn }}>
-            <i className="ti ti-plus" aria-hidden="true" /> {t('model_sheet.new_version')}
-            <input type="file" style={{ display: 'none' }}
-              accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf"
-              onChange={e => e.target.files[0] && onNewVersion(e.target.files[0])} />
-          </label>
-          <button type="button" onClick={onHistory} title={t('model_sheet.version_history')} style={actBtn}>
-            <i className="ti ti-history" aria-hidden="true" />
-          </button>
-          <button type="button" onClick={onDelete} title={t('model_sheet.files.delete')}
-            style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>
-            <i className="ti ti-trash" aria-hidden="true" />
-          </button>
+          {isTechSheet ? (
+            <>
+              <button type="button" onClick={onEdit} style={{ ...actBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>
+                <i className="ti ti-edit" aria-hidden="true" /> {t('model_sheet.files.edit')}
+              </button>
+              <button type="button" onClick={onHistory} style={actBtn}>
+                <i className="ti ti-history" aria-hidden="true" /> {t('model_sheet.version_history')}
+              </button>
+              <button type="button" onClick={onDelete}
+                style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>
+                <i className="ti ti-trash" aria-hidden="true" /> {t('model_sheet.files.delete')}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={onPreview} style={{ ...actBtn, color: 'var(--text-main)' }}>
+                <i className="ti ti-eye" aria-hidden="true" /> {t('model_sheet.view')}
+              </button>
+              {isEditable && (
+                <button type="button" onClick={onEdit} style={{ ...actBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>
+                  <i className="ti ti-edit" aria-hidden="true" /> {t('model_sheet.files.edit')}
+                </button>
+              )}
+              <label title={t('model_sheet.new_version')} style={{ ...actBtn }}>
+                <i className="ti ti-plus" aria-hidden="true" /> {t('model_sheet.new_version')}
+                <input type="file" style={{ display: 'none' }}
+                  accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf,.ftt"
+                  onChange={e => e.target.files[0] && onNewVersion(e.target.files[0])} />
+              </label>
+              <button type="button" onClick={onHistory} title={t('model_sheet.version_history')} style={actBtn}>
+                <i className="ti ti-history" aria-hidden="true" />
+              </button>
+              <button type="button" onClick={onDelete} title={t('model_sheet.files.delete')}
+                style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>
+                <i className="ti ti-trash" aria-hidden="true" />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

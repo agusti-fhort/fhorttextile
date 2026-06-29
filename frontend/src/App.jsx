@@ -1,5 +1,5 @@
 import React, { useEffect, lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useParams, useSearchParams } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import useAuthStore from './store/auth'
 import Login from './pages/Login'
 import Shell from './components/layout/Shell'
@@ -26,6 +26,7 @@ const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
 const TechSheetTemplateEditor = lazy(() => import('./pages/TechSheetTemplateEditor'))
+const DissenyPlaceholder = lazy(() => import('./pages/DissenyPlaceholder'))
 const ItemAuthoring = lazy(() => import('./pages/ItemAuthoring'))
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
 const UsersRoles = lazy(() => import('./pages/UsersRoles'))
@@ -34,6 +35,7 @@ const CompanyCalendar = lazy(() => import('./pages/CompanyCalendar'))
 const Planning = lazy(() => import('./pages/Planning'))
 const PlanningCalendar = lazy(() => import('./pages/PlanningCalendar'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const PaperKonvaPoc = lazy(() => import('./pages/PaperKonvaPoc'))
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -57,6 +59,39 @@ function MesuresRedirect() {
   const [sp] = useSearchParams()
   const taskId = sp.get('task_id')
   return <Navigate to={`/models/${id}?tab=Mesures${taskId ? `&task_id=${taskId}` : ''}`} replace />
+}
+
+// Cutover .ftt (F8): /models/:id/fitxa ja no munta l'editor TechSheet (O2O). Resol o crea el
+// document .ftt del model (ModelFitxer tipus TECHSHEET) i redirigeix a l'editor .ftt, conservant
+// task_id. Així WorkPlan (tasca tech_sheet) i el tab Fitxa segueixen apuntant a /fitxa sense canvis.
+function FttResolver() {
+  const { id } = useParams()
+  const [sp] = useSearchParams()
+  const navigate = useNavigate()
+  const taskId = sp.get('task_id')
+  useEffect(() => {
+    const API = import.meta.env.VITE_API_URL || ''
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+    let cancelled = false
+    ;(async () => {
+      let fitxerId = null
+      try {
+        const r = await fetch(`${API}/api/v1/model-fitxers/?model=${id}&tipus=TECHSHEET&is_current=true&ordering=-data_pujada`, { headers })
+        if (r.ok) { const d = await r.json(); const list = d.results || d || []; if (list.length) fitxerId = list[0].id }
+      } catch { /* noop */ }
+      if (!fitxerId) {
+        try {
+          const r = await fetch(`${API}/api/v1/models/${id}/ftt-document/`, { method: 'POST', headers })
+          if (r.ok) { const f = await r.json(); fitxerId = f.id }
+        } catch { /* noop */ }
+      }
+      if (cancelled) return
+      navigate(fitxerId ? `/models/${id}/ftt/${fitxerId}${taskId ? `?task_id=${taskId}` : ''}` : `/models/${id}`, { replace: true })
+    })()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+  return <div style={{ padding: 24, color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>…</div>
 }
 
 class AppErrorBoundary extends React.Component {
@@ -117,8 +152,14 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         {/* Recuperació de contrasenya: pública, fora del guard (la persona no està autenticada). */}
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
-        {/* Fitxa tècnica: editor full-screen FORA del Shell (sense sidebar), però protegit. */}
+        {/* Fitxa tècnica: /fitxa ja no munta l'editor TechSheet; resol/crea el .ftt i redirigeix. */}
         <Route path="/models/:id/fitxa" element={
+          <ProtectedRoute>
+            <FttResolver />
+          </ProtectedRoute>
+        } />
+        {/* Editor de document .ftt (ModelFitxer tipus TECHSHEET): mateix editor, font .ftt. */}
+        <Route path="/models/:id/ftt/:fitxerId" element={
           <ProtectedRoute>
             <TechSheetEditor />
           </ProtectedRoute>
@@ -173,6 +214,10 @@ export default function App() {
           <Route path="poms" element={<POMs />} />
           <Route path="poms/grading" element={<GradingRuleSets />} />
           <Route path="size-library" element={<SizeLibrary />} />
+          {/* Grup Disseny (F6): documents .ftt i patró DXF. Placeholders fins als sprints propis. */}
+          <Route path="disseny/documents" element={<DissenyPlaceholder titleKey="nav.documents" icon="ti-file-text" />} />
+          <Route path="disseny/patro-dxf" element={<DissenyPlaceholder titleKey="nav.patro_dxf" icon="ti-vector" />} />
+          <Route path="disseny/poc-paper" element={<PaperKonvaPoc />} />
           <Route path="onboarding" element={<OnboardingWizard />} />
           <Route path="configuracio/usuaris" element={<UsersRoles />} />
           <Route path="configuracio/calendari" element={<CompanyCalendar />} />

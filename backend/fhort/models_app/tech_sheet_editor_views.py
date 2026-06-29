@@ -1,169 +1,20 @@
-"""Editor de fitxa tècnica — estat + lock col·laboratiu (full-screen al frontend).
+"""Plantilles de fitxa per Customer (TechSheetTemplate).
 
-NOU. No toca tech_sheet_views.py (Sprint S17, extracció IA per CREAR models). Aquí gestionem
-la fitxa persistent d'un Model existent:
-
-- TechSheetDetailView  GET   models/<model_id>/tech-sheet/         → get_or_create + serialitza
-- TechSheetLockView    POST  models/<model_id>/tech-sheet/lock/    → adquireix el lock (o força a >30min)
-- TechSheetUnlockView  POST  models/<model_id>/tech-sheet/unlock/  → allibera (propietari o `configure`)
-- TechSheetUpdateView  PATCH models/<model_id>/tech-sheet/update/  → desa template_json (només propietari del lock)
-
-El lock és cooperatiu (no transaccional fort): és una porta UX per evitar dos editors alhora,
-amb caducitat automàtica a 30 min perquè una pestanya tancada sense unlock no bloquegi per sempre.
+NOTA (Fase 2 .ftt): la fitxa per-model (TechSheet O2O) s'ha jubilat — l'editor treballa ara
+sobre documents .ftt (ModelFitxer tipus TECHSHEET) via els endpoints ftt-documents/. Aquí
+només queden les vistes de PLANTILLA per Customer, que segueixen vives fins al seu cutover propi
+a DocumentTemplate.
 """
-import datetime
-
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from fhort.accounts.capabilities import CONFIGURE, get_capabilities
 
-from .models import Model
-from .tech_sheet_models import TechSheet, TechSheetTemplate
-from .tech_sheet_serializers import TechSheetSerializer, TechSheetTemplateSerializer
-
-# Caducitat del lock: passat aquest temps sense unlock, un altre usuari el pot forçar.
-LOCK_TTL = datetime.timedelta(minutes=30)
-
-
-def _get_sheet(model_id):
-    """Retorna (o crea) la fitxa del model. 404 si el model no existeix.
-    En crear-la per primer cop (i si encara no té contingut), hi aplica automàticament
-    la plantilla del customer del model (o la del default del tenant)."""
-    model = get_object_or_404(Model, pk=model_id)
-    sheet, created = TechSheet.objects.get_or_create(model=model)
-    if created and not sheet.template_json:
-        template_json = _resolve_template_json(model.customer)
-        if template_json:
-            sheet.template_json = template_json
-            sheet.save(update_fields=['template_json'])
-    return sheet
-
-
-def _resolve_template_json(customer):
-    """template_json de la plantilla del customer (actiu), o del Customer is_self
-    (default del tenant), o {} si cap no en té."""
-    if customer is not None:
-        try:
-            t = TechSheetTemplate.objects.get(customer=customer, actiu=True)
-            if t.template_json:
-                return t.template_json
-        except TechSheetTemplate.DoesNotExist:
-            pass
-    # Fallback: default del tenant (Customer is_self=True).
-    from fhort.tasks.models import Customer as CustomerModel
-    try:
-        self_customer = CustomerModel.objects.get(is_self=True)
-        if self_customer != customer:
-            t = TechSheetTemplate.objects.get(customer=self_customer, actiu=True)
-            if t.template_json:
-                return t.template_json
-    except (TechSheetTemplate.DoesNotExist, CustomerModel.DoesNotExist,
-            CustomerModel.MultipleObjectsReturned):
-        pass
-    return {}
-
-
-class TechSheetDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, model_id):
-        sheet = _get_sheet(model_id)
-        return Response(TechSheetSerializer(sheet).data)
-
-
-class TechSheetLockView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, model_id):
-        sheet = _get_sheet(model_id)
-        now = timezone.now()
-        holder = sheet.locked_by
-
-        is_free = holder is None
-        is_mine = holder is not None and holder == request.user
-        is_stale = (
-            holder is not None
-            and sheet.locked_at is not None
-            and sheet.locked_at < now - LOCK_TTL
-        )
-
-        if is_free or is_mine or is_stale:
-            sheet.locked_by = request.user
-            sheet.locked_at = now
-            sheet.save(update_fields=['locked_by', 'locked_at', 'updated_at'])
-            return Response(TechSheetSerializer(sheet).data)
-
-        # Ocupada per un altre usuari i encara vigent → 409 amb qui i des de quan.
-        return Response(
-            {
-                'detail': 'La fitxa està bloquejada per un altre usuari.',
-                'locked_by': holder.get_username(),
-                'locked_at': sheet.locked_at,
-            },
-            status=status.HTTP_409_CONFLICT,
-        )
-
-
-class TechSheetUnlockView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, model_id):
-        sheet = _get_sheet(model_id)
-        holder = sheet.locked_by
-
-        is_mine = holder is not None and holder == request.user
-        can_override = CONFIGURE in get_capabilities(request.user)
-
-        if holder is not None and not (is_mine or can_override):
-            return Response(
-                {
-                    'detail': 'No pots alliberar un lock d\'un altre usuari.',
-                    'locked_by': holder.get_username(),
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        sheet.locked_by = None
-        sheet.locked_at = None
-        sheet.save(update_fields=['locked_by', 'locked_at', 'updated_at'])
-        return Response(TechSheetSerializer(sheet).data)
-
-
-class TechSheetUpdateView(APIView):
-    """Desa el contingut de la fitxa (template pdfme). Autosave del frontend (debounce).
-
-    Només l'usuari que té el lock pot escriure: és la garantia d'integritat de l'edició
-    col·laborativa (el lock dona dret exclusiu d'escriptura). Sense lock o lock d'un altre → 403."""
-    permission_classes = [IsAuthenticated]
-
-    def patch(self, request, model_id):
-        sheet = _get_sheet(model_id)
-
-        if sheet.locked_by_id != request.user.id:
-            return Response(
-                {
-                    'detail': 'Has de tenir el lock per desar la fitxa.',
-                    'locked_by': sheet.locked_by.get_username() if sheet.locked_by_id else None,
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        if 'template_json' not in request.data:
-            return Response(
-                {'detail': 'Falta template_json.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        sheet.template_json = request.data['template_json']
-        sheet.last_editor = request.user
-        sheet.save(update_fields=['template_json', 'last_editor', 'updated_at'])
-        return Response(TechSheetSerializer(sheet).data)
+from .tech_sheet_models import TechSheetTemplate
+from .tech_sheet_serializers import TechSheetTemplateSerializer
 
 
 # ── TechSheetTemplate views (plantilla per Customer) ─────────────────────────

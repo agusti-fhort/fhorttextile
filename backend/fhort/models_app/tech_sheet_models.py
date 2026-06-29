@@ -1,61 +1,21 @@
-"""Fitxa tècnica editable (editor full-screen) — model d'estat + lock col·laboratiu.
+"""Plantilla de fitxa per Customer (TechSheetTemplate).
 
-Separat de models.py per aïllar el subsistema de l'editor de fitxa. S'importa des de
-models_app/models.py (al final) perquè Django el descobreixi dins l'app `models_app`;
-l'app_label s'infereix del paquet contenidor, així les migracions van a models_app/.
+NOTA (Fase 2 .ftt): el model TechSheet (fitxa per-model, O2O) s'ha jubilat — el document
+editable viu ara com a ModelFitxer tipus TECHSHEET (.ftt). Queda només la plantilla per
+Customer, fins al seu cutover propi a DocumentTemplate.
 
-No confondre amb tech_sheet_views.py (Sprint S17), que és l'extracció IA d'una fitxa
-PDF → JSON per CREAR un Model. Això és l'editor persistent de la fitxa d'un Model ja existent.
+Separat de models.py per aïllar el subsistema; s'importa des de models_app/models.py (al
+final) perquè Django el descobreixi dins l'app `models_app`.
 """
-from django.conf import settings
 from django.db import models
 
 
-class TechSheet(models.Model):
-    ESTAT_CHOICES = [
-        ('obert', 'Obert'),
-        ('tancat', 'Tancat'),
-    ]
-
-    model = models.OneToOneField(
-        'models_app.Model',
-        on_delete=models.CASCADE,
-        related_name='tech_sheet',
-    )
-    estat = models.CharField(max_length=10, choices=ESTAT_CHOICES, default='obert')
-    versio = models.PositiveIntegerField(default=1)
-    template_json = models.JSONField(default=dict, blank=True)
-
-    # Lock col·laboratiu: qui té la fitxa oberta ara (edició exclusiva).
-    locked_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='tech_sheets_locked',
-    )
-    locked_at = models.DateTimeField(null=True, blank=True)
-
-    # Últim que va desar (auditoria lleugera).
-    last_editor = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='tech_sheets_edited',
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = 'Fitxa tècnica'
-        verbose_name_plural = 'Fitxes tècniques'
-
-    def __str__(self):
-        return f'TechSheet<{self.model_id}> [{self.estat}] v{self.versio}'
-
-
 class TechSheetTemplate(models.Model):
-    """Plantilla de fitxa tècnica per Customer (TS-3). Una per client; la del Customer
+    """DEPRECAT (Fase 1 .ftt) — substituït per models_app.ftt_models.DocumentTemplate
+    (magatzem de moltes plantilles del tenant). Es manté mentre el flux TechSheet (O2O)
+    encara hi llegeix; la retirada neta arriba a la jubilació final (B8). 0 files a BD.
+
+    Plantilla de fitxa tècnica per Customer (TS-3). Una per client; la del Customer
     is_self=True actua com a default del tenant. S'aplica en crear la TechSheet d'un model
     (copia template_json). Mateix format v2 (clau `pages`) que TechSheet — opac per al backend."""
     customer = models.OneToOneField(

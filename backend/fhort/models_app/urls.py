@@ -145,24 +145,38 @@ except Exception:
 # amb el detall del router (models/<pk>/), però es prepended per consistència amb la resta.
 try:
     from .tech_sheet_editor_views import (
-        TechSheetDetailView,
-        TechSheetLockView,
-        TechSheetUnlockView,
-        TechSheetUpdateView,
         get_or_create_template,
         update_template,
     )
     _techsheet_editor_paths = [
-        path('models/<int:model_id>/tech-sheet/',        TechSheetDetailView.as_view(), name='tech-sheet-detail'),
-        path('models/<int:model_id>/tech-sheet/lock/',   TechSheetLockView.as_view(),   name='tech-sheet-lock'),
-        path('models/<int:model_id>/tech-sheet/unlock/', TechSheetUnlockView.as_view(), name='tech-sheet-unlock'),
-        path('models/<int:model_id>/tech-sheet/update/', TechSheetUpdateView.as_view(), name='tech-sheet-update'),
-        # Plantilles de fitxa per Customer (TS-3).
+        # Fitxa per-model jubilada (Fase 2 .ftt) → els endpoints viuen a ftt-documents/.
+        # Es mantenen només les plantilles de fitxa per Customer (TS-3).
         path('customers/<int:customer_id>/tech-sheet-template/',        get_or_create_template, name='tech-sheet-template-detail'),
         path('customers/<int:customer_id>/tech-sheet-template/update/', update_template,        name='tech-sheet-template-update'),
     ]
 except Exception:
     _techsheet_editor_paths = []
+
+# Documents .ftt sobre el Finder (ModelFitxer tipus TECHSHEET). Crear/carregar/desar.
+try:
+    from .ftt_document_views import (
+        FttDocumentAssetView,
+        FttDocumentCreateView,
+        FttDocumentDetailView,
+        FttDocumentExportView,
+        FttDocumentLockView,
+        FttDocumentUnlockView,
+    )
+    _ftt_document_paths = [
+        path('models/<int:model_id>/ftt-document/', FttDocumentCreateView.as_view(), name='ftt-document-create'),
+        path('ftt-documents/<int:fitxer_id>/', FttDocumentDetailView.as_view(), name='ftt-document-detail'),
+        path('ftt-documents/<int:fitxer_id>/lock/', FttDocumentLockView.as_view(), name='ftt-document-lock'),
+        path('ftt-documents/<int:fitxer_id>/unlock/', FttDocumentUnlockView.as_view(), name='ftt-document-unlock'),
+        path('ftt-documents/<int:fitxer_id>/export/', FttDocumentExportView.as_view(), name='ftt-document-export'),
+        path('ftt-documents/<int:fitxer_id>/asset/<str:asset_name>/', FttDocumentAssetView.as_view(), name='ftt-document-asset'),
+    ]
+except Exception:
+    _ftt_document_paths = []
 
 urlpatterns = (
     [
@@ -199,5 +213,6 @@ urlpatterns = (
     + _sprint17_paths
     + _bulk_paths
     + _techsheet_editor_paths
+    + _ftt_document_paths
     + router.urls
 )

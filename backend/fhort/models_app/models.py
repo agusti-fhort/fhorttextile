@@ -341,6 +341,14 @@ class ModelFitxer(models.Model):
         ('ia_ocr', 'IA OCR'),
     ]
 
+    # Valors reservats de `tipus` per al sistema de documents .ftt. El camp `tipus`
+    # és CharField lliure (sense choices) → són convencions de codi, no constraints
+    # de BD: no requereixen migració. La invariant is_current/versio (save_model_file)
+    # és agnòstica al tipus.
+    TIPUS_TECHSHEET = 'TECHSHEET'   # document editable .ftt (fitxa tècnica)
+    TIPUS_EXPORT = 'EXPORT'         # PDF d'export generat des d'un document .ftt
+    FTT_EXTENSION = '.ftt'
+
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='fitxers')
     nom_fitxer = models.CharField(max_length=255)
     categoria = models.CharField(max_length=20, choices=CATEGORIA_CHOICES)
@@ -355,6 +363,16 @@ class ModelFitxer(models.Model):
         null=True,
         blank=True,
         related_name='versions_posteriors',
+    )
+    # Enllaç (no cadena): per a artefactes generats des d'un altre fitxer, p.ex. un PDF
+    # EXPORT generat des d'una versió concreta del document .ftt. NO és versio_anterior:
+    # l'export és la seva pròpia cadena i el .ftt origen no es toca (is_current intacte).
+    generat_des_de = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='exports_generats',
     )
     accessible_portal = models.BooleanField(default=False)
     pujat_per = models.ForeignKey(
@@ -852,6 +870,10 @@ class Watchpoint(models.Model):
         return f'Watchpoint #{self.pk} ({self.estat}) · model {self.model_id}'
 
 
-# Fitxa tècnica editable (editor full-screen). Definit a tech_sheet_models.py i importat
-# aquí perquè Django el descobreixi dins l'app `models_app` (migracions → models_app/).
-from .tech_sheet_models import TechSheet  # noqa: E402,F401
+# Plantilla de fitxa per Customer. Definida a tech_sheet_models.py i importada aquí perquè
+# Django la descobreixi dins l'app `models_app`. (El model TechSheet per-model s'ha jubilat
+# a la Fase 2 .ftt; el document editable viu com a ModelFitxer tipus TECHSHEET.)
+from .tech_sheet_models import TechSheetTemplate  # noqa: E402,F401
+
+# Sistema de documents .ftt: magatzem de plantilles + lock del document lògic.
+from .ftt_models import DocumentTemplate, FttDocumentLock  # noqa: E402,F401

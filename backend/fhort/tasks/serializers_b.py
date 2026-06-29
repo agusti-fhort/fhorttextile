@@ -7,7 +7,9 @@ from .services_c import rectification_count
 class TaskTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskType
-        fields = ['id', 'code', 'name', 'default_order', 'active']
+        # B1: s'exposen fase/eina/mode (additiu, read-only) perquè l'arbre de tasques agrupi per
+        # fase i pugui navegar a l'eina correcta en iniciar. Referència sempre per `code` (G9).
+        fields = ['id', 'code', 'name', 'default_order', 'active', 'fase', 'eina', 'mode']
 
 
 class ModelTaskSerializer(serializers.ModelSerializer):
