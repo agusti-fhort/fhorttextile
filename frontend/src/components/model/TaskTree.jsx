@@ -75,6 +75,17 @@ export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelId])
 
+  // T3: auditoria — avisa (NO silencia) si algun TaskType actiu té `eina` però cap ruta d'eina
+  // mapejada a toolRoute. Aquests s'inicien + refresquen sense navegar (eina futura: patró, bom…).
+  useEffect(() => {
+    if (!types.length) return
+    const unmapped = types.filter(tt => tt.eina && !toolRoute(tt.code, 1, modelId))
+    if (unmapped.length) {
+      console.warn('[TaskTree] TaskTypes actius amb `eina` sense ruta d\'eina mapejada (s\'inicien sense navegar):',
+        unmapped.map(tt => `${tt.code}→${tt.eina}`).join(', '))
+    }
+  }, [types, modelId])
+
   const start = (tt) => {
     setError(''); setStarting(tt.code)
     models.openTask(modelId, tt.code)
