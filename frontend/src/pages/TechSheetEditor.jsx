@@ -40,21 +40,20 @@ export const PAGE_FORMATS = {
 }
 
 export const FONT = 'IBM Plex Mono, monospace'
-// Re-tema DARK (C1). Editor-local: COL només l'usen els editors de fitxa (aquest +
-// TechSheetTemplateEditor); cap altra pantalla. Per això NO toquem els tokens globals de
-// :root (--border/--text-main/--text-muted) i la resta de l'app queda intacta. Decisió Agus
-// (invertida): fons de TREBALL charcoal MÉS CLAR (`work`), CLOSCA charcoal MÉS FOSC
-// (`sidebar`/`bg`); controls amb interior fosc (`field`) i text clar; gold = accent.
+// T1 (DECISIONS §3): la pell de la closca de l'editor usa els TOKENS GLOBALS de la plataforma
+// (:root a index.css) per coherència amb la resta del SaaS — substitueix els literals dark/
+// SolidWorks dels commits f77309e/233f10f-9c3c0de. COL és el mapa DOM→token (var() resol al DOM);
+// KONVA_COL (canvas) NO es toca.
 export const COL = {
-  sidebar: '#e6e8eb',   // closca SolidWorks: barres i ribbon, clar tecnic
-  gold: 'var(--gold)',  // accent (es manté)
-  goldPale: '#fff3df',  // estat actiu amb tint gold clar
-  border: '#b9c0c8',    // vora tecnica sobre gris
-  textMain: '#23272c',  // text principal sobre UI clara
-  textMuted: '#69717b', // text secundari
-  bg: '#f1f3f5',        // closca: asides, columnes, panells
-  work: '#d7dbe0',      // fons de treball darrere el paper
-  field: '#ffffff',     // interior de controls
+  sidebar: 'var(--bg-sidebar)',  // closca: topbar/peu — càlid, com la nav de la plataforma
+  gold: 'var(--gold)',           // accent
+  goldPale: 'var(--gold-pale)',  // estat actiu amb tint gold suau
+  border: 'var(--border)',       // filet/vora subtil de la plataforma
+  textMain: 'var(--text-main)',  // text principal
+  textMuted: 'var(--text-muted)',// text secundari
+  bg: 'var(--bg-muted)',         // asides, columnes, panells
+  work: 'var(--bg-muted)',       // fons de treball darrere el paper
+  field: 'var(--white)',         // interior de controls
 }
 // Paleta LITERAL del canvas: Konva pinta sobre <canvas> via ctx.fillStyle i NO resol
 // CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
@@ -1961,8 +1960,8 @@ export default function TechSheetEditor() {
   const paletteBtnOn = { borderColor: COL.gold, background: COL.goldPale, color: COL.gold }
   // PAL-1: eina futura sense handler — placeholder visible però deshabilitat.
   const paletteBtnSoon = { color: COL.textMuted, opacity: 0.4, cursor: 'default' }
-  // Barra contextual (C4): FOSCA com la resta de la closca (PAL-A), discreta, separada de la topbar
-  // i del viewport per un filet molt fi (1px COL.border subtil) — com la barra d'estat inferior.
+  // Barra contextual (C4): mateixa pell que la resta de la closca (tokens globals, T1), discreta,
+  // separada de la topbar i del viewport per un filet molt fi (1px COL.border) — com el peu d'estat.
   const CTX_BG = COL.sidebar, CTX_BORDER = COL.border, CTX_TEXT = COL.textMain
   const ctxBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 26, height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: COL.field, color: CTX_TEXT, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' }
   const curObjs = objectsOf(currentPage)
@@ -2217,7 +2216,7 @@ export default function TechSheetEditor() {
                         style={{ position: 'absolute', right: 1, bottom: 0, fontSize: 8, lineHeight: 1, opacity: it.soon ? 0.4 : 0.7 }} />
                     </button>
                     {flyoutOpen === it.id && flyoutRect && (
-                      <div data-flyout={it.id} style={{ position: 'fixed', left: flyoutRect.right + 4, top: flyoutRect.top, zIndex: 60, display: 'flex', gap: 2, padding: 4, background: COL.sidebar, border: `1px solid ${COL.border}`, borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.35)' }}>
+                      <div data-flyout={it.id} style={{ position: 'fixed', left: flyoutRect.right + 4, top: flyoutRect.top, zIndex: 60, display: 'flex', gap: 2, padding: 4, background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
                         {it.tools.map(tl => (
                           <button key={tl.k} disabled={it.soon} onClick={() => !it.soon && pickFlyoutTool(it, tl.k)}
                             title={it.soon ? `${tl.label} · ${t('tech_sheet.coming_soon')}` : tl.label}
@@ -2257,7 +2256,7 @@ export default function TechSheetEditor() {
           )}
           <div style={{ width: pageW * zoom, height: pageH * zoom, position: 'relative', margin: '0 auto' }}>
           <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()}
-            style={{ position: 'relative', width: pageW * zoom, height: pageH * zoom, boxShadow: '0 4px 24px rgba(0,0,0,0.12)', background: 'var(--white)', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
+            style={{ position: 'relative', width: pageW * zoom, height: pageH * zoom, outline: `1px solid ${COL.border}`, background: 'var(--white)', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
             {/* R1: el zoom el fa Konva (scaleX/scaleY) re-pintant els vectors a la mida real ×
                 devicePixelRatio → NÍTID a qualsevol zoom. Ja no s'escala el bitmap per CSS. */}
             <Stage ref={stageRef} width={pageW * zoom} height={pageH * zoom} scaleX={zoom} scaleY={zoom}
@@ -2428,7 +2427,7 @@ export default function TechSheetEditor() {
               <>
                 <SectionTitle>{t('tech_sheet.element')} · {selObj.type}</SectionTitle>
                 {selDim && (
-                  <div style={{ border: `1px solid ${COL.border}`, borderRadius: 5, background: '#f8f9fa', padding: 8, marginBottom: 10 }}>
+                  <div style={{ border: `1px solid ${COL.border}`, borderRadius: 5, background: 'var(--bg-card)', padding: 8, marginBottom: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                       <span style={{ color: COL.gold, fontSize: 'var(--fs-label)', fontWeight: 700, textTransform: 'uppercase' }}>{t('tech_sheet.dimensions_position')}</span>
                       <button type="button" onClick={() => setRatioLocked(v => !v)} title={t('tech_sheet.keep_ratio')}
@@ -2555,7 +2554,7 @@ export default function TechSheetEditor() {
           v{sheet?.versio ?? 1} · {badge.text}
         </span>
         {saveLabel && <span>{saveLabel}</span>}
-        {notice && <span style={{ color: '#8a520d', background: '#fff3df', border: `1px solid ${COL.gold}`, padding: '2px 8px', borderRadius: 5 }}>{notice}</span>}
+        {notice && <span style={{ color: 'var(--warn)', background: 'var(--gold-pale)', border: `1px solid ${COL.gold}`, padding: '2px 8px', borderRadius: 5 }}>{notice}</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
           <button type="button" onClick={() => setZoomClamped(z => z - ZOOM_STEP)} title={t('tech_sheet.zoom_out')} style={{ ...headerBtn, padding: '3px 6px' }}>
             <i className="ti ti-minus" aria-hidden="true" style={{ fontSize: 13 }} />
@@ -2612,4 +2611,4 @@ export function SectionTitle({ children }) {
   return <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
 }
 export const propLabel = { display: 'block', fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 8 }
-export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: COL.field, color: COL.textMain, boxSizing: 'border-box', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.7)' }
+export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: COL.field, color: COL.textMain, boxSizing: 'border-box' }
