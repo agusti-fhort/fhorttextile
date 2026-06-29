@@ -1682,6 +1682,8 @@
     "flat_insert": "Dibujo vectorial",
     "flat_import": "Importar Garment",
     "import_measurements": "Importar Medidas",
+    "import_panel_title_image": "Importar Imagen",
+    "import_panel_title_garment": "Importar Garment",
     "flat_replace_svg": "Reemplazar SVG",
     "flat_import_invalid": "Este archivo no es un SVG válido.",
     "flat_import_error": "No se ha podido importar el SVG.",

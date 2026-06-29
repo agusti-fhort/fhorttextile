@@ -1682,6 +1682,8 @@
     "flat_insert": "Dibuix vectorial",
     "flat_import": "Importar Garment",
     "import_measurements": "Importar Mesures",
+    "import_panel_title_image": "Importar Imatge",
+    "import_panel_title_garment": "Importar Garment",
     "flat_replace_svg": "Reemplaçar SVG",
     "flat_import_invalid": "Aquest fitxer no és un SVG vàlid.",
     "flat_import_error": "No s'ha pogut importar l'SVG.",

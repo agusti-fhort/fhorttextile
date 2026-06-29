@@ -1029,6 +1029,7 @@ export default function TechSheetEditor() {
   const [flyoutRect, setFlyoutRect] = useState(null)   // rect del botó (popover en position:fixed)
   const [ribbonGroup, setRibbonGroup] = useState('file')
   const [dockTab, setDockTab] = useState('properties')   // D2: pestanya activa del dock dret
+  const [importMode, setImportMode] = useState(null)     // IMP-1: null | 'image' | 'garment' (panell d'import al dock)
   const [ratioLocked, setRatioLocked] = useState(true)
 
   const locked = lockState === 'owned'
@@ -2059,6 +2060,9 @@ export default function TechSheetEditor() {
   const openFlyout = (id, rect) => { setFlyoutRect(rect); setFlyoutOpen(id) }
   const startHold = (id, rect) => { cancelHold(); holdTimer.current = setTimeout(() => { suppressClick.current = true; openFlyout(id, rect) }, 300) }
   const pickFlyoutTool = (fl, k) => { setFlyoutSel(s => ({ ...s, [fl.id]: k })); setTool(k); setFlyoutOpen(null); cancelHold() }
+  // IMP-1: panell d'importació al dock dret. openImport substitueix els tabs; closeImport hi torna.
+  const openImport = (mode) => setImportMode(mode)
+  const closeImport = () => setImportMode(null)
   const ribbonTabs = [
     { id: 'file', label: t('tech_sheet.ribbon_file') },
     { id: 'page', label: t('tech_sheet.ribbon_page') },
@@ -2121,10 +2125,10 @@ export default function TechSheetEditor() {
         ribbonTool({ key: 'logo', icon: 'ti-photo', label: t('tech_sheet.client_logo'), onClick: insertLogo, title: customerLogoUrl ? t('tech_sheet.insert_logo_title') : t('tech_sheet.no_logo_title') }),
         ribbonTool({ key: 'table', icon: 'ti-table', label: t('tech_sheet.graded_table'), onClick: onAddTableClick, disabled: addingTable || !sizeFittings.length }),
         ribbonTool({ key: 'flat', icon: 'ti-vector', label: t('tech_sheet.flat_insert'), onClick: insertFlatSketch }),
-        ribbonTool({ key: 'import-flat', icon: 'ti-file-import', label: t('tech_sheet.flat_import'), onClick: () => flatFileRef.current?.click() }),
+        ribbonTool({ key: 'import-flat', icon: 'ti-file-import', label: t('tech_sheet.flat_import'), onClick: () => openImport('garment') }),
         // R1: placeholder — el flux d'import de mesures es dissenyarà més endavant (sense handler).
         ribbonTool({ key: 'import-measures', icon: 'ti-ruler', label: t('tech_sheet.import_measurements'), disabled: true, title: `${t('tech_sheet.import_measurements')} · ${t('tech_sheet.coming_soon')}` }),
-        ribbonTool({ key: 'image', icon: 'ti-photo-plus', label: t('tech_sheet.tool_image'), onClick: () => fileRef.current?.click() }),
+        ribbonTool({ key: 'image', icon: 'ti-photo-plus', label: t('tech_sheet.tool_image'), onClick: () => openImport('image') }),
       ]
       // NOTA (R1): els botons de "Fitxers del model" s'han retirat del ribbon; addModelFitxer i la
       // càrrega de `fitxers` es conserven al codi per al futur tab Components.
@@ -2336,6 +2340,24 @@ export default function TechSheetEditor() {
 
         {/* ── Dreta: capes / inserir / propietats ── */}
         <aside style={{ width: 270, flexShrink: 0, borderLeft: `1px solid ${COL.border}`, background: COL.bg, display: 'flex', flexDirection: 'column', minHeight: 0, fontFamily: FONT }}>
+          {/* IMP-1/2: panell d'importació — substitueix temporalment els tabs Propietats/Capes */}
+          {importMode && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px', borderBottom: `1px solid ${COL.border}`, flexShrink: 0 }}>
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: COL.textMain }}>
+                  {importMode === 'image' ? t('tech_sheet.import_panel_title_image') : t('tech_sheet.import_panel_title_garment')}
+                </span>
+                <button type="button" onClick={closeImport} title={t('app.close')}
+                  style={{ border: 'none', background: 'transparent', color: COL.textMuted, cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 2 }}>
+                  <i className="ti ti-x" />
+                </button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px 64px' }}>
+                {/* IMP-2: contingut del panell (D'ON, drop zone, Inserir/Cancel·lar) */}
+              </div>
+            </div>
+          )}
+          {!importMode && (<>
           {/* D2: pestanyes del dock. Arquitectura oberta: afegir aquí un futur tab 'components'. */}
           <div style={{ display: 'flex', flexShrink: 0, borderBottom: `1px solid ${COL.border}` }}>
             {[{ id: 'properties', icon: 'ti-adjustments', label: t('tech_sheet.dock_properties') }, { id: 'layers', icon: 'ti-stack-2', label: t('tech_sheet.dock_layers') }].map(tb => {
@@ -2523,6 +2545,7 @@ export default function TechSheetEditor() {
               </>
             )}
           </div>
+          </>)}
         </aside>
       </main>
 
