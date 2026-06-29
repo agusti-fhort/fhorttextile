@@ -1641,6 +1641,8 @@
     "rotation_deg": "∠ (grados)",
     "mirror_h": "Espejo H",
     "mirror_v": "Espejo V",
+    "bring_to_front": "Frente",
+    "send_to_back": "Fondo",
     "bring_forward": "Adelante",
     "send_backward": "Atrás",
     "group": "Agrupar",

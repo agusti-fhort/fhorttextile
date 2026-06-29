@@ -1057,6 +1057,7 @@ export default function TechSheetEditor() {
   const fttUrlToName = useRef({})      // {URL: nom} per desar (URL → 'assets/<nom>')
   const fttMeta = useRef({})           // metadata del document.json (es conserva en desar)
   const fttHeadId = useRef(fitxerId || null)  // cap de cadena vigent (canvia en desar: nova versió)
+  const didInitialFit = useRef(false)
   const drawing = useRef(null)         // {type, points, id} mentre es dibuixa
   const [drawTemp, setDrawTemp] = useState(null)
 
@@ -1098,6 +1099,14 @@ export default function TechSheetEditor() {
     const pad = 48
     setZoomClamped(Math.min((viewport.clientWidth - pad) / pageW, (viewport.clientHeight - pad) / pageH))
   }, [pageH, pageW, setZoomClamped])
+  useEffect(() => {
+    if (didInitialFit.current || !pages.length) return undefined
+    const t = setTimeout(() => {
+      fitZoomToViewport()
+      didInitialFit.current = true
+    }, 0)
+    return () => clearTimeout(t)
+  }, [fitZoomToViewport, pages.length])
   const selectOnly = useCallback((objId) => setSelectedIds([objId]), [])
   const toggleSelection = useCallback((objId) => {
     setSelectedIds(ids => (ids.includes(objId) ? ids.filter(id => id !== objId) : [...ids, objId]))
@@ -1160,6 +1169,18 @@ export default function TechSheetEditor() {
         }
       }
       return next
+    })
+  }, [currentPage, selectedIds, updatePageObjects])
+  const moveSelectionToFreeLayerEdge = useCallback((edge) => {
+    const ids = new Set(selectedIds)
+    updatePageObjects(currentPage, objs => {
+      const nonFree = objs.filter(o => o.layer !== 'free')
+      const freeSelected = objs.filter(o => o.layer === 'free' && ids.has(o.id))
+      const freeRest = objs.filter(o => o.layer === 'free' && !ids.has(o.id))
+      if (!freeSelected.length) return objs
+      return edge === 'front'
+        ? [...nonFree, ...freeRest, ...freeSelected]
+        : [...nonFree, ...freeSelected, ...freeRest]
     })
   }, [currentPage, selectedIds, updatePageObjects])
   const groupSelection = useCallback(() => {
@@ -2119,8 +2140,10 @@ export default function TechSheetEditor() {
       ribbonTool({ key: 'ungroup', icon: 'ti-unlink', label: t('tech_sheet.ungroup'), onClick: () => ungroupObject(selObj.id), disabled: selObj?.type !== 'group' }),
       ribbonTool({ key: 'mirror-h', icon: 'ti-flip-horizontal', label: t('tech_sheet.mirror_h'), onClick: () => mirrorObjects(mirrorableIds, 'scaleX'), disabled: mirrorableIds.length === 0 }),
       ribbonTool({ key: 'mirror-v', icon: 'ti-flip-vertical', label: t('tech_sheet.mirror_v'), onClick: () => mirrorObjects(mirrorableIds, 'scaleY'), disabled: mirrorableIds.length === 0 }),
+      ribbonTool({ key: 'send-back', icon: 'ti-chevrons-down', label: t('tech_sheet.send_to_back'), onClick: () => moveSelectionToFreeLayerEdge('back'), disabled: freeSelectedIds.length === 0 }),
       ribbonTool({ key: 'backward', icon: 'ti-arrow-down', label: t('tech_sheet.send_backward'), onClick: () => moveSelectionInFreeLayer('backward'), disabled: freeSelectedIds.length === 0 }),
       ribbonTool({ key: 'forward', icon: 'ti-arrow-up', label: t('tech_sheet.bring_forward'), onClick: () => moveSelectionInFreeLayer('forward'), disabled: freeSelectedIds.length === 0 }),
+      ribbonTool({ key: 'bring-front', icon: 'ti-chevrons-up', label: t('tech_sheet.bring_to_front'), onClick: () => moveSelectionToFreeLayerEdge('front'), disabled: freeSelectedIds.length === 0 }),
       ribbonTool({ key: 'delete', icon: 'ti-trash', label: t('app.delete'), onClick: deleteSelection, disabled: selectedDeletableIds.length === 0 }),
     ]
   }

@@ -1641,6 +1641,8 @@
     "rotation_deg": "∠ (graus)",
     "mirror_h": "Mirall H",
     "mirror_v": "Mirall V",
+    "bring_to_front": "Davant",
+    "send_to_back": "Fons",
     "bring_forward": "Endavant",
     "send_backward": "Enrere",
     "group": "Agrupar",

@@ -348,6 +348,7 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
     const svg = sketchLayer.exportSVG({ asString: true, bounds: 'content' })
     onCommit(svg)
   }
+  const visibleStatus = status === labels?.pathSelected ? '' : status
 
   return (
     <div style={{ position: 'absolute', left, top, width: overlayW, height: overlayH, zIndex: 20, overflow: 'hidden' }}>
@@ -357,8 +358,8 @@ export default function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, on
         height={pageH * zoom}
         style={{ position: 'absolute', left: -left, top: -top, width: pageW * zoom, height: pageH * zoom, touchAction: 'none', cursor: 'crosshair' }}
       />
-      <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', alignItems: 'center', gap: 6, padding: 6, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)', boxShadow: '0 2px 8px rgba(0,0,0,.08)' }}>
-        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', minWidth: 120 }}>{status}</span>
+      <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 5px', border: '1px solid var(--border)', borderRadius: 5, background: 'rgba(255,255,255,.92)', boxShadow: '0 1px 5px rgba(0,0,0,.08)' }}>
+        {visibleStatus && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', maxWidth: 86, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{visibleStatus}</span>}
         <button type="button" onClick={commit} disabled={!canCommit} style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)', border: 'none', borderRadius: 5, background: 'var(--gold)', color: 'var(--white)', padding: '5px 8px', cursor: canCommit ? 'pointer' : 'default', opacity: canCommit ? 1 : 0.45 }}>
           <i className="ti ti-check" aria-hidden="true" /> {labels?.done}
         </button>
