@@ -2130,14 +2130,14 @@ export default function TechSheetEditor() {
       ]
     }
     return [
-      ribbonTool({ key: 'align-left', icon: 'ti-align-left', label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-center', icon: 'ti-align-center', label: t('tech_sheet.align_center_short'), onClick: () => alignSelection('center'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-right', icon: 'ti-align-right', label: t('tech_sheet.align_right_short'), onClick: () => alignSelection('right'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-top', icon: 'ti-align-top', label: t('tech_sheet.align_top_short'), onClick: () => alignSelection('top'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-middle', icon: 'ti-align-middle', label: t('tech_sheet.align_middle_short'), onClick: () => alignSelection('middle'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-bottom', icon: 'ti-align-bottom', label: t('tech_sheet.align_bottom_short'), onClick: () => alignSelection('bottom'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'dist-h', icon: 'ti-distribute-horizontal', label: t('tech_sheet.distribute_h_short'), onClick: () => distributeSelection('h'), disabled: selectedObjects.length < 3 }),
-      ribbonTool({ key: 'dist-v', icon: 'ti-distribute-vertical', label: t('tech_sheet.distribute_v_short'), onClick: () => distributeSelection('v'), disabled: selectedObjects.length < 3 }),
+      ribbonTool({ key: 'align-left', icon: 'ti-layout-align-left', label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-center', icon: 'ti-layout-align-center', label: t('tech_sheet.align_center_short'), onClick: () => alignSelection('center'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-right', icon: 'ti-layout-align-right', label: t('tech_sheet.align_right_short'), onClick: () => alignSelection('right'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-top', icon: 'ti-layout-align-top', label: t('tech_sheet.align_top_short'), onClick: () => alignSelection('top'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-middle', icon: 'ti-layout-align-middle', label: t('tech_sheet.align_middle_short'), onClick: () => alignSelection('middle'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-bottom', icon: 'ti-layout-align-bottom', label: t('tech_sheet.align_bottom_short'), onClick: () => alignSelection('bottom'), disabled: selectedObjects.length < 2 }),
+      ribbonTool({ key: 'dist-h', icon: 'ti-layout-distribute-horizontal', label: t('tech_sheet.distribute_h_short'), onClick: () => distributeSelection('h'), disabled: selectedObjects.length < 3 }),
+      ribbonTool({ key: 'dist-v', icon: 'ti-layout-distribute-vertical', label: t('tech_sheet.distribute_v_short'), onClick: () => distributeSelection('v'), disabled: selectedObjects.length < 3 }),
       ribbonTool({ key: 'group', icon: 'ti-box-multiple', label: t('tech_sheet.group'), onClick: groupSelection, disabled: selectedObjects.length < 2 }),
       ribbonTool({ key: 'ungroup', icon: 'ti-unlink', label: t('tech_sheet.ungroup'), onClick: () => ungroupObject(selObj.id), disabled: selObj?.type !== 'group' }),
       ribbonTool({ key: 'mirror-h', icon: 'ti-flip-horizontal', label: t('tech_sheet.mirror_h'), onClick: () => mirrorObjects(mirrorableIds, 'scaleX'), disabled: mirrorableIds.length === 0 }),
