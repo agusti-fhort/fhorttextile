@@ -383,6 +383,19 @@
     "tab_grading": "Grading",
     "tab_tech_sheet": "Tech sheet",
     "tab_activity_log": "Activity log",
+    "tab_tasks": "Tasks",
+    "tasks": {
+      "tree_title": "Start a task",
+      "tree_start_task": "Start",
+      "tree_no_permission": "You don't have permission to start this task",
+      "tree_start_error": "Could not start the task",
+      "tree_phase_design": "Design",
+      "tree_phase_dev": "Tech dev",
+      "tree_phase_prototype": "Prototype",
+      "tree_phase_samples": "Samples",
+      "tree_phase_preprod": "Pre-production",
+      "tree_phase_prod": "Production"
+    },
     "dashboard": {
       "err_load": "Error loading the dashboard",
       "section_status": "Where I am",

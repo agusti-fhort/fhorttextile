@@ -383,6 +383,19 @@
     "tab_grading": "Escalado",
     "tab_tech_sheet": "Ficha técnica",
     "tab_activity_log": "Registro de actividad",
+    "tab_tasks": "Tareas",
+    "tasks": {
+      "tree_title": "Iniciar una tarea",
+      "tree_start_task": "Iniciar",
+      "tree_no_permission": "No tienes permiso para iniciar esta tarea",
+      "tree_start_error": "No se ha podido iniciar la tarea",
+      "tree_phase_design": "Diseño",
+      "tree_phase_dev": "Des. técnico",
+      "tree_phase_prototype": "Prototipo",
+      "tree_phase_samples": "Muestras",
+      "tree_phase_preprod": "Preproducción",
+      "tree_phase_prod": "Producción"
+    },
     "dashboard": {
       "err_load": "Error al cargar el dashboard",
       "section_status": "Dónde estoy",

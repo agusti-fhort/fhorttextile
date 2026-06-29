@@ -383,6 +383,19 @@
     "tab_grading": "Escalat",
     "tab_tech_sheet": "Fitxa tècnica",
     "tab_activity_log": "Registre d'activitat",
+    "tab_tasks": "Tasques",
+    "tasks": {
+      "tree_title": "Iniciar una tasca",
+      "tree_start_task": "Iniciar",
+      "tree_no_permission": "No tens permís per iniciar aquesta tasca",
+      "tree_start_error": "No s'ha pogut iniciar la tasca",
+      "tree_phase_design": "Disseny",
+      "tree_phase_dev": "Dev. tècnic",
+      "tree_phase_prototype": "Prototip",
+      "tree_phase_samples": "Mostres",
+      "tree_phase_preprod": "Preproducció",
+      "tree_phase_prod": "Producció"
+    },
     "dashboard": {
       "err_load": "Error carregant el dashboard",
       "section_status": "On sóc",
