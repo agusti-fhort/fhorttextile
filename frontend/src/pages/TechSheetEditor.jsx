@@ -2114,12 +2114,14 @@ export default function TechSheetEditor() {
     cursor: 'pointer',
   })
   const ribbonToolStyle = (disabled = false, active = false) => ({
-    width: 72, minHeight: 50, display: 'flex', flexDirection: 'column', alignItems: 'center',
-    justifyContent: 'center', gap: 3, padding: '5px 4px', border: `1px solid ${active ? COL.gold : COL.border}`,
+    width: 72, flexShrink: 0, minHeight: 50, display: 'flex', flexDirection: 'column', alignItems: 'center',
+    justifyContent: 'center', gap: 3, padding: '5px 3px', border: `1px solid ${active ? COL.gold : COL.border}`,
     borderRadius: 5, background: active ? COL.goldPale : COL.field, color: active ? COL.gold : COL.textMain,
-    fontFamily: FONT, fontSize: 'var(--fs-caption)', lineHeight: 1.05, textAlign: 'center',
+    fontFamily: FONT, fontSize: 'var(--fs-caption)', lineHeight: 1.1, textAlign: 'center', overflow: 'hidden',
     cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.42 : 1,
   })
+  // Peça 4: etiqueta del botó del ribbon — màx 2 línies, trunca amb ellipsis (títol complet al hover).
+  const ribbonLabelStyle = { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', width: '100%', wordBreak: 'break-word' }
   const ribbonSelectStyle = {
     height: 50, minWidth: 86, border: `1px solid ${COL.border}`, borderRadius: 5,
     background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)',
@@ -2128,8 +2130,8 @@ export default function TechSheetEditor() {
   const ribbonTool = ({ key, icon, label, onClick, disabled, active, title }) => (
     <button key={key} type="button" onClick={onClick} disabled={disabled} title={title || label}
       style={ribbonToolStyle(disabled, active)}>
-      <i className={`ti ${icon}`} aria-hidden="true" style={{ fontSize: 18 }} />
-      <span>{label}</span>
+      <i className={`ti ${icon}`} aria-hidden="true" style={{ fontSize: 18, flexShrink: 0 }} />
+      <span style={ribbonLabelStyle}>{label}</span>
     </button>
   )
   // PEÇA 2: en mode edició de nodes, la barra contextual del ribbon mostra eines de node + Fet/Cancel.
