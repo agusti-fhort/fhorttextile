@@ -12,6 +12,7 @@ import RuleSetCard from '../components/model/RuleSetCard'
 import { models, watchpoints, modelTasks } from '../api/endpoints'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
+import TasksTab from '../components/model/TasksTab'
 
 const API = import.meta.env.VITE_API_URL || ''
 // Menú net (PEÇA 5): Size Check absorbit a Mesures (taula base amb estadis), Producció retirat;
@@ -19,10 +20,11 @@ const API = import.meta.env.VITE_API_URL || ''
 // redirigeix a /mesures (App.jsx), aquí ja no hi ha cap branca 'Size Check'.
 // 'Anàlisi IA' OCULTAT del menú (peça F): inert avui. El case i el component TabAIAnalysis es
 // conserven (no destructiu); simplement no apareix a la banda de pestanyes.
-const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat"]
+const TABS = ['Dashboard', 'Tasques', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat"]
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
   'Dashboard': 'model_sheet.tab_dashboard',
+  'Tasques': 'model_sheet.tab_tasks',
   'Resum': 'model_sheet.tab_summary',
   'Mesures': 'model.tabs.mesures',
   'Escalat': 'model_sheet.tab_grading',
@@ -378,6 +380,14 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             onOpenTab={setActiveTab}
             navigate={navigate}
             wpVersion={wpVersion}
+          />
+        )}
+        {activeTab === 'Tasques' && (
+          <TasksTab
+            modelId={parseInt(id)}
+            onOpenTab={setActiveTab}
+            modelTaskRows={modelTaskRows}
+            onTasksChanged={reloadTasks}
           />
         )}
         {activeTab === 'Resum' && (
