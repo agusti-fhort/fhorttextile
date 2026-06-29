@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group, Path } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
+import FhortLogo from '../components/brand/FhortLogo'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -2151,18 +2152,34 @@ export default function TechSheetEditor() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
-      {/* ── Topbar ── */}
-      <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.7rem 1.2rem', borderBottom: `1px solid ${COL.border}`, background: COL.sidebar, color: COL.textMain }}>
-        <button onClick={() => navigate(`/models/${id}`)} style={headerBtn}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('tech_sheet.back_to_model')}
+      {/* ── Topbar (patró navbar del dashboard: blanc, logo + breadcrumb, gold per a l'acció
+            principal) ── */}
+      <header style={{ flexShrink: 0, height: 56, display: 'flex', alignItems: 'center', gap: 14, padding: '0 1.2rem', borderBottom: `1px solid ${COL.border}`, background: COL.sidebar, color: COL.textMain }}>
+        <button onClick={() => navigate(`/models/${id}`)} title={t('tech_sheet.back_to_model')}
+          style={{ ...headerBtn, padding: '5px 8px' }}>
+          <i className="ti ti-arrow-left" style={{ fontSize: 15 }} />
         </button>
-        <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 600 }}>
-          {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
-        </span>
-        <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
-
-        {/* Eines → paleta esquerra (C2). Zoom/estat/notice → barra d'estat (C3).
-            Format de pàgina + opcions contextuals → barra contextual (C4). */}
+        <FhortLogo width={92} />
+        <span style={{ width: 1, height: 24, background: COL.border }} />
+        {/* Breadcrumb: model → editor (com "Models → Blusa CALLIE" al dashboard) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: COL.textMuted, minWidth: 0 }}>
+          <span onClick={() => navigate(`/models/${id}`)} style={{ cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
+          </span>
+          <i className="ti ti-chevron-right" style={{ fontSize: 14 }} />
+          <strong style={{ color: COL.textMain, fontWeight: 600, whiteSpace: 'nowrap' }}>{t('tech_sheet.doc_editor')}</strong>
+        </div>
+        {/* Dreta: context reaprofitat (pàgina, versió, save) + acció principal gold */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted, whiteSpace: 'nowrap' }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
+          <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>v{sheet?.versio ?? 1}</span>
+          {saveLabel && <span style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>{saveLabel}</span>}
+          <button onClick={onExport} disabled={exporting}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: COL.gold, color: 'var(--white)', border: 'none', borderRadius: 8, padding: '0 0.9rem', height: 32, fontSize: 'var(--fs-body)', fontWeight: 500, cursor: exporting ? 'default' : 'pointer', opacity: exporting ? 0.5 : 1, fontFamily: FONT }}>
+            <i className="ti ti-file-download" style={{ fontSize: 15 }} />
+            {exporting ? t('tech_sheet.exporting') : t('tech_sheet.export_pdf')}
+          </button>
+        </div>
       </header>
 
       {/* ── Ribbon SolidWorks: fila 1 grups, fila 2 comandaments ── */}

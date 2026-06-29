@@ -1540,6 +1540,7 @@
 
   "tech_sheet": {
     "back_to_model": "Back to model",
+    "doc_editor": "Document editor",
     "exporting": "Exporting…",
     "export_pdf": "Export PDF",
     "export_saved_finder": "PDF saved to Finder",

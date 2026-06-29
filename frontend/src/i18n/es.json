@@ -1540,6 +1540,7 @@
 
   "tech_sheet": {
     "back_to_model": "Volver al modelo",
+    "doc_editor": "Editor de documentos",
     "exporting": "Exportando…",
     "export_pdf": "Exportar PDF",
     "export_saved_finder": "PDF guardado en el Finder",
