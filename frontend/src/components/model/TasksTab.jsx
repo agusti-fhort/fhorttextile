@@ -27,7 +27,7 @@ export default function TasksTab({ modelId, onOpenTab, modelTaskRows, onTasksCha
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       <WorkPlan tasques={tasques} modelId={modelId} onRefresh={load} onOpenTab={onOpenTab} />
       <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: '1.5rem' }}>
-        <TaskTree modelId={modelId} modelTaskRows={modelTaskRows} onTaskStarted={handleStarted} onOpenTab={onOpenTab} />
+        <TaskTree modelId={modelId} modelTaskRows={modelTaskRows} tasks={tasques} onTaskStarted={handleStarted} onOpenTab={onOpenTab} />
       </div>
     </div>
   )

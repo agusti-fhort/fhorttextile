@@ -52,7 +52,7 @@ const startBtn = {
   padding: '5px 12px', cursor: 'pointer',
 }
 
-export default function TaskTree({ modelId, modelTaskRows = [], onTaskStarted, onOpenTab }) {  // eslint-disable-line no-unused-vars
+export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTaskStarted, onOpenTab }) {  // eslint-disable-line no-unused-vars
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [types, setTypes] = useState([])
@@ -100,6 +100,10 @@ export default function TaskTree({ modelId, modelTaskRows = [], onTaskStarted, o
   for (const tt of types) { (byPhase[tt.fase] = byPhase[tt.fase] || []).push(tt) }
   const ordered = [...PHASE_ORDER, ...Object.keys(byPhase).filter(p => !PHASE_ORDER.includes(p))]
     .filter(p => byPhase[p] && byPhase[p].length)
+  // T2: creuament TaskType.code → ModelTask existent (estat + assignee) via el compositor del
+  // dashboard (té task_type_code, status i assignee_nom). modelTaskRows queda com a prop futura.
+  const taskByCode = {}
+  for (const tk of tasks) { if (tk && tk.task_type_code) taskByCode[tk.task_type_code] = tk }
 
   return (
     <div style={{ width: '100%' }}>
@@ -116,18 +120,27 @@ export default function TaskTree({ modelId, modelTaskRows = [], onTaskStarted, o
       ) : ordered.map(phase => (
         <div key={phase}>
           <div style={phaseTitle}>{t(PHASE_I18N[phase], { defaultValue: phase })}</div>
-          {byPhase[phase].slice().sort((a, b) => (a.default_order - b.default_order)).map(tt => (
-            <div key={tt.code} style={rowStyle}>
-              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {taskTypeLabel(t, tt.code, tt.name)}
-              </span>
-              <button type="button" style={{ ...startBtn, opacity: starting === tt.code ? 0.5 : 1, cursor: starting ? 'default' : 'pointer' }}
-                disabled={!!starting} onClick={() => start(tt)}>
-                <i className="ti ti-player-play" style={{ fontSize: 14 }} />
-                {t('model_sheet.tasks.tree_start_task')}
-              </button>
-            </div>
-          ))}
+          {byPhase[phase].slice().sort((a, b) => (a.default_order - b.default_order)).map(tt => {
+            const mt = taskByCode[tt.code]
+            const meta = mt
+              ? `${t(`model_sheet.dashboard.task_status.${mt.status}`, { defaultValue: mt.status })} · ${mt.assignee_nom || t('model_sheet.tasks.tree_unassigned')}`
+              : t('model_sheet.tasks.tree_unassigned')
+            return (
+              <div key={tt.code} style={rowStyle}>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                  {taskTypeLabel(t, tt.code, tt.name)}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{meta}</span>
+                  <button type="button" style={{ ...startBtn, opacity: starting === tt.code ? 0.5 : 1, cursor: starting ? 'default' : 'pointer' }}
+                    disabled={!!starting} onClick={() => start(tt)}>
+                    <i className="ti ti-player-play" style={{ fontSize: 14 }} />
+                    {t('model_sheet.tasks.tree_start_task')}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       ))}
     </div>
