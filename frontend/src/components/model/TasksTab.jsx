@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import WorkPlan from './WorkPlan'
 import TaskTree from './TaskTree'
 
-// B3 — Tab "Tasques" del Model Sheet: unifica les tasques EXISTENTS (WorkPlan, alimentat pel
-// compositor del dashboard) + l'arbre per INICIAR-NE de noves (TaskTree). En iniciar una tasca
-// des de l'arbre, es refresca el WorkPlan (load) i la llista de tasques del pare (onTasksChanged).
+// B3/TL2 — Tab "Tasques" del Model Sheet: UNA sola llista unificada (TaskTree). Les targetes ja
+// mostren les tasques existents amb el mateix detall que el WorkPlan del Dashboard (que es manté
+// intacte allà), de manera que aquí no cal duplicar-lo. Seguim carregant el compositor del
+// dashboard per alimentar el creuament estat/assignee de l'arbre (data.tasques).
 const API = import.meta.env.VITE_API_URL || ''
 
 export default function TasksTab({ modelId, onOpenTab, modelTaskRows, onTasksChanged }) {
@@ -24,11 +24,6 @@ export default function TasksTab({ modelId, onOpenTab, modelTaskRows, onTasksCha
   const handleStarted = useCallback(() => { load(); onTasksChanged?.() }, [load, onTasksChanged])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      <WorkPlan tasques={tasques} modelId={modelId} onRefresh={load} onOpenTab={onOpenTab} />
-      <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: '1.5rem' }}>
-        <TaskTree modelId={modelId} modelTaskRows={modelTaskRows} tasks={tasques} onTaskStarted={handleStarted} onOpenTab={onOpenTab} />
-      </div>
-    </div>
+    <TaskTree modelId={modelId} modelTaskRows={modelTaskRows} tasks={tasques} onTaskStarted={handleStarted} onOpenTab={onOpenTab} />
   )
 }
