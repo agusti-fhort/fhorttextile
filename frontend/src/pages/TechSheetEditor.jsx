@@ -1030,6 +1030,8 @@ export default function TechSheetEditor() {
   const [ribbonGroup, setRibbonGroup] = useState('file')
   const [dockTab, setDockTab] = useState('properties')   // D2: pestanya activa del dock dret
   const [importMode, setImportMode] = useState(null)     // IMP-1: null | 'image' | 'garment' (panell d'import al dock)
+  const [importFile, setImportFile] = useState(null)     // IMP-2: fitxer triat (no s'insereix fins a "Inserir")
+  const [importDrag, setImportDrag] = useState(false)    // IMP-2: ressaltat de la drop zone
   const [ratioLocked, setRatioLocked] = useState(true)
 
   const locked = lockState === 'owned'
@@ -1054,6 +1056,7 @@ export default function TechSheetEditor() {
     return () => document.removeEventListener('mousedown', onDown)
   }, [flyoutOpen])
   const flatFileRef = useRef(null)
+  const importInputRef = useRef(null)   // IMP-2: file input del panell d'importació
   const saveTimer = useRef(null)
   const skipSave = useRef(true)        // salta l'autosave del primer load
   // Mode .ftt: estat del document (assets carregats + metadata + cap de cadena actual).
@@ -2060,9 +2063,30 @@ export default function TechSheetEditor() {
   const openFlyout = (id, rect) => { setFlyoutRect(rect); setFlyoutOpen(id) }
   const startHold = (id, rect) => { cancelHold(); holdTimer.current = setTimeout(() => { suppressClick.current = true; openFlyout(id, rect) }, 300) }
   const pickFlyoutTool = (fl, k) => { setFlyoutSel(s => ({ ...s, [fl.id]: k })); setTool(k); setFlyoutOpen(null); cancelHold() }
-  // IMP-1: panell d'importació al dock dret. openImport substitueix els tabs; closeImport hi torna.
-  const openImport = (mode) => setImportMode(mode)
-  const closeImport = () => setImportMode(null)
+  // IMP-1/2: panell d'importació al dock dret. openImport substitueix els tabs; closeImport hi torna.
+  const openImport = (mode) => { setImportFile(null); setImportDrag(false); setImportMode(mode) }
+  const closeImport = () => { setImportMode(null); setImportFile(null); setImportDrag(false) }
+  // IMP-2: "Inserir" — reaprofita els handlers existents (no vinculem fitxers, els importem).
+  const handleImportInsert = () => {
+    if (!importFile) return
+    if (importMode === 'image') {
+      handleFile(importFile)            // crea type:'image' amb dataURL
+      closeImport()
+      return
+    }
+    const name = (importFile.name || '').toLowerCase()
+    if (name.endsWith('.svg') || importFile.type === 'image/svg+xml') {
+      handleFlatSvgFile(importFile)     // converteix SVG → path editable
+      closeImport()
+    } else {
+      flash(t('tech_sheet.import_dxf_soon'))   // DXF (i altres) encara no suportats
+    }
+  }
+  const onImportPick = (file) => { if (file) setImportFile(file) }
+  const onImportDrop = (e) => {
+    e.preventDefault(); setImportDrag(false)
+    onImportPick(e.dataTransfer.files?.[0])
+  }
   const ribbonTabs = [
     { id: 'file', label: t('tech_sheet.ribbon_file') },
     { id: 'page', label: t('tech_sheet.ribbon_page') },
@@ -2353,7 +2377,55 @@ export default function TechSheetEditor() {
                 </button>
               </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px 64px' }}>
-                {/* IMP-2: contingut del panell (D'ON, drop zone, Inserir/Cancel·lar) */}
+                {/* D'ON? — origen del fitxer */}
+                <div style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t('tech_sheet.import_source')}</div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+                  <button type="button"
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 6px', border: `1px solid ${COL.gold}`, borderRadius: 6, background: COL.goldPale, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'default' }}>
+                    <i className="ti ti-folder" /> {t('tech_sheet.import_from_local')}
+                  </button>
+                  <button type="button" disabled title={t('tech_sheet.import_soon')}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 6px', border: `1px solid ${COL.border}`, borderRadius: 6, background: 'transparent', color: COL.textMuted, fontFamily: FONT, fontSize: 'var(--fs-body)', opacity: 0.5, cursor: 'default' }}>
+                    <i className="ti ti-building-warehouse" /> {t('tech_sheet.import_from_ftt')} ({t('tech_sheet.import_soon')})
+                  </button>
+                </div>
+
+                {/* Drop zone (origen local) */}
+                <div onDragOver={e => { e.preventDefault(); setImportDrag(true) }}
+                  onDragLeave={() => setImportDrag(false)} onDrop={onImportDrop}
+                  style={{ border: `1.5px dashed ${importDrag ? COL.gold : COL.border}`, borderRadius: 8, background: importDrag ? COL.goldPale : 'var(--white)', padding: '18px 12px', textAlign: 'center', marginBottom: 12 }}>
+                  <i className="ti ti-cloud-upload" style={{ fontSize: 26, color: COL.textMuted }} />
+                  <div style={{ fontSize: 'var(--fs-body)', color: COL.textMuted, margin: '6px 0 10px' }}>{t('tech_sheet.import_drop_zone')}</div>
+                  <button type="button" onClick={() => importInputRef.current?.click()}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: `1px solid ${COL.gold}`, borderRadius: 6, background: 'transparent', color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer' }}>
+                    <i className="ti ti-file-upload" /> {t('tech_sheet.import_choose_file')}
+                  </button>
+                  {importFile && (
+                    <div style={{ marginTop: 10, fontSize: 'var(--fs-label)', color: COL.textMain, fontWeight: 600, wordBreak: 'break-all' }}>
+                      <i className="ti ti-file-check" style={{ marginRight: 4, color: COL.gold }} />{importFile.name}
+                    </div>
+                  )}
+                  <div style={{ marginTop: 10, fontSize: 'var(--fs-caption)', color: COL.textMuted, letterSpacing: '0.04em' }}>
+                    {importMode === 'image' ? 'JPG · PNG · GIF' : 'SVG · DXF'}
+                  </div>
+                </div>
+
+                {/* input ocult del panell (selecciona, no insereix fins a "Inserir") */}
+                <input ref={importInputRef} type="file" hidden
+                  accept={importMode === 'image' ? 'image/*' : '.svg,.dxf,image/svg+xml'}
+                  onChange={e => { const f = e.target.files[0]; e.target.value = ''; onImportPick(f) }} />
+
+                {/* Accions */}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" onClick={handleImportInsert} disabled={!importFile}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px', border: 'none', borderRadius: 6, background: COL.gold, color: 'var(--white)', fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: importFile ? 'pointer' : 'default', opacity: importFile ? 1 : 0.45 }}>
+                    <i className="ti ti-check" /> {t('tech_sheet.import_btn_insert')}
+                  </button>
+                  <button type="button" onClick={closeImport}
+                    style={{ flex: 1, padding: '8px', border: `1px solid ${COL.border}`, borderRadius: 6, background: 'transparent', color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
+                    {t('app.cancel')}
+                  </button>
+                </div>
               </div>
             </div>
           )}
