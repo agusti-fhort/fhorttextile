@@ -1020,6 +1020,7 @@ export default function TechSheetEditor() {
   const [pickFitting, setPickFitting] = useState(false)
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
   const [editingFlatId, setEditingFlatId] = useState(null)
+  const [flatCanCommit, setFlatCanCommit] = useState(false)   // PEÇA 2: estat "es pot desar" de l'editor de nodes
   const [zoom, setZoom] = useState(1)
   const [pageFormat, setPageFormat] = useState('A4L')   // TS-4b: format del document sencer
   // PAL-1: paleta amb flyouts (estil Adobe). flyoutOpen = id del flyout desplegat; flyoutSel =
@@ -1057,6 +1058,7 @@ export default function TechSheetEditor() {
   }, [flyoutOpen])
   const flatFileRef = useRef(null)
   const importInputRef = useRef(null)   // IMP-2: file input del panell d'importació
+  const paperFlatRef = useRef(null)     // PEÇA 2: handle imperatiu de PaperFlatEditor (commit)
   const saveTimer = useRef(null)
   const skipSave = useRef(true)        // salta l'autosave del primer load
   // Mode .ftt: estat del document (assets carregats + metadata + cap de cadena actual).
@@ -2119,10 +2121,38 @@ export default function TechSheetEditor() {
       <span>{label}</span>
     </button>
   )
+  // PEÇA 2: en mode edició de nodes, la barra contextual del ribbon mostra eines de node + Fet/Cancel.
+  const nodeToolBtn = (icon, labelKey, { active = false, disabled = false, onClick } = {}) => (
+    <button key={labelKey} type="button" onClick={onClick} disabled={disabled}
+      title={disabled ? `${t(`tech_sheet.${labelKey}`)} · ${t('tech_sheet.coming_soon')}` : t(`tech_sheet.${labelKey}`)}
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, border: `1px solid ${active ? COL.gold : COL.border}`, borderRadius: 6, background: active ? COL.goldPale : COL.field, color: active ? COL.gold : COL.textMain, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1 }}>
+      <i className={`ti ${icon}`} style={{ fontSize: 18 }} />
+    </button>
+  )
+  const renderNodeEditTools = () => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+      {nodeToolBtn('ti-pointer', 'node_tool_select', { active: true })}
+      {nodeToolBtn('ti-vector-bezier', 'node_tool_convert', { disabled: true })}
+      {nodeToolBtn('ti-line-dashed', 'node_tool_handles', { disabled: true })}
+      {nodeToolBtn('ti-plus', 'node_tool_add', { disabled: true })}
+      {nodeToolBtn('ti-minus', 'node_tool_remove', { disabled: true })}
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+        <button type="button" onClick={() => paperFlatRef.current?.commit()} disabled={!flatCanCommit}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', border: 'none', borderRadius: 6, background: COL.gold, color: 'var(--white)', fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: flatCanCommit ? 'pointer' : 'default', opacity: flatCanCommit ? 1 : 0.45 }}>
+          <i className="ti ti-check" /> {t('tech_sheet.flat_done')}
+        </button>
+        <button type="button" onClick={() => setEditingFlatId(null)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
+          <i className="ti ti-x" /> {t('tech_sheet.flat_cancel')}
+        </button>
+      </div>
+    </div>
+  )
   const renderRibbonContent = () => {
     if (!locked) {
       return <span style={{ color: COL.textMuted, padding: '0 8px' }}><i className="ti ti-eye" aria-hidden="true" style={{ marginRight: 5 }} />{t('tech_sheet.readonly_overlay')}</span>
     }
+    if (editingFlatId) return renderNodeEditTools()
     if (ribbonGroup === 'file') {
       return [
         ribbonTool({ key: 'export', icon: 'ti-file-download', label: t('tech_sheet.export_pdf'), onClick: onExport, disabled: exporting }),
@@ -2220,7 +2250,7 @@ export default function TechSheetEditor() {
             </button>
           ))}
           <span style={{ marginLeft: 'auto', color: COL.textMuted, fontSize: 'var(--fs-label)' }}>
-            {multiSelected ? t('tech_sheet.selected_objects', { n: selectedObjects.length }) : selObj ? `${t('tech_sheet.element')} · ${selObj.type}` : tool !== 'select' ? t('tech_sheet.ctx_tool', { tool: activeToolDef.label }) : t('tech_sheet.ctx_idle')}
+            {editingFlatId ? t('tech_sheet.node_edit_mode') : multiSelected ? t('tech_sheet.selected_objects', { n: selectedObjects.length }) : selObj ? `${t('tech_sheet.element')} · ${selObj.type}` : tool !== 'select' ? t('tech_sheet.ctx_tool', { tool: activeToolDef.label }) : t('tech_sheet.ctx_idle')}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 64, padding: '6px 12px 8px', overflowX: 'auto' }}>
@@ -2348,6 +2378,7 @@ export default function TechSheetEditor() {
           {editingFlat && (
             <Suspense fallback={<div style={{ position: 'absolute', inset: 0, zIndex: 20, background: 'rgba(255,255,255,.65)', display: 'grid', placeItems: 'center', color: COL.textMuted, fontSize: 'var(--fs-body)' }}>{t('tech_sheet.flat_loading')}</div>}>
               <PaperFlatEditor
+                ref={paperFlatRef}
                 flat={editingFlat}
                 pageW={pageW}
                 pageH={pageH}
@@ -2355,7 +2386,7 @@ export default function TechSheetEditor() {
                 toPx={toPx}
                 labels={paperFlatLabels}
                 onCommit={commitFlatEdit}
-                onCancel={() => setEditingFlatId(null)}
+                onCanCommitChange={setFlatCanCommit}
               />
             </Suspense>
           )}
