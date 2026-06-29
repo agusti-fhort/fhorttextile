@@ -2122,13 +2122,12 @@ export default function TechSheetEditor() {
         ribbonTool({ key: 'table', icon: 'ti-table', label: t('tech_sheet.graded_table'), onClick: onAddTableClick, disabled: addingTable || !sizeFittings.length }),
         ribbonTool({ key: 'flat', icon: 'ti-vector', label: t('tech_sheet.flat_insert'), onClick: insertFlatSketch }),
         ribbonTool({ key: 'import-flat', icon: 'ti-file-import', label: t('tech_sheet.flat_import'), onClick: () => flatFileRef.current?.click() }),
+        // R1: placeholder — el flux d'import de mesures es dissenyarà més endavant (sense handler).
+        ribbonTool({ key: 'import-measures', icon: 'ti-ruler', label: t('tech_sheet.import_measurements'), disabled: true, title: `${t('tech_sheet.import_measurements')} · ${t('tech_sheet.coming_soon')}` }),
         ribbonTool({ key: 'image', icon: 'ti-photo-plus', label: t('tech_sheet.tool_image'), onClick: () => fileRef.current?.click() }),
-        ...fitxers.slice(0, 4).map(f => ribbonTool({
-          key: `fitxer-${f.id}`, icon: 'ti-file-plus', label: f.nom_fitxer || t('tech_sheet.model_file'),
-          onClick: () => addModelFitxer(f), disabled: !(f.url_extern || f.fitxer),
-          title: f.nom_fitxer,
-        })),
       ]
+      // NOTA (R1): els botons de "Fitxers del model" s'han retirat del ribbon; addModelFitxer i la
+      // càrrega de `fitxers` es conserven al codi per al futur tab Components.
     }
     return [
       ribbonTool({ key: 'align-left', icon: 'ti-layout-align-left', label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: selectedObjects.length < 2 }),
