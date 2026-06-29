@@ -1028,6 +1028,7 @@ export default function TechSheetEditor() {
   const [flyoutSel, setFlyoutSel] = useState({})
   const [flyoutRect, setFlyoutRect] = useState(null)   // rect del botó (popover en position:fixed)
   const [ribbonGroup, setRibbonGroup] = useState('file')
+  const [dockTab, setDockTab] = useState('properties')   // D2: pestanya activa del dock dret
   const [ratioLocked, setRatioLocked] = useState(true)
 
   const locked = lockState === 'owned'
@@ -2335,11 +2336,23 @@ export default function TechSheetEditor() {
         </div>
 
         {/* ── Dreta: capes / inserir / propietats ── */}
-        <aside style={{ width: 180, flexShrink: 0, borderLeft: `1px solid ${COL.border}`, background: COL.bg, display: 'flex', flexDirection: 'column', minHeight: 0, fontFamily: FONT }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
-            {/* Capes (C4): llista d'objectes de la pàgina (front a dalt) + z-order. */}
-            <SectionTitle>{t('tech_sheet.layers')}</SectionTitle>
-            {ordered.length === 0 ? (
+        <aside style={{ width: 270, flexShrink: 0, borderLeft: `1px solid ${COL.border}`, background: COL.bg, display: 'flex', flexDirection: 'column', minHeight: 0, fontFamily: FONT }}>
+          {/* D2: pestanyes del dock. Arquitectura oberta: afegir aquí un futur tab 'components'. */}
+          <div style={{ display: 'flex', flexShrink: 0, borderBottom: `1px solid ${COL.border}` }}>
+            {[{ id: 'properties', icon: 'ti-adjustments', label: t('tech_sheet.dock_properties') }, { id: 'layers', icon: 'ti-stack-2', label: t('tech_sheet.dock_layers') }].map(tb => {
+              const on = dockTab === tb.id
+              return (
+                <button key={tb.id} type="button" onClick={() => setDockTab(tb.id)}
+                  style={{ flex: 1, padding: '8px 6px', border: 'none', borderBottom: `2px solid ${on ? COL.gold : 'transparent'}`, background: on ? COL.goldPale : 'transparent', color: on ? COL.gold : COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: on ? 700 : 500, cursor: 'pointer' }}>
+                  <i className={`ti ${tb.icon}`} style={{ marginRight: 5, fontSize: 14 }} />{tb.label}
+                </button>
+              )
+            })}
+          </div>
+          {/* padding inferior extra: clearança per als botons flotants de Chrome (IA/cerca) */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px 64px' }}>
+            {/* TAB CAPES: llista d'objectes de la pàgina (front a dalt) + z-order. */}
+            {dockTab === 'layers' && (ordered.length === 0 ? (
               <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.layers_empty')}</p>
             ) : (
               <div style={{ marginBottom: 8, border: `1px solid ${COL.border}`, borderRadius: 5, overflow: 'hidden' }}>
@@ -2364,52 +2377,18 @@ export default function TechSheetEditor() {
                   )
                 })}
               </div>
-            )}
+            ))}
 
-            {/* Inserir blocs de dades */}
-            <SectionTitle>{t('tech_sheet.insert_data_block')}</SectionTitle>
-            <button onClick={insertHeader} disabled={!locked}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
-              <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> {t('tech_sheet.model_header')}
-            </button>
-            <button onClick={insertLogo} disabled={!locked}
-              title={customerLogoUrl ? t('tech_sheet.insert_logo_title') : t('tech_sheet.no_logo_title')}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
-              <i className="ti ti-photo" style={{ fontSize: 13 }} /> {t('tech_sheet.client_logo')}
-            </button>
-            <button onClick={onAddTableClick} disabled={!locked || addingTable || !sizeFittings.length}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: (!locked || !sizeFittings.length) ? 'default' : 'pointer', opacity: (!locked || addingTable || !sizeFittings.length) ? 0.45 : 1 }}>
-              <i className="ti ti-table" style={{ fontSize: 13 }} /> {addingTable ? t('tech_sheet.adding') : t('tech_sheet.graded_table')}
-            </button>
-            <button onClick={insertFlatSketch} disabled={!locked}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
-              <i className="ti ti-vector" style={{ fontSize: 13 }} /> {t('tech_sheet.flat_insert')}
-            </button>
-            <button onClick={() => flatFileRef.current?.click()} disabled={!locked}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: `1px solid ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: !locked ? 'default' : 'pointer', opacity: !locked ? 0.45 : 1 }}>
-              <i className="ti ti-file-import" style={{ fontSize: 13 }} /> {t('tech_sheet.flat_import')}
-            </button>
+            {/* input SVG sempre muntat: el referencien el ribbon (Inserir) i el panell de selecció */}
             <input ref={flatFileRef} type="file" accept=".svg,image/svg+xml" hidden
               onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFlatSvgFile(f) }} />
-            {!sizeFittings.length && <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.no_size_fitting')}</p>}
 
-            {/* Fitxers del model */}
-            <SectionTitle>{t('tech_sheet.model_files', { n: fitxers.length })}</SectionTitle>
-            {fitxers.length === 0 ? (
-              <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>{t('tech_sheet.no_files')}</p>
-            ) : fitxers.map(f => {
-              const hasUrl = !!(f.url_extern || f.fitxer)
-              return (
-                <button key={f.id} onClick={() => addModelFitxer(f)} disabled={!hasUrl || !locked}
-                  title={f.nom_fitxer}
-                  style={{ width: '100%', textAlign: 'left', fontSize: 'var(--fs-label)', padding: '5px 6px', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 4, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: (!hasUrl || !locked) ? 'default' : 'pointer', opacity: (!hasUrl || !locked) ? 0.5 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  <i className="ti ti-photo-plus" style={{ fontSize: 11, marginRight: 5 }} />{f.nom_fitxer}
-                </button>
-              )
-            })}
-
-            {/* Propietats de l'objecte seleccionat (TS-4b) */}
-            {multiSelected && locked && (
+            {/* TAB PROPIETATS: propietats de la selecció (W/H/X/Y, stroke/fill, …). Els blocs
+                d'inserció i de fitxers del model viuen ara al ribbon (pestanya Inserir). */}
+            {dockTab === 'properties' && !multiSelected && !selObj && (
+              <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>{t('tech_sheet.dock_no_selection')}</p>
+            )}
+            {dockTab === 'properties' && multiSelected && locked && (
               <>
                 <SectionTitle>{t('tech_sheet.selected_objects', { n: selectedObjects.length })}</SectionTitle>
                 {multiStroke.length > 0 && (
@@ -2442,7 +2421,7 @@ export default function TechSheetEditor() {
                 )}
               </>
             )}
-            {selObj && locked && (
+            {dockTab === 'properties' && selObj && locked && (
               <>
                 <SectionTitle>{t('tech_sheet.element')} · {selObj.type}</SectionTitle>
                 {selDim && (
