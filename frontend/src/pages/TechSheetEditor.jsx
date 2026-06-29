@@ -46,15 +46,15 @@ export const FONT = 'IBM Plex Mono, monospace'
 // (invertida): fons de TREBALL charcoal MÉS CLAR (`work`), CLOSCA charcoal MÉS FOSC
 // (`sidebar`/`bg`); controls amb interior fosc (`field`) i text clar; gold = accent.
 export const COL = {
-  sidebar: '#1b1f24',   // closca fosca: topbar
+  sidebar: '#e6e8eb',   // closca SolidWorks: barres i ribbon, clar tecnic
   gold: 'var(--gold)',  // accent (es manté)
-  goldPale: '#3a3322',  // fons d'estat actiu (tint daurat fosc)
-  border: '#3a424c',    // vora subtil sobre fosc
-  textMain: '#e8e5df',  // text clar
-  textMuted: '#9aa1aa', // text clar atenuat
-  bg: '#20262d',        // closca: asides, columnes, panells
-  work: '#2d343c',      // fons de treball (viewport, darrere el paper) — MÉS CLAR
-  field: '#13171b',     // interior de controls (inputs, dropdowns, botons neutres)
+  goldPale: '#fff3df',  // estat actiu amb tint gold clar
+  border: '#b9c0c8',    // vora tecnica sobre gris
+  textMain: '#23272c',  // text principal sobre UI clara
+  textMuted: '#69717b', // text secundari
+  bg: '#f1f3f5',        // closca: asides, columnes, panells
+  work: '#d7dbe0',      // fons de treball darrere el paper
+  field: '#ffffff',     // interior de controls
 }
 // Paleta LITERAL del canvas: Konva pinta sobre <canvas> via ctx.fillStyle i NO resol
 // CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
@@ -1836,13 +1836,13 @@ export default function TechSheetEditor() {
 
   const headerBtn = {
     display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '5px 10px',
-    borderRadius: 6, border: `1px solid ${COL.border}`, background: 'transparent',
+    borderRadius: 5, border: `1px solid ${COL.border}`, background: COL.field,
     cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
   // Botó de la paleta d'eines vertical (C2): icona quadrada; eina activa ressaltada amb accent gold.
   const paletteBtn = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
-    borderRadius: 6, border: `1px solid transparent`, background: 'transparent',
+    borderRadius: 5, border: `1px solid transparent`, background: 'transparent',
     cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
   const paletteBtnOn = { borderColor: COL.gold, background: COL.goldPale, color: COL.gold }
@@ -1851,7 +1851,7 @@ export default function TechSheetEditor() {
   // Barra contextual (C4): FOSCA com la resta de la closca (PAL-A), discreta, separada de la topbar
   // i del viewport per un filet molt fi (1px COL.border subtil) — com la barra d'estat inferior.
   const CTX_BG = COL.sidebar, CTX_BORDER = COL.border, CTX_TEXT = COL.textMain
-  const ctxBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 26, height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: COL.bg, color: CTX_TEXT, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' }
+  const ctxBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 26, height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: COL.field, color: CTX_TEXT, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' }
   const curObjs = objectsOf(currentPage)
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   const selectedSet = new Set(selectedIds)
@@ -2474,7 +2474,7 @@ export default function TechSheetEditor() {
           v{sheet?.versio ?? 1} · {badge.text}
         </span>
         {saveLabel && <span>{saveLabel}</span>}
-        {notice && <span style={{ color: '#fcd34d', background: '#3a2e12', padding: '2px 8px', borderRadius: 6 }}>{notice}</span>}
+        {notice && <span style={{ color: '#8a520d', background: '#fff3df', border: `1px solid ${COL.gold}`, padding: '2px 8px', borderRadius: 5 }}>{notice}</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
           <button type="button" onClick={() => setZoomClamped(z => z - ZOOM_STEP)} title={t('tech_sheet.zoom_out')} style={{ ...headerBtn, padding: '3px 6px' }}>
             <i className="ti ti-minus" aria-hidden="true" style={{ fontSize: 13 }} />
@@ -2528,7 +2528,7 @@ export function ColorPicker({ value, onChange }) {
 }
 
 export function SectionTitle({ children }) {
-  return <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
+  return <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
 }
 export const propLabel = { display: 'block', fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 8 }
-export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: COL.field, color: COL.textMain, boxSizing: 'border-box' }
+export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: COL.field, color: COL.textMain, boxSizing: 'border-box', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.7)' }
