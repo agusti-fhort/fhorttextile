@@ -1032,6 +1032,8 @@ export default function TechSheetEditor() {
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
   const [editingFlatId, setEditingFlatId] = useState(null)
   const [flatCanCommit, setFlatCanCommit] = useState(false)   // PEÇA 2: estat "es pot desar" de l'editor de nodes
+  const [spaceHeld, setSpaceHeld] = useState(false)           // PEÇA P: barra espaiadora premuda (pan temporal)
+  const [panning, setPanning] = useState(false)              // PEÇA P: arrossegant amb pan actiu
   const [zoom, setZoom] = useState(1)
   const [pageFormat, setPageFormat] = useState('A4L')   // TS-4b: format del document sencer
   // PAL-1: paleta amb flyouts (estil Adobe). flyoutOpen = id del flyout desplegat; flyoutSel =
@@ -1070,6 +1072,7 @@ export default function TechSheetEditor() {
   const flatFileRef = useRef(null)
   const importInputRef = useRef(null)   // IMP-2: file input del panell d'importació
   const paperFlatRef = useRef(null)     // PEÇA 2: handle imperatiu de PaperFlatEditor (commit)
+  const panDrag = useRef(null)          // PEÇA P: estat de l'arrossegament de pan
   const saveTimer = useRef(null)
   const skipSave = useRef(true)        // salta l'autosave del primer load
   // Mode .ftt: estat del document (assets carregats + metadata + cap de cadena actual).
@@ -1549,6 +1552,17 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, currentPage, pages, locked, editingText, editingFlatId])
 
+  // ── PEÇA P: barra espaiadora = pan temporal (independent de l'eina activa) ──
+  useEffect(() => {
+    if (!locked) return undefined
+    const typing = () => { const tag = document.activeElement?.tagName; return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' }
+    const onDown = (e) => { if (e.code === 'Space' && !editingText && !typing()) { e.preventDefault(); setSpaceHeld(true) } }
+    const onUp = (e) => { if (e.code === 'Space') { setSpaceHeld(false); setPanning(false) } }
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp) }
+  }, [locked, editingText])
+
   // ── Handlers de node (drag / transform) ────────────────────────────────────
   const handleDragEnd = (obj) => (e) => {
     const node = e.target
@@ -1612,6 +1626,7 @@ export default function TechSheetEditor() {
   }
   const onStageMouseDown = (e) => {
     if (editingFlatId) return
+    if (tool === 'pan' || spaceHeld) return   // PEÇA P: el pan el gestiona el viewport, no el Stage
     if (!locked) { if (e.target === e.target.getStage()) clearSelection(); return }
     const pos = stagePoint()
     if (!pos) return
@@ -1709,6 +1724,23 @@ export default function TechSheetEditor() {
     const direction = e.deltaY > 0 ? -1 : 1
     setZoomClamped(z => z + direction * ZOOM_STEP)
   }
+  // ── PEÇA P: pan arrossegant el viewport (eina 'pan' o barra espaiadora) ──
+  const onViewportMouseDown = (e) => {
+    if (!(tool === 'pan' || spaceHeld) || !locked) return
+    const vp = viewportRef.current
+    if (!vp) return
+    e.preventDefault()
+    panDrag.current = { x: e.clientX, y: e.clientY, sl: vp.scrollLeft, st: vp.scrollTop }
+    setPanning(true)
+  }
+  const onViewportMouseMove = (e) => {
+    const d = panDrag.current
+    const vp = viewportRef.current
+    if (!d || !vp) return
+    vp.scrollLeft = d.sl - (e.clientX - d.x)
+    vp.scrollTop = d.st - (e.clientY - d.y)
+  }
+  const endPan = () => { if (panDrag.current) { panDrag.current = null; setPanning(false) } }
 
   // ── Imatge: fitxer local (botó/drop) i fitxers del model ───────────────────
   const addImageFromDataURL = (dataURL) => {
@@ -2060,6 +2092,10 @@ export default function TechSheetEditor() {
         { k: 'preset_legend', icon: 'ti-list-details', label: t('tech_sheet.preset_legend') },
       ] },
     ] },
+    { cat: 'nav', items: [
+      // PEÇA P: pan funcional (arrossega el llenç). També s'activa amb la barra espaiadora.
+      { kind: 'tool', k: 'pan', icon: 'ti-hand-stop', label: t('tech_sheet.tool_pan') },
+    ] },
   ]
   // PEU de la paleta — swatches (sense estat de color global avui → placeholders marcats `soon`).
   const PALETTE_SWATCHES = [
@@ -2221,6 +2257,10 @@ export default function TechSheetEditor() {
     ]
   }
 
+  // PEÇA P/C: pan actiu (eina 'pan' o espai) i cursor del viewport segons l'eina activa.
+  const panActive = locked && (tool === 'pan' || spaceHeld)
+  const viewportCursor = panActive ? (panning ? 'grabbing' : 'grab') : (locked && tool !== 'select' ? 'crosshair' : 'default')
+
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
       {/* ── Topbar (patró navbar del dashboard: blanc, logo + breadcrumb, gold per a l'acció
@@ -2338,7 +2378,9 @@ export default function TechSheetEditor() {
         )}
 
         {/* ── Centre: Stage Konva ── */}
-        <div ref={viewportRef} onWheel={onViewportWheel} style={{ flex: 1, background: COL.work, minWidth: 0, overflow: 'auto', position: 'relative', padding: 24, boxSizing: 'border-box' }}>
+        <div ref={viewportRef} onWheel={onViewportWheel}
+          onMouseDown={onViewportMouseDown} onMouseMove={onViewportMouseMove} onMouseUp={endPan} onMouseLeave={endPan}
+          style={{ flex: 1, background: COL.work, minWidth: 0, overflow: 'auto', position: 'relative', padding: 24, boxSizing: 'border-box', cursor: viewportCursor }}>
           {lockState === 'readonly' && (
             <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: COL.sidebar, border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-body)', color: COL.textMuted }}>
               <i className="ti ti-eye" style={{ marginRight: 6 }} />{t('tech_sheet.readonly_overlay')}
@@ -2346,7 +2388,7 @@ export default function TechSheetEditor() {
           )}
           <div style={{ width: pageW * zoom, height: pageH * zoom, position: 'relative', margin: '0 auto' }}>
           <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()}
-            style={{ position: 'relative', width: pageW * zoom, height: pageH * zoom, outline: `1px solid ${COL.border}`, background: 'var(--white)', cursor: (locked && tool !== 'select') ? 'crosshair' : 'default' }}>
+            style={{ position: 'relative', width: pageW * zoom, height: pageH * zoom, outline: `1px solid ${COL.border}`, background: 'var(--white)', cursor: viewportCursor }}>
             {/* R1: el zoom el fa Konva (scaleX/scaleY) re-pintant els vectors a la mida real ×
                 devicePixelRatio → NÍTID a qualsevol zoom. Ja no s'escala el bitmap per CSS. */}
             <Stage ref={stageRef} width={pageW * zoom} height={pageH * zoom} scaleX={zoom} scaleY={zoom}
@@ -2360,7 +2402,7 @@ export default function TechSheetEditor() {
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
                     selected={selectedIds.includes(o.id)}
                     selectable={locked && o.layer !== 'template'}
-                    draggable={locked && tool === 'select' && o.layer !== 'template'}
+                    draggable={locked && tool === 'select' && !panActive && o.layer !== 'template'}
                     onSelect={(e) => handleSelectObject(e, o.id)}
                     onDragEnd={handleDragEnd(o)}
                     onTransformEnd={handleTransformEnd(o)}
