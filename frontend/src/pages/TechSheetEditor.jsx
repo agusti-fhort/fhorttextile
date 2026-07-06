@@ -73,7 +73,7 @@ export const COL = {
 // CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
 // build*Primitives, Rects de fons/selecció, text_box, previews) DEUEN usar aquests literals,
 // no COL (que és per al DOM, on var() sí resol). Valors = mateixos hex que els tokens de :root.
-const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685' }
+const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685' }
 
 const LAYER_ORDER = { template: 0, data: 1, free: 2 }
 const ZOOM_MIN = 0.25
@@ -89,6 +89,28 @@ const PRESET_TOOLS = ['preset_callout', 'preset_detail_circle', 'preset_legend']
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(performance.now())}-${Math.floor(Math.random() * 1e9)}`)
 export const toPx = (mm) => mm * MM_TO_PX
 export const toMm = (px) => px / MM_TO_PX
+
+// S5-1: catàleg de camps (ModelDetailSerializer §4.4). Únics vàlids — NO n'afegim d'altres
+// (marca/dissenyador/patronista NO existeixen al model). Es resolen server-side en instanciar
+// un document des de la plantilla (commits posteriors); aquí només s'insereixen com a xip.
+const FIELD_CATALOG = [
+  { key: 'nom_prenda', tk: 'field_nom_prenda' },
+  { key: 'codi_intern', tk: 'field_codi_intern' },
+  { key: 'codi_client', tk: 'field_codi_client' },
+  { key: 'customer_nom', tk: 'field_customer_nom' },
+  { key: 'collection', tk: 'field_collection' },
+  { key: 'temporada_any', tk: 'field_temporada_any' },
+  { key: 'color_referencia', tk: 'field_color_referencia' },
+  { key: 'descripcio', tk: 'field_descripcio' },
+  { key: 'responsable_nom', tk: 'field_responsable_nom' },
+  { key: 'data_entrada', tk: 'field_data_entrada' },
+  { key: 'base_size_label', tk: 'field_base_size_label' },
+  { key: 'size_system_nom', tk: 'field_size_system_nom' },
+  { key: 'fabric_main', tk: 'field_fabric_main' },
+  { key: 'fabric_composition', tk: 'field_fabric_composition' },
+  { key: 'customer_logo', tk: 'field_customer_logo' },
+  { key: 'data_avui', tk: 'field_data_avui' },
+]
 
 const EMPTY_FLAT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 120"><path d="M34 94 C42 32 72 18 91 28 C114 16 145 33 150 94 C119 103 67 103 34 94 Z" fill="none" stroke="#1d1d1b" stroke-width="3" stroke-linejoin="round"/></svg>'
 
@@ -457,6 +479,22 @@ function buildTableCellPrimitives(obj) {
   return { prims, totalW, totalH }
 }
 
+// Camp (S5-1): xip de placeholder d'un camp del catàleg → {prims, totalW, totalH}. Es RESOL
+// server-side en instanciar un document des de la plantilla (commits posteriors); aquí és
+// només un xip visual (vora punejada gold) amb el label literal entre claus.
+function buildFieldChipPrims(obj) {
+  const label = obj.label || obj.key || ''
+  const text = '{' + label + '}'
+  const fontPx = Math.round((obj.style?.fontSize || 11) * 0.3528 * MM_TO_PX)   // pt → mm → px
+  const w = Math.max(30 * MM_TO_PX, (text.length * fontPx * 0.6) + 8 * MM_TO_PX)
+  const h = fontPx + 8
+  const prims = [
+    { t: 'r', x: 0, y: 0, w, h, fill: KONVA_COL.goldPale, stroke: KONVA_COL.gold, sw: 1, dash: [3, 2] },
+    { t: 't', x: 4, y: 0, w: w - 8, h, text, fill: KONVA_COL.gold, size: fontPx, mid: true },
+  ]
+  return { prims, totalW: w, totalH: h }
+}
+
 // Capçalera del model → {prims, totalW, totalH}. Dues bandes (20mm + 12mm), 277mm d'ample.
 // placeholderMode=true (editor de plantilla): mostra `{model.codi}` etc. en lloc de valors
 // reals (no hi ha model), excepte customer_nom que SÍ és real (la plantilla és per client).
@@ -495,7 +533,7 @@ export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLog
 function PrimNode({ p }) {
   if (p.t === 'r') {
     return <Rect x={p.x} y={p.y} width={p.w} height={p.h} fill={p.fill}
-      stroke={p.stroke} strokeWidth={p.sw} listening={!!p.fill} />
+      stroke={p.stroke} strokeWidth={p.sw} dash={p.dash} listening={!!p.fill} />
   }
   if (p.t === 'l') {
     return <Line points={p.points} stroke={p.stroke} strokeWidth={p.sw} listening={false} />
@@ -509,7 +547,7 @@ function PrimNode({ p }) {
 // Primitiva → node Konva imperatiu (render offscreen per a export/miniatures).
 function addPrimsToGroup(group, prims) {
   for (const p of prims) {
-    if (p.t === 'r') group.add(new Konva.Rect({ x: p.x, y: p.y, width: p.w, height: p.h, fill: p.fill, stroke: p.stroke, strokeWidth: p.sw }))
+    if (p.t === 'r') group.add(new Konva.Rect({ x: p.x, y: p.y, width: p.w, height: p.h, fill: p.fill, stroke: p.stroke, strokeWidth: p.sw, dash: p.dash }))
     else if (p.t === 'l') group.add(new Konva.Line({ points: p.points, stroke: p.stroke, strokeWidth: p.sw }))
     else group.add(new Konva.Text({ x: p.x, y: p.y, width: p.w, height: p.h, text: p.text, fill: p.fill, fontSize: p.size, fontFamily: FONT, fontStyle: p.bold ? 'bold' : p.italic ? 'italic' : 'normal', align: p.align || 'left', verticalAlign: p.mid ? 'middle' : 'top', ellipsis: true, wrap: 'none' }))
   }
@@ -533,6 +571,18 @@ function TableNode({ obj, groupProps, isSelected }) {
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
       {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={TBL.OUTER} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
+    </Group>
+  )
+}
+
+// Camp (S5-1) — xip de placeholder, mateix patró que TableNode (sense fetch: el label ja ve
+// resolt a l'objecte). El valor real es resol server-side en instanciar un document.
+function FieldChipNode({ obj, groupProps, isSelected }) {
+  const { prims, totalW, totalH } = useMemo(() => buildFieldChipPrims(obj), [obj])
+  return (
+    <Group {...groupProps}>
+      {prims.map((p, i) => <PrimNode key={i} p={p} />)}
+      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={KONVA_COL.gold} strokeWidth={1.5} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
   )
 }
@@ -672,7 +722,7 @@ function dataBlockPlaceholderProps(obj) {
 }
 
 function blocksTransform(obj) {
-  return obj && (obj.type === 'line' || obj.type === 'arrow' || (obj.type === 'text' && obj.bgFill))
+  return obj && (obj.type === 'line' || obj.type === 'arrow' || obj.type === 'field' || (obj.type === 'text' && obj.bgFill))
 }
 
 function commonValue(objects, key) {
@@ -757,6 +807,12 @@ async function addObjectToLayer(layer, obj, ctx) {
   if (obj.type === 'table') {
     const g = new Konva.Group(dataBlockGroupProps(obj))
     addPrimsToGroup(g, buildTableCellPrimitives(obj).prims)
+    layer.add(g)
+    return
+  }
+  if (obj.type === 'field') {
+    const g = new Konva.Group(dataBlockGroupProps(obj))
+    addPrimsToGroup(g, buildFieldChipPrims(obj).prims)
     layer.add(g)
     return
   }
@@ -878,6 +934,10 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   if (obj.type === 'table') {
     const dataCommon = { ...common, ...dataBlockGroupProps(obj) }
     return <TableNode obj={obj} groupProps={dataCommon} isSelected={selected} />
+  }
+  if (obj.type === 'field') {
+    const dataCommon = { ...common, ...dataBlockGroupProps(obj) }
+    return <FieldChipNode obj={obj} groupProps={dataCommon} isSelected={selected} />
   }
   if (obj.type === 'text') {
     // Text amb fons (text_box): Group amb un Rect darrere; no redimensionable per Transformer.
@@ -3166,7 +3226,7 @@ export default function TechSheetEditor() {
           {!importMode && (<>
           {/* D2: pestanyes del dock. Arquitectura oberta: afegir aquí un futur tab 'components'. */}
           <div style={{ display: 'flex', flexShrink: 0, borderBottom: `1px solid ${COL.border}` }}>
-            {[{ id: 'properties', icon: 'ti-adjustments', label: t('tech_sheet.dock_properties') }, { id: 'layers', icon: 'ti-stack-2', label: t('tech_sheet.dock_layers') }].map(tb => {
+            {[{ id: 'properties', icon: 'ti-adjustments', label: t('tech_sheet.dock_properties') }, { id: 'layers', icon: 'ti-stack-2', label: t('tech_sheet.dock_layers') }, { id: 'fields', icon: 'ti-forms', label: t('tech_sheet.dock_fields') }].map(tb => {
               const on = dockTab === tb.id
               return (
                 <button key={tb.id} type="button" onClick={() => setDockTab(tb.id)}
@@ -3185,8 +3245,8 @@ export default function TechSheetEditor() {
               <div style={{ marginBottom: 8, border: `1px solid ${COL.border}`, borderRadius: 5, overflow: 'hidden' }}>
                 {[...ordered].reverse().map(o => {
                   const on = selectedIds.includes(o.id)
-                  const icon = { text: 'ti-cursor-text', rect: 'ti-square', ellipse: 'ti-circle', line: 'ti-minus', arrow: 'ti-arrow-right', image: 'ti-photo', path: 'ti-vector', sketch_svg: 'ti-vector', data_block: 'ti-table', group: 'ti-box-multiple' }[o.type] || 'ti-shape'
-                  const label = o.type === 'text' ? (o.text || t('tech_sheet.tool_text')) : o.type
+                  const icon = { text: 'ti-cursor-text', rect: 'ti-square', ellipse: 'ti-circle', line: 'ti-minus', arrow: 'ti-arrow-right', image: 'ti-photo', path: 'ti-vector', sketch_svg: 'ti-vector', data_block: 'ti-table', group: 'ti-box-multiple', field: 'ti-forms' }[o.type] || 'ti-shape'
+                  const label = o.type === 'text' ? (o.text || t('tech_sheet.tool_text')) : o.type === 'field' ? (o.label || o.type) : o.type
                   return (
                     <div key={o.id} onClick={() => selectOnly(o.id)}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', cursor: 'pointer', background: on ? COL.goldPale : 'transparent', color: on ? COL.gold : COL.textMain, borderBottom: `1px solid ${COL.border}`, opacity: o.visible === false ? 0.45 : 1 }}>
@@ -3431,6 +3491,23 @@ export default function TechSheetEditor() {
                     <i className="ti ti-trash" style={{ fontSize: 12, marginRight: 5 }} />{t('app.delete')}
                   </button>
                 )}
+              </>
+            )}
+            {/* TAB CAMPS (S5-1): catàleg clicable → insereix un xip {label} a (20,20)mm.
+                Es resol server-side en instanciar un document des de la plantilla. */}
+            {dockTab === 'fields' && locked && (
+              <>
+                <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.fields_hint')}</p>
+                <div style={{ border: `1px solid ${COL.border}`, borderRadius: 5, overflow: 'hidden' }}>
+                  {FIELD_CATALOG.map(f => (
+                    <button key={f.key} type="button"
+                      onClick={() => addObject({ id: uid(), type: 'field', key: f.key, label: t('tech_sheet.' + f.tk), layer: 'free', x: 20, y: 20, style: { fontSize: 11 } })}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '6px 8px', border: 'none', borderBottom: `1px solid ${COL.border}`, background: 'transparent', color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', textAlign: 'left', cursor: 'pointer' }}>
+                      <i className="ti ti-forms" style={{ fontSize: 13, color: COL.gold, flexShrink: 0 }} />
+                      <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t('tech_sheet.' + f.tk)}</span>
+                    </button>
+                  ))}
+                </div>
               </>
             )}
           </div>
