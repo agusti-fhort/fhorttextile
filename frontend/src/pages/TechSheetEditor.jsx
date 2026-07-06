@@ -7,6 +7,7 @@ import { PDFDocument } from 'pdf-lib'
 import FhortLogo from '../components/brand/FhortLogo'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
+import { booleanOp } from './ftt/paperbool'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -85,6 +86,8 @@ const RECT_TOOLS = ['rect', 'rect_round', 'ellipse']   // drag = bounding box
 const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
 // Peça C: eines que mostren cursor de creu (dibuix + nodes). 'select' → fletxa; 'pan' → grab.
 const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, 'draw', 'pen', 'node', 'subpath', 'polygon']
+// S8: tipus convertibles a Paper.js (objectToPaperPath) — únics vàlids per al pathfinder.
+const PATHFINDER_TYPES = ['path', 'rect', 'rect_round', 'ellipse']
 // S7c2: polígon regular de N costats inscrit al bbox de drag → punts (px de contingut).
 const polygonPoints = (x, y, w, h, n) => {
   const cx = x + w / 2, cy = y + h / 2, rx = w / 2, ry = h / 2
@@ -2860,6 +2863,19 @@ export default function TechSheetEditor() {
     if (!selectedDeletableIds.length) return
     deleteObjects(selectedDeletableIds)
   }
+  // S8: buscatraços — calen 2+ objectes seleccionats i tots convertibles a Paper.js.
+  const pathfinderReady = locked && selectedObjects.length >= 2 && selectedObjects.every(o => PATHFINDER_TYPES.includes(o.type))
+  const applyPathfinder = (op) => {
+    if (!pathfinderReady) return
+    const ordered = curObjs.filter(o => selectedIds.includes(o.id))   // z-order (baix→dalt) per a 'subtract'
+    const style = ordered[0]
+    const result = booleanOp(ordered, op, style, uid)
+    if (!result) { flash(t('tech_sheet.pathfinder_error')); return }
+    const ids = new Set(selectedIds)
+    // Una sola updatePageObjects → un sol setPages → S0 coalesceix a UNA entrada d'historial.
+    updatePageObjects(currentPage, objs => [...objs.filter(o => !ids.has(o.id)), result])
+    setSelectedIds([result.id])
+  }
   const selDim = dimensionInfo(selObj)
   const paperFlatLabels = {
     loading: t('tech_sheet.flat_loading'),
@@ -3078,6 +3094,12 @@ export default function TechSheetEditor() {
       ribbonTool({ key: 'forward', icon: 'ti-arrow-up', label: t('tech_sheet.bring_forward'), onClick: () => moveSelectionInFreeLayer('forward'), disabled: freeSelectedIds.length === 0 }),
       ribbonTool({ key: 'bring-front', icon: 'ti-chevrons-up', label: t('tech_sheet.bring_to_front'), onClick: () => moveSelectionToFreeLayerEdge('front'), disabled: freeSelectedIds.length === 0 }),
       ribbonTool({ key: 'delete', icon: 'ti-trash', label: t('app.delete'), onClick: deleteSelection, disabled: selectedDeletableIds.length === 0 }),
+      // S8: buscatraços (unir/restar/intersecar/excloure) — grup separat al final de l'organize.
+      <span key="sep-pathfinder" style={{ width: 1, height: 50, background: COL.border, flexShrink: 0 }} />,
+      ribbonTool({ key: 'pf-unite', icon: 'ti-layers-union', label: t('tech_sheet.pathfinder_unite'), onClick: () => applyPathfinder('unite'), disabled: !pathfinderReady }),
+      ribbonTool({ key: 'pf-subtract', icon: 'ti-layers-subtract', label: t('tech_sheet.pathfinder_subtract'), onClick: () => applyPathfinder('subtract'), disabled: !pathfinderReady }),
+      ribbonTool({ key: 'pf-intersect', icon: 'ti-layers-intersect', label: t('tech_sheet.pathfinder_intersect'), onClick: () => applyPathfinder('intersect'), disabled: !pathfinderReady }),
+      ribbonTool({ key: 'pf-exclude', icon: 'ti-layers-difference', label: t('tech_sheet.pathfinder_exclude'), onClick: () => applyPathfinder('exclude'), disabled: !pathfinderReady }),
     ]
   }
 
