@@ -79,6 +79,7 @@ const LAYER_ORDER = { template: 0, data: 1, free: 2 }
 const ZOOM_MIN = 0.25
 const ZOOM_MAX = 4
 const ZOOM_STEP = 0.1
+const RULER_SIZE = 18   // S2: gruix (px) de les regles superior/esquerra
 // TS-4c — eines per "família" de creació (mateixa mecànica de drag).
 const RECT_TOOLS = ['rect', 'rect_round', 'ellipse']   // drag = bounding box
 const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
@@ -1106,6 +1107,9 @@ export default function TechSheetEditor() {
   // S1: rubber-band de selecció (marc arrossegat en tela buida amb eina 'select')
   const [marquee, setMarquee] = useState(null)   // {x,y,w,h} px de contingut, per pintar
   const marqueeStart = useRef(null)              // {x,y,shift,rect} mentre s'arrossega
+  // S2: regles en mm — geometria de la pàgina relativa al viewport + posició del cursor.
+  const [rulerGeo, setRulerGeo] = useState({ left: 0, top: 0 })
+  const [cursorMm, setCursorMm] = useState(null)
 
   // ── Helpers de mutació de pàgines ──────────────────────────────────────────
   const objectsOf = (pi) => pages[pi]?.objects || []
@@ -1157,6 +1161,21 @@ export default function TechSheetEditor() {
     }, 0)
     return () => clearTimeout(t)
   }, [fitZoomToViewport, pages.length])
+  // S2: recalcula la posició de la pàgina (wrapRef) relativa al viewport, per alinear les regles.
+  const syncRuler = useCallback(() => {
+    const vp = viewportRef.current, wr = wrapRef.current
+    if (!vp || !wr) return
+    const vpR = vp.getBoundingClientRect(), wrR = wr.getBoundingClientRect()
+    setRulerGeo({ left: wrR.left - vpR.left, top: wrR.top - vpR.top })
+  }, [])
+  useEffect(() => {
+    const t = setTimeout(syncRuler, 0)   // post-layout (zoom/format canvien la mida del wrap)
+    return () => clearTimeout(t)
+  }, [zoom, pageFormat, pages.length, syncRuler])
+  useEffect(() => {
+    window.addEventListener('resize', syncRuler)
+    return () => window.removeEventListener('resize', syncRuler)
+  }, [syncRuler])
   const selectOnly = useCallback((objId) => setSelectedIds([objId]), [])
   const toggleSelection = useCallback((objId) => {
     setSelectedIds(ids => (ids.includes(objId) ? ids.filter(id => id !== objId) : [...ids, objId]))
@@ -1883,6 +1902,10 @@ export default function TechSheetEditor() {
   }
   const onStageMouseMove = (e) => {
     if (editingFlatId) return
+    // S2: marcador de cursor a les regles (mm) — no interfereix amb marquee/dibuix, que
+    // recalculen `pos` pel seu compte més avall.
+    const cur = stagePoint()
+    if (cur) setCursorMm({ x: toMm(cur.x), y: toMm(cur.y) })
     if (marqueeStart.current) {
       const start = marqueeStart.current
       const pos = stagePoint()
@@ -2290,6 +2313,28 @@ export default function TechSheetEditor() {
   const multiPosition = selectedObjects.filter(o => o.type !== 'line' && o.type !== 'arrow')
   const mirrorableIds = selectedObjects.filter(o => !blocksTransform(o)).map(o => o.id)
   const freeSelectedIds = selectedObjects.filter(o => o.layer === 'free').map(o => o.id)
+
+  // S2: regles en mm — ticks alineats amb la posició real de la pàgina (rulerGeo) i el zoom.
+  const sx = (mm) => rulerGeo.left + mm * MM_TO_PX * zoom
+  const sy = (mm) => rulerGeo.top + mm * MM_TO_PX * zoom
+  const topTicks = []
+  for (let mm = 0; mm <= Math.ceil(fmt.w); mm += 5) {
+    const x = sx(mm)
+    if (x < -2 || x > 4000) continue
+    const major = mm % 20 === 0
+    topTicks.push(<line key={`t${mm}`} x1={x} y1={major ? RULER_SIZE * 0.2 : RULER_SIZE * 0.55} x2={x} y2={RULER_SIZE} stroke={COL.textMuted} strokeWidth={0.5} />)
+    if (major) topTicks.push(<text key={`tl${mm}`} x={x + 2} y={RULER_SIZE * 0.7} fontSize={8} fill={COL.textMuted}>{mm}</text>)
+  }
+  if (cursorMm) topTicks.push(<line key="cur" x1={sx(cursorMm.x)} y1={0} x2={sx(cursorMm.x)} y2={RULER_SIZE} stroke={COL.gold} strokeWidth={1} />)
+  const leftTicks = []
+  for (let mm = 0; mm <= Math.ceil(fmt.h); mm += 5) {
+    const y = sy(mm)
+    if (y < -2 || y > 4000) continue
+    const major = mm % 20 === 0
+    leftTicks.push(<line key={`t${mm}`} x1={major ? RULER_SIZE * 0.2 : RULER_SIZE * 0.55} y1={y} x2={RULER_SIZE} y2={y} stroke={COL.textMuted} strokeWidth={0.5} />)
+    if (major) leftTicks.push(<text key={`tl${mm}`} x={1} y={y + 8} fontSize={7} fill={COL.textMuted}>{mm}</text>)
+  }
+  if (cursorMm) leftTicks.push(<line key="cur" x1={0} y1={sy(cursorMm.y)} x2={RULER_SIZE} y2={sy(cursorMm.y)} stroke={COL.gold} strokeWidth={1} />)
   const multiStrokeValue = commonValue(multiStroke, 'stroke')
   const multiFillValue = commonValue(multiFill, 'fill')
   const multiX = commonValue(multiPosition, 'x')
@@ -2642,10 +2687,21 @@ export default function TechSheetEditor() {
           </div>
         )}
 
-        {/* ── Centre: Stage Konva ── */}
-        <div ref={viewportRef} onWheel={onViewportWheel}
+        {/* ── Centre: Stage Konva, envoltat per un marc amb regles en mm (S2) ── */}
+        <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: `${RULER_SIZE}px 1fr`, gridTemplateRows: `${RULER_SIZE}px 1fr`, background: COL.work, position: 'relative' }}>
+          {/* Cantonada */}
+          <div style={{ background: COL.sidebar, borderRight: `1px solid ${COL.border}`, borderBottom: `1px solid ${COL.border}` }} />
+          {/* Regla superior */}
+          <div style={{ overflow: 'hidden', background: COL.sidebar, borderBottom: `1px solid ${COL.border}` }}>
+            <svg width="100%" height={RULER_SIZE} style={{ display: 'block' }}>{topTicks}</svg>
+          </div>
+          {/* Regla esquerra */}
+          <div style={{ overflow: 'hidden', background: COL.sidebar, borderRight: `1px solid ${COL.border}` }}>
+            <svg width={RULER_SIZE} height="100%" style={{ display: 'block' }}>{leftTicks}</svg>
+          </div>
+        <div ref={viewportRef} onWheel={onViewportWheel} onScroll={syncRuler}
           onMouseDown={onViewportMouseDown} onMouseMove={onViewportMouseMove} onMouseUp={endPan} onMouseLeave={endPan}
-          style={{ flex: 1, background: COL.work, minWidth: 0, overflow: 'auto', position: 'relative', padding: 24, boxSizing: 'border-box', cursor: viewportCursor }}>
+          style={{ background: COL.work, minWidth: 0, overflow: 'auto', position: 'relative', padding: 24, boxSizing: 'border-box', cursor: viewportCursor }}>
           {lockState === 'readonly' && (
             <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: COL.sidebar, border: `1px solid ${COL.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-body)', color: COL.textMuted }}>
               <i className="ti ti-eye" style={{ marginRight: 6 }} />{t('tech_sheet.readonly_overlay')}
@@ -2726,6 +2782,7 @@ export default function TechSheetEditor() {
             </Suspense>
           )}
           </div>
+        </div>
         </div>
 
         {/* ── Dreta: capes / inserir / propietats ── */}
