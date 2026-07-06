@@ -1050,6 +1050,7 @@ export default function TechSheetEditor() {
   const [importFile, setImportFile] = useState(null)     // IMP-2: fitxer triat (no s'insereix fins a "Inserir")
   const [importDrag, setImportDrag] = useState(false)    // IMP-2: ressaltat de la drop zone
   const [ratioLocked, setRatioLocked] = useState(true)
+  const [shiftHeld, setShiftHeld] = useState(false)   // S1: Shift premuda → resize proporcional
 
   const locked = lockState === 'owned'
   const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
@@ -1643,6 +1644,53 @@ export default function TechSheetEditor() {
     return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp) }
   }, [locked, editingText])
 
+  // ── S1: Shift premuda → Transformer proporcional (resize) ───────────────────
+  useEffect(() => {
+    const onDown = (e) => { if (e.key === 'Shift') setShiftHeld(true) }
+    const onUp = (e) => { if (e.key === 'Shift') setShiftHeld(false) }
+    const onBlur = () => setShiftHeld(false)
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onDown)
+      window.removeEventListener('keyup', onUp)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [])
+
+  // ── S1: nudge amb fletxes — translada un objecte (dx,dy en mm) segons el seu tipus ──
+  const translate = (o, dx, dy) => {
+    if (o.type === 'line') return { ...o, points: (o.points || []).map((v, i) => (i % 2 === 0 ? v + dx : v + dy)) }
+    if (o.type === 'arrow') return { ...o, x: (o.x || 0) + dx, y: (o.y || 0) + dy, x2: (o.x2 || 0) + dx, y2: (o.y2 || 0) + dy }
+    return { ...o, x: (o.x || 0) + dx, y: (o.y || 0) + dy }
+  }
+  // ── S1 — Teclat: fletxes mouen la selecció (±1mm, ±10mm amb Shift) ──────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (editingFlatId) return
+      if (editingText) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (!locked) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const s = e.shiftKey ? 10 : 1
+      let dx = 0, dy = 0
+      if (e.key === 'ArrowLeft') dx = -s
+      else if (e.key === 'ArrowRight') dx = s
+      else if (e.key === 'ArrowUp') dy = -s
+      else if (e.key === 'ArrowDown') dy = s
+      else return
+      e.preventDefault()
+      const ids = new Set(objectsOf(currentPage).filter(o => o.layer === 'free' && selectedIds.includes(o.id)).map(o => o.id))
+      if (!ids.size) return
+      updatePageObjects(currentPage, objs => objs.map(o => (ids.has(o.id) ? translate(o, dx, dy) : o)))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked, editingText, editingFlatId, selectedIds, currentPage, updatePageObjects])
+
   // ── Handlers de node (drag / transform) ────────────────────────────────────
   const handleDragEnd = (obj) => (e) => {
     const node = e.target
@@ -1694,6 +1742,15 @@ export default function TechSheetEditor() {
     updateObject(obj.id, patch)
   }
 
+  // ── S1: Shift durant el dibuix de línia/fletxa → encaixa l'angle a múltiples de 45° ──
+  const snap45 = (sx, sy, x, y) => {
+    const dx = x - sx, dy = y - sy
+    const a = Math.atan2(dy, dx)
+    const step = Math.PI / 4
+    const sa = Math.round(a / step) * step
+    const len = Math.hypot(dx, dy)
+    return { x: sx + Math.cos(sa) * len, y: sy + Math.sin(sa) * len }
+  }
   // ── Stage: dibuix de rect/línia/draw + crear text + deselecció ─────────────
   const stagePoint = () => {
     const stage = stageRef.current
@@ -1758,13 +1815,14 @@ export default function TechSheetEditor() {
     if (RECT_TOOLS.includes(d.type)) {
       setDrawTemp({ type: d.type, x: Math.min(d.startX, pos.x), y: Math.min(d.startY, pos.y), w: Math.abs(pos.x - d.startX), h: Math.abs(pos.y - d.startY) })
     } else if (LINE_TOOLS.includes(d.type)) {
-      setDrawTemp({ type: d.type, points: [d.startX, d.startY, pos.x, pos.y] })
+      const p = e?.evt?.shiftKey ? snap45(d.startX, d.startY, pos.x, pos.y) : pos
+      setDrawTemp({ type: d.type, points: [d.startX, d.startY, p.x, p.y] })
     } else if (d.type === 'draw') {
       d.points = [...d.points, pos.x, pos.y]
       setDrawTemp({ type: 'draw', points: d.points })
     }
   }
-  const onStageMouseUp = () => {
+  const onStageMouseUp = (e) => {
     if (editingFlatId) return
     if (marqueeStart.current) {
       const m = marqueeStart.current
@@ -1814,10 +1872,12 @@ export default function TechSheetEditor() {
       const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
       if (w > 3 && h > 3) obj = { ...base, type: 'ellipse', x: toMm((d.startX + pos.x) / 2), y: toMm((d.startY + pos.y) / 2), rx: toMm(w / 2), ry: toMm(h / 2), stroke: KONVA_COL.textMain, strokeWidth: 1.5, fill: 'transparent' }
     } else if (d.type === 'line' || d.type === 'line_dot') {
-      obj = { ...base, type: 'line', x: 0, y: 0, points: [toMm(d.startX), toMm(d.startY), toMm(pos.x), toMm(pos.y)], stroke: KONVA_COL.textMain, strokeWidth: 1, ...(d.type === 'line_dot' ? { dash: [4, 4] } : {}) }
+      const p = e?.evt?.shiftKey ? snap45(d.startX, d.startY, pos.x, pos.y) : pos
+      obj = { ...base, type: 'line', x: 0, y: 0, points: [toMm(d.startX), toMm(d.startY), toMm(p.x), toMm(p.y)], stroke: KONVA_COL.textMain, strokeWidth: 1, ...(d.type === 'line_dot' ? { dash: [4, 4] } : {}) }
     } else if (d.type === 'arrow' || d.type === 'arrow2') {
-      const dist = Math.hypot(pos.x - d.startX, pos.y - d.startY)
-      if (dist > 5) obj = { ...base, type: 'arrow', x: toMm(d.startX), y: toMm(d.startY), x2: toMm(pos.x), y2: toMm(pos.y), stroke: KONVA_COL.textMain, fill: KONVA_COL.textMain, strokeWidth: 1.5, ...(d.type === 'arrow2' ? { arrow2: true } : {}) }
+      const p = e?.evt?.shiftKey ? snap45(d.startX, d.startY, pos.x, pos.y) : pos
+      const dist = Math.hypot(p.x - d.startX, p.y - d.startY)
+      if (dist > 5) obj = { ...base, type: 'arrow', x: toMm(d.startX), y: toMm(d.startY), x2: toMm(p.x), y2: toMm(p.y), stroke: KONVA_COL.textMain, fill: KONVA_COL.textMain, strokeWidth: 1.5, ...(d.type === 'arrow2' ? { arrow2: true } : {}) }
     } else if (d.type === 'draw') {
       if (d.points.length >= 4) obj = { ...base, type: 'line', x: 0, y: 0, points: d.points.map(toMm), stroke: KONVA_COL.textMain, strokeWidth: 1 }
     }
@@ -2537,7 +2597,7 @@ export default function TechSheetEditor() {
                 {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={KONVA_COL.textMain} fill={KONVA_COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
                 {/* S1: marc de rubber-band mentre s'arrossega en tela buida */}
                 {marquee && <Rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} fill={KONVA_COL.gold} opacity={0.15} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} listening={false} />}
-                <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={selectedObjects.length === 1 && selObj?.type === 'data_block'}
+                <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && selObj?.type === 'data_block')}
                   padding={5}
                   borderStroke={KONVA_COL.textMuted} borderStrokeWidth={0.5} borderDash={[4, 4]}
                   anchorSize={6} anchorStroke={KONVA_COL.textMuted} anchorStrokeWidth={1} anchorFill={KONVA_COL.white} anchorCornerRadius={2}
