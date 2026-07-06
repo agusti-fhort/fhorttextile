@@ -1125,8 +1125,8 @@ export default function TechSheetEditor() {
   const [exporting, setExporting] = useState(false)
   const [addingTable, setAddingTable] = useState(false)
   const [pickFitting, setPickFitting] = useState(false)
-  // S3: picker de variant de taula (T1a/T1b) — null | { variant?: 't1a'|'t1b' }. Encara sense
-  // obrir des del ribbon (commit 4); aquí només l'estat + el motor d'inserció.
+  // S3: picker de variant de taula (T1a/T1b/T2/custom) — null | { variant?: 't1a'|'t1b'|'t2'|'custom' }.
+  // Obert des del ribbon (botó "Taula", commit 4).
   const [tablePicker, setTablePicker] = useState(null)
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
   const [editingFlatId, setEditingFlatId] = useState(null)
@@ -2296,6 +2296,8 @@ export default function TechSheetEditor() {
   const flash = (text) => { setNotice(text); setTimeout(() => setNotice(null), 2500) }
 
   // ── Bloc de dades: taula graduada (Konva natiu — sense PNG congelat) ────────
+  // LEGACY: substituït pel picker de taules snapshot S3; el RENDER de graded_table
+  // es conserva per a docs existents; candidat a poda futura.
   const insertGradedTable = async (sfId) => {
     if (!locked) return
     setAddingTable(true)
@@ -2320,6 +2322,8 @@ export default function TechSheetEditor() {
     } catch { /* silenci */ }
     finally { setAddingTable(false) }
   }
+  // LEGACY: substituïts pel picker de taules snapshot S3; el RENDER de graded_table
+  // es conserva per a docs existents; candidats a poda futura.
   const onAddTableClick = () => {
     if (!sizeFittings.length) return
     if (sizeFittings.length === 1) insertGradedTable(sizeFittings[0].id)
@@ -2811,7 +2815,7 @@ export default function TechSheetEditor() {
       return [
         ribbonTool({ key: 'header', icon: 'ti-layout-navbar', label: t('tech_sheet.model_header'), onClick: insertHeader }),
         ribbonTool({ key: 'logo', icon: 'ti-photo', label: t('tech_sheet.client_logo'), onClick: insertLogo, title: customerLogoUrl ? t('tech_sheet.insert_logo_title') : t('tech_sheet.no_logo_title') }),
-        ribbonTool({ key: 'table', icon: 'ti-table', label: t('tech_sheet.graded_table'), onClick: onAddTableClick, disabled: addingTable || !sizeFittings.length }),
+        ribbonTool({ key: 'table', icon: 'ti-table', label: t('tech_sheet.ribbon_table'), onClick: () => setTablePicker({}), disabled: !locked }),
         ribbonTool({ key: 'flat', icon: 'ti-vector', label: t('tech_sheet.flat_insert'), onClick: insertFlatSketch }),
         ribbonTool({ key: 'import-flat', icon: 'ti-file-import', label: t('tech_sheet.flat_import'), onClick: () => openImport('garment') }),
         // R1: placeholder — el flux d'import de mesures es dissenyarà més endavant (sense handler).
@@ -3478,19 +3482,20 @@ export default function TechSheetEditor() {
 
       {/* S3: picker de variant de taula (T1a/T1b/T2/personalitzada) + sub-selector de size
           fitting (T1a/T1b) o de mida (personalitzada). Mateix look que el modal pickFitting
-          de dalt. Encara sense obrir des del ribbon (commit 4) — motor a punt, entrada pendent. */}
+          de dalt. Obert des del ribbon (botó "Taula", commit 4); T1a/T1b es deshabiliten
+          sense size-fittings, T2/Custom sempre disponibles. */}
       {tablePicker && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setTablePicker(null)}>
           <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.table_picker_title')}</h2>
             {!tablePicker.variant ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <button type="button" onClick={() => onPickTableVariant('t1a')}
-                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                <button type="button" disabled={!sizeFittings.length} onClick={() => onPickTableVariant('t1a')}
+                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: sizeFittings.length ? 'pointer' : 'default', opacity: sizeFittings.length ? 1 : 0.5 }}>
                   {t('tech_sheet.table_variant_t1a')}
                 </button>
-                <button type="button" onClick={() => onPickTableVariant('t1b')}
-                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                <button type="button" disabled={!sizeFittings.length} onClick={() => onPickTableVariant('t1b')}
+                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: sizeFittings.length ? 'pointer' : 'default', opacity: sizeFittings.length ? 1 : 0.5 }}>
                   {t('tech_sheet.table_variant_t1b')}
                 </button>
                 <button type="button" onClick={() => onPickTableVariant('t2')}

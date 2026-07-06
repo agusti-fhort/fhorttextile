@@ -1639,6 +1639,7 @@
     "client_logo": "Logo cliente",
     "adding": "Añadiendo…",
     "graded_table": "Tabla graduada",
+    "ribbon_table": "Tabla",
     "no_size_fitting": "Sin size fitting.",
     "model_files": "Archivos del modelo ({{n}})",
     "model_file": "Archivo",

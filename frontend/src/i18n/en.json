@@ -1639,6 +1639,7 @@
     "client_logo": "Client logo",
     "adding": "Adding…",
     "graded_table": "Graded table",
+    "ribbon_table": "Table",
     "no_size_fitting": "No size fitting.",
     "model_files": "Model files ({{n}})",
     "model_file": "File",

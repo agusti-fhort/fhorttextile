@@ -1639,6 +1639,7 @@
     "client_logo": "Logo client",
     "adding": "Afegint…",
     "graded_table": "Taula graduada",
+    "ribbon_table": "Taula",
     "no_size_fitting": "Cap size fitting.",
     "model_files": "Fitxers del model ({{n}})",
     "model_file": "Fitxer",
