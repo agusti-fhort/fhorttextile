@@ -401,6 +401,49 @@ function buildTablePrimitives(d) {
   return { prims, totalW, totalH }
 }
 
+// Taula genèrica (S3): columnes/files lliures (POM fitting/grading, BOM, custom) → {prims, totalW, totalH}.
+// Mateix patró de primitives que buildTablePrimitives (sibling, NO la sobrecarreguem). Sense fetch:
+// obj ja porta columns/rows resolts (snapshot). Cos mínim 8pt (llei fitxa tècnica).
+function buildTableCellPrimitives(obj) {
+  const cols = obj.columns || []
+  const rows = obj.rows || []
+  const st = obj.style || {}
+  const pt = Math.max(8, st.fontSize || 9)
+  const fontPx = Math.round(pt * 0.3528 * MM_TO_PX)   // pt → mm → px
+  const cw = cols.map(c => Math.max(6, (c.width || 24)) * MM_TO_PX)
+  const totalW = cw.reduce((a, b) => a + b, 0) || MM_TO_PX * 40
+  const rowH = fontPx + T_ROW_PAD * 2
+  const hdrH = rowH
+  const totalH = hdrH + rows.length * rowH
+  const prims = []
+
+  // Capçalera
+  prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: hdrH, fill: st.headerFill || TBL.HDR_BG })
+  let cxH = 0
+  cols.forEach((c, i) => {
+    prims.push({ t: 't', x: cxH + T_PAD, y: 0, w: cw[i] - 2 * T_PAD, h: hdrH, text: String(c.label ?? ''), fill: TBL.HDR_TEXT, size: fontPx, mid: true })
+    cxH += cw[i]
+  })
+
+  // Files (zebra opcional) + contingut
+  rows.forEach((row, ri) => {
+    const y = hdrH + ri * rowH
+    if (st.zebra) prims.push({ t: 'r', x: 0, y, w: totalW, h: rowH, fill: ri % 2 === 0 ? TBL.ROW_EVEN : TBL.ROW_ODD })
+    let cxR = 0
+    cols.forEach((c, i) => {
+      prims.push({ t: 't', x: cxR + T_PAD, y, w: cw[i] - 2 * T_PAD, h: rowH, text: String(row[i] ?? ''), fill: TBL.VAL, size: fontPx, mid: true })
+      cxR += cw[i]
+    })
+    prims.push({ t: 'l', points: [0, y + rowH, totalW, y + rowH], stroke: TBL.ROW_BORDER, sw: 0.5 })
+  })
+
+  // Separadors verticals (interns) + vora exterior
+  let cxV = cw[0] || 0
+  cw.slice(1).forEach(w => { prims.push({ t: 'l', points: [cxV, 0, cxV, totalH], stroke: TBL.ROW_BORDER, sw: 0.5 }); cxV += w })
+  prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: totalH, stroke: TBL.OUTER, sw: 1.5 })
+  return { prims, totalW, totalH }
+}
+
 // Capçalera del model → {prims, totalW, totalH}. Dues bandes (20mm + 12mm), 277mm d'ample.
 // placeholderMode=true (editor de plantilla): mostra `{model.codi}` etc. en lloc de valors
 // reals (no hi ha model), excepte customer_nom que SÍ és real (la plantilla és per client).
@@ -462,6 +505,17 @@ function addPrimsToGroup(group, prims) {
 // Bloc de taula graduada — Konva natiu (no imatge). NO fa fetch: rep tableData del pare.
 function GradedTableNode({ tableData, groupProps, isSelected }) {
   const { prims, totalW, totalH } = useMemo(() => buildTablePrimitives(tableData), [tableData])
+  return (
+    <Group {...groupProps}>
+      {prims.map((p, i) => <PrimNode key={i} p={p} />)}
+      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={TBL.OUTER} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
+    </Group>
+  )
+}
+
+// Taula genèrica (S3) — mateix patró que GradedTableNode, columns/rows lliures (sense fetch).
+function TableNode({ obj, groupProps, isSelected }) {
+  const { prims, totalW, totalH } = useMemo(() => buildTableCellPrimitives(obj), [obj])
   return (
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
@@ -687,6 +741,12 @@ async function addObjectToLayer(layer, obj, ctx) {
     }
     return
   }
+  if (obj.type === 'table') {
+    const g = new Konva.Group(dataBlockGroupProps(obj))
+    addPrimsToGroup(g, buildTableCellPrimitives(obj).prims)
+    layer.add(g)
+    return
+  }
   if (obj.type === 'image') {
     const src = obj.src
     if (!src) return
@@ -801,6 +861,10 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
       )
     }
     return <GradedTableNode tableData={data} groupProps={dataCommon} isSelected={selected} />
+  }
+  if (obj.type === 'table') {
+    const dataCommon = { ...common, ...dataBlockGroupProps(obj) }
+    return <TableNode obj={obj} groupProps={dataCommon} isSelected={selected} />
   }
   if (obj.type === 'text') {
     // Text amb fons (text_box): Group amb un Rect darrere; no redimensionable per Transformer.
@@ -1867,7 +1931,7 @@ export default function TechSheetEditor() {
     // Blocs de dades: el resize baka l'escala a obj.scale (coherent amb l'auto-fit),
     // no a width/height. node.scaleX() ja és l'escala absoluta nova (Konva multiplica
     // sobre l'escala base del Group), per tant s'hi assigna directament.
-    if (obj.type === 'data_block') {
+    if (obj.type === 'data_block' || obj.type === 'table') {
       updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, scaleX, scaleY, scale: Math.max(0.1, Math.max(absSx, absSy)) })
       return
     }
@@ -2801,7 +2865,7 @@ export default function TechSheetEditor() {
                     ? <Line x={toPx(creatingGuide.pos)} y={0} points={[0, 0, 0, pageH]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
                     : <Line x={0} y={toPx(creatingGuide.pos)} points={[0, 0, pageW, 0]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
                 )}
-                <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && selObj?.type === 'data_block')}
+                <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && (selObj?.type === 'data_block' || selObj?.type === 'table'))}
                   padding={5}
                   borderStroke={KONVA_COL.textMuted} borderStrokeWidth={0.5} borderDash={[4, 4]}
                   anchorSize={6} anchorStroke={KONVA_COL.textMuted} anchorStrokeWidth={1} anchorFill={KONVA_COL.white} anchorCornerRadius={2}
