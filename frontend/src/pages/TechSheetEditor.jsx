@@ -5,6 +5,7 @@ import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Tr
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
 import FhortLogo from '../components/brand/FhortLogo'
+import { useDocumentHistory } from './ftt/history'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -1115,6 +1116,8 @@ export default function TechSheetEditor() {
     setSelectedIds([])
   }, [currentPage, updatePageObjects])
   const clearSelection = useCallback(() => setSelectedIds([]), [])
+  // ── S0: història undo/redo (coalescing de ràfegues) ────────────────────────
+  const { undo, redo, reset: resetHistory } = useDocumentHistory({ pages, setPages, setSelectedIds })
   const setZoomClamped = useCallback((next) => {
     setZoom(current => clampZoom(typeof next === 'function' ? next(current) : next))
   }, [])
@@ -1451,8 +1454,9 @@ export default function TechSheetEditor() {
       rawPages = [{ id: uid(), objects: [] }]
     }
     setPages(rawPages)
+    resetHistory(rawPages)
     convertLegacySketchSvgs(rawPages).then(converted => {
-      if (converted !== rawPages) setPages(converted)
+      if (converted !== rawPages) { setPages(converted); resetHistory(converted) }
     }).catch(() => {})
     setPageFormat((tj && tj.pageFormat) || 'A4L')
     setCurrentPage(0)
