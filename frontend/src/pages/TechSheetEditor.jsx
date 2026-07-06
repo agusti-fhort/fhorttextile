@@ -769,7 +769,7 @@ function PathObj({ obj, common, onDblVector }) {
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText, onDblVector }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -835,13 +835,17 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
       (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
       .filter(child => child.visible !== false)
     return (
-      <Group {...common}>
+      <Group {...common} onDblClick={onDblGroup} onDblTap={onDblGroup}>
         {orderedChildren.map(child => (
           <ObjectNode key={child.id} obj={child} src={child.src}
             tableData={tableData} modelData={modelData} versio={versio}
             placeholderMode={placeholderMode} customerLogoUrl={customerLogoUrl}
-            selected={false} selectable={false} draggable={false}
-            onSelect={undefined} onDragEnd={undefined} onTransformEnd={undefined}
+            // S1: dins d'un grup ENTRAT, els fills es poden seleccionar i moure (no rotar/redimensionar/editar).
+            selected={entered ? child.id === selectedChildId : false}
+            selectable={!!entered} draggable={!!entered}
+            onSelect={entered ? (e) => onChildSelect(e, child.id) : undefined}
+            onDragEnd={entered ? onChildDragEnd(child) : undefined}
+            onTransformEnd={undefined}
             onDblText={undefined} onDblVector={undefined} />
         ))}
       </Group>
@@ -1056,6 +1060,8 @@ export default function TechSheetEditor() {
   const [importDrag, setImportDrag] = useState(false)    // IMP-2: ressaltat de la drop zone
   const [ratioLocked, setRatioLocked] = useState(true)
   const [shiftHeld, setShiftHeld] = useState(false)   // S1: Shift premuda → resize proporcional
+  const [activeGroup, setActiveGroup] = useState(null)        // S1: id del grup on s'ha entrat (doble clic)
+  const [selectedChildId, setSelectedChildId] = useState(null) // S1: fill seleccionat dins el grup entrat
 
   const locked = lockState === 'owned'
   const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
@@ -1151,9 +1157,33 @@ export default function TechSheetEditor() {
     setSelectedIds(ids => (ids.includes(objId) ? ids.filter(id => id !== objId) : [...ids, objId]))
   }, [])
   const handleSelectObject = useCallback((e, objId) => {
+    // S1: seleccionar un altre objecte de nivell superior surt del grup entrat.
+    if (activeGroup && objId !== activeGroup) { setActiveGroup(null); setSelectedChildId(null) }
     if (e?.evt?.shiftKey) toggleSelection(objId)
     else selectOnly(objId)
-  }, [selectOnly, toggleSelection])
+  }, [selectOnly, toggleSelection, activeGroup])
+  const handleChildSelect = useCallback((e, childId) => {
+    if (e) e.cancelBubble = true
+    setSelectedChildId(childId)
+  }, [])
+  const handleChildDragEnd = useCallback((groupId) => (child) => (e) => {
+    const node = e.target
+    let patch
+    if (child.type === 'line') {
+      const dx = toMm(node.x()), dy = toMm(node.y())
+      patch = { points: (child.points || []).map((v, i) => (i % 2 === 0 ? v + dx : v + dy)) }
+      node.position({ x: 0, y: 0 })
+    } else if (child.type === 'arrow') {
+      const dx = toMm(node.x()), dy = toMm(node.y())
+      patch = { x: (child.x || 0) + dx, y: (child.y || 0) + dy, x2: (child.x2 || 0) + dx, y2: (child.y2 || 0) + dy }
+      node.position({ x: 0, y: 0 })
+    } else {
+      patch = { x: toMm(node.x()), y: toMm(node.y()) }
+    }
+    updatePageObjects(currentPage, objs => objs.map(g => (
+      g.id !== groupId ? g : { ...g, children: (g.children || []).map(c => (c.id !== child.id ? c : { ...c, ...patch })) }
+    )))
+  }, [currentPage, updatePageObjects])
   const mirrorObjects = useCallback((objIds, axis) => {
     updateObjects(objIds, o => ({ [axis]: -1 * (o[axis] || 1) }))
   }, [updateObjects])
@@ -1618,6 +1648,19 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locked, editingText, editingFlatId, undo, redo, selectedIds, currentPage, pages, updatePageObjects])
 
+  // ── S1 — Teclat: Escape surt del grup entrat ────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (editingText || editingFlatId) return
+      if (!activeGroup) return
+      setActiveGroup(null); setSelectedChildId(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroup, editingText, editingFlatId])
+
   // ── S1 — Teclat: dreceres d'eina V/T/R/E/L (sense Cmd/Ctrl/Alt) ────────────
   useEffect(() => {
     const onKey = (e) => {
@@ -1776,6 +1819,8 @@ export default function TechSheetEditor() {
       // S1: en tela buida no deseleccionem al mousedown — comencem un marc de rubber-band
       // i la deselecció (si no hi ha arrossegament) es resol al mouseup.
       if (e.target === e.target.getStage()) {
+        // S1: clic en tela buida surt del grup entrat.
+        if (activeGroup) { setActiveGroup(null); setSelectedChildId(null) }
         marqueeStart.current = { x: pos.x, y: pos.y, shift: !!e.evt?.shiftKey, rect: { x: pos.x, y: pos.y, w: 0, h: 0 } }
         setMarquee({ x: pos.x, y: pos.y, w: 0, h: 0 })
       }
@@ -2588,12 +2633,17 @@ export default function TechSheetEditor() {
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
                     selected={selectedIds.includes(o.id)}
                     selectable={locked && o.layer !== 'template' && !o.locked}
-                    draggable={locked && tool === 'select' && !panActive && o.layer !== 'template' && !o.locked}
+                    draggable={locked && tool === 'select' && !panActive && o.layer !== 'template' && !o.locked && activeGroup !== o.id}
                     onSelect={(e) => handleSelectObject(e, o.id)}
                     onDragEnd={handleDragEnd(o)}
                     onTransformEnd={handleTransformEnd(o)}
                     onDblText={() => startTextEdit(o)}
-                    onDblVector={() => startVectorEdit(o)} />
+                    onDblVector={() => startVectorEdit(o)}
+                    entered={locked && activeGroup === o.id}
+                    onDblGroup={() => { if (o.type === 'group') { setActiveGroup(o.id); setSelectedChildId(null); clearSelection() } }}
+                    onChildSelect={handleChildSelect}
+                    onChildDragEnd={handleChildDragEnd(o.id)}
+                    selectedChildId={activeGroup === o.id ? selectedChildId : null} />
                 ))}
                 {/* Forma temporal mentre es dibuixa */}
                 {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}
