@@ -9,6 +9,8 @@ El "Desa" de l'editor = una versió nova encadenada (nou cap de cadena is_curren
 predecessor a is_current=False), no una sobreescriptura.
 """
 import datetime
+import logging
+import os
 
 from django.core.files.base import ContentFile
 from django.utils import timezone
@@ -16,6 +18,8 @@ from django.utils import timezone
 from . import services_ftt
 from .models import FttDocumentLock, ModelFitxer
 from .services_fitxers import save_model_file
+
+logger = logging.getLogger(__name__)
 
 # Caducitat del lock: passat aquest temps sense renovar, un altre usuari el pot forçar.
 FTT_LOCK_TTL = datetime.timedelta(minutes=30)
@@ -101,14 +105,46 @@ def _placeholder_values(model):
     vals = {k: ('' if data.get(k) is None else str(data.get(k))) for k in keys}
     vals['temporada_any'] = (f"{data.get('temporada') or ''} {data.get('any') or ''}").strip()
     vals['data_avui'] = timezone.localdate().isoformat()
-    return vals  # customer_logo intencionadament absent → es resol com a imatge al següent commit
+    return vals  # customer_logo intencionadament absent: es resol com a imatge a _resolve_obj
 
 
-def _resolve_obj(o, vals):
-    """Retorna l'objecte resolt: 'field' (llevat de customer_logo) → 'text' congelat."""
+def _resolve_logo_obj(o, model):
+    """Resol el placeholder customer_logo: 'image' amb el logo del client com a asset,
+    o 'text' buit si el client no en té (mai bloquejant)."""
+    cust = getattr(model, 'customer', None)
+    logo = getattr(cust, 'logo', None) if cust else None
+    if logo:
+        try:
+            logo.open('rb')
+            try:
+                data = logo.read()
+            finally:
+                logo.close()
+            ext = os.path.splitext(logo.name)[1] or '.png'
+            name = 'field_customer_logo' + ext
+            return name, data, {
+                'id': o.get('id'), 'type': 'image', 'layer': o.get('layer', 'free'),
+                'x': o.get('x', 0), 'y': o.get('y', 0), 'width': 40, 'height': 16,
+                'src': 'assets/' + name,
+            }
+        except (ValueError, OSError):
+            logger.exception("Logo del client %s il·legible; es deixa buit", getattr(cust, 'pk', None))
+    style = o.get('style') or {}
+    return None, None, {
+        'id': o.get('id'), 'type': 'text', 'layer': o.get('layer', 'free'),
+        'x': o.get('x', 0), 'y': o.get('y', 0), 'text': '',
+        'fontSize': style.get('fontSize', 11),
+    }
+
+
+def _resolve_obj(o, vals, model, assets_out):
+    """Retorna l'objecte resolt: 'field' → 'text' congelat (customer_logo → 'image')."""
     if o.get('type') == 'field':
         if o.get('key') == 'customer_logo':
-            return o
+            name, data, resolved = _resolve_logo_obj(o, model)
+            if name is not None:
+                assets_out[name] = data
+            return resolved
         text = vals.get(o.get('key'), '')
         style = o.get('style') or {}
         return {
@@ -117,19 +153,21 @@ def _resolve_obj(o, vals):
             'fontSize': style.get('fontSize', 11),
         }
     if o.get('children'):
-        return {**o, 'children': [_resolve_obj(c, vals) for c in o['children']]}
+        return {**o, 'children': [_resolve_obj(c, vals, model, assets_out) for c in o['children']]}
     return o
 
 
 def resolve_placeholders(document_json, model):
     """Instanciació des de plantilla: congela cada 'field' com a 'text' amb el valor real
-    del model (snapshot; no binding en viu). customer_logo es deixa intacte (S5 imatges)."""
+    del model (snapshot; no binding en viu); customer_logo es resol com a 'image' amb el
+    logo del client empaquetat com a asset. Retorna (document_json, assets)."""
     vals = _placeholder_values(model)
+    assets = {}
     pages = [
-        {**p, 'objects': [_resolve_obj(o, vals) for o in (p.get('objects') or [])]}
+        {**p, 'objects': [_resolve_obj(o, vals, model, assets) for o in (p.get('objects') or [])]}
         for p in (document_json.get('pages') or [])
     ]
-    return {**document_json, 'pages': pages}
+    return {**document_json, 'pages': pages}, assets
 
 
 def create_document(model, *, document_json=None, assets=None, preview=None, nom=None):
