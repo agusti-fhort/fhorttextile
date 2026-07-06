@@ -1613,6 +1613,8 @@
     "tool_rect": "Rectangle",
     "tool_rect_round": "Rounded rectangle",
     "tool_ellipse": "Ellipse",
+    "tool_polygon": "Polygon",
+    "polygon_sides": "Sides",
     "tool_group_draw": "Draw",
     "tool_line": "Line",
     "tool_line_dot": "Dotted line",

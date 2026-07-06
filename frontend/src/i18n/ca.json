@@ -1613,6 +1613,8 @@
     "tool_rect": "Rectangle",
     "tool_rect_round": "Rectangle arrodonit",
     "tool_ellipse": "El·lipse",
+    "tool_polygon": "Polígon",
+    "polygon_sides": "Costats",
     "tool_group_draw": "Dibuix",
     "tool_line": "Línia",
     "tool_line_dot": "Línia de punts",

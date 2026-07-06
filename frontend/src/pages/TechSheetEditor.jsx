@@ -84,7 +84,17 @@ const RULER_SIZE = 18   // S2: gruix (px) de les regles superior/esquerra
 const RECT_TOOLS = ['rect', 'rect_round', 'ellipse']   // drag = bounding box
 const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
 // Peça C: eines que mostren cursor de creu (dibuix + nodes). 'select' → fletxa; 'pan' → grab.
-const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, 'draw', 'pen', 'node', 'subpath']
+const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, 'draw', 'pen', 'node', 'subpath', 'polygon']
+// S7c2: polígon regular de N costats inscrit al bbox de drag → punts (px de contingut).
+const polygonPoints = (x, y, w, h, n) => {
+  const cx = x + w / 2, cy = y + h / 2, rx = w / 2, ry = h / 2
+  const pts = []
+  for (let k = 0; k < n; k++) {
+    const a = -Math.PI / 2 + (2 * Math.PI * k) / n
+    pts.push(cx + rx * Math.cos(a), cy + ry * Math.sin(a))
+  }
+  return pts
+}
 const PRESET_TOOLS = ['preset_callout', 'preset_detail_circle', 'preset_legend']
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(performance.now())}-${Math.floor(Math.random() * 1e9)}`)
 export const toPx = (mm) => mm * MM_TO_PX
@@ -1292,6 +1302,7 @@ export default function TechSheetEditor() {
   const didInitialFit = useRef(false)
   const drawing = useRef(null)         // {type, points, id} mentre es dibuixa
   const [drawTemp, setDrawTemp] = useState(null)
+  const [polygonSides, setPolygonSides] = useState(6)   // S7c2: costats de l'eina polígon
   // S7: eina ploma — traç multi-clic (px de contingut). null = inactiva. Independent de `drawing`.
   const penRef = useRef(null)          // {points:[{x,y,inX,inY,outX,outY}], dragging}
   const [penTemp, setPenTemp] = useState(null)   // mirall per pintar: {points, cursor}
@@ -2176,7 +2187,7 @@ export default function TechSheetEditor() {
       setTool('select')
       return
     }
-    if (RECT_TOOLS.includes(tool) || LINE_TOOLS.includes(tool) || tool === 'draw') {
+    if (RECT_TOOLS.includes(tool) || LINE_TOOLS.includes(tool) || tool === 'draw' || tool === 'polygon') {
       drawing.current = { type: tool, startX: pos.x, startY: pos.y, points: [pos.x, pos.y] }
       setDrawTemp({ type: tool, x: pos.x, y: pos.y, w: 0, h: 0, points: [pos.x, pos.y] })
     }
@@ -2212,7 +2223,7 @@ export default function TechSheetEditor() {
     const pos = stagePoint()
     if (!pos) return
     const d = drawing.current
-    if (RECT_TOOLS.includes(d.type)) {
+    if (RECT_TOOLS.includes(d.type) || d.type === 'polygon') {
       setDrawTemp({ type: d.type, x: Math.min(d.startX, pos.x), y: Math.min(d.startY, pos.y), w: Math.abs(pos.x - d.startX), h: Math.abs(pos.y - d.startY) })
     } else if (LINE_TOOLS.includes(d.type)) {
       const p = e?.evt?.shiftKey ? snap45(d.startX, d.startY, pos.x, pos.y) : pos
@@ -2277,6 +2288,16 @@ export default function TechSheetEditor() {
     } else if (d.type === 'ellipse') {
       const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
       if (w > 3 && h > 3) obj = { ...base, type: 'ellipse', x: toMm((d.startX + pos.x) / 2), y: toMm((d.startY + pos.y) / 2), rx: toMm(w / 2), ry: toMm(h / 2), stroke: KONVA_COL.textMain, strokeWidth: 1.5, fill: 'transparent' }
+    } else if (d.type === 'polygon') {
+      // S7c2: N costats inscrits al bbox → path tancat (sense tipus nou d'objecte).
+      const x = Math.min(d.startX, pos.x), y = Math.min(d.startY, pos.y)
+      const w = Math.abs(pos.x - d.startX), h = Math.abs(pos.y - d.startY)
+      if (w > 3 && h > 3) {
+        const pts = polygonPoints(x, y, w, h, polygonSides)
+        const segments = []
+        for (let k = 0; k < pts.length; k += 2) segments.push({ x: toMm(pts[k]), y: toMm(pts[k + 1]), inX: 0, inY: 0, outX: 0, outY: 0 })
+        obj = { ...base, type: 'path', x: 0, y: 0, paths: [{ closed: true, fill: 'transparent', stroke: KONVA_COL.textMain, strokeWidth: 1.2, fillRule: 'nonzero', segments }] }
+      }
     } else if (d.type === 'line' || d.type === 'line_dot') {
       const p = e?.evt?.shiftKey ? snap45(d.startX, d.startY, pos.x, pos.y) : pos
       obj = { ...base, type: 'line', x: 0, y: 0, points: [toMm(d.startX), toMm(d.startY), toMm(p.x), toMm(p.y)], stroke: KONVA_COL.textMain, strokeWidth: 1, ...(d.type === 'line_dot' ? { dash: [4, 4] } : {}) }
@@ -2849,6 +2870,7 @@ export default function TechSheetEditor() {
         { k: 'rect', icon: 'ti-square', label: t('tech_sheet.tool_rect') },
         { k: 'rect_round', icon: 'ti-square-rounded', label: t('tech_sheet.tool_rect_round') },
         { k: 'ellipse', icon: 'ti-circle', label: t('tech_sheet.tool_ellipse') },
+        { k: 'polygon', icon: 'ti-hexagon', label: t('tech_sheet.tool_polygon') },
       ] },
       { kind: 'flyout', id: 'lines', label: t('tech_sheet.tool_group_lines'), tools: [
         { k: 'line', icon: 'ti-line', label: t('tech_sheet.tool_line') },
@@ -3220,6 +3242,7 @@ export default function TechSheetEditor() {
                 {/* Forma temporal mentre es dibuixa */}
                 {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}
                 {drawTemp?.type === 'ellipse' && <Ellipse x={drawTemp.x + drawTemp.w / 2} y={drawTemp.y + drawTemp.h / 2} radiusX={drawTemp.w / 2} radiusY={drawTemp.h / 2} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
+                {drawTemp?.type === 'polygon' && drawTemp.w > 1 && drawTemp.h > 1 && <Line points={polygonPoints(drawTemp.x, drawTemp.y, drawTemp.w, drawTemp.h, polygonSides)} closed stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {(drawTemp?.type === 'line' || drawTemp?.type === 'line_dot' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={KONVA_COL.textMain} fill={KONVA_COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
                 {/* S7: previsualització del traç de ploma — traç fet (mm→pathToData) + goma fins al cursor (px) */}
@@ -3409,7 +3432,16 @@ export default function TechSheetEditor() {
             {/* TAB PROPIETATS: propietats de la selecció (W/H/X/Y, stroke/fill, …). Els blocs
                 d'inserció i de fitxers del model viuen ara al ribbon (pestanya Inserir). */}
             {dockTab === 'properties' && !multiSelected && !selObj && (
-              <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>{t('tech_sheet.dock_no_selection')}</p>
+              <>
+                <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>{t('tech_sheet.dock_no_selection')}</p>
+                {tool === 'polygon' && (
+                  <label style={propLabel}>{t('tech_sheet.polygon_sides')}
+                    <input type="number" min={3} max={20} value={polygonSides}
+                      onChange={e => setPolygonSides(Math.max(3, Math.min(20, parseInt(e.target.value, 10) || 6)))}
+                      style={propInput} />
+                  </label>
+                )}
+              </>
             )}
             {dockTab === 'properties' && multiSelected && locked && (
               <>
