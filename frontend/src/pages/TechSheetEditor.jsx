@@ -223,7 +223,7 @@ function objectBounds(obj) {
     return { minX: Math.min(obj.x, obj.x2), minY: Math.min(obj.y, obj.y2), maxX: Math.max(obj.x, obj.x2), maxY: Math.max(obj.y, obj.y2) }
   }
   if (obj.type === 'path') {
-    const pts = (obj.paths || []).flatMap(path => (path.segments || []).flatMap(seg => {
+    const pts = (obj.paths || []).flatMap(path => entrySegments(path).flatMap(seg => {
       const p = { x: seg.x || 0, y: seg.y || 0 }
       const hin = { x: p.x + (seg.inX || 0), y: p.y + (seg.inY || 0) }
       const hout = { x: p.x + (seg.outX || 0), y: p.y + (seg.outY || 0) }
@@ -664,8 +664,10 @@ function arrowProps(obj) {
   }
 }
 
-function pathToData(path) {
-  const segments = path.segments || []
+// Llegeix els segments d'una entrada paths[]: simple (segments) o compost (subpaths concatenats).
+const entrySegments = (p) => (p.subpaths ? p.subpaths.flatMap(sp => sp.segments || []) : (p.segments || []))
+
+function segmentsToData(segments, closed) {
   if (!segments.length) return ''
   const fmt = (n) => Math.round(toPx(n || 0) * 1000) / 1000
   const parts = [`M ${fmt(segments[0].x)} ${fmt(segments[0].y)}`]
@@ -679,7 +681,7 @@ function pathToData(path) {
       parts.push(`L ${fmt(seg.x)} ${fmt(seg.y)}`)
     }
   }
-  if (path.closed && segments.length > 1) {
+  if (closed && segments.length > 1) {
     const last = segments[segments.length - 1]
     const first = segments[0]
     const hasClosingCurve = last.outX || last.outY || first.inX || first.inY
@@ -689,6 +691,12 @@ function pathToData(path) {
     parts.push('Z')
   }
   return parts.join(' ')
+}
+
+// Compost (forats): concatena exterior + subpaths interiors en un sol 'd'; fillRule 'evenodd' fa el tall.
+function pathToData(path) {
+  if (path.subpaths?.length) return path.subpaths.map(sp => segmentsToData(sp.segments || [], !!sp.closed)).join(' ')
+  return segmentsToData(path.segments || [], path.closed)
 }
 
 function pathChildProps(obj, path) {
@@ -1095,21 +1103,49 @@ async function legacySketchSvgToPath(obj, scope) {
   const scaleX = width / bounds.width
   const scaleY = height / bounds.height
   const strokeScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2
-  const paths = imported.getItems({ class: scope.Path }).filter(path => path.segments?.length).map(path => ({
-    closed: !!path.closed,
-    stroke: normalizePaint(path.strokeColor ? paperColorToCss(path.strokeColor, null) : null),
-    fill: normalizePaint(path.fillColor ? paperColorToCss(path.fillColor, null) : null),
-    fillRule: normalizeFillRule(path.fillRule),
-    strokeWidth: Math.max(0.2, (path.strokeWidth || 1) * strokeScale),
-    segments: path.segments.map(seg => ({
-      x: (seg.point.x - bounds.x) * scaleX,
-      y: (seg.point.y - bounds.y) * scaleY,
-      inX: seg.handleIn.x * scaleX,
-      inY: seg.handleIn.y * scaleY,
-      outX: seg.handleOut.x * scaleX,
-      outY: seg.handleOut.y * scaleY,
-    })),
+  const mapSegs = (paperPath) => paperPath.segments.map(seg => ({
+    x: (seg.point.x - bounds.x) * scaleX,
+    y: (seg.point.y - bounds.y) * scaleY,
+    inX: seg.handleIn.x * scaleX,
+    inY: seg.handleIn.y * scaleY,
+    outX: seg.handleOut.x * scaleX,
+    outY: seg.handleOut.y * scaleY,
   }))
+  // Recorre l'arbre importat sense aplanar els CompoundPath (que porten els forats als fills).
+  const collect = (item, out) => {
+    const cn = item.className
+    if (cn === 'CompoundPath') out.push({ compound: item })
+    else if (cn === 'Path') out.push({ path: item })
+    else if (item.children) item.children.forEach(c => collect(c, out))
+  }
+  const collected = []
+  collect(imported, collected)
+  const paths = collected.map(entry => {
+    if (entry.compound) {
+      const compound = entry.compound
+      const subpaths = compound.children
+        .filter(c => c.className === 'Path' && c.segments?.length)
+        .map(c => ({ closed: !!c.closed, segments: mapSegs(c) }))
+      if (!subpaths.length) return null
+      return {
+        fill: normalizePaint(compound.fillColor ? paperColorToCss(compound.fillColor, null) : null),
+        fillRule: 'evenodd',
+        stroke: normalizePaint(compound.strokeColor ? paperColorToCss(compound.strokeColor, null) : null),
+        strokeWidth: Math.max(0.2, (compound.strokeWidth || 1) * strokeScale),
+        subpaths,
+      }
+    }
+    const path = entry.path
+    if (!path.segments?.length) return null
+    return {
+      closed: !!path.closed,
+      stroke: normalizePaint(path.strokeColor ? paperColorToCss(path.strokeColor, null) : null),
+      fill: normalizePaint(path.fillColor ? paperColorToCss(path.fillColor, null) : null),
+      fillRule: normalizeFillRule(path.fillRule),
+      strokeWidth: Math.max(0.2, (path.strokeWidth || 1) * strokeScale),
+      segments: mapSegs(path),
+    }
+  }).filter(Boolean)
   if (!paths.length) return obj
   return {
     ...obj,
@@ -1575,7 +1611,7 @@ export default function TechSheetEditor() {
     updateObject(obj.id, { [key]: next })
   }
   const pathLocalBounds = (obj) => {
-    const pts = (obj.paths || []).flatMap(path => (path.segments || []).flatMap(seg => [
+    const pts = (obj.paths || []).flatMap(path => entrySegments(path).flatMap(seg => [
       { x: seg.x || 0, y: seg.y || 0 },
       { x: (seg.x || 0) + (seg.inX || 0), y: (seg.y || 0) + (seg.inY || 0) },
       { x: (seg.x || 0) + (seg.outX || 0), y: (seg.y || 0) + (seg.outY || 0) },

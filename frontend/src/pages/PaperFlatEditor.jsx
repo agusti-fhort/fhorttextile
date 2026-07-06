@@ -22,7 +22,7 @@ function flatBounds(flat) {
       maxY: (flat?.y || 0) + (flat?.height || 60),
     }
   }
-  const pts = (flat.paths || []).flatMap(path => (path.segments || []).flatMap(seg => {
+  const pts = (flat.paths || []).flatMap(path => (path.subpaths ? path.subpaths.flatMap(sp => sp.segments || []) : (path.segments || [])).flatMap(seg => {
     const p = { x: seg.x || 0, y: seg.y || 0 }
     return [
       p,
@@ -208,13 +208,15 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       imported = new scope.Group()
       ;(flat.paths || []).forEach((pathData, index) => {
         const path = new scope.Path({
-          closed: !!pathData.closed,
+          closed: !!(pathData.subpaths ? pathData.subpaths[0]?.closed : pathData.closed),
           strokeColor: flat.stroke || pathData.stroke || '#1f2937',
           strokeWidth: toViewPx(flat.strokeWidth || pathData.strokeWidth || 1.2),
           fillColor: (flat.fill ?? pathData.fill) && (flat.fill ?? pathData.fill) !== 'transparent' ? (flat.fill ?? pathData.fill) : null,
         })
         path.data = { index }
-        ;(pathData.segments || []).forEach(seg => {
+        // Compost: s'edita només l'exterior (subpaths[0]); els forats es preserven al commit sense mostrar-se aquí.
+        const segs = pathData.subpaths ? (pathData.subpaths[0]?.segments || []) : (pathData.segments || [])
+        segs.forEach(seg => {
           path.add(new scope.Segment(
             localToView(seg.x, seg.y),
             handleToView(seg.inX, seg.inY),
@@ -329,18 +331,22 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         const p = fromViewMm(point)
         return { x: (p.x * cos - p.y * sin) / scaleX, y: (p.x * sin + p.y * cos) / scaleY }
       }
+      const segsOf = (pp) => pp.segments.map(seg => {
+        const p = pointToLocal(seg.point)
+        const hin = handleToLocal(seg.handleIn)
+        const hout = handleToLocal(seg.handleOut)
+        return { x: p.x, y: p.y, inX: hin.x, inY: hin.y, outX: hout.x, outY: hout.y }
+      })
       const paths = sketchLayer.getItems({ class: scope.Path }).filter(path => path.segments?.length).map((path, index) => {
         const source = flat.paths?.[path.data?.index ?? index] || {}
-        return {
-          ...source,
-          closed: path.closed,
-          segments: path.segments.map(seg => {
-            const p = pointToLocal(seg.point)
-            const hin = handleToLocal(seg.handleIn)
-            const hout = handleToLocal(seg.handleOut)
-            return { x: p.x, y: p.y, inX: hin.x, inY: hin.y, outX: hout.x, outY: hout.y }
-          }),
+        if (source.subpaths) {
+          // Compost: només l'exterior (subpaths[0]) s'edita aquí; els forats es conserven intactes.
+          return {
+            ...source,
+            subpaths: source.subpaths.map((sp, si) => (si === 0 ? { ...sp, closed: path.closed, segments: segsOf(path) } : sp)),
+          }
         }
+        return { ...source, closed: path.closed, segments: segsOf(path) }
       })
       onCommit({ paths })
       return
