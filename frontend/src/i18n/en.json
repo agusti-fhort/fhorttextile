@@ -1683,6 +1683,8 @@
     "stroke_color": "Stroke color",
     "stroke_width": "Stroke width",
     "fill": "Fill",
+    "subpath_active": "Editing piece {{n}}",
+    "subpath_whole": "Whole object",
     "scale_pct": "Scale (%)",
     "dimensions_position": "Dimensions and position",
     "keep_ratio": "Keep ratio",

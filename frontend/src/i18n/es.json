@@ -1683,6 +1683,8 @@
     "stroke_color": "Color trazo",
     "stroke_width": "Grosor trazo",
     "fill": "Relleno",
+    "subpath_active": "Editando pieza {{n}}",
+    "subpath_whole": "Todo el objeto",
     "scale_pct": "Escala (%)",
     "dimensions_position": "Dimensiones y posición",
     "keep_ratio": "Mantener proporción",

@@ -1683,6 +1683,8 @@
     "stroke_color": "Color traç",
     "stroke_width": "Gruix traç",
     "fill": "Emplenat",
+    "subpath_active": "Editant peça {{n}}",
+    "subpath_whole": "Tot l'objecte",
     "scale_pct": "Escala (%)",
     "dimensions_position": "Dimensions i posició",
     "keep_ratio": "Mantenir proporció",

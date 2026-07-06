@@ -891,19 +891,25 @@ function SketchSvgObj({ obj, common }) {
     scaleX={props.scaleX} scaleY={props.scaleY} />
 }
 
-function PathObj({ obj, common, onDblVector }) {
+function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSelect }) {
   const paths = obj.paths || []
   return (
     <Group {...common} onDblClick={onDblVector} onDblTap={onDblVector}>
       {paths.map((path, i) => {
         const props = pathChildProps(obj, path)
-        return props.data ? <Path key={i} {...props} hitStrokeWidth={10} /> : null
+        if (!props.data) return null
+        // S6: objecte ja seleccionat → aquest clic activa la subpath (no bombolla fins al Group).
+        // Objecte NO seleccionat → sense handler propi: el clic puja i selecciona tot l'objecte.
+        const subClick = selected ? (e) => { e.cancelBubble = true; onSubSelect?.(i) } : undefined
+        // Ressalt visual (només pinta): la subpath activa es mostra amb traç daurat, sense tocar les dades.
+        const highlight = i === activeSubIndex ? { stroke: KONVA_COL.gold, strokeWidth: Math.max(2, props.strokeWidth || 1) } : null
+        return <Path key={i} {...props} {...highlight} hitStrokeWidth={10} onClick={subClick} onTap={subClick} />
       })}
     </Group>
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -966,7 +972,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     return <Arrow {...common} {...arrowProps(obj)} hitStrokeWidth={10} />
   }
   if (obj.type === 'path') {
-    return <PathObj obj={obj} common={common} onDblVector={onDblVector} />
+    return <PathObj obj={obj} common={common} onDblVector={onDblVector} selected={selected} activeSubIndex={activeSubIndex} onSubSelect={onSubSelect} />
   }
   if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
@@ -1211,6 +1217,7 @@ export default function TechSheetEditor() {
   const [shiftHeld, setShiftHeld] = useState(false)   // S1: Shift premuda → resize proporcional
   const [activeGroup, setActiveGroup] = useState(null)        // S1: id del grup on s'ha entrat (doble clic)
   const [selectedChildId, setSelectedChildId] = useState(null) // S1: fill seleccionat dins el grup entrat
+  const [activeSubpath, setActiveSubpath] = useState(null)   // S6: subpath activa dins un path { objId, index } | null
   const [snapLines, setSnapLines] = useState(null)   // S2: guies de magnetisme actives {x,y} en mm (o null)
   const snapCand = useRef(null)   // S2: candidats de magnetisme calculats a l'inici del drag (no per frame)
 
@@ -1284,7 +1291,7 @@ export default function TechSheetEditor() {
     updatePageObjects(currentPage, objs => objs.filter(o => !ids.has(o.id)))
     setSelectedIds([])
   }, [currentPage, updatePageObjects])
-  const clearSelection = useCallback(() => setSelectedIds([]), [])
+  const clearSelection = useCallback(() => { setSelectedIds([]); setActiveSubpath(null) }, [])
   // ── S0: història undo/redo (coalescing de ràfegues) ────────────────────────
   const { undo, redo, reset: resetHistory } = useDocumentHistory({ pages, setPages, setSelectedIds })
   // ── S0: clipboard intern (copy/paste/duplicate) — NO navigator.clipboard ──
@@ -1363,6 +1370,8 @@ export default function TechSheetEditor() {
     setSelectedIds(ids => (ids.includes(objId) ? ids.filter(id => id !== objId) : [...ids, objId]))
   }, [])
   const handleSelectObject = useCallback((e, objId) => {
+    // S6: seleccionar (un altre) objecte reinicia la subpath activa.
+    setActiveSubpath(null)
     // S1: seleccionar un altre objecte de nivell superior surt del grup entrat.
     if (activeGroup && objId !== activeGroup) { setActiveGroup(null); setSelectedChildId(null) }
     if (e?.evt?.shiftKey) toggleSelection(objId)
@@ -1859,6 +1868,7 @@ export default function TechSheetEditor() {
     const onKey = (e) => {
       if (e.key !== 'Escape') return
       if (editingText || editingFlatId) return
+      setActiveSubpath(null)   // S6: Escape també surt de l'edició de subpath
       if (!activeGroup) return
       setActiveGroup(null); setSelectedChildId(null)
     }
@@ -2664,6 +2674,7 @@ export default function TechSheetEditor() {
   const selectedSet = new Set(selectedIds)
   const selectedObjects = curObjs.filter(o => selectedSet.has(o.id))
   const selObj = selectedObjects.length === 1 ? selectedObjects[0] : null
+  const subActive = selObj?.type === 'path' && activeSubpath?.objId === selObj.id ? activeSubpath.index : null   // S6
   const multiSelected = selectedObjects.length > 1
   const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
   const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse', 'path'].includes(o.type))
@@ -3095,7 +3106,9 @@ export default function TechSheetEditor() {
                     onDblGroup={() => { if (o.type === 'group') { setActiveGroup(o.id); setSelectedChildId(null); clearSelection() } }}
                     onChildSelect={handleChildSelect}
                     onChildDragEnd={handleChildDragEnd(o.id)}
-                    selectedChildId={activeGroup === o.id ? selectedChildId : null} />
+                    selectedChildId={activeGroup === o.id ? selectedChildId : null}
+                    activeSubIndex={activeSubpath?.objId === o.id ? activeSubpath.index : null}
+                    onSubSelect={(i) => setActiveSubpath({ objId: o.id, index: i })} />
                 ))}
                 {/* Forma temporal mentre es dibuixa */}
                 {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}
@@ -3393,8 +3406,21 @@ export default function TechSheetEditor() {
                 })()}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'line' || selObj.type === 'arrow' || selObj.type === 'path') && (
                   <>
+                    {selObj.type === 'path' && subActive != null && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>
+                        <span>{t('tech_sheet.subpath_active', { n: subActive + 1 })}</span>
+                        <button type="button" onClick={() => setActiveSubpath(null)}
+                          style={{ border: `1px solid ${COL.border}`, borderRadius: 5, background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', padding: '2px 6px', cursor: 'pointer' }}>
+                          {t('tech_sheet.subpath_whole')}
+                        </button>
+                      </div>
+                    )}
                     <div style={propLabel}>{t('tech_sheet.stroke_color')}
-                      <ColorPicker value={selObj.stroke || KONVA_COL.textMain} onChange={c => updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
+                      <ColorPicker
+                        value={subActive != null ? (selObj.paths[subActive]?.stroke || selObj.stroke || KONVA_COL.textMain) : (selObj.stroke || KONVA_COL.textMain)}
+                        onChange={c => subActive != null
+                          ? updateObject(selObj.id, { paths: selObj.paths.map((p, i) => i === subActive ? { ...p, stroke: c } : p) })
+                          : updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
                     </div>
                     <label style={propLabel}>{t('tech_sheet.stroke_width')}
                       <input type="number" min={0.5} max={5} step={0.5} value={selObj.strokeWidth || (selObj.type === 'arrow' ? 1.5 : 1)}
@@ -3404,7 +3430,11 @@ export default function TechSheetEditor() {
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'path') && (
                   <div style={propLabel}>{t('tech_sheet.fill')}
-                    <ColorPicker value={selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : KONVA_COL.white} onChange={c => updateObject(selObj.id, { fill: c })} />
+                    <ColorPicker
+                      value={subActive != null ? (selObj.paths[subActive]?.fill || selObj.fill || KONVA_COL.white) : (selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : KONVA_COL.white)}
+                      onChange={c => subActive != null
+                        ? updateObject(selObj.id, { paths: selObj.paths.map((p, i) => i === subActive ? { ...p, fill: c } : p) })
+                        : updateObject(selObj.id, { fill: c })} />
                   </div>
                 )}
                 {selObj.type === 'data_block' && (
