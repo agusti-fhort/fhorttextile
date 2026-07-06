@@ -98,7 +98,7 @@ const polygonPoints = (x, y, w, h, n) => {
   }
   return pts
 }
-const PRESET_TOOLS = ['preset_callout', 'preset_detail_circle', 'preset_legend']
+const PRESET_TOOLS = ['preset_callout', 'preset_detail_circle', 'preset_legend', 'preset_cota_pom', 'preset_annotation']
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(performance.now())}-${Math.floor(Math.random() * 1e9)}`)
 export const toPx = (mm) => mm * MM_TO_PX
 export const toMm = (px) => px / MM_TO_PX
@@ -1472,6 +1472,27 @@ export default function TechSheetEditor() {
         children: [
           { id: uid(), type: 'ellipse', layer: 'free', x: 18, y: 18, rx: 16, ry: 16, stroke: KONVA_COL.gold, strokeWidth: 2, fill: 'transparent' },
           { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [34, 18, 72, 18], stroke: KONVA_COL.gold, strokeWidth: 1 },
+        ],
+      }
+    }
+    if (preset === 'preset_cota_pom') {
+      // Cota tècnica lliure (sense binding POM, frontera G1 fora d'abast): línia + marques + text editable
+      return {
+        ...base,
+        children: [
+          { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [0, 12, 60, 12], stroke: KONVA_COL.textMain, strokeWidth: 1 },
+          { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [0, 8, 0, 16], stroke: KONVA_COL.textMain, strokeWidth: 1 },
+          { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [60, 8, 60, 16], stroke: KONVA_COL.textMain, strokeWidth: 1 },
+          { id: uid(), type: 'text', layer: 'free', x: 20, y: 0, width: 24, height: 10, text: t('tech_sheet.preset_cota_text'), fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' },
+        ],
+      }
+    }
+    if (preset === 'preset_annotation') {
+      return {
+        ...base,
+        children: [
+          { id: uid(), type: 'text', layer: 'free', x: 0, y: 0, width: 48, height: 14, text: t('tech_sheet.preset_annotation_text'), fontSize: 10, fontFamily: FONT, fill: KONVA_COL.textMain, bgFill: KONVA_COL.white, bgPadding: 3 },
+          { id: uid(), type: 'arrow', layer: 'free', x: 50, y: 7, x2: 80, y2: 7, stroke: KONVA_COL.textMain, fill: KONVA_COL.textMain, strokeWidth: 1 },
         ],
       }
     }
@@ -2929,6 +2950,8 @@ export default function TechSheetEditor() {
         { k: 'preset_callout', icon: 'ti-message-2-share', label: t('tech_sheet.preset_callout') },
         { k: 'preset_detail_circle', icon: 'ti-circle-dashed', label: t('tech_sheet.preset_detail_circle') },
         { k: 'preset_legend', icon: 'ti-list-details', label: t('tech_sheet.preset_legend') },
+        { k: 'preset_cota_pom', icon: 'ti-ruler-2', label: t('tech_sheet.preset_cota_pom') },
+        { k: 'preset_annotation', icon: 'ti-note', label: t('tech_sheet.preset_annotation') },
       ] },
     ] },
     { cat: 'nav', items: [
