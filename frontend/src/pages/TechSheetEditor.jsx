@@ -6,6 +6,7 @@ import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
 import FhortLogo from '../components/brand/FhortLogo'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
+import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -769,13 +770,15 @@ function PathObj({ obj, common, onDblVector }) {
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
     draggable,
     onClick: selectable ? onSelect : undefined,
     onTap: selectable ? onSelect : undefined,
+    onDragStart,
+    onDragMove,
     onDragEnd,
     onTransformEnd,
   }
@@ -1062,6 +1065,8 @@ export default function TechSheetEditor() {
   const [shiftHeld, setShiftHeld] = useState(false)   // S1: Shift premuda → resize proporcional
   const [activeGroup, setActiveGroup] = useState(null)        // S1: id del grup on s'ha entrat (doble clic)
   const [selectedChildId, setSelectedChildId] = useState(null) // S1: fill seleccionat dins el grup entrat
+  const [snapLines, setSnapLines] = useState(null)   // S2: guies de magnetisme actives {x,y} en mm (o null)
+  const snapCand = useRef(null)   // S2: candidats de magnetisme calculats a l'inici del drag (no per frame)
 
   const locked = lockState === 'owned'
   const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
@@ -1740,7 +1745,36 @@ export default function TechSheetEditor() {
   }, [locked, editingText, editingFlatId, selectedIds, currentPage, updatePageObjects])
 
   // ── Handlers de node (drag / transform) ────────────────────────────────────
+  // S2: bbox (mm) d'un objecte a partir del seu node Konva en viu (rect real, no obj.x/y).
+  const nodeRectMm = (id) => {
+    const n = stageRef.current?.findOne('#' + id)
+    if (!n) return null
+    const r = n.getClientRect({ relativeTo: n.getLayer() })
+    return { x: toMm(r.x), y: toMm(r.y), w: toMm(r.width), h: toMm(r.height) }
+  }
+  // S2: candidats de magnetisme calculats UN COP a l'inici del drag (no per frame).
+  const handleDragStart = (obj) => () => {
+    const rects = objectsOf(currentPage)
+      .filter(o => o.id !== obj.id && o.layer === 'free' && o.visible !== false)
+      .map(o => nodeRectMm(o.id)).filter(Boolean)
+    const p = pages[currentPage] || {}
+    snapCand.current = buildCandidates({ rectsMm: rects, pageWmm: fmt.w, pageHmm: fmt.h, guides: p.guides || [] })
+  }
+  // S2: a cada frame de drag, magnetitza el node contra els candidats (Cmd/Ctrl ho desactiva).
+  const handleDragMove = (obj) => (e) => {
+    if (!snapCand.current) return
+    if (e.evt?.ctrlKey || e.evt?.metaKey) { setSnapLines(null); return }
+    const node = e.target
+    const r = node.getClientRect({ relativeTo: node.getLayer() })
+    const rectMm = { x: toMm(r.x), y: toMm(r.y), w: toMm(r.width), h: toMm(r.height) }
+    const thr = SNAP_PX / (MM_TO_PX * zoom)
+    const { dx, dy, lineX, lineY } = computeSnap(rectMm, snapCand.current, thr)
+    if (dx) node.x(node.x() + dx * MM_TO_PX)
+    if (dy) node.y(node.y() + dy * MM_TO_PX)
+    setSnapLines((lineX != null || lineY != null) ? { x: lineX, y: lineY } : null)
+  }
   const handleDragEnd = (obj) => (e) => {
+    setSnapLines(null); snapCand.current = null
     const node = e.target
     if (obj.type === 'line') {
       const dx = toMm(node.x()), dy = toMm(node.y())
@@ -2635,6 +2669,8 @@ export default function TechSheetEditor() {
                     selectable={locked && o.layer !== 'template' && !o.locked}
                     draggable={locked && tool === 'select' && !panActive && o.layer !== 'template' && !o.locked && activeGroup !== o.id}
                     onSelect={(e) => handleSelectObject(e, o.id)}
+                    onDragStart={handleDragStart(o)}
+                    onDragMove={handleDragMove(o)}
                     onDragEnd={handleDragEnd(o)}
                     onTransformEnd={handleTransformEnd(o)}
                     onDblText={() => startTextEdit(o)}
@@ -2652,6 +2688,9 @@ export default function TechSheetEditor() {
                 {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={KONVA_COL.textMain} fill={KONVA_COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
                 {/* S1: marc de rubber-band mentre s'arrossega en tela buida */}
                 {marquee && <Rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} fill={KONVA_COL.gold} opacity={0.15} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} listening={false} />}
+                {/* S2: guies daurades temporals de magnetisme (drag) */}
+                {snapLines?.x != null && <Line points={[toPx(snapLines.x), 0, toPx(snapLines.x), pageH]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} listening={false} />}
+                {snapLines?.y != null && <Line points={[0, toPx(snapLines.y), pageW, toPx(snapLines.y)]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} listening={false} />}
                 <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && selObj?.type === 'data_block')}
                   padding={5}
                   borderStroke={KONVA_COL.textMuted} borderStrokeWidth={0.5} borderDash={[4, 4]}
