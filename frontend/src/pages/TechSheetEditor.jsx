@@ -1086,6 +1086,9 @@ export default function TechSheetEditor() {
   const didInitialFit = useRef(false)
   const drawing = useRef(null)         // {type, points, id} mentre es dibuixa
   const [drawTemp, setDrawTemp] = useState(null)
+  // S1: rubber-band de selecció (marc arrossegat en tela buida amb eina 'select')
+  const [marquee, setMarquee] = useState(null)   // {x,y,w,h} px de contingut, per pintar
+  const marqueeStart = useRef(null)              // {x,y,shift,rect} mentre s'arrossega
 
   // ── Helpers de mutació de pàgines ──────────────────────────────────────────
   const objectsOf = (pi) => pages[pi]?.objects || []
@@ -1609,6 +1612,26 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locked, editingText, editingFlatId, undo, redo, selectedIds, currentPage, pages, updatePageObjects])
 
+  // ── S1 — Teclat: dreceres d'eina V/T/R/E/L (sense Cmd/Ctrl/Alt) ────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (editingFlatId) return
+      if (editingText) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (!locked) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const map = { v: 'select', t: 'text', r: 'rect', e: 'ellipse', l: 'line' }
+      const next = map[e.key.toLowerCase()]
+      if (!next) return
+      e.preventDefault()
+      setTool(next)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked, editingText, editingFlatId])
+
   // ── PEÇA P: barra espaiadora = pan temporal (independent de l'eina activa) ──
   useEffect(() => {
     if (!locked) return undefined
@@ -1688,7 +1711,12 @@ export default function TechSheetEditor() {
     const pos = stagePoint()
     if (!pos) return
     if (tool === 'select') {
-      if (e.target === e.target.getStage()) clearSelection()
+      // S1: en tela buida no deseleccionem al mousedown — comencem un marc de rubber-band
+      // i la deselecció (si no hi ha arrossegament) es resol al mouseup.
+      if (e.target === e.target.getStage()) {
+        marqueeStart.current = { x: pos.x, y: pos.y, shift: !!e.evt?.shiftKey, rect: { x: pos.x, y: pos.y, w: 0, h: 0 } }
+        setMarquee({ x: pos.x, y: pos.y, w: 0, h: 0 })
+      }
       return
     }
     if (tool === 'text' || tool === 'text_box') {
@@ -1712,8 +1740,17 @@ export default function TechSheetEditor() {
       setDrawTemp({ type: tool, x: pos.x, y: pos.y, w: 0, h: 0, points: [pos.x, pos.y] })
     }
   }
-  const onStageMouseMove = () => {
+  const onStageMouseMove = (e) => {
     if (editingFlatId) return
+    if (marqueeStart.current) {
+      const start = marqueeStart.current
+      const pos = stagePoint()
+      if (!pos) return
+      const rect = { x: Math.min(start.x, pos.x), y: Math.min(start.y, pos.y), w: Math.abs(pos.x - start.x), h: Math.abs(pos.y - start.y) }
+      start.rect = rect
+      setMarquee(rect)
+      return
+    }
     if (!drawing.current) return
     const pos = stagePoint()
     if (!pos) return
@@ -1729,6 +1766,30 @@ export default function TechSheetEditor() {
   }
   const onStageMouseUp = () => {
     if (editingFlatId) return
+    if (marqueeStart.current) {
+      const m = marqueeStart.current
+      marqueeStart.current = null
+      setMarquee(null)
+      const rect = m.rect || { x: m.x, y: m.y, w: 0, h: 0 }
+      // Marc menyspreable → es tracta com un clic simple (deselecció, tret que sigui shift).
+      if (rect.w <= 3 && rect.h <= 3) {
+        if (!m.shift) clearSelection()
+        return
+      }
+      const stage = stageRef.current
+      const hits = []
+      if (stage) {
+        objectsOf(currentPage).filter(o => o.layer === 'free').forEach(o => {
+          const node = stage.findOne('#' + o.id)
+          if (!node) return
+          const r = node.getClientRect({ relativeTo: node.getLayer() })
+          const overlap = !(r.x > rect.x + rect.w || r.x + r.width < rect.x || r.y > rect.y + rect.h || r.y + r.height < rect.y)
+          if (overlap) hits.push(o.id)
+        })
+      }
+      setSelectedIds(m.shift ? Array.from(new Set([...selectedIds, ...hits])) : hits)
+      return
+    }
     const d = drawing.current
     if (!d) return
     drawing.current = null
@@ -2474,6 +2535,8 @@ export default function TechSheetEditor() {
                 {drawTemp?.type === 'ellipse' && <Ellipse x={drawTemp.x + drawTemp.w / 2} y={drawTemp.y + drawTemp.h / 2} radiusX={drawTemp.w / 2} radiusY={drawTemp.h / 2} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {(drawTemp?.type === 'line' || drawTemp?.type === 'line_dot' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={KONVA_COL.textMain} fill={KONVA_COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
+                {/* S1: marc de rubber-band mentre s'arrossega en tela buida */}
+                {marquee && <Rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} fill={KONVA_COL.gold} opacity={0.15} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={selectedObjects.length === 1 && selObj?.type === 'data_block'}
                   padding={5}
                   borderStroke={KONVA_COL.textMuted} borderStrokeWidth={0.5} borderDash={[4, 4]}
