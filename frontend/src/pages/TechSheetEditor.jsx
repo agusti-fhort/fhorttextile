@@ -1128,6 +1128,8 @@ export default function TechSheetEditor() {
   // S3: picker de variant de taula (T1a/T1b/T2/custom) — null | { variant?: 't1a'|'t1b'|'t2'|'custom' }.
   // Obert des del ribbon (botó "Taula", commit 4).
   const [tablePicker, setTablePicker] = useState(null)
+  // S4: modal "Desar com a plantilla" — null | { nom, descripcio }
+  const [saveAsTpl, setSaveAsTpl] = useState(null)
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
   const [editingFlatId, setEditingFlatId] = useState(null)
   const [flatCanCommit, setFlatCanCommit] = useState(false)   // PEÇA 2: estat "es pot desar" de l'editor de nodes
@@ -2554,6 +2556,19 @@ export default function TechSheetEditor() {
     finally { setExporting(false) }
   }
 
+  // S4: desa el document .ftt vigent (cap de cadena) com a plantilla del tenant.
+  const submitSaveAsTpl = async () => {
+    if (!saveAsTpl?.nom.trim()) return
+    try {
+      const r = await fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/save-as-template/`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({ nom: saveAsTpl.nom.trim(), descripcio: saveAsTpl.descripcio || '' }),
+      })
+      if (r.ok) { flash(t('tech_sheet.saved_as_template_ok')); setSaveAsTpl(null) }
+      else flash(t('tech_sheet.save_as_template_error'))
+    } catch { flash(t('tech_sheet.save_as_template_error')) }
+  }
+
   // ── UI ───────────────────────────────────────────────────────────────────
   const badge = (() => {
     if (lockState === 'loading') return { text: t('model_sheet.loading'), bg: COL.bg, fg: COL.textMuted }
@@ -2794,6 +2809,7 @@ export default function TechSheetEditor() {
     if (ribbonGroup === 'file') {
       return [
         ribbonTool({ key: 'export', icon: 'ti-file-download', label: t('tech_sheet.export_pdf'), onClick: onExport, disabled: exporting }),
+        ribbonTool({ key: 'save-template', icon: 'ti-template', label: t('tech_sheet.save_as_template'), onClick: () => setSaveAsTpl({ nom: '', descripcio: '' }), disabled: !locked }),
         ribbonTool({ key: 'autosave', icon: saveState === 'error' ? 'ti-alert-triangle' : 'ti-device-floppy', label: saveLabel || t('tech_sheet.autosave'), disabled: true, title: t('tech_sheet.autosave_title') }),
         ribbonTool({ key: 'version', icon: 'ti-history', label: `v${sheet?.versio ?? 1}`, disabled: true, title: t('tech_sheet.version_current') }),
       ]
@@ -3537,6 +3553,35 @@ export default function TechSheetEditor() {
               style={{ marginTop: 12, fontSize: 'var(--fs-label)', color: COL.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
               {t('tech_sheet.table_picker_cancel')}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* S4: modal "Desar com a plantilla" — mateix look que pickFitting/tablePicker */}
+      {saveAsTpl && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setSaveAsTpl(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.save_as_template')}</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label style={propLabel}>
+                <input type="text" value={saveAsTpl.nom} placeholder={t('tech_sheet.save_as_template_name')}
+                  onChange={e => setSaveAsTpl(p => ({ ...p, nom: e.target.value }))} style={propInput} />
+              </label>
+              <label style={propLabel}>
+                <input type="text" value={saveAsTpl.descripcio} placeholder={t('tech_sheet.save_as_template_desc')}
+                  onChange={e => setSaveAsTpl(p => ({ ...p, descripcio: e.target.value }))} style={propInput} />
+              </label>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+                <button type="button" onClick={() => setSaveAsTpl(null)}
+                  style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px' }}>
+                  {t('tech_sheet.table_picker_cancel')}
+                </button>
+                <button type="button" onClick={submitSaveAsTpl} disabled={!saveAsTpl.nom.trim()}
+                  style={{ fontSize: 'var(--fs-body)', padding: '6px 14px', border: `1px solid ${COL.gold}`, borderRadius: 6, background: COL.goldPale, color: COL.gold, fontWeight: 600, fontFamily: FONT, cursor: saveAsTpl.nom.trim() ? 'pointer' : 'default', opacity: saveAsTpl.nom.trim() ? 1 : 0.5 }}>
+                  {t('tech_sheet.save_as_template')}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

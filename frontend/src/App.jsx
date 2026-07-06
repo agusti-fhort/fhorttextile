@@ -1,5 +1,6 @@
-import React, { useEffect, lazy, Suspense } from 'react'
+import React, { useEffect, useState, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useParams, useSearchParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import useAuthStore from './store/auth'
 import Login from './pages/Login'
 import Shell from './components/layout/Shell'
@@ -68,10 +69,29 @@ function FttResolver() {
   const { id } = useParams()
   const [sp] = useSearchParams()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const taskId = sp.get('task_id')
+  // null = resolent | { templates } = mostra el selector (blanc | plantilla de tenant)
+  const [choose, setChoose] = useState(null)
+  const API = import.meta.env.VITE_API_URL || ''
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+
+  // Crea el document (blanc si templateId és null) i navega a l'editor.
+  const createDoc = async (templateId) => {
+    try {
+      const r = await fetch(`${API}/api/v1/models/${id}/ftt-document/`, {
+        method: 'POST', headers, body: JSON.stringify(templateId ? { template_id: templateId } : {}),
+      })
+      if (r.ok) {
+        const f = await r.json()
+        navigate(`/models/${id}/ftt/${f.id}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })
+        return
+      }
+    } catch { /* noop */ }
+    navigate(`/models/${id}`, { replace: true })
+  }
+
   useEffect(() => {
-    const API = import.meta.env.VITE_API_URL || ''
-    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }
     let cancelled = false
     ;(async () => {
       let fitxerId = null
@@ -79,18 +99,47 @@ function FttResolver() {
         const r = await fetch(`${API}/api/v1/model-fitxers/?model=${id}&tipus=TECHSHEET&is_current=true&ordering=-data_pujada`, { headers })
         if (r.ok) { const d = await r.json(); const list = d.results || d || []; if (list.length) fitxerId = list[0].id }
       } catch { /* noop */ }
-      if (!fitxerId) {
-        try {
-          const r = await fetch(`${API}/api/v1/models/${id}/ftt-document/`, { method: 'POST', headers })
-          if (r.ok) { const f = await r.json(); fitxerId = f.id }
-        } catch { /* noop */ }
-      }
       if (cancelled) return
-      navigate(fitxerId ? `/models/${id}/ftt/${fitxerId}${taskId ? `?task_id=${taskId}` : ''}` : `/models/${id}`, { replace: true })
+      if (fitxerId) {
+        navigate(`/models/${id}/ftt/${fitxerId}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })
+        return
+      }
+      // Sense document existent: si el tenant té plantilles, pregunta; si no, crea en blanc directe.
+      let templates = []
+      try {
+        const r = await fetch(`${API}/api/v1/document-templates/`, { headers })
+        if (r.ok) { const d = await r.json(); templates = d.results || d || [] }
+      } catch { /* noop */ }
+      if (cancelled) return
+      if (templates.length) { setChoose({ templates }); return }
+      createDoc(null)
     })()
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  if (choose) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+        <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', border: '1px solid var(--border)' }}>
+          <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>{t('tech_sheet.new_doc_title')}</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <button type="button" onClick={() => createDoc(null)}
+              style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--gold)', borderRadius: 6, background: 'transparent', color: 'var(--gold)', fontWeight: 600, cursor: 'pointer' }}>
+              {t('tech_sheet.new_doc_blank')}
+            </button>
+            {choose.templates.map(tpl => (
+              <button key={tpl.id} type="button" onClick={() => createDoc(tpl.id)}
+                style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)', color: 'var(--text)', cursor: 'pointer' }}>
+                {tpl.nom}
+                {tpl.descripcio && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{tpl.descripcio}</div>}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
   return <div style={{ padding: 24, color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>…</div>
 }
 
