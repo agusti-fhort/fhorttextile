@@ -784,6 +784,12 @@ def import_session_extraccio_view(request, token):
         _logging.getLogger(__name__).exception('Extracció W2: error a la crida Claude')
         return Response({'error': f'Error a la crida d\'extracció: {e}'}, status=502)
 
+    # Guarda de truncament: si Opus talla per límit de tokens, degradem amb gràcia
+    # (no bloqueja; el JSON pot quedar incomplet i el gestiona el salvage de sota).
+    if getattr(response, 'stop_reason', None) == 'max_tokens':
+        avisos.append("Resposta d'extracció truncada pel límit de tokens; "
+                      'resultat possiblement incomplet.')
+
     # Parse tolerant (Fase 1) amb salvage per fila.
     grading_status = {'status': 'ok', 'detail': ''}
     try:
