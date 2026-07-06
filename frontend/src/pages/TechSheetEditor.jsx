@@ -2452,6 +2452,25 @@ export default function TechSheetEditor() {
     selectOnly(obj.id)
     setEditingFlatId(obj.id)
   }
+  // ── S7 — Teclat: A obre l'editor de nodes (PaperFlatEditor) del path sol seleccionat ──
+  useEffect(() => {
+    const onKey = (e) => {
+      if (editingFlatId || editingText) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (!locked) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key.toLowerCase() !== 'a') return
+      const sel = objectsOf(currentPage).filter(o => selectedIds.includes(o.id))
+      if (sel.length === 1 && (sel[0].type === 'path' || sel[0].type === 'sketch_svg')) {
+        e.preventDefault()
+        startVectorEdit(sel[0])
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked, editingText, editingFlatId, selectedIds, currentPage])
   const commitFlatEdit = (payload) => {
     if (!editingFlatId) return
     if (payload && typeof payload === 'object' && Array.isArray(payload.paths)) {
