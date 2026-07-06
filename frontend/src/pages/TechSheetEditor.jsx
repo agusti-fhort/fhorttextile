@@ -251,6 +251,7 @@ export function documentToV2(documentJson, assets = {}) {
           ? { ...obj, src: urlOf(obj.src.slice(7)) }
           : obj
       ))),
+      guides: p.guides || [],   // S2: guies (no s'exporten a PDF)
     })),
   }
 }
@@ -270,6 +271,7 @@ export function v2ToDocument(v2Pages, pageFormat, metadata = {}, urlToName = {})
           ? { ...obj, src: 'assets/' + urlToName[obj.src] }
           : obj
       ))),
+      guides: p.guides || [],   // S2: guies (no s'exporten a PDF)
     })),
   }
 }
@@ -730,6 +732,7 @@ export function serializePages(pages) {
   return pages.map(p => ({
     id: p.id,
     objects: (p.objects || []).map(serializeObject),
+    guides: p.guides || [],   // S2: guies (no s'exporten a PDF)
   }))
 }
 
@@ -1176,6 +1179,43 @@ export default function TechSheetEditor() {
     window.addEventListener('resize', syncRuler)
     return () => window.removeEventListener('resize', syncRuler)
   }, [syncRuler])
+  // S2: guies — helper de mutació (via setPages → entra a la història S0, com qualsevol altre canvi).
+  const setPageGuides = useCallback((updater) => {
+    setPages(ps => ps.map((pg, i) => (i === currentPage ? { ...pg, guides: updater(pg.guides || []) } : pg)))
+  }, [currentPage])
+  const [creatingGuide, setCreatingGuide] = useState(null)   // S2: {axis,pos} mm mentre s'arrossega una guia nova des de la regla
+  // S2: arrossegar una guia existent — moure-la, o esborrar-la si es deixa anar fora de la pàgina.
+  const onGuideDragEnd = (axis, i, e) => {
+    const node = e.target
+    const newPos = axis === 'x' ? toMm(node.x()) : toMm(node.y())
+    const max = axis === 'x' ? fmt.w : fmt.h
+    setPageGuides(gs => (
+      newPos < 0 || newPos > max ? gs.filter((_, k) => k !== i) : gs.map((g, k) => (k === i ? { ...g, pos: newPos } : g))
+    ))
+  }
+  // S2: crear una guia arrossegant des d'una regla (mousedown a la banda → segueix el ratolí → soltar la crea).
+  const startGuideCreate = (axis, e) => {
+    if (!locked) return
+    e.preventDefault()
+    const posFrom = (ev) => {
+      const wr = wrapRef.current
+      if (!wr) return 0
+      const r = wr.getBoundingClientRect()
+      return axis === 'x' ? toMm((ev.clientX - r.left) / zoom) : toMm((ev.clientY - r.top) / zoom)
+    }
+    setCreatingGuide({ axis, pos: posFrom(e) })
+    const onMove = (ev) => setCreatingGuide({ axis, pos: posFrom(ev) })
+    const onUp = (ev) => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      const pos = posFrom(ev)
+      const max = axis === 'x' ? fmt.w : fmt.h
+      setCreatingGuide(null)
+      if (pos >= 0 && pos <= max) setPageGuides(gs => [...gs, { axis, pos }])
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
   const selectOnly = useCallback((objId) => setSelectedIds([objId]), [])
   const toggleSelection = useCallback((objId) => {
     setSelectedIds(ids => (ids.includes(objId) ? ids.filter(id => id !== objId) : [...ids, objId]))
@@ -1514,7 +1554,7 @@ export default function TechSheetEditor() {
     skipSave.current = true
     let rawPages = null
     if (tj && tj.version === 2 && Array.isArray(tj.pages) && tj.pages.length) {
-      rawPages = tj.pages.map(p => ({ id: p.id || uid(), objects: (p.objects || []).map(o => ({ ...o, id: o.id || uid() })) }))
+      rawPages = tj.pages.map(p => ({ id: p.id || uid(), objects: (p.objects || []).map(o => ({ ...o, id: o.id || uid() })), guides: p.guides || [] }))
     } else {
       rawPages = [{ id: uid(), objects: [] }]
     }
@@ -2303,6 +2343,7 @@ export default function TechSheetEditor() {
   const CTX_BG = COL.sidebar, CTX_BORDER = COL.border, CTX_TEXT = COL.textMain
   const ctxBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 26, height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: COL.field, color: CTX_TEXT, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' }
   const curObjs = objectsOf(currentPage)
+  const curGuides = pages[currentPage]?.guides || []   // S2: guies de la pàgina activa
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   const selectedSet = new Set(selectedIds)
   const selectedObjects = curObjs.filter(o => selectedSet.has(o.id))
@@ -2691,12 +2732,14 @@ export default function TechSheetEditor() {
         <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: `${RULER_SIZE}px 1fr`, gridTemplateRows: `${RULER_SIZE}px 1fr`, background: COL.work, position: 'relative' }}>
           {/* Cantonada */}
           <div style={{ background: COL.sidebar, borderRight: `1px solid ${COL.border}`, borderBottom: `1px solid ${COL.border}` }} />
-          {/* Regla superior */}
-          <div style={{ overflow: 'hidden', background: COL.sidebar, borderBottom: `1px solid ${COL.border}` }}>
+          {/* Regla superior — arrossegar-ne crea una guia vertical (S2) */}
+          <div onMouseDown={(e) => startGuideCreate('x', e)}
+            style={{ overflow: 'hidden', background: COL.sidebar, borderBottom: `1px solid ${COL.border}` }}>
             <svg width="100%" height={RULER_SIZE} style={{ display: 'block' }}>{topTicks}</svg>
           </div>
-          {/* Regla esquerra */}
-          <div style={{ overflow: 'hidden', background: COL.sidebar, borderRight: `1px solid ${COL.border}` }}>
+          {/* Regla esquerra — arrossegar-ne crea una guia horitzontal (S2) */}
+          <div onMouseDown={(e) => startGuideCreate('y', e)}
+            style={{ overflow: 'hidden', background: COL.sidebar, borderRight: `1px solid ${COL.border}` }}>
             <svg width={RULER_SIZE} height="100%" style={{ display: 'block' }}>{leftTicks}</svg>
           </div>
         <div ref={viewportRef} onWheel={onViewportWheel} onScroll={syncRuler}
@@ -2747,6 +2790,17 @@ export default function TechSheetEditor() {
                 {/* S2: guies daurades temporals de magnetisme (drag) */}
                 {snapLines?.x != null && <Line points={[toPx(snapLines.x), 0, toPx(snapLines.x), pageH]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} listening={false} />}
                 {snapLines?.y != null && <Line points={[0, toPx(snapLines.y), pageW, toPx(snapLines.y)]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} listening={false} />}
+                {/* S2: guies persistents de la pàgina — arrossegables (moure) o expulsables (esborrar) */}
+                {curGuides.map((g, i) => (g.axis === 'x'
+                  ? <Line key={'g' + i} x={toPx(g.pos)} y={0} points={[0, 0, 0, pageH]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} hitStrokeWidth={8} draggable dragBoundFunc={(pos) => ({ x: pos.x, y: 0 })} onDragEnd={(e) => onGuideDragEnd('x', i, e)} />
+                  : <Line key={'g' + i} x={0} y={toPx(g.pos)} points={[0, 0, pageW, 0]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} hitStrokeWidth={8} draggable dragBoundFunc={(pos) => ({ x: 0, y: pos.y })} onDragEnd={(e) => onGuideDragEnd('y', i, e)} />
+                ))}
+                {/* S2: previsualització de la guia en creació (arrossegant des de la regla) */}
+                {creatingGuide && creatingGuide.pos >= 0 && creatingGuide.pos <= (creatingGuide.axis === 'x' ? fmt.w : fmt.h) && (
+                  creatingGuide.axis === 'x'
+                    ? <Line x={toPx(creatingGuide.pos)} y={0} points={[0, 0, 0, pageH]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
+                    : <Line x={0} y={toPx(creatingGuide.pos)} points={[0, 0, pageW, 0]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
+                )}
                 <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && selObj?.type === 'data_block')}
                   padding={5}
                   borderStroke={KONVA_COL.textMuted} borderStrokeWidth={0.5} borderDash={[4, 4]}
