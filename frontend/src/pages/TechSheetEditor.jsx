@@ -410,10 +410,16 @@ function buildTableCellPrimitives(obj) {
   const st = obj.style || {}
   const pt = Math.max(8, st.fontSize || 9)
   const fontPx = Math.round(pt * 0.3528 * MM_TO_PX)   // pt → mm → px
+  const subPx = Math.round(fontPx * 0.8)
   const cw = cols.map(c => Math.max(6, (c.width || 24)) * MM_TO_PX)
   const totalW = cw.reduce((a, b) => a + b, 0) || MM_TO_PX * 40
-  const rowH = fontPx + T_ROW_PAD * 2
-  const hdrH = rowH
+  // Cel·la = string | { text, sub?, bold? } (S3: POM bilingüe a T1a, breaks en negreta a T1b).
+  // Si alguna cel·la porta `sub`, TOTA la taula passa a fila de dues línies (mateix patró
+  // que buildTablePrimitives amb nom_en/nom_ca).
+  const norm = (c) => (c && typeof c === 'object') ? c : { text: String(c ?? '') }
+  const hasSub = rows.some(row => row.some(c => norm(c).sub))
+  const rowH = hasSub ? fontPx * 2 + T_ROW_PAD * 3 : fontPx + T_ROW_PAD * 2
+  const hdrH = fontPx + T_ROW_PAD * 2
   const totalH = hdrH + rows.length * rowH
   const prims = []
 
@@ -431,7 +437,14 @@ function buildTableCellPrimitives(obj) {
     if (st.zebra) prims.push({ t: 'r', x: 0, y, w: totalW, h: rowH, fill: ri % 2 === 0 ? TBL.ROW_EVEN : TBL.ROW_ODD })
     let cxR = 0
     cols.forEach((c, i) => {
-      prims.push({ t: 't', x: cxR + T_PAD, y, w: cw[i] - 2 * T_PAD, h: rowH, text: String(row[i] ?? ''), fill: TBL.VAL, size: fontPx, mid: true })
+      const cell = norm(row[i])
+      const wCell = cw[i] - 2 * T_PAD
+      if (cell.sub) {
+        prims.push({ t: 't', x: cxR + T_PAD, y: y + T_ROW_PAD, w: wCell, h: fontPx + 2, text: cell.text || '', fill: TBL.VAL, size: fontPx, bold: !!cell.bold, mid: false })
+        prims.push({ t: 't', x: cxR + T_PAD, y: y + T_ROW_PAD * 2 + fontPx, w: wCell, h: subPx + 2, text: cell.sub, fill: TBL.NOM, size: subPx, italic: true, mid: false })
+      } else {
+        prims.push({ t: 't', x: cxR + T_PAD, y, w: wCell, h: rowH, text: cell.text || '', fill: TBL.VAL, size: fontPx, bold: !!cell.bold, mid: true })
+      }
       cxR += cw[i]
     })
     prims.push({ t: 'l', points: [0, y + rowH, totalW, y + rowH], stroke: TBL.ROW_BORDER, sw: 0.5 })
@@ -1112,6 +1125,9 @@ export default function TechSheetEditor() {
   const [exporting, setExporting] = useState(false)
   const [addingTable, setAddingTable] = useState(false)
   const [pickFitting, setPickFitting] = useState(false)
+  // S3: picker de variant de taula (T1a/T1b) — null | { variant?: 't1a'|'t1b' }. Encara sense
+  // obrir des del ribbon (commit 4); aquí només l'estat + el motor d'inserció.
+  const [tablePicker, setTablePicker] = useState(null)
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
   const [editingFlatId, setEditingFlatId] = useState(null)
   const [flatCanCommit, setFlatCanCommit] = useState(false)   // PEÇA 2: estat "es pot desar" de l'editor de nodes
@@ -2310,6 +2326,123 @@ export default function TechSheetEditor() {
     else setPickFitting(true)
   }
 
+  // ── S3: taules snapshot (T1a/T1b) — valors CONGELATS a la inserció (llei de disseny:
+  // cap binding viu; obj.snapshot només serveix per traçabilitat). Auto-fit igual que
+  // insertGradedTable: es construeix un cop amb buildTableCellPrimitives per obtenir
+  // totalW/totalH i calcular l'escala que hi cap al format actual.
+  const fitTableObj = (obj) => {
+    const { totalW, totalH } = buildTableCellPrimitives(obj)
+    const wMm = totalW / MM_TO_PX, hMm = totalH / MM_TO_PX
+    const scale = Math.min(1, (fmt.w - 20) / wMm, (fmt.h - 20) / hMm)
+    return { ...obj, scale, width: wMm * scale, height: hMm * scale }
+  }
+
+  // T1a — fitxa de treball fitting (POM base + regla de grading). Tol± queda buit: la
+  // serialització de base-measurements no exposa tolerància (només impressió+anotació manual).
+  const insertTableT1a = async (sfId) => {
+    if (!locked) return
+    let bms, rules
+    try {
+      const [rBm, rRules] = await Promise.all([
+        fetch(`${API}/api/v1/models/${model.id}/base-measurements/`, { headers: authHeaders }),
+        fetch(`${API}/api/v1/grading-rules/?rule_set=${model.grading_rule_set}`, { headers: authHeaders }),
+      ])
+      if (!rBm.ok || !rRules.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
+      const dBm = await rBm.json()
+      const dRules = await rRules.json()
+      bms = dBm.results || dBm || []
+      rules = dRules.results || dRules || []
+    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
+    if (!bms.length) { flash(t('tech_sheet.flash_empty_table')); return }
+
+    const rulesByPom = {}
+    rules.forEach(r => { rulesByPom[r.pom] = r })
+    const columns = [
+      { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
+      { key: 'pom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
+      { key: 'base', label: t('tech_sheet.tbl_col_base_cm'), width: 18 },
+      { key: 'rule', label: t('tech_sheet.tbl_col_rule'), width: 18 },
+      { key: 'break', label: t('tech_sheet.tbl_col_break'), width: 18 },
+      { key: 'tol', label: t('tech_sheet.tbl_col_tol'), width: 14 },
+      { key: 'nova', label: t('tech_sheet.tbl_col_new_measure'), width: 34 },
+      { key: 'coment', label: t('tech_sheet.tbl_col_comments'), width: 60 },
+    ]
+    const rows = bms.map(bm => {
+      const rule = rulesByPom[bm.pom_id]
+      return [
+        bm.nom_fitxa || bm.pom_abbreviation || '',
+        { text: rule?.pom_nom_en || bm.nom_client || bm.pom_code_global || '', sub: bm.nom_ca || '' },
+        bm.base_value_cm != null ? String(bm.base_value_cm) : '',
+        rule?.increment_base != null ? String(rule.increment_base) : '',
+        rule?.talla_break_label || '',
+        '', '', '',
+      ]
+    })
+    const obj = fitTableObj({
+      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
+      kind: 'pom_fitting', columns, rows,
+      style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+      snapshot: { model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString() },
+    })
+    addObject(obj)
+    setTablePicker(null)
+  }
+
+  // T1b — grading final: talles + Δ, amb els breaks (canvi d'increment) en negreta.
+  const insertTableT1b = async (sfId) => {
+    if (!locked) return
+    let data
+    try {
+      const r = await fetch(`${API}/api/v1/fitting/${sfId}/graded-table/`, { headers: authHeaders })
+      if (!r.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
+      data = await r.json()
+    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
+    if (!data.rows || !data.rows.length) { flash(t('tech_sheet.flash_empty_table')); return }
+
+    const sizeLabels = data.size_labels || []
+    const columns = [
+      { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
+      { key: 'nom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
+      ...sizeLabels.map(sl => ({ key: sl, label: sl === data.base_size ? `${sl}*` : sl, width: 16 })),
+      { key: 'delta', label: 'Δ', width: 16 },
+    ]
+    // Break = talla on el delta CANVIA respecte a la talla anterior (ordre de size_labels).
+    const cellForSize = (row, sl, prevSl) => {
+      const v = row.valors?.[sl]
+      const text = v != null ? String(v) : '–'
+      const d = row.deltas?.[sl]
+      const dPrev = prevSl != null ? row.deltas?.[prevSl] : undefined
+      const isBreak = prevSl != null && d != null && dPrev != null && d !== dPrev
+      return isBreak ? { text, bold: true } : text
+    }
+    const rows = data.rows.map(row => [
+      row.ref || row.abbreviation || row.codi || '',
+      { text: row.nom_en || '', sub: row.nom_ca || '' },
+      ...sizeLabels.map((sl, si) => cellForSize(row, sl, si > 0 ? sizeLabels[si - 1] : null)),
+      rowDelta(row, data.base_size, sizeLabels),
+    ])
+    const obj = fitTableObj({
+      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
+      kind: 'pom_grading', columns, rows,
+      style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+      snapshot: { model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString() },
+    })
+    addObject(obj)
+    setTablePicker(null)
+  }
+
+  // Punt d'entrada del picker (encara sense botó al ribbon — commit 4): tria de variant →
+  // si cal, sub-selector de size fitting → insereix.
+  const runTableVariant = (variant, sfId) => {
+    if (variant === 't1a') insertTableT1a(sfId)
+    else if (variant === 't1b') insertTableT1b(sfId)
+  }
+  const onPickTableVariant = (variant) => {
+    if (!sizeFittings.length) return   // ribbon el desactiva (commit 4); sense fitting no hi ha què inserir
+    if (sizeFittings.length === 1) { runTableVariant(variant, sizeFittings[0].id); return }
+    setTablePicker({ variant })
+  }
+
   // ── Bloc de dades: capçalera del model (màxim 1 per pàgina) ─────────────────
   const insertHeader = () => {
     if (!locked) return
@@ -3247,6 +3380,43 @@ export default function TechSheetEditor() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* S3: picker de variant de taula (T1a/T1b) + sub-selector de size fitting.
+          Mateix look que el modal pickFitting de dalt. Encara sense obrir des del ribbon
+          (commit 4) — motor a punt, entrada pendent. */}
+      {tablePicker && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setTablePicker(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.table_picker_title')}</h2>
+            {!tablePicker.variant ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <button type="button" onClick={() => onPickTableVariant('t1a')}
+                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                  {t('tech_sheet.table_variant_t1a')}
+                </button>
+                <button type="button" onClick={() => onPickTableVariant('t1b')}
+                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                  {t('tech_sheet.table_variant_t1b')}
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 4 }}>{t('tech_sheet.table_pick_fitting')}</p>
+                {sizeFittings.map(sf => (
+                  <button key={sf.id} type="button" onClick={() => runTableVariant(tablePicker.variant, sf.id)}
+                    style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                    {sf.codi || sf.nom || sf.talla_base || `#${sf.id}`}{sf.tipus ? ` · ${sf.tipus}` : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button type="button" onClick={() => setTablePicker(null)}
+              style={{ marginTop: 12, fontSize: 'var(--fs-label)', color: COL.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              {t('tech_sheet.table_picker_cancel')}
+            </button>
           </div>
         </div>
       )}
