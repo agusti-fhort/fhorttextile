@@ -5,7 +5,7 @@ import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Tr
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
 import FhortLogo from '../components/brand/FhortLogo'
-import { useDocumentHistory } from './ftt/history'
+import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -1118,6 +1118,8 @@ export default function TechSheetEditor() {
   const clearSelection = useCallback(() => setSelectedIds([]), [])
   // ── S0: història undo/redo (coalescing de ràfegues) ────────────────────────
   const { undo, redo, reset: resetHistory } = useDocumentHistory({ pages, setPages, setSelectedIds })
+  // ── S0: clipboard intern (copy/paste/duplicate) — NO navigator.clipboard ──
+  const clipboardRef = useRef([])
   const setZoomClamped = useCallback((next) => {
     setZoom(current => clampZoom(typeof next === 'function' ? next(current) : next))
   }, [])
@@ -1558,7 +1560,7 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, currentPage, pages, locked, editingText, editingFlatId])
 
-  // ── S0 — Teclat: Cmd/Ctrl+Z desfés · Shift+Z/Ctrl+Y refés ──────────────────
+  // ── S0 — Teclat: Cmd/Ctrl+Z desfés · Shift+Z/Ctrl+Y refés · C/V/D clipboard ─
   useEffect(() => {
     const onKey = (e) => {
       if (editingFlatId) return
@@ -1571,15 +1573,41 @@ export default function TechSheetEditor() {
       if (key === 'z') {
         e.preventDefault()
         if (e.shiftKey) redo(); else undo()
-      } else if (key === 'y') {
+        return
+      }
+      if (key === 'y') {
         e.preventDefault()
         redo()
+        return
+      }
+      if (key === 'c') {
+        const toCopy = objectsOf(currentPage).filter(o => selectedIds.includes(o.id) && o.layer === 'free')
+        if (!toCopy.length) return
+        e.preventDefault()
+        clipboardRef.current = toCopy
+        return
+      }
+      if (key === 'v') {
+        if (!clipboardRef.current.length) return
+        e.preventDefault()
+        const pasted = clipboardRef.current.map(o => offsetObjectMm(cloneWithNewIds(o, uid), 5, 5))
+        updatePageObjects(currentPage, objs => [...objs, ...pasted])
+        setSelectedIds(pasted.map(o => o.id))
+        return
+      }
+      if (key === 'd') {
+        const toDup = objectsOf(currentPage).filter(o => selectedIds.includes(o.id) && o.layer === 'free')
+        if (!toDup.length) return
+        e.preventDefault()
+        const duped = toDup.map(o => offsetObjectMm(cloneWithNewIds(o, uid), 5, 5))
+        updatePageObjects(currentPage, objs => [...objs, ...duped])
+        setSelectedIds(duped.map(o => o.id))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locked, editingText, editingFlatId, undo, redo])
+  }, [locked, editingText, editingFlatId, undo, redo, selectedIds, currentPage, pages, updatePageObjects])
 
   // ── PEÇA P: barra espaiadora = pan temporal (independent de l'eina activa) ──
   useEffect(() => {
