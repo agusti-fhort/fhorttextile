@@ -7,8 +7,10 @@ nova encadenada via save_model_file (invariant is_current intacta).
 NOTA (B3): encara NO hi ha enforcement de lock; arriba a B7 (lock sobre el document
 lògic + timer-gap). De moment només IsAuthenticated.
 """
+import logging
 import mimetypes
 
+from django.core.files.base import ContentFile
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -18,9 +20,12 @@ from rest_framework.views import APIView
 
 from fhort.accounts.capabilities import CONFIGURE, get_capabilities
 
-from . import services_ftt_document as svc
-from .models import Model, ModelFitxer
+from . import services_ftt, services_ftt_document as svc
+from .ftt_template_views import DocumentTemplateSerializer
+from .models import DocumentTemplate, Model, ModelFitxer
 from .serializers import ModelFitxerSerializer
+
+logger = logging.getLogger(__name__)
 
 
 def _lock_data(lock):
@@ -48,9 +53,27 @@ class FttDocumentCreateView(APIView):
 
     def post(self, request, model_id):
         model = get_object_or_404(Model, pk=model_id)
-        # template_id: reservat per a B5 (magatzem de plantilles). B3 crea buit.
+        template_id = request.data.get('template_id')
         document_json = None
-        fitxer = svc.create_document(model, document_json=document_json)
+        assets = None
+        if template_id:
+            tpl = get_object_or_404(DocumentTemplate, pk=template_id)
+            if tpl.fitxer_template:
+                try:
+                    tpl.fitxer_template.open('rb')
+                    try:
+                        blob = tpl.fitxer_template.read()
+                    finally:
+                        tpl.fitxer_template.close()
+                    unpacked = services_ftt.unpack(blob)
+                    document_json = unpacked['document_json']
+                    assets = unpacked.get('assets')
+                except (ValueError, OSError):
+                    # Plantilla corrupta o il·legible: degradem a document buit (mai 500).
+                    logger.exception("Plantilla %s il·legible; es crea document buit", template_id)
+                    document_json = None
+                    assets = None
+        fitxer = svc.create_document(model, document_json=document_json, assets=assets)
         return Response(ModelFitxerSerializer(fitxer).data, status=status.HTTP_201_CREATED)
 
 
@@ -158,6 +181,29 @@ class FttDocumentExportView(APIView):
         return Response(
             ModelFitxerSerializer(export).data, status=status.HTTP_201_CREATED
         )
+
+
+class FttSaveAsTemplateView(APIView):
+    """POST ftt-documents/<fitxer_id>/save-as-template/ → desa el cap com a DocumentTemplate."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, fitxer_id):
+        nom = (request.data.get('nom') or '').strip()
+        if not nom:
+            return Response({'detail': 'nom requerit'}, status=status.HTTP_400_BAD_REQUEST)
+        descripcio = request.data.get('descripcio') or ''
+        # Cap de cadena actual (l'autosave del client el manté al dia).
+        fitxer = get_object_or_404(ModelFitxer, pk=fitxer_id)
+        data = svc.load_document(fitxer)
+        blob = services_ftt.pack(
+            data['document_json'], assets=data.get('assets'), kind=services_ftt.FTT_KIND_TEMPLATE
+        )
+        tpl = DocumentTemplate(nom=nom, descripcio=descripcio, created_by=request.user, origen='tenant')
+        safe_nom = nom[:60].replace('/', '_').replace('\\', '_').replace(' ', '_')
+        tpl.fitxer_template.save(f"{safe_nom}.fttpt", ContentFile(blob), save=False)
+        tpl.save()
+        return Response(DocumentTemplateSerializer(tpl).data, status=status.HTTP_201_CREATED)
 
 
 class FttDocumentAssetView(APIView):
