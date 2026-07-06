@@ -2431,6 +2431,44 @@ export default function TechSheetEditor() {
     setTablePicker(null)
   }
 
+  // T2 — BOM: neix buida (sense snapshot de fitting), 100% editable a mà.
+  const insertTableT2 = () => {
+    if (!locked) return
+    const columns = [
+      { key: 'material', label: t('tech_sheet.tbl_col_material'), width: 50 },
+      { key: 'ref', label: t('tech_sheet.tbl_col_ref'), width: 32 },
+      { key: 'supplier', label: t('tech_sheet.tbl_col_supplier'), width: 44 },
+      { key: 'consumption', label: t('tech_sheet.tbl_col_consumption'), width: 28 },
+      { key: 'notes', label: t('tech_sheet.tbl_col_notes'), width: 56 },
+    ]
+    const rows = Array.from({ length: 4 }, () => columns.map(() => ''))
+    const obj = fitTableObj({
+      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
+      kind: 'bom', columns, rows,
+      style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+      snapshot: { model_id: model.id, snapshot_at: new Date().toISOString() },
+    })
+    addObject(obj)
+    setTablePicker(null)
+  }
+
+  // Personalitzada — graella genèrica buida, mida a tria (files×columnes).
+  const insertTableCustom = (nRows, nCols) => {
+    if (!locked) return
+    const columns = Array.from({ length: nCols }, (_, i) => ({
+      key: 'c' + i, label: t('tech_sheet.tbl_col_default', { n: i + 1 }), width: Math.max(20, Math.floor(240 / nCols)),
+    }))
+    const rows = Array.from({ length: nRows }, () => columns.map(() => ''))
+    const obj = fitTableObj({
+      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
+      kind: 'custom', columns, rows,
+      style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+      snapshot: { model_id: model.id, snapshot_at: new Date().toISOString() },
+    })
+    addObject(obj)
+    setTablePicker(null)
+  }
+
   // Punt d'entrada del picker (encara sense botó al ribbon — commit 4): tria de variant →
   // si cal, sub-selector de size fitting → insereix.
   const runTableVariant = (variant, sfId) => {
@@ -2438,6 +2476,8 @@ export default function TechSheetEditor() {
     else if (variant === 't1b') insertTableT1b(sfId)
   }
   const onPickTableVariant = (variant) => {
+    if (variant === 't2') { insertTableT2(); return }
+    if (variant === 'custom') { setTablePicker({ variant: 'custom', rows: 3, cols: 3 }); return }
     if (!sizeFittings.length) return   // ribbon el desactiva (commit 4); sense fitting no hi ha què inserir
     if (sizeFittings.length === 1) { runTableVariant(variant, sizeFittings[0].id); return }
     setTablePicker({ variant })
@@ -3293,6 +3333,58 @@ export default function TechSheetEditor() {
                       onChange={e => updateObject(selObj.id, { scale: Math.max(0.1, (Number(e.target.value) || 100) / 100) })} style={propInput} />
                   </label>
                 )}
+                {selObj.type === 'table' && (selObj.kind === 'bom' || selObj.kind === 'custom') && (() => {
+                  // T2/personalitzada: EDITABLES a mà (llei: T1a/T1b congelades, aquestes no).
+                  const tblBtn = (disabled) => ({ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 'var(--fs-label)', padding: '4px 7px', border: `1px solid ${COL.border}`, borderRadius: 5, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1 })
+                  const cellInput = { ...propInput, marginTop: 0, flex: 1, minWidth: 0, fontSize: 'var(--fs-label)' }
+                  return (
+                    <>
+                      <SectionTitle>{t('tech_sheet.table_edit')}</SectionTitle>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
+                        {selObj.columns.map((c, i) => (
+                          <input key={c.key} type="text" value={c.label}
+                            onChange={e => updateObject(selObj.id, { columns: selObj.columns.map((cc, k) => k === i ? { ...cc, label: e.target.value } : cc) })}
+                            style={{ ...cellInput, fontWeight: 600 }} />
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                        {selObj.rows.map((row, r) => (
+                          <div key={r} style={{ display: 'flex', gap: 4 }}>
+                            {row.map((cell, ci) => (
+                              <input key={ci} type="text" value={String(cell ?? '')}
+                                onChange={e => updateObject(selObj.id, { rows: selObj.rows.map((rr, rk) => rk === r ? rr.map((cc, ck) => ck === ci ? e.target.value : cc) : rr) })}
+                                style={cellInput} />
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        <button type="button" onClick={() => updateObject(selObj.id, { rows: [...selObj.rows, selObj.columns.map(() => '')] })} style={tblBtn(false)}>
+                          <i className="ti ti-plus" aria-hidden="true" />{t('tech_sheet.table_add_row')}
+                        </button>
+                        <button type="button" onClick={() => {
+                            const len = selObj.columns.length
+                            updateObject(selObj.id, {
+                              columns: [...selObj.columns, { key: 'c' + len, label: t('tech_sheet.tbl_col_default', { n: len + 1 }), width: 28 }],
+                              rows: selObj.rows.map(row => [...row, '']),
+                            })
+                          }} style={tblBtn(false)}>
+                          <i className="ti ti-plus" aria-hidden="true" />{t('tech_sheet.table_add_col')}
+                        </button>
+                        <button type="button" disabled={selObj.rows.length <= 1}
+                          onClick={() => selObj.rows.length > 1 && updateObject(selObj.id, { rows: selObj.rows.slice(0, -1) })}
+                          style={tblBtn(selObj.rows.length <= 1)}>
+                          <i className="ti ti-minus" aria-hidden="true" />{t('tech_sheet.table_del_row')}
+                        </button>
+                        <button type="button" disabled={selObj.columns.length <= 1}
+                          onClick={() => selObj.columns.length > 1 && updateObject(selObj.id, { columns: selObj.columns.slice(0, -1), rows: selObj.rows.map(row => row.slice(0, -1)) })}
+                          style={tblBtn(selObj.columns.length <= 1)}>
+                          <i className="ti ti-minus" aria-hidden="true" />{t('tech_sheet.table_del_col')}
+                        </button>
+                      </div>
+                    </>
+                  )
+                })()}
                 {(selObj.type === 'sketch_svg' || selObj.type === 'path') && (
                   <>
                     <button type="button" onClick={editSelectedFlat}
@@ -3384,9 +3476,9 @@ export default function TechSheetEditor() {
         </div>
       )}
 
-      {/* S3: picker de variant de taula (T1a/T1b) + sub-selector de size fitting.
-          Mateix look que el modal pickFitting de dalt. Encara sense obrir des del ribbon
-          (commit 4) — motor a punt, entrada pendent. */}
+      {/* S3: picker de variant de taula (T1a/T1b/T2/personalitzada) + sub-selector de size
+          fitting (T1a/T1b) o de mida (personalitzada). Mateix look que el modal pickFitting
+          de dalt. Encara sense obrir des del ribbon (commit 4) — motor a punt, entrada pendent. */}
       {tablePicker && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setTablePicker(null)}>
           <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
@@ -3400,6 +3492,29 @@ export default function TechSheetEditor() {
                 <button type="button" onClick={() => onPickTableVariant('t1b')}
                   style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
                   {t('tech_sheet.table_variant_t1b')}
+                </button>
+                <button type="button" onClick={() => onPickTableVariant('t2')}
+                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                  {t('tech_sheet.table_variant_t2')}
+                </button>
+                <button type="button" onClick={() => onPickTableVariant('custom')}
+                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                  {t('tech_sheet.table_variant_custom')}
+                </button>
+              </div>
+            ) : tablePicker.variant === 'custom' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={propLabel}>{t('tech_sheet.table_custom_rows')}
+                  <input type="number" min={1} max={20} value={tablePicker.rows}
+                    onChange={e => setTablePicker(p => ({ ...p, rows: Math.min(20, Math.max(1, Number(e.target.value) || 1)) }))} style={propInput} />
+                </label>
+                <label style={propLabel}>{t('tech_sheet.table_custom_cols')}
+                  <input type="number" min={1} max={20} value={tablePicker.cols}
+                    onChange={e => setTablePicker(p => ({ ...p, cols: Math.min(20, Math.max(1, Number(e.target.value) || 1)) }))} style={propInput} />
+                </label>
+                <button type="button" onClick={() => insertTableCustom(tablePicker.rows, tablePicker.cols)}
+                  style={{ textAlign: 'center', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.gold}`, borderRadius: 6, background: COL.goldPale, color: COL.gold, fontWeight: 600, fontFamily: FONT, cursor: 'pointer' }}>
+                  {t('tech_sheet.table_custom_create')}
                 </button>
               </div>
             ) : (
