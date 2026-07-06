@@ -1292,6 +1292,9 @@ export default function TechSheetEditor() {
   const didInitialFit = useRef(false)
   const drawing = useRef(null)         // {type, points, id} mentre es dibuixa
   const [drawTemp, setDrawTemp] = useState(null)
+  // S7: eina ploma — traç multi-clic (px de contingut). null = inactiva. Independent de `drawing`.
+  const penRef = useRef(null)          // {points:[{x,y,inX,inY,outX,outY}], dragging}
+  const [penTemp, setPenTemp] = useState(null)   // mirall per pintar: {points, cursor}
   // S1: rubber-band de selecció (marc arrossegat en tela buida amb eina 'select')
   const [marquee, setMarquee] = useState(null)   // {x,y,w,h} px de contingut, per pintar
   const marqueeStart = useRef(null)              // {x,y,shift,rect} mentre s'arrossega
@@ -1922,7 +1925,7 @@ export default function TechSheetEditor() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (!locked) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      const map = { v: 'select', t: 'text', r: 'rect', e: 'ellipse', l: 'line' }
+      const map = { v: 'select', t: 'text', r: 'rect', e: 'ellipse', l: 'line', p: 'pen' }
       const next = map[e.key.toLowerCase()]
       if (!next) return
       e.preventDefault()
@@ -1932,6 +1935,32 @@ export default function TechSheetEditor() {
     return () => window.removeEventListener('keydown', onKey)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locked, editingText, editingFlatId])
+
+  // ── S7 — Teclat de la ploma: Enter tanca obert, Escape cancel·la TOT el traç
+  // (el simple guanya — no treu punt a punt), Backspace treu l'últim ancoratge ──
+  useEffect(() => {
+    const onKey = (e) => {
+      if (tool !== 'pen' || !penRef.current) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        if (penRef.current.points.length >= 2) finishPen(false)
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        penRef.current = null
+        setPenTemp(null)
+      } else if (e.key === 'Backspace') {
+        e.preventDefault()
+        penRef.current.points.pop()
+        if (!penRef.current.points.length) { penRef.current = null; setPenTemp(null) }
+        else setPenTemp({ points: [...penRef.current.points], cursor: stagePoint() })
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tool])
 
   // ── PEÇA P: barra espaiadora = pan temporal (independent de l'eina activa) ──
   useEffect(() => {
@@ -2090,12 +2119,36 @@ export default function TechSheetEditor() {
     // que esperen toMm i el dibuix de formes.
     return p ? { x: p.x / zoom, y: p.y / zoom } : null
   }
+  // ── S7: tanca el traç de ploma → un sol objecte type:'path' amb segments editables (mm) ──
+  const finishPen = (closed) => {
+    const points = penRef.current?.points || []
+    if (points.length >= 2) {
+      const segments = points.map(p => ({ x: toMm(p.x), y: toMm(p.y), inX: toMm(p.inX), inY: toMm(p.inY), outX: toMm(p.outX), outY: toMm(p.outY) }))
+      addObject({
+        id: uid(), type: 'path', layer: 'free', x: 0, y: 0,
+        paths: [{ closed, fill: 'transparent', stroke: KONVA_COL.textMain, strokeWidth: 1.2, fillRule: 'nonzero', segments }],
+      })
+    }
+    penRef.current = null
+    setPenTemp(null)
+    setTool('select')
+  }
   const onStageMouseDown = (e) => {
     if (editingFlatId) return
     if (tool === 'pan' || spaceHeld) return   // PEÇA P: el pan el gestiona el viewport, no el Stage
     if (!locked) { if (e.target === e.target.getStage()) clearSelection(); return }
     const pos = stagePoint()
     if (!pos) return
+    if (tool === 'pen') {
+      // Clic a prop del 1r punt (amb ≥2 punts) tanca el traç; si no, afegeix un nou ancoratge.
+      const pts = penRef.current?.points
+      if (pts && pts.length >= 2 && Math.hypot(pos.x - pts[0].x, pos.y - pts[0].y) <= 8) { finishPen(true); return }
+      if (!penRef.current) penRef.current = { points: [], dragging: false }
+      penRef.current.points.push({ x: pos.x, y: pos.y, inX: 0, inY: 0, outX: 0, outY: 0 })
+      penRef.current.dragging = true
+      setPenTemp({ points: [...penRef.current.points], cursor: pos })
+      return
+    }
     if (tool === 'select') {
       // S1: en tela buida no deseleccionem al mousedown — comencem un marc de rubber-band
       // i la deselecció (si no hi ha arrossegament) es resol al mouseup.
@@ -2134,6 +2187,18 @@ export default function TechSheetEditor() {
     // recalculen `pos` pel seu compte més avall.
     const cur = stagePoint()
     if (cur) setCursorMm({ x: toMm(cur.x), y: toMm(cur.y) })
+    if (tool === 'pen' && penRef.current) {
+      if (!cur) return
+      const points = penRef.current.points
+      if (penRef.current.dragging && points.length) {
+        const last = points[points.length - 1]
+        const p = e?.evt?.shiftKey ? snap45(last.x, last.y, cur.x, cur.y) : cur
+        last.outX = p.x - last.x; last.outY = p.y - last.y
+        last.inX = -last.outX; last.inY = -last.outY
+      }
+      setPenTemp({ points: [...points], cursor: cur })
+      return
+    }
     if (marqueeStart.current) {
       const start = marqueeStart.current
       const pos = stagePoint()
@@ -2159,6 +2224,12 @@ export default function TechSheetEditor() {
   }
   const onStageMouseUp = (e) => {
     if (editingFlatId) return
+    if (tool === 'pen' && penRef.current) {
+      penRef.current.dragging = false
+      const pos = stagePoint()
+      setPenTemp({ points: [...penRef.current.points], cursor: pos })
+      return
+    }
     if (marqueeStart.current) {
       const m = marqueeStart.current
       marqueeStart.current = null
@@ -2773,7 +2844,7 @@ export default function TechSheetEditor() {
     ] },
     { cat: 'draw', items: [
       { kind: 'tool', k: 'draw', icon: 'ti-pencil', label: t('tech_sheet.tool_draw') },
-      { kind: 'tool', k: 'pen', icon: 'ti-vector-bezier', label: t('tech_sheet.tool_pen'), soon: true },
+      { kind: 'tool', k: 'pen', icon: 'ti-vector-bezier', label: t('tech_sheet.tool_pen') },
       { kind: 'flyout', id: 'shapes', label: t('tech_sheet.tool_group_shapes'), tools: [
         { k: 'rect', icon: 'ti-square', label: t('tech_sheet.tool_rect') },
         { k: 'rect_round', icon: 'ti-square-rounded', label: t('tech_sheet.tool_rect_round') },
@@ -3151,6 +3222,16 @@ export default function TechSheetEditor() {
                 {drawTemp?.type === 'ellipse' && <Ellipse x={drawTemp.x + drawTemp.w / 2} y={drawTemp.y + drawTemp.h / 2} radiusX={drawTemp.w / 2} radiusY={drawTemp.h / 2} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {(drawTemp?.type === 'line' || drawTemp?.type === 'line_dot' || drawTemp?.type === 'draw') && <Line points={drawTemp.points} stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {(drawTemp?.type === 'arrow' || drawTemp?.type === 'arrow2') && <Arrow points={drawTemp.points} stroke={KONVA_COL.textMain} fill={KONVA_COL.textMain} strokeWidth={1.5} pointerLength={8} pointerWidth={6} pointerAtBeginning={drawTemp.type === 'arrow2'} listening={false} />}
+                {/* S7: previsualització del traç de ploma — traç fet (mm→pathToData) + goma fins al cursor (px) */}
+                {penTemp && penTemp.points.length >= 2 && (
+                  <Path data={pathToData({ closed: false, segments: penTemp.points.map(p => ({ x: toMm(p.x), y: toMm(p.y), inX: toMm(p.inX), inY: toMm(p.inY), outX: toMm(p.outX), outY: toMm(p.outY) })) })}
+                    stroke={KONVA_COL.gold} strokeWidth={1.2} listening={false} />
+                )}
+                {penTemp?.cursor && penTemp.points.length > 0 && (() => {
+                  const last = penTemp.points[penTemp.points.length - 1]
+                  return <Line points={[last.x, last.y, penTemp.cursor.x, penTemp.cursor.y]} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} listening={false} />
+                })()}
+                {penTemp?.points.map((p, i) => <Rect key={'pen' + i} x={p.x - 2} y={p.y - 2} width={4} height={4} fill={KONVA_COL.gold} listening={false} />)}
                 {/* S1: marc de rubber-band mentre s'arrossega en tela buida */}
                 {marquee && <Rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} fill={KONVA_COL.gold} opacity={0.15} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {/* S2: guies daurades temporals de magnetisme (drag) */}
