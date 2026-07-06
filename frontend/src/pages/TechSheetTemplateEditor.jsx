@@ -1,3 +1,7 @@
+// ⚠️ JUBILAT (S4, 2026-07-06): aquest editor edita el TechSheetTemplate deprecat (per Customer,
+// 0 files a BD). Substituït pel flux de DocumentTemplate (plantilles del tenant): desar-com-a-plantilla
+// + chooser blanc|plantilla al nou document. Ja no té ruta ni botó. NO esborrar encara: el backend
+// tech_sheet_models/serializers/views i l'API techSheetTemplate queden com a candidats a G-poda.
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'

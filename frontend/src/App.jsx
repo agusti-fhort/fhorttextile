@@ -26,7 +26,6 @@ const BulkImportWizard = lazy(() => import('./pages/BulkImportWizard'))
 const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
-const TechSheetTemplateEditor = lazy(() => import('./pages/TechSheetTemplateEditor'))
 const DissenyPlaceholder = lazy(() => import('./pages/DissenyPlaceholder'))
 const ItemAuthoring = lazy(() => import('./pages/ItemAuthoring'))
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
@@ -211,12 +210,6 @@ export default function App() {
         <Route path="/models/:id/ftt/:fitxerId" element={
           <ProtectedRoute>
             <TechSheetEditor />
-          </ProtectedRoute>
-        } />
-        {/* Plantilla de fitxa per client (TS-3): mateix editor full-screen, FORA del Shell. */}
-        <Route path="/clients/:id/plantilla" element={
-          <ProtectedRoute>
-            <TechSheetTemplateEditor />
           </ProtectedRoute>
         } />
         <Route path="/" element={
