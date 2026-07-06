@@ -618,7 +618,10 @@ async function addObjectToLayer(layer, obj, ctx) {
     })
     const orderedChildren = [...(obj.children || [])].sort(
       (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
-    for (const child of orderedChildren) await addObjectToLayer(g, child, ctx)
+    for (const child of orderedChildren) {
+      if (child.visible === false) continue
+      await addObjectToLayer(g, child, ctx)
+    }
     layer.add(g)
     return
   }
@@ -710,6 +713,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
   const ordered = [...(page.objects || [])].sort(
     (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   for (const o of ordered) {
+    if (o.visible === false) continue
     await addObjectToLayer(layer, o, ctx)
   }
   layer.draw()
@@ -829,6 +833,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   if (obj.type === 'group') {
     const orderedChildren = [...(obj.children || [])].sort(
       (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
+      .filter(child => child.visible !== false)
     return (
       <Group {...common}>
         {orderedChildren.map(child => (
@@ -1538,7 +1543,7 @@ export default function TechSheetEditor() {
     // (resize de punts), text amb fons (Group), plantilla.
     const selectedSet = new Set(selectedIds)
     const nodes = objectsOf(currentPage)
-      .filter(o => selectedSet.has(o.id) && o.layer !== 'template' && !blocksTransform(o))
+      .filter(o => selectedSet.has(o.id) && o.layer !== 'template' && !blocksTransform(o) && !o.locked && o.visible !== false)
       .map(o => stage.findOne('#' + o.id))
       .filter(Boolean)
     tr.nodes(nodes)
@@ -1556,7 +1561,7 @@ export default function TechSheetEditor() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
       if (!selectedIds.length || !locked) return
-      const deletable = objectsOf(currentPage).filter(o => selectedIds.includes(o.id) && o.layer === 'free').map(o => o.id)
+      const deletable = objectsOf(currentPage).filter(o => selectedIds.includes(o.id) && o.layer === 'free' && !o.locked).map(o => o.id)
       if (deletable.length) { e.preventDefault(); deleteObjects(deletable) }
     }
     window.addEventListener('keydown', onKey)
@@ -1682,7 +1687,7 @@ export default function TechSheetEditor() {
       else if (e.key === 'ArrowDown') dy = s
       else return
       e.preventDefault()
-      const ids = new Set(objectsOf(currentPage).filter(o => o.layer === 'free' && selectedIds.includes(o.id)).map(o => o.id))
+      const ids = new Set(objectsOf(currentPage).filter(o => o.layer === 'free' && selectedIds.includes(o.id) && !o.locked).map(o => o.id))
       if (!ids.size) return
       updatePageObjects(currentPage, objs => objs.map(o => (ids.has(o.id) ? translate(o, dx, dy) : o)))
     }
@@ -1837,7 +1842,7 @@ export default function TechSheetEditor() {
       const stage = stageRef.current
       const hits = []
       if (stage) {
-        objectsOf(currentPage).filter(o => o.layer === 'free').forEach(o => {
+        objectsOf(currentPage).filter(o => o.layer === 'free' && !o.locked && o.visible !== false).forEach(o => {
           const node = stage.findOne('#' + o.id)
           if (!node) return
           const r = node.getClientRect({ relativeTo: node.getLayer() })
@@ -2578,12 +2583,12 @@ export default function TechSheetEditor() {
                   ordenem els objectes i pintem en una sola Layer (z per ordre d'array). */}
               <Layer>
                 <Rect x={0} y={0} width={pageW} height={pageH} fill={KONVA_COL.white} listening={false} />
-                {ordered.filter(o => o.id !== editingFlatId).map(o => (
+                {ordered.filter(o => o.id !== editingFlatId && o.visible !== false).map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
                     selected={selectedIds.includes(o.id)}
-                    selectable={locked && o.layer !== 'template'}
-                    draggable={locked && tool === 'select' && !panActive && o.layer !== 'template'}
+                    selectable={locked && o.layer !== 'template' && !o.locked}
+                    draggable={locked && tool === 'select' && !panActive && o.layer !== 'template' && !o.locked}
                     onSelect={(e) => handleSelectObject(e, o.id)}
                     onDragEnd={handleDragEnd(o)}
                     onTransformEnd={handleTransformEnd(o)}
@@ -2727,11 +2732,17 @@ export default function TechSheetEditor() {
                   const label = o.type === 'text' ? (o.text || t('tech_sheet.tool_text')) : o.type
                   return (
                     <div key={o.id} onClick={() => selectOnly(o.id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', cursor: 'pointer', background: on ? COL.goldPale : 'transparent', color: on ? COL.gold : COL.textMain, borderBottom: `1px solid ${COL.border}` }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', cursor: 'pointer', background: on ? COL.goldPale : 'transparent', color: on ? COL.gold : COL.textMain, borderBottom: `1px solid ${COL.border}`, opacity: o.visible === false ? 0.45 : 1 }}>
                       <i className={`ti ${icon}`} style={{ fontSize: 13, flexShrink: 0 }} />
                       <span style={{ flex: 1, fontSize: 'var(--fs-label)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
                       {locked && o.layer === 'free' && (
                         <>
+                          <button onClick={(e) => { e.stopPropagation(); updateObject(o.id, { visible: o.visible === false ? true : false }) }}
+                            title={o.visible === false ? t('tech_sheet.layer_show') : t('tech_sheet.layer_hide')}
+                            style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className={`ti ${o.visible === false ? 'ti-eye-off' : 'ti-eye'}`} style={{ fontSize: 13 }} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); updateObject(o.id, { locked: o.locked === true ? false : true }) }}
+                            title={o.locked === true ? t('tech_sheet.layer_unlock') : t('tech_sheet.layer_lock')}
+                            style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className={`ti ${o.locked === true ? 'ti-lock' : 'ti-lock-open'}`} style={{ fontSize: 13 }} /></button>
                           <button onClick={(e) => { e.stopPropagation(); selectOnly(o.id); moveSelectionInFreeLayer('forward') }} title={t('tech_sheet.bring_forward')}
                             style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className="ti ti-arrow-up" style={{ fontSize: 13 }} /></button>
                           <button onClick={(e) => { e.stopPropagation(); selectOnly(o.id); moveSelectionInFreeLayer('backward') }} title={t('tech_sheet.send_backward')}
