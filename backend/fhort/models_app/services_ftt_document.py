@@ -88,6 +88,50 @@ def _doc_filename(model):
     return "%s_fitxa%s" % (base, ModelFitxer.FTT_EXTENSION)
 
 
+def _placeholder_values(model):
+    """Construeix el mapa key→valor (str) per resoldre placeholders des del model."""
+    from fhort.models_app.serializers import ModelDetailSerializer  # import local: evita cicles
+
+    data = ModelDetailSerializer(model).data
+    keys = [
+        'nom_prenda', 'codi_intern', 'codi_client', 'customer_nom', 'collection',
+        'color_referencia', 'descripcio', 'responsable_nom', 'data_entrada',
+        'base_size_label', 'size_system_nom', 'fabric_main', 'fabric_composition',
+    ]
+    vals = {k: ('' if data.get(k) is None else str(data.get(k))) for k in keys}
+    vals['temporada_any'] = (f"{data.get('temporada') or ''} {data.get('any') or ''}").strip()
+    vals['data_avui'] = timezone.localdate().isoformat()
+    return vals  # customer_logo intencionadament absent → es resol com a imatge al següent commit
+
+
+def _resolve_obj(o, vals):
+    """Retorna l'objecte resolt: 'field' (llevat de customer_logo) → 'text' congelat."""
+    if o.get('type') == 'field':
+        if o.get('key') == 'customer_logo':
+            return o
+        text = vals.get(o.get('key'), '')
+        style = o.get('style') or {}
+        return {
+            'id': o.get('id'), 'type': 'text', 'layer': o.get('layer', 'free'),
+            'x': o.get('x', 0), 'y': o.get('y', 0), 'text': text,
+            'fontSize': style.get('fontSize', 11),
+        }
+    if o.get('children'):
+        return {**o, 'children': [_resolve_obj(c, vals) for c in o['children']]}
+    return o
+
+
+def resolve_placeholders(document_json, model):
+    """Instanciació des de plantilla: congela cada 'field' com a 'text' amb el valor real
+    del model (snapshot; no binding en viu). customer_logo es deixa intacte (S5 imatges)."""
+    vals = _placeholder_values(model)
+    pages = [
+        {**p, 'objects': [_resolve_obj(o, vals) for o in (p.get('objects') or [])]}
+        for p in (document_json.get('pages') or [])
+    ]
+    return {**document_json, 'pages': pages}
+
+
 def create_document(model, *, document_json=None, assets=None, preview=None, nom=None):
     """Crea la v1 d'un document .ftt per al model (cadena nova, is_current=True)."""
     if document_json is None:

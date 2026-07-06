@@ -66,7 +66,7 @@ class FttDocumentCreateView(APIView):
                     finally:
                         tpl.fitxer_template.close()
                     unpacked = services_ftt.unpack(blob)
-                    document_json = unpacked['document_json']
+                    document_json = svc.resolve_placeholders(unpacked['document_json'], model)
                     assets = unpacked.get('assets')
                 except (ValueError, OSError):
                     # Plantilla corrupta o il·legible: degradem a document buit (mai 500).
