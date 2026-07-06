@@ -35,6 +35,7 @@ from .views import (
 )
 
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
+from .ftt_template_views import DocumentTemplateViewSet
 
 router = DefaultRouter()
 router.register('models', ModelViewSet, basename='model')
@@ -43,6 +44,7 @@ router.register('base-measurements', BaseMeasurementViewSet, basename='base-meas
 router.register('size-checks', SizeCheckViewSet, basename='size-check')
 router.register('size-check-lines', SizeCheckLineViewSet, basename='size-check-line')
 router.register('watchpoints', WatchpointViewSet, basename='watchpoint')
+router.register('document-templates', DocumentTemplateViewSet, basename='document-template')
 
 # Sprint 6 — AI extraction. Paths before the router so 'models/extract-from-file/'
 # is not captured by 'models/<pk>/' of the ModelViewSet detail.
