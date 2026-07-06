@@ -1558,6 +1558,29 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, currentPage, pages, locked, editingText, editingFlatId])
 
+  // ── S0 — Teclat: Cmd/Ctrl+Z desfés · Shift+Z/Ctrl+Y refés ──────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (editingFlatId) return
+      if (editingText) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (!locked) return
+      if (!(e.metaKey || e.ctrlKey)) return
+      const key = e.key.toLowerCase()
+      if (key === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) redo(); else undo()
+      } else if (key === 'y') {
+        e.preventDefault()
+        redo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked, editingText, editingFlatId, undo, redo])
+
   // ── PEÇA P: barra espaiadora = pan temporal (independent de l'eina activa) ──
   useEffect(() => {
     if (!locked) return undefined
