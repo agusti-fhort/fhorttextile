@@ -31,4 +31,5 @@ urlpatterns = [
     path('api/v1/', include('fhort.fitting.urls')),
     path('api/v1/', include('fhort.tasks.urls')),
     path('api/v1/', include('fhort.planning.urls')),
+    path('api/v1/', include('fhort.commerce.urls')),
 ]
