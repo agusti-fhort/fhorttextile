@@ -1979,6 +1979,20 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroup, editingText, editingFlatId])
 
+  // ── E1b — Teclat: Escape cancel·la l'edició de nodes (equivalent al botó Cancel·lar) ──
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (!editingFlatId) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      setEditingFlatId(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingFlatId])
+
   // ── S1 — Teclat: dreceres d'eina V/T/R/E/L (sense Cmd/Ctrl/Alt) ────────────
   useEffect(() => {
     const onKey = (e) => {
