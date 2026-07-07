@@ -2276,7 +2276,9 @@ export default function TechSheetEditor() {
         return
       }
       const p1 = twoClickRef.current.p1
-      const p2 = pos
+      // A2: Shift encaixa la cota (2n punt) a múltiples de 45°, coherent amb el preview.
+      const p2 = (twoClickRef.current.tool === 'cota_pom' && e?.evt?.shiftKey)
+        ? snap45(p1.x, p1.y, pos.x, pos.y) : pos
       finishTwoClick(twoClickRef.current.tool, p1, p2)
       twoClickRef.current = null
       setTwoClickTemp(null)
@@ -2333,7 +2335,13 @@ export default function TechSheetEditor() {
     if (cur) setCursorMm({ x: toMm(cur.x), y: toMm(cur.y) })
     if (twoClickRef.current) {
       // E2: preview elàstic del 2n punt — p1 ja fixat, només movem el cursor.
-      if (cur) setTwoClickTemp({ ...twoClickRef.current, cursor: cur })
+      // A2: Shift encaixa la cota a múltiples de 45° (reutilitza snap45, com ploma/línia).
+      if (cur) {
+        const p1 = twoClickRef.current.p1
+        const c = (twoClickRef.current.tool === 'cota_pom' && e?.evt?.shiftKey)
+          ? snap45(p1.x, p1.y, cur.x, cur.y) : cur
+        setTwoClickTemp({ ...twoClickRef.current, cursor: c })
+      }
       return
     }
     if (tool === 'pen' && penRef.current) {
