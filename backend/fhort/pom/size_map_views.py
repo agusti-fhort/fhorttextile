@@ -498,6 +498,32 @@ def size_map_create_view(request):
 
         warnings = []
 
+        # ── Guard de col·lisió (R1): dos codis de document vinculats al MATEIX POM col·lapsarien
+        # a una sola regla (update_or_create(rule_set, pom), l'última guanya) → pèrdua SILENCIOSA.
+        # Decisió CTO: BLOQUEJAR abans d'escriure res → 400 amb la llista {codi_document → pom}.
+        by_pom = {}
+        for g in grading:
+            pid = g.get('pom_id')
+            if pid is None:
+                continue
+            by_pom.setdefault(pid, []).append((g.get('codi') or '').strip())
+        collisions = []
+        for pid, codes in by_pom.items():
+            if len(codes) > 1:
+                pom = POMMaster.objects.filter(pk=pid).first()
+                collisions.append({
+                    'pom_id': pid,
+                    'pom_codi': (getattr(pom, 'codi_client', '') or '') if pom else '',
+                    'pom_nom': (getattr(pom, 'nom_client', '') or '') if pom else '',
+                    'codis_document': [c for c in codes if c],
+                })
+        if collisions:
+            return Response({
+                'error': ('Dos o més codis de document es vinculen al mateix POM; '
+                          'resol els duplicats abans de crear (cap regla desada).'),
+                'collisions': collisions,
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         target = Target.objects.filter(codi=target_codi).first() if target_codi else None
 
         # ── Pre-check d'avís-i-confirma (NOMÉS REUTILITZAR: el sistema ja existeix i la

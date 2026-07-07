@@ -1348,6 +1348,8 @@
   "size_map_dest_new": "A NEW size system will be created with its grading.",
   "size_map_dest_reuse": "It will be linked to the existing system",
   "size_map_dest_reuse2": "A NEW grading rule is created; the system is NOT modified.",
+  "size_map_dup_pom": "Already linked by another code",
+  "size_map_dup_warn": "{{count}} POM(s) linked by more than one code: resolve the duplicates before creating.",
   "size_map_empty": "No size systems yet.",
   "size_map_error": "Error loading the systems.",
   "size_map_f_base": "Base size",

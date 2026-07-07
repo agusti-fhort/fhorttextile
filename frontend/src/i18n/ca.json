@@ -1348,6 +1348,8 @@
   "size_map_dest_new": "Es crearà un sistema de talles NOU amb la seva graduació.",
   "size_map_dest_reuse": "S'associarà al sistema existent",
   "size_map_dest_reuse2": "Es crea un grading rule NOU; el sistema NO es modifica.",
+  "size_map_dup_pom": "Ja vinculat per un altre codi",
+  "size_map_dup_warn": "{{count}} POM(s) vinculats per més d'un codi: resol els duplicats abans de crear.",
   "size_map_empty": "Cap sistema de talles encara.",
   "size_map_error": "Error en carregar els sistemes.",
   "size_map_f_base": "Talla base",

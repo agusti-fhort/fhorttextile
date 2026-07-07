@@ -347,13 +347,24 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       .finally(() => setBusy(false))
   }
 
+  // Col·lisió R1 (pre-check al pas 3): pom_id vinculats per >1 codi de document. Dues files al
+  // mateix POM col·lapsarien a una sola regla al backend (update_or_create) → pèrdua silenciosa.
+  // Es marquen visualment i el create es bloqueja (backend 400); decisió CTO: bloquejar.
+  const dupPomIds = (() => {
+    const c = {}
+    wiz.gradingResults.forEach(g => { if (g.pom_id) c[g.pom_id] = (c[g.pom_id] || 0) + 1 })
+    return new Set(Object.entries(c).filter(([, n]) => n > 1).map(([k]) => Number(k)))
+  })()
+
   // P5 → create. buildPayload accepta overrides {on_conflict, nom_variant} per re-cridar
   // des del panell de conflicte (avís-i-confirma).
   const buildPayload = (extra = {}) => {
     const grading = wiz.gradingResults
       .filter(g => g.pom_id)
       .map(g => {
-        const row = { pom_id: g.pom_id, logica: g.logica }
+        // `codi` = codi de document (nomenclatura del client): NO es persisteix, viatja perquè
+        // el backend pugui rotular una col·lisió {codi_document → pom} (R1) si dues files hi cauen.
+        const row = { pom_id: g.pom_id, codi: g.pom_codi_client, logica: g.logica }
         // valors_step és l'ORIGEN del break: enviar-lo sempre que el preview el va produir
         // (també per LINEAR amb break, p.ex. CHEST) perquè el create en derivi base+break.
         let vs = null
@@ -386,6 +397,13 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   }
 
   const submitCreate = (extra = {}) => {
+    // Guard anti-col·lisió (R1): si dos codis comparteixen POM, tornar al pas 3 a resoldre-ho
+    // (el backend també ho bloqueja amb 400, però evitem la crida inútil).
+    if (dupPomIds.size > 0) {
+      setErr(t('size_map_dup_warn', { count: dupPomIds.size }))
+      setStep(3)
+      return
+    }
     // Guard anti-descart-silenciós: buildPayload filtra els !pom_id; abans d'enviar, avisa
     // l'usuari de quins codis de client no s'han vinculat (i per tant no es desaran).
     const noResolts = wiz.gradingResults.filter(g => !g.pom_id)
@@ -598,6 +616,14 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             </ul>
           )}
 
+          {dupPomIds.size > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--err-bg)', color: 'var(--err)',
+                          border: '0.5px solid var(--err)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
+              <i className="ti ti-alert-triangle" style={{ fontSize: 14 }} />
+              {t('size_map_dup_warn', { count: dupPomIds.size })}
+            </div>
+          )}
+
           {wiz.gradingResults.length > 0 && (
             <div style={{ overflowX: 'auto', marginBottom: 14 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
@@ -614,7 +640,8 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                   {wiz.gradingResults.map((g, i) => {
                     const upd = (k, v) => set({ gradingResults: wiz.gradingResults.map((r, j) => j === i ? { ...r, [k]: v } : r) })
                     return (
-                      <tr key={i} style={{ borderTop: '0.5px solid var(--gray-l)', background: g.pom_id ? 'transparent' : 'var(--warn-bg)' }}>
+                      <tr key={i} style={{ borderTop: '0.5px solid var(--gray-l)',
+                        background: g.pom_id ? (dupPomIds.has(g.pom_id) ? 'var(--err-bg)' : 'transparent') : 'var(--warn-bg)' }}>
                         <td style={{ padding: 6 }}>
                           {/* codi de client (nomenclatura seva, ex 'B') + descripció del fitxer
                               com a referència; badge de confiança; si no resol, select de catàleg. */}
@@ -628,6 +655,12 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                                 {cb.label}</span>
                             ) : null
                           })()}
+                          {g.pom_id && dupPomIds.has(g.pom_id) && (
+                            <div style={{ marginTop: 2, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--err)' }}>
+                              <i className="ti ti-alert-triangle" style={{ fontSize: 12, marginRight: 3 }} />
+                              {t('size_map_dup_pom')}
+                            </div>
+                          )}
                           {g.pom_id
                             ? (g.pom_nom && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>→ {g.pom_nom}</div>)
                             : (
