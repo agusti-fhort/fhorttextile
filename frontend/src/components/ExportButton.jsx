@@ -96,15 +96,3 @@ export function ExportFittingCSV({ fittingId }) {
     />
   )
 }
-
-export function ExportModelPDF({ modelId, nomModel }) {
-  const { t } = useTranslation()
-  return (
-    <ExportButton
-      url={`/api/v1/models/${modelId}/export/pdf/`}
-      filename={`spec_${nomModel || modelId}.pdf`}
-      label={t('model_sheet.tab_tech_sheet')}
-      type="pdf"
-    />
-  )
-}
