@@ -12,6 +12,8 @@ const TaskTypes = lazy(() => import('./pages/TaskTypes'))
 const GarmentTypes = lazy(() => import('./pages/GarmentTypes'))
 const Suppliers = lazy(() => import('./pages/Suppliers'))
 const Customers = lazy(() => import('./pages/Customers'))
+const Products = lazy(() => import('./pages/Products'))
+const ProductDetail = lazy(() => import('./pages/ProductDetail'))
 const FittingDetail = lazy(() => import('./pages/FittingDetail'))
 const FittingSessionList = lazy(() => import('./pages/FittingSessionList'))
 const FittingSessionNew = lazy(() => import('./pages/FittingSessionNew'))
@@ -248,6 +250,9 @@ export default function App() {
           <Route path="garment-type-items/:itemId/editar" element={<ItemAuthoring />} />
           <Route path="suppliers" element={<Suppliers />} />
           <Route path="clients" element={<Customers />} />
+          {/* Mòdul Comercial Studio (B1) — mestre d'articles. Gate de tier = B5. */}
+          <Route path="comercial/productes" element={<Products />} />
+          <Route path="comercial/productes/:id" element={<ProductDetail />} />
           <Route path="planificacio" element={<Planning />} />
           {/* Calendari propi (agenda) read-only: obert a qualsevol autenticat (scope per dades a
               calendar/events); NO gatejat per canPlan, a diferència de la gestió /planificacio. */}

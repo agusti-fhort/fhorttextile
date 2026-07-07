@@ -49,6 +49,11 @@ const navGroups = [
     { to: '/clients', labelKey: 'nav.clients', icon: 'ti-users-group' },
     { to: '/suppliers', labelKey: 'nav.suppliers', icon: 'ti-building-factory' },
   ]},
+  // Comercial Studio (B1) — mestre d'articles. El gate de tier del mòdul arriba a B5;
+  // de moment sense `cap` (visible; l'escriptura la gateja CONFIGURE dins la pàgina).
+  { sectionKey: 'nav.section_comercial', items: [
+    { to: '/comercial/productes', labelKey: 'nav.products', icon: 'ti-package' },
+  ]},
   { sectionKey: 'nav.section_sistema', items: [
     { to: '/onboarding', labelKey: 'nav.onboarding', icon: 'ti-rocket', cap: 'onboarding' },
     { to: '/configuracio/calendari', labelKey: 'nav.company_calendar', icon: 'ti-calendar-cog', cap: 'configure' },

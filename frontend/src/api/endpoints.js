@@ -309,6 +309,44 @@ export const garmentTypeItems = {
   remove: (id) => client.delete(`/api/v1/garment-type-items/${id}/`),
 }
 
+// Mòdul Comercial Studio (B1) — mestre d'articles. Escriptura gated CONFIGURE.
+// Satèl·lits filtrables per ?product=. price-exceptions = taula d'EXCEPCIONS (no graella densa).
+export const commerce = {
+  units: {
+    list: (params) => client.get('/api/v1/commerce/units/', { params }),
+  },
+  products: {
+    list: (params) => client.get('/api/v1/commerce/products/', { params }),
+    get: (id) => client.get(`/api/v1/commerce/products/${id}/`),
+    create: (data) => client.post('/api/v1/commerce/products/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/products/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/products/${id}/`),
+  },
+  recipeLines: {
+    list: (params) => client.get('/api/v1/commerce/recipe-lines/', { params }),
+    create: (data) => client.post('/api/v1/commerce/recipe-lines/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/recipe-lines/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/recipe-lines/${id}/`),
+  },
+  productSuppliers: {
+    list: (params) => client.get('/api/v1/commerce/product-suppliers/', { params }),
+    create: (data) => client.post('/api/v1/commerce/product-suppliers/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/product-suppliers/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/product-suppliers/${id}/`),
+  },
+  productComponents: {
+    list: (params) => client.get('/api/v1/commerce/product-components/', { params }),
+    create: (data) => client.post('/api/v1/commerce/product-components/', data),
+    remove: (id) => client.delete(`/api/v1/commerce/product-components/${id}/`),
+  },
+  priceExceptions: {
+    list: (params) => client.get('/api/v1/commerce/price-exceptions/', { params }),
+    create: (data) => client.post('/api/v1/commerce/price-exceptions/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/price-exceptions/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/price-exceptions/${id}/`),
+  },
+}
+
 // Sprint Llibreria d'Items — pertinença POM de l'Item (garment-pom-maps/, ModelViewSet).
 // Escriptura gated CONFIGURE. Reorder = PATCH {ordre} per fila (mateix patró que POMBrowser).
 export const garmentPomMaps = {
