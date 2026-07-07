@@ -1291,6 +1291,16 @@ export default function TechSheetEditor() {
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [flyoutOpen])
+  // E3: barra de menús en text (Fitxer/Edició/Objecte/Visualització) — mateix patró de tancar-per-clic-fora.
+  const [menuOpen, setMenuOpen] = useState(null)   // 'file'|'edit'|'object'|'view'|null
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e) => {
+      if (!(e.target.closest && e.target.closest('[data-menu]'))) setMenuOpen(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [menuOpen])
   const flatFileRef = useRef(null)
   const importInputRef = useRef(null)   // IMP-2: file input del panell d'importació
   const paperFlatRef = useRef(null)     // PEÇA 2: handle imperatiu de PaperFlatEditor (commit)
@@ -1940,27 +1950,21 @@ export default function TechSheetEditor() {
         return
       }
       if (key === 'c') {
-        const toCopy = objectsOf(currentPage).filter(o => selectedIds.includes(o.id) && o.layer === 'free')
-        if (!toCopy.length) return
+        if (!objectsOf(currentPage).some(o => selectedIds.includes(o.id) && o.layer === 'free')) return
         e.preventDefault()
-        clipboardRef.current = toCopy
+        copySelection()
         return
       }
       if (key === 'v') {
         if (!clipboardRef.current.length) return
         e.preventDefault()
-        const pasted = clipboardRef.current.map(o => offsetObjectMm(cloneWithNewIds(o, uid), 5, 5))
-        updatePageObjects(currentPage, objs => [...objs, ...pasted])
-        setSelectedIds(pasted.map(o => o.id))
+        pasteClipboard()
         return
       }
       if (key === 'd') {
-        const toDup = objectsOf(currentPage).filter(o => selectedIds.includes(o.id) && o.layer === 'free')
-        if (!toDup.length) return
+        if (!objectsOf(currentPage).some(o => selectedIds.includes(o.id) && o.layer === 'free')) return
         e.preventDefault()
-        const duped = toDup.map(o => offsetObjectMm(cloneWithNewIds(o, uid), 5, 5))
-        updatePageObjects(currentPage, objs => [...objs, ...duped])
-        setSelectedIds(duped.map(o => o.id))
+        duplicateSelection()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -3007,6 +3011,37 @@ export default function TechSheetEditor() {
     updatePageObjects(currentPage, objs => [...objs.filter(o => !ids.has(o.id)), result])
     setSelectedIds([result.id])
   }
+  // E3: pre-extracció — mateixa lògica exacta que abans vivia dins el keydown c/v/d; ara
+  // teclat i menú "Edició" criden les mateixes funcions (zero canvi de comportament).
+  const copySelection = () => {
+    const toCopy = objectsOf(currentPage).filter(o => selectedIds.includes(o.id) && o.layer === 'free')
+    if (!toCopy.length) return
+    clipboardRef.current = toCopy
+  }
+  const pasteClipboard = () => {
+    if (!clipboardRef.current.length) return
+    const pasted = clipboardRef.current.map(o => offsetObjectMm(cloneWithNewIds(o, uid), 5, 5))
+    updatePageObjects(currentPage, objs => [...objs, ...pasted])
+    setSelectedIds(pasted.map(o => o.id))
+  }
+  const duplicateSelection = () => {
+    const toDup = objectsOf(currentPage).filter(o => selectedIds.includes(o.id) && o.layer === 'free')
+    if (!toDup.length) return
+    const duped = toDup.map(o => offsetObjectMm(cloneWithNewIds(o, uid), 5, 5))
+    updatePageObjects(currentPage, objs => [...objs, ...duped])
+    setSelectedIds(duped.map(o => o.id))
+  }
+  // E3: pre-extracció dels botons visible/lock del panell de capes.
+  const toggleVisible = (id) => {
+    const o = curObjs.find(x => x.id === id)
+    if (!o) return
+    updateObject(id, { visible: o.visible === false ? true : false })
+  }
+  const toggleLock = (id) => {
+    const o = curObjs.find(x => x.id === id)
+    if (!o) return
+    updateObject(id, { locked: o.locked === true ? false : true })
+  }
   const selDim = dimensionInfo(selObj)
   const paperFlatLabels = {
     loading: t('tech_sheet.flat_loading'),
@@ -3234,6 +3269,76 @@ export default function TechSheetEditor() {
     ]
   }
 
+  // E3: barra de menús en text (Fitxer/Edició/Objecte/Visualització), cortines desplegables sobre
+  // el ribbon. Conviu amb el ribbon — no el substitueix, reutilitza els mateixos handlers.
+  const menuItem = (key, { label, shortcut, onClick, disabled }) => (
+    <div key={key} onClick={() => { if (disabled) return; onClick(); setMenuOpen(null) }}
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, padding: '5px 14px', color: disabled ? COL.textMuted : COL.textMain, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1, whiteSpace: 'nowrap' }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = COL.goldPale }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+      <span>{label}</span>
+      {shortcut && <span style={{ color: COL.textMuted, fontSize: 'var(--fs-label)', marginLeft: 12 }}>{shortcut}</span>}
+    </div>
+  )
+  const menuSep = (key) => <div key={key} style={{ borderTop: `1px solid ${COL.border}`, margin: '4px 0' }} />
+  // OBJECTE: totes les entrades, a més de la seva condició pròpia, es deshabiliten si !locked.
+  const objDisabled = (cond) => !locked || cond
+  const menuFileItems = [
+    menuItem('mf-export', { label: t('tech_sheet.export_pdf'), onClick: onExport, disabled: !locked }),
+    menuItem('mf-save-tpl', { label: t('tech_sheet.save_as_template'), onClick: () => setSaveAsTpl({ nom: '', descripcio: '' }), disabled: !locked }),
+    menuItem('mf-import', { label: t('tech_sheet.flat_import'), onClick: () => openImport('garment'), disabled: !locked }),
+  ]
+  const menuEditItems = [
+    menuItem('me-undo', { label: t('tech_sheet.menu_undo'), shortcut: '⌘Z', onClick: undo }),
+    menuItem('me-redo', { label: t('tech_sheet.menu_redo'), shortcut: '⇧⌘Z', onClick: redo }),
+    menuSep('me-sep1'),
+    menuItem('me-copy', { label: t('tech_sheet.menu_copy'), shortcut: '⌘C', onClick: copySelection, disabled: freeSelectedIds.length === 0 }),
+    menuItem('me-paste', { label: t('tech_sheet.menu_paste'), shortcut: '⌘V', onClick: pasteClipboard, disabled: !clipboardRef.current.length }),
+    menuItem('me-dup', { label: t('tech_sheet.menu_duplicate'), shortcut: '⌘D', onClick: duplicateSelection, disabled: freeSelectedIds.length === 0 }),
+    menuItem('me-delete', { label: t('app.delete'), shortcut: '⌫', onClick: deleteSelection, disabled: selectedDeletableIds.length === 0 }),
+  ]
+  const menuObjectItems = [
+    menuItem('mo-group', { label: t('tech_sheet.group'), shortcut: '⌘G', onClick: groupSelection, disabled: objDisabled(selectedObjects.length < 2) }),
+    menuItem('mo-ungroup', { label: t('tech_sheet.ungroup'), onClick: () => ungroupObject(selObj?.id), disabled: objDisabled(selObj?.type !== 'group') }),
+    menuSep('mo-sep1'),
+    menuItem('mo-fwd', { label: t('tech_sheet.bring_forward'), onClick: () => moveSelectionInFreeLayer('forward'), disabled: objDisabled(freeSelectedIds.length === 0) }),
+    menuItem('mo-bwd', { label: t('tech_sheet.send_backward'), onClick: () => moveSelectionInFreeLayer('backward'), disabled: objDisabled(freeSelectedIds.length === 0) }),
+    menuItem('mo-front', { label: t('tech_sheet.bring_to_front'), onClick: () => moveSelectionToFreeLayerEdge('front'), disabled: objDisabled(freeSelectedIds.length === 0) }),
+    menuItem('mo-back', { label: t('tech_sheet.send_to_back'), onClick: () => moveSelectionToFreeLayerEdge('back'), disabled: objDisabled(freeSelectedIds.length === 0) }),
+    menuSep('mo-sep2'),
+    menuItem('mo-align-l', { label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: objDisabled(selectedObjects.length < 2) }),
+    menuItem('mo-align-c', { label: t('tech_sheet.align_center_short'), onClick: () => alignSelection('center'), disabled: objDisabled(selectedObjects.length < 2) }),
+    menuItem('mo-align-r', { label: t('tech_sheet.align_right_short'), onClick: () => alignSelection('right'), disabled: objDisabled(selectedObjects.length < 2) }),
+    menuItem('mo-align-t', { label: t('tech_sheet.align_top_short'), onClick: () => alignSelection('top'), disabled: objDisabled(selectedObjects.length < 2) }),
+    menuItem('mo-align-m', { label: t('tech_sheet.align_middle_short'), onClick: () => alignSelection('middle'), disabled: objDisabled(selectedObjects.length < 2) }),
+    menuItem('mo-align-b', { label: t('tech_sheet.align_bottom_short'), onClick: () => alignSelection('bottom'), disabled: objDisabled(selectedObjects.length < 2) }),
+    menuItem('mo-dist-h', { label: t('tech_sheet.distribute_h_short'), onClick: () => distributeSelection('h'), disabled: objDisabled(selectedObjects.length < 2) }),
+    menuItem('mo-dist-v', { label: t('tech_sheet.distribute_v_short'), onClick: () => distributeSelection('v'), disabled: objDisabled(selectedObjects.length < 2) }),
+    menuSep('mo-sep3'),
+    menuItem('mo-mirror-h', { label: t('tech_sheet.mirror_h'), onClick: () => mirrorObjects(selectedIds, 'scaleX'), disabled: objDisabled(selectedIds.length === 0) }),
+    menuItem('mo-mirror-v', { label: t('tech_sheet.mirror_v'), onClick: () => mirrorObjects(selectedIds, 'scaleY'), disabled: objDisabled(selectedIds.length === 0) }),
+    menuSep('mo-sep4'),
+    menuItem('mo-pf-unite', { label: t('tech_sheet.pathfinder_unite'), onClick: () => applyPathfinder('unite'), disabled: objDisabled(!pathfinderReady) }),
+    menuItem('mo-pf-subtract', { label: t('tech_sheet.pathfinder_subtract'), onClick: () => applyPathfinder('subtract'), disabled: objDisabled(!pathfinderReady) }),
+    menuItem('mo-pf-intersect', { label: t('tech_sheet.pathfinder_intersect'), onClick: () => applyPathfinder('intersect'), disabled: objDisabled(!pathfinderReady) }),
+    menuItem('mo-pf-exclude', { label: t('tech_sheet.pathfinder_exclude'), onClick: () => applyPathfinder('exclude'), disabled: objDisabled(!pathfinderReady) }),
+    menuSep('mo-sep5'),
+    menuItem('mo-lock-sel', { label: t('tech_sheet.menu_lock_sel'), onClick: () => selectedIds.forEach(toggleLock), disabled: objDisabled(selectedIds.length === 0) }),
+    menuItem('mo-hide-sel', { label: t('tech_sheet.menu_hide_sel'), onClick: () => selectedIds.forEach(toggleVisible), disabled: objDisabled(selectedIds.length === 0) }),
+  ]
+  const menuViewItems = [
+    menuItem('mv-in', { label: t('tech_sheet.zoom_in'), onClick: () => setZoomClamped(z => z + ZOOM_STEP) }),
+    menuItem('mv-out', { label: t('tech_sheet.zoom_out'), onClick: () => setZoomClamped(z => z - ZOOM_STEP) }),
+    menuItem('mv-100', { label: '100%', onClick: () => setZoomClamped(1) }),
+    menuItem('mv-fit', { label: t('tech_sheet.zoom_fit'), onClick: fitZoomToViewport }),
+  ]
+  const menuBar = [
+    { id: 'file', label: t('tech_sheet.menu_file'), items: menuFileItems },
+    { id: 'edit', label: t('tech_sheet.menu_edit'), items: menuEditItems },
+    { id: 'object', label: t('tech_sheet.menu_object'), items: menuObjectItems },
+    { id: 'view', label: t('tech_sheet.menu_view'), items: menuViewItems },
+  ]
+
   // PEÇA P/C: pan actiu (eina 'pan' o espai) i cursor del viewport segons l'eina activa.
   const panActive = locked && (tool === 'pan' || spaceHeld)
   const viewportCursor = !locked ? 'default'
@@ -3272,6 +3377,23 @@ export default function TechSheetEditor() {
           </button>
         </div>
       </header>
+
+      {/* ── E3: barra de menús en text (Fitxer/Edició/Objecte/Visualització) — cortines desplegables ── */}
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', height: 26, background: COL.sidebar, borderBottom: `1px solid ${COL.border}`, padding: '0 8px', fontFamily: FONT, fontSize: 'var(--fs-body)' }}>
+        {menuBar.map(m => (
+          <div key={m.id} data-menu style={{ position: 'relative' }}>
+            <button type="button" onClick={() => setMenuOpen(o => o === m.id ? null : m.id)}
+              style={{ border: 'none', background: menuOpen === m.id ? COL.goldPale : 'transparent', color: menuOpen === m.id ? COL.gold : COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '0 10px', height: 26, cursor: 'pointer' }}>
+              {m.label}
+            </button>
+            {menuOpen === m.id && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 70, minWidth: 210, background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '4px 0' }}>
+                {m.items}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
 
       {/* ── Ribbon SolidWorks: fila 1 grups, fila 2 comandaments ── */}
       <div style={{ flexShrink: 0, background: CTX_BG, borderBottom: `1px solid ${CTX_BORDER}`, color: CTX_TEXT }}>
@@ -3590,10 +3712,10 @@ export default function TechSheetEditor() {
                       <span style={{ flex: 1, fontSize: 'var(--fs-label)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
                       {locked && o.layer === 'free' && (
                         <>
-                          <button onClick={(e) => { e.stopPropagation(); updateObject(o.id, { visible: o.visible === false ? true : false }) }}
+                          <button onClick={(e) => { e.stopPropagation(); toggleVisible(o.id) }}
                             title={o.visible === false ? t('tech_sheet.layer_show') : t('tech_sheet.layer_hide')}
                             style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className={`ti ${o.visible === false ? 'ti-eye-off' : 'ti-eye'}`} style={{ fontSize: 13 }} /></button>
-                          <button onClick={(e) => { e.stopPropagation(); updateObject(o.id, { locked: o.locked === true ? false : true }) }}
+                          <button onClick={(e) => { e.stopPropagation(); toggleLock(o.id) }}
                             title={o.locked === true ? t('tech_sheet.layer_unlock') : t('tech_sheet.layer_lock')}
                             style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className={`ti ${o.locked === true ? 'ti-lock' : 'ti-lock-open'}`} style={{ fontSize: 13 }} /></button>
                           <button onClick={(e) => { e.stopPropagation(); selectOnly(o.id); moveSelectionInFreeLayer('forward') }} title={t('tech_sheet.bring_forward')}
