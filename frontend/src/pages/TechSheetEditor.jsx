@@ -2346,8 +2346,11 @@ export default function TechSheetEditor() {
       const isArrow = tool === 'arrow_curve'
       addObject({
         id: uid(), type: 'path', layer: 'free', x: 0, y: 0,
+        // Fix #2: stroke a nivell d'OBJECTE (no de subpath) → el selector "Color de traç" de
+        // nivell superior recolora línia I punta alhora; el per-subpath segueix com a override.
+        stroke: KONVA_COL.textMain,
         ...(isArrow ? { headEnd: true } : {}),
-        paths: [{ closed: isArrow ? false : closed, fill: 'transparent', stroke: KONVA_COL.textMain, strokeWidth: isArrow ? 1.5 : 1.2, fillRule: 'nonzero', segments }],
+        paths: [{ closed: isArrow ? false : closed, fill: 'transparent', strokeWidth: isArrow ? 1.5 : 1.2, fillRule: 'nonzero', segments }],
       })
     }
     penRef.current = null
