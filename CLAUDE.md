@@ -53,6 +53,16 @@
   `MAPA_SISTEMA.md`, `*_MODEL_VIU.md`, `MOTOR_*.md`. Viuen al servidor com a memòria
   de treball, no com a codi.
 
+## Diagnosis (`docs/diagnosis/`)
+- **Els agents només consulten l'arrel de `docs/diagnosis/` (vigents).**
+  `docs/diagnosis/arxiu/` és històric, MAI font de veritat per a decisions.
+- Quan un sprint implementa o supera una diagnosi, **el mateix sprint la segella**
+  (capçalera `> ⚠️ SUPERADA <data> — <motiu>. Consulta només com a històric.`) **i la
+  mou a `arxiu/`**.
+- Les diagnosis SÍ es commiten (arrel = vigents · arxiu = històric segellat). Excepció a
+  la regla de "fitxers d'estat fora de git": `ESTAT_*.md` i `DECISIONS.md` segueixen
+  SENSE commitar; només `docs/diagnosis/` entra a git.
+
 ## Zones intocables
 - No tocar POMs / grading engine (`generate_graded_specs`) / motor de patrons, tret
   que la peça ho demani explícitament. Problemes vistos en aquestes zones s'anoten.

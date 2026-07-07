@@ -1,3 +1,5 @@
+> ⚠️ SUPERADA 2026-07-07 — PoC-gate superat (Paper.js integrat, S6-S8). Consulta només com a històric.
+
 # PoC Paper.js + Konva — Fase 4 gate
 
 Data: 2026-06-27  

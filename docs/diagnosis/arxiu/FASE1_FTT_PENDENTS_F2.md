@@ -1,3 +1,5 @@
+> ⚠️ SUPERADA 2026-07-07 — cutover F2 fet (editor 100% .ftt, TechSheet eliminat mig 0050); substituïda per DIAGNOSI_EDITOR_ESTAT. Consulta només com a històric.
+
 # Fase 1 .ftt — anotacions per a la Fase 2 (cutover frontend)
 
 Backend de la Fase 1 complet (peces B1–B8, branca `dev`, sense push). Aquest document recull
