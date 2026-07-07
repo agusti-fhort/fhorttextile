@@ -99,42 +99,6 @@ class GarmentTypeGlobal(models.Model):
         return f'{self.codi} · {self.nom_en}'
 
 
-class TascaGlobal(models.Model):
-    FASE_CHOICES = [
-        ('Proto', 'Proto'),
-        ('Fit', 'Fit'),
-        ('SizeSet', 'SizeSet'),
-        ('PP', 'PP'),
-        ('TOP', 'TOP'),
-    ]
-    TIPUS_CHOICES = [
-        ('Interna', 'Interna'),
-        ('Externa', 'Externa'),
-        ('Validacio', 'Validació'),
-    ]
-
-    codi = models.CharField(max_length=80, unique=True)
-    nom_en = models.CharField(max_length=200)
-    nom_ca = models.CharField(max_length=200)
-    nom_es = models.CharField(max_length=200)
-    fase = models.CharField(max_length=20, choices=FASE_CHOICES)
-    tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES)
-    minuts_estandard = models.PositiveIntegerField()
-    es_gate = models.BooleanField(default=False)
-    resultat_gate_opcions = models.JSONField(default=list, blank=True)
-    facturable = models.BooleanField(default=False)
-    ordre_base = models.PositiveIntegerField(default=0)
-    activa = models.BooleanField(default=True)
-
-    class Meta:
-        verbose_name = 'Tasca global'
-        verbose_name_plural = 'Tasques globals'
-        ordering = ['ordre_base', 'codi']
-
-    def __str__(self):
-        return f'{self.codi} · {self.nom_ca}'
-
-
 class POMEstadisticaGlobal(models.Model):
     pom_global = models.ForeignKey(POMGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')
     garment_type_global = models.ForeignKey(GarmentTypeGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')
