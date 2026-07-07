@@ -723,6 +723,9 @@ def size_map_create_view(request):
             'nom': ss.nom,
             'grading_rule_set_id': rule_set.id,
             'sizing_profile_ids': sizing_profile_ids,
+            # R5 — comptador de font única: regles REALS persistides al ruleset (no files de
+            # document). Coincideix amb regles_count del serializer i amb la fitxa del run.
+            'rules_count': rule_set.regles.count(),
             'discarded_codes': discarded_codes,
             'warnings': warnings,
         })

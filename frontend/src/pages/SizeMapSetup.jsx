@@ -446,6 +446,8 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         </div>
         <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)', fontFamily: MONO }}>
           <div>{result.nom}</div>
+          {/* R5 — regles reals persistides (BD), font única. */}
+          <div>{t('size_map_sum_rules')}: {result.rules_count ?? 0}</div>
         </div>
         {pendents.length > 0 && (
           <div style={{ background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8,
@@ -802,7 +804,10 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)', fontFamily: MONO }}>
             <div>{t('size_map_sum_action')}: <b>{wiz.decision}</b></div>
             <div>{t('size_map_sum_target')}: {wiz.target_codi ? t(`model_wizard.target_${wiz.target_codi}`, wiz.target_codi) : '—'} · {t('size_map_sum_unit')}: {wiz.base_unit} · {t('size_map_sum_client')}: {wiz.customer_codi || '—'}</div>
-            <div>{t('size_map_sum_talles')}: {wiz.talles.length} · {t('size_map_sum_rules')}: {wiz.gradingResults.filter(g => g.pom_id).length} · {t('size_map_sum_perfils')}: {wiz.perfilTargets.length}</div>
+            {/* R5 — comptador de regles = POMs distints vinculats (regles reals que es
+                persistiran, font única), no files de document. La col·lisió (R1) es bloqueja
+                abans, així que aquest recompte coincideix amb el de la BD després de crear. */}
+            <div>{t('size_map_sum_talles')}: {wiz.talles.length} · {t('size_map_sum_rules')}: {new Set(wiz.gradingResults.filter(g => g.pom_id).map(g => g.pom_id)).size} · {t('size_map_sum_perfils')}: {wiz.perfilTargets.length}</div>
             {wiz.construction_id && <div>{t('size_map_sum_constr')}: {nomById(lookups.constructions, wiz.construction_id)}</div>}
           </div>
 
