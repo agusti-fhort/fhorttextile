@@ -5,16 +5,23 @@ configuració de catàleg, com CustomerViewSet). La capability pròpia del mòdu
 tier (feature_flags) arriben a B5.
 """
 from django.db.models import ProtectedError
+from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from fhort.accounts.capabilities import HasCapability, CONFIGURE
 
-from .models import Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI
+from .models import (
+    Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
+    Quote, QuoteLine,
+)
 from .serializers import (
     UnitSerializer, ProductSerializer, ProductRecipeSerializer, ProductSupplierSerializer,
     ProductComponentSerializer, ProductPriceGTISerializer,
+    QuoteSerializer, QuoteLineSerializer,
 )
 
 
@@ -74,3 +81,57 @@ class ProductPriceGTIViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
     queryset = ProductPriceGTI.objects.select_related('product', 'garment_type_item').all()
     serializer_class = ProductPriceGTISerializer
     filterset_fields = ['product', 'garment_type_item']
+
+
+# ── Documents comercials — Quote (B2) ──────────────────────────────────────────────────
+
+class QuoteViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+    """CRUD d'ofertes + accions `send` (DRAFT→SENT) i `pdf` (descàrrega). Escriptura gated
+    CONFIGURE (com el mestre B1); el `pdf` és lectura (autenticat). Rol comercial propi = B5."""
+    queryset = Quote.objects.select_related('customer', 'created_by').prefetch_related(
+        'lines__product').all()
+    serializer_class = QuoteSerializer
+    filterset_fields = ['status', 'customer']
+
+    def get_permissions(self):
+        # El PDF és una lectura: obert a autenticats (no gated CONFIGURE).
+        if self.action == 'pdf':
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=getattr(self.request.user, 'profile', None))
+
+    @action(detail=True, methods=['post'])
+    def send(self, request, pk=None):
+        """Transiciona DRAFT→SENT. Guard: l'oferta ha de tenir almenys una línia."""
+        quote = self.get_object()
+        if quote.status != 'DRAFT':
+            return Response({'detail': "Només es pot enviar una oferta en esborrany (DRAFT)."},
+                            status=status.HTTP_409_CONFLICT)
+        if not quote.lines.exists():
+            return Response({'detail': "L'oferta no té cap línia; afegeix-ne almenys una."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        quote.status = 'SENT'
+        if not quote.issued_at:
+            quote.issued_at = timezone.now().date()
+        quote.save(update_fields=['status', 'issued_at', 'updated_at'])
+        return Response(self.get_serializer(quote).data)
+
+    @action(detail=True, methods=['get'])
+    def pdf(self, request, pk=None):
+        """Genera i retorna el PDF de l'oferta (reportlab, P5). Import mandrós per no acoblar."""
+        quote = self.get_object()
+        from .pdf_service import generate_quote_pdf
+        pdf_bytes = generate_quote_pdf(quote)
+        resp = HttpResponse(pdf_bytes, content_type='application/pdf')
+        resp['Content-Disposition'] = f'attachment; filename="{quote.document_number or "quote"}.pdf"'
+        return resp
+
+
+class QuoteLineViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+    """Línies d'oferta (edició filtrada per ?quote=, patró satèl·lit B1). El guard DRAFT viu al
+    model i es replica al serializer per a un 400 net."""
+    queryset = QuoteLine.objects.select_related('quote', 'product').all()
+    serializer_class = QuoteLineSerializer
+    filterset_fields = ['quote', 'product']
