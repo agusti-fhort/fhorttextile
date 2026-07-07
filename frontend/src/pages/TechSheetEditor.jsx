@@ -1347,6 +1347,13 @@ export default function TechSheetEditor() {
       ids.has(o.id) ? { ...o, ...(typeof patch === 'function' ? patch(o) : patch) } : o
     )))
   }, [currentPage, updatePageObjects])
+  // A3: patch arbitrari sobre un fill d'un grup (generalitza handleChildDragEnd) — via
+  // updatePageObjects perquè la mutació passi per la història (undo/redo).
+  const updateChild = useCallback((groupId, childId, patch) => {
+    updatePageObjects(currentPage, objs => objs.map(g => (
+      g.id !== groupId ? g : { ...g, children: (g.children || []).map(c => (c.id !== childId ? c : { ...c, ...patch })) }
+    )))
+  }, [currentPage, updatePageObjects])
   const deleteObject = useCallback((objId) => {
     updatePageObjects(currentPage, objs => objs.filter(o => o.id !== objId))
     if (editingFlatId === objId) setEditingFlatId(null)
@@ -2965,6 +2972,21 @@ export default function TechSheetEditor() {
   const selectedSet = new Set(selectedIds)
   const selectedObjects = curObjs.filter(o => selectedSet.has(o.id))
   const selObj = selectedObjects.length === 1 ? selectedObjects[0] : null
+  // A3: text editable pel panell — el propi objecte 'text', o bé el fill 'text' d'un grup
+  // (cas cota). Prioritza el fill actiu si s'ha entrat al grup; si no, l'únic fill text.
+  const groupTextChild = (() => {
+    if (!selObj || selObj.type !== 'group') return null
+    const kids = selObj.children || []
+    if (activeGroup === selObj.id && selectedChildId) {
+      const c = kids.find(k => k.id === selectedChildId)
+      return c?.type === 'text' ? c : null
+    }
+    const texts = kids.filter(k => k.type === 'text')
+    return texts.length === 1 ? texts[0] : null
+  })()
+  const textObj = selObj?.type === 'text' ? selObj : groupTextChild
+  const textGroupId = selObj?.type === 'group' ? selObj.id : null
+  const updateText = (patch) => (textObj && (textGroupId ? updateChild(textGroupId, textObj.id, patch) : updateObject(textObj.id, patch)))
   const subActive = selObj?.type === 'path' && activeSubpath?.objId === selObj.id ? activeSubpath.index : null   // S6
   const multiSelected = selectedObjects.length > 1
   const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
@@ -3823,44 +3845,60 @@ export default function TechSheetEditor() {
                     </div>
                   </div>
                 )}
-                {selObj.type === 'text' && (() => {
-                  // Peça 3: tipografia completa. fontStyle combina bold+italic ('bold italic');
-                  // textDecoration porta el subratllat; align l'alineació del Konva Text.
-                  const fstyle = selObj.fontStyle || 'normal'
+                {textObj && (() => {
+                  // Peça 3 / A3: tipografia completa. Opera sobre textObj (pot ser el fill 'text'
+                  // d'un grup, cas cota) via updateText, que enruta a updateChild o updateObject.
+                  const fstyle = textObj.fontStyle || 'normal'
                   const isBold = fstyle.includes('bold')
                   const isItalic = fstyle.includes('italic')
-                  const isUnderline = (selObj.textDecoration || '').includes('underline')
-                  const align = selObj.align || 'left'
-                  const setStyle = (bold, italic) => updateObject(selObj.id, { fontStyle: [bold && 'bold', italic && 'italic'].filter(Boolean).join(' ') || 'normal' })
+                  const isUnderline = (textObj.textDecoration || '').includes('underline')
+                  const align = textObj.align || 'left'
+                  const hasBg = !!textObj.bgFill
+                  const setStyle = (bold, italic) => updateText({ fontStyle: [bold && 'bold', italic && 'italic'].filter(Boolean).join(' ') || 'normal' })
                   const tbtn = (on) => ({ flex: 1, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? COL.gold : COL.border}`, borderRadius: 5, background: on ? COL.goldPale : COL.field, color: on ? COL.gold : COL.textMain, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' })
                   return (
                     <>
+                      {textGroupId && <div style={{ fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>{t('tech_sheet.group_text')}</div>}
                       <label style={propLabel}>{t('tech_sheet.font_family')}
-                        <select value={selObj.fontFamily || FONT} onChange={e => updateObject(selObj.id, { fontFamily: e.target.value })} style={propInput}>
+                        <select value={textObj.fontFamily || FONT} onChange={e => updateText({ fontFamily: e.target.value })} style={propInput}>
                           {FONT_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                         </select>
                       </label>
                       <label style={propLabel}>{t('tech_sheet.font_size')}
-                        <input type="number" min={6} max={48} value={selObj.fontSize || 11}
-                          onChange={e => updateObject(selObj.id, { fontSize: Number(e.target.value) || 11 })} style={propInput} />
+                        <input type="number" min={6} max={48} value={textObj.fontSize || 11}
+                          onChange={e => updateText({ fontSize: Number(e.target.value) || 11 })} style={propInput} />
                       </label>
                       <div style={propLabel}>{t('tech_sheet.font_style')}
                         <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
                           <button type="button" title={t('tech_sheet.bold')} onClick={() => setStyle(!isBold, isItalic)} style={{ ...tbtn(isBold), fontWeight: 700 }}>B</button>
                           <button type="button" title={t('tech_sheet.italic')} onClick={() => setStyle(isBold, !isItalic)} style={{ ...tbtn(isItalic), fontStyle: 'italic' }}>I</button>
-                          <button type="button" title={t('tech_sheet.underline')} onClick={() => updateObject(selObj.id, { textDecoration: isUnderline ? '' : 'underline' })} style={{ ...tbtn(isUnderline), textDecoration: 'underline' }}>U</button>
+                          <button type="button" title={t('tech_sheet.underline')} onClick={() => updateText({ textDecoration: isUnderline ? '' : 'underline' })} style={{ ...tbtn(isUnderline), textDecoration: 'underline' }}>U</button>
                         </div>
                       </div>
                       <div style={propLabel}>{t('tech_sheet.text_align')}
                         <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
-                          <button type="button" title={t('tech_sheet.align_left')} onClick={() => updateObject(selObj.id, { align: 'left' })} style={tbtn(align === 'left')}><i className="ti ti-align-left" /></button>
-                          <button type="button" title={t('tech_sheet.align_center')} onClick={() => updateObject(selObj.id, { align: 'center' })} style={tbtn(align === 'center')}><i className="ti ti-align-center" /></button>
-                          <button type="button" title={t('tech_sheet.align_right')} onClick={() => updateObject(selObj.id, { align: 'right' })} style={tbtn(align === 'right')}><i className="ti ti-align-right" /></button>
+                          <button type="button" title={t('tech_sheet.align_left')} onClick={() => updateText({ align: 'left' })} style={tbtn(align === 'left')}><i className="ti ti-align-left" /></button>
+                          <button type="button" title={t('tech_sheet.align_center')} onClick={() => updateText({ align: 'center' })} style={tbtn(align === 'center')}><i className="ti ti-align-center" /></button>
+                          <button type="button" title={t('tech_sheet.align_right')} onClick={() => updateText({ align: 'right' })} style={tbtn(align === 'right')}><i className="ti ti-align-right" /></button>
                         </div>
                       </div>
                       <div style={propLabel}>{t('tech_sheet.text_color')}
-                        <ColorPicker value={selObj.fill || KONVA_COL.textMain} onChange={c => updateObject(selObj.id, { fill: c })} />
+                        <ColorPicker value={textObj.fill || KONVA_COL.textMain} onChange={c => updateText({ fill: c })} />
                       </div>
+                      {/* A3(d): fons blanc darrere el text (tapa la línia de la cota) + color de fons. */}
+                      <div style={propLabel}>{t('tech_sheet.text_bg')}
+                        <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
+                          <button type="button" title={t('tech_sheet.text_bg')}
+                            onClick={() => updateText(hasBg ? { bgFill: null } : { bgFill: KONVA_COL.white, bgPadding: textObj.bgPadding || 3 })}
+                            style={tbtn(hasBg)}><i className="ti ti-square-rounded" /></button>
+                        </div>
+                      </div>
+                      {hasBg && (
+                        <div style={propLabel}>{t('tech_sheet.text_bg_color')}
+                          <ColorPicker value={textObj.bgFill && textObj.bgFill !== 'transparent' ? textObj.bgFill : KONVA_COL.white}
+                            onChange={c => updateText({ bgFill: c })} />
+                        </div>
+                      )}
                     </>
                   )
                 })()}
