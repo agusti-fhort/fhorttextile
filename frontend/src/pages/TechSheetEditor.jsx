@@ -2098,6 +2098,7 @@ export default function TechSheetEditor() {
         e.preventDefault()
         penRef.current = null
         setPenTemp(null)
+        setTool('select')   // Bloc 2 (ii): cancel·lar també surt de l'eina, no la deixa activa.
       } else if (e.key === 'Backspace') {
         e.preventDefault()
         penRef.current.points.pop()
