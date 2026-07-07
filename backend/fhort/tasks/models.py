@@ -175,6 +175,24 @@ class Customer(models.Model):
     # Logo del client (TS-4c): per a la capçalera de la fitxa tècnica.
     logo = models.ImageField(upload_to='customer_logos/%Y/%m/', null=True, blank=True)
 
+    # Comercial Studio (B1) — dades fiscals i comercials del client tercer. Additives (blank).
+    # Vocabulari mirall de tenants.Client (font fiscal canònica del projecte). Sense lògica de
+    # facturació aquí: la factura legal viu FORA del mòdul (fins albarà + liquidació).
+    rao_social = models.CharField(max_length=200, blank=True)
+    nif = models.CharField(max_length=20, blank=True, help_text="NIF/VAT/tax id.")
+    adreca_linia1 = models.CharField(max_length=200, blank=True)
+    adreca_linia2 = models.CharField(max_length=200, blank=True)
+    ciutat = models.CharField(max_length=100, blank=True)
+    codi_postal = models.CharField(max_length=20, blank=True)
+    pais = models.CharField(max_length=2, default='ES', help_text="ISO 3166-1 alpha-2.")
+    email_facturacio = models.EmailField(blank=True)
+    condicions_pagament = models.CharField(max_length=200, blank=True,
+                                           help_text="Termini/forma de pagament (text lliure).")
+    descompte_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+                                        help_text="% de descompte comercial per defecte.")
+    persona_contacte = models.CharField(max_length=200, blank=True)
+    telefon_contacte = models.CharField(max_length=40, blank=True)
+
     class Meta:
         ordering = ['codi']
         verbose_name = 'Customer'

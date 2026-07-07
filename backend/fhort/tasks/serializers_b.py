@@ -51,7 +51,11 @@ class CustomerSerializer(serializers.ModelSerializer):
         model = Customer
         # logo: ImageField → URL (absoluta si el ViewSet passa `request` al context, que és
         # el cas per defecte de ModelViewSet). read_only: s'escriu via l'acció upload-logo.
-        fields = ['id', 'codi', 'nom', 'active', 'is_self', 'logo']
+        fields = ['id', 'codi', 'nom', 'active', 'is_self', 'logo',
+                  # Comercial Studio (B1) — dades fiscals/comercials (additives, blank).
+                  'rao_social', 'nif', 'adreca_linia1', 'adreca_linia2', 'ciutat', 'codi_postal',
+                  'pais', 'email_facturacio', 'condicions_pagament', 'descompte_pct',
+                  'persona_contacte', 'telefon_contacte']
         read_only_fields = ['logo']
 
 
