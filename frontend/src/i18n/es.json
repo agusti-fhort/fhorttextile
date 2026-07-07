@@ -1689,6 +1689,7 @@
     "underline": "Subrayado",
     "text_color": "Color texto",
     "group_text": "Texto del grupo",
+    "group_text_content": "Contenido",
     "arrow_heads": "Puntas",
     "head_start": "Punta al inicio",
     "head_end": "Punta al final",

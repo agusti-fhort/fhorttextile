@@ -3921,6 +3921,11 @@ export default function TechSheetEditor() {
                   return (
                     <>
                       {textGroupId && <div style={{ fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>{t('tech_sheet.group_text')}</div>}
+                      {/* Fix #2: contingut del text editable des del panell (via updateText → història). */}
+                      <label style={propLabel}>{t('tech_sheet.group_text_content')}
+                        <textarea value={textObj.text || ''} onChange={e => updateText({ text: e.target.value })}
+                          rows={2} style={{ ...propInput, resize: 'vertical', minHeight: 44 }} />
+                      </label>
                       <label style={propLabel}>{t('tech_sheet.font_family')}
                         <select value={textObj.fontFamily || FONT} onChange={e => updateText({ fontFamily: e.target.value })} style={propInput}>
                           {FONT_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}

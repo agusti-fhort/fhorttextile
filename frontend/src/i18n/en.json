@@ -1689,6 +1689,7 @@
     "underline": "Underline",
     "text_color": "Text color",
     "group_text": "Group text",
+    "group_text_content": "Content",
     "arrow_heads": "Arrowheads",
     "head_start": "Start head",
     "head_end": "End head",
