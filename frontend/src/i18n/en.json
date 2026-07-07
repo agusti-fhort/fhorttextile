@@ -2250,6 +2250,13 @@
     }
   },
   "taskassign": {
+    "needs_estimate_intro": "{{count}} task(s) without a time estimate. Enter the minutes to unblock planning.",
+    "minutes": "minutes",
+    "min_abbr": "min",
+    "capturing": "Saving…",
+    "capture_save_retry": "Save and retry",
+    "capture_invalid": "Each task needs a value in minutes > 0.",
+    "err_capture": "Error saving the estimate. Please try again.",
     "title": "Assign tasks",
     "err_assign": "Error assigning. Please try again.",
     "model": "model",

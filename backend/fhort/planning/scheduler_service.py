@@ -127,6 +127,7 @@ def schedule(model_task_qs, now=None, save=True):
         {'placements': [{task_id, model, task_type, assignee, planned_start, planned_end,
                          locked}, ...]  (ordenades per tècnic i inici),
          'warnings': [{task_id, model, task_type, warning}, ...],
+         'needs_estimate': [{task_id, task_code, fase, model}, ...]  (captura-PM),
          'models': {model_id: {predicted_start, predicted_end}}}
     """
     now = now or _now_naive()
@@ -140,6 +141,7 @@ def schedule(model_task_qs, now=None, save=True):
     # cridadors). Les Done són immutables: conserven assignee/finished_at/planned_* tal com estan.
     tasks = [t for t in tasks if t.status != 'Done']
     warnings = []
+    needs_estimate = []      # tasques no planificables per falta d'estimació (captura-PM)
     placements = []          # dicts de sortida
     save_ops = []            # (task, start_naive, end_naive) a desar si save
     model_bounds = {}        # model_id -> [min_start_naive, max_end_naive]
@@ -214,6 +216,8 @@ def schedule(model_task_qs, now=None, save=True):
         for t in ordered_movable:
             if not t.estimated_minutes or t.estimated_minutes <= 0:
                 _warn(t, 'sense estimació de temps (no planificable)')
+                needs_estimate.append({'task_id': t.id, 'task_code': t.task_type.code,
+                                       'fase': t.task_type.fase, 'model': t.model.codi_intern})
                 continue
             start, end = _place(profile, cursor, t.estimated_minutes, busy)
             placements.append({'task_id': t.id, 'model': t.model.codi_intern,
@@ -251,4 +255,5 @@ def schedule(model_task_qs, now=None, save=True):
         p['planned_start'] = p['planned_start'].isoformat()
         p['planned_end'] = p['planned_end'].isoformat()
 
-    return {'placements': placements, 'warnings': warnings, 'models': models_out}
+    return {'placements': placements, 'warnings': warnings,
+            'needs_estimate': needs_estimate, 'models': models_out}

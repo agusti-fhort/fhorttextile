@@ -13,7 +13,7 @@ from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TA
                                          get_allowed_task_types, scope_model_task_queryset)
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
-                     GarmentTypeItem, TaskTimeEstimate, TaskTransition, Customer)
+                     GarmentTypeItem, TaskTimeEstimate, TaskTransition, Customer, TimeSeed)
 from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             SupplierSerializer, ProductionSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer,
@@ -961,6 +961,33 @@ def time_set_estimate_view(request):
     cell = TaskTimeEstimate.objects.select_related(
         'task_type', 'garment_type_item', 'garment_type_item__garment_type').get(pk=cell.pk)
     return Response(_cell_item_payload(cell), status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_DefineTasks])
+def time_capture_seed_view(request):
+    """POST /api/v1/time-analysis/capture-seed/ — captura conscient del PM (graó 3 de la cascada):
+    fixa una LLAVOR de tenant per task (TimeSeed scope='task', origen='CAPTURA') quan la
+    planificació no ha pogut estimar una tasca (needs_estimate). Desbloqueja TOTES les tasques
+    d'aquell task sense cel·la ni empíric. Body: {task_code, minuts}. Gated define_tasks."""
+    code = request.data.get('task_code')
+    minuts = request.data.get('minuts')
+    if not code:
+        return Response({'error': 'task_code requerit.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        minuts = int(minuts)
+    except (TypeError, ValueError):
+        return Response({'error': 'minuts ha de ser un enter.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    if minuts <= 0:
+        return Response({'error': 'minuts ha de ser > 0.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    if not TaskType.objects.filter(code=code).exists():
+        return Response({'error': 'task_type no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    profile = getattr(request.user, 'profile', None)
+    seed, _ = TimeSeed.objects.update_or_create(
+        scope='task', key=code,
+        defaults={'minuts': minuts, 'origen': 'CAPTURA', 'updated_by': profile})
+    return Response({'ok': True, 'task_code': code, 'minuts': seed.minuts, 'origen': seed.origen},
+                    status=http_status.HTTP_200_OK)
 
 
 @api_view(['GET'])

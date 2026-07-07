@@ -2250,6 +2250,13 @@
     }
   },
   "taskassign": {
+    "needs_estimate_intro": "{{count}} tasca/tasques sense estimació de temps. Indica els minuts per desbloquejar la planificació.",
+    "minutes": "minuts",
+    "min_abbr": "min",
+    "capturing": "Desant…",
+    "capture_save_retry": "Desa i reintenta",
+    "capture_invalid": "Cada tasca necessita un valor en minuts > 0.",
+    "err_capture": "Error desant l'estimació. Torna-ho a intentar.",
     "title": "Assignar tasques",
     "err_assign": "Error en assignar. Torna-ho a intentar.",
     "model": "model",

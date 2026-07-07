@@ -2250,6 +2250,13 @@
     }
   },
   "taskassign": {
+    "needs_estimate_intro": "{{count}} tarea(s) sin estimación de tiempo. Indica los minutos para desbloquear la planificación.",
+    "minutes": "minutos",
+    "min_abbr": "min",
+    "capturing": "Guardando…",
+    "capture_save_retry": "Guarda y reintenta",
+    "capture_invalid": "Cada tarea necesita un valor en minutos > 0.",
+    "err_capture": "Error al guardar la estimación. Inténtalo de nuevo.",
     "title": "Asignar tareas",
     "err_assign": "Error al asignar. Vuelve a intentarlo.",
     "model": "modelo",
