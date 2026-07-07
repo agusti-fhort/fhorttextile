@@ -668,12 +668,21 @@ function lineProps(obj) {
   }
 }
 
+// Puntes per element (path i arrow). Els camps nous headStart/headEnd manen si són presents;
+// si no, retrocompat: arrow2 (doble punta) = start+end, arrow simple = només end, path = cap.
+function headConfig(obj) {
+  if (obj.headStart !== undefined || obj.headEnd !== undefined) return { start: !!obj.headStart, end: !!obj.headEnd }
+  if (obj.type === 'arrow') return { start: !!obj.arrow2, end: true }
+  return { start: false, end: false }
+}
+
 function arrowProps(obj) {
+  const cfg = headConfig(obj)
   return {
     x: 0, y: 0, rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1, points: [toPx(obj.x), toPx(obj.y), toPx(obj.x2), toPx(obj.y2)],
     stroke: obj.stroke || KONVA_COL.textMain, fill: obj.fill || obj.stroke || KONVA_COL.textMain,
     strokeWidth: obj.strokeWidth || 1.5, pointerLength: 8, pointerWidth: 6,
-    pointerAtBeginning: !!obj.arrow2,
+    pointerAtBeginning: cfg.start, pointerAtEnding: cfg.end,
   }
 }
 
@@ -3924,6 +3933,20 @@ export default function TechSheetEditor() {
                       <input type="number" min={0.5} max={5} step={0.5} value={selObj.strokeWidth || (selObj.type === 'arrow' ? 1.5 : 1)}
                         onChange={e => updateObject(selObj.id, { strokeWidth: Number(e.target.value) || 1 })} style={propInput} />
                     </label>
+                    {/* COMMIT 4: puntes per element (arrow i path). Escriu ambdós camps perquè
+                        prevalguin sobre el legacy arrow2 (retrocompat via headConfig). */}
+                    {(selObj.type === 'arrow' || selObj.type === 'path') && (() => {
+                      const cfg = headConfig(selObj)
+                      const hbtn = (on) => ({ flex: 1, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? COL.gold : COL.border}`, borderRadius: 5, background: on ? COL.goldPale : COL.field, color: on ? COL.gold : COL.textMain, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' })
+                      return (
+                        <div style={propLabel}>{t('tech_sheet.arrow_heads')}
+                          <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
+                            <button type="button" title={t('tech_sheet.head_start')} onClick={() => updateObject(selObj.id, { headStart: !cfg.start, headEnd: cfg.end })} style={hbtn(cfg.start)}><i className="ti ti-arrow-narrow-left" /></button>
+                            <button type="button" title={t('tech_sheet.head_end')} onClick={() => updateObject(selObj.id, { headStart: cfg.start, headEnd: !cfg.end })} style={hbtn(cfg.end)}><i className="ti ti-arrow-narrow-right" /></button>
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </>
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'path') && (
