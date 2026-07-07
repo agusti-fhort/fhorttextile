@@ -4361,8 +4361,14 @@ export default function TechSheetEditor() {
 const QUICK_COLORS = [KONVA_COL.textMain, '#185fa5', '#1d9e75', '#dc2626', KONVA_COL.gold, '#ca8a04']
 export function ColorPicker({ value, onChange }) {
   const { t } = useTranslation()
+  const isNone = value == null || value === 'transparent' || value === 'none'
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginTop: 3 }}>
+      {/* Fix #3-5: swatch "cap color" (transparent) — compartit a traç/emplenat/text/fons/puntes. */}
+      <button type="button" onClick={() => onChange('transparent')} title={t('tech_sheet.no_color')}
+        style={{ width: 18, height: 18, borderRadius: '50%', background: 'transparent', border: isNone ? `2px solid ${COL.textMain}` : `1px solid ${COL.border}`, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: COL.textMuted, fontSize: 12 }}>
+        <i className="ti ti-ban" aria-hidden="true" />
+      </button>
       {QUICK_COLORS.map(c => (
         <button key={c} type="button" onClick={() => onChange(c)} title={c}
           style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: value === c ? `2px solid ${COL.textMain}` : `1px solid ${COL.border}`, cursor: 'pointer', padding: 0 }} />
