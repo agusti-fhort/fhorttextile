@@ -621,7 +621,8 @@ No afegeixis cap text fora del JSON.""",
 
 def _extraccio_via_excel(session, api_key):
     """Via ràpida d'extracció per a fitxes Excel: parse determinista + revisió Sonnet,
-    SENSE la crida Opus. Retorna la MATEIXA forma de resposta que la via PDF/imatge."""
+    SENSE la crida Opus. Retorna la MATEIXA forma de resposta que la via PDF/imatge,
+    o None si el parse determinista no troba POMs (el caller fa fallback IA via Opus)."""
     # 1. Bytes del document desat al Pas 1.
     try:
         session.document.open('rb')
@@ -632,9 +633,9 @@ def _extraccio_via_excel(session, api_key):
     # 2. Parse determinista.
     raw_poms, talles_detectades = _parse_excel_poms(file_bytes)
 
-    # 3. Sense POMs llegibles → error clar.
+    # 3. Sense POMs llegibles → senyal (None) perquè el caller faci fallback IA (Opus).
     if not raw_poms:
-        return Response({'error': 'No s\'ha pogut llegir l\'Excel'}, status=400)
+        return None
 
     # 4. Text pla per a la revisió Sonnet.
     linies = [
@@ -735,10 +736,14 @@ def import_session_extraccio_view(request, token):
         return Response({'error': 'ANTHROPIC_API_KEY no configurada al backend'}, status=500)
 
     # Via ràpida Excel: parse determinista + revisió Sonnet, saltant Opus.
-    # PDF/imatge segueixen el camí actual sense cap canvi.
+    # Si el parser ràpid no reconeix el format (None), es continua pel camí comú
+    # Opus amb el full de càlcul convertit a text. PDF/imatge no canvien.
     doc_name = session.document.name or ''
-    if doc_name.lower().endswith(('.xlsx', '.xls')):
-        return _extraccio_via_excel(session, api_key)
+    es_excel = doc_name.lower().endswith(('.xlsx', '.xls'))
+    if es_excel:
+        resposta_rapida = _extraccio_via_excel(session, api_key)
+        if resposta_rapida is not None:
+            return resposta_rapida
 
     # Llegeix el document desat al Pas 1.
     try:
@@ -754,7 +759,12 @@ def import_session_extraccio_view(request, token):
             f'Document multi-model ({len(detectats)} detectats); extracció del model principal.'
         )
 
-    content_block = _cribratge_content_block(file_bytes, session.document.name, '')
+    if es_excel:
+        content_block = {'type': 'text',
+                         'text': f'Contingut del full de càlcul (fitxa Excel):\n{_excel_to_text(file_bytes)}'}
+        avisos.append('Format Excel no reconegut pel parser ràpid; extracció via IA.')
+    else:
+        content_block = _cribratge_content_block(file_bytes, session.document.name, '')
 
     try:
         client = anthropic.Anthropic(api_key=api_key)
@@ -773,6 +783,12 @@ def import_session_extraccio_view(request, token):
     except Exception as e:
         _logging.getLogger(__name__).exception('Extracció W2: error a la crida Claude')
         return Response({'error': f'Error a la crida d\'extracció: {e}'}, status=502)
+
+    # Guarda de truncament: si Opus talla per límit de tokens, degradem amb gràcia
+    # (no bloqueja; el JSON pot quedar incomplet i el gestiona el salvage de sota).
+    if getattr(response, 'stop_reason', None) == 'max_tokens':
+        avisos.append("Resposta d'extracció truncada pel límit de tokens; "
+                      'resultat possiblement incomplet.')
 
     # Parse tolerant (Fase 1) amb salvage per fila.
     grading_status = {'status': 'ok', 'detail': ''}

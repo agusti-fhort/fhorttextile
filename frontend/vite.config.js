@@ -15,5 +15,26 @@ export default defineConfig({
         }
       }
     }
-  }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('konva')) return 'vendor-konva'
+            if (id.includes('paper')) return 'vendor-paper'
+            if (id.includes('pdf-lib')) return 'vendor-pdf'
+            // Framework core (react/router/http/i18n): ja s'executa eagerly a l'entry,
+            // però abans anava tot dins del chunk "index" (>500kB). Es separa a part
+            // perquè sigui cacheable i no compti com a chunk d'APP; la resta de
+            // node_modules (dnd-kit, @svar-ui, tabler-icons, etc.) es queda amb el
+            // xunkejament automàtic per no perdre el seu lazy-load per pàgina.
+            if (/\/(react|react-dom|react-router|react-router-dom|scheduler|use-sync-external-store|axios|i18next|i18next-browser-languagedetector|react-i18next|zustand)\//.test(id)) {
+              return 'vendor-react'
+            }
+          }
+        },
+      },
+    },
+  },
 })

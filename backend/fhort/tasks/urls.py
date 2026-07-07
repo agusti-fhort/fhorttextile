@@ -221,7 +221,6 @@ try:
         export_grading_csv_view,
         export_size_set_csv_view,
         export_fitting_csv_view,
-        export_model_spec_pdf_view,
     )
     from django.urls import path as _p_s8
     _s8_paths = [
@@ -231,8 +230,6 @@ try:
                export_size_set_csv_view),
         _p_s8('fittings/peca/<int:pf_id>/export/csv/',
                export_fitting_csv_view),
-        _p_s8('models/<int:model_id>/export/pdf/',
-               export_model_spec_pdf_view),
     ]
     urlpatterns = _s8_paths + urlpatterns
 except Exception as _e_s8:

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- S6: fixture de test per als forats evenodd (CompoundPath) a l'import de patrons.
+     Tres formes soles (rect, circle, rect) + una peça amb un forat interior
+     expressat com a <path> amb dos subcamins i fill-rule evenodd. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 150">
+  <rect x="10" y="10" width="60" height="60" fill="#4a90d9" />
+  <circle cx="140" cy="40" r="30" fill="#d9944a" />
+  <rect x="190" y="10" width="60" height="60" fill="#7ac36a" />
+  <path
+    d="M 10 90 L 110 90 L 110 140 L 10 140 Z M 35 100 L 85 100 L 85 130 L 35 130 Z"
+    fill="#a34ad9"
+    fill-rule="evenodd"
+  />
+</svg>

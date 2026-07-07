@@ -35,6 +35,7 @@ from .views import (
 )
 
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
+from .ftt_template_views import DocumentTemplateViewSet
 
 router = DefaultRouter()
 router.register('models', ModelViewSet, basename='model')
@@ -43,6 +44,7 @@ router.register('base-measurements', BaseMeasurementViewSet, basename='base-meas
 router.register('size-checks', SizeCheckViewSet, basename='size-check')
 router.register('size-check-lines', SizeCheckLineViewSet, basename='size-check-line')
 router.register('watchpoints', WatchpointViewSet, basename='watchpoint')
+router.register('document-templates', DocumentTemplateViewSet, basename='document-template')
 
 # Sprint 6 — AI extraction. Paths before the router so 'models/extract-from-file/'
 # is not captured by 'models/<pk>/' of the ModelViewSet detail.
@@ -166,6 +168,7 @@ try:
         FttDocumentExportView,
         FttDocumentLockView,
         FttDocumentUnlockView,
+        FttSaveAsTemplateView,
     )
     _ftt_document_paths = [
         path('models/<int:model_id>/ftt-document/', FttDocumentCreateView.as_view(), name='ftt-document-create'),
@@ -173,6 +176,7 @@ try:
         path('ftt-documents/<int:fitxer_id>/lock/', FttDocumentLockView.as_view(), name='ftt-document-lock'),
         path('ftt-documents/<int:fitxer_id>/unlock/', FttDocumentUnlockView.as_view(), name='ftt-document-unlock'),
         path('ftt-documents/<int:fitxer_id>/export/', FttDocumentExportView.as_view(), name='ftt-document-export'),
+        path('ftt-documents/<int:fitxer_id>/save-as-template/', FttSaveAsTemplateView.as_view(), name='ftt-save-as-template'),
         path('ftt-documents/<int:fitxer_id>/asset/<str:asset_name>/', FttDocumentAssetView.as_view(), name='ftt-document-asset'),
     ]
 except Exception:

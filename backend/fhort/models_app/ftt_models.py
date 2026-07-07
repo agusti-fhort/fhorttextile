@@ -55,6 +55,13 @@ class DocumentTemplate(models.Model):
     is_sample = models.BooleanField(default=False)
     origen = models.CharField(max_length=20, choices=ORIGEN_CHOICES, default='tenant')
     actiu = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        'accounts.UserProfile',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='document_templates_created',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -23,6 +23,10 @@ FTT_MAGIC = "FTT"
 FTT_SCHEMA_VERSION = 1
 FTT_APP_VERSION = "0.1.0"
 
+# Tipus de document dins el .ftt (manifest.kind). Retrocompat: absent → document.
+FTT_KIND_DOCUMENT = "document"
+FTT_KIND_TEMPLATE = "template"
+
 MANIFEST_NAME = "manifest.json"
 DOCUMENT_NAME = "document.json"
 PREVIEW_NAME = "preview.png"
@@ -51,12 +55,13 @@ def new_empty_document(metadata=None, page_format=DEFAULT_PAGE_FORMAT):
     }
 
 
-def pack(document_json, assets=None, preview=None, app_version=FTT_APP_VERSION):
+def pack(document_json, assets=None, preview=None, app_version=FTT_APP_VERSION, kind=FTT_KIND_DOCUMENT):
     """Empaqueta un document lògic en un blob .ftt (bytes).
 
     - `document_json`: dict serialitzable a JSON.
     - `assets`: dict {nom -> bytes} de binaris; es desen sota `assets/<nom>`.
     - `preview`: bytes PNG opcionals; es desen com `preview.png`.
+    - `kind`: "document" (per defecte) o "template"; discriminador al manifest.
 
     El manifest hi inclou un sha256 per cada peça per a auditoria/integritat futura.
     """
@@ -75,6 +80,7 @@ def pack(document_json, assets=None, preview=None, app_version=FTT_APP_VERSION):
         "magic": FTT_MAGIC,
         "schema_version": FTT_SCHEMA_VERSION,
         "app_version": app_version,
+        "kind": kind,
         "checksums": checksums,
     }
 
@@ -179,7 +185,9 @@ def document_to_v2(document_json, asset_src=None):
 def unpack(blob):
     """Desempaqueta un blob .ftt i retorna un dict.
 
-    Retorna {manifest, document_json, assets:{nom->bytes}, preview:bytes|None}.
+    Retorna {manifest, document_json, assets:{nom->bytes}, preview:bytes|None, kind}.
+    `kind` és normalitzat: si el manifest no en té (fitxers antics), es fixa a
+    FTT_KIND_DOCUMENT per retrocompatibilitat.
     Valida `magic == "FTT"` i `schema_version` suportat; si no, ValueError clar.
     """
     try:
@@ -228,4 +236,5 @@ def unpack(blob):
         "document_json": document_json,
         "assets": assets,
         "preview": preview,
+        "kind": manifest.get("kind", FTT_KIND_DOCUMENT),
     }
