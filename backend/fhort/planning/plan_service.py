@@ -66,8 +66,12 @@ def recompute_for_technicians(profile_ids, *, now=None):
         for t in queue:
             if t.planned_locked:
                 continue   # punt fix: la durada snapshot es respecta tal qual
+            if t.status != 'Pending':
+                continue   # NOMÉS les no començades re-resolen; InProgress/Paused conserven el
+                           # snapshot (Done ja excloses de la cua). Cap canvi espontani d'estimació.
             fresh = lookup_estimated_minutes(t.model, t.task_type)
-            if fresh != t.estimated_minutes:
+            if fresh is not None and fresh != t.estimated_minutes:
+                # No clobberem mai un valor amb None (peça 4: cap tasca NULL després de planificar).
                 t.estimated_minutes = fresh
                 t.save(update_fields=['estimated_minutes', 'updated_at'])
         results[pid] = schedule(queue, now=now, save=True)

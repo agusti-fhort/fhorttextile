@@ -135,3 +135,50 @@ class CaptureSeedTest(TenantTestCase):
         resp = time_capture_seed_view(req)
         self.assertEqual(resp.status_code, 400)
         self.assertFalse(TimeSeed.objects.filter(key='task_y').exists())
+
+
+class RecomputeReresolutionTest(TenantTestCase):
+    """Peça 5: en replanificar (recompute), NOMÉS les tasques Pending re-resolen l'estimació
+    via cascada; InProgress/Paused conserven el snapshot (Done ja excloses de la cua)."""
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Tenant'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TST'
+        tenant.vat_number = 'X0000000X'
+        tenant.tipus_client = 'STANDARD'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        from fhort.accounts.models import UserProfile
+        from fhort.models_app.models import Model
+        self.user = get_user_model().objects.create(username='tec')
+        self.prof, _ = UserProfile.objects.get_or_create(user=self.user)
+        self.prof.rol_nom = 'technician'
+        self.prof.save()
+        self.model = Model.objects.create(codi_intern='M1', codi_tenant='TST', any=2026,
+                                          temporada='SS26', sequencial=1)
+
+    def _task_amb_llavor(self, code):
+        tt = TaskType.objects.create(code=code, name=code, fase='Dev. tècnic')
+        TimeSeed.objects.create(scope='task', key=code, minuts=40, origen='MIGRACIO')  # cascada → 40
+        return tt
+
+    def _mt(self, tt, status, est):
+        from fhort.tasks.models import ModelTask
+        return ModelTask.objects.create(model=self.model, task_type=tt, order=0,
+                                        status=status, assignee=self.prof, estimated_minutes=est)
+
+    def test_pending_reresol_started_conserva(self):
+        from fhort.planning.plan_service import recompute_for_technicians
+        pending = self._mt(self._task_amb_llavor('task_p'), 'Pending', 10)     # 10 → 40
+        inprog = self._mt(self._task_amb_llavor('task_i'), 'InProgress', 10)   # conserva 10
+        paused = self._mt(self._task_amb_llavor('task_a'), 'Paused', 10)       # conserva 10
+        recompute_for_technicians([self.prof.id])
+        for t in (pending, inprog, paused):
+            t.refresh_from_db()
+        self.assertEqual(pending.estimated_minutes, 40)
+        self.assertEqual(inprog.estimated_minutes, 10)
+        self.assertEqual(paused.estimated_minutes, 10)
