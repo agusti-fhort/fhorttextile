@@ -36,6 +36,10 @@ class TenantConfig(models.Model):
     norma_referencia = models.CharField(max_length=20, choices=NORMA_CHOICES, default='ISO_8559')
     nom_empresa      = models.CharField(max_length=200, blank=True)
     logo_url         = models.URLField(blank=True)
+    # Comercial Studio (B1) — tarifa interna de COST per hora (plana, v1). Font del cost estàndard
+    # dels serveis interns: Σ cascada(task_code, GTI) × hourly_rate. ≠ Product.sale_rate (VENDA).
+    # null = no fixada (la cascada de cost recorrerà a captura quan calgui). Per-perfil = v2.
+    hourly_rate      = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     creat_at         = models.DateTimeField(auto_now_add=True)
     actualitzat_at   = models.DateTimeField(auto_now=True)
 

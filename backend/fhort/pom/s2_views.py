@@ -284,7 +284,7 @@ def tenant_config_view(request):
             return Response(TenantConfigSerializer(config).data)
 
         # PATCH
-        allowed = ['unitat_mesura', 'norma_referencia', 'nom_empresa', 'logo_url']
+        allowed = ['unitat_mesura', 'norma_referencia', 'nom_empresa', 'logo_url', 'hourly_rate']
         for field in allowed:
             if field in request.data:
                 setattr(config, field, request.data[field])

@@ -153,6 +153,9 @@ class TenantConfigSerializer(serializers.Serializer):
     norma_referencia = serializers.ChoiceField(choices=['ISO_8559', 'ASTM_D13'])
     nom_empresa = serializers.CharField(allow_blank=True)
     logo_url = serializers.URLField(allow_blank=True)
+    # Comercial Studio (B1) — tarifa interna de cost per hora (plana). ≠ Product.sale_rate.
+    hourly_rate = serializers.DecimalField(max_digits=10, decimal_places=2,
+                                           required=False, allow_null=True)
 
 
 class POMGlobalLightSerializer(serializers.Serializer):
