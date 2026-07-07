@@ -458,6 +458,10 @@ class GradingRuleSet(models.Model):
     )
     size_system = models.ForeignKey(SizeSystem, on_delete=models.PROTECT, null=True, blank=True, related_name='grading_rule_sets')
     actiu = models.BooleanField(default=True)
+    # R2 — codis de document del run que NO es van poder vincular a cap POM (no es perden en
+    # silenci: es desen aquí com a "pendents de vincular" per revisar-los més tard). Llista de str.
+    pendents_vincular = models.JSONField(default=list, blank=True,
+        help_text="Codis de document no vinculats a cap POM en crear el run (pendents de vincular).")
 
 
 

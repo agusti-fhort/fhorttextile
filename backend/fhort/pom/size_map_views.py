@@ -491,6 +491,9 @@ def size_map_create_view(request):
         perfils = data.get('perfils') or []
         base_size = (data.get('base_size') or '').strip()
         src_ssid = data.get('size_system_id')
+        # R2 — codis de document que el frontend NO va poder vincular a cap POM. NO es perden en
+        # silenci: es desen al ruleset com a "pendents de vincular" i s'eco-retornen al resultat.
+        discarded_codes = [str(c).strip() for c in (data.get('discarded_codes') or []) if str(c).strip()]
         # 1C-4b-be — resolució de conflictes de graduació (N graduacions per combinació,
         # distingides pel nom). on_conflict: None | 'new' | 'update'.
         on_conflict = data.get('on_conflict')
@@ -644,6 +647,10 @@ def size_map_create_view(request):
             if target:
                 rule_set.targets.add(target)
 
+            # R2 — desa els codis no vinculats al ruleset (pendents de vincular).
+            rule_set.pendents_vincular = discarded_codes
+            rule_set.save(update_fields=['pendents_vincular'])
+
             # ---- 5. GradingRules ----
             if base_def is None and grading:
                 warnings.append("No s'ha pogut resoldre cap talla base; regles de grading omeses.")
@@ -716,6 +723,7 @@ def size_map_create_view(request):
             'nom': ss.nom,
             'grading_rule_set_id': rule_set.id,
             'sizing_profile_ids': sizing_profile_ids,
+            'discarded_codes': discarded_codes,
             'warnings': warnings,
         })
     except Exception as e:

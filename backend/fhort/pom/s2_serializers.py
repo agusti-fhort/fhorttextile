@@ -59,6 +59,8 @@ class GradingRuleSetLightSerializer(serializers.Serializer):
     is_system_default = serializers.BooleanField()
     version_number = serializers.IntegerField()
     has_custom_version = serializers.SerializerMethodField()
+    # R2 — codis de document pendents de vincular, persistits al crear el run.
+    pendents_vincular = serializers.JSONField(read_only=True)
 
     def get_has_custom_version(self, obj):
         return hasattr(obj, 'versions') and obj.versions.exists()

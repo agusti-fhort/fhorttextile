@@ -216,6 +216,9 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   const [err, setErr] = useState(null)
   // 1C-4b-fe1 — panell d'avís-i-confirma quan el backend retorna 409 {existing, message}.
   const [conflict, setConflict] = useState(null)
+  // R2/R5 — resultat del create (nom, regles reals persistides, pendents de vincular): es mostra
+  // abans de tancar perquè l'humà vegi què s'ha desat i què ha quedat pendent.
+  const [result, setResult] = useState(null)
   const [lookups, setLookups] = useState({ targets: [], constructions: [], fit_types: [], garment_types: [], base_units: [] })
 
   // Estat global del wizard en un sol objecte.
@@ -392,6 +395,10 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         body_height_cm: x.body_height_cm === '' ? null : Number(x.body_height_cm),
       })),
       grading, perfils,
+      // R2 — codis del document no vinculats a cap POM: viatgen perquè el backend els
+      // desi al run com a "pendents de vincular" (no es perden en silenci). El window.confirm
+      // de submitCreate segueix sent la primera barrera.
+      discarded_codes: wiz.gradingResults.filter(g => !g.pom_id).map(g => g.pom_codi_client).filter(Boolean),
       ...extra,   // on_conflict / nom_variant des del panell sobreescriuen
     }
   }
@@ -415,7 +422,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
     }
     setErr(null); setConflict(null); setBusy(true)
     sizeMap.create(buildPayload(extra))
-      .then(r => { onComplete(r.data) })
+      .then(r => { setResult(r.data) })
       .catch(e => {
         // 409 = avís-i-confirma (no és error): obre el panell amb les graduacions existents.
         if (e?.response?.status === 409) { setConflict(e.response.data); return }
@@ -427,6 +434,36 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   const doCreate = () => submitCreate()
 
   const nomById = (arr, id) => arr.find(x => String(x.id) === String(id))?.nom || ''
+
+  // ---- RESULTAT del create (R2 pendents + R5 comptador) ----
+  if (result) {
+    const pendents = result.discarded_codes || []
+    return (
+      <div style={{ minWidth: 0, maxWidth: 1100 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <i className="ti ti-circle-check" style={{ fontSize: 20, color: 'var(--gold)' }} />
+          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO, margin: 0 }}>{t('size_map_result_title')}</h1>
+        </div>
+        <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)', fontFamily: MONO }}>
+          <div>{result.nom}</div>
+        </div>
+        {pendents.length > 0 && (
+          <div style={{ background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8,
+                        padding: '10px 12px', marginBottom: 14, fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>
+              <i className="ti ti-link-off" style={{ marginRight: 6 }} />
+              {t('size_map_pendents')} ({pendents.length})
+            </div>
+            <div style={{ fontFamily: MONO }}>{pendents.join(', ')}</div>
+            <div style={{ marginTop: 4, fontSize: 'var(--fs-label)' }}>{t('size_map_pendents_hint')}</div>
+          </div>
+        )}
+        <button onClick={() => onComplete(result)} style={primaryBtn}>
+          <i className="ti ti-check" />{t('size_map_result_close')}
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div style={{ minWidth: 0, maxWidth: 1100 }}>

@@ -280,6 +280,20 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
         </div>
       )}
 
+      {/* Pendents de vincular (R2): codis del document del run que no es van poder vincular a
+          cap POM en crear-lo. Persistits al ruleset perquè no es perdin en silenci. */}
+      {profile.grading_rule_set?.pendents_vincular?.length > 0 && (
+        <div style={{ marginBottom: 16, padding: "10px 12px", borderRadius: 6,
+                      background: "var(--warn-bg)", border: "1px solid var(--warn)" }}>
+          <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--warn)", marginBottom: 6 }}>
+            {t('size_library.pending_link')} ({profile.grading_rule_set.pendents_vincular.length})
+          </div>
+          <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-main)" }}>
+            {profile.grading_rule_set.pendents_vincular.join(', ')}
+          </div>
+        </div>
+      )}
+
       {/* Sizes */}
       {sizes.length > 0 && (
         <div>
