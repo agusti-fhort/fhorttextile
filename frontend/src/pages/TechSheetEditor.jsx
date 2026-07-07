@@ -972,12 +972,16 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
         const subClick = selected ? (e) => { e.cancelBubble = true; onSubSelect?.(i) } : undefined
         // Ressalt visual (només pinta): la subpath activa es mostra amb traç daurat, sense tocar les dades.
         const highlight = i === activeSubIndex ? { stroke: KONVA_COL.gold, strokeWidth: Math.max(2, props.strokeWidth || 1) } : null
-        return <Path key={i} {...props} {...highlight} hitStrokeWidth={10} onClick={subClick} onTap={subClick} />
+        // Fix #4: un path sense fill només capta clics sobre el traç; ampliem la zona hit
+        // perquè una fletxa curva fina sigui fàcil de seleccionar.
+        return <Path key={i} {...props} {...highlight} hitStrokeWidth={props.fill ? 10 : 18} onClick={subClick} onTap={subClick} />
       })}
-      {/* COMMIT 5: puntes de fletxa curva orientades a la tangent (mateix builder que l'export). */}
+      {/* COMMIT 5: puntes de fletxa curva orientades a la tangent (mateix builder que l'export).
+          Fix #4: SENSE listening={false} → la punta sòlida bombolla el clic al Group (onSelect),
+          que és la part que l'usuari prem per seleccionar la fletxa. */}
       {pathHeadAngles(obj).map((h, i) => (
         <Line key={'head' + i} points={headTriPoints(h.x, h.y, h.angle)} closed
-          fill={pathHeadColor(obj)} stroke={pathHeadColor(obj)} strokeWidth={1} listening={false} />
+          fill={pathHeadColor(obj)} stroke={pathHeadColor(obj)} strokeWidth={1} />
       ))}
     </Group>
   )
