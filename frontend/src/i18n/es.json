@@ -1621,6 +1621,7 @@
     "tool_line_dot": "Línea de puntos",
     "tool_arrow": "Flecha →",
     "tool_arrow2": "Flecha ↔",
+    "tool_arrow_curve": "Flecha curva",
     "tool_draw": "Libre",
     "tool_pen": "Pluma",
     "tool_node": "Selección directa (nodos)",

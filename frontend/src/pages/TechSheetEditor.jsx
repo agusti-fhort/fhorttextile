@@ -85,7 +85,7 @@ const RULER_SIZE = 18   // S2: gruix (px) de les regles superior/esquerra
 const RECT_TOOLS = ['rect', 'rect_round', 'ellipse']   // drag = bounding box
 const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
 // Peça C: eines que mostren cursor de creu (dibuix + nodes). 'select' → fletxa; 'pan' → grab.
-const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, 'draw', 'pen', 'node', 'subpath', 'polygon', 'note', 'cota_pom']
+const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, 'draw', 'pen', 'arrow_curve', 'node', 'subpath', 'polygon', 'note', 'cota_pom']
 // S8: tipus convertibles a Paper.js (objectToPaperPath) — únics vàlids per al pathfinder.
 const PATHFINDER_TYPES = ['path', 'rect', 'rect_round', 'ellipse']
 // S7c2: polígon regular de N costats inscrit al bbox de drag → punts (px de contingut).
@@ -721,6 +721,40 @@ function pathToData(path) {
   return segmentsToData(path.segments || [], path.closed)
 }
 
+// COMMIT 5: geometria de puntes d'un path amb headStart/headEnd, orientades a la TANGENT.
+// Retorna {x,y} (px, espai local del path) i angle (rad) de la direcció SORTINT de cada punta
+// activa. Tangent d'un cúbic: a l'extrem C'(1)∝−inHandle; a l'inici C'(0)∝outHandle (invertit
+// perquè la punta miri cap enfora). Fallback al parell on-curve si el tram és recte (handles 0).
+function pathHeadAngles(obj) {
+  const cfg = headConfig(obj)
+  if (!cfg.start && !cfg.end) return []
+  const segs = entrySegments((obj.paths || [])[0] || {})
+  if (segs.length < 2) return []
+  const heads = []
+  if (cfg.end) {
+    const last = segs[segs.length - 1], prev = segs[segs.length - 2]
+    let dx = -(last.inX || 0), dy = -(last.inY || 0)
+    if (Math.hypot(dx, dy) < 1e-6) { dx = last.x - prev.x; dy = last.y - prev.y }
+    heads.push({ x: toPx(last.x), y: toPx(last.y), angle: Math.atan2(dy, dx) })
+  }
+  if (cfg.start) {
+    const first = segs[0], next = segs[1]
+    let dx = -(first.outX || 0), dy = -(first.outY || 0)
+    if (Math.hypot(dx, dy) < 1e-6) { dx = first.x - next.x; dy = first.y - next.y }
+    heads.push({ x: toPx(first.x), y: toPx(first.y), angle: Math.atan2(dy, dx) })
+  }
+  return heads
+}
+// Triangle de punta (px): vèrtex al tip, base retrocedida `len` al llarg de l'angle, amplada `wid`.
+function headTriPoints(tipX, tipY, angle, len = 8, wid = 6) {
+  const bx = tipX - Math.cos(angle) * len, by = tipY - Math.sin(angle) * len
+  const nx = -Math.sin(angle) * (wid / 2), ny = Math.cos(angle) * (wid / 2)
+  return [tipX, tipY, bx + nx, by + ny, bx - nx, by - ny]
+}
+function pathHeadColor(obj) {
+  return normalizePaint((obj.paths?.[0]?.stroke) ?? obj.stroke) || KONVA_COL.textMain
+}
+
 function pathChildProps(obj, path) {
   const fill = normalizePaint(path.fill ?? obj.fill)
   const stroke = normalizePaint(path.stroke ?? obj.stroke)
@@ -812,6 +846,11 @@ async function addObjectToLayer(layer, obj, ctx) {
     for (const path of obj.paths || []) {
       const props = pathChildProps(obj, path)
       if (props.data) g.add(new Konva.Path(props))
+    }
+    // COMMIT 5: puntes de fletxa curva (path amb headStart/headEnd) orientades a la tangent.
+    const headCol = pathHeadColor(obj)
+    for (const h of pathHeadAngles(obj)) {
+      g.add(new Konva.Line({ points: headTriPoints(h.x, h.y, h.angle), closed: true, fill: headCol, stroke: headCol, strokeWidth: 1 }))
     }
     layer.add(g)
     return
@@ -935,6 +974,11 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
         const highlight = i === activeSubIndex ? { stroke: KONVA_COL.gold, strokeWidth: Math.max(2, props.strokeWidth || 1) } : null
         return <Path key={i} {...props} {...highlight} hitStrokeWidth={10} onClick={subClick} onTap={subClick} />
       })}
+      {/* COMMIT 5: puntes de fletxa curva orientades a la tangent (mateix builder que l'export). */}
+      {pathHeadAngles(obj).map((h, i) => (
+        <Line key={'head' + i} points={headTriPoints(h.x, h.y, h.angle)} closed
+          fill={pathHeadColor(obj)} stroke={pathHeadColor(obj)} strokeWidth={1} listening={false} />
+      ))}
     </Group>
   )
 }
@@ -2040,7 +2084,7 @@ export default function TechSheetEditor() {
   // (el simple guanya — no treu punt a punt), Backspace treu l'últim ancoratge ──
   useEffect(() => {
     const onKey = (e) => {
-      if (tool !== 'pen' || !penRef.current) return
+      if ((tool !== 'pen' && tool !== 'arrow_curve') || !penRef.current) return
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (e.key === 'Enter') {
@@ -2241,9 +2285,13 @@ export default function TechSheetEditor() {
     const points = penRef.current?.points || []
     if (points.length >= 2) {
       const segments = points.map(p => ({ x: toMm(p.x), y: toMm(p.y), inX: toMm(p.inX), inY: toMm(p.inY), outX: toMm(p.outX), outY: toMm(p.outY) }))
+      // COMMIT 5: la fletxa curva reutilitza la màquina de ploma, però surt oberta, amb
+      // gruix de fletxa i headEnd:true (la punta la dibuixa el render sobre la tangent final).
+      const isArrow = tool === 'arrow_curve'
       addObject({
         id: uid(), type: 'path', layer: 'free', x: 0, y: 0,
-        paths: [{ closed, fill: 'transparent', stroke: KONVA_COL.textMain, strokeWidth: 1.2, fillRule: 'nonzero', segments }],
+        ...(isArrow ? { headEnd: true } : {}),
+        paths: [{ closed: isArrow ? false : closed, fill: 'transparent', stroke: KONVA_COL.textMain, strokeWidth: isArrow ? 1.5 : 1.2, fillRule: 'nonzero', segments }],
       })
     }
     penRef.current = null
@@ -2299,7 +2347,7 @@ export default function TechSheetEditor() {
       setTool('select')
       return
     }
-    if (tool === 'pen') {
+    if (tool === 'pen' || tool === 'arrow_curve') {
       // Clic a prop del 1r punt (amb ≥2 punts) tanca el traç; si no, afegeix un nou ancoratge.
       const pts = penRef.current?.points
       if (pts && pts.length >= 2 && Math.hypot(pos.x - pts[0].x, pos.y - pts[0].y) <= 8) { finishPen(true); return }
@@ -2358,7 +2406,7 @@ export default function TechSheetEditor() {
       }
       return
     }
-    if (tool === 'pen' && penRef.current) {
+    if ((tool === 'pen' || tool === 'arrow_curve') && penRef.current) {
       if (!cur) return
       const points = penRef.current.points
       if (penRef.current.dragging && points.length) {
@@ -2395,7 +2443,7 @@ export default function TechSheetEditor() {
   }
   const onStageMouseUp = (e) => {
     if (editingFlatId) return
-    if (tool === 'pen' && penRef.current) {
+    if ((tool === 'pen' || tool === 'arrow_curve') && penRef.current) {
       penRef.current.dragging = false
       const pos = stagePoint()
       setPenTemp({ points: [...penRef.current.points], cursor: pos })
@@ -3117,6 +3165,7 @@ export default function TechSheetEditor() {
       { kind: 'flyout', id: 'arrows', label: t('tech_sheet.tool_group_arrows'), tools: [
         { k: 'arrow', icon: 'ti-arrow-right', label: t('tech_sheet.tool_arrow') },
         { k: 'arrow2', icon: 'ti-arrows-horizontal', label: t('tech_sheet.tool_arrow2') },
+        { k: 'arrow_curve', icon: 'ti-vector-spline', label: t('tech_sheet.tool_arrow_curve') },
       ] },
     ] },
     { cat: 'text', items: [

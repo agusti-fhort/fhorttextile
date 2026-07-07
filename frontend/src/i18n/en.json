@@ -1621,6 +1621,7 @@
     "tool_line_dot": "Dotted line",
     "tool_arrow": "Arrow →",
     "tool_arrow2": "Arrow ↔",
+    "tool_arrow_curve": "Curved arrow",
     "tool_draw": "Freehand",
     "tool_pen": "Pen",
     "tool_node": "Direct select (nodes)",
