@@ -702,7 +702,15 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                           )}
                           {g.pom_id
                             ? (g.pom_nom && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>→ {g.pom_nom}</div>)
-                            : (
+                            : (<>
+                              {/* Match dèbil (LOW): el backend NO ha auto-vinculat; es mostra el suggeriment
+                                  perquè l'humà vinculi conscientment (mai vinculació silenciosa dubtosa). */}
+                              {g.weak_suggestion && (
+                                <div style={{ marginTop: 2, fontSize: 'var(--fs-label)', color: 'var(--warn)' }}>
+                                  <i className="ti ti-help-circle" style={{ fontSize: 12, marginRight: 3 }} />
+                                  {t('size_map_weak_match', { pom: g.weak_suggestion })}
+                                </div>
+                              )}
                               <select value={g.pom_id || ''} style={{ ...selS, padding: '3px 6px', fontSize: 'var(--fs-body)', marginTop: 2, maxWidth: 260 }}
                                 onChange={e => {
                                   const id = Number(e.target.value) || null
@@ -712,7 +720,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                                 <option value="">{t('size_map_link_pom')}</option>
                                 {catalegPoms.map(p => <option key={p.pom_id} value={p.pom_id}>{p.codi_client} — {p.nom}</option>)}
                               </select>
-                            )}
+                            </>)}
                         </td>
                         <td style={{ padding: 6 }}>
                           <select value={g.logica} onChange={e => upd('logica', e.target.value)} style={{ ...selS, padding: '3px 6px' }}>

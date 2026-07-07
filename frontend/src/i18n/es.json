@@ -1450,6 +1450,7 @@
   "size_map_g_warn": "Aviso",
   "size_map_grading_err": "Error en el cálculo de grading.",
   "size_map_link_pom": "Vincular a POM del catálogo…",
+  "size_map_weak_match": "Match débil (sugerido: {{pom}}); vincúlalo manualmente.",
   "size_map_loading": "Cargando…",
   "size_map_match_err": "Error en el matching.",
   "size_map_next": "Siguiente",

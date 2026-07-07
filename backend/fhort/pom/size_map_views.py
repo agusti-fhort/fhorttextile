@@ -20,6 +20,20 @@ from fhort.pom.grading_utils import _norm, detect_grading, derive_break_fields
 
 logger = logging.getLogger(__name__)
 
+# Llindar d'auto-vinculació del matcher (DIAGNOSI_POM_RESOLUCIO_RUN_2026-07-08): només els
+# matches HIGH/MEDIUM auto-vinculen la fila. Un match dèbil (LOW — p.ex. el root-prefix, que és
+# l'últim recurs) NO es vincula en silenci: la fila cau a pendents amb un suggeriment visible.
+_POM_AUTOLINK_CONF = ('HIGH', 'MEDIUM')
+
+
+def _apply_match_threshold(pom, conf):
+    """Aplica el llindar: retorna (pom_efectiu, weak_suggestion).
+    Si el match és per sota del llindar, desvincula (pom→None) i torna el nom suggerit perquè
+    la UI el mostri com a pendent; mai una vinculació dubtosa en silenci."""
+    if pom is not None and conf not in _POM_AUTOLINK_CONF:
+        return None, pom.nom_client
+    return pom, None
+
 
 class _Configure(HasCapability):
     required_capability = CONFIGURE
@@ -247,8 +261,9 @@ def size_map_grading_preview_view(request):
 
             # descripció si el paste la porta (avui no); el fitxer SÍ → match per nom.
             pom, mtype, conf = find_pom_master(codi, row.get('descripcio') or '')
+            pom, weak_suggestion = _apply_match_threshold(pom, conf)
             warning = ''
-            if pom is None:
+            if pom is None and not weak_suggestion:
                 warning = f"POM '{codi}' no resolt al catàleg."
 
             det = detect_grading(valors_raw, run, base_size)
@@ -272,6 +287,7 @@ def size_map_grading_preview_view(request):
                 'talla_break_label': tlabel,
                 'talla_break_pos': tpos,
                 'valors_calculats': {k: valors_raw.get(k) for k in valors_raw},
+                'weak_suggestion': weak_suggestion,
                 'warning': warning,
             })
 
@@ -435,7 +451,8 @@ def size_map_grading_preview_file_view(request):
                 pom, mtype, conf = find_pom_master(codi, descripcio)
             except Exception:
                 pom, mtype, conf = None, 'no_match', 'NO_MATCH'
-            warning = '' if pom else f"POM '{codi}' no resolt al catàleg."
+            pom, weak_suggestion = _apply_match_threshold(pom, conf)
+            warning = '' if (pom or weak_suggestion) else f"POM '{codi}' no resolt al catàleg."
             try:
                 det = detect_grading(values, run, base_size)
             except Exception as e:
@@ -463,6 +480,7 @@ def size_map_grading_preview_file_view(request):
                 # Paritat R7 (NOMÉS display): toleràncies extretes al costat de la regla derivada.
                 'tolerance_minus': p.get('tolerance_minus'),
                 'tolerance_plus': p.get('tolerance_plus'),
+                'weak_suggestion': weak_suggestion,
                 'warning': warning,
             })
 
