@@ -11,6 +11,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework import status
 
+from fhort.pom.size_labels import canonical_size_label
+
 
 def normalize_size_run(raw):
     """Convert any size_run format to 'XXS·XS·S·M·L·XL'."""
@@ -413,12 +415,15 @@ def import_session_talles_view(request, token):
     system_labels = []
     if model.size_system_id:
         system_labels = list(model.size_system.talles.values_list('etiqueta', flat=True))
-    destins = {_norm_label(x) for x in configurat} | {_norm_label(x) for x in system_labels}
-    destins |= {_norm_label(v) for v in mapeig.values()}
-    mapeig_norm = {_norm_label(k) for k in mapeig.keys()}
+    # B1: comparem en forma CANÒNICA (XXL≡2XL) perquè una etiqueta del document que difereix
+    # només en la notació X-repetida trobi el seu destí al run del tenant. El mapeig manual es
+    # manté com a escapatòria; el guardat de l'etiqueta tenant es fa al reconcile d'import.
+    destins = {canonical_size_label(x) for x in configurat} | {canonical_size_label(x) for x in system_labels}
+    destins |= {canonical_size_label(v) for v in mapeig.values()}
+    mapeig_norm = {canonical_size_label(k) for k in mapeig.keys()}
 
     sense_desti = [t for t in talles_sel
-                   if _norm_label(t) not in destins and _norm_label(t) not in mapeig_norm]
+                   if canonical_size_label(t) not in destins and canonical_size_label(t) not in mapeig_norm]
     ready = bool(talles_sel) and not sense_desti
 
     rc = dict(session.run_conciliat or {})
@@ -1211,9 +1216,24 @@ def import_session_confirmar_view(request, token):
         if run_detectat and base_detectada and target_codi:
             mr = match_size_system(target_codi, run_detectat, base_detectada)
             if mr.ok and mr.score == 1.0 and mr.base_ok:
+                # B1: el match és canònic (XXL≡2XL) però el model ha de parlar SEMPRE la llengua
+                # del tenant → traduïm cada etiqueta del document a la SizeDefinition del sistema,
+                # i remapem les claus de `valors` en el mateix moviment perquè el run, la base i
+                # els valors quedin alineats (grading llegeix el run internament).
+                from fhort.pom.models import SizeDefinition
+                _tenant_labels = list(SizeDefinition.objects.filter(size_system=mr.size_system)
+                                      .values_list('etiqueta', flat=True))
+                _canon_to_tenant = {canonical_size_label(e): e for e in _tenant_labels}
+
+                def _to_tenant(lbl):
+                    return _canon_to_tenant.get(canonical_size_label(lbl), lbl)
+
+                run_tenant = [_to_tenant(l) for l in run_detectat]
+                base_detectada = _to_tenant(base_detectada)
+                valors = {pid: {_to_tenant(k): v for k, v in d.items()} for pid, d in valors.items()}
                 model.size_system = mr.size_system
                 model.base_size_label = base_detectada
-                model.size_run_model = '·'.join(run_detectat)
+                model.size_run_model = '·'.join(run_tenant)
                 model.save(update_fields=['size_system', 'base_size_label', 'size_run_model'])
             else:
                 session.avisos = (session.avisos or []) + [

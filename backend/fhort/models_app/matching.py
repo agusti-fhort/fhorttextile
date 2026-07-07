@@ -10,6 +10,8 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 
+from fhort.pom.size_labels import canonical_size_label
+
 
 @dataclass
 class MatchResult:
@@ -78,15 +80,17 @@ def match_size_system(target_codi, labels_input, base_size):
             error=f"Columna 'run_talles': no hi ha cap sistema de talles configurat per a "
                   f"aquest target. Contacta amb l'estudi.")
 
-    input_set = set(labels)
+    # B1: comparem en forma CANÒNICA (XXL≡2XL) però conservem l'etiqueta original per als
+    # missatges i el guardat (el guardat de l'etiqueta tenant es fa al reconcile d'import).
+    input_canon = {canonical_size_label(l) for l in labels}
     scored = []
     for sys in candidates:
         ordered = list(
             SizeDefinition.objects.filter(size_system=sys).order_by('ordre')
             .values_list('etiqueta', flat=True))
-        etiquetes = set(ordered)
-        score = len(input_set & etiquetes) / len(input_set)
-        scored.append((sys, score, etiquetes, ordered))
+        etiquetes_canon = {canonical_size_label(e) for e in ordered}
+        score = len(input_canon & etiquetes_canon) / len(input_canon)
+        scored.append((sys, score, etiquetes_canon, ordered))
 
     max_score = max(s for _, s, _, _ in scored)
     winners = [w for w in scored if w[1] == max_score]
@@ -103,9 +107,9 @@ def match_size_system(target_codi, labels_input, base_size):
     else:
         winner = winners[0]
 
-    sys, score, etiquetes, ordered = winner
-    unmatched = [l for l in labels if l not in etiquetes]
-    base_ok = base_size in input_set if base_size else False
+    sys, score, etiquetes_canon, ordered = winner
+    unmatched = [l for l in labels if canonical_size_label(l) not in etiquetes_canon]
+    base_ok = canonical_size_label(base_size) in input_canon if base_size else False
 
     if score < 0.5:
         exemples = ', '.join(ordered[:8])
