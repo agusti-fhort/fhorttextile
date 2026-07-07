@@ -3240,10 +3240,12 @@ export default function TechSheetEditor() {
                       title={it.soon ? `${it.label} · ${t('tech_sheet.coming_soon')}` : `${it.label} — ${vis.label}`}
                       style={{ ...paletteBtn, ...(groupActive ? paletteBtnOn : {}), ...(it.soon ? paletteBtnSoon : {}) }}>
                       <i className={`ti ${vis.icon}`} style={{ fontSize: 17 }} />
-                      {/* triangle ▸ indicador de flyout */}
-                      <i className="ti ti-caret-right-filled"
-                        onClick={e => { e.stopPropagation(); cancelHold(); suppressClick.current = false; if (!it.soon) openFlyout(it.id, e.currentTarget.parentElement.getBoundingClientRect()) }}
-                        style={{ position: 'absolute', right: 1, bottom: 0, fontSize: 8, lineHeight: 1, opacity: it.soon ? 0.4 : 0.7 }} />
+                      {/* triangle ▸ indicador de flyout — visible per descobribilitat (E1a) */}
+                      {it.tools && it.tools.length > 1 && (
+                        <i className="ti ti-caret-right-filled" title={t('tech_sheet.flyout_hint')}
+                          onClick={e => { e.stopPropagation(); cancelHold(); suppressClick.current = false; if (!it.soon) openFlyout(it.id, e.currentTarget.parentElement.getBoundingClientRect()) }}
+                          style={{ position: 'absolute', right: 0, bottom: 0, fontSize: 11, lineHeight: 1, color: COL.gold, opacity: it.soon ? 0.35 : 0.9 }} />
+                      )}
                     </button>
                     {flyoutOpen === it.id && flyoutRect && (
                       <div data-flyout={it.id} style={{ position: 'fixed', left: flyoutRect.right + 4, top: flyoutRect.top, zIndex: 60, display: 'flex', gap: 2, padding: 4, background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>

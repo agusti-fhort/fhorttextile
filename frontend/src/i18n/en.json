@@ -1609,6 +1609,7 @@
     "ribbon_page": "Page",
     "ribbon_insert": "Insert",
     "ribbon_organize": "Organize",
+    "flyout_hint": "Hold or click ▸ for more tools",
     "tool_group_shapes": "Shapes",
     "tool_rect": "Rectangle",
     "tool_rect_round": "Rounded rectangle",
