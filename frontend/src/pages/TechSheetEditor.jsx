@@ -3048,7 +3048,23 @@ export default function TechSheetEditor() {
   const textObj = selObj?.type === 'text' ? selObj : groupTextChild
   const textGroupId = selObj?.type === 'group' ? selObj.id : null
   const updateText = (patch) => (textObj && (textGroupId ? updateChild(textGroupId, textObj.id, patch) : updateObject(textObj.id, patch)))
-  const subActive = selObj?.type === 'path' && activeSubpath?.objId === selObj.id ? activeSubpath.index : null   // S6
+  // Fix #3: forma amb traç editable — el propi objecte (rect/ellipse/line/arrow/path) o bé el
+  // fill 'arrow'/'path' d'un grup (cas cota: conviu amb textObj, tots dos blocs alhora).
+  const STROKE_TYPES = ['rect', 'ellipse', 'line', 'arrow', 'path']
+  const groupShapeChild = (() => {
+    if (!selObj || selObj.type !== 'group') return null
+    const kids = selObj.children || []
+    if (activeGroup === selObj.id && selectedChildId) {
+      const c = kids.find(k => k.id === selectedChildId)
+      return (c && (c.type === 'arrow' || c.type === 'path')) ? c : null
+    }
+    const shapes = kids.filter(k => k.type === 'arrow' || k.type === 'path')
+    return shapes.length === 1 ? shapes[0] : null
+  })()
+  const shapeObj = STROKE_TYPES.includes(selObj?.type) ? selObj : groupShapeChild
+  const shapeGroupId = (selObj?.type === 'group' && groupShapeChild) ? selObj.id : null
+  const updateShape = (patch) => (shapeObj && (shapeGroupId ? updateChild(shapeGroupId, shapeObj.id, patch) : updateObject(shapeObj.id, patch)))
+  const subActive = shapeObj?.type === 'path' && activeSubpath?.objId === shapeObj.id ? activeSubpath.index : null   // S6
   const multiSelected = selectedObjects.length > 1
   const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
   const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse', 'path'].includes(o.type))
@@ -3969,9 +3985,11 @@ export default function TechSheetEditor() {
                     </>
                   )
                 })()}
-                {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'line' || selObj.type === 'arrow' || selObj.type === 'path') && (
+                {/* Fix #3: un sol bloc de traç/puntes que apunta a shapeObj — l'objecte de nivell
+                    superior o el fill arrow/path d'un grup (cota) — i muta via updateShape. */}
+                {shapeObj && (
                   <>
-                    {selObj.type === 'path' && subActive != null && (
+                    {shapeObj.type === 'path' && subActive != null && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>
                         <span>{t('tech_sheet.subpath_active', { n: subActive + 1 })}</span>
                         <button type="button" onClick={() => setActiveSubpath(null)}
@@ -3980,27 +3998,28 @@ export default function TechSheetEditor() {
                         </button>
                       </div>
                     )}
+                    {shapeGroupId && <div style={{ fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>{t('tech_sheet.group_shape')}</div>}
                     <div style={propLabel}>{t('tech_sheet.stroke_color')}
                       <ColorPicker
-                        value={subActive != null ? (selObj.paths[subActive]?.stroke || selObj.stroke || KONVA_COL.textMain) : (selObj.stroke || KONVA_COL.textMain)}
+                        value={subActive != null ? (shapeObj.paths[subActive]?.stroke || shapeObj.stroke || KONVA_COL.textMain) : (shapeObj.stroke || KONVA_COL.textMain)}
                         onChange={c => subActive != null
-                          ? updateObject(selObj.id, { paths: selObj.paths.map((p, i) => i === subActive ? { ...p, stroke: c } : p) })
-                          : updateObject(selObj.id, { stroke: c, ...(selObj.type === 'arrow' ? { fill: c } : {}) })} />
+                          ? updateShape({ paths: shapeObj.paths.map((p, i) => i === subActive ? { ...p, stroke: c } : p) })
+                          : updateShape({ stroke: c, ...(shapeObj.type === 'arrow' ? { fill: c } : {}) })} />
                     </div>
                     <label style={propLabel}>{t('tech_sheet.stroke_width')}
-                      <input type="number" min={0.5} max={5} step={0.5} value={selObj.strokeWidth || (selObj.type === 'arrow' ? 1.5 : 1)}
-                        onChange={e => updateObject(selObj.id, { strokeWidth: Number(e.target.value) || 1 })} style={propInput} />
+                      <input type="number" min={0.5} max={5} step={0.5} value={shapeObj.strokeWidth || (shapeObj.type === 'arrow' ? 1.5 : 1)}
+                        onChange={e => updateShape({ strokeWidth: Number(e.target.value) || 1 })} style={propInput} />
                     </label>
                     {/* COMMIT 4: puntes per element (arrow i path). Escriu ambdós camps perquè
                         prevalguin sobre el legacy arrow2 (retrocompat via headConfig). */}
-                    {(selObj.type === 'arrow' || selObj.type === 'path') && (() => {
-                      const cfg = headConfig(selObj)
+                    {(shapeObj.type === 'arrow' || shapeObj.type === 'path') && (() => {
+                      const cfg = headConfig(shapeObj)
                       const hbtn = (on) => ({ flex: 1, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? COL.gold : COL.border}`, borderRadius: 5, background: on ? COL.goldPale : COL.field, color: on ? COL.gold : COL.textMain, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' })
                       return (
                         <div style={propLabel}>{t('tech_sheet.arrow_heads')}
                           <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
-                            <button type="button" title={t('tech_sheet.head_start')} onClick={() => updateObject(selObj.id, { headStart: !cfg.start, headEnd: cfg.end })} style={hbtn(cfg.start)}><i className="ti ti-arrow-narrow-left" /></button>
-                            <button type="button" title={t('tech_sheet.head_end')} onClick={() => updateObject(selObj.id, { headStart: cfg.start, headEnd: !cfg.end })} style={hbtn(cfg.end)}><i className="ti ti-arrow-narrow-right" /></button>
+                            <button type="button" title={t('tech_sheet.head_start')} onClick={() => updateShape({ headStart: !cfg.start, headEnd: cfg.end })} style={hbtn(cfg.start)}><i className="ti ti-arrow-narrow-left" /></button>
+                            <button type="button" title={t('tech_sheet.head_end')} onClick={() => updateShape({ headStart: cfg.start, headEnd: !cfg.end })} style={hbtn(cfg.end)}><i className="ti ti-arrow-narrow-right" /></button>
                           </div>
                         </div>
                       )
