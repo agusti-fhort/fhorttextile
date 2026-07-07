@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { users as usersApi, taskTypes as taskTypesApi } from '../api/endpoints'
+import { taskTypeLabel } from '../utils/taskType'
 
 // Tram 3 — Pantalla "Usuaris i rols" (gated manage_users).
 // Peça C: matriu editable (capacitats → permisos.grant/revoke; tasques → permisos.tasks) +
@@ -181,7 +182,7 @@ export default function UsersRoles() {
         </select>
         <select value={canTask} onChange={e => setCanTask(e.target.value)} style={inputS}>
           <option value="">{t('usersRoles.all_tasks')}</option>
-          {taskTypes.map(tt => <option key={tt.id} value={tt.code}>{tt.name}</option>)}
+          {taskTypes.map(tt => <option key={tt.id} value={tt.code}>{taskTypeLabel(t, tt.code, tt.name)}</option>)}
         </select>
         {/* Botó "Nou usuari" (la pàgina ja està gated per manage_users). */}
         <button onClick={() => setNewUserOpen(true)} style={{
@@ -251,7 +252,7 @@ export default function UsersRoles() {
                 ))}
                 {taskTypes.map(tt => (
                   <th key={tt.id} style={{ ...thBase, textAlign: 'center', background: CREMA, color: AMBER_TEXT }}
-                      title={`${tt.name} (${tt.code})`}>{tt.name}</th>
+                      title={`${taskTypeLabel(t, tt.code, tt.name)} (${tt.code})`}>{taskTypeLabel(t, tt.code, tt.name)}</th>
                 ))}
                 <th style={{ ...thBase, textAlign: 'center' }}>{t('usersRoles.col_action')}</th>
               </tr>
@@ -284,7 +285,7 @@ export default function UsersRoles() {
                       <ToggleCell key={cap} on={caps.includes(cap)} title={t(`usersRoles.caps.${cap}`)} />
                     ))}
                     {taskTypes.map(tt => (
-                      <ToggleCell key={tt.id} on={allowed.includes(tt.code)} title={tt.name} />
+                      <ToggleCell key={tt.id} on={allowed.includes(tt.code)} title={taskTypeLabel(t, tt.code, tt.name)} />
                     ))}
                     <td style={{ textAlign: 'center', padding: '7px 10px', borderBottom: '0.5px solid var(--gray-l)' }}>
                       {canManage && (
@@ -461,7 +462,7 @@ function BulkBar({ t, count, roles, taskTypes, onSetRole, onActive, onTask }) {
       {/* set_task */}
       <select value={taskCode} onChange={e => setTaskCode(e.target.value)} style={selS}>
         <option value="">{t('usersRoles.pick_task')}</option>
-        {taskTypes.map(tt => <option key={tt.id} value={tt.code}>{tt.name}</option>)}
+        {taskTypes.map(tt => <option key={tt.id} value={tt.code}>{taskTypeLabel(t, tt.code, tt.name)}</option>)}
       </select>
       <button style={btn} disabled={!taskCode} onClick={() => onTask(taskCode, true)}>{t('usersRoles.bulk_task_add')}</button>
       <button style={btn} disabled={!taskCode} onClick={() => onTask(taskCode, false)}>{t('usersRoles.bulk_task_remove')}</button>
@@ -670,7 +671,7 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
                   }}>
                     <input type="checkbox" checked={checked} disabled={isAdmin}
                            onChange={() => toggleTask(tt.code)} />
-                    {tt.name}
+                    {taskTypeLabel(t, tt.code, tt.name)}
                   </label>
                 )
               })}

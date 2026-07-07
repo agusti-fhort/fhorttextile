@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { taskTypes as taskTypesApi, plan as planApi, modelTasks as modelTaskItems } from '../api/endpoints'
+import { taskTypeLabel } from '../utils/taskType'
 import { selS, primaryBtn } from './ui/buttons'
 
 // Wizard modal d'assignació de tasques (task_type × persona × data opcional) sobre 1..N models.
@@ -227,7 +228,7 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
                     return (
                       <option key={tt.id} value={tt.id} disabled={isBlocked}
                         style={isBlocked ? { color: 'var(--text-muted)' } : undefined}>
-                        {tt.code} · {tt.name}{isBlocked ? ` ${t('taskassign.already_assigned')}` : ''}
+                        {tt.code} · {taskTypeLabel(t, tt.code, tt.name)}{isBlocked ? ` ${t('taskassign.already_assigned')}` : ''}
                       </option>
                     )
                   })}
