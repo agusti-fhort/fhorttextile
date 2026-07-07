@@ -170,16 +170,29 @@ def _parse_excel_poms(file_bytes: bytes):
                 continue
 
             header = rows[header_idx]
-            # Columnes de talla: col E (índex 4) endavant, excloent toleràncies.
+            # Columnes de talla: col E (índex 4) endavant. B2: les columnes de tolerància
+            # ('tol') ja NO es descarten — es capturen com a tol_minus/tol_plus. Una sola
+            # columna 'Tol' (sense signe) → mateix valor a minus i plus (simètrica).
             size_cols = []  # [(col_index, label)]
+            tol_minus_ci = tol_plus_ci = tol_single_ci = None
             for ci in range(4, len(header)):
                 label = header[ci]
                 if label is None or str(label).strip() == '':
                     continue
-                if 'tol' in str(label).strip().lower():
+                low = str(label).strip().lower()
+                if 'tol' in low:
+                    if '-' in low or 'min' in low:
+                        tol_minus_ci = ci
+                    elif '+' in low or 'plus' in low or 'max' in low:
+                        tol_plus_ci = ci
+                    else:
+                        tol_single_ci = ci
                     continue
                 size_cols.append((ci, str(label).strip()))
             talles = [lbl for _, lbl in size_cols]
+
+            def _cell(row, ci):
+                return _num(row[ci]) if (ci is not None and ci < len(row)) else None
 
             poms = []
             for row in rows[header_idx + 1:]:
@@ -192,12 +205,22 @@ def _parse_excel_poms(file_bytes: bytes):
                         nv = _num(row[ci])
                         if nv is not None:
                             values[lbl] = nv
+                tm = _cell(row, tol_minus_ci)
+                tp = _cell(row, tol_plus_ci)
+                ts = _cell(row, tol_single_ci)
+                if ts is not None:
+                    if tm is None:
+                        tm = ts
+                    if tp is None:
+                        tp = ts
                 desc = row[2] if len(row) > 2 and row[2] is not None else ''
                 poms.append({
                     'codi_fitxa': str(a).strip(),
                     'descripcio': str(desc).strip(),
                     'dim': _num(row[3]) if len(row) > 3 else None,
                     'values': values,
+                    'tol_minus': tm,
+                    'tol_plus': tp,
                 })
             return poms, talles
     finally:
@@ -684,6 +707,8 @@ def _extraccio_via_excel(session, api_key):
             'match_type': match_type,
             'confidence': confidence,
             'values': p['values'],
+            'tol_minus': p.get('tol_minus'),   # B2: tolerància del document (None si no en porta)
+            'tol_plus': p.get('tol_plus'),
             'actiu': True,
             'ordre': i,
         })
@@ -833,6 +858,8 @@ def import_session_extraccio_view(request, token):
             'match_type': match_type,
             'confidence': confidence,
             'values': msr.get('values') or {},
+            'tol_minus': msr.get('tol_minus'),   # B2: tolerància del document (None si absent)
+            'tol_plus': msr.get('tol_plus'),
             'actiu': bool(pm),  # per defecte només actius els que tenen match
             'ordre': i,
         })
@@ -1272,16 +1299,22 @@ def import_session_confirmar_view(request, token):
             if not pm:
                 continue
             base_val = valors.get(pid, {}).get(base_size)
+            _defaults = {
+                'base_value_cm': base_val,
+                'nom_fitxa': p.get('codi_fitxa') or '',
+                'origen': 'IMPORTED',
+                'is_active': True,
+                'ordre': i,
+                'notes': p.get('descripcio') or '',
+            }
+            # B2: només escrivim tolerància si el document en porta (asimètrica, contracte de
+            # Size Check). Si no en porta, NO incloem les claus → null → fallback al catàleg.
+            if p.get('tol_minus') is not None:
+                _defaults['tolerancia_minus'] = p['tol_minus']
+            if p.get('tol_plus') is not None:
+                _defaults['tolerancia_plus'] = p['tol_plus']
             BaseMeasurement.objects.update_or_create(
-                model=model, pom=pm,
-                defaults={
-                    'base_value_cm': base_val,
-                    'nom_fitxa': p.get('codi_fitxa') or '',
-                    'origen': 'IMPORTED',
-                    'is_active': True,
-                    'ordre': i,
-                    'notes': p.get('descripcio') or '',
-                },
+                model=model, pom=pm, defaults=_defaults,
             )
             confirmed_pom_ids.append(pid)
             n_bm += 1
