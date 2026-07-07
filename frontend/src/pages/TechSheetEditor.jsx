@@ -2302,6 +2302,11 @@ export default function TechSheetEditor() {
     setPenTemp(null)
     setTool('select')
   }
+  // Bloc 2 (i): doble-clic al llenç = final descobrible d'un traç obert (ploma/fletxa curva),
+  // equivalent a Enter. Només actua si hi ha un traç en curs amb ≥2 punts.
+  const finishPenOnDblClick = () => {
+    if (penRef.current && penRef.current.points.length >= 2) finishPen(false)
+  }
   // ── E2: 2n clic de nota-fletxa/cota → construeix el GRUP (children relatius a l'origen del grup) ──
   const finishTwoClick = (kind, p1, p2) => {
     if (kind === 'note') {
@@ -3615,7 +3620,8 @@ export default function TechSheetEditor() {
             {/* R1: el zoom el fa Konva (scaleX/scaleY) re-pintant els vectors a la mida real ×
                 devicePixelRatio → NÍTID a qualsevol zoom. Ja no s'escala el bitmap per CSS. */}
             <Stage ref={stageRef} width={pageW * zoom} height={pageH * zoom} scaleX={zoom} scaleY={zoom}
-              onMouseDown={onStageMouseDown} onMouseMove={onStageMouseMove} onMouseUp={onStageMouseUp}>
+              onMouseDown={onStageMouseDown} onMouseMove={onStageMouseMove} onMouseUp={onStageMouseUp}
+              onDblClick={finishPenOnDblClick} onDblTap={finishPenOnDblClick}>
               {/* Fons blanc + 3 capes en ordre z. Konva no agrupa per `layer`:
                   ordenem els objectes i pintem en una sola Layer (z per ordre d'array). */}
               <Layer>
