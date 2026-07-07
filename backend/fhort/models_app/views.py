@@ -1444,12 +1444,12 @@ def generate_grading_view(request, model_id):
         # Watchpoint informatiu de traça quan s'ha superat una versió segellada (NO bloca).
         if sealed_active is not None and allow_reopen_sealed:
             from fhort.tasks.models import ModelTask
-            scaling_task = (ModelTask.objects
-                            .filter(model=model, task_type__code='scaling')
+            grading_task = (ModelTask.objects
+                            .filter(model=model, task_type__code='grading')
                             .order_by('-id').first())
             Watchpoint.objects.create(
                 model=model,
-                task=scaling_task,
+                task=grading_task,
                 text=(f'Versió segellada v{sealed_active.version_number} superada per '
                       f'{str(profile) if profile else "usuari desconegut"} '
                       f'propagant a v{new_v.version_number}.'),
