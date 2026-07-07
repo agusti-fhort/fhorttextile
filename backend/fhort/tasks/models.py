@@ -149,6 +149,21 @@ class Supplier(models.Model):
                             choices=[('workshop', 'Taller'), ('factory', 'Fàbrica')], default='workshop')
     active = models.BooleanField(default=True)
 
+    # Comercial Studio (B1) — dades fiscals, condicions de compra i contacte. Additives (blank).
+    # Vocabulari mirall de tenants.Client. FK des de commerce.ProductSupplier/Expense (B1/B3).
+    rao_social = models.CharField(max_length=200, blank=True)
+    nif = models.CharField(max_length=20, blank=True, help_text="NIF/VAT/tax id.")
+    adreca_linia1 = models.CharField(max_length=200, blank=True)
+    adreca_linia2 = models.CharField(max_length=200, blank=True)
+    ciutat = models.CharField(max_length=100, blank=True)
+    codi_postal = models.CharField(max_length=20, blank=True)
+    pais = models.CharField(max_length=2, default='ES', help_text="ISO 3166-1 alpha-2.")
+    condicions_compra = models.CharField(max_length=200, blank=True,
+                                         help_text="Termini/forma de compra (text lliure).")
+    persona_contacte = models.CharField(max_length=200, blank=True)
+    telefon_contacte = models.CharField(max_length=40, blank=True)
+    email_contacte = models.EmailField(blank=True)
+
     class Meta:
         ordering = ['name']
         verbose_name = 'Supplier'

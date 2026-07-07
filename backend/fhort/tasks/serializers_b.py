@@ -43,7 +43,10 @@ class ModelTaskSerializer(serializers.ModelSerializer):
 class SupplierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Supplier
-        fields = ['id', 'name', 'type', 'active']
+        fields = ['id', 'name', 'type', 'active',
+                  # Comercial Studio (B1) — dades fiscals/compra/contacte (additives, blank).
+                  'rao_social', 'nif', 'adreca_linia1', 'adreca_linia2', 'ciutat', 'codi_postal',
+                  'pais', 'condicions_compra', 'persona_contacte', 'telefon_contacte', 'email_contacte']
 
 
 class CustomerSerializer(serializers.ModelSerializer):
