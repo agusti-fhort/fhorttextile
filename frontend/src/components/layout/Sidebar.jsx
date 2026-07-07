@@ -53,6 +53,7 @@ const navGroups = [
   // de moment sense `cap` (visible; l'escriptura la gateja CONFIGURE dins la pàgina).
   { sectionKey: 'nav.section_comercial', items: [
     { to: '/comercial/productes', labelKey: 'nav.products', icon: 'ti-package' },
+    { to: '/comercial/ofertes', labelKey: 'nav.quotes', icon: 'ti-file-invoice' },
   ]},
   { sectionKey: 'nav.section_sistema', items: [
     { to: '/onboarding', labelKey: 'nav.onboarding', icon: 'ti-rocket', cap: 'onboarding' },

@@ -345,6 +345,22 @@ export const commerce = {
     update: (id, data) => client.patch(`/api/v1/commerce/price-exceptions/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/commerce/price-exceptions/${id}/`),
   },
+  // Documents comercials — Quote (B2). send/pdf són accions; pdf retorna blob.
+  quotes: {
+    list: (params) => client.get('/api/v1/commerce/quotes/', { params }),
+    get: (id) => client.get(`/api/v1/commerce/quotes/${id}/`),
+    create: (data) => client.post('/api/v1/commerce/quotes/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/quotes/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/quotes/${id}/`),
+    send: (id) => client.post(`/api/v1/commerce/quotes/${id}/send/`),
+    pdf: (id) => client.get(`/api/v1/commerce/quotes/${id}/pdf/`, { responseType: 'blob' }),
+  },
+  quoteLines: {
+    list: (params) => client.get('/api/v1/commerce/quote-lines/', { params }),   // ?quote=
+    create: (data) => client.post('/api/v1/commerce/quote-lines/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/quote-lines/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/quote-lines/${id}/`),
+  },
 }
 
 // Sprint Llibreria d'Items — pertinença POM de l'Item (garment-pom-maps/, ModelViewSet).
