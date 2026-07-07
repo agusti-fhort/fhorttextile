@@ -328,10 +328,19 @@ class TimeSeed(models.Model):
     nivell de task_type, altres a nivell de fase. Dada de tenant EVOLUTIVA, separada del
     catàleg canònic TaskType (que es manté read-only)."""
     SCOPE_CHOICES = [('task', 'task'), ('phase', 'phase')]
+    ORIGEN_CHOICES = [('ONBOARDING', 'ONBOARDING'), ('CAPTURA', 'CAPTURA'), ('MIGRACIO', 'MIGRACIO')]
+    # scope discrimina el node (XOR task/fase): scope='task' → key=TaskType.code;
+    # scope='phase' → key=TaskType.fase. unique(scope,key) garanteix un sol node per clau.
     scope = models.CharField(max_length=10, choices=SCOPE_CHOICES)
     key = models.CharField(max_length=50,
             help_text="TaskType.code si scope='task'; TaskType.fase (nom de fase) si scope='phase'.")
     minuts = models.PositiveIntegerField()
+    origen = models.CharField(max_length=12, choices=ORIGEN_CHOICES, default='MIGRACIO',
+            help_text="Procedència: sembra d'onboarding, captura conscient del PM, o destil·lació de cel·les teòriques.")
+    updated_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = [('scope', 'key')]
