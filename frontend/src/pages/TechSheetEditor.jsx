@@ -2248,19 +2248,17 @@ export default function TechSheetEditor() {
       addObject({ id: uid(), type: 'group', layer: 'free', x: ox, y: oy, rotation: 0, children: [arrow, text] })
       return
     }
-    // 'cota_pom': p1 = A, p2 = B → grup ancorat a A, ticks perpendiculars al segment real A→B.
+    // 'cota_pom': p1 = A, p2 = B → grup ancorat a A. A4: la línia és una fletxa de doble
+    // punta (arrow2) que marca els extrems A→B; substitueix els ticks perpendiculars.
     const ax = toMm(p1.x), ay = toMm(p1.y)
     const dx = toMm(p2.x) - ax, dy = toMm(p2.y) - ay
     const len = Math.hypot(dx, dy) || 1
-    const px = -dy / len, py = dx / len   // perpendicular unitari
-    const L = 2   // mig-tick en mm
-    const linia = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [0, 0, dx, dy], stroke: KONVA_COL.textMain, strokeWidth: 1 }
-    const tickA = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [px * L, py * L, -px * L, -py * L], stroke: KONVA_COL.textMain, strokeWidth: 1 }
-    const tickB = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [dx + px * L, dy + py * L, dx - px * L, dy - py * L], stroke: KONVA_COL.textMain, strokeWidth: 1 }
+    const px = -dy / len, py = dx / len   // perpendicular unitari (per desplaçar el text)
+    const linia = { id: uid(), type: 'arrow', layer: 'free', x: 0, y: 0, x2: dx, y2: dy, stroke: KONVA_COL.textMain, fill: KONVA_COL.textMain, strokeWidth: 1, arrow2: true }
     const TW = 24
     const mx = dx / 2 + px * 3, my = dy / 2 + py * 3   // punt mig desplaçat 3mm perpendicular
     const text = { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: t('tech_sheet.preset_cota_text'), fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
-    addObject({ id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0, children: [linia, tickA, tickB, text] })
+    addObject({ id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0, children: [linia, text] })
   }
   const onStageMouseDown = (e) => {
     if (editingFlatId) return
