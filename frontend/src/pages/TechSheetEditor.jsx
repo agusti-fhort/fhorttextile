@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group, Path } from 'react-konva'
+import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group, Path, Circle } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
 import FhortLogo from '../components/brand/FhortLogo'
@@ -960,6 +960,24 @@ function SketchSvgObj({ obj, common }) {
     scaleX={props.scaleX} scaleY={props.scaleY} />
 }
 
+// Bloc 1: extrems d'un line/arrow en px (espai de contingut), per pintar-hi les nanses de
+// selecció i per al snap. 'arrow' porta x/y/x2/y2; 'line' el primer i últim parell de points[].
+function endpointsPx(obj) {
+  if (obj.type === 'arrow') return { start: { x: toPx(obj.x), y: toPx(obj.y) }, end: { x: toPx(obj.x2), y: toPx(obj.y2) } }
+  const p = obj.points || []
+  return { start: { x: toPx(p[0] || 0), y: toPx(p[1] || 0) }, end: { x: toPx(p[p.length - 2] || 0), y: toPx(p[p.length - 1] || 0) } }
+}
+// Nanses arrossegables als dos extrems (substitueixen el requadre del Transformer per a line/arrow).
+function EndpointHandles({ obj, onEndpointDrag }) {
+  const { start, end } = endpointsPx(obj)
+  const mk = (which, p) => (
+    <Circle key={which} x={p.x} y={p.y} radius={5} fill={KONVA_COL.white} stroke={KONVA_COL.gold} strokeWidth={1.5}
+      draggable onMouseDown={e => { e.cancelBubble = true }}
+      onDragMove={onEndpointDrag(which)} onDragEnd={onEndpointDrag(which)} />
+  )
+  return <>{mk('start', start)}{mk('end', end)}</>
+}
+
 function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSelect }) {
   const paths = obj.paths || []
   return (
@@ -987,7 +1005,7 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, onEndpointDrag }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -1044,10 +1062,14 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     return <Ellipse {...common} {...ellipseProps(obj)} />
   }
   if (obj.type === 'line') {
-    return <Line {...common} {...lineProps(obj)} hitStrokeWidth={10} />
+    const line = <Line {...common} {...lineProps(obj)} hitStrokeWidth={10} />
+    if (!selected || !onEndpointDrag) return line
+    return <>{line}<EndpointHandles obj={obj} onEndpointDrag={onEndpointDrag} /></>
   }
   if (obj.type === 'arrow') {
-    return <Arrow {...common} {...arrowProps(obj)} hitStrokeWidth={10} />
+    const arrow = <Arrow {...common} {...arrowProps(obj)} hitStrokeWidth={10} />
+    if (!selected || !onEndpointDrag) return arrow
+    return <>{arrow}<EndpointHandles obj={obj} onEndpointDrag={onEndpointDrag} /></>
   }
   if (obj.type === 'path') {
     return <PathObj obj={obj} common={common} onDblVector={onDblVector} selected={selected} activeSubIndex={activeSubIndex} onSubSelect={onSubSelect} />
@@ -2238,6 +2260,26 @@ export default function TechSheetEditor() {
       updateObject(obj.id, { x: obj.x + dx, y: obj.y + dy, x2: obj.x2 + dx, y2: obj.y2 + dy })
     } else {
       updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()) })
+    }
+  }
+  // Bloc 1: arrossegar una nansa mou NOMÉS aquell extrem. Shift encaixa a 45° respecte
+  // l'altre extrem (reutilitza snap45, com ploma/cota). No toca la resta de l'objecte.
+  const handleEndpointDrag = (obj) => (which) => (e) => {
+    const node = e.target
+    let px = { x: node.x(), y: node.y() }
+    if (e.evt?.shiftKey) {
+      const ep = endpointsPx(obj)
+      const other = which === 'start' ? ep.end : ep.start
+      px = snap45(other.x, other.y, px.x, px.y)
+    }
+    const mx = toMm(px.x), my = toMm(px.y)
+    if (obj.type === 'arrow') {
+      updateObject(obj.id, which === 'start' ? { x: mx, y: my } : { x2: mx, y2: my })
+    } else {
+      const pts = [...(obj.points || [])]
+      if (which === 'start') { pts[0] = mx; pts[1] = my }
+      else { pts[pts.length - 2] = mx; pts[pts.length - 1] = my }
+      updateObject(obj.id, { points: pts })
     }
   }
   const handleTransformEnd = (obj) => (e) => {
@@ -3655,7 +3697,8 @@ export default function TechSheetEditor() {
                     onChildDragEnd={handleChildDragEnd(o.id)}
                     selectedChildId={activeGroup === o.id ? selectedChildId : null}
                     activeSubIndex={activeSubpath?.objId === o.id ? activeSubpath.index : null}
-                    onSubSelect={(i) => setActiveSubpath({ objId: o.id, index: i })} />
+                    onSubSelect={(i) => setActiveSubpath({ objId: o.id, index: i })}
+                    onEndpointDrag={handleEndpointDrag(o)} />
                 ))}
                 {/* Forma temporal mentre es dibuixa */}
                 {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}
