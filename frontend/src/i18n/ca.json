@@ -1401,7 +1401,20 @@
   "size_map_unmatched": "No reconegudes",
   "size_map_warnings": "avisos",
   "tasktype": {
-    "size_check": "Mesures"
+    "design_review": "Revisió de disseny",
+    "design_clarify": "Aclariments amb disseny",
+    "pattern_digit": "Patró digitalització",
+    "pattern_cad": "Patró CAD",
+    "pattern_hand": "Patró a mà",
+    "pom": "Definició POM",
+    "size_check": "Mesures",
+    "grading": "Escalat",
+    "tech_sheet": "Fitxa tècnica",
+    "pattern_review": "Revisió de patró CAD",
+    "bom": "Definició BOM",
+    "scaling": "Escalat CAD",
+    "marking": "Marcada",
+    "audit": "Auditoria de model"
   },
   "basestage": {
     "title": "Taula base · estadis",

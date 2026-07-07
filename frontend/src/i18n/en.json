@@ -1401,7 +1401,20 @@
   "size_map_unmatched": "Unrecognised",
   "size_map_warnings": "warnings",
   "tasktype": {
-    "size_check": "Measures"
+    "design_review": "Design review",
+    "design_clarify": "Design clarifications",
+    "pattern_digit": "Pattern digitising",
+    "pattern_cad": "CAD pattern",
+    "pattern_hand": "Hand pattern",
+    "pom": "POM definition",
+    "size_check": "Measures",
+    "grading": "Grading",
+    "tech_sheet": "Tech sheet",
+    "pattern_review": "CAD pattern review",
+    "bom": "BOM definition",
+    "scaling": "CAD scaling",
+    "marking": "Marker making",
+    "audit": "Model audit"
   },
   "basestage": {
     "title": "Base table · stages",

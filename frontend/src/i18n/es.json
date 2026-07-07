@@ -1401,7 +1401,20 @@
   "size_map_unmatched": "No reconocidas",
   "size_map_warnings": "avisos",
   "tasktype": {
-    "size_check": "Medidas"
+    "design_review": "Revisión de diseño",
+    "design_clarify": "Aclaraciones con diseño",
+    "pattern_digit": "Patrón digitalización",
+    "pattern_cad": "Patrón CAD",
+    "pattern_hand": "Patrón a mano",
+    "pom": "Definición POM",
+    "size_check": "Medidas",
+    "grading": "Escalado",
+    "tech_sheet": "Ficha técnica",
+    "pattern_review": "Revisión de patrón CAD",
+    "bom": "Definición BOM",
+    "scaling": "Escalado CAD",
+    "marking": "Marcada",
+    "audit": "Auditoría de modelo"
   },
   "basestage": {
     "title": "Tabla base · estadios",
