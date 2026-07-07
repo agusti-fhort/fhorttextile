@@ -85,7 +85,7 @@ const RULER_SIZE = 18   // S2: gruix (px) de les regles superior/esquerra
 const RECT_TOOLS = ['rect', 'rect_round', 'ellipse']   // drag = bounding box
 const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
 // Peça C: eines que mostren cursor de creu (dibuix + nodes). 'select' → fletxa; 'pan' → grab.
-const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, 'draw', 'pen', 'node', 'subpath', 'polygon']
+const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, 'draw', 'pen', 'node', 'subpath', 'polygon', 'note', 'cota_pom']
 // S8: tipus convertibles a Paper.js (objectToPaperPath) — únics vàlids per al pathfinder.
 const PATHFINDER_TYPES = ['path', 'rect', 'rect_round', 'ellipse']
 // S7c2: polígon regular de N costats inscrit al bbox de drag → punts (px de contingut).
@@ -1309,6 +1309,9 @@ export default function TechSheetEditor() {
   // S7: eina ploma — traç multi-clic (px de contingut). null = inactiva. Independent de `drawing`.
   const penRef = useRef(null)          // {points:[{x,y,inX,inY,outX,outY}], dragging}
   const [penTemp, setPenTemp] = useState(null)   // mirall per pintar: {points, cursor}
+  // E2: eines de 2 clics (nota-fletxa / cota) — mateix patró que la ploma però amb 1 sol segment.
+  const twoClickRef = useRef(null)     // {tool:'note'|'cota_pom', p1:{x,y}} px de contingut, o null
+  const [twoClickTemp, setTwoClickTemp] = useState(null)   // mirall per pintar: {tool, p1, cursor}
   // S1: rubber-band de selecció (marc arrossegat en tela buida amb eina 'select')
   const [marquee, setMarquee] = useState(null)   // {x,y,w,h} px de contingut, per pintar
   const marqueeStart = useRef(null)              // {x,y,shift,rect} mentre s'arrossega
@@ -2039,6 +2042,23 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool])
 
+  // ── E2 — Teclat de nota-fletxa/cota: Escape cancel·la el 1r clic pendent ──
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!twoClickRef.current) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        twoClickRef.current = null
+        setTwoClickTemp(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tool])
+
   // ── PEÇA P: barra espaiadora = pan temporal (independent de l'eina activa) ──
   useEffect(() => {
     if (!locked) return undefined
@@ -2210,12 +2230,55 @@ export default function TechSheetEditor() {
     setPenTemp(null)
     setTool('select')
   }
+  // ── E2: 2n clic de nota-fletxa/cota → construeix el GRUP (children relatius a l'origen del grup) ──
+  const finishTwoClick = (kind, p1, p2) => {
+    if (kind === 'note') {
+      // p1 = PUNTA (el punt assenyalat), p2 = ORIGEN (cua, on viu el text) → grup ancorat a l'origen.
+      const ox = toMm(p2.x), oy = toMm(p2.y)
+      const dx = toMm(p1.x) - ox, dy = toMm(p1.y) - oy
+      const TW = 42
+      // El text mai trepitja la fletxa: si la punta és a la DRETA (dx>0) el text va a l'ESQUERRA de l'origen, i viceversa.
+      const textX = dx > 0 ? -TW : 0
+      const arrow = { id: uid(), type: 'arrow', layer: 'free', x: 0, y: 0, x2: dx, y2: dy, stroke: KONVA_COL.textMain, fill: KONVA_COL.textMain, strokeWidth: 1 }
+      const text = { id: uid(), type: 'text', layer: 'free', x: textX, y: -7, width: TW, height: 14, text: t('tech_sheet.preset_annotation_text'), fontSize: 10, fontFamily: FONT, fill: KONVA_COL.textMain, bgFill: KONVA_COL.white, bgPadding: 3 }
+      addObject({ id: uid(), type: 'group', layer: 'free', x: ox, y: oy, rotation: 0, children: [arrow, text] })
+      return
+    }
+    // 'cota_pom': p1 = A, p2 = B → grup ancorat a A, ticks perpendiculars al segment real A→B.
+    const ax = toMm(p1.x), ay = toMm(p1.y)
+    const dx = toMm(p2.x) - ax, dy = toMm(p2.y) - ay
+    const len = Math.hypot(dx, dy) || 1
+    const px = -dy / len, py = dx / len   // perpendicular unitari
+    const L = 2   // mig-tick en mm
+    const linia = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [0, 0, dx, dy], stroke: KONVA_COL.textMain, strokeWidth: 1 }
+    const tickA = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [px * L, py * L, -px * L, -py * L], stroke: KONVA_COL.textMain, strokeWidth: 1 }
+    const tickB = { id: uid(), type: 'line', layer: 'free', x: 0, y: 0, points: [dx + px * L, dy + py * L, dx - px * L, dy - py * L], stroke: KONVA_COL.textMain, strokeWidth: 1 }
+    const TW = 24
+    const mx = dx / 2 + px * 3, my = dy / 2 + py * 3   // punt mig desplaçat 3mm perpendicular
+    const text = { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: t('tech_sheet.preset_cota_text'), fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
+    addObject({ id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0, children: [linia, tickA, tickB, text] })
+  }
   const onStageMouseDown = (e) => {
     if (editingFlatId) return
     if (tool === 'pan' || spaceHeld) return   // PEÇA P: el pan el gestiona el viewport, no el Stage
     if (!locked) { if (e.target === e.target.getStage()) clearSelection(); return }
     const pos = stagePoint()
     if (!pos) return
+    if (tool === 'note' || tool === 'cota_pom') {
+      // E2: 1r clic fixa p1 i mostra el preview elàstic; 2n clic tanca el grup i torna a 'select'.
+      if (!twoClickRef.current) {
+        twoClickRef.current = { tool, p1: pos }
+        setTwoClickTemp({ tool, p1: pos, cursor: pos })
+        return
+      }
+      const p1 = twoClickRef.current.p1
+      const p2 = pos
+      finishTwoClick(twoClickRef.current.tool, p1, p2)
+      twoClickRef.current = null
+      setTwoClickTemp(null)
+      setTool('select')
+      return
+    }
     if (tool === 'pen') {
       // Clic a prop del 1r punt (amb ≥2 punts) tanca el traç; si no, afegeix un nou ancoratge.
       const pts = penRef.current?.points
@@ -2264,6 +2327,11 @@ export default function TechSheetEditor() {
     // recalculen `pos` pel seu compte més avall.
     const cur = stagePoint()
     if (cur) setCursorMm({ x: toMm(cur.x), y: toMm(cur.y) })
+    if (twoClickRef.current) {
+      // E2: preview elàstic del 2n punt — p1 ja fixat, només movem el cursor.
+      if (cur) setTwoClickTemp({ ...twoClickRef.current, cursor: cur })
+      return
+    }
     if (tool === 'pen' && penRef.current) {
       if (!cur) return
       const points = penRef.current.points
@@ -2986,14 +3054,12 @@ export default function TechSheetEditor() {
       ] },
     ] },
     { cat: 'annot', items: [
-      { kind: 'tool', k: 'cota_pom', icon: 'ti-ruler-measure', label: t('tech_sheet.tool_cota_pom'), soon: true },
-      { kind: 'tool', k: 'note', icon: 'ti-arrow-guide', label: t('tech_sheet.tool_note'), soon: true },
+      { kind: 'tool', k: 'cota_pom', icon: 'ti-ruler-measure', label: t('tech_sheet.tool_cota_pom') },
+      { kind: 'tool', k: 'note', icon: 'ti-arrow-guide', label: t('tech_sheet.tool_note') },
       { kind: 'flyout', id: 'presets', label: t('tech_sheet.tool_group_presets'), tools: [
         { k: 'preset_callout', icon: 'ti-message-2-share', label: t('tech_sheet.preset_callout') },
         { k: 'preset_detail_circle', icon: 'ti-circle-dashed', label: t('tech_sheet.preset_detail_circle') },
         { k: 'preset_legend', icon: 'ti-list-details', label: t('tech_sheet.preset_legend') },
-        { k: 'preset_cota_pom', icon: 'ti-ruler-2', label: t('tech_sheet.preset_cota_pom') },
-        { k: 'preset_annotation', icon: 'ti-note', label: t('tech_sheet.preset_annotation') },
       ] },
     ] },
     { cat: 'nav', items: [
@@ -3363,6 +3429,15 @@ export default function TechSheetEditor() {
                   return <Line points={[last.x, last.y, penTemp.cursor.x, penTemp.cursor.y]} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} listening={false} />
                 })()}
                 {penTemp?.points.map((p, i) => <Rect key={'pen' + i} x={p.x - 2} y={p.y - 2} width={4} height={4} fill={KONVA_COL.gold} listening={false} />)}
+                {/* E2: previsualització elàstica de nota-fletxa (punta fixada a p1) i cota (A fixat a p1) */}
+                {twoClickTemp?.tool === 'note' && (
+                  <Arrow points={[twoClickTemp.p1.x, twoClickTemp.p1.y, twoClickTemp.cursor.x, twoClickTemp.cursor.y]}
+                    stroke={KONVA_COL.textMain} fill={KONVA_COL.textMain} strokeWidth={1} pointerLength={8} pointerWidth={6} pointerAtBeginning listening={false} />
+                )}
+                {twoClickTemp?.tool === 'cota_pom' && (
+                  <Line points={[twoClickTemp.p1.x, twoClickTemp.p1.y, twoClickTemp.cursor.x, twoClickTemp.cursor.y]}
+                    stroke={KONVA_COL.textMain} strokeWidth={1} dash={[4, 4]} listening={false} />
+                )}
                 {/* S1: marc de rubber-band mentre s'arrossega en tela buida */}
                 {marquee && <Rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} fill={KONVA_COL.gold} opacity={0.15} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} listening={false} />}
                 {/* S2: guies daurades temporals de magnetisme (drag) */}
