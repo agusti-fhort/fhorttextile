@@ -2111,6 +2111,15 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool])
 
+  // Bloc 2 (iii): en commutar d'eina, mata qualsevol traç/preview fantasma en curs
+  // (ploma/fletxa curva i nota/cota de 2 clics) perquè no persisteixi ni resusciti.
+  useEffect(() => {
+    penRef.current = null
+    setPenTemp(null)
+    twoClickRef.current = null
+    setTwoClickTemp(null)
+  }, [tool])
+
   // ── E2 — Teclat de nota-fletxa/cota: Escape cancel·la el 1r clic pendent ──
   useEffect(() => {
     const onKey = (e) => {
