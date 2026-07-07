@@ -7,6 +7,10 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('pom', '0026_itembasemeasurement_nom_fitxa'),
+        # Ordre cross-app: TascaGlobal només es pot esborrar DESPRÉS que tasks 0026 hagi
+        # tret la FK Tasca.tasca_global (i el model Tasca). Sense això, un replay fresc
+        # (creació de tenant nou / test DB) trenca amb una lazy reference penjada.
+        ('tasks', '0026_remove_paquetserveitasca_paquet_and_more'),
     ]
 
     operations = [
