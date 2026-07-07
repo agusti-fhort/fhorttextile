@@ -69,6 +69,7 @@ TENANT_APPS = [
     'fhort.fitting',
     'fhort.tasks',
     'fhort.planning',
+    'fhort.commerce',
 ]
 
 INSTALLED_APPS = list(SHARED_APPS) + [a for a in TENANT_APPS if a not in SHARED_APPS]
