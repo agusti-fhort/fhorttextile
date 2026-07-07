@@ -7,6 +7,7 @@ partir dels valors) i els SizingProfiles.
 
 Tots els endpoints requereixen la capacitat CONFIGURE.
 """
+import logging
 import re
 
 from django.db import transaction
@@ -16,6 +17,8 @@ from rest_framework.response import Response
 
 from fhort.accounts.capabilities import HasCapability, CONFIGURE
 from fhort.pom.grading_utils import _norm, detect_grading, derive_break_fields
+
+logger = logging.getLogger(__name__)
 
 
 class _Configure(HasCapability):
@@ -389,6 +392,16 @@ def size_map_grading_preview_file_view(request):
                 })
         elif name.endswith(('.pdf', '.png', '.jpg', '.jpeg', '.webp')):
             extracted = extract_from_file(file_bytes, f.name)
+            # Instrumentació K.1 (R4): registra els valors CRUS per talla tal com surten de
+            # l'extracció, ABANS de detect_grading (que fa l'alineació run↔talles). Permet
+            # re-executar un cas (p.ex. BERG) i discriminar si una regla FIXED espúria ve de
+            # l'extracció (valors ja constants a l'origen) o de l'alineació. Sense persistència.
+            for _row in (extracted.get('grading_table') or []):
+                logger.info(
+                    "size_map extract [K.1]: file=%s code=%r values_by_size=%r tol=(%r,%r)",
+                    f.name, (_row.get('code') or '').strip(),
+                    _row.get('values_by_size') or {},
+                    _row.get('tolerance_minus'), _row.get('tolerance_plus'))
             poms_in = _pdf_extracted_to_poms(extracted, base_size)
             if not poms_in:
                 avisos.append("La IA no ha retornat cap mesura llegible del document.")
