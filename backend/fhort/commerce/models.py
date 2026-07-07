@@ -192,3 +192,67 @@ class ProductPriceGTI(models.Model):
 
     def __str__(self):
         return f'{self.product_id} @ GTI{self.garment_type_item_id} = {self.price}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# DOCUMENTS COMERCIALS — Quote (oferta), B2. Primera subclasse de les abstractes (P1).
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+class Quote(AbstractDocument):
+    """Oferta comercial tenant→client. L'abstracta ja cobreix el 100% del cas Quote a B2.
+
+    El `document_number` (OF-YYYY-NNNN) es genera a save() la primera vegada. Els totals es
+    recalculen automàticament (signal a QuoteLine → recalculate_totals). Les línies només són
+    editables mentre status='DRAFT' (guard a QuoteLine), patró de segellat del repo
+    (close_base/seal_model_grading).
+    """
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Quote'
+        verbose_name_plural = 'Quotes'
+
+    def save(self, *args, **kwargs):
+        # doc_type sempre 'quote' per a un Quote; numeració atòmica només al crear (número buit).
+        if not self.doc_type:
+            self.doc_type = 'quote'
+        if not self.document_number:
+            from .services import reserve_document_number
+            self.document_number = reserve_document_number('quote')
+        super().save(*args, **kwargs)
+
+    def recalculate_totals(self):
+        """subtotal = Σ line_total; total = subtotal + tax_amount (manual). Persisteix."""
+        agg = self.lines.aggregate(s=models.Sum('line_total'))
+        self.subtotal = agg['s'] or 0
+        self.total = self.subtotal + (self.tax_amount or 0)
+        self.save(update_fields=['subtotal', 'total', 'updated_at'])
+
+    def __str__(self):
+        return self.document_number or f'Quote (esborrany #{self.pk})'
+
+
+class QuoteLine(AbstractDocumentLine):
+    """Línia d'una oferta. `unit_price` congelat en crear-la (còpia del preu del Product)."""
+    quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name='lines')
+
+    class Meta:
+        ordering = ['quote', 'position', 'id']
+        verbose_name = 'Quote line'
+        verbose_name_plural = 'Quote lines'
+
+    def _assert_editable(self):
+        if self.quote_id and self.quote.status != 'DRAFT':
+            raise ValidationError(
+                "No es poden modificar línies d'una oferta que no està en esborrany (DRAFT).")
+
+    def save(self, *args, **kwargs):
+        self._assert_editable()
+        self.line_total = (self.quantity or 0) * (self.unit_price or 0)
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        self._assert_editable()
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.quote_id}: {self.description or self.product_id} ×{self.quantity}'
