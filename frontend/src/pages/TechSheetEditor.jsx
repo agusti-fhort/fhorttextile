@@ -1773,6 +1773,34 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, fitxerId])
 
+  // ── Heartbeat del lock: renova locked_at cada 10min independent de l'autosave ──
+  // (tanca el forat "obert però inactiu >30min → lock caduca"; TTL backend = 30min).
+  useEffect(() => {
+    if (!locked) return undefined
+    const iv = setInterval(() => {
+      // Re-adquirir com a propietari actualitza locked_at sense afectar el document.
+      fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/lock/`, { method: 'POST', headers: authHeaders }).catch(() => {})
+    }, 10 * 60 * 1000)   // 10 min < TTL 30 min
+    return () => clearInterval(iv)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked])
+
+  // ── Allibera el lock (best-effort) en tancar/recarregar la pestanya bruscament ──
+  // (complementa, no substitueix, l'alliberament al cleanup de desmuntatge de dalt).
+  useEffect(() => {
+    if (!locked) return undefined
+    const onUnload = () => {
+      try {
+        const url = `${API}/api/v1/ftt-documents/${fttHeadId.current}/unlock/`
+        // keepalive perquè la petició sobrevisqui al tancament de la pestanya.
+        fetch(url, { method: 'POST', headers: authHeaders, keepalive: true }).catch(() => {})
+      } catch { /* best effort */ }
+    }
+    window.addEventListener('beforeunload', onUnload)
+    return () => window.removeEventListener('beforeunload', onUnload)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked])
+
   // Carrega el template_json v2 a l'estat. tj buit/absent → 1 pàgina buida.
   function hydrate(sheetData) {
     const tj = sheetData?.template_json
