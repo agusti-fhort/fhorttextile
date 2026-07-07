@@ -13,6 +13,10 @@ Lleis heretades (DECISIONS.md · DISSENY_MODUL_COMERCIAL.md):
 from django.core.exceptions import ValidationError
 from django.db import models
 
+# Fonaments dels documents comercials (B2+): abstractes + comptador de numeració.
+# DocumentSequence s'importa aquí perquè Django el registri sota l'app commerce.
+from .models_base import AbstractDocument, AbstractDocumentLine, DocumentSequence  # noqa: F401
+
 
 class Unit(models.Model):
     """Unitat de venda/mesura comercial (peça, hora, enviament, joc, metre, kg).
