@@ -1390,6 +1390,7 @@ def generate_grading_view(request, model_id):
 
     new_version = bool(request.data.get('new_version', False))
     allow_reopen_sealed = bool(request.data.get('allow_reopen_sealed', False))
+    n_consolidat = 0  # B3: POMs de talla base consolidats des de fittings oberts abans de propagar
 
     # Crida el motor. new_version=True → acte conscient de PROPAGAR (Peça 2): crea v+1 via el
     # helper bump_grading_version_and_generate (base_changed=False: propagar NO toca la base, no
@@ -1415,6 +1416,17 @@ def generate_grading_view(request, model_id):
         # NO és un eix de versions per comparar: el botó ja ha advertit (2 passos) abans d'arribar aquí.
         from fhort.models_app.models import ModelGradingOverride
         ModelGradingOverride.objects.filter(model=model).delete()
+        # B3 (decisió b1): abans que el motor llegeixi la base, consolida la realitat mesurada
+        # que viu en fittings OBERTS (línies de talla base amb valor_real rectificat) a
+        # BaseMeasurement.base_value_cm → es propaga sobre l'última mesura vàlida, no sobre la
+        # base original. NO toca el motor (pom/services.py); només actualitza la base abans.
+        from fhort.fitting.models import PieceFitting
+        from fhort.fitting.services import consolidate_base_from_fitting
+        _open_pfs = (PieceFitting.objects
+                     .filter(model=model, session__estat='Oberta')
+                     .select_related('model', 'grading_version', 'grading_version__size_fitting'))
+        for _pf in _open_pfs:
+            n_consolidat += len(consolidate_base_from_fitting(_pf, auth_user=request.user))
         try:
             new_v = bump_grading_version_and_generate(
                 sf.id,
@@ -1488,6 +1500,7 @@ def generate_grading_view(request, model_id):
         'graded_count': graded_count,
         'size_run': size_run,
         'base_size': model.base_size_label,
+        'base_consolidada_des_de_fitting': n_consolidat,  # B3: POMs base consolidats (0 si cap)
         'rows': rows,
     })
 
