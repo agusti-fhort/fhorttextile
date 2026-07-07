@@ -312,6 +312,34 @@ def _parse_grading_excel(file_bytes):
     return poms, talles
 
 
+def _pdf_extracted_to_poms(extracted, base_size):
+    """Normalitza l'esquema REAL del servei G3 (`extract_from_file`: claus `poms` + `grading_table`,
+    NO `measurements`) a la llista comuna [{codi_fitxa, descripcio, values}].
+    - `codi_fitxa` = `poms[*].code`; `descripcio` = `poms[*].description`.
+    - `values` = graduació per talla: `grading_table[*].values_by_size` casat per `code`; si el POM
+      no té fila de graduació (o `has_base_only`), es munta {base_size: base_value_cm}.
+    base_size: talla base triada al wizard (FormData); si buida, s'usa la detectada al document.
+    """
+    grading_by_code = {(g.get('code') or '').strip(): (g.get('values_by_size') or {})
+                       for g in (extracted.get('grading_table') or [])}
+    xb = (extracted.get('base_size') or {}).get('value')
+    eff_base = base_size or (str(xb).strip() if xb is not None else '')
+    out = []
+    for p in (extracted.get('poms') or []):
+        code = (p.get('code') or '').strip()
+        values = dict(grading_by_code.get(code) or {})
+        if not values:
+            bv = p.get('base_value_cm')
+            if eff_base and bv is not None:
+                values = {eff_base: bv}
+        out.append({
+            'codi_fitxa': code,
+            'descripcio': (p.get('description') or '').strip(),
+            'values': values,
+        })
+    return out
+
+
 @api_view(['POST'])
 @permission_classes([_Configure])
 def size_map_grading_preview_file_view(request):
@@ -351,12 +379,7 @@ def size_map_grading_preview_file_view(request):
                 })
         elif name.endswith(('.pdf', '.png', '.jpg', '.jpeg', '.webp')):
             extracted = extract_from_file(file_bytes, f.name)
-            for m in (extracted.get('measurements') or []):
-                poms_in.append({
-                    'codi_fitxa': (m.get('client_code') or m.get('code') or '').strip(),
-                    'descripcio': (m.get('description') or '').strip(),
-                    'values': m.get('values') or {},
-                })
+            poms_in = _pdf_extracted_to_poms(extracted, base_size)
             if not poms_in:
                 avisos.append("La IA no ha retornat cap mesura llegible del document.")
         else:
