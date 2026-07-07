@@ -102,3 +102,38 @@ class SizeMapPreviewFileViewTest(TenantTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn("La IA no ha retornat cap mesura llegible del document.",
                       resp.data.get('avisos', []))
+
+
+class _FakeResp:
+    def __init__(self, data): self._data = data
+    def raise_for_status(self): pass
+    def json(self): return self._data
+
+
+class _FakeClient:
+    def __init__(self, data): self._data = data
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+    def post(self, *a, **k): return _FakeResp(self._data)
+
+
+class ExtractFromFileTruncationTest(TestCase):
+    """Guarda de truncament (R4) al servei G3: stop_reason='max_tokens' → anomalia no bloquejant."""
+
+    @patch('fhort.models_app.extraction_service._get_api_key', return_value='k')
+    @patch('fhort.models_app.extraction_service.httpx.Client')
+    def test_max_tokens_afegeix_anomalia(self, mock_client, _mk):
+        from fhort.models_app import extraction_service as svc
+        mock_client.return_value = _FakeClient(
+            {'stop_reason': 'max_tokens', 'content': [{'text': '{"poms": [], "grading_table": []}'}]})
+        result = svc.extract_from_file(b'%PDF-1.4', 'x.pdf')
+        self.assertTrue(any('truncada' in a for a in result.get('anomalies_detected', [])))
+
+    @patch('fhort.models_app.extraction_service._get_api_key', return_value='k')
+    @patch('fhort.models_app.extraction_service.httpx.Client')
+    def test_end_turn_no_afegeix_anomalia(self, mock_client, _mk):
+        from fhort.models_app import extraction_service as svc
+        mock_client.return_value = _FakeClient(
+            {'stop_reason': 'end_turn', 'content': [{'text': '{"poms": [], "grading_table": []}'}]})
+        result = svc.extract_from_file(b'%PDF-1.4', 'x.pdf')
+        self.assertNotIn('truncada', ' '.join(result.get('anomalies_detected', [])))

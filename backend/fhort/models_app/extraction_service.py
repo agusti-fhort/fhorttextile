@@ -183,6 +183,13 @@ def extract_from_file(file_bytes: bytes, filename: str, wizard_context: dict | N
         logger.error(f"JSON inválid de Claude: {raw_text[:300]}")
         raise ValueError(f"La resposta de Claude no és JSON vàlid: {e}")
 
+    # Guarda de truncament (R4): si Opus talla per límit de tokens, ho marquem com a ANOMALIA
+    # no bloquejant (mateix esperit que el camí wizard; adaptat a httpx: stop_reason ve al JSON).
+    if data.get('stop_reason') == 'max_tokens' and isinstance(result, dict):
+        result.setdefault('anomalies_detected', []).append(
+            "Resposta d'extracció truncada pel límit de tokens (max_tokens); resultat possiblement incomplet.")
+        logger.warning("extract_from_file: resposta truncada per max_tokens; resultat possiblement incomplet.")
+
     return result
 
 
