@@ -1360,6 +1360,8 @@
   "size_map_file_err": "Error processing the file.",
   "size_map_from_w1": "You are configuring a run for an active tech sheet. When done you will return to the import.",
   "size_map_g_break_from": "from",
+  "size_map_g_doc_values": "Document values",
+  "size_map_g_tol": "tol",
   "size_map_g_file": "Upload the tech sheet (Excel, PDF or image)",
   "size_map_g_file_busy": "Analysing file…",
   "size_map_g_file_drop": "Drag or select a file",

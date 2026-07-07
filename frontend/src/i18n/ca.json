@@ -1360,6 +1360,8 @@
   "size_map_file_err": "Error processant el fitxer.",
   "size_map_from_w1": "Configures un run per a una fitxa en curs. En acabar tornaràs a la importació.",
   "size_map_g_break_from": "des de",
+  "size_map_g_doc_values": "Valors document",
+  "size_map_g_tol": "tol",
   "size_map_g_file": "Puja la fitxa (Excel, PDF o imatge)",
   "size_map_g_file_busy": "Analitzant fitxer…",
   "size_map_g_file_drop": "Arrossega o selecciona un fitxer",

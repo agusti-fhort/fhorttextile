@@ -322,6 +322,13 @@ def _pdf_extracted_to_poms(extracted, base_size):
     """
     grading_by_code = {(g.get('code') or '').strip(): (g.get('values_by_size') or {})
                        for g in (extracted.get('grading_table') or [])}
+    # Toleràncies extretes per code (grading_table primer, fallback al POM). NOMÉS display
+    # (paritat R7): NO es persisteixen — el sprint POM-review les farà aterrar al POM/model.
+    tol_by_code = {}
+    for g in (extracted.get('grading_table') or []):
+        c = (g.get('code') or '').strip()
+        if c and (g.get('tolerance_minus') is not None or g.get('tolerance_plus') is not None):
+            tol_by_code[c] = (g.get('tolerance_minus'), g.get('tolerance_plus'))
     xb = (extracted.get('base_size') or {}).get('value')
     eff_base = base_size or (str(xb).strip() if xb is not None else '')
     out = []
@@ -332,10 +339,13 @@ def _pdf_extracted_to_poms(extracted, base_size):
             bv = p.get('base_value_cm')
             if eff_base and bv is not None:
                 values = {eff_base: bv}
+        tmin, tplus = tol_by_code.get(code, (p.get('tolerance_minus'), p.get('tolerance_plus')))
         out.append({
             'codi_fitxa': code,
             'descripcio': (p.get('description') or '').strip(),
             'values': values,
+            'tolerance_minus': tmin,
+            'tolerance_plus': tplus,
         })
     return out
 
@@ -437,6 +447,9 @@ def size_map_grading_preview_file_view(request):
                 'talla_break_label': tlabel,
                 'talla_break_pos': tpos,
                 'valors_calculats': {k: values.get(k) for k in values},
+                # Paritat R7 (NOMÉS display): toleràncies extretes al costat de la regla derivada.
+                'tolerance_minus': p.get('tolerance_minus'),
+                'tolerance_plus': p.get('tolerance_plus'),
                 'warning': warning,
             })
 

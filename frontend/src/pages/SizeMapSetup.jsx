@@ -606,6 +606,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                     <th style={{ padding: 6 }}>POM</th>
                     <th style={{ padding: 6 }}>{t('size_map_g_logica')}</th>
                     <th style={{ padding: 6 }}>{t('size_map_g_value')}</th>
+                    <th style={{ padding: 6 }}>{t('size_map_g_doc_values')}</th>
                     <th style={{ padding: 6 }}>{t('size_map_g_warn')}</th>
                   </tr>
                 </thead>
@@ -654,6 +655,28 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                             : (g.increment_break != null
                                 ? <span>+{g.increment_base} · +{g.increment_break} {t('size_map_g_break_from')} {g.talla_break_label}</span>
                                 : <span>+{g.increment_base}</span>)}
+                        </td>
+                        {/* Paritat R7 (NOMÉS display): valors originals del document per talla + toleràncies
+                            extretes, al costat de la regla derivada, perquè l'humà validi la fidelitat
+                            (p.ex. detectar 5.6→8.0 rotulat FIXED) ABANS de persistir el secret industrial. */}
+                        <td style={{ padding: 6, fontFamily: MONO, fontSize: 'var(--fs-label)' }}>
+                          {g.valors_calculats && Object.keys(g.valors_calculats).length > 0
+                            ? (<>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 8px' }}>
+                                  {(wiz.gradingRun.length ? wiz.gradingRun : Object.keys(g.valors_calculats)).map(sz =>
+                                    g.valors_calculats[sz] != null
+                                      ? <span key={sz} style={{ whiteSpace: 'nowrap' }}>
+                                          <span style={{ color: 'var(--gray)' }}>{sz}</span> {g.valors_calculats[sz]}
+                                        </span>
+                                      : null)}
+                                </div>
+                                {(g.tolerance_minus != null || g.tolerance_plus != null) && (
+                                  <div style={{ color: 'var(--gray)', marginTop: 2 }}>
+                                    {t('size_map_g_tol')} −{g.tolerance_minus ?? 0} / +{g.tolerance_plus ?? 0}
+                                  </div>
+                                )}
+                              </>)
+                            : <span style={{ color: 'var(--gray)' }}>—</span>}
                         </td>
                         <td style={{ padding: 6, color: 'var(--warn)', fontSize: 'var(--fs-body)' }}>{g.warning || ''}</td>
                       </tr>

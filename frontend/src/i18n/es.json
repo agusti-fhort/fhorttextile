@@ -1360,6 +1360,8 @@
   "size_map_file_err": "Error al procesar el archivo.",
   "size_map_from_w1": "Estás configurando un run para una ficha en curso. Al finalizar volverás a la importación.",
   "size_map_g_break_from": "desde",
+  "size_map_g_doc_values": "Valores documento",
+  "size_map_g_tol": "tol",
   "size_map_g_file": "Sube la ficha (Excel, PDF o imagen)",
   "size_map_g_file_busy": "Analizando archivo…",
   "size_map_g_file_drop": "Arrastra o selecciona un archivo",
