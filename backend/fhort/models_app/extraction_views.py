@@ -530,67 +530,59 @@ def find_pom_master(code, description):
     """
     from fhort.pom.models import POMMaster
 
+    # ORDRE (reordenat — DIAGNOSI_POM_RESOLUCIO_RUN_2026-07-08): exacte → descripció → numèric →
+    # root-prefix (ÚLTIM RECURS). Abans el root-prefix anava 2n i col·lapsava 'H.6'/'H.16' a la
+    # lletra 'H' (= POM 'SLEEVE MUSCLE') abans de mirar la descripció ('Armhole'/'Cuff opening').
+    # Ara la descripció mana i el root només actua si res més ha resolt, amb confiança LOW.
+
     # Strategy 1 — exact match by codi_client. Va PRIMER: un codi_client EXACTE sempre ha de
-    # guanyar un match per prefix (p.ex. 'SH DR' → 'SH DR', no 'SH'). Abans anava DESPRÉS del
-    # root-prefix i 'SH DR' es resolia erròniament a 'SH' (col·lisió que perdia 'SH DR').
+    # guanyar un match per prefix (p.ex. 'SH DR' → 'SH DR', no 'SH').
     if code:
         pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).first()
         if pm:
             return pm, 'exact_code', 'HIGH'
 
-    # Strategy 0 — codis posicionals lletra+dígit (D1, G2s...): sense exacte, prova el root de
-    # lletres inicials. DESPRÉS de l'exacte perquè no segresti codis amb sufix com 'SH DR'.
-    if code:
-        m = _re.match(r'^([A-Za-z]+)', code)
-        if m and m.group(1) != code:
-            root = m.group(1)
-            pm = POMMaster.objects.filter(codi_client__iexact=root, actiu=True).first()
-            if pm:
-                return pm, 'root_code_match', 'MEDIUM'
-
-    if not description:
-        return None, 'no_match', 'NO_MATCH'
-
-    desc_clean = description.lower().strip()
+    desc_clean = (description or '').lower().strip()
     desc_base = _re.sub(r'\s*[\(\[].*?[\)\]]', '', desc_clean).strip()
 
-    # Strategy 2 — explicit synonym (curated table).
-    syn = _POM_SYNONYMS.get(desc_clean) or _POM_SYNONYMS.get(desc_base)
-    if syn:
+    if desc_clean:
+        # Strategy 2 — explicit synonym (curated table).
+        syn = _POM_SYNONYMS.get(desc_clean) or _POM_SYNONYMS.get(desc_base)
+        if syn:
+            for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
+                nom = (pm.nom_client or '').lower()
+                if syn in nom or nom in syn:
+                    return pm, 'synonym_match', 'HIGH'
+            for pm in POMMaster.objects.select_related('pom_global').filter(
+                pom_global__isnull=False, actiu=True,
+            ):
+                nom_en = (pm.pom_global.nom_en or '').lower()
+                if syn in nom_en or nom_en in syn:
+                    return pm, 'synonym_global_match', 'HIGH'
+
+        # Strategy 3 — match by nom_client (exact=HIGH, contains=MEDIUM).
         for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
             nom = (pm.nom_client or '').lower()
-            if syn in nom or nom in syn:
-                return pm, 'synonym_match', 'HIGH'
+            if desc_base and len(desc_base) > 3:
+                if desc_base == nom:
+                    return pm, 'exact_description', 'HIGH'
+                if desc_base in nom or nom in desc_base:
+                    return pm, 'description_match', 'MEDIUM'
+
+        # Strategy 4 — match by POMGlobal nom_en / abbreviation.
         for pm in POMMaster.objects.select_related('pom_global').filter(
             pom_global__isnull=False, actiu=True,
         ):
-            nom_en = (pm.pom_global.nom_en or '').lower()
-            if syn in nom_en or nom_en in syn:
-                return pm, 'synonym_global_match', 'HIGH'
-
-    # Strategy 3 — match by nom_client (exact=HIGH, contains=MEDIUM).
-    for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
-        nom = (pm.nom_client or '').lower()
-        if desc_base and len(desc_base) > 3:
-            if desc_base == nom:
-                return pm, 'exact_description', 'HIGH'
-            if desc_base in nom or nom in desc_base:
-                return pm, 'description_match', 'MEDIUM'
-
-    # Strategy 4 — match by POMGlobal nom_en / abbreviation.
-    for pm in POMMaster.objects.select_related('pom_global').filter(
-        pom_global__isnull=False, actiu=True,
-    ):
-        pg = pm.pom_global
-        nom_en = (pg.nom_en or '').lower()
-        abbrev = (pg.abbreviation or '').lower()
-        if desc_base and len(desc_base) > 3:
-            if desc_base == nom_en:
-                return pm, 'global_exact', 'HIGH'
-            if desc_base in nom_en or nom_en in desc_base:
-                return pm, 'global_name_match', 'MEDIUM'
-        if code and code.lower() == abbrev:
-            return pm, 'abbreviation_match', 'HIGH'
+            pg = pm.pom_global
+            nom_en = (pg.nom_en or '').lower()
+            abbrev = (pg.abbreviation or '').lower()
+            if desc_base and len(desc_base) > 3:
+                if desc_base == nom_en:
+                    return pm, 'global_exact', 'HIGH'
+                if desc_base in nom_en or nom_en in desc_base:
+                    return pm, 'global_name_match', 'MEDIUM'
+            if code and code.lower() == abbrev:
+                return pm, 'abbreviation_match', 'HIGH'
 
     # Strategy 5 — pure numeric codes → lining.
     if code and code.isdigit():
@@ -600,6 +592,18 @@ def find_pom_master(code, description):
                 nom = (pm.nom_client or '').lower()
                 if 'lining' in nom:
                     return pm, 'numeric_lining_match', 'MEDIUM'
+
+    # Strategy 6 (ÚLTIM RECURS) — root de lletres inicials per a codis posicionals (D1, G2s → D, G).
+    # NO es rooteja la nomenclatura d'AGRUPACIÓ 'LLETRA.NÚMERO' (H.6, G.3, J.2): la lletra és un
+    # grup del document, no un codi de mesura, i col·lapsaria a un POM d'una sola lletra aliè.
+    # Confiança LOW: és el darrer recurs, no una vinculació segura.
+    if code and not _re.match(r'^[A-Za-z]+\.\d', code):
+        m = _re.match(r'^([A-Za-z]+)', code)
+        if m and m.group(1) != code:
+            root = m.group(1)
+            pm = POMMaster.objects.filter(codi_client__iexact=root, actiu=True).first()
+            if pm:
+                return pm, 'root_code_match', 'LOW'
 
     return None, 'no_match', 'NO_MATCH'
 
