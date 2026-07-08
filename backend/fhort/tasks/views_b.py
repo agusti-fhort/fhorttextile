@@ -298,7 +298,8 @@ def define_model_tasks_view(request, model_id):
     if not types:
         return Response({'error': 'Cap TaskType actiu trobat per als ids donats.'},
                         status=status.HTTP_400_BAD_REQUEST)
-    existing = set(ModelTask.objects.filter(model_id=model_id, task_type_id__in=ids)
+    existing = set(ModelTask.objects.filter(model_id=model_id, task_type_id__in=ids,
+                                             origen='prevista')
                    .values_list('task_type_id', flat=True))
     if not Model.objects.filter(pk=model_id).exists():
         return Response({'error': 'Model no trobat.'}, status=status.HTTP_404_NOT_FOUND)
@@ -312,7 +313,7 @@ def define_model_tasks_view(request, model_id):
         est = lookup_estimated_minutes(model, t)   # snapshot del temps estimat (None si no n'hi ha)
         mt = ModelTask.objects.create(model_id=model_id, task_type=t,
                                       order=base_order + i, status='Pending',
-                                      estimated_minutes=est)
+                                      origen='prevista', estimated_minutes=est)
         created.append(mt.id)
     return Response({'created_ids': created, 'skipped_existing': sorted(existing)},
                     status=status.HTTP_201_CREATED)
@@ -495,14 +496,15 @@ def open_model_task_view(request, model_id):
     if code not in get_allowed_task_types(request.user):
         return Response({'error': f"No pots obrir una tasca del tipus '{code}' (no és a la teva allow-list)."},
                         status=http_status.HTTP_403_FORBIDDEN)
-    # 1. Crea-si-falta (mirall de define_model_tasks_view).
-    task = ModelTask.objects.filter(model=model, task_type=tt).first()
+    # 1. Crea-si-falta (mirall de define_model_tasks_view). La canònica és la prevista.
+    task = ModelTask.objects.filter(model=model, task_type=tt, origen='prevista').first()
     created = False
     if task is None:
         order = ModelTask.objects.filter(model=model).count()
         est = lookup_estimated_minutes(model, tt)
         task = ModelTask.objects.create(model=model, task_type=tt, order=order,
-                                        status='Pending', estimated_minutes=est)
+                                        status='Pending', origen='prevista',
+                                        estimated_minutes=est)
         created = True
     # 2. En curs (reusa transition_task) o claim si ja és En curs d'un altre.
     if task.status != 'InProgress':

@@ -92,9 +92,15 @@ class ModelTask(models.Model):
         ordering = ['model', 'order']
         verbose_name = 'Model task'
         verbose_name_plural = 'Model tasks'
-        # Defensa de fons: una tasca de cada tipus per model (la view ja ho comprova;
-        # això ho garanteix a BD contra curses i camins futurs sense check).
-        unique_together = [('model', 'task_type')]
+        # Defensa de fons: una tasca PREVISTA (de recepta) de cada tipus per model.
+        # Constraint PARCIAL (només origen='prevista') perquè els extres ad_hoc del
+        # mateix task_type puguin conviure amb la canònica sense col·lidir (B4a).
+        constraints = [
+            models.UniqueConstraint(
+                fields=['model', 'task_type'],
+                condition=models.Q(origen='prevista'),
+                name='uniq_prevista_model_tasktype'),
+        ]
 
     def __str__(self):
         return f'{self.model_id} · {self.task_type.code} ({self.status})'

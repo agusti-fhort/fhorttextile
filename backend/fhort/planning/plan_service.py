@@ -289,8 +289,8 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
             if code not in get_allowed_task_types(profile.user):
                 omesos.append({'model_id': mid, 'task_type_code': code, 'motiu': 'permís negat'})
                 continue
-            # b) buscar / crear (via canònica).
-            mt = (ModelTask.objects.filter(model_id=mid, task_type=tt)
+            # b) buscar / crear (via canònica: la prevista de recepta).
+            mt = (ModelTask.objects.filter(model_id=mid, task_type=tt, origen='prevista')
                   .select_related('assignee__user').first())
             if mt is not None and mt.status == 'Done':
                 omesos.append({'model_id': mid, 'task_type_code': code, 'motiu': 'Done immutable'})
@@ -308,7 +308,8 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
                     omesos.append({'model_id': mid, 'task_type_code': code, 'motiu': 'needs_estimate'})
                     continue
                 mt = ModelTask.objects.create(model_id=mid, task_type=tt, order=order,
-                                              status='Pending', estimated_minutes=est)
+                                              status='Pending', origen='prevista',
+                                              estimated_minutes=est)
                 creats += 1
             elif mt.assignee_id and mt.assignee_id != profile.id:
                 old_assignee = mt.assignee   # tècnic anterior desplaçat

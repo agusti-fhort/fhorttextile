@@ -116,7 +116,8 @@ class Command(BaseCommand):
         if tt is None:
             raise CommandError("TaskType 'size_check' no existeix (l'ha de crear l'Agus).")
         task, _ = ModelTask.objects.get_or_create(
-            model=clone, task_type=tt, defaults={'status': 'Pending', 'assignee': prof})
+            model=clone, task_type=tt, origen='prevista',
+            defaults={'status': 'Pending', 'assignee': prof})
         self.stdout.write(f"Tasca size_check: pk={task.pk} status={task.status} assignee={task.assignee_id}")
 
         # --- 6) Verificació d'equivalència de grading vs l'origen (mateix ruleset/base) ---
