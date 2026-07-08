@@ -131,6 +131,13 @@ def _tax_pct(subtotal, tax_amount):
 
 def generate_quote_pdf(quote):
     """Retorna els bytes del PDF de l'oferta `quote` (disseny Montserrat; fallback Helvetica)."""
+    return generate_document_pdf(quote, doc_title='Pressupost')
+
+
+def generate_document_pdf(quote, doc_title='Pressupost'):
+    """Retorna els bytes del PDF d'un document comercial (`quote` = Quote o SalesOrder; layout
+    idèntic). `doc_title` és el títol del document ('Pressupost' per oferta, 'Comanda' per
+    comanda). Emissor = TenantConfig; client/línies/totals/venciments = document."""
     F = _fonts()
     FL, FR, FS, FB = F[F_LIGHT], F[F_REG], F[F_SEMI], F[F_BOLD]
     cfg = _tenant_cfg()
@@ -156,7 +163,7 @@ def generate_quote_pdf(quote):
     buf = BytesIO()
     doc = BaseDocTemplate(buf, pagesize=A4,
                           leftMargin=ML, rightMargin=MR, topMargin=MT, bottomMargin=MB,
-                          title=quote.document_number or 'Pressupost')
+                          title=quote.document_number or doc_title)
     frame = Frame(ML, MB, CW, PAGE_H - MT - MB,
                   leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
     doc.addPageTemplates([PageTemplate(id='main', frames=[frame])])
@@ -201,7 +208,7 @@ def generate_quote_pdf(quote):
     ], colWidths=[COL_RIGHT_W - 30 * mm, 30 * mm], style=TableStyle(ZP))
 
     right = Table([
-        [Paragraph('Pressupost', S_TITDOC)],
+        [Paragraph(doc_title, S_TITDOC)],
         [Spacer(1, 2 * mm)],
         [meta],
     ], colWidths=[COL_RIGHT_W], style=TableStyle(ZP))

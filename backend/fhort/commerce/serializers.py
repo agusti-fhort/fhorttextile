@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
-    Quote, QuoteLine, PaymentTerms, PaymentTermLine,
+    Quote, QuoteLine, PaymentTerms, PaymentTermLine, SalesOrder, SalesOrderLine,
 )
 
 
@@ -146,3 +146,49 @@ class QuoteSerializer(serializers.ModelSerializer):
         # és el desglossament calculat, només lectura.
         read_only_fields = ['document_number', 'doc_type', 'status', 'subtotal', 'tax_amount',
                             'total', 'tax_breakdown', 'created_at', 'updated_at']
+
+
+# ── Documents comercials — SalesOrder (comanda, B3b) ───────────────────────────────────
+
+class SalesOrderLineSerializer(serializers.ModelSerializer):
+    """Línia de comanda. IRREVERSIBILITAT (B3b): preu/quantitat CONGELATS un cop creada (neixen
+    de la conversió); l'ÚNIC camp mutable per API és `qty_allocated` (imputació de cartera)."""
+    product_code = serializers.CharField(source='product.code', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+
+    class Meta:
+        model = SalesOrderLine
+        fields = ['id', 'order', 'product', 'product_code', 'product_name', 'description',
+                  'quantity', 'unit_price', 'line_total', 'position', 'qty_allocated']
+        read_only_fields = ['order', 'product', 'description', 'quantity', 'unit_price',
+                            'line_total', 'position']
+
+    def validate_qty_allocated(self, value):
+        if value is None:
+            return value
+        if value < 0:
+            raise serializers.ValidationError("La quantitat imputada no pot ser negativa.")
+        line = self.instance
+        if line is not None and value > line.quantity:
+            raise serializers.ValidationError(
+                "La quantitat imputada no pot superar la quantitat comandada.")
+        return value
+
+
+class SalesOrderSerializer(serializers.ModelSerializer):
+    """Capçalera de comanda amb línies nested (read-only). Tot calculat/congelat; l'ÚNIC camp
+    editable per API és `status` (OPEN/COMPLETED/CANCELLED). Traçabilitat a l'oferta origen."""
+    customer_nom = serializers.CharField(source='customer.nom', read_only=True)
+    lines = SalesOrderLineSerializer(many=True, read_only=True)
+    payment_terms_name = serializers.CharField(source='payment_terms.name', read_only=True)
+    source_quote_number = serializers.CharField(source='source_quote.document_number', read_only=True)
+
+    class Meta:
+        model = SalesOrder
+        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom', 'status',
+                  'issued_at', 'valid_until', 'payment_terms', 'payment_terms_name',
+                  'source_quote', 'source_quote_number', 'subtotal', 'tax_amount', 'total',
+                  'tax_breakdown', 'notes', 'created_at', 'updated_at', 'lines']
+        read_only_fields = ['document_number', 'doc_type', 'customer', 'issued_at', 'valid_until',
+                            'payment_terms', 'source_quote', 'subtotal', 'tax_amount', 'total',
+                            'tax_breakdown', 'notes', 'created_at', 'updated_at']

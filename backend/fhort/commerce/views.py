@@ -7,7 +7,7 @@ tier (feature_flags) arriben a B5.
 from django.db.models import ProtectedError
 from django.http import HttpResponse
 from django.utils import timezone
-from rest_framework import status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -16,12 +16,13 @@ from fhort.accounts.capabilities import HasCapability, CONFIGURE
 
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
-    Quote, QuoteLine, PaymentTerms,
+    Quote, QuoteLine, PaymentTerms, SalesOrder, SalesOrderLine,
 )
 from .serializers import (
     UnitSerializer, ProductSerializer, ProductRecipeSerializer, ProductSupplierSerializer,
     ProductComponentSerializer, ProductPriceGTISerializer,
     QuoteSerializer, QuoteLineSerializer, PaymentTermsSerializer,
+    SalesOrderSerializer, SalesOrderLineSerializer,
 )
 
 
@@ -144,6 +145,19 @@ class QuoteViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
         resp['Content-Disposition'] = f'attachment; filename="{quote.document_number or "quote"}.pdf"'
         return resp
 
+    @action(detail=True, methods=['post'])
+    def convert(self, request, pk=None):
+        """Converteix l'oferta en comanda (IRREVERSIBLE, B3b). Retorna la SalesOrder creada (201)
+        o l'error del guard (400 amb missatge clar). Escriptura gated CONFIGURE."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import convert_quote_to_order
+        quote = self.get_object()
+        try:
+            order = convert_quote_to_order(quote, user=request.user)
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(SalesOrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
 
 class QuoteLineViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
     """Línies d'oferta (edició filtrada per ?quote=, patró satèl·lit B1). El guard DRAFT viu al
@@ -151,3 +165,40 @@ class QuoteLineViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
     queryset = QuoteLine.objects.select_related('quote', 'product').all()
     serializer_class = QuoteLineSerializer
     filterset_fields = ['quote', 'product']
+
+
+# ── Documents comercials — SalesOrder (comanda, B3b) ───────────────────────────────────
+
+class SalesOrderViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin,
+                        mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """Comandes de venda (B3b). NOMÉS lectura + update restringit a `status` (les comandes neixen
+    de la conversió d'una oferta, mai per POST; irreversibilitat de línies via serializer). El
+    `pdf` és lectura (autenticat)."""
+    queryset = SalesOrder.objects.select_related('customer', 'source_quote', 'created_by').prefetch_related(
+        'lines__product', 'due_dates').all()
+    serializer_class = SalesOrderSerializer
+    filterset_fields = ['status', 'customer']
+
+    def get_permissions(self):
+        if self.action == 'pdf':
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
+    @action(detail=True, methods=['get'])
+    def pdf(self, request, pk=None):
+        """PDF de la comanda: reutilitza el generador de l'oferta amb títol 'Comanda'."""
+        order = self.get_object()
+        from .pdf_service import generate_document_pdf
+        pdf_bytes = generate_document_pdf(order, doc_title='Comanda')
+        resp = HttpResponse(pdf_bytes, content_type='application/pdf')
+        resp['Content-Disposition'] = f'attachment; filename="{order.document_number or "order"}.pdf"'
+        return resp
+
+
+class SalesOrderLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin,
+                            mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """Línies de comanda (lectura + PATCH restringit a `qty_allocated`, filtrat per ?order=). Sense
+    create/destroy: les línies neixen de la conversió (irreversibilitat, B3b)."""
+    queryset = SalesOrderLine.objects.select_related('order', 'product').all()
+    serializer_class = SalesOrderLineSerializer
+    filterset_fields = ['order', 'product']
