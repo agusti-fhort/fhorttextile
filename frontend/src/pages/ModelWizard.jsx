@@ -181,6 +181,9 @@ export default function ModelWizard() {
   const handleCreate = async () => {
     if (!season) { setError(t('model_wizard.season_required')); setBlock(1); return }
     if (!customerId) { setError(t('model_wizard.customer_required')); setBlock(1); return }
+    // B4b — GTI obligatori: és la baula del motor de temps (matriu item×task_type); sense ell
+    // no es poden estimar tasques ni valorar la recepta d'un encàrrec.
+    if (!item) { setError(t('model_wizard.gti_required')); setBlock(2); return }
     setSaving(true); setError('')
     try {
       // El selector mana customer_id; ref_client (text) segueix sent codi_client (SKU del client).

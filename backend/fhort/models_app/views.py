@@ -333,6 +333,13 @@ def create_model_wizard(request):
     if not year or not season:
         return Response({'error': 'year i season són obligatoris'}, status=400)
 
+    # B4b — garment_type_item obligatori al wizard: és la baula del motor de temps i de la
+    # valoració de receptes (comercial). Guard de servei; la columna segueix nullable a BD
+    # (additiu; 0 models amb GTI null al tenant → cap backfill). TODO: fer-la NOT NULL a BD
+    # en una sessió futura si es vol la garantia dura.
+    if not request.data.get('garment_type_item_id'):
+        return Response({'error': 'garment_type_item és obligatori'}, status=400)
+
     if is_multipiece:
         try:
             num_pieces = int(num_pieces)

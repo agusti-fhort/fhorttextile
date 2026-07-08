@@ -633,6 +633,7 @@
     "customer_placeholder": "Tria un client…",
     "customer_new": "+ Nou client",
     "customer_required": "Cal triar un client.",
+    "gti_required": "Cal triar un tipus de peça (garment type).",
     "title_new": "Nou model",
     "title_edit": "Editar model",
     "cancel": "Cancel·lar",

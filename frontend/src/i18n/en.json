@@ -633,6 +633,7 @@
     "customer_placeholder": "Select a client…",
     "customer_new": "+ New client",
     "customer_required": "Select a client.",
+    "gti_required": "Select a garment type.",
     "title_new": "New model",
     "title_edit": "Edit model",
     "cancel": "Cancel",
