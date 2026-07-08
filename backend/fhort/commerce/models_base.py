@@ -43,6 +43,10 @@ class AbstractDocument(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
     issued_at = models.DateField(null=True, blank=True)
     valid_until = models.DateField(null=True, blank=True)
+    # Comercial Studio (B3a) — override de condició de pagament per document. Si null, s'usa la
+    # del customer; si també null, cap venciment. Entra a cada subclasse concreta per migració.
+    payment_terms = models.ForeignKey('commerce.PaymentTerms', on_delete=models.SET_NULL,
+                                      null=True, blank=True, related_name='%(class)s_documents')
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0,
                                      help_text="Import d'impostos (manual a B2; sense motor fiscal).")

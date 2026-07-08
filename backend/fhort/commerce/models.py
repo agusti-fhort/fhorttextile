@@ -78,6 +78,10 @@ class Product(models.Model):
                                     help_text="Tarifa de VENDA per minut (TIME_BASED). ≠ cost intern.")
     markup_pct = models.DecimalField(max_digits=6, decimal_places=2, default=0,
                                      help_text="% de marge sobre el cost (externs/goods i TIME_BASED).")
+    # Comercial Studio (B3a) — classificador de grup de base impositiva. NO s'usa per calcular
+    # línia a línia: agrupa les línies per tipus i l'IVA es calcula sobre la base agregada.
+    tax_rate = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal('21.00'),
+                                   help_text="Tipus d'IVA de l'article (classificador de grup).")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, null=True, blank=True,
                              related_name='products')
     active = models.BooleanField(default=True)
