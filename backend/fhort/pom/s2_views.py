@@ -72,7 +72,7 @@ def sizing_profiles_view(request):
 
         qs = SizingProfile.objects.select_related(
             'target', 'construction', 'fit_type',
-            'size_system', 'size_system__parent', 'grading_rule_set'
+            'size_system', 'size_system__parent', 'grading_rule_set', 'customer'
         )
 
         target_codi = request.query_params.get('target')
@@ -81,6 +81,13 @@ def sizing_profiles_view(request):
         fit_codi = request.query_params.get('fit')
         garment_type_id = request.query_params.get('garment_type')
         customer_codi = request.query_params.get('customer_codi')
+        # Resol l'id del Customer per prioritzar pel FK directe (autoritatiu) a més del
+        # senyal indirecte size_system.customer_codi.
+        cust_id = None
+        if customer_codi:
+            from fhort.tasks.models import Customer
+            _c = Customer.objects.filter(codi=customer_codi).first()
+            cust_id = _c.id if _c else None
 
         if target_codi:
             qs = qs.filter(target__codi=target_codi)
@@ -95,11 +102,13 @@ def sizing_profiles_view(request):
 
         def _grup(p):
             cc = (p.size_system.customer_codi or '') if p.size_system_id else ''
-            if customer_codi and cc == customer_codi:
-                return 0  # run d'aquest client
-            if p.is_default:
-                return 1  # canònic
-            return 2      # altres runs de client
+            own = (cust_id is not None and p.customer_id == cust_id) or \
+                  (customer_codi and cc == customer_codi)
+            if own:
+                return 0  # perfil/run d'aquest client (FK directe o senyal indirecte)
+            if p.is_default and p.customer_id is None:
+                return 1  # canònic genèric del tenant
+            return 2      # altres (perfils d'altres clients / no-default)
         profiles = sorted(
             qs,
             key=lambda p: (_grup(p), p.size_system.nom if p.size_system_id else ''),

@@ -103,8 +103,18 @@ class SizingProfileSerializer(serializers.Serializer):
     size_system_customer_codi = serializers.SerializerMethodField()
     size_system_parent_nom = serializers.SerializerMethodField()
 
+    # Eix client (FK directe): NULL = perfil genèric del tenant; informat = propi del client.
+    customer_codi = serializers.SerializerMethodField()
+    customer_nom = serializers.SerializerMethodField()
+
     size_definitions = serializers.SerializerMethodField()
     grading_rules_preview = serializers.SerializerMethodField()
+
+    def get_customer_codi(self, obj):
+        return obj.customer.codi if obj.customer_id else ''
+
+    def get_customer_nom(self, obj):
+        return obj.customer.nom if obj.customer_id else ''
 
     def get_fit_type_nom(self, obj):
         return obj.fit_type.nom_en if obj.fit_type_id else ''

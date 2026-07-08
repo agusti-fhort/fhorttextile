@@ -808,6 +808,11 @@ def size_map_create_view(request):
             rule_set.pendents_vincular = discarded_codes
             rule_set.save(update_fields=['pendents_vincular'])
 
+            # Customer del run: eix client de SizingProfile + sembra de la biblioteca (àlies).
+            # Resolt aquí (sempre) perquè el fan servir tant les GradingRules com els perfils.
+            from fhort.pom.services import maybe_learn_customer_alias
+            alias_customer = _resolve_run_customer(data, src_ssid)
+
             # ---- 5. GradingRules ----
             if base_def is None and grading:
                 warnings.append("No s'ha pogut resoldre cap talla base; regles de grading omeses.")
@@ -818,9 +823,6 @@ def size_map_create_view(request):
                 run_ordenat = list(
                     SizeDefinition.objects.filter(size_system=ss)
                     .order_by('ordre').values_list('etiqueta', flat=True))
-                # Customer del run per sembrar la biblioteca de nomenclatura (àlies).
-                from fhort.pom.services import maybe_learn_customer_alias
-                alias_customer = _resolve_run_customer(data, src_ssid)
                 for g in grading:
                     pom_id = g.get('pom_id')
                     pom = POMMaster.objects.filter(pk=pom_id).first()
@@ -874,12 +876,14 @@ def size_map_create_view(request):
                 if profile is not None:
                     profile.garment_type = garment_type
                     profile.is_default = True
-                    profile.save(update_fields=['garment_type', 'is_default'])
+                    profile.customer = alias_customer  # eix client (NULL si run genèric)
+                    profile.save(update_fields=['garment_type', 'is_default', 'customer'])
                 else:
                     profile = SizingProfile.objects.create(
                         target=p_target, construction=construction, size_system=ss,
                         fit_type=fit_type, garment_type=garment_type,
                         grading_rule_set=rule_set, is_default=True,
+                        customer=alias_customer,  # eix client (NULL si run genèric)
                     )
                 sizing_profile_ids.append(profile.id)
 

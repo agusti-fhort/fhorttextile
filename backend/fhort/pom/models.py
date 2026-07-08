@@ -813,6 +813,13 @@ class SizingProfile(models.Model):
                          related_name='sizing_profiles')
     grading_rule_set = models.ForeignKey('GradingRuleSet', on_delete=models.PROTECT,
                          related_name='sizing_profiles')
+    # Eix client (DIAGNOSI_BIBLIOTECA_CLIENT_2026-07-08): NULL = perfil genèric del tenant;
+    # informat = perfil propi del client. db_constraint=False perquè `pom` és SHARED+TENANT i
+    # `tasks.Customer` és tenant-only → la FK creua schemas (mateix patró que CustomerPOMAlias
+    # i GradingRuleSet.customer). SET_NULL: esborrar un Customer no ha d'endur-se el perfil.
+    customer         = models.ForeignKey('tasks.Customer', on_delete=models.SET_NULL,
+                         null=True, blank=True, db_constraint=False,
+                         related_name='sizing_profiles')
     is_default       = models.BooleanField(default=True,
                          help_text="El sistema suggereix aquest perfil per defecte")
     parent_profile   = models.ForeignKey('self', null=True, blank=True,
