@@ -19,7 +19,8 @@ _CENT = Decimal('0.01')
 # Prefix de numeració per tipus de document (reinici anual, R5). Només Quote a B2.
 # TODO B3-B5: 'sales_order':'SO', 'work_order':'WO', 'delivery_note':'DN', 'settlement':'ST'.
 DOC_PREFIXES = {
-    'quote': 'OF',   # oferta
+    'quote': 'OF',          # oferta
+    'sales_order': 'SO',    # comanda (B3b) — seqüència independent de la d'ofertes
 }
 
 
@@ -74,31 +75,34 @@ def reserve_document_number(doc_type):
     return f"{prefix}-{year}-{n:04d}"
 
 
-def effective_payment_terms(quote):
-    """Condició de pagament efectiva: la del document, si no la del customer, si no cap."""
-    if quote.payment_terms_id:
-        return quote.payment_terms
-    if quote.customer_id:
-        return quote.customer.payment_terms
+def effective_payment_terms(document):
+    """Condició de pagament efectiva: la del document, si no la del customer, si no cap.
+    Genèric per a qualsevol document comercial (Quote, SalesOrder…)."""
+    if document.payment_terms_id:
+        return document.payment_terms
+    if document.customer_id:
+        return document.customer.payment_terms
     return None
 
 
-def generate_due_dates(quote):
-    """Esborra i regenera els venciments materialitzats del quote des del payment_terms efectiu.
+def generate_due_dates(document):
+    """Esborra i regenera els venciments materialitzats del document des del payment_terms efectiu.
 
-    Només genera si el quote té `issued_at` i una condició de pagament efectiva. Import de cada
-    fracció = (total × pct / 100).quantize(0.01); la ÚLTIMA fracció = total − Σ anteriors (ajust
-    del cèntim), de manera que la suma dels venciments SEMPRE quadra exacta amb el total.
+    Genèric per a Quote (oferta) i SalesOrder (comanda): resol la FK correcta de DocumentDueDate
+    segons el tipus. Només genera si el document té `issued_at` i una condició de pagament
+    efectiva. Import de cada fracció = (total × pct / 100).quantize(0.01); la ÚLTIMA fracció =
+    total − Σ anteriors (ajust del cèntim), de manera que la suma SEMPRE quadra exacta amb el total.
     """
-    from .models import DocumentDueDate
-    quote.due_dates.all().delete()
-    terms = effective_payment_terms(quote)
-    if not terms or not quote.issued_at:
+    from .models import DocumentDueDate, Quote
+    document.due_dates.all().delete()
+    terms = effective_payment_terms(document)
+    if not terms or not document.issued_at:
         return
     lines = list(terms.lines.all())
     if not lines:
         return
-    total = Decimal(quote.total or 0)
+    fk = 'quote' if isinstance(document, Quote) else 'sales_order'
+    total = Decimal(document.total or 0)
     allocated = Decimal('0')
     objs = []
     for i, ln in enumerate(lines):
@@ -108,6 +112,6 @@ def generate_due_dates(quote):
             amount = total - allocated   # última fracció: la suma quadra exacta amb total
         allocated += amount
         objs.append(DocumentDueDate(
-            quote=quote, due_date=quote.issued_at + timedelta(days=ln.days_offset),
+            **{fk: document}, due_date=document.issued_at + timedelta(days=ln.days_offset),
             amount=amount, percentage=ln.percentage, position=ln.position))
     DocumentDueDate.objects.bulk_create(objs)

@@ -275,6 +275,81 @@ class QuoteLine(AbstractDocumentLine):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
+# DOCUMENTS COMERCIALS — SalesOrder (comanda), B3b. Segona subclasse de les abstractes.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+class SalesOrder(AbstractDocument):
+    """Comanda de venda tenant→client. Neix EXCLUSIVAMENT de la conversió d'una oferta
+    (convert_quote_to_order, S3); no es crea a mà. IRREVERSIBILITAT de disseny (decisió Agus,
+    B3b): un cop creada, les línies MAI són editables en preu/quantitat (guard read-only al
+    serializer). L'única mutació permesa és qty_allocated (imputació de cartera) i el `status`
+    del header. L'única sortida és status=CANCELLED (que NO reobre l'oferta).
+
+    `source_quote` és la traçabilitat cap a l'oferta origen; unique → una oferta genera com a
+    molt UNA comanda (guard de doble conversió a nivell de BD). `status` propi OPEN/COMPLETED/
+    CANCELLED (sobreescriu el de l'abstracta, que és el cicle DRAFT/SENT… de les ofertes).
+    """
+    SO_STATUS_CHOICES = [
+        ('OPEN', 'Open'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+    source_quote = models.OneToOneField(Quote, on_delete=models.PROTECT, null=True, blank=True,
+                                         related_name='sales_order',
+                                         help_text="Oferta origen (traçabilitat). 1 oferta → 1 comanda (unique).")
+    status = models.CharField(max_length=20, choices=SO_STATUS_CHOICES, default='OPEN')
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Sales order'
+        verbose_name_plural = 'Sales orders'
+
+    def save(self, *args, **kwargs):
+        if not self.doc_type:
+            self.doc_type = 'sales_order'
+        if not self.document_number:
+            from .services import reserve_document_number
+            self.document_number = reserve_document_number('sales_order')
+        super().save(*args, **kwargs)
+
+    def recalculate_totals(self):
+        """Persisteix els totals del càlcul fiscal compartit (compute_document_totals, S1a) i
+        regenera els venciments. Idèntic a Quote: un sol motor fiscal per a tots els documents."""
+        from .services import compute_document_totals, generate_due_dates
+        self.subtotal, self.tax_amount, self.total, self.tax_breakdown = compute_document_totals(
+            self, self.lines.all())
+        self.save(update_fields=['subtotal', 'tax_amount', 'total', 'tax_breakdown', 'updated_at'])
+        generate_due_dates(self)
+
+    def __str__(self):
+        return self.document_number or f'SalesOrder (esborrany #{self.pk})'
+
+
+class SalesOrderLine(AbstractDocumentLine):
+    """Línia d'una comanda. Neix CONGELADA de la conversió d'una oferta (còpia de valors, cap FK
+    viva a preus). `unit_price`/`quantity` MAI editables per API (irreversibilitat, B3b); l'única
+    mutació és `qty_allocated` (control de cartera: ordered vs allocated, imputat a B4)."""
+    order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name='lines')
+    qty_allocated = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                        help_text="Quantitat imputada (≤ quantity). Control de cartera (B4).")
+
+    class Meta:
+        ordering = ['order', 'position', 'id']
+        verbose_name = 'Sales order line'
+        verbose_name_plural = 'Sales order lines'
+
+    def save(self, *args, **kwargs):
+        # Quantize a 2 decimals (llei B3a). Sense guard de segellat al model: la
+        # irreversibilitat s'imposa a l'API (serializer read-only), no al clonatge intern.
+        self.line_total = (Decimal(self.quantity or 0) * Decimal(self.unit_price or 0)).quantize(
+            _CENT, rounding=ROUND_HALF_UP)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.order_id}: {self.description or self.product_id} ×{self.quantity}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
 # CONDICIONS DE PAGAMENT (B3a) — condició reutilitzable + fraccions (venciments).
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
@@ -322,22 +397,34 @@ class PaymentTermLine(models.Model):
 
 
 class DocumentDueDate(models.Model):
-    """Venciment materialitzat d'un document (B3a). v1 SIMPLE: FK directa a Quote.
-
-    TODO B3b/B4: quan hi hagi més tipus de document (SalesOrder/DeliveryNote/Settlement),
-    valorar pujar-lo a l'abstracta o generalitzar amb GenericFK. Ara NO GenericFK.
-    Es regenera per generate_due_dates() des del payment_terms efectiu (document > customer).
+    """Venciment materialitzat d'un document comercial (B3a/B3b). Pertany EXACTAMENT a un
+    document: Quote (oferta) o SalesOrder (comanda). v1 SIMPLE: dues FK nullable + CHECK que
+    exactament una és no-null (NO GenericFK, decisió B3b). Es regenera per generate_due_dates()
+    des del payment_terms efectiu (document > customer).
     """
-    quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name='due_dates')
+    quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name='due_dates',
+                              null=True, blank=True)
+    sales_order = models.ForeignKey('commerce.SalesOrder', on_delete=models.CASCADE,
+                                    related_name='due_dates', null=True, blank=True)
     due_date = models.DateField()
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     percentage = models.DecimalField(max_digits=5, decimal_places=2)
     position = models.PositiveIntegerField(default=0)
 
     class Meta:
-        ordering = ['quote', 'position', 'id']
+        ordering = ['position', 'id']
+        constraints = [
+            models.CheckConstraint(
+                condition=(models.Q(quote__isnull=False) & models.Q(sales_order__isnull=True)) |
+                          (models.Q(quote__isnull=True) & models.Q(sales_order__isnull=False)),
+                name='duedate_exactly_one_parent'),
+        ]
         verbose_name = 'Document due date'
         verbose_name_plural = 'Document due dates'
 
+    @property
+    def document(self):
+        return self.quote if self.quote_id else self.sales_order
+
     def __str__(self):
-        return f'{self.quote_id}: {self.amount} @ {self.due_date}'
+        return f'{self.document}: {self.amount} @ {self.due_date}'
