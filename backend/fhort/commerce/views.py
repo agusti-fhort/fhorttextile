@@ -17,12 +17,14 @@ from fhort.accounts.capabilities import HasCapability, CONFIGURE, DEFINE_TASKS
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
     Quote, QuoteLine, PaymentTerms, SalesOrder, SalesOrderLine, WorkOrder, Expense,
+    DeliveryNote, DeliveryNoteLine,
 )
 from .serializers import (
     UnitSerializer, ProductSerializer, ProductRecipeSerializer, ProductSupplierSerializer,
     ProductComponentSerializer, ProductPriceGTISerializer,
     QuoteSerializer, QuoteLineSerializer, PaymentTermsSerializer,
     SalesOrderSerializer, SalesOrderLineSerializer, WorkOrderSerializer, ExpenseSerializer,
+    DeliveryNoteSerializer, DeliveryNoteLineSerializer,
 )
 
 
@@ -282,3 +284,75 @@ class ExpenseViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=getattr(self.request.user, 'profile', None))
+
+
+# ── Documents comercials — DeliveryNote (albarà, B4c) ──────────────────────────────────
+
+class DeliveryNoteViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin,
+                          mixins.UpdateModelMixin, mixins.DestroyModelMixin,
+                          viewsets.GenericViewSet):
+    """Albarans (B4c). Lectura oberta; `generate`/`issue`/`destroy` gated CONFIGURE; `pdf`
+    lectura. NO es crea per POST directe: neix de `generate/` (agrega 1..N WorkOrder CLOSED del
+    mateix customer). `destroy` només en DRAFT (allibera els WO via SET_NULL). L'UPDATE del
+    header serveix per editar `notes` en DRAFT (el status es mou només per `issue`)."""
+    queryset = DeliveryNote.objects.select_related('customer', 'issued_by', 'created_by') \
+        .prefetch_related('lines__product', 'delivery_notes_included').all()
+    serializer_class = DeliveryNoteSerializer
+    filterset_fields = ['status', 'customer']
+
+    def get_permissions(self):
+        if self.action == 'pdf':
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
+    @action(detail=False, methods=['post'])
+    def generate(self, request):
+        """POST commerce/delivery-notes/generate/ — genera un albarà DRAFT amb línies proposades
+        a partir de {work_order_ids}. Gate CONFIGURE. Retorna el DRAFT creat (201) o els errors
+        del guard junts (400 amb `detail` i `errors`, p.ex. extres pendents de revisió)."""
+        ids = request.data.get('work_order_ids') or []
+        wos = list(WorkOrder.objects.select_related('order_line__product', 'customer')
+                   .filter(pk__in=ids))
+        missing = set(ids) - {w.pk for w in wos}
+        if missing:
+            return Response({'detail': f'Encàrrecs no trobats: {sorted(missing)}.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import generate_delivery_note
+        try:
+            dn = generate_delivery_note(wos, user=getattr(request.user, 'profile', None))
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages), 'errors': e.messages},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(dn).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def issue(self, request, pk=None):
+        """POST commerce/delivery-notes/{id}/issue/ — emet el DRAFT (→ISSUED, congela línies).
+        Gate CONFIGURE. Guard: almenys 1 línia."""
+        dn = self.get_object()
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import issue_delivery_note
+        try:
+            issue_delivery_note(dn, user=getattr(request.user, 'profile', None))
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(dn).data)
+
+    def destroy(self, request, *args, **kwargs):
+        dn = self.get_object()
+        if dn.status != 'DRAFT':
+            return Response({'detail': "No es pot esborrar un albarà emès (ISSUED)."},
+                            status=status.HTTP_409_CONFLICT)
+        return super().destroy(request, *args, **kwargs)
+
+
+class DeliveryNoteLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin,
+                              mixins.ListModelMixin, mixins.UpdateModelMixin,
+                              viewsets.GenericViewSet):
+    """Línies d'albarà (edició filtrada per ?delivery_note=). Només PATCH de preu/descripció en
+    DRAFT (guard replicat al serializer per a un 400 net); FK de traçabilitat read-only. Sense
+    create/destroy per API: les línies neixen de `generate/`."""
+    queryset = DeliveryNoteLine.objects.select_related('delivery_note', 'product').all()
+    serializer_class = DeliveryNoteLineSerializer
+    filterset_fields = ['delivery_note', 'line_kind']

@@ -5,6 +5,7 @@ from .views import (
     ProductComponentViewSet, ProductPriceGTIViewSet,
     QuoteViewSet, QuoteLineViewSet, PaymentTermsViewSet,
     SalesOrderViewSet, SalesOrderLineViewSet, WorkOrderViewSet, ExpenseViewSet,
+    DeliveryNoteViewSet, DeliveryNoteLineViewSet,
 )
 
 # Mòdul Comercial Studio — mestre d'articles (B1). Escriptura gated CONFIGURE.
@@ -26,5 +27,9 @@ router.register(r'commerce/order-lines', SalesOrderLineViewSet, basename='commer
 router.register(r'commerce/work-orders', WorkOrderViewSet, basename='commerce-work-order')
 # Despeses d'un encàrrec (B4b), satèl·lit filtrat per ?work_order=.
 router.register(r'commerce/expenses', ExpenseViewSet, basename='commerce-expense')
+# Albarans (B4c). generate/issue/pdf són @action sota delivery-notes/{pk}/ (generate a la llista).
+router.register(r'commerce/delivery-notes', DeliveryNoteViewSet, basename='commerce-delivery-note')
+router.register(r'commerce/delivery-note-lines', DeliveryNoteLineViewSet,
+                basename='commerce-delivery-note-line')
 
 urlpatterns = router.urls

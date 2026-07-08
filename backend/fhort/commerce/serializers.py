@@ -9,7 +9,7 @@ from rest_framework import serializers
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
     Quote, QuoteLine, PaymentTerms, PaymentTermLine, SalesOrder, SalesOrderLine,
-    DocumentDueDate, WorkOrder, WorkOrderAdjustment, Expense,
+    DocumentDueDate, WorkOrder, WorkOrderAdjustment, Expense, DeliveryNote, DeliveryNoteLine,
 )
 
 
@@ -308,3 +308,52 @@ class ExpenseSerializer(serializers.ModelSerializer):
         except DjangoValidationError as e:
             raise serializers.ValidationError({'product': e.messages})
         return attrs
+
+
+# ── Documents comercials — DeliveryNote (albarà, B4c) ──────────────────────────────────
+
+class DeliveryNoteLineSerializer(serializers.ModelSerializer):
+    """Línia d'albarà. En DRAFT el comercial edita NOMÉS `unit_price`/`description`/`notes`; els
+    camps de traçabilitat (FK), `quantity`, `line_kind` i `line_total` són read-only. El guard
+    DRAFT viu al model i es replica aquí per a un 400 net (patró QuoteLine)."""
+    product_code = serializers.CharField(source='product.code', read_only=True, default=None)
+    product_name = serializers.CharField(source='product.name', read_only=True, default=None)
+
+    class Meta:
+        model = DeliveryNoteLine
+        fields = ['id', 'delivery_note', 'line_kind', 'product', 'product_code', 'product_name',
+                  'description', 'quantity', 'unit_price', 'line_total', 'position',
+                  'work_order', 'model_task', 'expense', 'adjustment']
+        read_only_fields = ['delivery_note', 'line_kind', 'product', 'quantity', 'line_total',
+                            'position', 'work_order', 'model_task', 'expense', 'adjustment']
+
+    def validate(self, data):
+        dn = getattr(self.instance, 'delivery_note', None)
+        if dn is not None and dn.status != 'DRAFT':
+            raise serializers.ValidationError(
+                "No es poden modificar línies d'un albarà que no està en esborrany (DRAFT).")
+        return data
+
+
+class DeliveryNoteSerializer(serializers.ModelSerializer):
+    """Capçalera d'albarà amb línies nested (read-only, s'editen pel DeliveryNoteLineViewSet,
+    ?delivery_note=). Numeració/totals/estat calculats o gestionats pel backend (read-only);
+    `notes` editable en DRAFT. `work_orders_included` = els WO agregats (traçabilitat)."""
+    customer_nom = serializers.CharField(source='customer.nom', read_only=True)
+    lines = DeliveryNoteLineSerializer(many=True, read_only=True)
+    issued_by_nom = serializers.CharField(source='issued_by.nom_complet', read_only=True, default=None)
+    work_orders_included = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DeliveryNote
+        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom', 'status',
+                  'issued_at', 'issued_by', 'issued_by_nom', 'subtotal', 'tax_amount', 'total',
+                  'tax_breakdown', 'notes', 'created_at', 'updated_at', 'lines',
+                  'work_orders_included']
+        read_only_fields = ['document_number', 'doc_type', 'customer', 'status', 'issued_at',
+                            'issued_by', 'subtotal', 'tax_amount', 'total', 'tax_breakdown',
+                            'created_at', 'updated_at']
+
+    def get_work_orders_included(self, obj):
+        return [{'id': w.id, 'number': w.number, 'kind': w.kind}
+                for w in obj.delivery_notes_included.all()]
