@@ -261,6 +261,7 @@
     "products": "Products",
     "quotes": "Quotes",
     "orders": "Orders",
+    "workorders": "Work orders",
     "payment_terms": "Payment terms",
     "clients": "Clients",
     "section_principal": "Main",
@@ -925,6 +926,25 @@
     "exc_removed": "Exception removed.",
     "exc_gti_ph": "— Garment type (GTI) —",
     "exc_filter_ph": "Filter by garment type…"
+  },
+  "workorders": {
+    "title": "Work orders",
+    "subtitle": "Execution containers: model work orders and monthly per-client collectors",
+    "col_number": "Number", "col_kind": "Kind", "col_customer": "Customer",
+    "col_target": "Model / period", "col_status": "Status", "col_tasks": "Tasks",
+    "kind_ORDER": "Order", "kind_COLLECTOR": "Collector",
+    "status_OPEN": "Open", "status_CLOSED": "Closed",
+    "filter_kind_all": "All kinds", "filter_status_all": "All statuses", "filter_customer_all": "All customers",
+    "open": "Open", "back": "Back to work orders", "loading": "Loading work orders…",
+    "empty": "No work orders.", "error": "The operation could not be completed.",
+    "close_action": "Close work order", "closed_ok": "Work order closed.", "close_error": "The work order could not be closed.",
+    "tasks": "Tasks", "tasks_empty": "No tasks.", "task_type": "Task type", "task_status": "Status", "task_minutes": "Time",
+    "off_recipe": "Off recipe",
+    "status_task_Done": "Done", "status_task_InProgress": "In progress", "status_task_Paused": "Paused", "status_task_Pending": "Pending",
+    "adjustments": "Adjustments", "adj_EXTRA_BILL": "Extra billed", "adj_EXTRA_ABSORB": "Extra absorbed", "adj_DEDUCTION": "Deduction",
+    "close_title": "Close the work order", "blockers_hard": "Blocking tasks (resolve them in the kanban):",
+    "blockers_extra": "Extras to resolve:", "pending_title": "Pending tasks (recipe not executed):",
+    "close_deduct": "Deduct pending and close", "close_confirm": "Confirm close", "close_cancel": "Cancel"
   },
   "orders": {
     "title": "Orders",

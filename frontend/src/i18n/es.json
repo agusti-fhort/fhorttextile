@@ -261,6 +261,7 @@
     "products": "Productos",
     "quotes": "Ofertas",
     "orders": "Pedidos",
+    "workorders": "Encargos",
     "payment_terms": "Condiciones de pago",
     "clients": "Clientes",
     "section_principal": "Principal",
@@ -925,6 +926,25 @@
     "exc_removed": "Excepción quitada.",
     "exc_gti_ph": "— Tipo de prenda (GTI) —",
     "exc_filter_ph": "Filtrar por tipo de prenda…"
+  },
+  "workorders": {
+    "title": "Encargos",
+    "subtitle": "Contenedores de ejecución: encargos de modelo y colectores mensuales por cliente",
+    "col_number": "Número", "col_kind": "Tipo", "col_customer": "Cliente",
+    "col_target": "Modelo / período", "col_status": "Estado", "col_tasks": "Tareas",
+    "kind_ORDER": "Encargo", "kind_COLLECTOR": "Colector",
+    "status_OPEN": "Abierto", "status_CLOSED": "Cerrado",
+    "filter_kind_all": "Todos los tipos", "filter_status_all": "Todos los estados", "filter_customer_all": "Todos los clientes",
+    "open": "Abrir", "back": "Volver a los encargos", "loading": "Cargando encargos…",
+    "empty": "Ningún encargo.", "error": "No se ha podido completar la operación.",
+    "close_action": "Cerrar encargo", "closed_ok": "Encargo cerrado.", "close_error": "No se ha podido cerrar el encargo.",
+    "tasks": "Tareas", "tasks_empty": "Ninguna tarea.", "task_type": "Tipo de tarea", "task_status": "Estado", "task_minutes": "Tiempo",
+    "off_recipe": "Fuera de receta",
+    "status_task_Done": "Hecha", "status_task_InProgress": "En curso", "status_task_Paused": "Pausada", "status_task_Pending": "Pendiente",
+    "adjustments": "Ajustes", "adj_EXTRA_BILL": "Extra facturado", "adj_EXTRA_ABSORB": "Extra absorbido", "adj_DEDUCTION": "Deducción",
+    "close_title": "Cerrar el encargo", "blockers_hard": "Tareas que bloquean (resuélvelas en el kanban):",
+    "blockers_extra": "Extras por resolver:", "pending_title": "Tareas pendientes (receta no ejecutada):",
+    "close_deduct": "Deducir pendientes y cerrar", "close_confirm": "Confirmar cierre", "close_cancel": "Cancelar"
   },
   "orders": {
     "title": "Pedidos",

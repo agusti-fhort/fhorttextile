@@ -216,6 +216,14 @@ export const customers = {
   remove: (id) => client.delete(`/api/v1/customers/${id}/`),
 }
 
+// Biblioteca de nomenclatura del client (CustomerPOMAlias). Escriptura gated CONFIGURE.
+export const customerAliases = {
+  list: (params) => client.get('/api/v1/customer-pom-aliases/', { params }),   // ?customer=<id>
+  create: (data) => client.post('/api/v1/customer-pom-aliases/', data),
+  update: (id, data) => client.patch(`/api/v1/customer-pom-aliases/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/customer-pom-aliases/${id}/`),
+}
+
 // Plantilla de fitxa tècnica per client (TS-3). get_or_create + PATCH; escriptura gated CONFIGURE.
 export const techSheetTemplate = {
   detail: (customerId) => client.get(`/api/v1/customers/${customerId}/tech-sheet-template/`),
@@ -388,6 +396,12 @@ export const commerce = {
   orderLines: {
     list: (params) => client.get('/api/v1/commerce/order-lines/', { params }),   // ?order=
     update: (id, data) => client.patch(`/api/v1/commerce/order-lines/${id}/`, data),   // qty_allocated
+  },
+  // Encàrrecs / ordres de treball (B4a). No es creen per POST (ORDER=wizard, COLLECTOR=hook).
+  workOrders: {
+    list: (params) => client.get('/api/v1/commerce/work-orders/', { params }),   // ?kind=&status=&customer=&period=
+    get: (id) => client.get(`/api/v1/commerce/work-orders/${id}/`),
+    close: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/close/`, data || {}),
   },
 }
 

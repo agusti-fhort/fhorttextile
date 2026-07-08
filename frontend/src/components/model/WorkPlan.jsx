@@ -69,9 +69,9 @@ const TRANSPORT = {
   Done:       { play: true,  pause: false, stop: false },
 }
 
-// Fora d'encàrrec: tasca iniciada fora de l'encàrrec del PM (arbre global / externa lliure),
-// marcada al backend amb origen='ad_hoc' (les 'prevista' són d'encàrrec). Activa el filet grana.
-function isOutOfCharge(task) { return task?.origen === 'ad_hoc' }
+// Fora d'encàrrec / fora de recepta: extra marcat al backend amb off_recipe=True (B4a), o
+// tasca iniciada fora de l'encàrrec (origen='ad_hoc'). Activa el filet grana. NOMÉS marca.
+function isOutOfCharge(task) { return task?.off_recipe === true || task?.origen === 'ad_hoc' }
 
 const containerStyle = { background: 'transparent', width: '100%' }
 const cardsGrid = { display: 'flex', flexWrap: 'wrap', gap: 12 }

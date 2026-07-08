@@ -2112,6 +2112,9 @@ def model_dashboard_view(request, model_id):
         'temps_consumit_min': int(temps_per_task.get(t.id, 0)),
         'obertures': int(obertures_per_task.get(t.id, 0)),
         'order': t.order,
+        # B4a — origen/off_recipe per pintar el filet grana (extra fora de recepta) al board.
+        'origen': t.origen,
+        'off_recipe': t.off_recipe,
     } for t in pla_tasks]
 
     # --- Q3: atenció tècnica — alertes POM PENDENTS de resoldre ---

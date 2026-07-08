@@ -261,6 +261,7 @@
     "products": "Productes",
     "quotes": "Ofertes",
     "orders": "Comandes",
+    "workorders": "Encàrrecs",
     "payment_terms": "Condicions de pagament",
     "clients": "Clients",
     "section_principal": "Principal",
@@ -925,6 +926,25 @@
     "exc_removed": "Excepció treta.",
     "exc_gti_ph": "— Tipus de peça (GTI) —",
     "exc_filter_ph": "Filtrar per tipus de peça…"
+  },
+  "workorders": {
+    "title": "Encàrrecs",
+    "subtitle": "Contenidors d'execució: encàrrecs de model i col·lectors mensuals per client",
+    "col_number": "Número", "col_kind": "Tipus", "col_customer": "Client",
+    "col_target": "Model / període", "col_status": "Estat", "col_tasks": "Tasques",
+    "kind_ORDER": "Encàrrec", "kind_COLLECTOR": "Col·lector",
+    "status_OPEN": "Obert", "status_CLOSED": "Tancat",
+    "filter_kind_all": "Tots els tipus", "filter_status_all": "Tots els estats", "filter_customer_all": "Tots els clients",
+    "open": "Obrir", "back": "Tornar als encàrrecs", "loading": "Carregant encàrrecs…",
+    "empty": "Cap encàrrec.", "error": "No s'ha pogut completar l'operació.",
+    "close_action": "Tancar encàrrec", "closed_ok": "Encàrrec tancat.", "close_error": "No s'ha pogut tancar l'encàrrec.",
+    "tasks": "Tasques", "tasks_empty": "Cap tasca.", "task_type": "Tipus de tasca", "task_status": "Estat", "task_minutes": "Temps",
+    "off_recipe": "Fora de recepta",
+    "status_task_Done": "Feta", "status_task_InProgress": "En curs", "status_task_Paused": "Pausada", "status_task_Pending": "Pendent",
+    "adjustments": "Ajustos", "adj_EXTRA_BILL": "Extra facturat", "adj_EXTRA_ABSORB": "Extra absorbit", "adj_DEDUCTION": "Deducció",
+    "close_title": "Tancar l'encàrrec", "blockers_hard": "Tasques que bloquegen (resol-les al kanban):",
+    "blockers_extra": "Extres per resoldre:", "pending_title": "Tasques pendents (recepta no executada):",
+    "close_deduct": "Deduir pendents i tancar", "close_confirm": "Confirmar tancament", "close_cancel": "Cancel·lar"
   },
   "orders": {
     "title": "Comandes",

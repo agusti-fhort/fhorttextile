@@ -23,7 +23,8 @@ class ModelTaskSerializer(serializers.ModelSerializer):
         fields = ['id', 'model', 'model_codi', 'task_type', 'task_type_code', 'task_type_name',
                   'status', 'origen', 'assignee', 'order', 'created_at', 'updated_at',
                   'started_at', 'finished_at', 'estimated_minutes', 'rectifications',
-                  'planned_start', 'planned_end', 'planned_locked']
+                  'planned_start', 'planned_end', 'planned_locked',
+                  'work_order', 'off_recipe']
         # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
         # origen el fixa el backend en crear (prevista per defecte; ad_hoc des de l'arbre global,
         # Sprint 4) → read-only per al client.
@@ -34,7 +35,8 @@ class ModelTaskSerializer(serializers.ModelSerializer):
         # referència/llista; el Gantt pinta des de plan/compute (local).
         read_only_fields = ['created_at', 'updated_at', 'origen',
                             'started_at', 'finished_at', 'estimated_minutes',
-                            'planned_start', 'planned_end', 'planned_locked']
+                            'planned_start', 'planned_end', 'planned_locked',
+                            'work_order', 'off_recipe']
 
     def get_rectifications(self, obj):
         return rectification_count(obj)
