@@ -203,6 +203,26 @@ class SalesOrderLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mix
     serializer_class = SalesOrderLineSerializer
     filterset_fields = ['order', 'product']
 
+    @action(detail=True, methods=['post'], url_path='assign-model')
+    def assign_model(self, request, pk=None):
+        """POST commerce/order-lines/{id}/assign-model/ — assigna un model a la línia i crea el
+        seu WorkOrder ORDER (snapshots congelats), imputa +1 a qty_allocated i migra les tasques
+        del col·lector al nou encàrrec. Gate CONFIGURE. Body: {model_id}."""
+        from fhort.models_app.models import Model
+        line = self.get_object()
+        model_id = request.data.get('model_id')
+        model = Model.objects.filter(pk=model_id).first()
+        if model is None:
+            return Response({'detail': 'Model no trobat.'}, status=status.HTTP_404_NOT_FOUND)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import assign_model_to_order_line
+        try:
+            wo, meta = assign_model_to_order_line(model, line, user=getattr(request.user, 'profile', None))
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'work_order': WorkOrderSerializer(wo).data, **meta},
+                        status=status.HTTP_201_CREATED)
+
 
 class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     """Encàrrecs / ordres de treball (B4a). Lectura (autenticat) + acció `close` (gate

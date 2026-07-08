@@ -219,6 +219,61 @@ def close_work_order(work_order, user=None, cancel_pending=False):
     return {'closed': True, 'blockers': [], 'pending_proposals': []}
 
 
+def assign_model_to_order_line(model, order_line, user=None):
+    """Assigna un model a una línia de comanda i crea el seu WorkOrder ORDER (B4b). Congela
+    price_snapshot i recipe_snapshot del Product de la línia (cap FK viva). MIGRA les tasques
+    del model que avui pengen d'un COLLECTOR al nou ORDER (cap albarà existeix encara, B4c: la
+    feina contractada no s'ha de facturar al calaix mensual). Retorna (work_order, warnings).
+
+    Llança ValidationError als guards durs. `warnings` = avisos no bloquejants (p.ex. GTI).
+    """
+    from django.core.exceptions import ValidationError
+    from .models import WorkOrder
+    from fhort.tasks.models import ModelTask
+    from fhort.tasks.services_c import _is_off_recipe
+
+    order = order_line.order
+    if order.status != 'OPEN':
+        raise ValidationError("La comanda no està oberta (OPEN): no s'hi poden assignar models.")
+    if model.customer_id != order.customer_id:
+        raise ValidationError("El model i la comanda han de ser del mateix client.")
+    if Decimal(order_line.qty_allocated or 0) >= Decimal(order_line.quantity or 0):
+        raise ValidationError("La línia ja té tota la quantitat imputada (qty_allocated = quantity).")
+    if WorkOrder.objects.filter(model=model, kind='ORDER', status='OPEN').exists():
+        raise ValidationError("El model ja té un encàrrec (WO ORDER) actiu.")
+
+    warnings = []
+    if model.garment_type_item_id is None:
+        warnings.append("El model no té garment_type_item: no es pot comprovar la compatibilitat.")
+
+    with transaction.atomic():
+        product = order_line.product
+        recipe_codes = list(product.recipe_lines.values_list('task_code', flat=True))
+        wo = WorkOrder.objects.create(
+            customer_id=model.customer_id, model=model, order_line=order_line,
+            kind='ORDER', origin='MANUAL', created_by=user,
+            price_snapshot={'unit_price': str(order_line.unit_price or '0'),
+                            'product_code': getattr(product, 'code', None)},
+            recipe_snapshot={'task_codes': recipe_codes})
+
+        # Imputació de cartera: +1 unitat (quantize 0.01).
+        order_line.qty_allocated = (Decimal(order_line.qty_allocated or 0) + Decimal('1')).quantize(_CENT)
+        order_line.save(update_fields=['qty_allocated'])
+
+        # Migració del col·lector: les tasques del model que pengen d'un COLLECTOR (i encara no
+        # s'han albaranat — cap albarà existeix a B4b) es mouen al nou ORDER, amb off_recipe
+        # recalculat contra la recepta congelada. TODO B4c: excloure aquí les tasques albaranades.
+        migrated = 0
+        for task in ModelTask.objects.filter(
+                model=model, work_order__kind='COLLECTOR').select_related('task_type'):
+            task.work_order = wo
+            task.off_recipe = _is_off_recipe(task, wo)
+            task.save(update_fields=['work_order', 'off_recipe', 'updated_at'])
+            migrated += 1
+
+    return wo, {'warnings': warnings, 'migrated_tasks': migrated}
+
+
 def apply_commercial_review(work_order, items, user=None):
     """Revisió COMERCIAL d'un WO tancat (B4b, decisió Agus 2026-07-08): el comercial fixa el
     PREU DE VENDA dels extres i deduccions. Acte posterior i separat del tancament del tècnic.
