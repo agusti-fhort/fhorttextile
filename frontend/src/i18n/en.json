@@ -833,7 +833,21 @@
     "deleted": "Supplier deleted.",
     "delete_protected": "Cannot delete: it has productions. Deactivate it.",
     "confirm_delete": "Delete supplier «{{name}}»?",
-    "required": "Name is required."
+    "required": "Name is required.",
+    "tab_dades": "Details",
+    "tab_comercial": "Commercial",
+    "rao_social": "Legal name",
+    "nif": "Tax ID",
+    "adreca": "Address",
+    "adreca1": "Address (line 1)",
+    "adreca2": "Address (line 2)",
+    "codi_postal": "Postal code",
+    "ciutat": "City",
+    "pais": "Country (ISO-2)",
+    "condicions_compra": "Purchase conditions",
+    "email_contacte": "Contact email",
+    "persona_contacte": "Contact person",
+    "telefon_contacte": "Contact phone"
   },
   "products": {
     "title": "Products",

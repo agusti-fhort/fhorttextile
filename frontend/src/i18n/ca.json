@@ -833,7 +833,21 @@
     "deleted": "Proveïdor esborrat.",
     "delete_protected": "No es pot esborrar: té confeccions associades. Desactiva'l.",
     "confirm_delete": "Esborrar el proveïdor «{{name}}»?",
-    "required": "Nom obligatori."
+    "required": "Nom obligatori.",
+    "tab_dades": "Dades",
+    "tab_comercial": "Comercial",
+    "rao_social": "Raó social",
+    "nif": "NIF / Tax ID",
+    "adreca": "Adreça",
+    "adreca1": "Adreça (línia 1)",
+    "adreca2": "Adreça (línia 2)",
+    "codi_postal": "Codi postal",
+    "ciutat": "Ciutat",
+    "pais": "País (ISO-2)",
+    "condicions_compra": "Condicions de compra",
+    "email_contacte": "Email de contacte",
+    "persona_contacte": "Persona de contacte",
+    "telefon_contacte": "Telèfon de contacte"
   },
   "products": {
     "title": "Productes",

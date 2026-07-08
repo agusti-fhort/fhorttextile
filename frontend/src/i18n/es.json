@@ -833,7 +833,21 @@
     "deleted": "Proveedor eliminado.",
     "delete_protected": "No se puede eliminar: tiene confecciones asociadas. Desactívalo.",
     "confirm_delete": "¿Eliminar el proveedor «{{name}}»?",
-    "required": "Nombre obligatorio."
+    "required": "Nombre obligatorio.",
+    "tab_dades": "Datos",
+    "tab_comercial": "Comercial",
+    "rao_social": "Razón social",
+    "nif": "NIF / Tax ID",
+    "adreca": "Dirección",
+    "adreca1": "Dirección (línea 1)",
+    "adreca2": "Dirección (línea 2)",
+    "codi_postal": "Código postal",
+    "ciutat": "Ciudad",
+    "pais": "País (ISO-2)",
+    "condicions_compra": "Condiciones de compra",
+    "email_contacte": "Email de contacto",
+    "persona_contacte": "Persona de contacto",
+    "telefon_contacte": "Teléfono de contacto"
   },
   "products": {
     "title": "Productos",
