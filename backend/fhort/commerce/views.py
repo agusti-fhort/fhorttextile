@@ -221,15 +221,16 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
 
     @action(detail=True, methods=['post'])
     def close(self, request, pk=None):
-        """POST commerce/work-orders/{id}/close/ — tanca segons la política B4a. Resposta
-        estructurada { closed, blockers, pending_proposals }. 409 si no es pot tancar.
-        Body opcional: {resolve_extras: [...], cancel_pending: bool}."""
+        """POST commerce/work-orders/{id}/close/ — el TÈCNIC tanca (feina feta). Bloqueja
+        NOMÉS per tasques InProgress/Paused; els extres NO bloquegen (la revisió comercial
+        en preu de venda és un acte posterior, /review/, B4b). Resposta estructurada
+        { closed, blockers, pending_proposals }. 409 si no es pot tancar. Body opcional:
+        {cancel_pending: bool}."""
         wo = self.get_object()
         profile = getattr(request.user, 'profile', None)
         from .services import close_work_order
         result = close_work_order(
             wo, user=profile,
-            resolve_extras=request.data.get('resolve_extras'),
             cancel_pending=bool(request.data.get('cancel_pending')))
         code = status.HTTP_200_OK if result['closed'] else status.HTTP_409_CONFLICT
         return Response(result, status=code)
