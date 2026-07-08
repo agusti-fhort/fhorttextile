@@ -87,6 +87,12 @@ class ModelTask(models.Model):
                        help_text="Posició manual fixa: el recàlcul es col·loca al voltant.")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # B4a — vincle a l'encàrrec (contenidor d'execució). FK per string per no importar
+    # commerce a tasks (evita cicle d'import). SET_NULL: si es purga un WO, la tasca no cau.
+    work_order = models.ForeignKey('commerce.WorkOrder', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='tasks')
+    # True = extra fora de la recepta del WorkOrder ORDER (marca grana al kanban).
+    off_recipe = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['model', 'order']

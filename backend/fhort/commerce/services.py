@@ -17,10 +17,11 @@ from .models_base import DocumentSequence
 _CENT = Decimal('0.01')
 
 # Prefix de numeració per tipus de document (reinici anual, R5). Només Quote a B2.
-# TODO B3-B5: 'sales_order':'SO', 'work_order':'WO', 'delivery_note':'DN', 'settlement':'ST'.
+# TODO B5: 'delivery_note':'DN', 'settlement':'ST'.
 DOC_PREFIXES = {
     'quote': 'OF',          # oferta
     'sales_order': 'SO',    # comanda (B3b) — seqüència independent de la d'ofertes
+    'work_order': 'WO',     # encàrrec / ordre de treball (B4a) — contenidor d'execució
 }
 
 

@@ -428,3 +428,88 @@ class DocumentDueDate(models.Model):
 
     def __str__(self):
         return f'{self.document}: {self.amount} @ {self.due_date}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# ENCÀRREC / ORDRE DE TREBALL (B4a) — contenidor d'execució, NO document emès al client.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+class WorkOrder(models.Model):
+    """Contenidor d'execució que agrupa les ModelTask d'un encàrrec (B4a). NO és un
+    AbstractDocument: no s'emet al client, no porta línies/totals fiscals; l'albarà (B4c)
+    en serà el document derivat. Dues menes:
+
+    - ORDER: encàrrec real d'un model × line de comanda; congela `price_snapshot` i
+      `recipe_snapshot` en crear-lo des de l'order_line (base contra què es marquen els
+      extres off_recipe).
+    - COLLECTOR: contenidor mensual lazy per (customer, period='YYYY-MM') que recull les
+      tasques de models sense encàrrec. Sense model/order_line/recepta: al col·lector res
+      és off_recipe (no hi ha recepta contra què comparar).
+
+    El tancament (status OPEN→CLOSED) és el gate real (B4a P5); un WO CLOSED no accepta
+    més tasques.
+    """
+    KIND_CHOICES = [
+        ('ORDER', 'Order'),          # encàrrec d'un model concret
+        ('COLLECTOR', 'Collector'),  # col·lector mensual per client
+    ]
+    ORIGIN_CHOICES = [
+        ('MANUAL', 'Manual'),
+        ('EXTERNAL_BUS', 'External bus'),  # federation-aware (disseny §7)
+    ]
+    STATUS_CHOICES = [
+        ('OPEN', 'Open'),
+        ('CLOSED', 'Closed'),
+    ]
+    number = models.CharField(
+        max_length=30, unique=True, blank=True,
+        help_text="Generat a save() (reserve_document_number 'work_order'). Mai editable.")
+    customer = models.ForeignKey('tasks.Customer', on_delete=models.PROTECT,
+                                 related_name='work_orders')
+    model = models.ForeignKey('models_app.Model', on_delete=models.PROTECT,
+                              null=True, blank=True, related_name='work_orders',
+                              help_text="null = col·lector (no lligat a un model concret).")
+    order_line = models.ForeignKey('commerce.SalesOrderLine', on_delete=models.PROTECT,
+                                   null=True, blank=True, related_name='work_orders',
+                                   help_text="Línia de comanda origen (nullable: encàrrec sense comanda / col·lector).")
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='ORDER')
+    origin = models.CharField(max_length=20, choices=ORIGIN_CHOICES, default='MANUAL')
+    period = models.CharField(max_length=7, blank=True,
+                              help_text="'YYYY-MM' — només per COLLECTOR (mes de recollida).")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
+    # Congelats en crear des d'order_line; buits al col·lector (no hi ha recepta a comparar).
+    price_snapshot = models.JSONField(default=dict, blank=True)
+    recipe_snapshot = models.JSONField(default=dict, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closed_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                  null=True, blank=True, related_name='work_orders_closed')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='work_orders_created')
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Work order'
+        verbose_name_plural = 'Work orders'
+        constraints = [
+            # Un sol col·lector per (customer, mes).
+            models.UniqueConstraint(
+                fields=['customer', 'period'], condition=models.Q(kind='COLLECTOR'),
+                name='uniq_collector_customer_period'),
+            # El col·lector no pot anar lligat a model ni a línia de comanda.
+            models.CheckConstraint(
+                condition=~models.Q(kind='COLLECTOR') |
+                          (models.Q(model__isnull=True) & models.Q(order_line__isnull=True)),
+                name='collector_no_model_no_orderline'),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.number:
+            from .services import reserve_document_number
+            self.number = reserve_document_number('work_order')
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        tag = self.period if self.kind == 'COLLECTOR' else (self.model_id or '—')
+        return f'{self.number or "WO?"} [{self.kind}] {tag}'
