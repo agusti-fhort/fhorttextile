@@ -233,6 +233,44 @@ class POMEstadisticaTenant(models.Model):
         return f'{self.pom.codi_client} · {self.garment_type}/{self.talla_label}'
 
 
+class CustomerPOMAlias(models.Model):
+    """Àlies de NOMENCLATURA per client (N1, DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08): separa
+    "com anomena un client una mesura" (client_code/client_description) del catàleg canònic
+    (POMMaster). Un client pot tenir DIVERSOS codis per al mateix POM (p.ex. Losan H.11 sleeve
+    opening vs H.16 cuff opening) → unicitat (customer, client_code), NO (customer, pom).
+    ADDITIU: encara no el consumeix el matcher (N3)."""
+    ORIGEN_CHOICES = [
+        ('IMPORT', 'Import'), ('MANUAL', 'Manual'), ('MIGRACIO', 'Migració'),
+    ]
+    # db_constraint=False: `pom` és SHARED+TENANT però `tasks.Customer` és tenant-only → la FK
+    # creua schemas (mateix patró que GarmentPOMMap). PROTECT a nivell ORM, sense constraint de BD.
+    customer = models.ForeignKey(
+        'tasks.Customer', on_delete=models.PROTECT, related_name='pom_aliases',
+        db_constraint=False)
+    pom = models.ForeignKey(
+        POMMaster, on_delete=models.CASCADE, related_name='client_aliases')
+    client_code = models.CharField(max_length=60)
+    client_description = models.CharField(max_length=200, blank=True, default='')
+    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default='MANUAL')
+    pendent_revisio = models.BooleanField(default=False)
+    creat_at = models.DateTimeField(auto_now_add=True)
+    actualitzat_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Àlies POM de client'
+        verbose_name_plural = 'Àlies POM de client'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['customer', 'client_code'], name='uniq_customer_client_code'),
+        ]
+        indexes = [
+            models.Index(fields=['customer', 'client_code'], name='idx_customer_client_code'),
+        ]
+
+    def __str__(self):
+        return f'{self.customer.codi}:{self.client_code} → {self.pom.codi_client}'
+
+
 class SizeSystem(models.Model):
     codi = models.CharField(max_length=60, unique=True)
     nom = models.CharField(max_length=120)
@@ -458,6 +496,12 @@ class GradingRuleSet(models.Model):
     )
     size_system = models.ForeignKey(SizeSystem, on_delete=models.PROTECT, null=True, blank=True, related_name='grading_rule_sets')
     actiu = models.BooleanField(default=True)
+    # N1 — client propietari de la graduació (àlies de nomenclatura). FK REAL a Customer (decisió
+    # CTO), nullable i additiu. Divergència ANOTADA i NO tocada: SizeSystem.customer_codi va per
+    # codi de 3 chars; aquí anem per FK. Backfill via size_system.customer_codi (N2-3).
+    customer = models.ForeignKey(
+        'tasks.Customer', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='grading_rule_sets', db_constraint=False)
     # R2 — codis de document del run que NO es van poder vincular a cap POM (no es perden en
     # silenci: es desen aquí com a "pendents de vincular" per revisar-los més tard). Llista de str.
     pendents_vincular = models.JSONField(default=list, blank=True,
