@@ -13,6 +13,7 @@ import Table from '../components/ui/Table'
 import Badge from '../components/ui/Badge'
 import { StatusBadge } from './Quotes'
 import { OrderStatusBadge } from './Orders'
+import { DNStatusBadge } from './DeliveryNotes'
 import { primaryBtn, selS } from '../components/ui/buttons'
 
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
@@ -382,17 +383,19 @@ function AliasAddRow({ customer, t, onCreated, onError }) {
 function ComercialTab({ customer, t, navigate }) {
   const [quotes, setQuotes] = useState([])
   const [orders, setOrders] = useState([])
+  const [deliveryNotes, setDeliveryNotes] = useState([])
   const [busy, setBusy] = useState(true)
 
   useEffect(() => {
     let alive = true
+    const asList = (r) => r.data?.results ?? (Array.isArray(r.data) ? r.data : [])
     Promise.all([
       commerce.quotes.list({ customer: customer.id, ordering: '-created_at', page_size: 500 }),
       commerce.orders.list({ customer: customer.id, ordering: '-created_at', page_size: 500 }),
-    ]).then(([q, o]) => {
+      commerce.deliveryNotes.list({ customer: customer.id, ordering: '-created_at', page_size: 500 }),
+    ]).then(([q, o, d]) => {
       if (!alive) return
-      setQuotes(q.data?.results ?? (Array.isArray(q.data) ? q.data : []))
-      setOrders(o.data?.results ?? (Array.isArray(o.data) ? o.data : []))
+      setQuotes(asList(q)); setOrders(asList(o)); setDeliveryNotes(asList(d))
     }).catch(() => {}).finally(() => { if (alive) setBusy(false) })
     return () => { alive = false }
   }, [customer.id])
@@ -423,6 +426,12 @@ function ComercialTab({ customer, t, navigate }) {
         <Table columns={docCols(r => <OrderStatusBadge status={r.status} t={t} />)}
           data={orders} loading={false} empty={t('clients.orders_empty')}
           onRowClick={r => navigate(`/comercial/comandes/${r.id}`)} />
+      </section>
+      <section>
+        <SectionTitle t={t} title="clients.deliverynotes_title" count={deliveryNotes.length} />
+        <Table columns={docCols(r => <DNStatusBadge status={r.status} t={t} />)}
+          data={deliveryNotes} loading={false} empty={t('clients.deliverynotes_empty')}
+          onRowClick={r => navigate(`/comercial/albarans/${r.id}`)} />
       </section>
     </div>
   )

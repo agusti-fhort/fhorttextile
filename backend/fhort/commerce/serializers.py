@@ -260,7 +260,7 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkOrder
         fields = ['id', 'number', 'kind', 'origin', 'status', 'customer', 'customer_nom',
-                  'model', 'model_codi', 'order_line', 'period',
+                  'model', 'model_codi', 'order_line', 'period', 'delivery_note',
                   'price_snapshot', 'recipe_snapshot',
                   'closed_at', 'closed_by', 'created_at', 'n_tasks', 'tasks', 'adjustments']
 

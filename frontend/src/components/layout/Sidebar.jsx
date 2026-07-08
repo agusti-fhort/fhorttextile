@@ -59,6 +59,7 @@ const navGroups = [
     { to: '/comercial/ofertes', labelKey: 'nav.quotes', icon: 'ti-file-invoice' },
     { to: '/comercial/comandes', labelKey: 'nav.orders', icon: 'ti-clipboard-check' },
     { to: '/comercial/encarrecs', labelKey: 'nav.workorders', icon: 'ti-briefcase' },
+    { to: '/comercial/albarans', labelKey: 'nav.deliverynotes', icon: 'ti-truck-delivery' },
     { to: '/comercial/condicions-pagament', labelKey: 'nav.payment_terms', icon: 'ti-calendar-dollar' },
   ]},
   { sectionKey: 'nav.section_sistema', items: [

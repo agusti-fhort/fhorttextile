@@ -43,6 +43,12 @@ export default function WorkOrderDetail() {
   const [busy, setBusy] = useState(false)
   const [modal, setModal] = useState(null)            // resposta estructurada del close
 
+  // Modal 6 — generar albarà (B4c): selector d'altres WO CLOSED no albaranats del mateix client.
+  const [dnModal, setDnModal] = useState(false)
+  const [otherWos, setOtherWos] = useState([])
+  const [selectedWos, setSelectedWos] = useState([])  // ids addicionals seleccionats
+  const [genErrors, setGenErrors] = useState([])
+
   // Despeses
   const [expenses, setExpenses] = useState([])
   const [products, setProducts] = useState([])
@@ -133,6 +139,26 @@ export default function WorkOrderDetail() {
       .finally(() => setBusy(false))
   }
 
+  const openDnModal = () => {
+    setGenErrors([]); setSelectedWos([]); setDnModal(true)
+    commerce.workOrders.list({ customer: wo.customer, status: 'CLOSED', page_size: 500 })
+      .then(rows).then(list => setOtherWos(list.filter(w => w.id !== wo.id && !w.delivery_note)))
+      .catch(() => setOtherWos([]))
+  }
+  const toggleWo = (wid) => setSelectedWos(s =>
+    s.includes(wid) ? s.filter(x => x !== wid) : [...s, wid])
+
+  const doGenerate = () => {
+    setBusy(true); setGenErrors([]); setFeedback(null)
+    commerce.deliveryNotes.generate({ work_order_ids: [wo.id, ...selectedWos] })
+      .then(res => navigate(`/comercial/albarans/${res.data.id}`))
+      .catch(err => {
+        const data = err?.response?.data
+        setGenErrors(data?.errors || [data?.detail || t('workorders.dn_error')])
+      })
+      .finally(() => setBusy(false))
+  }
+
   const saveReview = () => {
     const items = Object.entries(review).map(([mt, v]) => ({
       model_task_id: Number(mt), kind: v.kind, amount: v.amount === '' ? '0' : v.amount,
@@ -177,11 +203,24 @@ export default function WorkOrderDetail() {
 
       <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
-      {canClose && isOpen && (
-        <button onClick={() => doClose()} disabled={busy} style={{ ...primaryBtn, marginBottom: 8 }}>
-          <i className="ti ti-lock" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.close_action')}
-        </button>
-      )}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        {canClose && isOpen && (
+          <button onClick={() => doClose()} disabled={busy} style={{ ...primaryBtn }}>
+            <i className="ti ti-lock" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.close_action')}
+          </button>
+        )}
+        {/* B4c — generar albarà: WO tancat i encara no albaranat. Si ja ho està, enllaç a l'albarà. */}
+        {isClosed && canConfigure && !wo.delivery_note && (
+          <button onClick={openDnModal} disabled={busy} style={{ ...primaryBtn }}>
+            <i className="ti ti-file-invoice" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.dn_generate')}
+          </button>
+        )}
+        {isClosed && wo.delivery_note && (
+          <button onClick={() => navigate(`/comercial/albarans/${wo.delivery_note}`)} style={smallBtn}>
+            <i className="ti ti-file-invoice" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.dn_view')}
+          </button>
+        )}
+      </div>
 
       {/* Tasques */}
       <div style={sectionTitle}>{t('workorders.tasks')}</div>
@@ -371,6 +410,61 @@ export default function WorkOrderDetail() {
                 </button>
               )}
               <button onClick={() => setModal(null)} disabled={busy} style={smallBtn}>{t('workorders.close_cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 6 — generar albarà: aquest WO + altres WO CLOSED no albaranats del mateix client */}
+      {dnModal && (
+        <div onClick={() => setDnModal(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--white)', borderRadius: 12, padding: '1.2rem 1.4rem',
+            maxWidth: 520, width: '100%', maxHeight: '80vh', overflowY: 'auto',
+            border: '0.5px solid var(--gray-l)',
+          }}>
+            <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
+              {t('workorders.dn_title')}
+            </h2>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
+              {t('workorders.dn_help')}
+            </p>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, marginBottom: 4 }}>
+                <i className="ti ti-check" style={{ fontSize: 13, marginRight: 4, color: 'var(--ok)' }} />{wo.number}
+              </div>
+              {otherWos.length > 0 && (
+                <>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', margin: '8px 0 4px' }}>{t('workorders.dn_others')}</div>
+                  {otherWos.map(w => (
+                    <label key={w.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '3px 0', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={selectedWos.includes(w.id)} onChange={() => toggleWo(w.id)} />
+                      <span style={{ fontFamily: MONO, fontWeight: 600 }}>{w.number}</span>
+                      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+                        {w.kind === 'COLLECTOR' ? w.period : (w.model_codi || '—')}
+                      </span>
+                    </label>
+                  ))}
+                </>
+              )}
+            </div>
+            {genErrors.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ color: 'var(--err)', fontWeight: 600, marginBottom: 4 }}>{t('workorders.dn_blocked')}</div>
+                {genErrors.map((m, i) => (
+                  <div key={i} style={{ fontSize: 'var(--fs-body)', color: 'var(--err)' }}>· {m}</div>
+                ))}
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 6 }}>
+                  {t('workorders.dn_blocked_help')}
+                </div>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+              <button onClick={doGenerate} disabled={busy} style={{ ...primaryBtn }}>{t('workorders.dn_confirm')}</button>
+              <button onClick={() => setDnModal(false)} disabled={busy} style={smallBtn}>{t('workorders.dn_cancel')}</button>
             </div>
           </div>
         </div>

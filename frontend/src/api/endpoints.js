@@ -423,6 +423,22 @@ export const commerce = {
     update: (id, data) => client.patch(`/api/v1/commerce/expenses/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/commerce/expenses/${id}/`),
   },
+  // Albarans (B4c) — document derivat que agrega 1..N WorkOrder CLOSED del mateix client.
+  // No es creen per POST directe: neixen de generate/ (línies proposades pel sistema).
+  deliveryNotes: {
+    list: (params) => client.get('/api/v1/commerce/delivery-notes/', { params }),   // ?status=&customer=
+    get: (id) => client.get(`/api/v1/commerce/delivery-notes/${id}/`),
+    update: (id, data) => client.patch(`/api/v1/commerce/delivery-notes/${id}/`, data),   // notes en DRAFT
+    remove: (id) => client.delete(`/api/v1/commerce/delivery-notes/${id}/`),   // només DRAFT (allibera WO)
+    // Genera un DRAFT amb línies proposades. {work_order_ids:[…]} → 201 o 400 {detail, errors}.
+    generate: (data) => client.post('/api/v1/commerce/delivery-notes/generate/', data),
+    issue: (id) => client.post(`/api/v1/commerce/delivery-notes/${id}/issue/`),   // DRAFT→ISSUED (congela)
+    pdf: (id) => client.get(`/api/v1/commerce/delivery-notes/${id}/pdf/`, { responseType: 'blob' }),
+  },
+  deliveryNoteLines: {
+    list: (params) => client.get('/api/v1/commerce/delivery-note-lines/', { params }),   // ?delivery_note=
+    update: (id, data) => client.patch(`/api/v1/commerce/delivery-note-lines/${id}/`, data),   // preu/descr en DRAFT
+  },
 }
 
 // Sprint Llibreria d'Items — pertinença POM de l'Item (garment-pom-maps/, ModelViewSet).
