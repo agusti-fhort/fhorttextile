@@ -508,17 +508,10 @@ _POM_SYNONYMS = {
     'lining length at center front':   'lining length',
     'lining length at center back':    'lining length',
     'lining bottom width along hem':   'lining hem width',
-    # NEW — Brownie positional POMs (override the previous ones on collision, per spec
-    # S19; duplicate keys make the last one win).
-    'waist position':                  'waist position distance',
-    'hip position':                    'hip position distance',
-    'straight back body length':       'body length back',
-    'front armhole curve':             'armhole',
-    'collar width':                    'neck tie length',
-    'body zip length':                 'zip',
-    'lining length at center front':   'lining',
-    'lining length at center back':    'lining',
-    'lining bottom width along hem':   'lining bottom',
+    # El bloc "Brownie positional POMs" (nomenclatura del customer BRW disfressada de sinònim
+    # canònic) s'ha MIGRAT a CustomerPOMAlias (origen=MIGRACIO), migració pom 0031 (N2-4a,
+    # DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08). Els sinònims genèrics d'aquest diccionari es
+    # conserven; el matcher encara NO llegeix els àlies (N3).
 }
 
 
