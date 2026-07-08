@@ -937,7 +937,11 @@
     "tax_amount": "Impostos",
     "total": "Total",
     "details": "Detalls",
-    "notes": "Condicions / notes"
+    "notes": "Condicions / notes",
+    "vat": "IVA",
+    "base": "Base",
+    "payment_terms": "Condicions de pagament",
+    "terms_customer_default": "Per defecte del client"
   },
   "planning": {
     "title": "Planificació",

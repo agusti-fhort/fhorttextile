@@ -43,6 +43,7 @@ export default function QuoteDetail() {
   const [error, setError] = useState(false)
   const [quote, setQuote] = useState(null)
   const [products, setProducts] = useState([])
+  const [paymentTerms, setPaymentTerms] = useState([])
   const [feedback, setFeedback] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -56,8 +57,9 @@ export default function QuoteDetail() {
     Promise.all([
       commerce.quotes.get(id).then(res => res.data),
       commerce.products.list({ active: true, page_size: 500 }).then(rows).catch(() => []),
+      commerce.paymentTerms.list({ active: true, page_size: 200 }).then(rows).catch(() => []),
     ])
-      .then(([q, ps]) => { if (alive) { setQuote(q); setProducts(ps) } })
+      .then(([q, ps, pt]) => { if (alive) { setQuote(q); setProducts(ps); setPaymentTerms(pt) } })
       .catch(() => { if (alive) setError(true) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
@@ -115,7 +117,7 @@ export default function QuoteDetail() {
       {!isDraft && <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 12 }}>{t('quotes.locked_note')}</p>}
 
       <LinesSection quote={quote} editable={editable} products={products} t={t} reload={reload} ok={ok} err={err} />
-      <DetailsSection quote={quote} editable={editable} t={t} reload={reload} ok={ok} err={err} />
+      <DetailsSection quote={quote} editable={editable} paymentTerms={paymentTerms} t={t} reload={reload} ok={ok} err={err} />
     </div>
   )
 }
@@ -178,10 +180,14 @@ function LinesSection({ quote, editable, products, t, reload, ok, err }) {
         </Row>
       ))}
 
-      {/* Totals */}
+      {/* Totals — subtotal + desglossament fiscal per tipus (tax_breakdown) + total */}
       <div style={{ marginTop: 12, paddingTop: 8, borderTop: '0.5px solid var(--gray-l)', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
         <Total label={t('quotes.subtotal')} value={money(quote.subtotal)} />
-        <Total label={t('quotes.tax_amount')} value={money(quote.tax_amount)} />
+        {(quote.tax_breakdown || []).map((b, i) => (
+          <Total key={i} label={`${t('quotes.vat')} ${Number(b.rate)}% · ${t('quotes.base')} ${money(b.base)}`} value={money(b.tax)} />
+        ))}
+        {(!quote.tax_breakdown || quote.tax_breakdown.length === 0) &&
+          <Total label={t('quotes.tax_amount')} value={money(quote.tax_amount)} />}
         <Total label={t('quotes.total')} value={money(quote.total)} strong />
       </div>
 
@@ -210,17 +216,19 @@ function Total({ label, value, strong }) {
   )
 }
 
-// --- Detalls editables (impostos, validesa, notes) — només DRAFT ---
-function DetailsSection({ quote, editable, t, reload, ok, err }) {
-  const [tax, setTax] = useState(String(quote.tax_amount ?? '0'))
+// --- Detalls editables (validesa, condicions de pagament, notes) — només DRAFT ---
+// L'IVA ja NO és editable (B3a): es calcula sobre bases agregades i es mostra al desglossament.
+function DetailsSection({ quote, editable, paymentTerms, t, reload, ok, err }) {
+  const [terms, setTerms] = useState(quote.payment_terms != null ? String(quote.payment_terms) : '')
   const [validUntil, setValidUntil] = useState(quote.valid_until || '')
   const [notes, setNotes] = useState(quote.notes || '')
   const [busy, setBusy] = useState(false)
+  const defaultName = paymentTerms.find(p => String(p.id) === String(quote.customer_payment_terms))?.name
 
   const save = () => {
     setBusy(true)
     commerce.quotes.update(quote.id, {
-      tax_amount: tax === '' ? 0 : tax, valid_until: validUntil || null, notes,
+      payment_terms: terms === '' ? null : terms, valid_until: validUntil || null, notes,
     })
       .then(() => reload()).then(() => ok(t('quotes.saved'))).catch(err).finally(() => setBusy(false))
   }
@@ -228,15 +236,18 @@ function DetailsSection({ quote, editable, t, reload, ok, err }) {
   return (
     <Section title={t('quotes.details')}>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
-        <Field label={t('quotes.tax_amount')}>
-          {editable
-            ? <input type="text" inputMode="decimal" value={tax} onChange={e => setTax(e.target.value)} style={{ ...selS, width: 120 }} />
-            : <span style={{ fontFamily: MONO }}>{money(quote.tax_amount)}</span>}
-        </Field>
         <Field label={t('quotes.valid_until')}>
           {editable
             ? <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} style={{ ...selS }} />
             : <span style={{ fontFamily: MONO }}>{quote.valid_until || '—'}</span>}
+        </Field>
+        <Field label={t('quotes.payment_terms')}>
+          {editable
+            ? <select value={terms} onChange={e => setTerms(e.target.value)} style={{ ...selS, minWidth: 200 }}>
+                <option value="">{t('quotes.terms_customer_default')}{defaultName ? ` · ${defaultName}` : ''}</option>
+                {paymentTerms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            : <span style={{ fontFamily: MONO }}>{quote.payment_terms_name || defaultName || '—'}</span>}
         </Field>
       </div>
       <Field label={t('quotes.notes')}>

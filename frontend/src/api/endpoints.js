@@ -345,6 +345,10 @@ export const commerce = {
     update: (id, data) => client.patch(`/api/v1/commerce/price-exceptions/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/commerce/price-exceptions/${id}/`),
   },
+  // Condicions de pagament (B3a) — catàleg read-only per als selectors.
+  paymentTerms: {
+    list: (params) => client.get('/api/v1/commerce/payment-terms/', { params }),
+  },
   // Documents comercials — Quote (B2). send/pdf són accions; pdf retorna blob.
   quotes: {
     list: (params) => client.get('/api/v1/commerce/quotes/', { params }),

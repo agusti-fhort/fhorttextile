@@ -16,12 +16,12 @@ from fhort.accounts.capabilities import HasCapability, CONFIGURE
 
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
-    Quote, QuoteLine,
+    Quote, QuoteLine, PaymentTerms,
 )
 from .serializers import (
     UnitSerializer, ProductSerializer, ProductRecipeSerializer, ProductSupplierSerializer,
     ProductComponentSerializer, ProductPriceGTISerializer,
-    QuoteSerializer, QuoteLineSerializer,
+    QuoteSerializer, QuoteLineSerializer, PaymentTermsSerializer,
 )
 
 
@@ -38,6 +38,14 @@ class UnitViewSet(viewsets.ReadOnlyModelViewSet):
     """Catàleg d'unitats (sembrat; consulta per al selector d'unitat de l'article)."""
     queryset = Unit.objects.all()
     serializer_class = UnitSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['active']
+
+
+class PaymentTermsViewSet(viewsets.ReadOnlyModelViewSet):
+    """Catàleg de condicions de pagament (sembrat; selector al Customer i als documents)."""
+    queryset = PaymentTerms.objects.prefetch_related('lines').all()
+    serializer_class = PaymentTermsSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ['active']
 

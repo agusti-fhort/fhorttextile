@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
-    Quote, QuoteLine,
+    Quote, QuoteLine, PaymentTerms, PaymentTermLine,
 )
 
 
@@ -83,6 +83,22 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 
+# ── Condicions de pagament (B3a) ───────────────────────────────────────────────────────
+
+class PaymentTermLineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentTermLine
+        fields = ['id', 'percentage', 'days_offset', 'position']
+
+
+class PaymentTermsSerializer(serializers.ModelSerializer):
+    lines = PaymentTermLineSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PaymentTerms
+        fields = ['id', 'code', 'name', 'active', 'lines']
+
+
 # ── Documents comercials — Quote (B2) ──────────────────────────────────────────────────
 
 class QuoteLineSerializer(serializers.ModelSerializer):
@@ -116,11 +132,15 @@ class QuoteSerializer(serializers.ModelSerializer):
     Numeració, totals i estat són calculats/gestionats pel backend (read-only)."""
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
     lines = QuoteLineSerializer(many=True, read_only=True)
+    # Display (B3a): nom de la condició override + condició per defecte del client (per al selector).
+    payment_terms_name = serializers.CharField(source='payment_terms.name', read_only=True)
+    customer_payment_terms = serializers.IntegerField(source='customer.payment_terms_id', read_only=True)
 
     class Meta:
         model = Quote
         fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom', 'status',
-                  'issued_at', 'valid_until', 'payment_terms', 'subtotal', 'tax_amount', 'total',
+                  'issued_at', 'valid_until', 'payment_terms', 'payment_terms_name',
+                  'customer_payment_terms', 'subtotal', 'tax_amount', 'total',
                   'tax_breakdown', 'notes', 'created_at', 'updated_at', 'lines']
         # tax_amount deixa de ser editable manual (B2): ara sempre calculat (B3a). tax_breakdown
         # és el desglossament calculat, només lectura.

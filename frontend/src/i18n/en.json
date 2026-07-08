@@ -937,7 +937,11 @@
     "tax_amount": "Tax",
     "total": "Total",
     "details": "Details",
-    "notes": "Terms / notes"
+    "notes": "Terms / notes",
+    "vat": "VAT",
+    "base": "Base",
+    "payment_terms": "Payment terms",
+    "terms_customer_default": "Customer default"
   },
   "planning": {
     "title": "Planning",
