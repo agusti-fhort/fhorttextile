@@ -382,7 +382,7 @@ def size_map_grading_preview_file_view(request):
     Robust per fila: un POM que falla a la derivació s'omet amb avís, no aborta tot.
     """
     try:
-        from fhort.pom.models import SizeDefinition
+        from fhort.pom.models import SizeDefinition, SizeSystem
         from fhort.models_app.extraction_views import find_pom_master
         from fhort.models_app.extraction_service import extract_from_file
 
@@ -396,6 +396,13 @@ def size_map_grading_preview_file_view(request):
         file_bytes = f.read()
         avisos = []
 
+        # Run del tenant (etiquetes canòniques del SizeSystem) — es coneix ABANS d'extreure. És la
+        # MATEIXA font que el run ordenat de sota; es puja aquí per passar-lo a l'extractor (Capa 1).
+        tenant_run = []
+        if ssid:
+            tenant_run = list(SizeDefinition.objects.filter(size_system_id=ssid)
+                              .order_by('ordre').values_list('etiqueta', flat=True))
+
         # 1-2. Extracció → llista comuna [{codi_fitxa, descripcio, values}].
         poms_in = []
         if name.endswith(('.xlsx', '.xls')):
@@ -407,7 +414,14 @@ def size_map_grading_preview_file_view(request):
                     'values': p.get('values') or {},
                 })
         elif name.endswith(('.pdf', '.png', '.jpg', '.jpeg', '.webp')):
-            extracted = extract_from_file(file_bytes, f.name)
+            # Capa 1 (DIAGNOSI_ETIQUETES_TALLA): diem a l'extractor el run del tenant perquè mapi la
+            # graduació a AQUESTES talles (2XL, no XXL) i marqui size_discrepancy. El wizard ja el sap.
+            wiz_ctx = {
+                'size_run': ', '.join(tenant_run),
+                'base_size': base_size,
+                'size_system_codi': (SizeSystem.objects.filter(pk=ssid).values_list('codi', flat=True).first() or '') if ssid else '',
+            }
+            extracted = extract_from_file(file_bytes, f.name, wiz_ctx)
             # Instrumentació K.1 (R4): registra els valors CRUS per talla tal com surten de
             # l'extracció, ABANS de detect_grading (que fa l'alineació run↔talles). Permet
             # re-executar un cas (p.ex. BERG) i discriminar si una regla FIXED espúria ve de
@@ -418,6 +432,10 @@ def size_map_grading_preview_file_view(request):
                     f.name, (_row.get('code') or '').strip(),
                     _row.get('values_by_size') or {},
                     _row.get('tolerance_minus'), _row.get('tolerance_plus'))
+            # Capa 1: recull la discrepància de talles que el model marqui (document vs run configurat).
+            discrep = extracted.get('size_discrepancy')
+            if discrep:
+                avisos.append(f"Discrepància de talles document↔run: {discrep}")
             poms_in = _pdf_extracted_to_poms(extracted, base_size)
             if not poms_in:
                 avisos.append("La IA no ha retornat cap mesura llegible del document.")
@@ -430,11 +448,8 @@ def size_map_grading_preview_file_view(request):
             return Response({'results': [], 'run': [], 'base_size': base_size,
                              'avisos': avisos or ["No s'han trobat POMs al fitxer."]}, status=200)
 
-        # 3. run ordenat — MATEIXA font que el preview de paste i el create.
-        run = []
-        if ssid:
-            run = list(SizeDefinition.objects.filter(size_system_id=ssid)
-                       .order_by('ordre').values_list('etiqueta', flat=True))
+        # 3. run ordenat — MATEIXA font que el preview de paste i el create (tenant_run, ja calculat).
+        run = list(tenant_run)
         if not run:
             for p in poms_in:
                 for k in (p['values'] or {}).keys():
