@@ -160,6 +160,10 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Comercial Studio (B2) — directori de fonts TTF per als PDF (Montserrat). Configurable via
+# env per a producció. Si les fonts no hi són, el pdf_service fa fallback a Helvetica (WARNING).
+PDF_FONTS_DIR = os.environ.get('PDF_FONTS_DIR', os.path.join(BASE_DIR, 'assets', 'fonts'))
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
