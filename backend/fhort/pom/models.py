@@ -242,6 +242,7 @@ class CustomerPOMAlias(models.Model):
     models_app/extraction_views.py:543)."""
     ORIGEN_CHOICES = [
         ('IMPORT', 'Import'), ('MANUAL', 'Manual'), ('MIGRACIO', 'Migració'),
+        ('DICCIONARI', 'Diccionari'),
     ]
     # db_constraint=False: `pom` és SHARED+TENANT però `tasks.Customer` és tenant-only → la FK
     # creua schemas (mateix patró que GarmentPOMMap). PROTECT a nivell ORM, sense constraint de BD.
@@ -251,7 +252,16 @@ class CustomerPOMAlias(models.Model):
     pom = models.ForeignKey(
         POMMaster, on_delete=models.CASCADE, related_name='client_aliases')
     client_code = models.CharField(max_length=60)
+    # OBSOLET (TODO): camp de descripció únic heretat. Substituït per description_en +
+    # description_local. Es manté la columna (migració 0035 hi va bolcar el contingut propi
+    # cap a description_en); no s'esborra per no perdre històric. No escriure-hi de nou.
     client_description = models.CharField(max_length=200, blank=True, default='')
+    # Diccionari del client (carregat al setup): descripció canònica internacional (EN) +
+    # descripció en l'idioma local de l'empresa. Ambdues alimenten find_pom_master com a
+    # senyal de matching addicional. `language` = ISO 639-1 del camp local.
+    description_en = models.CharField(max_length=200, blank=True, default='')
+    description_local = models.CharField(max_length=200, blank=True, default='')
+    language = models.CharField(max_length=2, blank=True, default='')
     origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default='MANUAL')
     pendent_revisio = models.BooleanField(default=False)
     creat_at = models.DateTimeField(auto_now_add=True)
