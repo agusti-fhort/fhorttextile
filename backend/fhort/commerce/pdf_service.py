@@ -176,10 +176,10 @@ def generate_quote_pdf(quote):
     )
     story = []
 
-    # 1. CAPÇALERA — marca+emissor (esq.) · títol + meta (columna dreta, continguts a l'esquerra)
+    # 1. CAPÇALERA — marca+emissor (esq.) · títol + meta (meitat dreta real de la pàgina)
     right = [Paragraph('Pressupost', _ps('title', F[F_LIGHT], 14, GOLD, TA_LEFT)),
              Spacer(1, 3 * mm), _meta_flowable(quote, F)]
-    head = Table([[_brand_flowables(cfg, F), right]], colWidths=[85 * mm, 89 * mm])
+    head = Table([[_brand_flowables(cfg, F), right]], colWidths=[70 * mm, 104 * mm])
     head.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
@@ -189,21 +189,13 @@ def generate_quote_pdf(quote):
     # 2. HR
     story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY, spaceBefore=4 * mm, spaceAfter=4 * mm))
 
-    # 3. BLOC CLIENT — dins un contenidor amb LEFTPADDING 5mm perquè el bloc s'alineï
-    # visualment amb la columna "Descripció" de la taula de línies (també indentada 5mm).
+    # 3. BLOC CLIENT — arrenca al marge esquerre del document (x=0), sense leftPadding propi.
     c = quote.customer
-    client_block = [Paragraph('Per a:', _ps('forp', F[F_REG], 7, GREY)),
-                    Paragraph(c.rao_social or c.nom, _ps('cust', F[F_LIGHT], 13, DARK, leading=15))]
+    story.append(Paragraph('Per a:', _ps('forp', F[F_REG], 7, GREY)))
+    story.append(Paragraph(c.rao_social or c.nom, _ps('cust', F[F_LIGHT], 13, DARK, leading=15)))
     oneliner = _customer_oneliner(c)
     if oneliner:
-        client_block.append(Paragraph(oneliner, _ps('custl', F[F_LIGHT], 7.5, GREY, leading=10)))
-    client_tbl = Table([[client_block]], colWidths=[174 * mm])
-    client_tbl.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 5 * mm), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    story.append(client_tbl)
+        story.append(Paragraph(oneliner, _ps('custl', F[F_LIGHT], 7.5, GREY, leading=10)))
 
     # 4. HR
     story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY, spaceBefore=4 * mm, spaceAfter=4 * mm))
@@ -230,8 +222,6 @@ def generate_quote_pdf(quote):
     lstyle = [
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        # Col "Descripció" indentada 5mm (alinea amb el bloc client); numèriques a la dreta.
-        ('LEFTPADDING', (0, 0), (0, -1), 5 * mm),
         ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('LINEBELOW', (0, 0), (-1, 0), 0.5, LGREY),
     ]
