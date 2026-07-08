@@ -75,10 +75,12 @@ try:
     from .dictionary_views import (
         dictionary_template_view,
         dictionary_preview_view,
+        dictionary_commit_view,
     )
     _dictionary_paths = [
         path('pom/customers/<int:customer_id>/dictionary/template/', dictionary_template_view),
         path('pom/customers/<int:customer_id>/dictionary/preview/',  dictionary_preview_view),
+        path('pom/customers/<int:customer_id>/dictionary/commit/',   dictionary_commit_view),
     ]
 except Exception:
     _dictionary_paths = []
