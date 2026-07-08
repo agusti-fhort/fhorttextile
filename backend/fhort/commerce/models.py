@@ -10,6 +10,8 @@ Lleis heretades (DECISIONS.md · DISSENY_MODUL_COMERCIAL.md):
 - El sistema PROPOSA el preu (cost/Welford × tarifa + markup); l'humà FIXA a la línia (B2+).
 - Additiu: cap camp d'aquest mòdul toca el nucli tècnic (mesures/grading/fitting/tasques).
 """
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -256,3 +258,50 @@ class QuoteLine(AbstractDocumentLine):
 
     def __str__(self):
         return f'{self.quote_id}: {self.description or self.product_id} ×{self.quantity}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# CONDICIONS DE PAGAMENT (B3a) — condició reutilitzable + fraccions (venciments).
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+class PaymentTerms(models.Model):
+    """Condició de pagament reutilitzable (p.ex. 50-50, 30D). Les fraccions viuen a `lines`.
+    S'assigna per defecte al Customer i s'hi pot fer override per document (AbstractDocument)."""
+    code = models.SlugField(max_length=30, unique=True)
+    name = models.CharField(max_length=100, help_text="Nom canònic; display i18n a la UI.")
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['code']
+        verbose_name = 'Payment terms'
+        verbose_name_plural = 'Payment terms'
+
+    def __str__(self):
+        return self.code
+
+
+class PaymentTermLine(models.Model):
+    """Fracció d'una condició de pagament: percentatge + desfasament en dies des de la data
+    del document. La suma de percentatges de totes les fraccions d'un terms ha de ser 100.00."""
+    terms = models.ForeignKey(PaymentTerms, on_delete=models.CASCADE, related_name='lines')
+    percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    days_offset = models.PositiveIntegerField(default=0, help_text="Dies des de la data del document.")
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['terms', 'position', 'id']
+        verbose_name = 'Payment term line'
+        verbose_name_plural = 'Payment term lines'
+
+    def clean(self):
+        # Invariant: Σ percentatges de les fraccions del terms = 100.00 (incloent-hi aquesta).
+        if not self.terms_id:
+            return
+        others = self.terms.lines.exclude(pk=self.pk)
+        total = sum((ln.percentage for ln in others), Decimal('0')) + (self.percentage or Decimal('0'))
+        if total != Decimal('100.00'):
+            raise ValidationError(
+                f"La suma de percentatges de les fraccions ha de ser 100.00 (actual: {total}).")
+
+    def __str__(self):
+        return f'{self.terms_id}: {self.percentage}% @ +{self.days_offset}d'
