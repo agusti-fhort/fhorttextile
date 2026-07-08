@@ -23,6 +23,37 @@ DOC_PREFIXES = {
 }
 
 
+def compute_document_totals(document, lines):
+    """Càlcul fiscal compartit de tot document comercial (Quote, SalesOrder…). Un sol lloc de
+    veritat fiscal: retorna (subtotal, tax_amount, total, tax_breakdown) sense persistir res.
+
+    Lleis (B3a): Decimal sempre, quantize 0.01 (ROUND_HALF_UP) a cada pas. L'IVA es calcula
+    sobre la BASE AGREGADA de cada tipus (product.tax_rate), mai línia a línia. Si el règim
+    fiscal del client és INTRA_EU/EXPORT/EXEMPT, el tipus efectiu és 0 (bases visibles al
+    breakdown). `tax_breakdown` és una llista [{rate, base, tax}] ordenada per tipus desc.
+    """
+    customer = getattr(document, 'customer', None)
+    regime = getattr(customer, 'tax_regime', 'DOMESTIC') if customer is not None else 'DOMESTIC'
+    exempt = regime in ('INTRA_EU', 'EXPORT', 'EXEMPT')
+    # Agrupar les bases (Σ line_total) per tipus impositiu de l'article.
+    groups = {}
+    for line in lines:
+        rate = Decimal(line.product.tax_rate).quantize(_CENT) if line.product_id else Decimal('0.00')
+        groups[rate] = groups.get(rate, Decimal('0')) + Decimal(line.line_total or 0)
+    breakdown, subtotal, tax_total = [], Decimal('0'), Decimal('0')
+    for rate in sorted(groups, reverse=True):
+        base = groups[rate].quantize(_CENT)
+        eff = Decimal('0.00') if exempt else rate
+        tax = (base * eff / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
+        breakdown.append({'rate': str(eff), 'base': str(base), 'tax': str(tax)})
+        subtotal += base
+        tax_total += tax
+    subtotal = subtotal.quantize(_CENT)
+    tax_amount = tax_total.quantize(_CENT)
+    total = (subtotal + tax_amount).quantize(_CENT)
+    return subtotal, tax_amount, total, breakdown
+
+
 def reserve_document_number(doc_type):
     """Reserva atòmicament el següent número per (doc_type, any actual) i el formata.
 

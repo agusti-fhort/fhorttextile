@@ -229,35 +229,16 @@ class Quote(AbstractDocument):
         super().save(*args, **kwargs)
 
     def recalculate_totals(self):
-        """Càlcul fiscal sobre BASES AGREGADES per tipus (estàndard comptable; mai línia a línia).
+        """Persisteix els totals fiscals del càlcul compartit (compute_document_totals, S1a).
 
-        Lleis (B3a): Decimal sempre, quantize 0.01 (ROUND_HALF_UP) a cada pas. L'IVA es calcula
-        sobre la base agregada de cada grup (product.tax_rate), no per línia. Si el règim fiscal
-        del client és INTRA_EU/EXPORT/EXEMPT, el tipus efectiu és 0 (bases visibles al breakdown).
-        Persisteix subtotal, tax_amount, total i tax_breakdown [{rate, base, tax}].
+        El motor fiscal viu a commerce/services.py (un sol lloc de veritat per a tots els
+        documents). Aquí només es persisteix i es regeneren els venciments materialitzats
+        (depenen del total + issued_at + payment_terms).
         """
-        regime = getattr(self.customer, 'tax_regime', 'DOMESTIC') if self.customer_id else 'DOMESTIC'
-        exempt = regime in ('INTRA_EU', 'EXPORT', 'EXEMPT')
-        # Agrupar les bases (Σ line_total) per tipus impositiu de l'article.
-        groups = {}
-        for line in self.lines.all():
-            rate = Decimal(line.product.tax_rate).quantize(_CENT) if line.product_id else Decimal('0.00')
-            groups[rate] = groups.get(rate, Decimal('0')) + Decimal(line.line_total or 0)
-        breakdown, subtotal, tax_total = [], Decimal('0'), Decimal('0')
-        for rate in sorted(groups, reverse=True):
-            base = groups[rate].quantize(_CENT)
-            eff = Decimal('0.00') if exempt else rate
-            tax = (base * eff / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
-            breakdown.append({'rate': str(eff), 'base': str(base), 'tax': str(tax)})
-            subtotal += base
-            tax_total += tax
-        self.subtotal = subtotal.quantize(_CENT)
-        self.tax_amount = tax_total.quantize(_CENT)
-        self.total = (self.subtotal + self.tax_amount).quantize(_CENT)
-        self.tax_breakdown = breakdown
+        from .services import compute_document_totals, generate_due_dates
+        self.subtotal, self.tax_amount, self.total, self.tax_breakdown = compute_document_totals(
+            self, self.lines.all())
         self.save(update_fields=['subtotal', 'tax_amount', 'total', 'tax_breakdown', 'updated_at'])
-        # Regenera els venciments materialitzats (depenen del total + issued_at + payment_terms).
-        from .services import generate_due_dates
         generate_due_dates(self)
 
     def __str__(self):
