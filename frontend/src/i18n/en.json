@@ -205,7 +205,9 @@
     "grading_empty_help": "Grading sets are created in the Size Library (and edited in Grading Rules) and can be assigned to a client. This client has none of its own yet.",
     "profiles_empty_help": "Sizing profiles are born when a client run is materialised in the Size Library. This client has none yet.",
     "open_grading": "Open Grading Rules",
-    "open_size_library": "Open Size Library"
+    "open_size_library": "Open Size Library",
+    "dades_section": "Identity and fiscal data",
+    "dades_section_help": "Client identity, billing address and commercial terms."
   },
   "app": {
     "title": "Fhort Textile Tech",

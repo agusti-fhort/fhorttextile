@@ -205,7 +205,9 @@
     "grading_empty_help": "Las graduaciones se crean en la Size Library (y se editan en Grading Rules) y pueden asignarse a un cliente. Este cliente aún no tiene ninguna propia.",
     "profiles_empty_help": "Los perfiles de tallas nacen cuando se materializa un run de cliente en la Size Library. Este cliente aún no tiene ninguno.",
     "open_grading": "Abrir Grading Rules",
-    "open_size_library": "Abrir Size Library"
+    "open_size_library": "Abrir Size Library",
+    "dades_section": "Identificación y datos fiscales",
+    "dades_section_help": "Identidad, dirección de facturación y condiciones comerciales del cliente."
   },
   "app": {
     "title": "Fhort Textile Tech",

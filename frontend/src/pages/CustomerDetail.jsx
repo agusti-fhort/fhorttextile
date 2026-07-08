@@ -137,6 +137,7 @@ function DadesTab({ customer, canEdit, t, onSaved, onError }) {
 
   return (
     <div>
+      <SectionTitle t={t} title="clients.dades_section" subtitle="clients.dades_section_help" />
       <CustomerForm form={form} set={set} terms={terms} t={t} section="all" />
       {canEdit && (
         <button onClick={submit} disabled={saving || invalid} style={{ ...primaryBtn, marginLeft: 0, marginTop: 8 }}>
@@ -313,7 +314,7 @@ function AliasAddRow({ customer, t, onCreated, onError }) {
   }
 
   return (
-    <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 10, padding: 12, marginBottom: 14, background: 'var(--bg-muted)' }}>
+    <div style={{ paddingBottom: 14, marginBottom: 14, borderBottom: '0.5px solid var(--gray-l)' }}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label style={miniLabel}>{t('clients.alias_code')}
           <input value={code} onChange={e => setCode(e.target.value)} maxLength={60}
@@ -432,10 +433,6 @@ function SectionTitle({ t, title, subtitle, count, meta }) {
       {subtitle && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: '2px 0 0', fontWeight: 300 }}>{t(subtitle)}</p>}
     </div>
   )
-}
-
-function Empty({ t, k }) {
-  return <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic', margin: 0 }}>{t(k)}</p>
 }
 
 // Secció buida amb context: explica què és i on es crea, amb enllaços a la pàgina d'origen.
