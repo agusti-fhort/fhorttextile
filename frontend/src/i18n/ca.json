@@ -975,7 +975,8 @@
     "adjustments": "Ajustos", "adj_EXTRA_BILL": "Extra facturat", "adj_EXTRA_ABSORB": "Extra absorbit", "adj_DEDUCTION": "Deducció",
     "close_title": "Tancar l'encàrrec", "blockers_hard": "Tasques que bloquegen (resol-les al kanban):",
     "blockers_extra": "Extres per resoldre:", "pending_title": "Tasques pendents (recepta no executada):",
-    "close_deduct": "Deduir pendents i tancar", "close_confirm": "Confirmar tancament", "close_cancel": "Cancel·lar"
+    "close_deduct": "Deduir pendents i tancar", "close_confirm": "Confirmar tancament", "close_cancel": "Cancel·lar",
+    "expenses": "Despeses", "exp_product": "Article", "exp_supplier": "Proveïdor", "exp_cost": "Cost", "exp_sale": "Preu venda", "exp_qty": "Qt.", "exp_add": "Afegir", "exp_remove": "Treure", "exp_saved": "Despesa desada.", "exp_error": "No s'ha pogut desar la despesa.", "exp_suppliers_compare": "Preus proveïdors", "review": "Revisió comercial", "review_item": "Concepte", "review_kind": "Tipus", "review_amount": "Import venda", "review_save": "Desar revisió", "review_saved": "Revisió desada.", "review_error": "No s'ha pogut desar la revisió."
   },
   "orders": {
     "title": "Comandes",
@@ -993,6 +994,7 @@
     "filter_customer_all": "Tots els clients",
     "open": "Obrir",
     "back": "Tornar a comandes",
+    "assign_model": "Assignar model", "assign_title": "Assignar model a la línia", "assign_pick_model": "Tria un model", "assign_gti_warn": "El model no té garment type; comprova la compatibilitat.", "assign_migrate_note": "Les tasques del model al col·lector es mouran a l'encàrrec nou.", "assign_cancel": "Cancel·lar", "assign_confirm": "Assignar", "assign_done": "Encàrrec {{wo}} creat · {{n}} tasques migrades",
     "loading": "Carregant comandes…",
     "empty": "Cap comanda.",
     "error": "No s'ha pogut completar l'operació.",

@@ -975,7 +975,8 @@
     "adjustments": "Adjustments", "adj_EXTRA_BILL": "Extra billed", "adj_EXTRA_ABSORB": "Extra absorbed", "adj_DEDUCTION": "Deduction",
     "close_title": "Close the work order", "blockers_hard": "Blocking tasks (resolve them in the kanban):",
     "blockers_extra": "Extras to resolve:", "pending_title": "Pending tasks (recipe not executed):",
-    "close_deduct": "Deduct pending and close", "close_confirm": "Confirm close", "close_cancel": "Cancel"
+    "close_deduct": "Deduct pending and close", "close_confirm": "Confirm close", "close_cancel": "Cancel",
+    "expenses": "Expenses", "exp_product": "Product", "exp_supplier": "Supplier", "exp_cost": "Cost", "exp_sale": "Sale price", "exp_qty": "Qty", "exp_add": "Add", "exp_remove": "Remove", "exp_saved": "Expense saved.", "exp_error": "Could not save the expense.", "exp_suppliers_compare": "Supplier prices", "review": "Commercial review", "review_item": "Item", "review_kind": "Kind", "review_amount": "Sale amount", "review_save": "Save review", "review_saved": "Review saved.", "review_error": "Could not save the review."
   },
   "orders": {
     "title": "Orders",
@@ -993,6 +994,7 @@
     "filter_customer_all": "All customers",
     "open": "Open",
     "back": "Back to orders",
+    "assign_model": "Assign model", "assign_title": "Assign model to line", "assign_pick_model": "Pick a model", "assign_gti_warn": "The model has no garment type; check compatibility.", "assign_migrate_note": "The model's collector tasks will move to the new work order.", "assign_cancel": "Cancel", "assign_confirm": "Assign", "assign_done": "Work order {{wo}} created · {{n}} tasks migrated",
     "loading": "Loading orders…",
     "empty": "No orders.",
     "error": "The operation could not be completed.",

@@ -396,12 +396,23 @@ export const commerce = {
   orderLines: {
     list: (params) => client.get('/api/v1/commerce/order-lines/', { params }),   // ?order=
     update: (id, data) => client.patch(`/api/v1/commerce/order-lines/${id}/`, data),   // qty_allocated
+    // B4b — assigna un model a la línia i crea el WO ORDER (migra el col·lector). {model_id}
+    assignModel: (id, data) => client.post(`/api/v1/commerce/order-lines/${id}/assign-model/`, data),
   },
   // Encàrrecs / ordres de treball (B4a). No es creen per POST (ORDER=wizard, COLLECTOR=hook).
   workOrders: {
     list: (params) => client.get('/api/v1/commerce/work-orders/', { params }),   // ?kind=&status=&customer=&period=
     get: (id) => client.get(`/api/v1/commerce/work-orders/${id}/`),
     close: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/close/`, data || {}),
+    // B4b — revisió comercial (preu de venda) d'un WO tancat. {items:[{model_task_id,kind,amount}]}
+    review: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/review/`, data || {}),
+  },
+  // Despeses d'un encàrrec (B4b) — línia externa amb proveïdor i marge. Satèl·lit ?work_order=.
+  expenses: {
+    list: (params) => client.get('/api/v1/commerce/expenses/', { params }),   // ?work_order=
+    create: (data) => client.post('/api/v1/commerce/expenses/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/expenses/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/expenses/${id}/`),
   },
 }
 

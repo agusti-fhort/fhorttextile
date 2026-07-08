@@ -975,7 +975,8 @@
     "adjustments": "Ajustes", "adj_EXTRA_BILL": "Extra facturado", "adj_EXTRA_ABSORB": "Extra absorbido", "adj_DEDUCTION": "Deducción",
     "close_title": "Cerrar el encargo", "blockers_hard": "Tareas que bloquean (resuélvelas en el kanban):",
     "blockers_extra": "Extras por resolver:", "pending_title": "Tareas pendientes (receta no ejecutada):",
-    "close_deduct": "Deducir pendientes y cerrar", "close_confirm": "Confirmar cierre", "close_cancel": "Cancelar"
+    "close_deduct": "Deducir pendientes y cerrar", "close_confirm": "Confirmar cierre", "close_cancel": "Cancelar",
+    "expenses": "Gastos", "exp_product": "Artículo", "exp_supplier": "Proveedor", "exp_cost": "Coste", "exp_sale": "Precio venta", "exp_qty": "Cant.", "exp_add": "Añadir", "exp_remove": "Quitar", "exp_saved": "Gasto guardado.", "exp_error": "No se ha podido guardar el gasto.", "exp_suppliers_compare": "Precios proveedores", "review": "Revisión comercial", "review_item": "Concepto", "review_kind": "Tipo", "review_amount": "Importe venta", "review_save": "Guardar revisión", "review_saved": "Revisión guardada.", "review_error": "No se ha podido guardar la revisión."
   },
   "orders": {
     "title": "Pedidos",
@@ -993,6 +994,7 @@
     "filter_customer_all": "Todos los clientes",
     "open": "Abrir",
     "back": "Volver a pedidos",
+    "assign_model": "Asignar modelo", "assign_title": "Asignar modelo a la línea", "assign_pick_model": "Elige un modelo", "assign_gti_warn": "El modelo no tiene garment type; comprueba la compatibilidad.", "assign_migrate_note": "Las tareas del modelo en el colector se moverán al nuevo encargo.", "assign_cancel": "Cancelar", "assign_confirm": "Asignar", "assign_done": "Encargo {{wo}} creado · {{n}} tareas migradas",
     "loading": "Cargando pedidos…",
     "empty": "Ningún pedido.",
     "error": "No se pudo completar la operación.",
