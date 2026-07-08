@@ -1,13 +1,19 @@
-"""commerce/pdf_service.py — PDF d'una oferta (disseny validat, B2-PDF-v2, decisió R7).
+"""commerce/pdf_service.py — PDF d'una oferta (disseny validat, B2-PDF-v7, decisió R7).
 
-reportlab.platypus (taula real vectorial, NO el raster Konva). Disseny aprovat amb l'Agus:
-tipografia Montserrat carregada de `settings.PDF_FONTS_DIR`; si no hi és, fallback a Helvetica
-amb WARNING (mai 500). Emissor = TenantConfig; client = camps fiscals de Customer (B1). Etiquetes
-en català (naming EN només a BD/codi). doc_type al PDF hardcoded "Pressupost" (i18n = TODO).
+reportlab.platypus (taula real vectorial, NO el raster Konva). Disseny aprovat amb l'Agus.
+
+FIX D'ALINEACIÓ (v7): SimpleDocTemplate crea el Frame amb leftPadding/rightPadding=6pt →
+paràgrafs i HRFlowable respectaven el padding (~2mm d'indent) mentre les Table de 174mm
+(més amples que l'espai útil) es centraven i el desbordaven → dos orígens X diferents.
+Solució: BaseDocTemplate + Frame amb padding 0. Un sol origen (el leftMargin) per a tot.
+
+Tipografia Montserrat de `settings.PDF_FONTS_DIR` (fallback Helvetica + WARNING, mai 500).
+Emissor = TenantConfig; client = quote.customer; línies/totals/dates = quote. Etiquetes en
+català (naming EN només a BD/codi). doc_type al PDF hardcoded "Pressupost" (i18n = TODO).
 """
 import logging
 import os
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 
 from django.conf import settings
@@ -19,7 +25,8 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, HRFlowable,
+    BaseDocTemplate, PageTemplate, Frame,
+    Table, TableStyle, Paragraph, Spacer, Image, HRFlowable,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,6 +38,18 @@ LGREY = colors.HexColor('#DDDDDD')
 DARK = colors.HexColor('#1A1A1A')
 DGREY = colors.HexColor('#555555')
 ROWLINE = colors.HexColor('#F0F0F0')
+
+# Geometria (LITERAL del fitxer de referència v7). Un sol origen X per a tot.
+PAGE_W, PAGE_H = A4
+ML = MR = 18 * mm
+MT, MB = 14 * mm, 18 * mm
+CW = PAGE_W - ML - MR            # 174mm — TOT fa servir aquesta amplada exacta
+X_B = 88 * mm                    # línia vertical del bloc dret
+COL_LEFT_W, COL_RIGHT_W = X_B, CW - X_B
+
+# Paddings zero reutilitzables per a les taules interiors.
+ZP = [('TOPPADDING', (0, 0), (-1, -1), 1.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+      ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]
 
 # Noms lògics de font usats al layout → fitxer TTF esperat i fallback Helvetica.
 F_LIGHT, F_REG, F_SEMI, F_BOLD = 'MS-Light', 'MS', 'MS-SemiBold', 'MS-Bold'
@@ -76,9 +95,9 @@ def _money(value):
     return f'{v:,.2f}'.replace(',', '§').replace('.', ',').replace('§', '.')
 
 
-def _ps(name, font, size, color, align=TA_LEFT, leading=None):
-    return ParagraphStyle(name, fontName=font, fontSize=size, textColor=color,
-                          alignment=align, leading=leading or size * 1.28)
+def _fmt_date(d):
+    """Data en format DD/MM/YYYY, o '—' si no n'hi ha."""
+    return d.strftime('%d/%m/%Y') if d else '—'
 
 
 def _tenant_cfg():
@@ -87,60 +106,6 @@ def _tenant_cfg():
         return TenantConfig.objects.first()
     except Exception:  # noqa: BLE001
         return None
-
-
-def _brand_flowables(cfg, F):
-    """Bloc de marca: logo del tenant si logo_file té valor i el fitxer existeix; si no, text."""
-    out = []
-    logo = getattr(cfg, 'logo_file', None)
-    logo_path = None
-    if logo:
-        try:
-            logo_path = logo.path
-        except Exception:  # noqa: BLE001 — storage sense path local
-            logo_path = None
-    if logo_path and os.path.isfile(logo_path):
-        try:
-            img = Image(logo_path)
-            w = 35 * mm
-            img.drawWidth = w
-            img.drawHeight = w * (img.imageHeight / img.imageWidth)
-            img.hAlign = 'LEFT'
-            out.append(img)
-        except Exception:  # noqa: BLE001 — imatge malmesa → text de fallback
-            logo_path = None
-    if not out:
-        out.append(Paragraph(
-            f'<font name="{F[F_SEMI]}" size="14" color="#B8860B">Fhort</font> '
-            f'<font name="{F[F_LIGHT]}" size="14" color="#888888">Textile Tech</font>',
-            _ps('brand', F[F_SEMI], 14, DARK)))
-    # Dades de l'emissor (TenantConfig només té nom_empresa; adreça/NIF/email = placeholder futur).
-    nom = (getattr(cfg, 'nom_empresa', '') or '').strip()
-    detail = []
-    if nom:
-        detail.append(f'<font name="{F[F_SEMI]}" size="7.5" color="#1A1A1A">{nom}</font>')
-    # TODO B-fi: adreça/NIF/email de l'emissor quan TenantConfig els tingui (avui no existeixen).
-    if detail:
-        out.append(Spacer(1, 2 * mm))
-        out.append(Paragraph('<br/>'.join(detail), _ps('emit', F[F_LIGHT], 7.5, GREY, leading=10)))
-    return out
-
-
-def _meta_flowable(quote, F):
-    """Taula Número / Data / Vàlid fins (label gris + valor fosc), alineada a la dreta."""
-    def row(label, value):
-        return [Paragraph(label, _ps('ml', F[F_REG], 7, GREY, TA_LEFT)),
-                Paragraph(value or '—', _ps('mv', F[F_LIGHT], 8.5, DARK, TA_LEFT))]
-    t = Table([
-        row('Número', quote.document_number),
-        row('Data', quote.issued_at.isoformat() if quote.issued_at else None),
-        row('Vàlid fins', quote.valid_until.isoformat() if quote.valid_until else None),
-    ], colWidths=[22 * mm, 30 * mm], hAlign='LEFT')
-    t.setStyle(TableStyle([
-        ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    return t
 
 
 def _customer_oneliner(c):
@@ -167,103 +132,162 @@ def _tax_pct(subtotal, tax_amount):
 def generate_quote_pdf(quote):
     """Retorna els bytes del PDF de l'oferta `quote` (disseny Montserrat; fallback Helvetica)."""
     F = _fonts()
+    FL, FR, FS, FB = F[F_LIGHT], F[F_REG], F[F_SEMI], F[F_BOLD]
     cfg = _tenant_cfg()
+
+    def s(name, font=FL, size=8.5, align=TA_LEFT, color=DARK, leading=None):
+        return ParagraphStyle(name, fontName=font, fontSize=size, textColor=color,
+                              alignment=align, leading=leading or size * 1.35)
+
+    # Estils (geometria/mides LITERALS de la referència; fonts mapejades pel fallback).
+    S = s('n')
+    SB = s('b', font=FS)
+    SSM_G = s('smg', size=7.5, color=DGREY)
+    SSM_I = s('smi', size=7.5, color=GREY)
+    SR = s('r', align=TA_RIGHT)
+    SRB = s('rb', font=FS, align=TA_RIGHT)
+    S_TITDOC = s('titdoc', font=FL, size=14, color=GOLD, align=TA_RIGHT)
+    S_CLIENT = s('cli', font=FL, size=13)
+    S_LABEL = s('lbl', size=7, color=GREY)
+    S_LABEL_R = s('lblr', size=7, color=GREY, align=TA_RIGHT)
+    SSM_R = s('smr', size=7.5, align=TA_RIGHT)
+
+    # ── BaseDocTemplate amb Frame de padding 0 (un sol origen X per a tot) ──
     buf = BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm,
-        title=quote.document_number or 'Pressupost',
-    )
+    doc = BaseDocTemplate(buf, pagesize=A4,
+                          leftMargin=ML, rightMargin=MR, topMargin=MT, bottomMargin=MB,
+                          title=quote.document_number or 'Pressupost')
+    frame = Frame(ML, MB, CW, PAGE_H - MT - MB,
+                  leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
+    doc.addPageTemplates([PageTemplate(id='main', frames=[frame])])
+
     story = []
 
-    # 1. CAPÇALERA — marca+emissor (esq.) · títol + meta (meitat dreta real de la pàgina)
-    right = [Paragraph('Pressupost', _ps('title', F[F_LIGHT], 14, GOLD, TA_LEFT)),
-             Spacer(1, 3 * mm), _meta_flowable(quote, F)]
-    head = Table([[_brand_flowables(cfg, F), right]], colWidths=[70 * mm, 104 * mm])
-    head.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    story.append(head)
+    # ═══ CAPÇALERA ═══
+    # Marca: logo del tenant (logo_file) si existeix; si no, text de fallback.
+    def _brand_flowable():
+        logo = getattr(cfg, 'logo_file', None)
+        path = None
+        if logo:
+            try:
+                path = logo.path
+            except Exception:  # noqa: BLE001 — storage sense path local
+                path = None
+        if path and os.path.isfile(path):
+            try:
+                img = Image(path)
+                w = 35 * mm
+                img.drawWidth = w
+                img.drawHeight = w * (img.imageHeight / img.imageWidth)
+                img.hAlign = 'LEFT'
+                return img
+            except Exception:  # noqa: BLE001 — imatge malmesa → text de fallback
+                pass
+        return Paragraph(f'<font name="{FS}" color="#B8860B">Fhort</font> '
+                         f'<font name="{FL}" color="#888888">Textile Tech</font>',
+                         s('logo', size=14))
 
-    # 2. HR
-    story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY, spaceBefore=4 * mm, spaceAfter=4 * mm))
+    left_rows = [[_brand_flowable()], [Spacer(1, 2 * mm)]]
+    nom_emissor = (getattr(cfg, 'nom_empresa', '') or '').strip()
+    if nom_emissor:
+        left_rows.append([Paragraph(nom_emissor, s('en', font=FS, size=7.5))])
+    # TODO B-fi: adreça/NIF/email de l'emissor quan TenantConfig els tingui (avui no existeixen).
+    left = Table(left_rows, colWidths=[COL_LEFT_W], style=TableStyle(ZP))
 
-    # 3. BLOC CLIENT — arrenca al marge esquerre del document (x=0), sense leftPadding propi.
+    meta = Table([
+        [Paragraph('Número', S_LABEL_R), Paragraph(quote.document_number or '—', SSM_R)],
+        [Paragraph('Data', S_LABEL_R), Paragraph(_fmt_date(quote.issued_at), SSM_R)],
+        [Paragraph('Vàlid fins', S_LABEL_R), Paragraph(_fmt_date(quote.valid_until), SSM_R)],
+    ], colWidths=[COL_RIGHT_W - 30 * mm, 30 * mm], style=TableStyle(ZP))
+
+    right = Table([
+        [Paragraph('Pressupost', S_TITDOC)],
+        [Spacer(1, 2 * mm)],
+        [meta],
+    ], colWidths=[COL_RIGHT_W], style=TableStyle(ZP))
+
+    story.append(Table([[left, right]], colWidths=[COL_LEFT_W, COL_RIGHT_W],
+        style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
+
+    story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY,
+                            spaceBefore=5 * mm, spaceAfter=4 * mm))
+
+    # ═══ CLIENT ═══
     c = quote.customer
-    story.append(Paragraph('Per a:', _ps('forp', F[F_REG], 7, GREY)))
-    story.append(Paragraph(c.rao_social or c.nom, _ps('cust', F[F_LIGHT], 13, DARK, leading=15)))
+    story.append(Paragraph('Per a:', S_LABEL))
+    story.append(Spacer(1, 1 * mm))
+    story.append(Paragraph(c.rao_social or c.nom, S_CLIENT))
     oneliner = _customer_oneliner(c)
     if oneliner:
-        story.append(Paragraph(oneliner, _ps('custl', F[F_LIGHT], 7.5, GREY, leading=10)))
+        story.append(Paragraph(oneliner, SSM_G))
+    story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY,
+                            spaceBefore=4 * mm, spaceAfter=5 * mm))
 
-    # 4. HR
-    story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY, spaceBefore=4 * mm, spaceAfter=4 * mm))
-
-    # 5. TAULA DE LÍNIES
-    hstyle = _ps('lh', F[F_SEMI], 8, GREY)
-    rows = [[Paragraph('Descripció', hstyle),
-             Paragraph('Unitats', _ps('lhr', F[F_SEMI], 8, GREY, TA_RIGHT)),
-             Paragraph('Preu unit.', _ps('lhr2', F[F_SEMI], 8, GREY, TA_RIGHT)),
-             Paragraph('Import', _ps('lhr3', F[F_SEMI], 8, GREY, TA_RIGHT))]]
+    # ═══ LÍNIES ═══
+    HDR = s('hdr', font=FS, size=8, color=GREY)
+    HDR_R = s('hdrr', font=FS, size=8, color=GREY, align=TA_RIGHT)
+    rows = [[Paragraph('Descripció', HDR), Paragraph('Unitats', HDR_R),
+             Paragraph('Preu unit.', HDR_R), Paragraph('Import', HDR_R)]]
     for line in quote.lines.all():
         name = (line.product.name if line.product_id else '') or ''
         desc = (line.description or '').strip()
-        cell = f'<font name="{F[F_REG]}" size="8.5" color="#1A1A1A">{name}</font>'
+        cell = [[Paragraph(name, s('ln', font=FR, size=8.5))]]
         if desc and desc != name:
-            cell += f'<br/><font name="{F[F_LIGHT]}" size="7.5" color="#888888">{desc}</font>'
+            cell.append([Paragraph(desc, SSM_I)])
         rows.append([
-            Paragraph(cell, _ps('ld', F[F_REG], 8.5, DARK, leading=10)),
-            Paragraph(_money(line.quantity), _ps('lq', F[F_LIGHT], 8.5, DARK, TA_RIGHT)),
-            Paragraph(_money(line.unit_price), _ps('lp', F[F_LIGHT], 8.5, DARK, TA_RIGHT)),
-            Paragraph(_money(line.line_total), _ps('lt', F[F_LIGHT], 8.5, DARK, TA_RIGHT)),
-        ])
-    lines_table = Table(rows, colWidths=[108 * mm, 20 * mm, 24 * mm, 22 * mm], repeatRows=1)
-    lstyle = [
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LINEBELOW', (0, 0), (-1, 0), 0.5, LGREY),
-    ]
-    for i in range(1, len(rows)):
-        lstyle.append(('LINEBELOW', (0, i), (-1, i), 0.3, ROWLINE))
-    lines_table.setStyle(TableStyle(lstyle))
-    story += [lines_table, Spacer(1, 5 * mm)]
+            Table(cell, colWidths=[104 * mm], style=TableStyle(
+                [('TOPPADDING', (0, 0), (-1, -1), 0.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 0.5),
+                 ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])),
+            Paragraph(_money(line.quantity), SR),
+            Paragraph(_money(line.unit_price), SR),
+            Paragraph(_money(line.line_total), SR)])
 
-    # 6. TOTALS
+    story.append(Table(rows, colWidths=[104 * mm, 22 * mm, 26 * mm, 22 * mm],
+        style=TableStyle([
+            ('LINEBELOW', (0, 0), (-1, 0), 0.5, LGREY),
+            ('LINEBELOW', (0, 1), (-1, -1), 0.3, ROWLINE),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
+    story.append(Spacer(1, 6 * mm))
+
+    # ═══ TOTALS ═══
     pct = _tax_pct(quote.subtotal, quote.tax_amount)
-    lbl = _ps('tl', F[F_REG], 8.5, DGREY, TA_RIGHT)
-    val = _ps('tv', F[F_LIGHT], 8.5, DARK, TA_RIGHT)
-    lblb = _ps('tlb', F[F_SEMI], 9.5, DARK, TA_RIGHT)
-    valb = _ps('tvb', F[F_SEMI], 9.5, DARK, TA_RIGHT)
-    totals = Table([
-        ['', Paragraph('Base imposable', lbl), Paragraph(_money(quote.subtotal), val)],
-        ['', Paragraph(f'I.V.A. {pct}%', lbl), Paragraph(_money(quote.tax_amount), val)],
-        ['', Paragraph('Import total', lblb), Paragraph(_money(quote.total), valb)],
-    ], colWidths=[80 * mm, 52 * mm, 42 * mm])
-    totals.setStyle(TableStyle([
-        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    story.append(Table([
+        ['', Paragraph('Base imposable', S), Paragraph(_money(quote.subtotal), SR)],
+        ['', Paragraph(f'I.V.A. {pct}%', S), Paragraph(_money(quote.tax_amount), SR)],
+        ['', Paragraph('Import total', SB), Paragraph(_money(quote.total), SRB)],
+    ], colWidths=[104 * mm, 44 * mm, 26 * mm], style=TableStyle([
+        ('LINEABOVE', (1, 2), (2, 2), 0.5, LGREY),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('LINEABOVE', (1, 2), (-1, 2), 0.5, LGREY),
-    ]))
-    story += [totals, Spacer(1, 10 * mm)]
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
+    story.append(Spacer(1, 10 * mm))
 
-    # 7. PEU — forma de pagament (esq.) · condicions (dreta)
-    foot_l = [Paragraph('Forma de pagament', _ps('fl', F[F_REG], 7, GREY))]
+    # ═══ PEU ═══
+    peu_l_rows = [[Paragraph('Forma de pagament', S_LABEL)]]
     if quote.notes:
-        foot_l.append(Paragraph(quote.notes.replace('\n', '<br/>'), _ps('fln', F[F_LIGHT], 7.5, GREY, leading=10)))
-    # TODO B-fi: dades bancàries (IBAN) com a camp propi de TenantConfig (avui no existeix).
-    foot_r = [Paragraph('Condicions de pagament', _ps('fr', F[F_REG], 7, GREY)),
-              # TODO B-fi: terminis com a camp propi (avui v1 hardcoded).
-              Paragraph('50% a l\'inici · 50% a l\'entrega', _ps('frv', F[F_LIGHT], 7.5, DGREY, leading=10))]
-    foot = Table([[foot_l, foot_r]], colWidths=[90 * mm, 84 * mm])
-    foot.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('LINEABOVE', (0, 0), (-1, 0), 0.5, GREY),
-    ]))
-    story.append(foot)
+        peu_l_rows.append([Paragraph(quote.notes.replace('\n', ' '), SSM_G)])
+    # TODO B-fi: IBAN/dades bancàries com a camp propi de TenantConfig (avui no existeix).
+    peu_l = Table(peu_l_rows, colWidths=[COL_LEFT_W - 6 * mm],
+                  style=TableStyle(ZP + [('LINEABOVE', (0, 0), (0, 0), 0.5, LGREY)]))
+
+    # Terminis 50/50 derivats del total (v1; TODO camp propi de condicions de pagament).
+    total = Decimal(quote.total or 0)
+    first = (total / 2).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    second = total - first
+    peu_r = Table([
+        [Paragraph('Condicions de pagament', S_LABEL), ''],
+        [Paragraph("50% a l'inici", SSM_G), Paragraph(_money(first), SR)],
+        [Paragraph("50% a l'entrega", SSM_G), Paragraph(_money(second), SR)],
+    ], colWidths=[COL_RIGHT_W * 0.6, COL_RIGHT_W * 0.4], style=TableStyle(ZP +
+        [('LINEABOVE', (0, 0), (1, 0), 0.5, LGREY), ('SPAN', (0, 0), (1, 0))]))
+
+    story.append(Table([[peu_l, peu_r]], colWidths=[COL_LEFT_W, COL_RIGHT_W],
+        style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
 
     doc.build(story)
     return buf.getvalue()
