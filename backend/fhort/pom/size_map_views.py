@@ -35,6 +35,45 @@ def _apply_match_threshold(pom, conf):
     return pom, None
 
 
+def _resolve_run_customer(data, ssid):
+    """Customer d'AQUEST run per al matcher per àlies (N3, DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08).
+    Prefereix el `customer_codi` explícit del wizard; si no, el del SizeSystem triat. Retorna un
+    Customer o None (si None, find_pom_master salta l'estratègia d'àlies i resol per descripció)."""
+    from fhort.tasks.models import Customer
+    from fhort.pom.models import SizeSystem
+    codi = ((data or {}).get('customer_codi') or '').strip()
+    if not codi and ssid:
+        codi = (SizeSystem.objects.filter(pk=ssid)
+                .values_list('customer_codi', flat=True).first() or '').strip()
+    if not codi:
+        return None
+    return Customer.objects.filter(codi=codi).first()
+
+
+def _apply_many_to_one_guard(results):
+    """GUARD anti-many-to-one (N3-P2): si DUES files del mateix document resolen al MATEIX POM per
+    DESCRIPCIÓ/fuzzy, cap de les dues auto-vincula → totes a pendents amb avís explícit (marca
+    `many_to_one`). Motiu: `GradingRule` és únic per (rule_set, pom); dues files que hi cauen
+    col·lapsarien i la segona sobreescriuria la primera (l'origen de "ja vinculat per un altre
+    codi"). L'ÀLIES exacte queda EXEMPT: un client pot etiquetar legítimament el mateix POM amb
+    dos codis (Losan H.11 sleeve opening / H.16 cuff opening) → `match_type == 'alias_match'` no
+    dispara el guard. Muta `results` in situ."""
+    counts = {}
+    for r in results:
+        if r.get('pom_id') and r.get('match_type') != 'alias_match':
+            counts[r['pom_id']] = counts.get(r['pom_id'], 0) + 1
+    dup_ids = {pid for pid, n in counts.items() if n >= 2}
+    if not dup_ids:
+        return results
+    for r in results:
+        if r.get('pom_id') in dup_ids and r.get('match_type') != 'alias_match':
+            r['weak_suggestion'] = r.get('pom_nom')  # suggeriment visible per a la vinculació manual
+            r['pom_id'] = None
+            r['pom_nom'] = None
+            r['many_to_one'] = True
+    return results
+
+
 class _Configure(HasCapability):
     required_capability = CONFIGURE
 
@@ -237,6 +276,7 @@ def size_map_grading_preview_view(request):
         ssid = data.get('size_system_id')
         base_size = data.get('base_size') or ''
         taula = data.get('taula') or []
+        customer = _resolve_run_customer(data, ssid)  # N3: matcher per àlies del client
 
         # Run ordenat: unió d'etiquetes presents, ordenades pel size_system si es dóna.
         all_labels = []
@@ -260,7 +300,7 @@ def size_map_grading_preview_view(request):
             valors_raw = row.get('valors') or {}
 
             # descripció si el paste la porta (avui no); el fitxer SÍ → match per nom.
-            pom, mtype, conf = find_pom_master(codi, row.get('descripcio') or '')
+            pom, mtype, conf = find_pom_master(codi, row.get('descripcio') or '', customer=customer)
             pom, weak_suggestion = _apply_match_threshold(pom, conf)
             warning = ''
             if pom is None and not weak_suggestion:
@@ -310,6 +350,7 @@ def size_map_grading_preview_view(request):
                 'warning': warning,
             })
 
+        _apply_many_to_one_guard(results)  # N3-P2: dues files → mateix POM per descripció → pendents
         return Response({'results': results, 'run': run, 'base_size': base_size})
     except Exception as e:
         import logging
@@ -411,6 +452,7 @@ def size_map_grading_preview_file_view(request):
             return Response({'error': 'Cal adjuntar un fitxer (camp "file").'}, status=400)
         ssid = request.data.get('size_system_id')
         base_size = (request.data.get('base_size') or '').strip()
+        customer = _resolve_run_customer(request.data, ssid)  # N3: matcher per àlies del client
 
         name = (f.name or '').lower()
         file_bytes = f.read()
@@ -494,7 +536,7 @@ def size_map_grading_preview_file_view(request):
             logger.info("size_map reclau [K.1]: file=%s code=%r values_by_size=%r",
                         f.name, codi, values)
             try:
-                pom, mtype, conf = find_pom_master(codi, descripcio)
+                pom, mtype, conf = find_pom_master(codi, descripcio, customer=customer)
             except Exception:
                 pom, mtype, conf = None, 'no_match', 'NO_MATCH'
             pom, weak_suggestion = _apply_match_threshold(pom, conf)
@@ -552,6 +594,7 @@ def size_map_grading_preview_file_view(request):
                 'warning': warning,
             })
 
+        _apply_many_to_one_guard(results)  # N3-P2: dues files → mateix POM per descripció → pendents
         return Response({'results': results, 'run': run, 'base_size': base_size,
                          'avisos': avisos})
     except Exception as e:

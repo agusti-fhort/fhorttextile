@@ -1510,6 +1510,7 @@
   "size_map_grading_err": "Error in grading calculation.",
   "size_map_link_pom": "Link to catalogue POM…",
   "size_map_weak_match": "Weak match (suggested: {{pom}}); link it manually.",
+  "size_map_many_to_one": "Several rows resolve to the same POM ({{pom}}) by description; none linked automatically — confirm it manually.",
   "size_map_loading": "Loading…",
   "size_map_match_err": "Error in matching.",
   "size_map_next": "Next",

@@ -330,7 +330,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   const calcGrading = () => {
     setErr(null); setGradingAvisos([]); setBusy(true)
     const { taula } = parseTable(wiz.gradingText)
-    sizeMap.gradingPreview({ size_system_id: wiz.size_system_id, base_size: wiz.base_size, taula })
+    sizeMap.gradingPreview({ size_system_id: wiz.size_system_id, base_size: wiz.base_size, taula, customer_codi: wiz.customer_codi })
       .then(r => applyGradingData(r.data))
       .catch(e => setErr(e?.response?.data?.error || t('size_map_grading_err')))
       .finally(() => setBusy(false))
@@ -344,6 +344,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
     fd.append('file', fileObj)
     if (wiz.size_system_id) fd.append('size_system_id', wiz.size_system_id)
     fd.append('base_size', wiz.base_size || '')
+    if (wiz.customer_codi) fd.append('customer_codi', wiz.customer_codi)
     sizeMap.gradingPreviewFile(fd)
       .then(r => applyGradingData(r.data))
       .catch(e => setErr(e?.response?.data?.error || t('size_map_file_err')))
@@ -723,12 +724,15 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                           {g.pom_id
                             ? (g.pom_nom && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>→ {g.pom_nom}</div>)
                             : (<>
-                              {/* Match dèbil (LOW): el backend NO ha auto-vinculat; es mostra el suggeriment
-                                  perquè l'humà vinculi conscientment (mai vinculació silenciosa dubtosa). */}
+                              {/* Match dèbil (LOW) o guard many-to-one (N3-P2): el backend NO ha
+                                  auto-vinculat; es mostra el suggeriment perquè l'humà vinculi
+                                  conscientment (mai vinculació silenciosa ni col·lisió sobreescrita). */}
                               {g.weak_suggestion && (
                                 <div style={{ marginTop: 2, fontSize: 'var(--fs-label)', color: 'var(--warn)' }}>
                                   <i className="ti ti-help-circle" style={{ fontSize: 12, marginRight: 3 }} />
-                                  {t('size_map_weak_match', { pom: g.weak_suggestion })}
+                                  {g.many_to_one
+                                    ? t('size_map_many_to_one', { pom: g.weak_suggestion })
+                                    : t('size_map_weak_match', { pom: g.weak_suggestion })}
                                 </div>
                               )}
                               <select value={g.pom_id || ''} style={{ ...selS, padding: '3px 6px', fontSize: 'var(--fs-body)', marginTop: 2, maxWidth: 260 }}
