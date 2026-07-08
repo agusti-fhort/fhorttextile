@@ -5,6 +5,7 @@ import useAuthStore from '../store/auth'
 import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
+import Modal from '../components/ui/Modal'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import { StatusBadge } from './Quotes'
 
@@ -46,6 +47,7 @@ export default function QuoteDetail() {
   const [paymentTerms, setPaymentTerms] = useState([])
   const [feedback, setFeedback] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [confirmConvert, setConfirmConvert] = useState(false)
 
   const reload = useCallback(() => commerce.quotes.get(id)
     .then(res => setQuote(res.data))
@@ -83,12 +85,21 @@ export default function QuoteDetail() {
       .finally(() => setBusy(false))
   }
 
+  const doConvert = () => {
+    setBusy(true); setFeedback(null)
+    commerce.quotes.convert(id)
+      .then(res => { setConfirmConvert(false); navigate(`/comercial/comandes/${res.data.id}`) })
+      .catch(e => { setConfirmConvert(false); err(e) })
+      .finally(() => setBusy(false))
+  }
+
   if (loading) return <Center>{t('quotes.loading')}</Center>
   if (error || !quote) return <Center>{t('quotes.error')}</Center>
 
   const isDraft = quote.status === 'DRAFT'
   const editable = canEdit && isDraft
   const hasLines = (quote.lines || []).length > 0
+  const canConvert = canEdit && quote.status === 'SENT'
 
   return (
     <div style={{ minWidth: 0, maxWidth: 900 }}>
@@ -110,6 +121,11 @@ export default function QuoteDetail() {
         <button onClick={doPdf} disabled={busy} style={smallBtn}>
           <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {t('quotes.download_pdf')}
         </button>
+        {canConvert && (
+          <button onClick={() => setConfirmConvert(true)} disabled={busy} style={primaryBtn}>
+            <i className="ti ti-arrow-right-circle" style={{ fontSize: 14 }} /> {t('quotes.convert')}
+          </button>
+        )}
       </div>
 
       <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
@@ -118,6 +134,14 @@ export default function QuoteDetail() {
 
       <LinesSection quote={quote} editable={editable} products={products} t={t} reload={reload} ok={ok} err={err} />
       <DetailsSection quote={quote} editable={editable} paymentTerms={paymentTerms} t={t} reload={reload} ok={ok} err={err} />
+
+      {confirmConvert && (
+        <Modal title={t('quotes.convert_title')} subtitle={t('quotes.convert_warning')}
+          cancelLabel={t('quotes.cancel')} confirmLabel={t('quotes.convert_confirm')}
+          onCancel={() => setConfirmConvert(false)} onConfirm={doConvert} confirmDisabled={busy}>
+          <p style={{ fontSize: 'var(--fs-body)', lineHeight: 1.5 }}>{t('quotes.convert_body')}</p>
+        </Modal>
+      )}
     </div>
   )
 }

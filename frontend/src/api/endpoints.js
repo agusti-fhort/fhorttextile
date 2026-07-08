@@ -369,12 +369,25 @@ export const commerce = {
     remove: (id) => client.delete(`/api/v1/commerce/quotes/${id}/`),
     send: (id) => client.post(`/api/v1/commerce/quotes/${id}/send/`),
     pdf: (id) => client.get(`/api/v1/commerce/quotes/${id}/pdf/`, { responseType: 'blob' }),
+    convert: (id) => client.post(`/api/v1/commerce/quotes/${id}/convert/`),   // → SalesOrder (201)
   },
   quoteLines: {
     list: (params) => client.get('/api/v1/commerce/quote-lines/', { params }),   // ?quote=
     create: (data) => client.post('/api/v1/commerce/quote-lines/', data),
     update: (id, data) => client.patch(`/api/v1/commerce/quote-lines/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/commerce/quote-lines/${id}/`),
+  },
+  // Documents comercials — SalesOrder (comanda, B3b). Neixen de la conversió d'una oferta;
+  // lectura + pdf. Línies read-only (mutació només qty_allocated, control de cartera B4).
+  orders: {
+    list: (params) => client.get('/api/v1/commerce/orders/', { params }),
+    get: (id) => client.get(`/api/v1/commerce/orders/${id}/`),
+    update: (id, data) => client.patch(`/api/v1/commerce/orders/${id}/`, data),   // només status
+    pdf: (id) => client.get(`/api/v1/commerce/orders/${id}/pdf/`, { responseType: 'blob' }),
+  },
+  orderLines: {
+    list: (params) => client.get('/api/v1/commerce/order-lines/', { params }),   // ?order=
+    update: (id, data) => client.patch(`/api/v1/commerce/order-lines/${id}/`, data),   // qty_allocated
   },
 }
 

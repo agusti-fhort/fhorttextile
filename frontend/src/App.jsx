@@ -17,6 +17,8 @@ const ProductDetail = lazy(() => import('./pages/ProductDetail'))
 const Quotes = lazy(() => import('./pages/Quotes'))
 const QuoteDetail = lazy(() => import('./pages/QuoteDetail'))
 const PaymentTerms = lazy(() => import('./pages/PaymentTerms'))
+const Orders = lazy(() => import('./pages/Orders'))
+const OrderDetail = lazy(() => import('./pages/OrderDetail'))
 const FittingDetail = lazy(() => import('./pages/FittingDetail'))
 const FittingSessionList = lazy(() => import('./pages/FittingSessionList'))
 const FittingSessionNew = lazy(() => import('./pages/FittingSessionNew'))
@@ -262,6 +264,9 @@ export default function App() {
           <Route path="comercial/ofertes/:id" element={<QuoteDetail />} />
           {/* Comercial (M4) — condicions de pagament (PaymentTerms). */}
           <Route path="comercial/condicions-pagament" element={<PaymentTerms />} />
+          {/* Comercial (B3b) — comandes de venda (SalesOrder). */}
+          <Route path="comercial/comandes" element={<Orders />} />
+          <Route path="comercial/comandes/:id" element={<OrderDetail />} />
           <Route path="planificacio" element={<Planning />} />
           {/* Calendari propi (agenda) read-only: obert a qualsevol autenticat (scope per dades a
               calendar/events); NO gatejat per canPlan, a diferència de la gestió /planificacio. */}
