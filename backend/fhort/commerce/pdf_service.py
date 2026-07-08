@@ -134,10 +134,12 @@ def generate_quote_pdf(quote):
     return generate_document_pdf(quote, doc_title='Pressupost')
 
 
-def generate_document_pdf(quote, doc_title='Pressupost'):
-    """Retorna els bytes del PDF d'un document comercial (`quote` = Quote o SalesOrder; layout
-    idèntic). `doc_title` és el títol del document ('Pressupost' per oferta, 'Comanda' per
-    comanda). Emissor = TenantConfig; client/línies/totals/venciments = document."""
+def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
+    """Retorna els bytes del PDF d'un document comercial (`quote` = Quote, SalesOrder o
+    DeliveryNote; layout idèntic). `doc_title` és el títol ('Pressupost'/'Comanda'/'Albarà').
+    `show_payment=False` (albarà, B4c): SENSE bloc de venciments/condicions de pagament ni
+    "Vàlid fins" (l'albarà no en porta); el peu queda amb les observacions/notes. Les línies
+    DEDUCTION (import negatiu) es mostren amb signe − i color discret. Emissor = TenantConfig."""
     F = _fonts()
     FL, FR, FS, FB = F[F_LIGHT], F[F_REG], F[F_SEMI], F[F_BOLD]
     cfg = _tenant_cfg()
@@ -201,11 +203,13 @@ def generate_document_pdf(quote, doc_title='Pressupost'):
     # TODO B-fi: adreça/NIF/email de l'emissor quan TenantConfig els tingui (avui no existeixen).
     left = Table(left_rows, colWidths=[COL_LEFT_W], style=TableStyle(ZP))
 
-    meta = Table([
+    meta_rows = [
         [Paragraph('Número', S_LABEL_R), Paragraph(quote.document_number or '—', SSM_R)],
         [Paragraph('Data', S_LABEL_R), Paragraph(_fmt_date(quote.issued_at), SSM_R)],
-        [Paragraph('Vàlid fins', S_LABEL_R), Paragraph(_fmt_date(quote.valid_until), SSM_R)],
-    ], colWidths=[COL_RIGHT_W - 30 * mm, 30 * mm], style=TableStyle(ZP))
+    ]
+    if show_payment:  # "Vàlid fins" és propi d'oferta/comanda; un albarà no en porta.
+        meta_rows.append([Paragraph('Vàlid fins', S_LABEL_R), Paragraph(_fmt_date(quote.valid_until), SSM_R)])
+    meta = Table(meta_rows, colWidths=[COL_RIGHT_W - 30 * mm, 30 * mm], style=TableStyle(ZP))
 
     right = Table([
         [Paragraph(doc_title, S_TITDOC)],
@@ -237,19 +241,24 @@ def generate_document_pdf(quote, doc_title='Pressupost'):
     HDR_R = s('hdrr', font=FS, size=8, color=GREY, align=TA_RIGHT)
     rows = [[Paragraph('Descripció', HDR), Paragraph('Unitats', HDR_R),
              Paragraph('Preu unit.', HDR_R), Paragraph('Import', HDR_R)]]
+    SR_NEG = s('rneg', align=TA_RIGHT, color=DGREY)  # línia negativa (deducció): color discret
     for line in quote.lines.all():
         name = (line.product.name if line.product_id else '') or ''
         desc = (line.description or '').strip()
-        cell = [[Paragraph(name, s('ln', font=FR, size=8.5))]]
-        if desc and desc != name:
+        # Sense product (línia TASK/DEDUCTION/MANUAL d'albarà) → la descripció fa de títol.
+        title = name or desc
+        cell = [[Paragraph(title, s('ln', font=FR, size=8.5))]]
+        if desc and desc != title:
             cell.append([Paragraph(desc, SSM_I)])
+        neg = Decimal(line.line_total or 0) < 0
+        num = SR_NEG if neg else SR
         rows.append([
             Table(cell, colWidths=[104 * mm], style=TableStyle(
                 [('TOPPADDING', (0, 0), (-1, -1), 0.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 0.5),
                  ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])),
-            Paragraph(_money(line.quantity), SR),
-            Paragraph(_money(line.unit_price), SR),
-            Paragraph(_money(line.line_total), SR)])
+            Paragraph(_money(line.quantity), num),
+            Paragraph(_money(line.unit_price), num),
+            Paragraph(_money(line.line_total), num)])
 
     story.append(Table(rows, colWidths=[104 * mm, 22 * mm, 26 * mm, 22 * mm],
         style=TableStyle([
@@ -273,32 +282,40 @@ def generate_document_pdf(quote, doc_title='Pressupost'):
     story.append(Spacer(1, 10 * mm))
 
     # ═══ PEU ═══
-    peu_l_rows = [[Paragraph('Forma de pagament', S_LABEL)]]
+    # Albarà (show_payment=False): sense forma/condicions de pagament ni venciments; només
+    # observacions. Oferta/comanda: bloc esquerre (forma de pagament + notes) + bloc dret
+    # (condicions + venciments materialitzats).
+    peu_label = 'Forma de pagament' if show_payment else 'Observacions'
+    peu_l_rows = [[Paragraph(peu_label, S_LABEL)]]
     if quote.notes:
         peu_l_rows.append([Paragraph(quote.notes.replace('\n', ' '), SSM_G)])
     # TODO B-fi: IBAN/dades bancàries com a camp propi de TenantConfig (avui no existeix).
     peu_l = Table(peu_l_rows, colWidths=[COL_LEFT_W - 6 * mm],
                   style=TableStyle(ZP + [('LINEABOVE', (0, 0), (0, 0), 0.5, LGREY)]))
 
-    # Terminis 50/50 derivats del total (v1; TODO camp propi de condicions de pagament).
-    terms = quote.payment_terms or (quote.customer.payment_terms if quote.customer_id else None)
-    due = list(quote.due_dates.all())
-    peu_r_rows = [[Paragraph('Condicions de pagament', S_LABEL), '']]
-    if terms:
-        peu_r_rows.append([Paragraph(terms.name, SSM_I), ''])
-    for dd in due:
-        peu_r_rows.append([Paragraph(f'{dd.percentage:g}% · {_fmt_date(dd.due_date)}', SSM_G),
-                           Paragraph(_money(dd.amount), SR)])
-    if not due and not terms:
-        peu_r_rows.append([Paragraph('—', SSM_G), ''])
-    peu_r = Table(peu_r_rows, colWidths=[COL_RIGHT_W * 0.6, COL_RIGHT_W * 0.4],
-                  style=TableStyle(ZP + [('LINEABOVE', (0, 0), (1, 0), 0.5, LGREY),
-                                         ('SPAN', (0, 0), (1, 0))]))
-
-    story.append(Table([[peu_l, peu_r]], colWidths=[COL_LEFT_W, COL_RIGHT_W],
-        style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
+    if not show_payment:
+        story.append(Table([[peu_l]], colWidths=[COL_LEFT_W + COL_RIGHT_W],
+            style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
+    else:
+        terms = quote.payment_terms or (quote.customer.payment_terms if quote.customer_id else None)
+        due = list(quote.due_dates.all())
+        peu_r_rows = [[Paragraph('Condicions de pagament', S_LABEL), '']]
+        if terms:
+            peu_r_rows.append([Paragraph(terms.name, SSM_I), ''])
+        for dd in due:
+            peu_r_rows.append([Paragraph(f'{dd.percentage:g}% · {_fmt_date(dd.due_date)}', SSM_G),
+                               Paragraph(_money(dd.amount), SR)])
+        if not due and not terms:
+            peu_r_rows.append([Paragraph('—', SSM_G), ''])
+        peu_r = Table(peu_r_rows, colWidths=[COL_RIGHT_W * 0.6, COL_RIGHT_W * 0.4],
+                      style=TableStyle(ZP + [('LINEABOVE', (0, 0), (1, 0), 0.5, LGREY),
+                                             ('SPAN', (0, 0), (1, 0))]))
+        story.append(Table([[peu_l, peu_r]], colWidths=[COL_LEFT_W, COL_RIGHT_W],
+            style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
 
     doc.build(story)
     return buf.getvalue()

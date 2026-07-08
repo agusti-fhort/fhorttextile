@@ -339,6 +339,17 @@ class DeliveryNoteViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixin
             return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(dn).data)
 
+    @action(detail=True, methods=['get'])
+    def pdf(self, request, pk=None):
+        """PDF de l'albarà: reutilitza el generador genèric amb títol 'Albarà' i SENSE bloc de
+        venciments/condicions de pagament (show_payment=False)."""
+        dn = self.get_object()
+        from .pdf_service import generate_document_pdf
+        pdf_bytes = generate_document_pdf(dn, doc_title='Albarà', show_payment=False)
+        resp = HttpResponse(pdf_bytes, content_type='application/pdf')
+        resp['Content-Disposition'] = f'attachment; filename="{dn.document_number or "albara"}.pdf"'
+        return resp
+
     def destroy(self, request, *args, **kwargs):
         dn = self.get_object()
         if dn.status != 'DRAFT':
