@@ -6,6 +6,7 @@ import {
   customers, customerAliases, commerce, poms, gradingRuleSets, sizingProfiles,
 } from '../api/endpoints'
 import CustomerForm, { initCustomerForm, customerPayload, customerFormInvalid } from '../components/CustomerForm'
+import DictionaryWizard from '../components/DictionaryWizard'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Table from '../components/ui/Table'
@@ -154,6 +155,7 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
   const [rulesets, setRulesets] = useState([])
   const [profiles, setProfiles] = useState([])
   const [busy, setBusy] = useState(true)
+  const [showDict, setShowDict] = useState(false)
 
   const loadAliases = useCallback(() => customerAliases.list({ customer: customer.id })
     .then(res => setAliases(res.data?.results ?? (Array.isArray(res.data) ? res.data : []))), [customer.id])
@@ -229,8 +231,15 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
       {/* Biblioteca d'àlies */}
       <section>
-        <SectionTitle t={t} title="clients.biblioteca_title" subtitle="clients.biblioteca_subtitle"
-          meta={t('clients.biblioteca_count', { aliases: aliases.length, poms: nPoms })} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+          <SectionTitle t={t} title="clients.biblioteca_title" subtitle="clients.biblioteca_subtitle"
+            meta={t('clients.biblioteca_count', { aliases: aliases.length, poms: nPoms })} />
+          {canEdit && (
+            <button onClick={() => setShowDict(true)} style={{ ...primaryBtn, marginLeft: 0 }}>
+              <i className="ti ti-file-spreadsheet" style={{ fontSize: 14 }} />{t('clients.load_dictionary')}
+            </button>
+          )}
+        </div>
         {canEdit && <AliasAddRow customer={customer} t={t}
           onCreated={() => loadAliases().then(() => notify({ type: 'ok', text: t('clients.alias_saved') }))}
           onError={(text) => notify({ type: 'err', text })} />}
@@ -238,6 +247,16 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
           <Table columns={aliasCols} data={aliases} loading={false} empty={t('clients.alias_empty')} />
         )}
       </section>
+
+      {showDict && (
+        <DictionaryWizard customer={customer} t={t}
+          onClose={() => setShowDict(false)}
+          onDone={(res) => {
+            setShowDict(false)
+            loadAliases().then(() => notify({ type: 'ok', text: t('clients.dictionary_saved', {
+              linked: res.linked, created: res.created_pom, skipped: res.skipped }) }))
+          }} />
+      )}
 
       {/* Graduacions del client (lectura, enllaç a Grading Rules / Size Library) */}
       <section>

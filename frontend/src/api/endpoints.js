@@ -224,6 +224,15 @@ export const customerAliases = {
   remove: (id) => client.delete(`/api/v1/customer-pom-aliases/${id}/`),
 }
 
+// Diccionari de nomenclatura del client (setup). Escriptura gated CONFIGURE. Stateless.
+export const customerDictionary = {
+  template: (id) => client.get(`/api/v1/pom/customers/${id}/dictionary/template/`, { responseType: 'blob' }),
+  preview: (id, formData) => client.post(`/api/v1/pom/customers/${id}/dictionary/preview/`, formData, {
+    headers: { 'Content-Type': undefined },
+  }),
+  commit: (id, payload) => client.post(`/api/v1/pom/customers/${id}/dictionary/commit/`, payload),
+}
+
 // Plantilla de fitxa tècnica per client (TS-3). get_or_create + PATCH; escriptura gated CONFIGURE.
 export const techSheetTemplate = {
   detail: (customerId) => client.get(`/api/v1/customers/${customerId}/tech-sheet-template/`),
