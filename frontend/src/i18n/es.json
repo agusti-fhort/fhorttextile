@@ -197,7 +197,10 @@
     "orders_title": "Pedidos",
     "orders_empty": "Sin pedidos.",
     "col_ref": "Referencia",
-    "col_estat": "Estado"
+    "col_estat": "Estado",
+    "col_num": "Número",
+    "col_data": "Fecha",
+    "col_total": "Total"
   },
   "app": {
     "title": "Fhort Textile Tech",

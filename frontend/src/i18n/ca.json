@@ -197,7 +197,10 @@
     "orders_title": "Comandes",
     "orders_empty": "Cap comanda.",
     "col_ref": "Referència",
-    "col_estat": "Estat"
+    "col_estat": "Estat",
+    "col_num": "Número",
+    "col_data": "Data",
+    "col_total": "Total"
   },
   "app": {
     "title": "Fhort Textile Tech",

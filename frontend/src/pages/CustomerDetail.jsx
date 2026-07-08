@@ -9,7 +9,13 @@ import CustomerForm, { initCustomerForm, customerPayload, customerFormInvalid } 
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Table from '../components/ui/Table'
+import Badge from '../components/ui/Badge'
+import { StatusBadge } from './Quotes'
+import { OrderStatusBadge } from './Orders'
 import { primaryBtn, selS } from '../components/ui/buttons'
+
+const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
+const dayOf = (r) => (r.issued_at || r.created_at || '').slice(0, 10)
 
 // Fitxa completa del client (patró ModelSheet: capçalera + barra de tabs ?tab= + cos).
 // 3 tabs: Dades (identitat + fiscal, reusa CustomerForm de M2) · Tècnic (biblioteca de
@@ -332,10 +338,15 @@ function ComercialTab({ customer, t, navigate }) {
     return () => { alive = false }
   }, [customer.id])
 
-  const ref = (r) => r.codi || r.numero || r.reference || r.name || `#${r.id}`
-  const mkCols = () => [
-    { key: 'ref', label: t('clients.col_ref'), render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{ref(r)}</span> },
-    { key: 'status', label: t('clients.col_estat'), render: r => r.status || '—' },
+  // Columnes llegibles: número de document (mai la PK), data, total, estat com a badge.
+  const docCols = (badge) => [
+    { key: 'num', label: t('clients.col_num'),
+      render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.document_number || `#${r.id}`}</span> },
+    { key: 'data', label: t('clients.col_data'),
+      render: r => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{dayOf(r) || '—'}</span> },
+    { key: 'total', label: t('clients.col_total'), align: 'right',
+      render: r => <span style={{ fontFamily: MONO }}>{money(r.total)}</span> },
+    { key: 'estat', label: t('clients.col_estat'), render: badge },
   ]
 
   if (busy) return <Center>{t('clients.loading')}</Center>
@@ -343,13 +354,15 @@ function ComercialTab({ customer, t, navigate }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
       <section>
-        <SectionTitle t={t} title="clients.quotes_title" />
-        <Table columns={mkCols()} data={quotes} loading={false} empty={t('clients.quotes_empty')}
+        <SectionTitle t={t} title="clients.quotes_title" count={quotes.length} />
+        <Table columns={docCols(r => <StatusBadge status={r.status} t={t} />)}
+          data={quotes} loading={false} empty={t('clients.quotes_empty')}
           onRowClick={r => navigate(`/comercial/ofertes/${r.id}`)} />
       </section>
       <section>
-        <SectionTitle t={t} title="clients.orders_title" />
-        <Table columns={mkCols()} data={orders} loading={false} empty={t('clients.orders_empty')}
+        <SectionTitle t={t} title="clients.orders_title" count={orders.length} />
+        <Table columns={docCols(r => <OrderStatusBadge status={r.status} t={t} />)}
+          data={orders} loading={false} empty={t('clients.orders_empty')}
           onRowClick={r => navigate(`/comercial/comandes/${r.id}`)} />
       </section>
     </div>
@@ -368,10 +381,15 @@ const miniBtn = {
   padding: '4px 9px', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 'var(--fs-body)',
 }
 
-function SectionTitle({ t, title, subtitle }) {
+// Capçalera de secció a l'estil de la casa (Grading Rules): títol + comptador gris al costat.
+function SectionTitle({ t, title, subtitle, count, meta }) {
+  const metaText = meta != null ? meta : (count != null ? String(count) : null)
   return (
     <div style={{ marginBottom: 10 }}>
-      <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, fontFamily: MONO, margin: 0 }}>{t(title)}</h2>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+        <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, fontFamily: MONO, margin: 0 }}>{t(title)}</h2>
+        {metaText && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{metaText}</span>}
+      </div>
       {subtitle && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: '2px 0 0', fontWeight: 300 }}>{t(subtitle)}</p>}
     </div>
   )
