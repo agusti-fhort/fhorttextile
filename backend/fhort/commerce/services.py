@@ -158,3 +158,76 @@ def convert_quote_to_order(quote, user=None):
         quote.save(update_fields=['status', 'updated_at'])
     order.refresh_from_db()
     return order
+
+
+def close_work_order(work_order, user=None, resolve_extras=None, cancel_pending=False):
+    """Tanca un WorkOrder segons la política B4a (decisió Agus 2026-07-08). La resolució dels
+    blocatges viu AQUÍ (al tancament): opcionalment crea adjustments pels extres i deduccions
+    per les Pending. RETORNA SEMPRE un dict estructurat (mai llança per bloqueig):
+
+        { closed: bool, blockers: [...], pending_proposals: [...] }
+
+    Política:
+      - Tasques InProgress o Paused del WO → BLOQUEGEN (es recullen TOTES, no una a una).
+      - Extres off_recipe sense WorkOrderAdjustment → BLOQUEGEN.
+      - Pending: NO bloquegen. Es retornen com a proposta; si cancel_pending=True es
+        cancel·len creant una DEDUCTION i es deslliguen del WO, i llavors es tanca.
+
+    resolve_extras: llista [{model_task, kind (EXTRA_BILL|EXTRA_ABSORB), amount?, description?}]
+      per resoldre extres abans de comprovar bloquejos (crea els adjustments corresponents).
+    """
+    from .models import WorkOrderAdjustment
+    if work_order.status == 'CLOSED':
+        return {'closed': True, 'blockers': [], 'pending_proposals': [], 'already_closed': True}
+
+    with transaction.atomic():
+        tasks = list(work_order.tasks.select_related('task_type').all())
+        by_id = {t.pk: t for t in tasks}
+
+        # 1) Resoldre extres que el caller decideix facturar/absorbir.
+        for r in (resolve_extras or []):
+            t = by_id.get(r.get('model_task'))
+            if t is None or not t.off_recipe or r.get('kind') not in ('EXTRA_BILL', 'EXTRA_ABSORB'):
+                continue
+            WorkOrderAdjustment.objects.create(
+                work_order=work_order, model_task=t, kind=r['kind'],
+                amount=Decimal(str(r.get('amount') or '0')).quantize(_CENT),
+                description=r.get('description') or '', resolved_by=user)
+
+        resolved_ids = set(work_order.adjustments.filter(model_task__isnull=False)
+                           .values_list('model_task_id', flat=True))
+
+        # 2) Bloquejos (es recullen TOTS junts).
+        blockers = []
+        for t in tasks:
+            if t.status in ('InProgress', 'Paused'):
+                blockers.append({'model_task': t.pk, 'reason': t.status, 'task_type': t.task_type.code})
+        for t in tasks:
+            if t.off_recipe and t.pk not in resolved_ids:
+                blockers.append({'model_task': t.pk, 'reason': 'extra_unresolved', 'task_type': t.task_type.code})
+
+        pending = [t for t in tasks if t.status == 'Pending']
+        pending_proposals = [{'model_task': t.pk, 'task_type': t.task_type.code} for t in pending]
+
+        if blockers:
+            return {'closed': False, 'blockers': blockers, 'pending_proposals': pending_proposals}
+        if pending and not cancel_pending:
+            return {'closed': False, 'blockers': [], 'pending_proposals': pending_proposals}
+
+        # 3) Deducció de les Pending (si el caller ho decideix): DEDUCTION + deslligar del WO.
+        #    amount=0: el marcador; l'import real el posa l'albarà (B4c) des del price_snapshot.
+        if pending and cancel_pending:
+            for t in pending:
+                WorkOrderAdjustment.objects.create(
+                    work_order=work_order, model_task=t, kind='DEDUCTION', amount=Decimal('0.00'),
+                    description=f"Recepta no executada: {t.task_type.code}", resolved_by=user)
+                t.work_order = None
+                t.save(update_fields=['work_order', 'updated_at'])
+
+        # 4) Tancar.
+        work_order.status = 'CLOSED'
+        work_order.closed_at = timezone.now()
+        work_order.closed_by = user
+        work_order.save(update_fields=['status', 'closed_at', 'closed_by', 'updated_at'])
+
+    return {'closed': True, 'blockers': [], 'pending_proposals': []}

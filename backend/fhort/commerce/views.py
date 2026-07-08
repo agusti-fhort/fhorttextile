@@ -12,17 +12,17 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from fhort.accounts.capabilities import HasCapability, CONFIGURE
+from fhort.accounts.capabilities import HasCapability, CONFIGURE, DEFINE_TASKS
 
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
-    Quote, QuoteLine, PaymentTerms, SalesOrder, SalesOrderLine,
+    Quote, QuoteLine, PaymentTerms, SalesOrder, SalesOrderLine, WorkOrder,
 )
 from .serializers import (
     UnitSerializer, ProductSerializer, ProductRecipeSerializer, ProductSupplierSerializer,
     ProductComponentSerializer, ProductPriceGTISerializer,
     QuoteSerializer, QuoteLineSerializer, PaymentTermsSerializer,
-    SalesOrderSerializer, SalesOrderLineSerializer,
+    SalesOrderSerializer, SalesOrderLineSerializer, WorkOrderSerializer,
 )
 
 
@@ -202,3 +202,34 @@ class SalesOrderLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mix
     queryset = SalesOrderLine.objects.select_related('order', 'product').all()
     serializer_class = SalesOrderLineSerializer
     filterset_fields = ['order', 'product']
+
+
+class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Encàrrecs / ordres de treball (B4a). Lectura (autenticat) + acció `close` (gate
+    DEFINE_TASKS). No es crea per POST: els ORDER neixen del wizard (B4b) i els COLLECTOR
+    del hook lazy. Llista filtrable per kind/status/customer/period."""
+    queryset = WorkOrder.objects.select_related('customer', 'model', 'closed_by', 'order_line') \
+        .prefetch_related('adjustments', 'tasks__task_type').all()
+    serializer_class = WorkOrderSerializer
+    filterset_fields = ['kind', 'status', 'customer', 'period']
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        p = HasCapability(); self.required_capability = DEFINE_TASKS
+        return [p]
+
+    @action(detail=True, methods=['post'])
+    def close(self, request, pk=None):
+        """POST commerce/work-orders/{id}/close/ — tanca segons la política B4a. Resposta
+        estructurada { closed, blockers, pending_proposals }. 409 si no es pot tancar.
+        Body opcional: {resolve_extras: [...], cancel_pending: bool}."""
+        wo = self.get_object()
+        profile = getattr(request.user, 'profile', None)
+        from .services import close_work_order
+        result = close_work_order(
+            wo, user=profile,
+            resolve_extras=request.data.get('resolve_extras'),
+            cancel_pending=bool(request.data.get('cancel_pending')))
+        code = status.HTTP_200_OK if result['closed'] else status.HTTP_409_CONFLICT
+        return Response(result, status=code)

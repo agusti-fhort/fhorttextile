@@ -9,7 +9,7 @@ from rest_framework import serializers
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
     Quote, QuoteLine, PaymentTerms, PaymentTermLine, SalesOrder, SalesOrderLine,
-    DocumentDueDate,
+    DocumentDueDate, WorkOrder, WorkOrderAdjustment,
 )
 
 
@@ -237,3 +237,48 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         read_only_fields = ['document_number', 'doc_type', 'customer', 'issued_at', 'valid_until',
                             'payment_terms', 'source_quote', 'subtotal', 'tax_amount', 'total',
                             'tax_breakdown', 'notes', 'created_at', 'updated_at']
+
+
+class WorkOrderAdjustmentSerializer(serializers.ModelSerializer):
+    """Ajust d'un encàrrec (B4a): extra facturat/absorbit o deducció. L'albarà (B4c) el llegirà."""
+    class Meta:
+        model = WorkOrderAdjustment
+        fields = ['id', 'work_order', 'model_task', 'kind', 'description', 'amount',
+                  'resolved_by', 'resolved_at']
+        read_only_fields = ['resolved_at']
+
+
+class WorkOrderSerializer(serializers.ModelSerializer):
+    """Encàrrec / ordre de treball (B4a). Lectura amb detall de tasques (estat + minuts de timer
+    agregats) i adjustments. El detall de tasques s'omet a la llista (evita N+1)."""
+    customer_nom = serializers.CharField(source='customer.nom', read_only=True)
+    model_codi = serializers.CharField(source='model.codi_intern', read_only=True, default=None)
+    n_tasks = serializers.SerializerMethodField()
+    tasks = serializers.SerializerMethodField()
+    adjustments = WorkOrderAdjustmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = WorkOrder
+        fields = ['id', 'number', 'kind', 'origin', 'status', 'customer', 'customer_nom',
+                  'model', 'model_codi', 'order_line', 'period',
+                  'price_snapshot', 'recipe_snapshot',
+                  'closed_at', 'closed_by', 'created_at', 'n_tasks', 'tasks', 'adjustments']
+
+    def get_n_tasks(self, obj):
+        return obj.tasks.count()
+
+    def get_tasks(self, obj):
+        # A la llista no carreguem el detall (només el comptador n_tasks).
+        view = self.context.get('view')
+        if view is not None and getattr(view, 'action', None) == 'list':
+            return None
+        from django.db.models import Sum
+        rows = []
+        for t in obj.tasks.select_related('task_type').all():
+            minutes = t.timers.aggregate(m=Sum('minuts'))['m'] or 0
+            rows.append({
+                'id': t.pk, 'task_type_code': t.task_type.code, 'task_type_name': t.task_type.name,
+                'status': t.status, 'off_recipe': t.off_recipe, 'assignee': t.assignee_id,
+                'minutes': minutes,
+            })
+        return rows

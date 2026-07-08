@@ -4,7 +4,7 @@ from .views import (
     UnitViewSet, ProductViewSet, ProductRecipeViewSet, ProductSupplierViewSet,
     ProductComponentViewSet, ProductPriceGTIViewSet,
     QuoteViewSet, QuoteLineViewSet, PaymentTermsViewSet,
-    SalesOrderViewSet, SalesOrderLineViewSet,
+    SalesOrderViewSet, SalesOrderLineViewSet, WorkOrderViewSet,
 )
 
 # Mòdul Comercial Studio — mestre d'articles (B1). Escriptura gated CONFIGURE.
@@ -22,5 +22,7 @@ router.register(r'commerce/quote-lines', QuoteLineViewSet, basename='commerce-qu
 # Documents comercials — SalesOrder (comanda, B3b). pdf és @action sota orders/{pk}/.
 router.register(r'commerce/orders', SalesOrderViewSet, basename='commerce-order')
 router.register(r'commerce/order-lines', SalesOrderLineViewSet, basename='commerce-order-line')
+# Encàrrecs / ordres de treball (B4a). close és @action sota work-orders/{pk}/.
+router.register(r'commerce/work-orders', WorkOrderViewSet, basename='commerce-work-order')
 
 urlpatterns = router.urls
