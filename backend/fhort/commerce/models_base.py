@@ -24,9 +24,9 @@ class AbstractDocument(models.Model):
     """
     DOC_TYPE_CHOICES = [
         ('quote', 'Quote'),
-        ('sales_order', 'Sales order'),   # B3b
-        # TODO B4-B5: ('work_order','Work order'), ('delivery_note','Delivery note'),
-        #             ('settlement','Settlement')
+        ('sales_order', 'Sales order'),     # B3b
+        ('delivery_note', 'Delivery note'),  # B4c — albarà (WorkOrder NO és AbstractDocument)
+        # TODO B5: ('settlement','Settlement')
     ]
     STATUS_CHOICES = [
         ('DRAFT', 'Draft'),

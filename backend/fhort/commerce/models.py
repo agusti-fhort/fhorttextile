@@ -477,6 +477,11 @@ class WorkOrder(models.Model):
     period = models.CharField(max_length=7, blank=True,
                               help_text="'YYYY-MM' — només per COLLECTOR (mes de recollida).")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
+    # B4c — marca "aquest WO ja està albaranat". SET_NULL: esborrar un albarà DRAFT allibera els
+    # WO (delete de DeliveryNote posa aquest camp a NULL). Guard d'inclusió única a
+    # generate_delivery_note: un WO amb delivery_note assignat NO pot entrar a un segon albarà.
+    delivery_note = models.ForeignKey('commerce.DeliveryNote', on_delete=models.SET_NULL,
+                                      null=True, blank=True, related_name='delivery_notes_included')
     # Congelats en crear des d'order_line; buits al col·lector (no hi ha recepta a comparar).
     price_snapshot = models.JSONField(default=dict, blank=True)
     recipe_snapshot = models.JSONField(default=dict, blank=True)
@@ -600,3 +605,114 @@ class Expense(models.Model):
 
     def __str__(self):
         return f'{self.work_order_id}: {self.product_id} ×{self.quantity}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# DOCUMENTS COMERCIALS — DeliveryNote (albarà), B4c. Tercera subclasse de les abstractes.
+# Document derivat: agrega 1..N WorkOrder CLOSED del MATEIX customer (granularitat = WO sencer).
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+class DeliveryNote(AbstractDocument):
+    """Albarà tenant→client (B4c). Neix DRAFT amb línies PROPOSADES pel sistema
+    (generate_delivery_note): tasques acabades + extres facturables − deduccions per recepta no
+    executada. En DRAFT el comercial edita preu/descripció de les línies (guard patró Quote);
+    ISSUED = congelat (les línies queden bloquejades).
+
+    Decisions Agus 2026-07-08: albarà SENSE venciments → recalculate_totals NO crida
+    generate_due_dates i cap DocumentDueDate s'hi enganxa (no es reobre el XOR dual-FK de B3b).
+    `status` propi DRAFT/ISSUED (sobreescriu el cicle DRAFT/SENT… de l'abstracta, com fa SalesOrder).
+    """
+    DN_STATUS_CHOICES = [
+        ('DRAFT', 'Draft'),
+        ('ISSUED', 'Issued'),
+    ]
+    status = models.CharField(max_length=20, choices=DN_STATUS_CHOICES, default='DRAFT')
+    issued_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                  null=True, blank=True, related_name='delivery_notes_issued')
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Delivery note'
+        verbose_name_plural = 'Delivery notes'
+
+    def save(self, *args, **kwargs):
+        if not self.doc_type:
+            self.doc_type = 'delivery_note'
+        if not self.document_number:
+            from .services import reserve_document_number
+            self.document_number = reserve_document_number('delivery_note')
+        super().save(*args, **kwargs)
+
+    def recalculate_totals(self):
+        """Persisteix els totals fiscals compartits (compute_document_totals, S1a). A diferència
+        de Quote/SalesOrder, NO regenera venciments: l'albarà no en porta (decisió Agus). Les
+        línies DEDUCTION (line_total negatiu) resten soles de la base agregada del seu tipus."""
+        from .services import compute_document_totals
+        self.subtotal, self.tax_amount, self.total, self.tax_breakdown = compute_document_totals(
+            self, self.lines.all())
+        self.save(update_fields=['subtotal', 'tax_amount', 'total', 'tax_breakdown', 'updated_at'])
+
+    def delete(self, *args, **kwargs):
+        """Esborrar un albarà DRAFT allibera els WO inclosos (delivery_note→NULL via SET_NULL,
+        automàtic per la FK). ISSUED no s'esborra: és un document emès."""
+        if self.status != 'DRAFT':
+            raise ValidationError("No es pot esborrar un albarà emès (ISSUED).")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return self.document_number or f'DeliveryNote (esborrany #{self.pk})'
+
+
+class DeliveryNoteLine(AbstractDocumentLine):
+    """Línia d'albarà (B4c). `product` es fa NULLABLE (override de l'abstracta): una línia
+    TASK/DEDUCTION/EXTRA/MANUAL sovint no té article de catàleg — compute_document_totals ja
+    tolera product NULL (tipus 0%). Els camps de traçabilitat (tots nullable: una línia pot ser
+    manual) diuen d'on ve la línia. DEDUCTION porta unit_price/line_total NEGATIUS (el compute
+    de totals suma amb signe → la resta surt sola)."""
+    LINE_KIND_CHOICES = [
+        ('TASK', 'Task'),
+        ('EXTRA', 'Extra'),
+        ('DEDUCTION', 'Deduction'),
+        ('EXPENSE', 'Expense'),
+        ('MANUAL', 'Manual'),
+    ]
+    delivery_note = models.ForeignKey(DeliveryNote, on_delete=models.CASCADE, related_name='lines')
+    # Override de l'abstracta: a l'albarà el producte és opcional (línies sense article de catàleg).
+    product = models.ForeignKey('commerce.Product', on_delete=models.PROTECT, null=True, blank=True,
+                                related_name='delivery_note_lines',
+                                help_text="Nullable (override): una línia TASK/DEDUCTION/MANUAL pot no tenir article.")
+    work_order = models.ForeignKey('commerce.WorkOrder', on_delete=models.PROTECT,
+                                   null=True, blank=True, related_name='delivery_note_lines',
+                                   help_text="WO d'origen de la línia (PROTECT: un WO albaranat no es pot esborrar).")
+    model_task = models.ForeignKey('tasks.ModelTask', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='delivery_note_lines')
+    expense = models.ForeignKey('commerce.Expense', on_delete=models.SET_NULL,
+                                null=True, blank=True, related_name='delivery_note_lines')
+    adjustment = models.ForeignKey('commerce.WorkOrderAdjustment', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='delivery_note_lines')
+    line_kind = models.CharField(max_length=20, choices=LINE_KIND_CHOICES, default='MANUAL')
+
+    class Meta:
+        ordering = ['delivery_note', 'position', 'id']
+        verbose_name = 'Delivery note line'
+        verbose_name_plural = 'Delivery note lines'
+
+    def _assert_editable(self):
+        if self.delivery_note_id and self.delivery_note.status != 'DRAFT':
+            raise ValidationError(
+                "No es poden modificar línies d'un albarà que no està en esborrany (DRAFT).")
+
+    def save(self, *args, **kwargs):
+        self._assert_editable()
+        # Quantize a 2 decimals (llei B3a); line_total = quantity × unit_price AMB signe (una
+        # DEDUCTION porta unit_price negatiu → line_total negatiu, i el total resta sol).
+        self.line_total = (Decimal(self.quantity or 0) * Decimal(self.unit_price or 0)).quantize(
+            _CENT, rounding=ROUND_HALF_UP)
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        self._assert_editable()
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.delivery_note_id}: {self.description or self.line_kind} ×{self.quantity}'
