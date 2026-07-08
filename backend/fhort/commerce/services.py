@@ -310,11 +310,11 @@ def apply_commercial_review(work_order, items, user=None):
             if it.get('amount') is None:
                 raise ValidationError(f"Falta l'import per a la tasca {mt_id}.")
             amount = Decimal(str(it['amount'])).quantize(_CENT, rounding=ROUND_HALF_UP)
-            adj, _ = WorkOrderAdjustment.objects.get_or_create(
-                work_order=work_order, model_task_id=mt_id, kind=kind,
-                defaults={'resolved_by': user})
-            adj.amount = amount
-            adj.resolved_by = user
-            adj.save(update_fields=['amount', 'resolved_by'])
+            # UN SOL ajust per (work_order, model_task): el kind és atribut mutable, no clau.
+            # update_or_create retroba l'ajust existent (p.ex. la DEDUCTION marcador del close)
+            # i n'actualitza kind + amount sense crear una segona fila.
+            adj, _ = WorkOrderAdjustment.objects.update_or_create(
+                work_order=work_order, model_task_id=mt_id,
+                defaults={'kind': kind, 'amount': amount, 'resolved_by': user})
             out.append(adj)
     return out

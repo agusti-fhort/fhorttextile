@@ -549,6 +549,13 @@ class WorkOrderAdjustment(models.Model):
         ordering = ['work_order', 'id']
         verbose_name = 'Work order adjustment'
         verbose_name_plural = 'Work order adjustments'
+        constraints = [
+            # Un sol ajust per tasca dins un WorkOrder: el `kind` és atribut mutable (el
+            # comercial pot canviar-lo a /review/), no identitat. Les deduccions de concepte
+            # lliure (model_task NULL) queden fora (NULLs distints a Postgres).
+            models.UniqueConstraint(fields=['work_order', 'model_task'],
+                                    name='uniq_adjustment_per_task'),
+        ]
 
     def __str__(self):
         return f'{self.work_order_id}: {self.kind} {self.amount}'
