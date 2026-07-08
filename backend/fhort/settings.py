@@ -225,3 +225,23 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r'^https://[a-z0-9-]+\.fhorttextile\.tech$',
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# ─────────────────────────────────────────────────────────────
+# LOGGING — sense aquest bloc, els loggers `fhort.*` cauen al lastResort de Python (llindar
+# WARNING) i el handler `console` de Django va filtrat per require_debug_true (mut amb DEBUG=False),
+# de manera que `logger.info` (p.ex. la instrumentació R4 de size_map_views) no s'emet mai.
+# StreamHandler → stdout/stderr → journald (gunicorn). Vegeu DIAGNOSI_ETIQUETES_TALLA_2026-07-08.
+# ─────────────────────────────────────────────────────────────
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {'format': '%(asctime)s %(levelname)s %(name)s: %(message)s'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'standard'},
+    },
+    'loggers': {
+        'fhort': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
+}
