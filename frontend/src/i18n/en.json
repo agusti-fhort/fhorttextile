@@ -200,7 +200,12 @@
     "col_estat": "Status",
     "col_num": "Number",
     "col_data": "Date",
-    "col_total": "Total"
+    "col_total": "Total",
+    "biblioteca_count": "{{aliases}} aliases · {{poms}} canonical POMs",
+    "grading_empty_help": "Grading sets are created in the Size Library (and edited in Grading Rules) and can be assigned to a client. This client has none of its own yet.",
+    "profiles_empty_help": "Sizing profiles are born when a client run is materialised in the Size Library. This client has none yet.",
+    "open_grading": "Open Grading Rules",
+    "open_size_library": "Open Size Library"
   },
   "app": {
     "title": "Fhort Textile Tech",

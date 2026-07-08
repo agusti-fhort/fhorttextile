@@ -23,6 +23,7 @@ const dayOf = (r) => (r.issued_at || r.created_at || '').slice(0, 10)
 // (ofertes/comandes del client). L'edició d'àlies està gated CONFIGURE al backend.
 const MONO = 'IBM Plex Mono, monospace'
 const TABS = ['dades', 'tecnic', 'comercial']
+const ORIGEN_VARIANT = { IMPORT: 'gold', MANUAL: 'ok', MIGRACIO: 'gray' }
 
 export default function CustomerDetail() {
   const { id } = useParams()
@@ -180,11 +181,39 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
       .catch(() => notify({ type: 'err', text: t('clients.error') }))
   }
 
+  // Regla NOMÉS de visualització (no toca dades): si la descripció duplica el codi del
+  // client, mostrem '—'. El diccionari (description_en/local) omplirà això de veritat.
+  const descDup = (r) => !r.client_description ||
+    r.client_description.trim().toLowerCase() === (r.client_code || '').trim().toLowerCase()
+
   const aliasCols = [
-    { key: 'client_code', label: t('clients.alias_code'), render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.client_code}</span> },
-    { key: 'client_description', label: t('clients.alias_desc'), render: r => r.client_description || '—' },
-    { key: 'pom', label: t('clients.alias_pom'), render: r => <span><span style={{ fontFamily: MONO }}>{r.pom_codi}</span> · {r.pom_nom}</span> },
-    { key: 'origen', label: t('clients.alias_origen'), render: r => t(`clients.origen_${r.origen}`) },
+    { key: 'client_code', label: t('clients.alias_code'),
+      render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.client_code}</span> },
+    { key: 'client_description', label: t('clients.alias_desc'),
+      render: r => descDup(r) ? <span style={{ color: 'var(--text-muted)' }}>—</span> : r.client_description },
+    // POM canònic: codi global (POM-XXX) com a element principal; a sota, abreviatura + nom EN.
+    // Fallback per a POMs tenant-only (sense pom_global): el codi_client fa d'identificador i
+    // no repetim l'abreviatura si coincideix amb el principal.
+    { key: 'pom', label: t('clients.alias_pom'), render: r => {
+      const primary = r.pom_code_global || r.pom_codi
+      const abbr = r.pom_abbreviation && r.pom_abbreviation !== primary ? r.pom_abbreviation : null
+      const nomEn = r.pom_nom_en || r.pom_nom
+      const secondary = [abbr, nomEn].filter(Boolean).join(' · ')
+      return (
+        <div style={{ lineHeight: 1.2 }}>
+          <div style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--gold)' }}>{primary}</div>
+          {secondary && <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>{secondary}</div>}
+        </div>
+      )
+    } },
+    // Origen com a badge; sota, la data. TODO: CustomerPOMAlias no té camp autor (només dates);
+    // el diccionari futur pot afegir-lo.
+    { key: 'origen', label: t('clients.alias_origen'), render: r => (
+      <div style={{ lineHeight: 1.3 }}>
+        <Badge variant={ORIGEN_VARIANT[r.origen] || 'gray'}>{t(`clients.origen_${r.origen}`)}</Badge>
+        {r.creat_at && <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', marginTop: 3 }}>{r.creat_at.slice(0, 10)}</div>}
+      </div>
+    ) },
     ...(canEdit ? [{ key: '_a', label: '', align: 'right', render: r => (
       <button onClick={() => removeAlias(r)} title={t('clients.delete')} style={{
         background: 'none', border: '0.5px solid var(--err)', borderRadius: 6, cursor: 'pointer',
@@ -193,11 +222,14 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
     ) }] : []),
   ]
 
+  const nPoms = new Set(aliases.map(a => a.pom)).size
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
       {/* Biblioteca d'àlies */}
       <section>
-        <SectionTitle t={t} title="clients.biblioteca_title" subtitle="clients.biblioteca_subtitle" />
+        <SectionTitle t={t} title="clients.biblioteca_title" subtitle="clients.biblioteca_subtitle"
+          meta={t('clients.biblioteca_count', { aliases: aliases.length, poms: nPoms })} />
         {canEdit && <AliasAddRow customer={customer} t={t}
           onCreated={() => loadAliases().then(() => notify({ type: 'ok', text: t('clients.alias_saved') }))}
           onError={(text) => notify({ type: 'err', text })} />}
@@ -206,13 +238,17 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
         )}
       </section>
 
-      {/* Graduacions del client (lectura, enllaç a Size Library) */}
+      {/* Graduacions del client (lectura, enllaç a Grading Rules / Size Library) */}
       <section>
-        <SectionTitle t={t} title="clients.grading_title" />
-        {rulesets.length === 0 ? <Empty t={t} k="clients.grading_empty" /> : (
+        <SectionTitle t={t} title="clients.grading_title" count={rulesets.length} />
+        {rulesets.length === 0 ? (
+          <EmptyContext t={t} help="clients.grading_empty_help"
+            actions={[['clients.open_grading', '/poms/grading'], ['clients.open_size_library', '/size-library']]}
+            navigate={navigate} />
+        ) : (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {rulesets.map(rs => (
-              <li key={rs.id} style={rowCard} onClick={() => navigate('/size-library')} role="button" tabIndex={0}>
+              <li key={rs.id} style={rowCard} onClick={() => navigate('/poms/grading')} role="button" tabIndex={0}>
                 <span style={{ fontFamily: MONO }}>{rs.nom}</span>
                 <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
                   {rs.size_system_nom || rs.size_system_codi} · {rs.regles_count} {t('clients.rules')}
@@ -226,8 +262,11 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
 
       {/* Perfils de talles del client (lectura) */}
       <section>
-        <SectionTitle t={t} title="clients.profiles_title" />
-        {profiles.length === 0 ? <Empty t={t} k="clients.profiles_empty" /> : (
+        <SectionTitle t={t} title="clients.profiles_title" count={profiles.length} />
+        {profiles.length === 0 ? (
+          <EmptyContext t={t} help="clients.profiles_empty_help"
+            actions={[['clients.open_size_library', '/size-library']]} navigate={navigate} />
+        ) : (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {profiles.map(p => (
               <li key={p.id} style={{ ...rowCard, cursor: 'default' }}>
@@ -397,4 +436,27 @@ function SectionTitle({ t, title, subtitle, count, meta }) {
 
 function Empty({ t, k }) {
   return <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic', margin: 0 }}>{t(k)}</p>
+}
+
+// Secció buida amb context: explica què és i on es crea, amb enllaços a la pàgina d'origen.
+function EmptyContext({ t, help, actions = [], navigate }) {
+  return (
+    <div style={{
+      border: '1px dashed var(--border)', borderRadius: 10, padding: '1.25rem',
+      background: 'var(--bg-card)',
+    }}>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 10px' }}>{t(help)}</p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {actions.map(([labelKey, to]) => (
+          <button key={to} onClick={() => navigate(to)} style={{
+            background: 'var(--white)', border: '0.5px solid var(--border)', borderRadius: 6,
+            padding: '5px 11px', cursor: 'pointer', fontFamily: MONO, fontSize: 'var(--fs-body)',
+            color: 'var(--text-muted)',
+          }}>
+            <i className="ti ti-external-link" style={{ fontSize: 13, marginRight: 5 }} />{t(labelKey)}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }

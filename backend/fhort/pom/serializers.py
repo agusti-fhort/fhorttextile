@@ -313,11 +313,38 @@ class CustomerPOMAliasSerializer(serializers.ModelSerializer):
     pom_codi = serializers.CharField(source='pom.codi_client', read_only=True)
     pom_nom = serializers.CharField(source='pom.nom_client', read_only=True)
     customer_codi = serializers.CharField(source='customer.codi', read_only=True)
+    # Identificació canònica del POM (mateix patró que GradingRuleSerializer): codi global
+    # (POM-XXX) com a element principal + abreviatura + nom EN/CA per al display de la fitxa.
+    pom_code_global = serializers.SerializerMethodField()
+    pom_abbreviation = serializers.SerializerMethodField()
+    pom_nom_en = serializers.SerializerMethodField()
+    pom_nom_ca = serializers.SerializerMethodField()
+
+    def get_pom_code_global(self, obj):
+        if obj.pom and obj.pom.pom_global:
+            return obj.pom.pom_global.codi
+        return None
+
+    def get_pom_abbreviation(self, obj):
+        if obj.pom and obj.pom.pom_global:
+            return obj.pom.pom_global.abbreviation
+        return obj.pom.codi_client if obj.pom else None
+
+    def get_pom_nom_en(self, obj):
+        if obj.pom and obj.pom.pom_global:
+            return obj.pom.pom_global.nom_en
+        return obj.pom.nom_client if obj.pom else None
+
+    def get_pom_nom_ca(self, obj):
+        if obj.pom and obj.pom.pom_global:
+            return obj.pom.pom_global.nom_ca
+        return None
 
     class Meta:
         model = CustomerPOMAlias
         fields = (
             'id', 'customer', 'customer_codi', 'pom', 'pom_codi', 'pom_nom',
+            'pom_code_global', 'pom_abbreviation', 'pom_nom_en', 'pom_nom_ca',
             'client_code', 'client_description', 'origen', 'pendent_revisio',
             'creat_at', 'actualitzat_at',
         )

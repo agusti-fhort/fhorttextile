@@ -200,7 +200,12 @@
     "col_estat": "Estat",
     "col_num": "Número",
     "col_data": "Data",
-    "col_total": "Total"
+    "col_total": "Total",
+    "biblioteca_count": "{{aliases}} àlies · {{poms}} POMs canònics",
+    "grading_empty_help": "Les graduacions es creen a la Size Library (o s'editen a Grading Rules) i es poden assignar a un client. Aquest client encara no en té cap de pròpia.",
+    "profiles_empty_help": "Els perfils de talles neixen quan es materialitza un run de client a la Size Library. Aquest client encara no en té cap.",
+    "open_grading": "Obrir Grading Rules",
+    "open_size_library": "Obrir Size Library"
   },
   "app": {
     "title": "Fhort Textile Tech",
