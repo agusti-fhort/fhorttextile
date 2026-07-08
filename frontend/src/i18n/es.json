@@ -925,6 +925,21 @@
     "exc_gti_ph": "— Tipo de prenda (GTI) —",
     "exc_filter_ph": "Filtrar por tipo de prenda…"
   },
+  "config_general": {
+    "title": "Configuración general",
+    "subtitle": "Parámetros del estudio",
+    "loading": "Cargando configuración…",
+    "error": "No se pudo completar la operación.",
+    "saved": "Configuración guardada.",
+    "save": "Guardar",
+    "nom_empresa": "Nombre de la empresa",
+    "unitat_mesura": "Unidad de medida",
+    "unit_cm": "Centímetros (cm)",
+    "unit_inch": "Pulgadas (inch)",
+    "norma_referencia": "Norma de referencia",
+    "hourly_rate": "Tarifa interna de coste (€/hora)",
+    "hourly_rate_hint": "Coste interno por hora de los servicios. No es una tarifa de venta."
+  },
   "payment_terms": {
     "title": "Condiciones de pago",
     "subtitle": "Condiciones reutilizables con fracciones (vencimientos)",

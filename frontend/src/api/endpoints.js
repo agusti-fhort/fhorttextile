@@ -5,6 +5,13 @@ export const auth = {
   login: (username, password) => client.post('/api/token/', { username, password }),
 }
 
+// Configuració del tenant (TenantConfig) — pantalla General (M5). GET/PATCH d'un únic objecte
+// de config; hourly_rate = tarifa interna de cost (≠ tarifes de venda de Product).
+export const tenantConfig = {
+  get: () => client.get('/api/v1/tenant-config/'),
+  update: (data) => client.patch('/api/v1/tenant-config/', data),
+}
+
 // Client NET (sense interceptor Bearer) per a la recuperació de contrasenya pública:
 // la persona que recupera no està autenticada i no ha d'enviar cap token.
 const publicClient = axios.create({

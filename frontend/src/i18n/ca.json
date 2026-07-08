@@ -925,6 +925,21 @@
     "exc_gti_ph": "— Tipus de peça (GTI) —",
     "exc_filter_ph": "Filtrar per tipus de peça…"
   },
+  "config_general": {
+    "title": "Configuració general",
+    "subtitle": "Paràmetres de l'estudi",
+    "loading": "Carregant configuració…",
+    "error": "No s'ha pogut completar l'operació.",
+    "saved": "Configuració desada.",
+    "save": "Desar",
+    "nom_empresa": "Nom de l'empresa",
+    "unitat_mesura": "Unitat de mesura",
+    "unit_cm": "Centímetres (cm)",
+    "unit_inch": "Polzades (inch)",
+    "norma_referencia": "Norma de referència",
+    "hourly_rate": "Tarifa interna de cost (€/hora)",
+    "hourly_rate_hint": "Cost intern per hora dels serveis. No és una tarifa de venda."
+  },
   "payment_terms": {
     "title": "Condicions de pagament",
     "subtitle": "Condicions reutilitzables amb fraccions (venciments)",

@@ -37,6 +37,7 @@ const TimeTracking = lazy(() => import('./pages/TimeTracking'))
 const UsersRoles = lazy(() => import('./pages/UsersRoles'))
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
 const CompanyCalendar = lazy(() => import('./pages/CompanyCalendar'))
+const GeneralConfig = lazy(() => import('./pages/GeneralConfig'))
 const Planning = lazy(() => import('./pages/Planning'))
 const PlanningCalendar = lazy(() => import('./pages/PlanningCalendar'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
@@ -274,6 +275,7 @@ export default function App() {
           <Route path="disseny/patro-dxf" element={<DissenyPlaceholder titleKey="nav.patro_dxf" icon="ti-vector" />} />
           <Route path="disseny/poc-paper" element={<PaperKonvaPoc />} />
           <Route path="onboarding" element={<OnboardingWizard />} />
+          <Route path="configuracio/general" element={<GeneralConfig />} />
           <Route path="configuracio/usuaris" element={<UsersRoles />} />
           <Route path="configuracio/calendari" element={<CompanyCalendar />} />
           {/* Bloc 2 Peça 3: Registre d'activitat retirat com a ruta standalone → ara tab de Planning

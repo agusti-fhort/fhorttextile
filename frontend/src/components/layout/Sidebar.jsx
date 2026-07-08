@@ -61,6 +61,7 @@ const navGroups = [
   ]},
   { sectionKey: 'nav.section_sistema', items: [
     { to: '/onboarding', labelKey: 'nav.onboarding', icon: 'ti-rocket', cap: 'onboarding' },
+    { to: '/configuracio/general', labelKey: 'nav.configuracio_general', icon: 'ti-settings', cap: 'configure' },
     { to: '/configuracio/calendari', labelKey: 'nav.company_calendar', icon: 'ti-calendar-cog', cap: 'configure' },
     { to: '/configuracio/usuaris', labelKey: 'nav.users', icon: 'ti-users', cap: 'manage_users' },
     // G9 "consulta sí / edició no": catàleg de tasques consultable per a tothom (sense `cap`).
