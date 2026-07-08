@@ -385,6 +385,7 @@ def size_map_grading_preview_file_view(request):
         from fhort.pom.models import SizeDefinition, SizeSystem
         from fhort.models_app.extraction_views import find_pom_master
         from fhort.models_app.extraction_service import extract_from_file
+        from fhort.pom.size_labels import canonical_size_label
 
         f = request.FILES.get('file')
         if f is None:
@@ -456,12 +457,23 @@ def size_map_grading_preview_file_view(request):
                     if k not in run:
                         run.append(k)
 
+        # Capa 2 (DIAGNOSI_ETIQUETES_TALLA): mapa forma-canònica → etiqueta del tenant, per re-clavar
+        # les claus de values_by_size a les talles del run ABANS de detect_grading. Reusa
+        # canonical_size_label (mateix helper que el camí d'import, extraction_views.py:1250); NO és
+        # un normalitzador nou. Salva XXL↔2XL, que _norm (upper+strip) no cobreix.
+        canon_to_tenant = {canonical_size_label(e): e for e in run}
+
         # 4-5. matching (amb descripció) + derivació de grading, robust per fila.
         results = []
         for p in poms_in:
             codi = p['codi_fitxa']
             descripcio = p['descripcio']
             values = p['values'] or {}
+            # Capa 2 — re-clau a etiquetes del tenant. R4: valors DESPRÉS del re-clau (el log
+            # d'extracció d'abans, a l'entrada, dona els valors CRUS → es pot comparar el pont).
+            values = {canon_to_tenant.get(canonical_size_label(k), k): v for k, v in values.items()}
+            logger.info("size_map reclau [K.1]: file=%s code=%r values_by_size=%r",
+                        f.name, codi, values)
             try:
                 pom, mtype, conf = find_pom_master(codi, descripcio)
             except Exception:
