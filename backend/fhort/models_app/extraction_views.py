@@ -515,28 +515,38 @@ _POM_SYNONYMS = {
 }
 
 
-def find_pom_master(code, description):
+def find_pom_master(code, description, customer=None):
     """
     Find the most suitable POMMaster.
     Return (pom_master, match_type, confidence)
     confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'NO_MATCH'
+
+    ORDRE (DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08, N3):
+      (a) ÀLIES exacte del `customer` (CustomerPOMAlias) → HIGH. Requereix `customer`; si és None
+          (context sense client) se salta. El `client_code` d'un àlies pot ser un codi posicional
+          (LOS 'H.6') O el text de la descripció del client (BRW 'front armhole curve') → es prova
+          contra `code` I contra `description`.
+      (b) descripció + sinònims canònics → HIGH/MEDIUM (nom_client, POMGlobal.nom_en).
+      (c) codi numèric + 'lining' → MEDIUM.
+      (d) FALLBACK TRANSITORI (deprecació — objectiu de la diagnosi: treure `codi_client` del
+          matcher): `codi_client` exacte i root-prefix → LOW. Amb el llindar d'auto-vinculació
+          (c2b19bd) un LOW NO auto-vincula: cau a pendents amb el suggeriment visible. Abans
+          anaven PRIMER amb HIGH; ara són l'últim recurs, per sota de l'àlies i la descripció.
     """
-    from fhort.pom.models import POMMaster
-
-    # ORDRE (reordenat — DIAGNOSI_POM_RESOLUCIO_RUN_2026-07-08): exacte → descripció → numèric →
-    # root-prefix (ÚLTIM RECURS). Abans el root-prefix anava 2n i col·lapsava 'H.6'/'H.16' a la
-    # lletra 'H' (= POM 'SLEEVE MUSCLE') abans de mirar la descripció ('Armhole'/'Cuff opening').
-    # Ara la descripció mana i el root només actua si res més ha resolt, amb confiança LOW.
-
-    # Strategy 1 — exact match by codi_client. Va PRIMER: un codi_client EXACTE sempre ha de
-    # guanyar un match per prefix (p.ex. 'SH DR' → 'SH DR', no 'SH').
-    if code:
-        pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).first()
-        if pm:
-            return pm, 'exact_code', 'HIGH'
+    from fhort.pom.models import POMMaster, CustomerPOMAlias
 
     desc_clean = (description or '').lower().strip()
     desc_base = _re.sub(r'\s*[\(\[].*?[\)\]]', '', desc_clean).strip()
+
+    # (a) Àlies de nomenclatura del client. Va PRIMER: un codi/descripció reclamat explícitament
+    # per un àlies d'AQUEST customer mana sobre qualsevol heurística de descripció.
+    if customer is not None:
+        for key in (k for k in (code, desc_clean) if k):
+            alias = (CustomerPOMAlias.objects
+                     .filter(customer=customer, client_code__iexact=key)
+                     .select_related('pom').first())
+            if alias and alias.pom.actiu:
+                return alias.pom, 'alias_match', 'HIGH'
 
     if desc_clean:
         # Strategy 2 — explicit synonym (curated table).
@@ -577,7 +587,7 @@ def find_pom_master(code, description):
             if code and code.lower() == abbrev:
                 return pm, 'abbreviation_match', 'HIGH'
 
-    # Strategy 5 — pure numeric codes → lining.
+    # (c) Strategy — pure numeric codes → lining.
     if code and code.isdigit():
         desc_lower = (description or '').lower()
         if 'lining' in desc_lower:
@@ -586,10 +596,18 @@ def find_pom_master(code, description):
                 if 'lining' in nom:
                     return pm, 'numeric_lining_match', 'MEDIUM'
 
-    # Strategy 6 (ÚLTIM RECURS) — root de lletres inicials per a codis posicionals (D1, G2s → D, G).
-    # NO es rooteja la nomenclatura d'AGRUPACIÓ 'LLETRA.NÚMERO' (H.6, G.3, J.2): la lletra és un
-    # grup del document, no un codi de mesura, i col·lapsaria a un POM d'una sola lletra aliè.
-    # Confiança LOW: és el darrer recurs, no una vinculació segura.
+    # (d) FALLBACK TRANSITORI — `codi_client` exacte. Abans era la 1a estratègia amb HIGH; ara és
+    # penúltim recurs amb LOW (deprecació): l'àlies i la descripció manen. Un exacte que arriba
+    # aquí no ha resolt per àlies ni per descripció → suggeriment feble, no auto-vinculació.
+    if code:
+        pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).first()
+        if pm:
+            return pm, 'legacy_code_match', 'LOW'
+
+    # (d) FALLBACK TRANSITORI (ÚLTIM RECURS) — root de lletres inicials per a codis posicionals
+    # (D1, G2s → D, G). NO es rooteja la nomenclatura d'AGRUPACIÓ 'LLETRA.NÚMERO' (H.6, G.3, J.2):
+    # la lletra és un grup del document, no un codi de mesura, i col·lapsaria a un POM d'una sola
+    # lletra aliè. Confiança LOW: darrer recurs, no una vinculació segura.
     if code and not _re.match(r'^[A-Za-z]+\.\d', code):
         m = _re.match(r'^([A-Za-z]+)', code)
         if m and m.group(1) != code:
