@@ -710,9 +710,11 @@ def _extraccio_via_excel(session, api_key):
                 pass
 
     # 7-8. Matching POM + format IDÈNTIC al de la via Opus.
+    # N3: customer del model per resoldre els àlies de nomenclatura del client (paritat amb Opus).
+    import_customer = session.model.customer if session.model_id else None
     poms_extrets = []
     for i, p in enumerate(raw_poms):
-        pm, match_type, confidence = find_pom_master(p['codi_fitxa'], p['descripcio'])
+        pm, match_type, confidence = find_pom_master(p['codi_fitxa'], p['descripcio'], customer=import_customer)
         poms_extrets.append({
             'codi_fitxa': p['codi_fitxa'],
             'descripcio': p['descripcio'],
@@ -854,12 +856,16 @@ def import_session_extraccio_view(request, token):
     measurements = extracted.get('measurements', []) or []
 
     # Matching POM per fila.
+    # N3 (DIAGNOSI_NOMENCLATURA_ALIES): customer del model → el matcher resol els àlies de
+    # nomenclatura d'AQUEST client abans que per descripció. Si el model no en té, customer=None
+    # (comportament previ: resol per descripció).
+    import_customer = session.model.customer if session.model_id else None
     poms_extrets = []
     n_low, n_nomatch = 0, 0
     for i, msr in enumerate(measurements):
         codi_fitxa = (msr.get('client_code') or msr.get('code') or '').strip()
         descripcio = (msr.get('description') or '').strip()
-        pm, match_type, confidence = find_pom_master(codi_fitxa, descripcio)
+        pm, match_type, confidence = find_pom_master(codi_fitxa, descripcio, customer=import_customer)
         if confidence == 'LOW':
             n_low += 1
         if pm is None:
