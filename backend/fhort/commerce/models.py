@@ -513,3 +513,42 @@ class WorkOrder(models.Model):
     def __str__(self):
         tag = self.period if self.kind == 'COLLECTOR' else (self.model_id or '—')
         return f'{self.number or "WO?"} [{self.kind}] {tag}'
+
+
+class WorkOrderAdjustment(models.Model):
+    """Ajust d'un encàrrec, resolt al tancament (B4a). És el que l'albarà (B4c) llegirà
+    per sobre de les tasques acabades. Tres menes:
+
+    - EXTRA_BILL: extra off_recipe que es factura (model_task = l'extra).
+    - EXTRA_ABSORB: extra off_recipe que s'absorbeix (no es factura; queda registrat).
+    - DEDUCTION: deducció per recepta no executada (tasca Pending cancel·lada al tancar, o
+      concepte lliure via `description`); `model_task` pot ser null.
+
+    `amount` és el signe econòmic que l'albarà sumarà (extres +, deduccions −); es guarda
+    en Decimal quantitzat a 0.01 (llei B3a). No hi ha camp `resolution` a ModelTask: la
+    resolució viu aquí."""
+    KIND_CHOICES = [
+        ('EXTRA_BILL', 'Extra billed'),
+        ('EXTRA_ABSORB', 'Extra absorbed'),
+        ('DEDUCTION', 'Deduction'),
+    ]
+    work_order = models.ForeignKey('commerce.WorkOrder', on_delete=models.CASCADE,
+                                   related_name='adjustments')
+    model_task = models.ForeignKey('tasks.ModelTask', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='adjustments',
+                                   help_text="L'extra/tasca resolta. Null per a deducció de concepte lliure.")
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    description = models.CharField(max_length=300, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                 help_text="Import (extres +, deduccions −). Decimal 0.01 (B3a).")
+    resolved_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='adjustments_resolved')
+    resolved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['work_order', 'id']
+        verbose_name = 'Work order adjustment'
+        verbose_name_plural = 'Work order adjustments'
+
+    def __str__(self):
+        return f'{self.work_order_id}: {self.kind} {self.amount}'

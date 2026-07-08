@@ -256,6 +256,46 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                 {'assignee': f"L'usuari assignat no té permès el tipus de tasca "
                              f"'{task_type.code}' (allow-list de tasques)."})
 
+    @action(detail=False, methods=['post'], url_path='extra')
+    def extra(self, request):
+        """POST /api/v1/model-task-items/extra/ — crea una tasca EXTRA off_recipe (B4a).
+
+        Body: {work_order, model, task_type}. Neix origen='ad_hoc', off_recipe=True,
+        status='Pending', lligada al WorkOrder. Gate DEFINE_TASKS (get_permissions).
+        Guards: WO ha d'estar OPEN; per un WO ORDER el model ha de coincidir amb el del WO;
+        per un COLLECTOR el model ha de ser del mateix customer."""
+        from fhort.commerce.models import WorkOrder
+        wo_id = request.data.get('work_order')
+        model_id = request.data.get('model')
+        tt_id = request.data.get('task_type')
+        if not (wo_id and model_id and tt_id):
+            return Response({'error': 'Calen work_order, model i task_type.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        wo = WorkOrder.objects.filter(pk=wo_id).first()
+        if wo is None:
+            return Response({'error': 'WorkOrder no trobat.'}, status=status.HTTP_404_NOT_FOUND)
+        if wo.status != 'OPEN':
+            return Response({'error': "L'encàrrec està tancat: no accepta més tasques."},
+                            status=status.HTTP_409_CONFLICT)
+        model = Model.objects.filter(pk=model_id).first()
+        if model is None:
+            return Response({'error': 'Model no trobat.'}, status=status.HTTP_404_NOT_FOUND)
+        if wo.kind == 'ORDER' and wo.model_id != model.pk:
+            return Response({'error': "El model no correspon a l'encàrrec (WO ORDER)."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if wo.kind == 'COLLECTOR' and model.customer_id != wo.customer_id:
+            return Response({'error': "El model no és del client del col·lector."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        tt = TaskType.objects.filter(pk=tt_id, active=True).first()
+        if tt is None:
+            return Response({'error': 'TaskType no trobat o inactiu.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        order = ModelTask.objects.filter(model=model).count()
+        task = ModelTask.objects.create(
+            model=model, task_type=tt, order=order, status='Pending',
+            origen='ad_hoc', off_recipe=True, work_order=wo)
+        return Response(ModelTaskSerializer(task).data, status=status.HTTP_201_CREATED)
+
     def perform_create(self, serializer):
         self._validate_assignee(serializer)
         serializer.save()
