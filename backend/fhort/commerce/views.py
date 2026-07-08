@@ -102,6 +102,12 @@ class QuoteViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=getattr(self.request.user, 'profile', None))
 
+    def perform_update(self, serializer):
+        # Un canvi de payment_terms/issued_at (o notes) ha de regenerar els venciments.
+        quote = serializer.save()
+        from .services import generate_due_dates
+        generate_due_dates(quote)
+
     @action(detail=True, methods=['post'])
     def send(self, request, pk=None):
         """Transiciona DRAFT→SENT. Guard: l'oferta ha de tenir almenys una línia."""
@@ -116,6 +122,8 @@ class QuoteViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
         if not quote.issued_at:
             quote.issued_at = timezone.now().date()
         quote.save(update_fields=['status', 'issued_at', 'updated_at'])
+        from .services import generate_due_dates
+        generate_due_dates(quote)   # materialitza els venciments amb la data d'emissió
         return Response(self.get_serializer(quote).data)
 
     @action(detail=True, methods=['get'])

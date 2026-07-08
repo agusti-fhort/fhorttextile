@@ -256,6 +256,9 @@ class Quote(AbstractDocument):
         self.total = (self.subtotal + self.tax_amount).quantize(_CENT)
         self.tax_breakdown = breakdown
         self.save(update_fields=['subtotal', 'tax_amount', 'total', 'tax_breakdown', 'updated_at'])
+        # Regenera els venciments materialitzats (depenen del total + issued_at + payment_terms).
+        from .services import generate_due_dates
+        generate_due_dates(self)
 
     def __str__(self):
         return self.document_number or f'Quote (esborrany #{self.pk})'
@@ -335,3 +338,25 @@ class PaymentTermLine(models.Model):
 
     def __str__(self):
         return f'{self.terms_id}: {self.percentage}% @ +{self.days_offset}d'
+
+
+class DocumentDueDate(models.Model):
+    """Venciment materialitzat d'un document (B3a). v1 SIMPLE: FK directa a Quote.
+
+    TODO B3b/B4: quan hi hagi més tipus de document (SalesOrder/DeliveryNote/Settlement),
+    valorar pujar-lo a l'abstracta o generalitzar amb GenericFK. Ara NO GenericFK.
+    Es regenera per generate_due_dates() des del payment_terms efectiu (document > customer).
+    """
+    quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name='due_dates')
+    due_date = models.DateField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['quote', 'position', 'id']
+        verbose_name = 'Document due date'
+        verbose_name_plural = 'Document due dates'
+
+    def __str__(self):
+        return f'{self.quote_id}: {self.amount} @ {self.due_date}'

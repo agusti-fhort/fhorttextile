@@ -13,7 +13,7 @@ català (naming EN només a BD/codi). doc_type al PDF hardcoded "Pressupost" (i1
 """
 import logging
 import os
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from io import BytesIO
 
 from django.conf import settings
@@ -274,15 +274,19 @@ def generate_quote_pdf(quote):
                   style=TableStyle(ZP + [('LINEABOVE', (0, 0), (0, 0), 0.5, LGREY)]))
 
     # Terminis 50/50 derivats del total (v1; TODO camp propi de condicions de pagament).
-    total = Decimal(quote.total or 0)
-    first = (total / 2).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    second = total - first
-    peu_r = Table([
-        [Paragraph('Condicions de pagament', S_LABEL), ''],
-        [Paragraph("50% a l'inici", SSM_G), Paragraph(_money(first), SR)],
-        [Paragraph("50% a l'entrega", SSM_G), Paragraph(_money(second), SR)],
-    ], colWidths=[COL_RIGHT_W * 0.6, COL_RIGHT_W * 0.4], style=TableStyle(ZP +
-        [('LINEABOVE', (0, 0), (1, 0), 0.5, LGREY), ('SPAN', (0, 0), (1, 0))]))
+    terms = quote.payment_terms or (quote.customer.payment_terms if quote.customer_id else None)
+    due = list(quote.due_dates.all())
+    peu_r_rows = [[Paragraph('Condicions de pagament', S_LABEL), '']]
+    if terms:
+        peu_r_rows.append([Paragraph(terms.name, SSM_I), ''])
+    for dd in due:
+        peu_r_rows.append([Paragraph(f'{dd.percentage:g}% · {_fmt_date(dd.due_date)}', SSM_G),
+                           Paragraph(_money(dd.amount), SR)])
+    if not due and not terms:
+        peu_r_rows.append([Paragraph('—', SSM_G), ''])
+    peu_r = Table(peu_r_rows, colWidths=[COL_RIGHT_W * 0.6, COL_RIGHT_W * 0.4],
+                  style=TableStyle(ZP + [('LINEABOVE', (0, 0), (1, 0), 0.5, LGREY),
+                                         ('SPAN', (0, 0), (1, 0))]))
 
     story.append(Table([[peu_l, peu_r]], colWidths=[COL_LEFT_W, COL_RIGHT_W],
         style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
