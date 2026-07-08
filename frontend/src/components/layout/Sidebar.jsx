@@ -44,14 +44,17 @@ const navGroups = [
     { to: '/disseny/patro-dxf', labelKey: 'nav.patro_dxf', icon: 'ti-vector' },
   ]},
   // Estudi tècnic — gestió INTERNA del tenant (NO el backoffice futur de tots els tenants).
-  // Futur (previst, no implementat): Configuració de l'Estudi · Equip/usuaris · Catàleg de serveis/tasques.
+  // B3-M: Clients i Proveïdors s'han mogut a Comercial (mestres comercials). La secció queda
+  // reservada (buida → auto-oculta) per als futurs interns previstos: Configuració de l'Estudi ·
+  // Equip/usuaris · Catàleg de serveis/tasques. Les rutes /clients i /suppliers no canvien.
   { sectionKey: 'nav.section_technical_studio', items: [
+  ]},
+  // Comercial Studio — mestres comercials (Clients, Proveïdors, Productes) + documents (Ofertes).
+  // El gate de tier del mòdul arriba a B5; de moment sense `cap` (visible; l'escriptura la
+  // gateja CONFIGURE dins la pàgina).
+  { sectionKey: 'nav.section_comercial', items: [
     { to: '/clients', labelKey: 'nav.clients', icon: 'ti-users-group' },
     { to: '/suppliers', labelKey: 'nav.suppliers', icon: 'ti-building-factory' },
-  ]},
-  // Comercial Studio (B1) — mestre d'articles. El gate de tier del mòdul arriba a B5;
-  // de moment sense `cap` (visible; l'escriptura la gateja CONFIGURE dins la pàgina).
-  { sectionKey: 'nav.section_comercial', items: [
     { to: '/comercial/productes', labelKey: 'nav.products', icon: 'ti-package' },
     { to: '/comercial/ofertes', labelKey: 'nav.quotes', icon: 'ti-file-invoice' },
   ]},
