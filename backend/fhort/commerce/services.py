@@ -217,3 +217,49 @@ def close_work_order(work_order, user=None, cancel_pending=False):
         work_order.save(update_fields=['status', 'closed_at', 'closed_by', 'updated_at'])
 
     return {'closed': True, 'blockers': [], 'pending_proposals': []}
+
+
+def apply_commercial_review(work_order, items, user=None):
+    """Revisió COMERCIAL d'un WO tancat (B4b, decisió Agus 2026-07-08): el comercial fixa el
+    PREU DE VENDA dels extres i deduccions. Acte posterior i separat del tancament del tècnic.
+
+    NO toca cap COST: WorkOrderAdjustment.amount és preu de VENDA; el cost real (temps ×
+    hourly_rate) viu a la tasca i als timers, i no es replica aquí.
+
+    items = [{model_task_id, kind, amount}]. `kind` ∈ EXTRA_BILL|EXTRA_ABSORB|DEDUCTION.
+    `amount` Decimal quantize(0.01); ZERO és vàlid a qualsevol kind (la intenció de negoci
+    —facturar/absorbir— la porta el `kind`, no l'import). Cap default de kind ni d'amount.
+
+    get_or_create per (work_order, model_task, kind): així una DEDUCTION marcador creada pel
+    close (amount=0) es RETROBA i se li fixa el preu, i un extra estrena el seu adjustment.
+    Retorna la llista d'adjustments. Llança ValidationError (missatge clar) als guards.
+    """
+    from django.core.exceptions import ValidationError
+    from .models import WorkOrderAdjustment
+    KINDS = {'EXTRA_BILL', 'EXTRA_ABSORB', 'DEDUCTION'}
+    if work_order.status != 'CLOSED':
+        raise ValidationError("La revisió comercial només s'aplica a un encàrrec tancat.")
+    # Tasques reviewables: les que pengen del WO ara O que hi han pertangut (deduïdes al tancar,
+    # ara amb work_order=NULL però amb el seu Adjustment ancorat al WO).
+    valid_ids = set(work_order.tasks.values_list('id', flat=True)) | set(
+        work_order.adjustments.filter(model_task__isnull=False).values_list('model_task_id', flat=True))
+    out = []
+    with transaction.atomic():
+        for it in (items or []):
+            mt_id = it.get('model_task_id')
+            kind = it.get('kind')
+            if kind not in KINDS:
+                raise ValidationError(f"kind invàlid: {kind!r}.")
+            if mt_id not in valid_ids:
+                raise ValidationError(f"La tasca {mt_id} no pertany a aquest encàrrec.")
+            if it.get('amount') is None:
+                raise ValidationError(f"Falta l'import per a la tasca {mt_id}.")
+            amount = Decimal(str(it['amount'])).quantize(_CENT, rounding=ROUND_HALF_UP)
+            adj, _ = WorkOrderAdjustment.objects.get_or_create(
+                work_order=work_order, model_task_id=mt_id, kind=kind,
+                defaults={'resolved_by': user})
+            adj.amount = amount
+            adj.resolved_by = user
+            adj.save(update_fields=['amount', 'resolved_by'])
+            out.append(adj)
+    return out

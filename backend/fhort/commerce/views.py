@@ -216,8 +216,24 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
             return [IsAuthenticated()]
-        p = HasCapability(); self.required_capability = DEFINE_TASKS
+        # El tècnic tanca (DEFINE_TASKS); el comercial revisa el preu de venda (CONFIGURE).
+        p = HasCapability()
+        self.required_capability = CONFIGURE if self.action == 'review' else DEFINE_TASKS
         return [p]
+
+    @action(detail=True, methods=['post'])
+    def review(self, request, pk=None):
+        """POST work-orders/{id}/review/ — revisió COMERCIAL (preu de venda) d'un WO tancat.
+        Gate CONFIGURE. Body: {items:[{model_task_id, kind, amount}]}. No toca cap cost."""
+        wo = self.get_object()
+        profile = getattr(request.user, 'profile', None)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import apply_commercial_review
+        try:
+            apply_commercial_review(wo, request.data.get('items') or [], user=profile)
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(wo).data)
 
     @action(detail=True, methods=['post'])
     def close(self, request, pk=None):
