@@ -552,3 +552,44 @@ class WorkOrderAdjustment(models.Model):
 
     def __str__(self):
         return f'{self.work_order_id}: {self.kind} {self.amount}'
+
+
+class Expense(models.Model):
+    """Despesa d'un encàrrec: execució d'una LÍNIA EXTERNA (servei extern o mercaderia), B4b.
+    NO és una tasca (disseny §7): no crea ModelTask, no entra al Kanban, no toca Welford. És
+    una línia de compra amb marge propi (cost real pagat vs preu de venda al client).
+
+    El sistema PROPOSA (proveïdor per defecte via ProductSupplier.is_default; preu de venda via
+    base_price/markup del Product); l'humà FIXA cost_price i sale_price a la despesa concreta.
+    """
+    work_order = models.ForeignKey('commerce.WorkOrder', on_delete=models.CASCADE,
+                                   related_name='expenses')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='expenses',
+                                help_text="Article extern (EXTERNAL_SERVICE) o mercaderia (GOODS).")
+    supplier = models.ForeignKey('tasks.Supplier', on_delete=models.PROTECT, related_name='expenses')
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                     help_text="Cost real pagat al proveïdor (unitari).")
+    sale_price = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                     help_text="Preu de venda al client (unitari).")
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, default=1)
+    description = models.CharField(max_length=300, blank=True)
+    incurred_at = models.DateField(null=True, blank=True)
+    created_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='expenses_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['work_order', 'id']
+        verbose_name = 'Expense'
+        verbose_name_plural = 'Expenses'
+
+    def clean(self):
+        # Una despesa és una línia EXTERNA: només articles externs o mercaderia (un servei
+        # intern és una tasca, no una despesa).
+        if self.product_id and self.product.nature not in ('EXTERNAL_SERVICE', 'GOODS'):
+            raise ValidationError(
+                "Una despesa només pot referenciar un article EXTERNAL_SERVICE o GOODS.")
+
+    def __str__(self):
+        return f'{self.work_order_id}: {self.product_id} ×{self.quantity}'

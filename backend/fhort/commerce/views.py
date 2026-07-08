@@ -16,13 +16,13 @@ from fhort.accounts.capabilities import HasCapability, CONFIGURE, DEFINE_TASKS
 
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
-    Quote, QuoteLine, PaymentTerms, SalesOrder, SalesOrderLine, WorkOrder,
+    Quote, QuoteLine, PaymentTerms, SalesOrder, SalesOrderLine, WorkOrder, Expense,
 )
 from .serializers import (
     UnitSerializer, ProductSerializer, ProductRecipeSerializer, ProductSupplierSerializer,
     ProductComponentSerializer, ProductPriceGTISerializer,
     QuoteSerializer, QuoteLineSerializer, PaymentTermsSerializer,
-    SalesOrderSerializer, SalesOrderLineSerializer, WorkOrderSerializer,
+    SalesOrderSerializer, SalesOrderLineSerializer, WorkOrderSerializer, ExpenseSerializer,
 )
 
 
@@ -250,3 +250,15 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
             cancel_pending=bool(request.data.get('cancel_pending')))
         code = status.HTTP_200_OK if result['closed'] else status.HTTP_409_CONFLICT
         return Response(result, status=code)
+
+
+class ExpenseViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+    """Despeses d'un encàrrec (B4b): línies externes (servei extern / mercaderia) amb cost
+    real i preu de venda. CRUD gated CONFIGURE; lectura oberta. Satèl·lit del WorkOrder,
+    filtrat per ?work_order= (mateix patró que order-lines/quote-lines). NO és una tasca."""
+    queryset = Expense.objects.select_related('product', 'supplier', 'created_by').all()
+    serializer_class = ExpenseSerializer
+    filterset_fields = ['work_order', 'product', 'supplier']
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=getattr(self.request.user, 'profile', None))

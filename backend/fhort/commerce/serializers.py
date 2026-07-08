@@ -9,7 +9,7 @@ from rest_framework import serializers
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
     Quote, QuoteLine, PaymentTerms, PaymentTermLine, SalesOrder, SalesOrderLine,
-    DocumentDueDate, WorkOrder, WorkOrderAdjustment,
+    DocumentDueDate, WorkOrder, WorkOrderAdjustment, Expense,
 )
 
 
@@ -282,3 +282,29 @@ class WorkOrderSerializer(serializers.ModelSerializer):
                 'minutes': minutes,
             })
         return rows
+
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    """Despesa d'un encàrrec (B4b): línia externa amb cost real i preu de venda (marge propi)."""
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_nature = serializers.CharField(source='product.nature', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+
+    class Meta:
+        model = Expense
+        fields = ['id', 'work_order', 'product', 'product_name', 'product_nature',
+                  'supplier', 'supplier_name', 'cost_price', 'sale_price', 'quantity',
+                  'description', 'incurred_at', 'created_by', 'created_at']
+        read_only_fields = ['created_by', 'created_at']
+
+    def validate(self, attrs):
+        # DRF no crida Model.clean(); l'invoquem perquè el guard de nature (EXTERNAL_SERVICE/
+        # GOODS) apliqui via API. Fusiona attrs entrants amb la instància (PATCH parcial).
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        product = attrs.get('product', getattr(self.instance, 'product', None))
+        probe = Expense(product=product)
+        try:
+            probe.clean()
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({'product': e.messages})
+        return attrs
