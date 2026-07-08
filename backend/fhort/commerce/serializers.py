@@ -120,7 +120,9 @@ class QuoteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Quote
         fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom', 'status',
-                  'issued_at', 'valid_until', 'subtotal', 'tax_amount', 'total', 'notes',
-                  'created_at', 'updated_at', 'lines']
-        read_only_fields = ['document_number', 'doc_type', 'status', 'subtotal', 'total',
-                            'created_at', 'updated_at']
+                  'issued_at', 'valid_until', 'payment_terms', 'subtotal', 'tax_amount', 'total',
+                  'tax_breakdown', 'notes', 'created_at', 'updated_at', 'lines']
+        # tax_amount deixa de ser editable manual (B2): ara sempre calculat (B3a). tax_breakdown
+        # és el desglossament calculat, només lectura.
+        read_only_fields = ['document_number', 'doc_type', 'status', 'subtotal', 'tax_amount',
+                            'total', 'tax_breakdown', 'created_at', 'updated_at']

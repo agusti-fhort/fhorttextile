@@ -49,8 +49,11 @@ class AbstractDocument(models.Model):
                                       null=True, blank=True, related_name='%(class)s_documents')
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0,
-                                     help_text="Import d'impostos (manual a B2; sense motor fiscal).")
+                                     help_text="IVA calculat sobre bases agregades (B3a). No editable.")
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Comercial Studio (B3a) — desglossament fiscal per tipus: [{rate, base, tax}]. El llegeixen
+    # PDF i frontend sense recalcular. Calculat per recalculate_totals(); no editable.
+    tax_breakdown = models.JSONField(default=list, blank=True)
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

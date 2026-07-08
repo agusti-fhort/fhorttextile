@@ -10,10 +10,12 @@ Lleis heretades (DECISIONS.md · DISSENY_MODUL_COMERCIAL.md):
 - El sistema PROPOSA el preu (cost/Welford × tarifa + markup); l'humà FIXA a la línia (B2+).
 - Additiu: cap camp d'aquest mòdul toca el nucli tècnic (mesures/grading/fitting/tasques).
 """
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.exceptions import ValidationError
 from django.db import models
+
+_CENT = Decimal('0.01')
 
 # Fonaments dels documents comercials (B2+): abstractes + comptador de numeració.
 # DocumentSequence s'importa aquí perquè Django el registri sota l'app commerce.
@@ -227,11 +229,33 @@ class Quote(AbstractDocument):
         super().save(*args, **kwargs)
 
     def recalculate_totals(self):
-        """subtotal = Σ line_total; total = subtotal + tax_amount (manual). Persisteix."""
-        agg = self.lines.aggregate(s=models.Sum('line_total'))
-        self.subtotal = agg['s'] or 0
-        self.total = self.subtotal + (self.tax_amount or 0)
-        self.save(update_fields=['subtotal', 'total', 'updated_at'])
+        """Càlcul fiscal sobre BASES AGREGADES per tipus (estàndard comptable; mai línia a línia).
+
+        Lleis (B3a): Decimal sempre, quantize 0.01 (ROUND_HALF_UP) a cada pas. L'IVA es calcula
+        sobre la base agregada de cada grup (product.tax_rate), no per línia. Si el règim fiscal
+        del client és INTRA_EU/EXPORT/EXEMPT, el tipus efectiu és 0 (bases visibles al breakdown).
+        Persisteix subtotal, tax_amount, total i tax_breakdown [{rate, base, tax}].
+        """
+        regime = getattr(self.customer, 'tax_regime', 'DOMESTIC') if self.customer_id else 'DOMESTIC'
+        exempt = regime in ('INTRA_EU', 'EXPORT', 'EXEMPT')
+        # Agrupar les bases (Σ line_total) per tipus impositiu de l'article.
+        groups = {}
+        for line in self.lines.all():
+            rate = Decimal(line.product.tax_rate).quantize(_CENT) if line.product_id else Decimal('0.00')
+            groups[rate] = groups.get(rate, Decimal('0')) + Decimal(line.line_total or 0)
+        breakdown, subtotal, tax_total = [], Decimal('0'), Decimal('0')
+        for rate in sorted(groups, reverse=True):
+            base = groups[rate].quantize(_CENT)
+            eff = Decimal('0.00') if exempt else rate
+            tax = (base * eff / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
+            breakdown.append({'rate': str(eff), 'base': str(base), 'tax': str(tax)})
+            subtotal += base
+            tax_total += tax
+        self.subtotal = subtotal.quantize(_CENT)
+        self.tax_amount = tax_total.quantize(_CENT)
+        self.total = (self.subtotal + self.tax_amount).quantize(_CENT)
+        self.tax_breakdown = breakdown
+        self.save(update_fields=['subtotal', 'tax_amount', 'total', 'tax_breakdown', 'updated_at'])
 
     def __str__(self):
         return self.document_number or f'Quote (esborrany #{self.pk})'
@@ -253,7 +277,9 @@ class QuoteLine(AbstractDocumentLine):
 
     def save(self, *args, **kwargs):
         self._assert_editable()
-        self.line_total = (self.quantity or 0) * (self.unit_price or 0)
+        # Quantize a 2 decimals a cada pas (llei de càlcul B3a): cap valor viatja amb >2 decimals.
+        self.line_total = (Decimal(self.quantity or 0) * Decimal(self.unit_price or 0)).quantize(
+            _CENT, rounding=ROUND_HALF_UP)
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
