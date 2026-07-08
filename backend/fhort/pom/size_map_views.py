@@ -818,6 +818,9 @@ def size_map_create_view(request):
                 run_ordenat = list(
                     SizeDefinition.objects.filter(size_system=ss)
                     .order_by('ordre').values_list('etiqueta', flat=True))
+                # Customer del run per sembrar la biblioteca de nomenclatura (àlies).
+                from fhort.pom.services import maybe_learn_customer_alias
+                alias_customer = _resolve_run_customer(data, src_ssid)
                 for g in grading:
                     pom_id = g.get('pom_id')
                     pom = POMMaster.objects.filter(pk=pom_id).first()
@@ -841,6 +844,12 @@ def size_map_create_view(request):
                             'actiu': True,
                         },
                     )
+                    # Biblioteca del client: si el codi de document → POM l'ha resolt un
+                    # humà (el matcher no l'encerta sol), sembra un CustomerPOMAlias
+                    # reutilitzable. NO toca cap model existent (sembra futures imports).
+                    maybe_learn_customer_alias(
+                        alias_customer, g.get('codi'), g.get('descripcio'), pom,
+                        origen='IMPORT')
 
             # ---- 6. SizingProfiles ----
             sizing_profile_ids = []

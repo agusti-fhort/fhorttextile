@@ -1315,6 +1315,7 @@ def import_session_confirmar_view(request, token):
 
         n_bm = 0
         confirmed_pom_ids = []
+        from fhort.pom.services import maybe_learn_customer_alias
         for i, p in enumerate(poms):
             pid = int(p['pom_master_id'])
             pm = POMMaster.objects.filter(id=pid).first()
@@ -1340,6 +1341,13 @@ def import_session_confirmar_view(request, token):
             )
             confirmed_pom_ids.append(pid)
             n_bm += 1
+
+            # Biblioteca del client: si el tècnic ha resolt aquest codi de document
+            # manualment (el matcher no l'encerta sol), sembra un CustomerPOMAlias
+            # reutilitzable per a futures importacions. NO toca cap model existent.
+            maybe_learn_customer_alias(
+                model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
+                origen='IMPORT')
 
         # ── 2. Identificador del contenidor SF (NO es crea encara: si hi ha conflicte de grading
         # sense decisió, retornem 409 + rollback i NO volem deixar cap SizeFitting orfe).
