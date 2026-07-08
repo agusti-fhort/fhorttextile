@@ -43,11 +43,11 @@ class UnitViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['active']
 
 
-class PaymentTermsViewSet(viewsets.ReadOnlyModelViewSet):
-    """Catàleg de condicions de pagament (sembrat; selector al Customer i als documents)."""
+class PaymentTermsViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+    """Condicions de pagament (M4): CRUD amb fraccions nested writable. Lectura oberta (selector al
+    Customer i als documents); escriptura gated CONFIGURE. El guard Σ%=100 viu al serializer."""
     queryset = PaymentTerms.objects.prefetch_related('lines').all()
     serializer_class = PaymentTermsSerializer
-    permission_classes = [IsAuthenticated]
     filterset_fields = ['active']
 
 

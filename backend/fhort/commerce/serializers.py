@@ -2,6 +2,8 @@
 escriptura dels satèl·lits via els seus ViewSets propis (filtrats per ?product=).
 Els guards de domini de model.clean() es repliquen a validate() perquè apliquin via API.
 """
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from .models import (
@@ -92,11 +94,45 @@ class PaymentTermLineSerializer(serializers.ModelSerializer):
 
 
 class PaymentTermsSerializer(serializers.ModelSerializer):
-    lines = PaymentTermLineSerializer(many=True, read_only=True)
+    """Condició de pagament amb fraccions nested WRITABLE (M4): les fraccions s'editen sempre
+    com a conjunt i es desen amb la condició en una sola crida. Guard Σ%=100 aplicat aquí per a
+    l'escriptura via API (mateix invariant que PaymentTermLine.clean); el frontend en mostra
+    l'error de forma clara."""
+    lines = PaymentTermLineSerializer(many=True, required=False)
 
     class Meta:
         model = PaymentTerms
         fields = ['id', 'code', 'name', 'active', 'lines']
+
+    def validate(self, data):
+        lines = data.get('lines')
+        if lines:
+            total = sum((ln['percentage'] for ln in lines), Decimal('0'))
+            if total != Decimal('100.00'):
+                raise serializers.ValidationError({'lines':
+                    f"La suma de percentatges de les fraccions ha de ser 100.00 (actual: {total})."})
+        return data
+
+    def create(self, validated_data):
+        lines = validated_data.pop('lines', [])
+        terms = PaymentTerms.objects.create(**validated_data)
+        self._sync_lines(terms, lines)
+        return terms
+
+    def update(self, instance, validated_data):
+        lines = validated_data.pop('lines', None)
+        for k, v in validated_data.items():
+            setattr(instance, k, v)
+        instance.save()
+        if lines is not None:
+            instance.lines.all().delete()
+            self._sync_lines(instance, lines)
+        return instance
+
+    @staticmethod
+    def _sync_lines(terms, lines):
+        for ln in lines:
+            PaymentTermLine.objects.create(terms=terms, **{k: v for k, v in ln.items() if k != 'id'})
 
 
 # ── Documents comercials — Quote (B2) ──────────────────────────────────────────────────
