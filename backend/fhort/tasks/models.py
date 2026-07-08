@@ -208,6 +208,28 @@ class Customer(models.Model):
     persona_contacte = models.CharField(max_length=200, blank=True)
     telefon_contacte = models.CharField(max_length=40, blank=True)
 
+    # Comercial Studio (B3a) — règim fiscal + condicions de pagament per defecte. Additius.
+    # `condicions_pagament` (B1, text lliure) queda per a notes; el motor real és aquests camps.
+    TAX_REGIME_CHOICES = [
+        ('DOMESTIC', 'Domestic'),      # subjecte a IVA del país
+        ('INTRA_EU', 'Intra-EU'),      # inversió del subjecte passiu (IVA 0 al document)
+        ('EXPORT', 'Export'),          # exportació fora UE (IVA 0)
+        ('EXEMPT', 'Exempt'),          # operació exempta (IVA 0)
+    ]
+    PAYMENT_METHOD_CHOICES = [
+        ('TRANSFER', 'Bank transfer'),
+        ('DIRECT_DEBIT', 'Direct debit'),
+        ('CONFIRMING', 'Confirming'),
+        ('CASH', 'Cash'),
+    ]
+    tax_regime = models.CharField(max_length=20, choices=TAX_REGIME_CHOICES, default='DOMESTIC')
+    vat_number = models.CharField(max_length=30, blank=True,
+                                  help_text="NIF-IVA intracomunitari; només informatiu v1 (sense VIES).")
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='TRANSFER')
+    payment_terms = models.ForeignKey('commerce.PaymentTerms', on_delete=models.SET_NULL,
+                                      null=True, blank=True, related_name='default_customers',
+                                      help_text="Condició de pagament per defecte del client.")
+
     class Meta:
         ordering = ['codi']
         verbose_name = 'Customer'

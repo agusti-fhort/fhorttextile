@@ -58,7 +58,9 @@ class CustomerSerializer(serializers.ModelSerializer):
                   # Comercial Studio (B1) — dades fiscals/comercials (additives, blank).
                   'rao_social', 'nif', 'adreca_linia1', 'adreca_linia2', 'ciutat', 'codi_postal',
                   'pais', 'email_facturacio', 'condicions_pagament', 'descompte_pct',
-                  'persona_contacte', 'telefon_contacte']
+                  'persona_contacte', 'telefon_contacte',
+                  # Comercial Studio (B3a) — règim fiscal + condicions de pagament per defecte.
+                  'tax_regime', 'vat_number', 'payment_method', 'payment_terms']
         read_only_fields = ['logo']
 
 
