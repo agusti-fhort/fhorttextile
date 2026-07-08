@@ -345,9 +345,13 @@ export const commerce = {
     update: (id, data) => client.patch(`/api/v1/commerce/price-exceptions/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/commerce/price-exceptions/${id}/`),
   },
-  // Condicions de pagament (B3a) — catàleg read-only per als selectors.
+  // Condicions de pagament (B3a/M4) — CRUD amb fraccions nested writable (guard Σ%=100 al backend).
   paymentTerms: {
     list: (params) => client.get('/api/v1/commerce/payment-terms/', { params }),
+    get: (id) => client.get(`/api/v1/commerce/payment-terms/${id}/`),
+    create: (data) => client.post('/api/v1/commerce/payment-terms/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/payment-terms/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/payment-terms/${id}/`),
   },
   // Documents comercials — Quote (B2). send/pdf són accions; pdf retorna blob.
   quotes: {
