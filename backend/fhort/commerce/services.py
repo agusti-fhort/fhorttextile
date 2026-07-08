@@ -115,3 +115,45 @@ def generate_due_dates(document):
             **{fk: document}, due_date=document.issued_at + timedelta(days=ln.days_offset),
             amount=amount, percentage=ln.percentage, position=ln.position))
     DocumentDueDate.objects.bulk_create(objs)
+
+
+def convert_quote_to_order(quote, user=None):
+    """Converteix una oferta ENVIADA en una comanda de venda (IRREVERSIBLE, B3b).
+
+    Guards (tots abans de tocar res): l'oferta ha d'estar SENT, tenir ≥1 línia i no haver estat
+    convertida encara (source_quote unique). Execució atòmica (patró clone_model_for_qa):
+      1. crea la SalesOrder (customer, payment_terms EFECTIUS congelats com a override, issued_at
+         = avui, source_quote, numeració SO nova),
+      2. clona cada QuoteLine → SalesOrderLine amb pk=None i preus CONGELATS (còpia de valors),
+      3. recalcula totals + venciments sobre la comanda,
+      4. SEGELLA l'oferta (status=ACCEPTED; el guard DRAFT-only de QuoteLine bloqueja tota edició
+         posterior de línies).
+    NO hi ha reversió per disseny: l'única sortida és status=CANCELLED de la comanda (que NO
+    reobre l'oferta). Retorna la SalesOrder creada.
+    """
+    from django.core.exceptions import ValidationError
+    from .models import SalesOrder, SalesOrderLine
+    if quote.status != 'SENT':
+        raise ValidationError("Només es pot convertir en comanda una oferta enviada (SENT).")
+    lines = list(quote.lines.all())
+    if not lines:
+        raise ValidationError("L'oferta no té cap línia; no es pot convertir en comanda.")
+    if SalesOrder.objects.filter(source_quote=quote).exists():
+        raise ValidationError("Aquesta oferta ja s'ha convertit en comanda.")
+    with transaction.atomic():
+        order = SalesOrder.objects.create(
+            customer=quote.customer,
+            payment_terms=effective_payment_terms(quote),
+            issued_at=timezone.now().date(),
+            source_quote=quote,
+            created_by=getattr(user, 'profile', None) if user is not None else None,
+        )
+        for ln in lines:
+            SalesOrderLine.objects.create(
+                order=order, product=ln.product, description=ln.description,
+                quantity=ln.quantity, unit_price=ln.unit_price)
+        order.recalculate_totals()   # compute_document_totals + generate_due_dates sobre la comanda
+        quote.status = 'ACCEPTED'
+        quote.save(update_fields=['status', 'updated_at'])
+    order.refresh_from_db()
+    return order
