@@ -238,7 +238,8 @@ class CustomerPOMAlias(models.Model):
     "com anomena un client una mesura" (client_code/client_description) del catàleg canònic
     (POMMaster). Un client pot tenir DIVERSOS codis per al mateix POM (p.ex. Losan H.11 sleeve
     opening vs H.16 cuff opening) → unicitat (customer, client_code), NO (customer, pom).
-    ADDITIU: encara no el consumeix el matcher (N3)."""
+    El matcher el consumeix com a estratègia (a) prioritària de find_pom_master (N3 fet,
+    models_app/extraction_views.py:543)."""
     ORIGEN_CHOICES = [
         ('IMPORT', 'Import'), ('MANUAL', 'Manual'), ('MIGRACIO', 'Migració'),
     ]

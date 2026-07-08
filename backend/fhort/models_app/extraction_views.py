@@ -511,7 +511,8 @@ _POM_SYNONYMS = {
     # El bloc "Brownie positional POMs" (nomenclatura del customer BRW disfressada de sinònim
     # canònic) s'ha MIGRAT a CustomerPOMAlias (origen=MIGRACIO), migració pom 0031 (N2-4a,
     # DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08). Els sinònims genèrics d'aquest diccionari es
-    # conserven; el matcher encara NO llegeix els àlies (N3).
+    # conserven; el matcher llegeix els àlies com a estratègia (a) prioritària (N3 fet, veure
+    # find_pom_master més avall).
 }
 
 

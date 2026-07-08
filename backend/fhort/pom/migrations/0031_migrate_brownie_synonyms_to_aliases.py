@@ -3,7 +3,8 @@ CustomerPOMAlias del customer BRW (origen=MIGRACIO).
 
 DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08: era nomenclatura de CLIENT disfressada de sinònim
 canònic. Aquí es materialitza com a àlies. El diccionari de sinònims perd el bloc a la mateixa
-peça (codi). El matcher encara NO llegeix els àlies (N3).
+peça (codi). (Nota històrica: quan es va escriure aquesta migració el matcher encara no
+llegia els àlies; des de N3 sí que ho fa — estratègia (a) de find_pom_master.)
 
 Resolució del POM: per la descripció OBJECTIU del sinònim (nom_client / pom_global.nom_en,
 icontains, id més baix). Les entrades que no resolen a cap POM NO es migren i es reporten.
