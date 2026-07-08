@@ -359,6 +359,10 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
     return new Set(Object.entries(c).filter(([, n]) => n > 1).map(([k]) => Number(k)))
   })()
 
+  // Integritat: files amb talles absents (marcades pel backend). No es pot derivar cap regla d'una
+  // taula incompleta; es marquen i el create es bloqueja (backend 400).
+  const incompletes = wiz.gradingResults.filter(g => g.incompleta)
+
   // P5 → create. buildPayload accepta overrides {on_conflict, nom_variant} per re-cridar
   // des del panell de conflicte (avís-i-confirma).
   const buildPayload = (extra = {}) => {
@@ -367,7 +371,8 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       .map(g => {
         // `codi` = codi de document (nomenclatura del client): NO es persisteix, viatja perquè
         // el backend pugui rotular una col·lisió {codi_document → pom} (R1) si dues files hi cauen.
-        const row = { pom_id: g.pom_id, codi: g.pom_codi_client, logica: g.logica }
+        const row = { pom_id: g.pom_id, codi: g.pom_codi_client, logica: g.logica,
+          incompleta: !!g.incompleta, missing_sizes: g.missing_sizes || [] }
         // valors_step és l'ORIGEN del break: enviar-lo sempre que el preview el va produir
         // (també per LINEAR amb break, p.ex. CHEST) perquè el create en derivi base+break.
         let vs = null
@@ -404,6 +409,12 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   }
 
   const submitCreate = (extra = {}) => {
+    // Guard d'integritat: cap regla d'una taula incompleta. Torna al pas 3 (backend també 400).
+    if (incompletes.length > 0) {
+      setErr(t('size_map_incompleta_warn', { count: incompletes.length }))
+      setStep(3)
+      return
+    }
     // Guard anti-col·lisió (R1): si dos codis comparteixen POM, tornar al pas 3 a resoldre-ho
     // (el backend també ho bloqueja amb 400, però evitem la crida inútil).
     if (dupPomIds.size > 0) {
@@ -655,6 +666,14 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             </ul>
           )}
 
+          {incompletes.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--err-bg)', color: 'var(--err)',
+                          border: '0.5px solid var(--err)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
+              <i className="ti ti-alert-triangle" style={{ fontSize: 14 }} />
+              {t('size_map_incompleta_warn', { count: incompletes.length })}
+            </div>
+          )}
+
           {dupPomIds.size > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--err-bg)', color: 'var(--err)',
                           border: '0.5px solid var(--err)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
@@ -680,7 +699,8 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                     const upd = (k, v) => set({ gradingResults: wiz.gradingResults.map((r, j) => j === i ? { ...r, [k]: v } : r) })
                     return (
                       <tr key={i} style={{ borderTop: '0.5px solid var(--gray-l)',
-                        background: g.pom_id ? (dupPomIds.has(g.pom_id) ? 'var(--err-bg)' : 'transparent') : 'var(--warn-bg)' }}>
+                        background: g.incompleta ? 'var(--err-bg)'
+                          : g.pom_id ? (dupPomIds.has(g.pom_id) ? 'var(--err-bg)' : 'transparent') : 'var(--warn-bg)' }}>
                         <td style={{ padding: 6 }}>
                           {/* codi de client (nomenclatura seva, ex 'B') + descripció del fitxer
                               com a referència; badge de confiança; si no resol, select de catàleg. */}
@@ -758,7 +778,15 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                               </>)
                             : <span style={{ color: 'var(--gray)' }}>—</span>}
                         </td>
-                        <td style={{ padding: 6, color: 'var(--warn)', fontSize: 'var(--fs-body)' }}>{g.warning || ''}</td>
+                        <td style={{ padding: 6, fontSize: 'var(--fs-body)' }}>
+                          {g.incompleta && (
+                            <div style={{ color: 'var(--err)', fontWeight: 600, marginBottom: g.warning ? 3 : 0 }}>
+                              <i className="ti ti-alert-triangle" style={{ fontSize: 12, marginRight: 3 }} />
+                              {t('size_map_incompleta', { sizes: (g.missing_sizes || []).join(', ') })}
+                            </div>
+                          )}
+                          {g.warning && <span style={{ color: 'var(--warn)' }}>{g.warning}</span>}
+                        </td>
                       </tr>
                     )
                   })}

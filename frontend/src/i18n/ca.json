@@ -1498,6 +1498,8 @@
   "size_map_g_break_from": "des de",
   "size_map_g_doc_values": "Valors document",
   "size_map_g_tol": "tol",
+  "size_map_incompleta": "Taula incompleta: falten talles ({{sizes}}). No es deriva la regla.",
+  "size_map_incompleta_warn": "{{count}} fila(es) amb talles absents: completa-les o treu-les abans de crear.",
   "size_map_g_file": "Puja la fitxa (Excel, PDF o imatge)",
   "size_map_g_file_busy": "Analitzant fitxer…",
   "size_map_g_file_drop": "Arrossega o selecciona un fitxer",

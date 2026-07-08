@@ -266,6 +266,24 @@ def size_map_grading_preview_view(request):
             if pom is None and not weak_suggestion:
                 warning = f"POM '{codi}' no resolt al catàleg."
 
+            # BLOQUEIG (integritat): taula incompleta → no derivar amb deltes parcials.
+            missing = [s for s in run if valors_raw.get(s) is None] if run else []
+            if missing:
+                results.append({
+                    'pom_codi_client': codi,
+                    'pom_id': pom.id if pom else None,
+                    'pom_nom': pom.nom_client if pom else None,
+                    'match_type': mtype, 'confidence': conf,
+                    'logica_detectada': None, 'increment': None, 'valors_step': None,
+                    'increment_base': None, 'increment_break': None,
+                    'talla_break_label': None, 'talla_break_pos': None,
+                    'valors_calculats': {k: valors_raw.get(k) for k in valors_raw},
+                    'weak_suggestion': weak_suggestion,
+                    'incompleta': True, 'missing_sizes': missing,
+                    'warning': warning,
+                })
+                continue
+
             det = detect_grading(valors_raw, run, base_size)
             if det['warning']:
                 warning = (warning + ' ' if warning else '') + det['warning']
@@ -288,6 +306,7 @@ def size_map_grading_preview_view(request):
                 'talla_break_pos': tpos,
                 'valors_calculats': {k: valors_raw.get(k) for k in valors_raw},
                 'weak_suggestion': weak_suggestion,
+                'incompleta': False, 'missing_sizes': [],
                 'warning': warning,
             })
 
@@ -480,6 +499,27 @@ def size_map_grading_preview_file_view(request):
                 pom, mtype, conf = None, 'no_match', 'NO_MATCH'
             pom, weak_suggestion = _apply_match_threshold(pom, conf)
             warning = '' if (pom or weak_suggestion) else f"POM '{codi}' no resolt al catàleg."
+            # BLOQUEIG (integritat): si falta valor per a alguna talla del run (després del re-clau),
+            # la fila és INCOMPLETA → NO es deriva la regla amb deltes parcials (un break a la talla
+            # perduda es perdria en silenci). Es marca i el create la bloquejarà.
+            missing = [s for s in run if values.get(s) is None] if run else []
+            if missing:
+                results.append({
+                    'pom_codi_client': codi, 'pom_descripcio': descripcio,
+                    'pom_id': pom.id if pom else None,
+                    'pom_nom': pom.nom_client if pom else None,
+                    'match_type': mtype, 'confidence': conf,
+                    'logica_detectada': None, 'increment': None, 'valors_step': None,
+                    'increment_base': None, 'increment_break': None,
+                    'talla_break_label': None, 'talla_break_pos': None,
+                    'valors_calculats': {k: values.get(k) for k in values},
+                    'tolerance_minus': p.get('tolerance_minus'),
+                    'tolerance_plus': p.get('tolerance_plus'),
+                    'weak_suggestion': weak_suggestion,
+                    'incompleta': True, 'missing_sizes': missing,
+                    'warning': warning,
+                })
+                continue
             try:
                 det = detect_grading(values, run, base_size)
             except Exception as e:
@@ -508,6 +548,7 @@ def size_map_grading_preview_file_view(request):
                 'tolerance_minus': p.get('tolerance_minus'),
                 'tolerance_plus': p.get('tolerance_plus'),
                 'weak_suggestion': weak_suggestion,
+                'incompleta': False, 'missing_sizes': [],
                 'warning': warning,
             })
 
@@ -558,6 +599,21 @@ def size_map_create_view(request):
         nom_variant = (data.get('nom_variant') or '').strip() or None
 
         warnings = []
+
+        # ── Guard d'INTEGRITAT (talla absent = BLOQUEIG): cap regla es deriva d'una taula
+        # incompleta. Les files marcades incompletes al preview (falta valor per a alguna talla del
+        # run) arriben amb logica_detectada=None però logica='LINEAR' per defecte → derivarien una
+        # regla falsa. Es BLOQUEGEN aquí, abans d'escriure res → 400 amb la llista de files.
+        incompletes = [
+            {'codi': (g.get('codi') or '').strip(), 'missing_sizes': g.get('missing_sizes') or []}
+            for g in grading if g.get('incompleta')
+        ]
+        if incompletes:
+            return Response({
+                'error': ('Hi ha files amb talles absents (taula incompleta); completa-les o '
+                          'treu-les abans de crear (cap regla desada).'),
+                'incompletes': incompletes,
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         # ── Guard de col·lisió (R1): dos codis de document vinculats al MATEIX POM col·lapsarien
         # a una sola regla (update_or_create(rule_set, pom), l'última guanya) → pèrdua SILENCIOSA.

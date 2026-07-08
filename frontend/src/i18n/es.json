@@ -1498,6 +1498,8 @@
   "size_map_g_break_from": "desde",
   "size_map_g_doc_values": "Valores documento",
   "size_map_g_tol": "tol",
+  "size_map_incompleta": "Tabla incompleta: faltan tallas ({{sizes}}). No se deriva la regla.",
+  "size_map_incompleta_warn": "{{count}} fila(s) con tallas ausentes: complétalas o quítalas antes de crear.",
   "size_map_g_file": "Sube la ficha (Excel, PDF o imagen)",
   "size_map_g_file_busy": "Analizando archivo…",
   "size_map_g_file_drop": "Arrastra o selecciona un archivo",
