@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    CustomerPOMAliasViewSet,
     GarmentGroupViewSet,
     GarmentPOMMapViewSet,
     GarmentTypeViewSet,
@@ -25,6 +26,7 @@ router.register('grading-rule-sets', GradingRuleSetViewSet, basename='grading-ru
 router.register('grading-rules', GradingRuleViewSet, basename='grading-rule')
 router.register('garment-pom-maps', GarmentPOMMapViewSet, basename='garment-pom-map')
 router.register('item-base-measurements', ItemBaseMeasurementViewSet, basename='item-base-measurement')
+router.register('customer-pom-aliases', CustomerPOMAliasViewSet, basename='customer-pom-alias')
 
 # Sprint 7A — POM wizard. The 'poms/suggerits/', 'poms/cerca/' and
 # 'poms/crear-tenant/' paths would collide with POMMasterViewSet detail (poms/<pk>/);

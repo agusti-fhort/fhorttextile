@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { customers } from '../api/endpoints'
@@ -18,6 +19,7 @@ const actBtn = {
 
 export default function Customers() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
 
@@ -107,7 +109,7 @@ export default function Customers() {
           title={r.logo ? t('clients.logo_replace') : t('clients.logo_upload')} style={r.logo ? { ...actBtn, color: 'var(--gold)', borderColor: 'var(--gold)' } : actBtn}>
           <i className="ti ti-photo" aria-hidden="true" style={{ fontSize: 13 }} />
         </button>
-        <button onClick={() => setModal({ mode: 'edit', customer: r })} disabled={saving} style={actBtn}>{t('clients.edit')}</button>
+        <button onClick={() => navigate(`/clients/${r.id}`)} disabled={saving} style={actBtn}>{t('clients.open_sheet')}</button>
         <button onClick={() => toggleActive(r)} disabled={saving} style={actBtn}>{r.active ? t('clients.deactivate') : t('clients.activate')}</button>
         <button onClick={() => remove(r)} disabled={saving} style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>{t('clients.delete')}</button>
       </span>) }] : []),

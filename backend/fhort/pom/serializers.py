@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import (
+    CustomerPOMAlias,
     GarmentGroup,
     GarmentPOMMap,
     GarmentType,
@@ -171,6 +172,8 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
     garment_group_nom = serializers.CharField(source='garment_group.nom', read_only=True)
     size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
     size_system_nom = serializers.CharField(source='size_system.nom', read_only=True)
+    customer_codi = serializers.CharField(source='customer.codi', read_only=True, default='')
+    customer_nom = serializers.CharField(source='customer.nom', read_only=True, default='')
     regles_count = serializers.IntegerField(source='regles.count', read_only=True)
     regles = GradingRuleSerializer(many=True, read_only=True)
     # S16-A: array of target codes (M2M). target_codi kept for compatibility.
@@ -201,6 +204,7 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
             'fit_type', 'fit_type_codi',
             'garment_group', 'garment_group_nom',
             'size_system', 'size_system_codi', 'size_system_nom',
+            'customer', 'customer_codi', 'customer_nom',
             'is_system_default', 'actiu',
             'regles_count', 'regles',
         )
@@ -301,3 +305,20 @@ class ItemBaseMeasurementSerializer(serializers.ModelSerializer):
             'id', 'garment_type_item', 'pom', 'pom_codi', 'pom_nom',
             'base_value_cm', 'tol_minus', 'tol_plus', 'nom_fitxa',
         )
+
+
+class CustomerPOMAliasSerializer(serializers.ModelSerializer):
+    """Biblioteca de nomenclatura del client: (client_code, client_description) → POM canònic.
+    Font de sembra per-client del matcher (find_pom_master, estratègia (a))."""
+    pom_codi = serializers.CharField(source='pom.codi_client', read_only=True)
+    pom_nom = serializers.CharField(source='pom.nom_client', read_only=True)
+    customer_codi = serializers.CharField(source='customer.codi', read_only=True)
+
+    class Meta:
+        model = CustomerPOMAlias
+        fields = (
+            'id', 'customer', 'customer_codi', 'pom', 'pom_codi', 'pom_nom',
+            'client_code', 'client_description', 'origen', 'pendent_revisio',
+            'creat_at', 'actualitzat_at',
+        )
+        read_only_fields = ('creat_at', 'actualitzat_at')

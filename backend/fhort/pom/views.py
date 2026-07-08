@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from fhort.accounts.capabilities import HasCapability, CONFIGURE
 
 from .models import (
+    CustomerPOMAlias,
     GarmentGroup,
     GarmentPOMMap,
     GarmentType,
@@ -22,6 +23,7 @@ from .models import (
     SizingProfile,
 )
 from .serializers import (
+    CustomerPOMAliasSerializer,
     GarmentGroupSerializer,
     GarmentPOMMapSerializer,
     GarmentTypeSerializer,
@@ -146,7 +148,7 @@ class GradingRuleSetViewSet(viewsets.ModelViewSet):
         .all()
     )
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['actiu', 'garment_group', 'size_system']
+    filterset_fields = ['actiu', 'garment_group', 'size_system', 'customer']
     search_fields = ['nom']
     ordering = ['nom']
 
@@ -318,3 +320,25 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
             garment_type_item_id=item_id, pom_id=pom_id, defaults=defaults)
         return Response(self.get_serializer(obj).data,
                         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+class CustomerPOMAliasViewSet(viewsets.ModelViewSet):
+    """CRUD de la biblioteca de nomenclatura del client (CustomerPOMAlias).
+    Lectura oberta (IsAuthenticated); escriptura gated CONFIGURE (mateix patró que grading).
+    Filtra per ?customer=<id> per servir la fitxa del client."""
+    permission_classes = [IsAuthenticated]
+    serializer_class = CustomerPOMAliasSerializer
+    queryset = (
+        CustomerPOMAlias.objects
+        .select_related('customer', 'pom', 'pom__pom_global')
+        .all()
+    )
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['customer', 'pom', 'pendent_revisio', 'origen']
+    search_fields = ['client_code', 'client_description']
+    ordering = ['client_code']
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [_ConfigureWrite()]
+        return [IsAuthenticated()]
