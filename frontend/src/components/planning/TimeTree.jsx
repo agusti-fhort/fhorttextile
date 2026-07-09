@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { timeAnalysis } from '../../api/endpoints'
+import { taskTypeLabel } from '../../utils/taskType'
 import Center from '../ui/Center'
 import Feedback from '../ui/Feedback'
 
@@ -168,7 +169,7 @@ export default function TimeTree({ t }) {
                     return (
                       <div key={tk}>
                         <Row onClick={() => toggle(tk)} open={tOpen} depth={1}
-                             label={tt.name || tt.code} m={tt.metrics.maturity} t={t}
+                             label={taskTypeLabel(t, tt.code, tt.name)} m={tt.metrics.maturity} t={t}
                              minutes={tt.metrics.minutes} count={tt.metrics.count} />
                         {tOpen && (
                           <div style={{ background: 'var(--bg-muted)', padding: '4px 0' }}>
@@ -281,7 +282,7 @@ function ModelAxisTree({ tree, loading, expanded, toggle, t }) {
                           {(ph.tasks || []).map(tk => (
                             <tr key={tk.task_type_code} style={{ borderTop: '0.5px solid var(--gray-l)' }}>
                               <td style={{ ...tdS, paddingLeft: 48, fontFamily: MONO }}>
-                                <MatDot m={tk.maturity} />{' '}{tk.task_type_name || tk.task_type_code}
+                                <MatDot m={tk.maturity} />{' '}{taskTypeLabel(t, tk.task_type_code, tk.task_type_name)}
                               </td>
                               <td style={tdS}>{tk.estimated_minutes != null ? fmtMins(tk.estimated_minutes) : '—'}</td>
                               <td style={tdS}>{tk.real_minutes != null ? fmtMins(tk.real_minutes) : '—'}</td>

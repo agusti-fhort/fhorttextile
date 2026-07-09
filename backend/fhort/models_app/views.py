@@ -65,10 +65,11 @@ class ModelViewSet(viewsets.ModelViewSet):
             return qs
         # Pas 5C — enriquiment de la LLISTA: 3 dates de cicle (Subquery correlat, sense N+1) +
         # prefetch dels assignees per al "principal + N" (tècnics).
-        from django.db.models import OuterRef, Subquery, Prefetch
+        from django.db.models import OuterRef, Subquery, Prefetch, Exists
         from django.utils import timezone
         from fhort.tasks.models import Production, ModelTask
         from fhort.fitting.models import FittingSession
+        from fhort.commerce.models import WorkOrder
         today = timezone.localdate()
         return qs.annotate(
             entrada_prod=Subquery(Production.objects
@@ -80,6 +81,8 @@ class ModelViewSet(viewsets.ModelViewSet):
             fitting_prev=Subquery(FittingSession.objects
                 .filter(model=OuterRef('pk'), data__gte=today)
                 .order_by('data').values('data')[:1]),
+            # v2 albarà — traçabilitat: el model té encàrrec real (WO ORDER) o va directe (col·lector).
+            has_order=Exists(WorkOrder.objects.filter(model=OuterRef('pk'), kind='ORDER')),
         ).prefetch_related(Prefetch(
             'model_tasks',
             queryset=ModelTask.objects.exclude(assignee__isnull=True).select_related('assignee'),
@@ -332,6 +335,13 @@ def create_model_wizard(request):
 
     if not year or not season:
         return Response({'error': 'year i season són obligatoris'}, status=400)
+
+    # B4b — garment_type_item obligatori al wizard: és la baula del motor de temps i de la
+    # valoració de receptes (comercial). Guard de servei; la columna segueix nullable a BD
+    # (additiu; 0 models amb GTI null al tenant → cap backfill). TODO: fer-la NOT NULL a BD
+    # en una sessió futura si es vol la garantia dura.
+    if not request.data.get('garment_type_item_id'):
+        return Response({'error': 'garment_type_item és obligatori'}, status=400)
 
     if is_multipiece:
         try:
@@ -1390,6 +1400,7 @@ def generate_grading_view(request, model_id):
 
     new_version = bool(request.data.get('new_version', False))
     allow_reopen_sealed = bool(request.data.get('allow_reopen_sealed', False))
+    n_consolidat = 0  # B3: POMs de talla base consolidats des de fittings oberts abans de propagar
 
     # Crida el motor. new_version=True → acte conscient de PROPAGAR (Peça 2): crea v+1 via el
     # helper bump_grading_version_and_generate (base_changed=False: propagar NO toca la base, no
@@ -1415,6 +1426,17 @@ def generate_grading_view(request, model_id):
         # NO és un eix de versions per comparar: el botó ja ha advertit (2 passos) abans d'arribar aquí.
         from fhort.models_app.models import ModelGradingOverride
         ModelGradingOverride.objects.filter(model=model).delete()
+        # B3 (decisió b1): abans que el motor llegeixi la base, consolida la realitat mesurada
+        # que viu en fittings OBERTS (línies de talla base amb valor_real rectificat) a
+        # BaseMeasurement.base_value_cm → es propaga sobre l'última mesura vàlida, no sobre la
+        # base original. NO toca el motor (pom/services.py); només actualitza la base abans.
+        from fhort.fitting.models import PieceFitting
+        from fhort.fitting.services import consolidate_base_from_fitting
+        _open_pfs = (PieceFitting.objects
+                     .filter(model=model, session__estat='Oberta')
+                     .select_related('model', 'grading_version', 'grading_version__size_fitting'))
+        for _pf in _open_pfs:
+            n_consolidat += len(consolidate_base_from_fitting(_pf, auth_user=request.user))
         try:
             new_v = bump_grading_version_and_generate(
                 sf.id,
@@ -1432,12 +1454,12 @@ def generate_grading_view(request, model_id):
         # Watchpoint informatiu de traça quan s'ha superat una versió segellada (NO bloca).
         if sealed_active is not None and allow_reopen_sealed:
             from fhort.tasks.models import ModelTask
-            scaling_task = (ModelTask.objects
-                            .filter(model=model, task_type__code='scaling')
+            grading_task = (ModelTask.objects
+                            .filter(model=model, task_type__code='grading')
                             .order_by('-id').first())
             Watchpoint.objects.create(
                 model=model,
-                task=scaling_task,
+                task=grading_task,
                 text=(f'Versió segellada v{sealed_active.version_number} superada per '
                       f'{str(profile) if profile else "usuari desconegut"} '
                       f'propagant a v{new_v.version_number}.'),
@@ -1488,6 +1510,7 @@ def generate_grading_view(request, model_id):
         'graded_count': graded_count,
         'size_run': size_run,
         'base_size': model.base_size_label,
+        'base_consolidada_des_de_fitting': n_consolidat,  # B3: POMs base consolidats (0 si cap)
         'rows': rows,
     })
 
@@ -2099,6 +2122,9 @@ def model_dashboard_view(request, model_id):
         'temps_consumit_min': int(temps_per_task.get(t.id, 0)),
         'obertures': int(obertures_per_task.get(t.id, 0)),
         'order': t.order,
+        # B4a — origen/off_recipe per pintar el filet grana (extra fora de recepta) al board.
+        'origen': t.origen,
+        'off_recipe': t.off_recipe,
     } for t in pla_tasks]
 
     # --- Q3: atenció tècnica — alertes POM PENDENTS de resoldre ---

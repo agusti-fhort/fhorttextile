@@ -216,6 +216,9 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   const [err, setErr] = useState(null)
   // 1C-4b-fe1 — panell d'avís-i-confirma quan el backend retorna 409 {existing, message}.
   const [conflict, setConflict] = useState(null)
+  // R2/R5 — resultat del create (nom, regles reals persistides, pendents de vincular): es mostra
+  // abans de tancar perquè l'humà vegi què s'ha desat i què ha quedat pendent.
+  const [result, setResult] = useState(null)
   const [lookups, setLookups] = useState({ targets: [], constructions: [], fit_types: [], garment_types: [], base_units: [] })
 
   // Estat global del wizard en un sol objecte.
@@ -327,7 +330,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   const calcGrading = () => {
     setErr(null); setGradingAvisos([]); setBusy(true)
     const { taula } = parseTable(wiz.gradingText)
-    sizeMap.gradingPreview({ size_system_id: wiz.size_system_id, base_size: wiz.base_size, taula })
+    sizeMap.gradingPreview({ size_system_id: wiz.size_system_id, base_size: wiz.base_size, taula, customer_codi: wiz.customer_codi })
       .then(r => applyGradingData(r.data))
       .catch(e => setErr(e?.response?.data?.error || t('size_map_grading_err')))
       .finally(() => setBusy(false))
@@ -341,11 +344,25 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
     fd.append('file', fileObj)
     if (wiz.size_system_id) fd.append('size_system_id', wiz.size_system_id)
     fd.append('base_size', wiz.base_size || '')
+    if (wiz.customer_codi) fd.append('customer_codi', wiz.customer_codi)
     sizeMap.gradingPreviewFile(fd)
       .then(r => applyGradingData(r.data))
       .catch(e => setErr(e?.response?.data?.error || t('size_map_file_err')))
       .finally(() => setBusy(false))
   }
+
+  // Col·lisió R1 (pre-check al pas 3): pom_id vinculats per >1 codi de document. Dues files al
+  // mateix POM col·lapsarien a una sola regla al backend (update_or_create) → pèrdua silenciosa.
+  // Es marquen visualment i el create es bloqueja (backend 400); decisió CTO: bloquejar.
+  const dupPomIds = (() => {
+    const c = {}
+    wiz.gradingResults.forEach(g => { if (g.pom_id) c[g.pom_id] = (c[g.pom_id] || 0) + 1 })
+    return new Set(Object.entries(c).filter(([, n]) => n > 1).map(([k]) => Number(k)))
+  })()
+
+  // Integritat: files amb talles absents (marcades pel backend). No es pot derivar cap regla d'una
+  // taula incompleta; es marquen i el create es bloqueja (backend 400).
+  const incompletes = wiz.gradingResults.filter(g => g.incompleta)
 
   // P5 → create. buildPayload accepta overrides {on_conflict, nom_variant} per re-cridar
   // des del panell de conflicte (avís-i-confirma).
@@ -353,7 +370,10 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
     const grading = wiz.gradingResults
       .filter(g => g.pom_id)
       .map(g => {
-        const row = { pom_id: g.pom_id, logica: g.logica }
+        // `codi` = codi de document (nomenclatura del client): NO es persisteix, viatja perquè
+        // el backend pugui rotular una col·lisió {codi_document → pom} (R1) si dues files hi cauen.
+        const row = { pom_id: g.pom_id, codi: g.pom_codi_client, logica: g.logica,
+          incompleta: !!g.incompleta, missing_sizes: g.missing_sizes || [] }
         // valors_step és l'ORIGEN del break: enviar-lo sempre que el preview el va produir
         // (també per LINEAR amb break, p.ex. CHEST) perquè el create en derivi base+break.
         let vs = null
@@ -381,11 +401,28 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         body_height_cm: x.body_height_cm === '' ? null : Number(x.body_height_cm),
       })),
       grading, perfils,
+      // R2 — codis del document no vinculats a cap POM: viatgen perquè el backend els
+      // desi al run com a "pendents de vincular" (no es perden en silenci). El window.confirm
+      // de submitCreate segueix sent la primera barrera.
+      discarded_codes: wiz.gradingResults.filter(g => !g.pom_id).map(g => g.pom_codi_client).filter(Boolean),
       ...extra,   // on_conflict / nom_variant des del panell sobreescriuen
     }
   }
 
   const submitCreate = (extra = {}) => {
+    // Guard d'integritat: cap regla d'una taula incompleta. Torna al pas 3 (backend també 400).
+    if (incompletes.length > 0) {
+      setErr(t('size_map_incompleta_warn', { count: incompletes.length }))
+      setStep(3)
+      return
+    }
+    // Guard anti-col·lisió (R1): si dos codis comparteixen POM, tornar al pas 3 a resoldre-ho
+    // (el backend també ho bloqueja amb 400, però evitem la crida inútil).
+    if (dupPomIds.size > 0) {
+      setErr(t('size_map_dup_warn', { count: dupPomIds.size }))
+      setStep(3)
+      return
+    }
     // Guard anti-descart-silenciós: buildPayload filtra els !pom_id; abans d'enviar, avisa
     // l'usuari de quins codis de client no s'han vinculat (i per tant no es desaran).
     const noResolts = wiz.gradingResults.filter(g => !g.pom_id)
@@ -397,7 +434,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
     }
     setErr(null); setConflict(null); setBusy(true)
     sizeMap.create(buildPayload(extra))
-      .then(r => { onComplete(r.data) })
+      .then(r => { setResult(r.data) })
       .catch(e => {
         // 409 = avís-i-confirma (no és error): obre el panell amb les graduacions existents.
         if (e?.response?.status === 409) { setConflict(e.response.data); return }
@@ -409,6 +446,38 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   const doCreate = () => submitCreate()
 
   const nomById = (arr, id) => arr.find(x => String(x.id) === String(id))?.nom || ''
+
+  // ---- RESULTAT del create (R2 pendents + R5 comptador) ----
+  if (result) {
+    const pendents = result.discarded_codes || []
+    return (
+      <div style={{ minWidth: 0, maxWidth: 1100 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <i className="ti ti-circle-check" style={{ fontSize: 20, color: 'var(--gold)' }} />
+          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO, margin: 0 }}>{t('size_map_result_title')}</h1>
+        </div>
+        <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)', fontFamily: MONO }}>
+          <div>{result.nom}</div>
+          {/* R5 — regles reals persistides (BD), font única. */}
+          <div>{t('size_map_sum_rules')}: {result.rules_count ?? 0}</div>
+        </div>
+        {pendents.length > 0 && (
+          <div style={{ background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8,
+                        padding: '10px 12px', marginBottom: 14, fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>
+              <i className="ti ti-link-off" style={{ marginRight: 6 }} />
+              {t('size_map_pendents')} ({pendents.length})
+            </div>
+            <div style={{ fontFamily: MONO }}>{pendents.join(', ')}</div>
+            <div style={{ marginTop: 4, fontSize: 'var(--fs-label)' }}>{t('size_map_pendents_hint')}</div>
+          </div>
+        )}
+        <button onClick={() => onComplete(result)} style={primaryBtn}>
+          <i className="ti ti-check" />{t('size_map_result_close')}
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div style={{ minWidth: 0, maxWidth: 1100 }}>
@@ -598,6 +667,22 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             </ul>
           )}
 
+          {incompletes.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--err-bg)', color: 'var(--err)',
+                          border: '0.5px solid var(--err)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
+              <i className="ti ti-alert-triangle" style={{ fontSize: 14 }} />
+              {t('size_map_incompleta_warn', { count: incompletes.length })}
+            </div>
+          )}
+
+          {dupPomIds.size > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--err-bg)', color: 'var(--err)',
+                          border: '0.5px solid var(--err)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 'var(--fs-body)' }}>
+              <i className="ti ti-alert-triangle" style={{ fontSize: 14 }} />
+              {t('size_map_dup_warn', { count: dupPomIds.size })}
+            </div>
+          )}
+
           {wiz.gradingResults.length > 0 && (
             <div style={{ overflowX: 'auto', marginBottom: 14 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
@@ -606,6 +691,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                     <th style={{ padding: 6 }}>POM</th>
                     <th style={{ padding: 6 }}>{t('size_map_g_logica')}</th>
                     <th style={{ padding: 6 }}>{t('size_map_g_value')}</th>
+                    <th style={{ padding: 6 }}>{t('size_map_g_doc_values')}</th>
                     <th style={{ padding: 6 }}>{t('size_map_g_warn')}</th>
                   </tr>
                 </thead>
@@ -613,7 +699,9 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                   {wiz.gradingResults.map((g, i) => {
                     const upd = (k, v) => set({ gradingResults: wiz.gradingResults.map((r, j) => j === i ? { ...r, [k]: v } : r) })
                     return (
-                      <tr key={i} style={{ borderTop: '0.5px solid var(--gray-l)', background: g.pom_id ? 'transparent' : 'var(--warn-bg)' }}>
+                      <tr key={i} style={{ borderTop: '0.5px solid var(--gray-l)',
+                        background: g.incompleta ? 'var(--err-bg)'
+                          : g.pom_id ? (dupPomIds.has(g.pom_id) ? 'var(--err-bg)' : 'transparent') : 'var(--warn-bg)' }}>
                         <td style={{ padding: 6 }}>
                           {/* codi de client (nomenclatura seva, ex 'B') + descripció del fitxer
                               com a referència; badge de confiança; si no resol, select de catàleg. */}
@@ -627,9 +715,26 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                                 {cb.label}</span>
                             ) : null
                           })()}
+                          {g.pom_id && dupPomIds.has(g.pom_id) && (
+                            <div style={{ marginTop: 2, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--err)' }}>
+                              <i className="ti ti-alert-triangle" style={{ fontSize: 12, marginRight: 3 }} />
+                              {t('size_map_dup_pom')}
+                            </div>
+                          )}
                           {g.pom_id
                             ? (g.pom_nom && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>→ {g.pom_nom}</div>)
-                            : (
+                            : (<>
+                              {/* Match dèbil (LOW) o guard many-to-one (N3-P2): el backend NO ha
+                                  auto-vinculat; es mostra el suggeriment perquè l'humà vinculi
+                                  conscientment (mai vinculació silenciosa ni col·lisió sobreescrita). */}
+                              {g.weak_suggestion && (
+                                <div style={{ marginTop: 2, fontSize: 'var(--fs-label)', color: 'var(--warn)' }}>
+                                  <i className="ti ti-help-circle" style={{ fontSize: 12, marginRight: 3 }} />
+                                  {g.many_to_one
+                                    ? t('size_map_many_to_one', { pom: g.weak_suggestion })
+                                    : t('size_map_weak_match', { pom: g.weak_suggestion })}
+                                </div>
+                              )}
                               <select value={g.pom_id || ''} style={{ ...selS, padding: '3px 6px', fontSize: 'var(--fs-body)', marginTop: 2, maxWidth: 260 }}
                                 onChange={e => {
                                   const id = Number(e.target.value) || null
@@ -639,7 +744,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                                 <option value="">{t('size_map_link_pom')}</option>
                                 {catalegPoms.map(p => <option key={p.pom_id} value={p.pom_id}>{p.codi_client} — {p.nom}</option>)}
                               </select>
-                            )}
+                            </>)}
                         </td>
                         <td style={{ padding: 6 }}>
                           <select value={g.logica} onChange={e => upd('logica', e.target.value)} style={{ ...selS, padding: '3px 6px' }}>
@@ -655,7 +760,37 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                                 ? <span>+{g.increment_base} · +{g.increment_break} {t('size_map_g_break_from')} {g.talla_break_label}</span>
                                 : <span>+{g.increment_base}</span>)}
                         </td>
-                        <td style={{ padding: 6, color: 'var(--warn)', fontSize: 'var(--fs-body)' }}>{g.warning || ''}</td>
+                        {/* Paritat R7 (NOMÉS display): valors originals del document per talla + toleràncies
+                            extretes, al costat de la regla derivada, perquè l'humà validi la fidelitat
+                            (p.ex. detectar 5.6→8.0 rotulat FIXED) ABANS de persistir el secret industrial. */}
+                        <td style={{ padding: 6, fontFamily: MONO, fontSize: 'var(--fs-label)' }}>
+                          {g.valors_calculats && Object.keys(g.valors_calculats).length > 0
+                            ? (<>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 8px' }}>
+                                  {(wiz.gradingRun.length ? wiz.gradingRun : Object.keys(g.valors_calculats)).map(sz =>
+                                    g.valors_calculats[sz] != null
+                                      ? <span key={sz} style={{ whiteSpace: 'nowrap' }}>
+                                          <span style={{ color: 'var(--gray)' }}>{sz}</span> {g.valors_calculats[sz]}
+                                        </span>
+                                      : null)}
+                                </div>
+                                {(g.tolerance_minus != null || g.tolerance_plus != null) && (
+                                  <div style={{ color: 'var(--gray)', marginTop: 2 }}>
+                                    {t('size_map_g_tol')} −{g.tolerance_minus ?? 0} / +{g.tolerance_plus ?? 0}
+                                  </div>
+                                )}
+                              </>)
+                            : <span style={{ color: 'var(--gray)' }}>—</span>}
+                        </td>
+                        <td style={{ padding: 6, fontSize: 'var(--fs-body)' }}>
+                          {g.incompleta && (
+                            <div style={{ color: 'var(--err)', fontWeight: 600, marginBottom: g.warning ? 3 : 0 }}>
+                              <i className="ti ti-alert-triangle" style={{ fontSize: 12, marginRight: 3 }} />
+                              {t('size_map_incompleta', { sizes: (g.missing_sizes || []).join(', ') })}
+                            </div>
+                          )}
+                          {g.warning && <span style={{ color: 'var(--warn)' }}>{g.warning}</span>}
+                        </td>
                       </tr>
                     )
                   })}
@@ -709,7 +844,10 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           <div style={{ background: 'var(--gray-l)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 'var(--fs-body)', fontFamily: MONO }}>
             <div>{t('size_map_sum_action')}: <b>{wiz.decision}</b></div>
             <div>{t('size_map_sum_target')}: {wiz.target_codi ? t(`model_wizard.target_${wiz.target_codi}`, wiz.target_codi) : '—'} · {t('size_map_sum_unit')}: {wiz.base_unit} · {t('size_map_sum_client')}: {wiz.customer_codi || '—'}</div>
-            <div>{t('size_map_sum_talles')}: {wiz.talles.length} · {t('size_map_sum_rules')}: {wiz.gradingResults.filter(g => g.pom_id).length} · {t('size_map_sum_perfils')}: {wiz.perfilTargets.length}</div>
+            {/* R5 — comptador de regles = POMs distints vinculats (regles reals que es
+                persistiran, font única), no files de document. La col·lisió (R1) es bloqueja
+                abans, així que aquest recompte coincideix amb el de la BD després de crear. */}
+            <div>{t('size_map_sum_talles')}: {wiz.talles.length} · {t('size_map_sum_rules')}: {new Set(wiz.gradingResults.filter(g => g.pom_id).map(g => g.pom_id)).size} · {t('size_map_sum_perfils')}: {wiz.perfilTargets.length}</div>
             {wiz.construction_id && <div>{t('size_map_sum_constr')}: {nomById(lookups.constructions, wiz.construction_id)}</div>}
           </div>
 

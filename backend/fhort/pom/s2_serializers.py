@@ -59,6 +59,8 @@ class GradingRuleSetLightSerializer(serializers.Serializer):
     is_system_default = serializers.BooleanField()
     version_number = serializers.IntegerField()
     has_custom_version = serializers.SerializerMethodField()
+    # R2 — codis de document pendents de vincular, persistits al crear el run.
+    pendents_vincular = serializers.JSONField(read_only=True)
 
     def get_has_custom_version(self, obj):
         return hasattr(obj, 'versions') and obj.versions.exists()
@@ -101,8 +103,18 @@ class SizingProfileSerializer(serializers.Serializer):
     size_system_customer_codi = serializers.SerializerMethodField()
     size_system_parent_nom = serializers.SerializerMethodField()
 
+    # Eix client (FK directe): NULL = perfil genèric del tenant; informat = propi del client.
+    customer_codi = serializers.SerializerMethodField()
+    customer_nom = serializers.SerializerMethodField()
+
     size_definitions = serializers.SerializerMethodField()
     grading_rules_preview = serializers.SerializerMethodField()
+
+    def get_customer_codi(self, obj):
+        return obj.customer.codi if obj.customer_id else ''
+
+    def get_customer_nom(self, obj):
+        return obj.customer.nom if obj.customer_id else ''
 
     def get_fit_type_nom(self, obj):
         return obj.fit_type.nom_en if obj.fit_type_id else ''
@@ -153,6 +165,32 @@ class TenantConfigSerializer(serializers.Serializer):
     norma_referencia = serializers.ChoiceField(choices=['ISO_8559', 'ASTM_D13'])
     nom_empresa = serializers.CharField(allow_blank=True)
     logo_url = serializers.URLField(allow_blank=True)
+    # Comercial Studio (P6) — logo pujat (fitxer) exposat com a URL (absoluta si el view passa
+    # `request` al context). L'escriptura és via upload multipart al mateix endpoint, no per aquest camp.
+    logo_file = serializers.SerializerMethodField()
+    # Comercial Studio (B1) — tarifa interna de cost per hora (plana). ≠ Product.sale_rate.
+    hourly_rate = serializers.DecimalField(max_digits=10, decimal_places=2,
+                                           required=False, allow_null=True)
+    # Comercial Studio (P6) — dades de pagament de l'emissor per als documents PDF.
+    iban = serializers.CharField(allow_blank=True, required=False)
+    payment_notes = serializers.CharField(allow_blank=True, required=False)
+    # Comercial Studio (Empresa/fiscal) — identitat fiscal de l'emissor per a la capçalera dels PDF.
+    legal_name = serializers.CharField(allow_blank=True, required=False)
+    tax_id = serializers.CharField(allow_blank=True, required=False)
+    address = serializers.CharField(allow_blank=True, required=False)
+    postal_code = serializers.CharField(allow_blank=True, required=False)
+    city = serializers.CharField(allow_blank=True, required=False)
+    country = serializers.CharField(allow_blank=True, required=False)
+    email = serializers.EmailField(allow_blank=True, required=False)
+    phone = serializers.CharField(allow_blank=True, required=False)
+
+    def get_logo_file(self, obj):
+        f = getattr(obj, 'logo_file', None)
+        if not f:
+            return None
+        url = f.url
+        req = self.context.get('request')
+        return req.build_absolute_uri(url) if req else url
 
 
 class POMGlobalLightSerializer(serializers.Serializer):

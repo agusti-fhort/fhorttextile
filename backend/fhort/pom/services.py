@@ -350,6 +350,50 @@ def update_client_profile(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# CUSTOMER POM ALIAS — biblioteca de nomenclatura del client (sembra reutilitzable)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def maybe_learn_customer_alias(customer, client_code, description, pom, origen='IMPORT'):
+    """Sembra (idempotent) un CustomerPOMAlias reutilitzable quan un HUMÀ ha resolt la
+    vinculació codi-de-document → POM i el matcher automàtic NO la produeix sol.
+
+    Llei (DIAGNOSI_BIBLIOTECA_CLIENT_2026-07-08): CAP àlies viu retroactiu — escriure un
+    àlies NO modifica cap model existent; només sembra les FUTURES importacions d'aquest
+    customer. Aquesta funció només toca CustomerPOMAlias.
+
+    Discriminador manual vs automàtic: si find_pom_master (encara sense aquest àlies)
+    ja resol el codi al MATEIX POM amb confiança d'auto-vinculació (HIGH/MEDIUM), la
+    vinculació és automàtica → NO se sembra (evita retroalimentar el matcher amb els
+    seus propis encerts / falsos positius). Retorna l'àlies creat/actualitzat o None.
+    """
+    from fhort.pom.models import CustomerPOMAlias
+    from fhort.models_app.extraction_views import find_pom_master
+
+    code = (client_code or '').strip()
+    if customer is None or not code or pom is None:
+        return None
+
+    pm, _mtype, conf = find_pom_master(code, description or '', customer=customer)
+    if pm is not None and pm.id == pom.id and conf in ('HIGH', 'MEDIUM'):
+        return None  # el matcher ja ho encerta sol → automàtic, no sembrem
+
+    alias, created = CustomerPOMAlias.objects.get_or_create(
+        customer=customer, client_code=code[:60],
+        defaults={
+            'pom': pom,
+            'client_description': (description or '')[:200],
+            'origen': origen,
+        },
+    )
+    if not created and alias.pom_id != pom.id:
+        alias.pom = pom
+        alias.client_description = (description or '')[:200]
+        alias.origen = origen
+        alias.save(update_fields=['pom', 'client_description', 'origen', 'actualitzat_at'])
+    return alias
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # PRIVATE HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 

@@ -43,14 +43,74 @@ class TransitionError(Exception):
     pass
 
 
+def _is_off_recipe(task, work_order):
+    """Un extra és off_recipe si el seu task_type NO és a la recepta congelada del WO ORDER.
+    Al col·lector —o si la recepta encara no s'ha congelat (B4b)— res no és off_recipe: no
+    hi ha base contra què comparar."""
+    if work_order.kind != 'ORDER':
+        return False
+    codes = (work_order.recipe_snapshot or {}).get('task_codes')
+    if not codes:
+        return False
+    return task.task_type.code not in codes
+
+
+def _resolve_work_order(task, when):
+    """Resol l'encàrrec (WorkOrder) d'una tasca segons la regla B4a. Retorna
+    (work_order, off_recipe). (None, False) si no es pot resoldre —model sense customer, o
+    col·lector del mes ja tancat— i llavors es deixa per al reconcile.
+
+    Regla: si el model té un WO ORDER obert → aquell (off_recipe segons recepta); si no →
+    col·lector (customer, mes de `when`), on tot és off_recipe=False."""
+    from fhort.commerce.models import WorkOrder
+    model = task.model
+    if not model.customer_id:
+        return None, False
+    order_wo = (WorkOrder.objects.filter(model=model, kind='ORDER', status='OPEN')
+                .order_by('-created_at').first())
+    if order_wo is not None:
+        return order_wo, _is_off_recipe(task, order_wo)
+    period = when.strftime('%Y-%m')
+    collector, created = WorkOrder.objects.get_or_create(
+        customer_id=model.customer_id, kind='COLLECTOR', period=period,
+        defaults={'origin': 'MANUAL'})
+    if not created and collector.status == 'CLOSED':
+        return None, False   # el col·lector del mes ja s'ha tancat → resolució manual/reconcile
+    return collector, False
+
+
+def assign_work_order(task, when):
+    """Assigna l'encàrrec a una tasca si encara no en té (IDEMPOTENT). Reutilitzat pel hook
+    (primera InProgress) i pel reconcile. Si la tasca ja té work_order, no fa res."""
+    if task.work_order_id is not None:
+        return
+    work_order, off_recipe = _resolve_work_order(task, when)
+    if work_order is None:
+        return
+    task.work_order = work_order
+    task.off_recipe = off_recipe
+    task.save(update_fields=['work_order', 'off_recipe', 'updated_at'])
+
+
 @transaction.atomic
-def transition_task(task, to_status, profile):
+def transition_task(task, to_status, profile, force=False):
     """Aplica una transició d'estat. Imposa 'una sola InProgress per tècnic' (global):
     en entrar a InProgress, pausa l'altra InProgress del mateix tècnic (tanca timer + log).
-    Retorna dict amb la tasca i, si escau, la pausada automàticament."""
+    Retorna dict amb la tasca i, si escau, la pausada automàticament.
+
+    `force=True` salta NOMÉS el guard d'albarà (reobertura): reservat a rutines internes de
+    migració que reprocessen històric (retype command). La porta d'usuari mai el passa."""
     frm = task.status
     if to_status not in ALLOWED.get(frm, set()):
         raise TransitionError(f'Transició no permesa: {frm} → {to_status}')
+
+    # v2 — guard de reobertura: una tasca amb línia en albarà EMÈS (ISSUED/INVOICED) no es pot
+    # reobrir (rectificació = extra nova que genera línia al proper albarà). DRAFT NO bloqueja
+    # (encara es pot desfer esborrant el DRAFT). Limitat estrictament a Done→InProgress.
+    if not force and frm == 'Done' and to_status == 'InProgress':
+        if task.delivery_note_lines.filter(
+                delivery_note__status__in=['ISSUED', 'INVOICED']).exists():
+            raise TransitionError('No es pot reobrir una tasca ja albaranada (albarà emès).')
 
     paused_task_id = None
     now = timezone.now()
@@ -116,9 +176,13 @@ def transition_task(task, to_status, profile):
                         opaque_ref=record.opaque_ref,
                         merited_at=now,
                     )
+                # B4a — ENCÀRREC: assigna work_order a CADA primera InProgress de tasca (no
+                # només la del model): el col·lector és per-model×mes però l'assignació és
+                # per-tasca. Idempotent i dins el mateix atomic no-fatal.
+                assign_work_order(task, now)
         except Exception:
             logger.exception(
-                "meritacio fallida model=%s task=%s", task.model_id, task.pk
+                "meritacio/assignacio fallida model=%s task=%s", task.model_id, task.pk
             )
             # NO re-raise: el tecnic ja te la transicio feta; el forat es reconcilia despres.
 

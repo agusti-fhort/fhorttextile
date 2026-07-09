@@ -23,7 +23,8 @@ class ModelTaskSerializer(serializers.ModelSerializer):
         fields = ['id', 'model', 'model_codi', 'task_type', 'task_type_code', 'task_type_name',
                   'status', 'origen', 'assignee', 'order', 'created_at', 'updated_at',
                   'started_at', 'finished_at', 'estimated_minutes', 'rectifications',
-                  'planned_start', 'planned_end', 'planned_locked']
+                  'planned_start', 'planned_end', 'planned_locked',
+                  'work_order', 'off_recipe']
         # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
         # origen el fixa el backend en crear (prevista per defecte; ad_hoc des de l'arbre global,
         # Sprint 4) → read-only per al client.
@@ -34,7 +35,8 @@ class ModelTaskSerializer(serializers.ModelSerializer):
         # referència/llista; el Gantt pinta des de plan/compute (local).
         read_only_fields = ['created_at', 'updated_at', 'origen',
                             'started_at', 'finished_at', 'estimated_minutes',
-                            'planned_start', 'planned_end', 'planned_locked']
+                            'planned_start', 'planned_end', 'planned_locked',
+                            'work_order', 'off_recipe']
 
     def get_rectifications(self, obj):
         return rectification_count(obj)
@@ -43,16 +45,46 @@ class ModelTaskSerializer(serializers.ModelSerializer):
 class SupplierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Supplier
-        fields = ['id', 'name', 'type', 'active']
+        fields = ['id', 'name', 'type', 'active',
+                  # Comercial Studio (B1) — dades fiscals/compra/contacte (additives, blank).
+                  'rao_social', 'nif', 'adreca_linia1', 'adreca_linia2', 'ciutat', 'codi_postal',
+                  'pais', 'condicions_compra', 'persona_contacte', 'telefon_contacte', 'email_contacte']
 
 
 class CustomerSerializer(serializers.ModelSerializer):
+    # Comptadors agregats (annotate del CustomerViewSet). SerializerMethodField amb default 0 perquè
+    # les respostes fora de list (create/update) — que no venen annotades — no petin.
+    quotes_sent = serializers.SerializerMethodField()
+    quotes_accepted = serializers.SerializerMethodField()
+    orders_open = serializers.SerializerMethodField()
+    delivery_notes_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Customer
         # logo: ImageField → URL (absoluta si el ViewSet passa `request` al context, que és
         # el cas per defecte de ModelViewSet). read_only: s'escriu via l'acció upload-logo.
-        fields = ['id', 'codi', 'nom', 'active', 'is_self', 'logo']
+        fields = ['id', 'codi', 'nom', 'active', 'is_self', 'logo',
+                  # Comercial Studio (B1) — dades fiscals/comercials (additives, blank).
+                  'rao_social', 'nif', 'adreca_linia1', 'adreca_linia2', 'ciutat', 'codi_postal',
+                  'pais', 'email_facturacio', 'condicions_pagament', 'descompte_pct',
+                  'persona_contacte', 'telefon_contacte',
+                  # Comercial Studio (B3a) — règim fiscal + condicions de pagament per defecte.
+                  'tax_regime', 'vat_number', 'payment_method', 'payment_terms',
+                  # Pàgina Clients (annotate): ofertes presentades/acceptades, comandes obertes, albarans.
+                  'quotes_sent', 'quotes_accepted', 'orders_open', 'delivery_notes_count']
         read_only_fields = ['logo']
+
+    def get_quotes_sent(self, o):
+        return getattr(o, 'cnt_quotes_sent', 0) or 0
+
+    def get_quotes_accepted(self, o):
+        return getattr(o, 'cnt_quotes_accepted', 0) or 0
+
+    def get_orders_open(self, o):
+        return getattr(o, 'cnt_orders_open', 0) or 0
+
+    def get_delivery_notes_count(self, o):
+        return getattr(o, 'cnt_delivery_notes', 0) or 0
 
 
 class ProductionSerializer(serializers.ModelSerializer):

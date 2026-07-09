@@ -52,14 +52,45 @@ class Command(BaseCommand):
         total_ok = 0
         total_skip = 0
         total_err = 0
+        total_wo = 0   # B4a — tasques amb work_order assignat retroactivament
 
         for tenant in tenants:
             self.stdout.write(f"\n{'[DRY-RUN] ' if dry_run else ''}Tenant: {tenant.schema_name} ({tenant.codi_tenant})")
 
             with schema_context(tenant.schema_name):
                 from fhort.models_app.models import Model, ConsumptionRecord
-                from fhort.tasks.models import ModelTask
+                from fhort.tasks.models import ModelTask, TaskTransition
                 from fhort.tasks.signals import model_consumption_started
+                from fhort.tasks.services_c import assign_work_order
+                from django.db.models import Min
+
+                # B4a — ENCÀRREC: tasques amb activitat però sense work_order (forats
+                # d'assignació: anteriors al hook B4a o amb fallada transitòria). S'assignen
+                # amb la MATEIXA regla, però amb period = MIN(→InProgress) de cada tasca.
+                wo_gaps = (
+                    ModelTask.objects
+                    .filter(work_order__isnull=True,
+                            status__in=['InProgress', 'Done', 'Paused'],
+                            model__customer__isnull=False)
+                    .select_related('model', 'model__customer', 'task_type')
+                )
+                for task in wo_gaps:
+                    first = TaskTransition.objects.filter(
+                        model_task=task, to_status='InProgress').aggregate(f=Min('at'))['f']
+                    when = first or task.started_at or timezone.now()
+                    if dry_run:
+                        self.stdout.write(
+                            f"  [DRY-RUN] WOULD ASSIGN work_order task pk={task.pk} "
+                            f"model={task.model.codi_intern} period={when.strftime('%Y-%m')}")
+                        total_wo += 1
+                        continue
+                    try:
+                        assign_work_order(task, when)
+                        task.refresh_from_db(fields=['work_order'])
+                        if task.work_order_id:
+                            total_wo += 1
+                    except Exception:
+                        logger.exception('reconcile work_order failed task=%s', task.pk)
 
                 # Forats: models amb activitat real i sense marca de meritació
                 gaps = (
@@ -167,5 +198,5 @@ class Command(BaseCommand):
 
         self.stdout.write(
             f"\n{'[DRY-RUN] ' if dry_run else ''}Done: {total_ok} merited, "
-            f"{total_skip} skipped, {total_err} errors."
+            f"{total_skip} skipped, {total_err} errors, {total_wo} work_orders assigned."
         )

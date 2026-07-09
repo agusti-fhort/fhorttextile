@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.filters import SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Q, ProtectedError
 
@@ -13,7 +14,7 @@ from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TA
                                          get_allowed_task_types, scope_model_task_queryset)
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
-                     GarmentTypeItem, TaskTimeEstimate, TaskTransition, Customer)
+                     GarmentTypeItem, TaskTimeEstimate, TaskTransition, Customer, TimeSeed)
 from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             SupplierSerializer, ProductionSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer,
@@ -256,6 +257,46 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                 {'assignee': f"L'usuari assignat no té permès el tipus de tasca "
                              f"'{task_type.code}' (allow-list de tasques)."})
 
+    @action(detail=False, methods=['post'], url_path='extra')
+    def extra(self, request):
+        """POST /api/v1/model-task-items/extra/ — crea una tasca EXTRA off_recipe (B4a).
+
+        Body: {work_order, model, task_type}. Neix origen='ad_hoc', off_recipe=True,
+        status='Pending', lligada al WorkOrder. Gate DEFINE_TASKS (get_permissions).
+        Guards: WO ha d'estar OPEN; per un WO ORDER el model ha de coincidir amb el del WO;
+        per un COLLECTOR el model ha de ser del mateix customer."""
+        from fhort.commerce.models import WorkOrder
+        wo_id = request.data.get('work_order')
+        model_id = request.data.get('model')
+        tt_id = request.data.get('task_type')
+        if not (wo_id and model_id and tt_id):
+            return Response({'error': 'Calen work_order, model i task_type.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        wo = WorkOrder.objects.filter(pk=wo_id).first()
+        if wo is None:
+            return Response({'error': 'WorkOrder no trobat.'}, status=status.HTTP_404_NOT_FOUND)
+        if wo.status != 'OPEN':
+            return Response({'error': "L'encàrrec està tancat: no accepta més tasques."},
+                            status=status.HTTP_409_CONFLICT)
+        model = Model.objects.filter(pk=model_id).first()
+        if model is None:
+            return Response({'error': 'Model no trobat.'}, status=status.HTTP_404_NOT_FOUND)
+        if wo.kind == 'ORDER' and wo.model_id != model.pk:
+            return Response({'error': "El model no correspon a l'encàrrec (WO ORDER)."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if wo.kind == 'COLLECTOR' and model.customer_id != wo.customer_id:
+            return Response({'error': "El model no és del client del col·lector."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        tt = TaskType.objects.filter(pk=tt_id, active=True).first()
+        if tt is None:
+            return Response({'error': 'TaskType no trobat o inactiu.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        order = ModelTask.objects.filter(model=model).count()
+        task = ModelTask.objects.create(
+            model=model, task_type=tt, order=order, status='Pending',
+            origen='ad_hoc', off_recipe=True, work_order=wo)
+        return Response(ModelTaskSerializer(task).data, status=status.HTTP_201_CREATED)
+
     def perform_create(self, serializer):
         self._validate_assignee(serializer)
         serializer.save()
@@ -298,7 +339,8 @@ def define_model_tasks_view(request, model_id):
     if not types:
         return Response({'error': 'Cap TaskType actiu trobat per als ids donats.'},
                         status=status.HTTP_400_BAD_REQUEST)
-    existing = set(ModelTask.objects.filter(model_id=model_id, task_type_id__in=ids)
+    existing = set(ModelTask.objects.filter(model_id=model_id, task_type_id__in=ids,
+                                             origen='prevista')
                    .values_list('task_type_id', flat=True))
     if not Model.objects.filter(pk=model_id).exists():
         return Response({'error': 'Model no trobat.'}, status=status.HTTP_404_NOT_FOUND)
@@ -312,7 +354,7 @@ def define_model_tasks_view(request, model_id):
         est = lookup_estimated_minutes(model, t)   # snapshot del temps estimat (None si no n'hi ha)
         mt = ModelTask.objects.create(model_id=model_id, task_type=t,
                                       order=base_order + i, status='Pending',
-                                      estimated_minutes=est)
+                                      origen='prevista', estimated_minutes=est)
         created.append(mt.id)
     return Response({'created_ids': created, 'skipped_existing': sorted(existing)},
                     status=status.HTTP_201_CREATED)
@@ -495,14 +537,15 @@ def open_model_task_view(request, model_id):
     if code not in get_allowed_task_types(request.user):
         return Response({'error': f"No pots obrir una tasca del tipus '{code}' (no és a la teva allow-list)."},
                         status=http_status.HTTP_403_FORBIDDEN)
-    # 1. Crea-si-falta (mirall de define_model_tasks_view).
-    task = ModelTask.objects.filter(model=model, task_type=tt).first()
+    # 1. Crea-si-falta (mirall de define_model_tasks_view). La canònica és la prevista.
+    task = ModelTask.objects.filter(model=model, task_type=tt, origen='prevista').first()
     created = False
     if task is None:
         order = ModelTask.objects.filter(model=model).count()
         est = lookup_estimated_minutes(model, tt)
         task = ModelTask.objects.create(model=model, task_type=tt, order=order,
-                                        status='Pending', estimated_minutes=est)
+                                        status='Pending', origen='prevista',
+                                        estimated_minutes=est)
         created = True
     # 2. En curs (reusa transition_task) o claim si ja és En curs d'un altre.
     if task.status != 'InProgress':
@@ -643,7 +686,25 @@ class SupplierViewSet(viewsets.ModelViewSet):
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['active']
+    search_fields = ['codi', 'nom']   # cercador de la pàgina Clients (codi, nom)
+
+    def get_queryset(self):
+        """Comptadors agregats en UNA sola consulta (annotate, cap N+1): ofertes presentades
+        (SENT) / acceptades (ACCEPTED), comandes obertes (OPEN) i albarans. `?exclude_self=1`
+        amaga el customer propi (is_self) — només la pàgina Clients l'envia; la resta de consumidors
+        (selectors de client) segueixen veient-lo."""
+        qs = Customer.objects.annotate(
+            cnt_quotes_sent=Count('quotes', filter=Q(quotes__status='SENT'), distinct=True),
+            cnt_quotes_accepted=Count('quotes', filter=Q(quotes__status='ACCEPTED'), distinct=True),
+            cnt_orders_open=Count('salesorders', filter=Q(salesorders__status='OPEN'), distinct=True),
+            cnt_delivery_notes=Count('deliverynotes', distinct=True),
+        )
+        p = self.request.query_params.get('exclude_self')
+        if p and p.lower() not in ('0', 'false', ''):
+            qs = qs.exclude(is_self=True)
+        return qs
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
@@ -961,6 +1022,33 @@ def time_set_estimate_view(request):
     cell = TaskTimeEstimate.objects.select_related(
         'task_type', 'garment_type_item', 'garment_type_item__garment_type').get(pk=cell.pk)
     return Response(_cell_item_payload(cell), status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_DefineTasks])
+def time_capture_seed_view(request):
+    """POST /api/v1/time-analysis/capture-seed/ — captura conscient del PM (graó 3 de la cascada):
+    fixa una LLAVOR de tenant per task (TimeSeed scope='task', origen='CAPTURA') quan la
+    planificació no ha pogut estimar una tasca (needs_estimate). Desbloqueja TOTES les tasques
+    d'aquell task sense cel·la ni empíric. Body: {task_code, minuts}. Gated define_tasks."""
+    code = request.data.get('task_code')
+    minuts = request.data.get('minuts')
+    if not code:
+        return Response({'error': 'task_code requerit.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    try:
+        minuts = int(minuts)
+    except (TypeError, ValueError):
+        return Response({'error': 'minuts ha de ser un enter.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    if minuts <= 0:
+        return Response({'error': 'minuts ha de ser > 0.'}, status=http_status.HTTP_400_BAD_REQUEST)
+    if not TaskType.objects.filter(code=code).exists():
+        return Response({'error': 'task_type no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    profile = getattr(request.user, 'profile', None)
+    seed, _ = TimeSeed.objects.update_or_create(
+        scope='task', key=code,
+        defaults={'minuts': minuts, 'origen': 'CAPTURA', 'updated_by': profile})
+    return Response({'ok': True, 'task_code': code, 'minuts': seed.minuts, 'origen': seed.origen},
+                    status=http_status.HTTP_200_OK)
 
 
 @api_view(['GET'])

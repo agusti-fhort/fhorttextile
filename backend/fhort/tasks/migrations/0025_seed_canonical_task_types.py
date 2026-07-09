@@ -19,7 +19,7 @@ CATALEG = [
     (70, 'bom',            'Definició BOM',            'Dev. tècnic', 'Interna',        'fitxa',   'bom',          True),
     (81, 'scaling',        'Escalat CAD',              'Dev. tècnic', 'Interna',        'patro',   'escalat',      True),
     (82, 'marking',        'Marcada',                  'Dev. tècnic', 'Interna',        'patro',   'marcada',      True),
-    (90, 'Audit',          'Auditoria de model',       'Dev. tècnic', 'Externa-lliure', None,      None,           False),
+    (90, 'audit',          'Auditoria de model',       'Dev. tècnic', 'Externa-lliure', None,      None,           False),
 ]
 
 

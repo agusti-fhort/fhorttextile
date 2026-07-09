@@ -12,6 +12,20 @@ const TaskTypes = lazy(() => import('./pages/TaskTypes'))
 const GarmentTypes = lazy(() => import('./pages/GarmentTypes'))
 const Suppliers = lazy(() => import('./pages/Suppliers'))
 const Customers = lazy(() => import('./pages/Customers'))
+const CustomerDetail = lazy(() => import('./pages/CustomerDetail'))
+const Products = lazy(() => import('./pages/Products'))
+const ProductDetail = lazy(() => import('./pages/ProductDetail'))
+const Quotes = lazy(() => import('./pages/Quotes'))
+const QuoteDetail = lazy(() => import('./pages/QuoteDetail'))
+const PaymentTerms = lazy(() => import('./pages/PaymentTerms'))
+const Orders = lazy(() => import('./pages/Orders'))
+const OrderDetail = lazy(() => import('./pages/OrderDetail'))
+const WorkOrders = lazy(() => import('./pages/WorkOrders'))
+const WorkOrderDetail = lazy(() => import('./pages/WorkOrderDetail'))
+const DeliveryNotes = lazy(() => import('./pages/DeliveryNotes'))
+const DeliveryNoteDetail = lazy(() => import('./pages/DeliveryNoteDetail'))
+// TEMPORAL (esborrable) — banc de proves del sistema visual comercial unificat. Ruta /comercial/_kit.
+const CommercialKitDemo = lazy(() => import('./pages/CommercialKitDemo'))
 const FittingDetail = lazy(() => import('./pages/FittingDetail'))
 const FittingSessionList = lazy(() => import('./pages/FittingSessionList'))
 const FittingSessionNew = lazy(() => import('./pages/FittingSessionNew'))
@@ -32,6 +46,7 @@ const TimeTracking = lazy(() => import('./pages/TimeTracking'))
 const UsersRoles = lazy(() => import('./pages/UsersRoles'))
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
 const CompanyCalendar = lazy(() => import('./pages/CompanyCalendar'))
+const GeneralConfig = lazy(() => import('./pages/GeneralConfig'))
 const Planning = lazy(() => import('./pages/Planning'))
 const PlanningCalendar = lazy(() => import('./pages/PlanningCalendar'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
@@ -248,6 +263,26 @@ export default function App() {
           <Route path="garment-type-items/:itemId/editar" element={<ItemAuthoring />} />
           <Route path="suppliers" element={<Suppliers />} />
           <Route path="clients" element={<Customers />} />
+          <Route path="clients/:id" element={<CustomerDetail />} />
+          {/* Mòdul Comercial Studio (B1) — mestre d'articles. Gate de tier = B5. */}
+          <Route path="comercial/productes" element={<Products />} />
+          <Route path="comercial/productes/:id" element={<ProductDetail />} />
+          {/* Comercial Studio (B2) — ofertes (Quote). */}
+          <Route path="comercial/ofertes" element={<Quotes />} />
+          <Route path="comercial/ofertes/:id" element={<QuoteDetail />} />
+          {/* Comercial (M4) — condicions de pagament (PaymentTerms). */}
+          <Route path="comercial/condicions-pagament" element={<PaymentTerms />} />
+          {/* Comercial (B3b) — comandes de venda (SalesOrder). */}
+          <Route path="comercial/comandes" element={<Orders />} />
+          <Route path="comercial/comandes/:id" element={<OrderDetail />} />
+          {/* Comercial (B4a) — encàrrecs / ordres de treball (WorkOrder). */}
+          <Route path="comercial/encarrecs" element={<WorkOrders />} />
+          <Route path="comercial/encarrecs/:id" element={<WorkOrderDetail />} />
+          {/* Comercial (B4c) — albarans (DeliveryNote). */}
+          <Route path="comercial/albarans" element={<DeliveryNotes />} />
+          <Route path="comercial/albarans/:id" element={<DeliveryNoteDetail />} />
+          {/* TEMPORAL (esborrable) — banc de proves dels components del sistema visual comercial. */}
+          <Route path="comercial/_kit" element={<CommercialKitDemo />} />
           <Route path="planificacio" element={<Planning />} />
           {/* Calendari propi (agenda) read-only: obert a qualsevol autenticat (scope per dades a
               calendar/events); NO gatejat per canPlan, a diferència de la gestió /planificacio. */}
@@ -261,6 +296,7 @@ export default function App() {
           <Route path="disseny/patro-dxf" element={<DissenyPlaceholder titleKey="nav.patro_dxf" icon="ti-vector" />} />
           <Route path="disseny/poc-paper" element={<PaperKonvaPoc />} />
           <Route path="onboarding" element={<OnboardingWizard />} />
+          <Route path="configuracio/general" element={<GeneralConfig />} />
           <Route path="configuracio/usuaris" element={<UsersRoles />} />
           <Route path="configuracio/calendari" element={<CompanyCalendar />} />
           {/* Bloc 2 Peça 3: Registre d'activitat retirat com a ruta standalone → ara tab de Planning

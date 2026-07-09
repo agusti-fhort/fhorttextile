@@ -55,10 +55,47 @@ Aplicar canvis d'nginx: `nginx -t && systemctl reload nginx`.
 - Després de canvis al backend: `sudo systemctl restart fhort.service`.
 - Comprovació prèvia recomanada: `python manage.py check` (des de `backend/`, venv activat).
 
+## Permisos de `media/` (uploads de fitxers)
+
+Els directoris sota `backend/media/` (`tenant_logos/` i qualsevol subdirectori d'upload futur —
+p.ex. DXF del motor de patrons) han de ser propietat de **`www-data:www-data`**, no de `root:root`.
+Gunicorn corre com `www-data`; si un directori d'upload és de root, l'escriptura falla amb
+`500 [Errno 13] Permission denied` i el fitxer no es desa (trobat 2026-07-09, fitxa Empresa/logo).
+
+Aquest pas **NO viatja amb git ni amb cap migració**: si es recrea l'entorn (servidor nou, tenant
+nou, restore de backup) o es crea un subdirectori d'upload nou, cal repetir-lo explícitament —
+**després de qualsevol `mkdir` de `media/` i abans del primer restart**:
+
+```bash
+mkdir -p backend/media/<nou_directori>
+chown www-data:www-data -R backend/media/<nou_directori>
+chmod 775 backend/media/<nou_directori>
+```
+
+Verificació ràpida (ha de tornar buit; si surt algun path, aplicar-hi el `chown`):
+
+```bash
+find backend/media/ ! -user www-data
+```
+
 ## Frontend
 
 - Build: `cd frontend && npm run build` → genera `frontend/dist/` (vite neteja el `dist/` antic i
   emet hashes nous a cada build). nginx serveix aquest `dist/` directament.
+
+### Uploads multipart des del frontend — `Content-Type`
+
+Qualsevol client HTTP del frontend que pugi fitxers amb `FormData` ha de **sobreescriure
+explícitament el `Content-Type` a `undefined`** per a aquella crida concreta. El client axios base
+té un `Content-Type: application/json` fixat a nivell global; si l'upload l'hereta, el navegador
+**no** afegeix el `boundary` multipart, el fitxer **mai** arriba a `request.FILES` del servidor i
+falla amb un `ParseError` silenciós (trobat 2026-07-09, upload de logo). Patró correcte:
+
+```js
+client.patch(url, formData, { headers: { 'Content-Type': undefined } })
+```
+
+Comprovar aquest patró en **qualsevol upload nou** (p.ex. DXF del motor de patrons).
 
 ## Notes operatives
 

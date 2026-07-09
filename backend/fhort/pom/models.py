@@ -99,42 +99,6 @@ class GarmentTypeGlobal(models.Model):
         return f'{self.codi} · {self.nom_en}'
 
 
-class TascaGlobal(models.Model):
-    FASE_CHOICES = [
-        ('Proto', 'Proto'),
-        ('Fit', 'Fit'),
-        ('SizeSet', 'SizeSet'),
-        ('PP', 'PP'),
-        ('TOP', 'TOP'),
-    ]
-    TIPUS_CHOICES = [
-        ('Interna', 'Interna'),
-        ('Externa', 'Externa'),
-        ('Validacio', 'Validació'),
-    ]
-
-    codi = models.CharField(max_length=80, unique=True)
-    nom_en = models.CharField(max_length=200)
-    nom_ca = models.CharField(max_length=200)
-    nom_es = models.CharField(max_length=200)
-    fase = models.CharField(max_length=20, choices=FASE_CHOICES)
-    tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES)
-    minuts_estandard = models.PositiveIntegerField()
-    es_gate = models.BooleanField(default=False)
-    resultat_gate_opcions = models.JSONField(default=list, blank=True)
-    facturable = models.BooleanField(default=False)
-    ordre_base = models.PositiveIntegerField(default=0)
-    activa = models.BooleanField(default=True)
-
-    class Meta:
-        verbose_name = 'Tasca global'
-        verbose_name_plural = 'Tasques globals'
-        ordering = ['ordre_base', 'codi']
-
-    def __str__(self):
-        return f'{self.codi} · {self.nom_ca}'
-
-
 class POMEstadisticaGlobal(models.Model):
     pom_global = models.ForeignKey(POMGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')
     garment_type_global = models.ForeignKey(GarmentTypeGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')
@@ -267,6 +231,55 @@ class POMEstadisticaTenant(models.Model):
 
     def __str__(self):
         return f'{self.pom.codi_client} · {self.garment_type}/{self.talla_label}'
+
+
+class CustomerPOMAlias(models.Model):
+    """Àlies de NOMENCLATURA per client (N1, DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08): separa
+    "com anomena un client una mesura" (client_code/client_description) del catàleg canònic
+    (POMMaster). Un client pot tenir DIVERSOS codis per al mateix POM (p.ex. Losan H.11 sleeve
+    opening vs H.16 cuff opening) → unicitat (customer, client_code), NO (customer, pom).
+    El matcher el consumeix com a estratègia (a) prioritària de find_pom_master (N3 fet,
+    models_app/extraction_views.py:543)."""
+    ORIGEN_CHOICES = [
+        ('IMPORT', 'Import'), ('MANUAL', 'Manual'), ('MIGRACIO', 'Migració'),
+        ('DICCIONARI', 'Diccionari'),
+    ]
+    # db_constraint=False: `pom` és SHARED+TENANT però `tasks.Customer` és tenant-only → la FK
+    # creua schemas (mateix patró que GarmentPOMMap). PROTECT a nivell ORM, sense constraint de BD.
+    customer = models.ForeignKey(
+        'tasks.Customer', on_delete=models.PROTECT, related_name='pom_aliases',
+        db_constraint=False)
+    pom = models.ForeignKey(
+        POMMaster, on_delete=models.CASCADE, related_name='client_aliases')
+    client_code = models.CharField(max_length=60)
+    # OBSOLET (TODO): camp de descripció únic heretat. Substituït per description_en +
+    # description_local. Es manté la columna (migració 0035 hi va bolcar el contingut propi
+    # cap a description_en); no s'esborra per no perdre històric. No escriure-hi de nou.
+    client_description = models.CharField(max_length=200, blank=True, default='')
+    # Diccionari del client (carregat al setup): descripció canònica internacional (EN) +
+    # descripció en l'idioma local de l'empresa. Ambdues alimenten find_pom_master com a
+    # senyal de matching addicional. `language` = ISO 639-1 del camp local.
+    description_en = models.CharField(max_length=200, blank=True, default='')
+    description_local = models.CharField(max_length=200, blank=True, default='')
+    language = models.CharField(max_length=2, blank=True, default='')
+    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default='MANUAL')
+    pendent_revisio = models.BooleanField(default=False)
+    creat_at = models.DateTimeField(auto_now_add=True)
+    actualitzat_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Àlies POM de client'
+        verbose_name_plural = 'Àlies POM de client'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['customer', 'client_code'], name='uniq_customer_client_code'),
+        ]
+        indexes = [
+            models.Index(fields=['customer', 'client_code'], name='idx_customer_client_code'),
+        ]
+
+    def __str__(self):
+        return f'{self.customer.codi}:{self.client_code} → {self.pom.codi_client}'
 
 
 class SizeSystem(models.Model):
@@ -494,6 +507,16 @@ class GradingRuleSet(models.Model):
     )
     size_system = models.ForeignKey(SizeSystem, on_delete=models.PROTECT, null=True, blank=True, related_name='grading_rule_sets')
     actiu = models.BooleanField(default=True)
+    # N1 — client propietari de la graduació (àlies de nomenclatura). FK REAL a Customer (decisió
+    # CTO), nullable i additiu. Divergència ANOTADA i NO tocada: SizeSystem.customer_codi va per
+    # codi de 3 chars; aquí anem per FK. Backfill via size_system.customer_codi (N2-3).
+    customer = models.ForeignKey(
+        'tasks.Customer', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='grading_rule_sets', db_constraint=False)
+    # R2 — codis de document del run que NO es van poder vincular a cap POM (no es perden en
+    # silenci: es desen aquí com a "pendents de vincular" per revisar-los més tard). Llista de str.
+    pendents_vincular = models.JSONField(default=list, blank=True,
+        help_text="Codis de document no vinculats a cap POM en crear el run (pendents de vincular).")
 
 
 
@@ -799,6 +822,13 @@ class SizingProfile(models.Model):
     size_system      = models.ForeignKey('SizeSystem', on_delete=models.PROTECT,
                          related_name='sizing_profiles')
     grading_rule_set = models.ForeignKey('GradingRuleSet', on_delete=models.PROTECT,
+                         related_name='sizing_profiles')
+    # Eix client (DIAGNOSI_BIBLIOTECA_CLIENT_2026-07-08): NULL = perfil genèric del tenant;
+    # informat = perfil propi del client. db_constraint=False perquè `pom` és SHARED+TENANT i
+    # `tasks.Customer` és tenant-only → la FK creua schemas (mateix patró que CustomerPOMAlias
+    # i GradingRuleSet.customer). SET_NULL: esborrar un Customer no ha d'endur-se el perfil.
+    customer         = models.ForeignKey('tasks.Customer', on_delete=models.SET_NULL,
+                         null=True, blank=True, db_constraint=False,
                          related_name='sizing_profiles')
     is_default       = models.BooleanField(default=True,
                          help_text="El sistema suggereix aquest perfil per defecte")

@@ -72,7 +72,7 @@ def sizing_profiles_view(request):
 
         qs = SizingProfile.objects.select_related(
             'target', 'construction', 'fit_type',
-            'size_system', 'size_system__parent', 'grading_rule_set'
+            'size_system', 'size_system__parent', 'grading_rule_set', 'customer'
         )
 
         target_codi = request.query_params.get('target')
@@ -81,6 +81,13 @@ def sizing_profiles_view(request):
         fit_codi = request.query_params.get('fit')
         garment_type_id = request.query_params.get('garment_type')
         customer_codi = request.query_params.get('customer_codi')
+        # Resol l'id del Customer per prioritzar pel FK directe (autoritatiu) a més del
+        # senyal indirecte size_system.customer_codi.
+        cust_id = None
+        if customer_codi:
+            from fhort.tasks.models import Customer
+            _c = Customer.objects.filter(codi=customer_codi).first()
+            cust_id = _c.id if _c else None
 
         if target_codi:
             qs = qs.filter(target__codi=target_codi)
@@ -95,11 +102,13 @@ def sizing_profiles_view(request):
 
         def _grup(p):
             cc = (p.size_system.customer_codi or '') if p.size_system_id else ''
-            if customer_codi and cc == customer_codi:
-                return 0  # run d'aquest client
-            if p.is_default:
-                return 1  # canònic
-            return 2      # altres runs de client
+            own = (cust_id is not None and p.customer_id == cust_id) or \
+                  (customer_codi and cc == customer_codi)
+            if own:
+                return 0  # perfil/run d'aquest client (FK directe o senyal indirecte)
+            if p.is_default and p.customer_id is None:
+                return 1  # canònic genèric del tenant
+            return 2      # altres (perfils d'altres clients / no-default)
         profiles = sorted(
             qs,
             key=lambda p: (_grup(p), p.size_system.nom if p.size_system_id else ''),
@@ -279,17 +288,31 @@ def tenant_config_view(request):
         from fhort.pom.s2_serializers import TenantConfigSerializer
 
         config = TenantConfig.get_or_create_default()
+        ctx = {'request': request}   # perquè logo_file surti com a URL absoluta
 
         if request.method == 'GET':
-            return Response(TenantConfigSerializer(config).data)
+            return Response(TenantConfigSerializer(config, context=ctx).data)
 
-        # PATCH
-        allowed = ['unitat_mesura', 'norma_referencia', 'nom_empresa', 'logo_url']
+        # PATCH — camps escalars + upload opcional del logo (multipart, camp 'logo_file').
+        allowed = ['unitat_mesura', 'norma_referencia', 'nom_empresa', 'logo_url', 'hourly_rate',
+                   'iban', 'payment_notes', 'legal_name', 'tax_id', 'address', 'postal_code',
+                   'city', 'country', 'email', 'phone']
         for field in allowed:
             if field in request.data:
                 setattr(config, field, request.data[field])
+        if 'logo_file' in request.FILES:
+            # L'usuari puja SVG/PNG/JPG; el backend el normalitza SEMPRE a un PNG ràster que
+            # reportlab dibuixa a la capçalera (fi de l'exigència "màxim 15 mm PNG").
+            from fhort.accounts.logo import normalize_logo
+            try:
+                content = normalize_logo(request.FILES['logo_file'])
+            except ValueError as e:
+                return Response({'error': f'Logo no vàlid: {e}'}, status=400)
+            if config.logo_file:
+                config.logo_file.delete(save=False)   # neteja el fitxer anterior
+            config.logo_file = content
         config.save()
-        return Response(TenantConfigSerializer(config).data)
+        return Response(TenantConfigSerializer(config, context=ctx).data)
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)

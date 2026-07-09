@@ -87,14 +87,26 @@ class ModelTask(models.Model):
                        help_text="Posició manual fixa: el recàlcul es col·loca al voltant.")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # B4a — vincle a l'encàrrec (contenidor d'execució). FK per string per no importar
+    # commerce a tasks (evita cicle d'import). SET_NULL: si es purga un WO, la tasca no cau.
+    work_order = models.ForeignKey('commerce.WorkOrder', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='tasks')
+    # True = extra fora de la recepta del WorkOrder ORDER (marca grana al kanban).
+    off_recipe = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['model', 'order']
         verbose_name = 'Model task'
         verbose_name_plural = 'Model tasks'
-        # Defensa de fons: una tasca de cada tipus per model (la view ja ho comprova;
-        # això ho garanteix a BD contra curses i camins futurs sense check).
-        unique_together = [('model', 'task_type')]
+        # Defensa de fons: una tasca PREVISTA (de recepta) de cada tipus per model.
+        # Constraint PARCIAL (només origen='prevista') perquè els extres ad_hoc del
+        # mateix task_type puguin conviure amb la canònica sense col·lidir (B4a).
+        constraints = [
+            models.UniqueConstraint(
+                fields=['model', 'task_type'],
+                condition=models.Q(origen='prevista'),
+                name='uniq_prevista_model_tasktype'),
+        ]
 
     def __str__(self):
         return f'{self.model_id} · {self.task_type.code} ({self.status})'
@@ -149,6 +161,21 @@ class Supplier(models.Model):
                             choices=[('workshop', 'Taller'), ('factory', 'Fàbrica')], default='workshop')
     active = models.BooleanField(default=True)
 
+    # Comercial Studio (B1) — dades fiscals, condicions de compra i contacte. Additives (blank).
+    # Vocabulari mirall de tenants.Client. FK des de commerce.ProductSupplier/Expense (B1/B3).
+    rao_social = models.CharField(max_length=200, blank=True)
+    nif = models.CharField(max_length=20, blank=True, help_text="NIF/VAT/tax id.")
+    adreca_linia1 = models.CharField(max_length=200, blank=True)
+    adreca_linia2 = models.CharField(max_length=200, blank=True)
+    ciutat = models.CharField(max_length=100, blank=True)
+    codi_postal = models.CharField(max_length=20, blank=True)
+    pais = models.CharField(max_length=2, default='ES', help_text="ISO 3166-1 alpha-2.")
+    condicions_compra = models.CharField(max_length=200, blank=True,
+                                         help_text="Termini/forma de compra (text lliure).")
+    persona_contacte = models.CharField(max_length=200, blank=True)
+    telefon_contacte = models.CharField(max_length=40, blank=True)
+    email_contacte = models.EmailField(blank=True)
+
     class Meta:
         ordering = ['name']
         verbose_name = 'Supplier'
@@ -174,6 +201,46 @@ class Customer(models.Model):
     codi_global = models.CharField(max_length=3, null=True, blank=True)
     # Logo del client (TS-4c): per a la capçalera de la fitxa tècnica.
     logo = models.ImageField(upload_to='customer_logos/%Y/%m/', null=True, blank=True)
+
+    # Comercial Studio (B1) — dades fiscals i comercials del client tercer. Additives (blank).
+    # Vocabulari mirall de tenants.Client (font fiscal canònica del projecte). Sense lògica de
+    # facturació aquí: la factura legal viu FORA del mòdul (fins albarà + liquidació).
+    rao_social = models.CharField(max_length=200, blank=True)
+    nif = models.CharField(max_length=20, blank=True, help_text="NIF/VAT/tax id.")
+    adreca_linia1 = models.CharField(max_length=200, blank=True)
+    adreca_linia2 = models.CharField(max_length=200, blank=True)
+    ciutat = models.CharField(max_length=100, blank=True)
+    codi_postal = models.CharField(max_length=20, blank=True)
+    pais = models.CharField(max_length=2, default='ES', help_text="ISO 3166-1 alpha-2.")
+    email_facturacio = models.EmailField(blank=True)
+    condicions_pagament = models.CharField(max_length=200, blank=True,
+                                           help_text="Termini/forma de pagament (text lliure).")
+    descompte_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+                                        help_text="% de descompte comercial per defecte.")
+    persona_contacte = models.CharField(max_length=200, blank=True)
+    telefon_contacte = models.CharField(max_length=40, blank=True)
+
+    # Comercial Studio (B3a) — règim fiscal + condicions de pagament per defecte. Additius.
+    # `condicions_pagament` (B1, text lliure) queda per a notes; el motor real és aquests camps.
+    TAX_REGIME_CHOICES = [
+        ('DOMESTIC', 'Domestic'),      # subjecte a IVA del país
+        ('INTRA_EU', 'Intra-EU'),      # inversió del subjecte passiu (IVA 0 al document)
+        ('EXPORT', 'Export'),          # exportació fora UE (IVA 0)
+        ('EXEMPT', 'Exempt'),          # operació exempta (IVA 0)
+    ]
+    PAYMENT_METHOD_CHOICES = [
+        ('TRANSFER', 'Bank transfer'),
+        ('DIRECT_DEBIT', 'Direct debit'),
+        ('CONFIRMING', 'Confirming'),
+        ('CASH', 'Cash'),
+    ]
+    tax_regime = models.CharField(max_length=20, choices=TAX_REGIME_CHOICES, default='DOMESTIC')
+    vat_number = models.CharField(max_length=30, blank=True,
+                                  help_text="NIF-IVA intracomunitari; només informatiu v1 (sense VIES).")
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='TRANSFER')
+    payment_terms = models.ForeignKey('commerce.PaymentTerms', on_delete=models.SET_NULL,
+                                      null=True, blank=True, related_name='default_customers',
+                                      help_text="Condició de pagament per defecte del client.")
 
     class Meta:
         ordering = ['codi']
@@ -328,10 +395,19 @@ class TimeSeed(models.Model):
     nivell de task_type, altres a nivell de fase. Dada de tenant EVOLUTIVA, separada del
     catàleg canònic TaskType (que es manté read-only)."""
     SCOPE_CHOICES = [('task', 'task'), ('phase', 'phase')]
+    ORIGEN_CHOICES = [('ONBOARDING', 'ONBOARDING'), ('CAPTURA', 'CAPTURA'), ('MIGRACIO', 'MIGRACIO')]
+    # scope discrimina el node (XOR task/fase): scope='task' → key=TaskType.code;
+    # scope='phase' → key=TaskType.fase. unique(scope,key) garanteix un sol node per clau.
     scope = models.CharField(max_length=10, choices=SCOPE_CHOICES)
     key = models.CharField(max_length=50,
             help_text="TaskType.code si scope='task'; TaskType.fase (nom de fase) si scope='phase'.")
     minuts = models.PositiveIntegerField()
+    origen = models.CharField(max_length=12, choices=ORIGEN_CHOICES, default='MIGRACIO',
+            help_text="Procedència: sembra d'onboarding, captura conscient del PM, o destil·lació de cel·les teòriques.")
+    updated_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = [('scope', 'key')]

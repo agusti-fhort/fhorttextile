@@ -5,6 +5,20 @@ export const auth = {
   login: (username, password) => client.post('/api/token/', { username, password }),
 }
 
+// Configuració del tenant (TenantConfig) — pantalla General (M5). GET/PATCH d'un únic objecte
+// de config; hourly_rate = tarifa interna de cost (≠ tarifes de venda de Product).
+export const tenantConfig = {
+  get: () => client.get('/api/v1/tenant-config/'),
+  update: (data) => client.patch('/api/v1/tenant-config/', data),
+  // P6 — puja el logo del tenant (multipart) al mateix endpoint; retorna la config actualitzada.
+  // Content-Type: undefined perquè axios/el navegador posin el boundary multipart (el client per
+  // defecte és application/json — sense això, el fitxer no arriba a request.FILES). Patró de la casa.
+  uploadLogo: (file) => {
+    const fd = new FormData(); fd.append('logo_file', file)
+    return client.patch('/api/v1/tenant-config/', fd, { headers: { 'Content-Type': undefined } })
+  },
+}
+
 // Client NET (sense interceptor Bearer) per a la recuperació de contrasenya pública:
 // la persona que recupera no està autenticada i no ha d'enviar cap token.
 const publicClient = axios.create({
@@ -209,6 +223,23 @@ export const customers = {
   remove: (id) => client.delete(`/api/v1/customers/${id}/`),
 }
 
+// Biblioteca de nomenclatura del client (CustomerPOMAlias). Escriptura gated CONFIGURE.
+export const customerAliases = {
+  list: (params) => client.get('/api/v1/customer-pom-aliases/', { params }),   // ?customer=<id>
+  create: (data) => client.post('/api/v1/customer-pom-aliases/', data),
+  update: (id, data) => client.patch(`/api/v1/customer-pom-aliases/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/customer-pom-aliases/${id}/`),
+}
+
+// Diccionari de nomenclatura del client (setup). Escriptura gated CONFIGURE. Stateless.
+export const customerDictionary = {
+  template: (id) => client.get(`/api/v1/pom/customers/${id}/dictionary/template/`, { responseType: 'blob' }),
+  preview: (id, formData) => client.post(`/api/v1/pom/customers/${id}/dictionary/preview/`, formData, {
+    headers: { 'Content-Type': undefined },
+  }),
+  commit: (id, payload) => client.post(`/api/v1/pom/customers/${id}/dictionary/commit/`, payload),
+}
+
 // Plantilla de fitxa tècnica per client (TS-3). get_or_create + PATCH; escriptura gated CONFIGURE.
 export const techSheetTemplate = {
   detail: (customerId) => client.get(`/api/v1/customers/${customerId}/tech-sheet-template/`),
@@ -307,6 +338,127 @@ export const garmentTypeItems = {
   create: (data) => client.post('/api/v1/garment-type-items/', data),
   update: (id, data) => client.patch(`/api/v1/garment-type-items/${id}/`, data),
   remove: (id) => client.delete(`/api/v1/garment-type-items/${id}/`),
+}
+
+// Mòdul Comercial Studio (B1) — mestre d'articles. Escriptura gated CONFIGURE.
+// Satèl·lits filtrables per ?product=. price-exceptions = taula d'EXCEPCIONS (no graella densa).
+export const commerce = {
+  units: {
+    list: (params) => client.get('/api/v1/commerce/units/', { params }),
+  },
+  products: {
+    list: (params) => client.get('/api/v1/commerce/products/', { params }),
+    get: (id) => client.get(`/api/v1/commerce/products/${id}/`),
+    create: (data) => client.post('/api/v1/commerce/products/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/products/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/products/${id}/`),
+  },
+  recipeLines: {
+    list: (params) => client.get('/api/v1/commerce/recipe-lines/', { params }),
+    create: (data) => client.post('/api/v1/commerce/recipe-lines/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/recipe-lines/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/recipe-lines/${id}/`),
+  },
+  productSuppliers: {
+    list: (params) => client.get('/api/v1/commerce/product-suppliers/', { params }),
+    create: (data) => client.post('/api/v1/commerce/product-suppliers/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/product-suppliers/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/product-suppliers/${id}/`),
+  },
+  productComponents: {
+    list: (params) => client.get('/api/v1/commerce/product-components/', { params }),
+    create: (data) => client.post('/api/v1/commerce/product-components/', data),
+    remove: (id) => client.delete(`/api/v1/commerce/product-components/${id}/`),
+  },
+  priceExceptions: {
+    list: (params) => client.get('/api/v1/commerce/price-exceptions/', { params }),
+    create: (data) => client.post('/api/v1/commerce/price-exceptions/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/price-exceptions/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/price-exceptions/${id}/`),
+  },
+  // Condicions de pagament (B3a/M4) — CRUD amb fraccions nested writable (guard Σ%=100 al backend).
+  paymentTerms: {
+    list: (params) => client.get('/api/v1/commerce/payment-terms/', { params }),
+    get: (id) => client.get(`/api/v1/commerce/payment-terms/${id}/`),
+    create: (data) => client.post('/api/v1/commerce/payment-terms/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/payment-terms/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/payment-terms/${id}/`),
+  },
+  // Documents comercials — Quote (B2). send/pdf són accions; pdf retorna blob.
+  quotes: {
+    list: (params) => client.get('/api/v1/commerce/quotes/', { params }),
+    get: (id) => client.get(`/api/v1/commerce/quotes/${id}/`),
+    create: (data) => client.post('/api/v1/commerce/quotes/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/quotes/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/quotes/${id}/`),
+    send: (id) => client.post(`/api/v1/commerce/quotes/${id}/send/`),
+    pdf: (id) => client.get(`/api/v1/commerce/quotes/${id}/pdf/`, { responseType: 'blob' }),
+    convert: (id) => client.post(`/api/v1/commerce/quotes/${id}/convert/`),   // → SalesOrder (201)
+  },
+  quoteLines: {
+    list: (params) => client.get('/api/v1/commerce/quote-lines/', { params }),   // ?quote=
+    create: (data) => client.post('/api/v1/commerce/quote-lines/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/quote-lines/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/quote-lines/${id}/`),
+  },
+  // Documents comercials — SalesOrder (comanda, B3b). Neixen de la conversió d'una oferta;
+  // lectura + pdf. Línies read-only (mutació només qty_allocated, control de cartera B4).
+  orders: {
+    list: (params) => client.get('/api/v1/commerce/orders/', { params }),
+    get: (id) => client.get(`/api/v1/commerce/orders/${id}/`),
+    update: (id, data) => client.patch(`/api/v1/commerce/orders/${id}/`, data),   // només status
+    pdf: (id) => client.get(`/api/v1/commerce/orders/${id}/pdf/`, { responseType: 'blob' }),
+  },
+  orderLines: {
+    list: (params) => client.get('/api/v1/commerce/order-lines/', { params }),   // ?order=
+    update: (id, data) => client.patch(`/api/v1/commerce/order-lines/${id}/`, data),   // qty_allocated
+    // B4b — assigna un model a la línia i crea el WO ORDER (migra el col·lector). {model_id}
+    assignModel: (id, data) => client.post(`/api/v1/commerce/order-lines/${id}/assign-model/`, data),
+    // P4 — expansió read-only: models assignats (via WO), tasques amb estat, % imputat.
+    allocation: (id) => client.get(`/api/v1/commerce/order-lines/${id}/allocation/`),
+  },
+  // Encàrrecs / ordres de treball (B4a). No es creen per POST (ORDER=wizard, COLLECTOR=hook).
+  workOrders: {
+    list: (params) => client.get('/api/v1/commerce/work-orders/', { params }),   // ?kind=&status=&customer=&period=
+    get: (id) => client.get(`/api/v1/commerce/work-orders/${id}/`),
+    close: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/close/`, data || {}),
+    // B4b — revisió comercial (preu de venda) d'un WO tancat. {items:[{model_task_id,kind,amount}]}
+    review: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/review/`, data || {}),
+  },
+  // Despeses d'un encàrrec (B4b) — línia externa amb proveïdor i marge. Satèl·lit ?work_order=.
+  expenses: {
+    list: (params) => client.get('/api/v1/commerce/expenses/', { params }),   // ?work_order=
+    create: (data) => client.post('/api/v1/commerce/expenses/', data),
+    update: (id, data) => client.patch(`/api/v1/commerce/expenses/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/commerce/expenses/${id}/`),
+  },
+  // Albarans (B4c) — document derivat que agrega 1..N WorkOrder CLOSED del mateix client.
+  // No es creen per POST directe: neixen de generate/ (línies proposades pel sistema).
+  deliveryNotes: {
+    list: (params) => client.get('/api/v1/commerce/delivery-notes/', { params }),   // ?status=&customer=
+    get: (id) => client.get(`/api/v1/commerce/delivery-notes/${id}/`),
+    update: (id, data) => client.patch(`/api/v1/commerce/delivery-notes/${id}/`, data),   // notes en DRAFT
+    remove: (id) => client.delete(`/api/v1/commerce/delivery-notes/${id}/`),   // només DRAFT (allibera WO)
+    // Genera un DRAFT amb línies proposades. {work_order_ids:[…]} → 201 o 400 {detail, errors}.
+    generate: (data) => client.post('/api/v1/commerce/delivery-notes/generate/', data),
+    issue: (id) => client.post(`/api/v1/commerce/delivery-notes/${id}/issue/`),   // DRAFT→ISSUED (congela)
+    pdf: (id) => client.get(`/api/v1/commerce/delivery-notes/${id}/pdf/`, { responseType: 'blob' }),
+    // v2 — safata d'albaranables per model. ?customer=<id> → {customer, groups:[{model, items}]}.
+    billable: (params) => client.get('/api/v1/commerce/delivery-notes/billable/', { params }),
+    // v2 — retorna el DRAFT obert del client o en crea un. {customer} → 200/201.
+    draft: (data) => client.post('/api/v1/commerce/delivery-notes/draft/', data),
+    // v2 — afegeix línies seleccionades de la safata al DRAFT. {items:[{kind, *_id}]}.
+    addLines: (id, data) => client.post(`/api/v1/commerce/delivery-notes/${id}/add-lines/`, data),
+    // v2 — marcatge ISSUED→INVOICED (individual i massiu {ids:[…]}).
+    markInvoiced: (id) => client.post(`/api/v1/commerce/delivery-notes/${id}/mark-invoiced/`),
+    markInvoicedBulk: (data) => client.post('/api/v1/commerce/delivery-notes/mark-invoiced-bulk/', data),
+  },
+  deliveryNoteLines: {
+    list: (params) => client.get('/api/v1/commerce/delivery-note-lines/', { params }),   // ?delivery_note=
+    update: (id, data) => client.patch(`/api/v1/commerce/delivery-note-lines/${id}/`, data),   // preu/descr/visible en DRAFT
+    create: (data) => client.post('/api/v1/commerce/delivery-note-lines/', data),   // v2 — línia MANUAL
+    remove: (id) => client.delete(`/api/v1/commerce/delivery-note-lines/${id}/`),   // v2 — treu línia del DRAFT
+  },
 }
 
 // Sprint Llibreria d'Items — pertinença POM de l'Item (garment-pom-maps/, ModelViewSet).
@@ -443,4 +595,5 @@ export const timeAnalysis = {
   tree: (params) => client.get('/api/v1/time-analysis/tree/', { params }),    // ?fase&task_type&garment_type&garment_type_item
   setEstimate: (data) => client.post('/api/v1/time-analysis/set-estimate/', data),   // {garment_type_item, task_type, minutes}
   byModel: (params) => client.get('/api/v1/time-analysis/by-model/', { params }),    // ?model&fase → {models:[{label,nom,est,real,n,fases:[{fase,...,tasks:[...]}]}]}
+  captureSeed: (data) => client.post('/api/v1/time-analysis/capture-seed/', data),   // {task_code, minuts} → llavor CAPTURA
 }

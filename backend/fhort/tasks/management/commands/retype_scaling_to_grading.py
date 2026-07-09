@@ -60,9 +60,11 @@ class Command(BaseCommand):
                         doned.append((mt.id, tmin, mt.assignee_id))
                         if apply:
                             prof = mt.assignee
+                            # force=True: migració d'històric; salta el guard d'albarà v2 (mai
+                            # reobre per a usuari, aquí reprocessa re-tipades scaling→grading).
                             if mt.status != 'InProgress':
-                                transition_task(mt, 'InProgress', prof)
-                            transition_task(mt, 'Done', prof)
+                                transition_task(mt, 'InProgress', prof, force=True)
+                            transition_task(mt, 'Done', prof, force=True)
                 if not apply:
                     transaction.set_rollback(True)
 

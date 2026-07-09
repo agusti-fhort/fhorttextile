@@ -44,13 +44,27 @@ const navGroups = [
     { to: '/disseny/patro-dxf', labelKey: 'nav.patro_dxf', icon: 'ti-vector' },
   ]},
   // Estudi tècnic — gestió INTERNA del tenant (NO el backoffice futur de tots els tenants).
-  // Futur (previst, no implementat): Configuració de l'Estudi · Equip/usuaris · Catàleg de serveis/tasques.
+  // B3-M: Clients i Proveïdors s'han mogut a Comercial (mestres comercials). La secció queda
+  // reservada (buida → auto-oculta) per als futurs interns previstos: Configuració de l'Estudi ·
+  // Equip/usuaris · Catàleg de serveis/tasques. Les rutes /clients i /suppliers no canvien.
   { sectionKey: 'nav.section_technical_studio', items: [
+  ]},
+  // Comercial Studio — mestres comercials (Clients, Proveïdors, Productes) + documents (Ofertes).
+  // El gate de tier del mòdul arriba a B5; de moment sense `cap` (visible; l'escriptura la
+  // gateja CONFIGURE dins la pàgina).
+  { sectionKey: 'nav.section_comercial', items: [
     { to: '/clients', labelKey: 'nav.clients', icon: 'ti-users-group' },
     { to: '/suppliers', labelKey: 'nav.suppliers', icon: 'ti-building-factory' },
+    { to: '/comercial/productes', labelKey: 'nav.products', icon: 'ti-package' },
+    { to: '/comercial/ofertes', labelKey: 'nav.quotes', icon: 'ti-file-invoice' },
+    { to: '/comercial/comandes', labelKey: 'nav.orders', icon: 'ti-clipboard-check' },
+    { to: '/comercial/encarrecs', labelKey: 'nav.workorders', icon: 'ti-briefcase' },
+    { to: '/comercial/albarans', labelKey: 'nav.deliverynotes', icon: 'ti-truck-delivery' },
+    { to: '/comercial/condicions-pagament', labelKey: 'nav.payment_terms', icon: 'ti-calendar-dollar' },
   ]},
   { sectionKey: 'nav.section_sistema', items: [
     { to: '/onboarding', labelKey: 'nav.onboarding', icon: 'ti-rocket', cap: 'onboarding' },
+    { to: '/configuracio/general', labelKey: 'nav.configuracio_general', icon: 'ti-settings', cap: 'configure' },
     { to: '/configuracio/calendari', labelKey: 'nav.company_calendar', icon: 'ti-calendar-cog', cap: 'configure' },
     { to: '/configuracio/usuaris', labelKey: 'nav.users', icon: 'ti-users', cap: 'manage_users' },
     // G9 "consulta sí / edició no": catàleg de tasques consultable per a tothom (sense `cap`).

@@ -66,8 +66,12 @@ def recompute_for_technicians(profile_ids, *, now=None):
         for t in queue:
             if t.planned_locked:
                 continue   # punt fix: la durada snapshot es respecta tal qual
+            if t.status != 'Pending':
+                continue   # NOMÉS les no començades re-resolen; InProgress/Paused conserven el
+                           # snapshot (Done ja excloses de la cua). Cap canvi espontani d'estimació.
             fresh = lookup_estimated_minutes(t.model, t.task_type)
-            if fresh != t.estimated_minutes:
+            if fresh is not None and fresh != t.estimated_minutes:
+                # No clobberem mai un valor amb None (peça 4: cap tasca NULL després de planificar).
                 t.estimated_minutes = fresh
                 t.save(update_fields=['estimated_minutes', 'updated_at'])
         results[pid] = schedule(queue, now=now, save=True)
@@ -262,6 +266,7 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
 
     fets = creats = 0
     reassignats, omesos, warnings, touched = [], [], [], []
+    needs_estimate, seen_needs = [], set()
     affected = set()
 
     # Pas 2 — per cada (model × assignació).
@@ -284,8 +289,8 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
             if code not in get_allowed_task_types(profile.user):
                 omesos.append({'model_id': mid, 'task_type_code': code, 'motiu': 'permís negat'})
                 continue
-            # b) buscar / crear (via canònica).
-            mt = (ModelTask.objects.filter(model_id=mid, task_type=tt)
+            # b) buscar / crear (via canònica: la prevista de recepta).
+            mt = (ModelTask.objects.filter(model_id=mid, task_type=tt, origen='prevista')
                   .select_related('assignee__user').first())
             if mt is not None and mt.status == 'Done':
                 omesos.append({'model_id': mid, 'task_type_code': code, 'motiu': 'Done immutable'})
@@ -294,8 +299,17 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
             if mt is None:
                 order = ModelTask.objects.filter(model_id=mid).count()
                 est = lookup_estimated_minutes(model, tt)
+                if est is None:
+                    # "O té valor o demana": no creem una tasca amb estimated_minutes NULL.
+                    # Es recull per a la captura conscient del PM (llavor CAPTURA) i es reintenta.
+                    if code not in seen_needs:
+                        seen_needs.add(code)
+                        needs_estimate.append({'task_code': code, 'fase': tt.fase})
+                    omesos.append({'model_id': mid, 'task_type_code': code, 'motiu': 'needs_estimate'})
+                    continue
                 mt = ModelTask.objects.create(model_id=mid, task_type=tt, order=order,
-                                              status='Pending', estimated_minutes=est)
+                                              status='Pending', origen='prevista',
+                                              estimated_minutes=est)
                 creats += 1
             elif mt.assignee_id and mt.assignee_id != profile.id:
                 old_assignee = mt.assignee   # tècnic anterior desplaçat
@@ -347,7 +361,14 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
 
     # Pas 3 — neteja d'ordre manual + recompute ÚNIC dels afectats.
     cleanup_queue_order(affected, model_ids)
-    recompute_for_technicians(affected, now=now)
+    rec = recompute_for_technicians(affected, now=now)
+    # Agrega el needs_estimate del scheduler (tasques EXISTENTS que segueixen sense estimació,
+    # p.ex. creades abans per open-task) al de creació, deduplicant per task_code.
+    for r in (rec or {}).values():
+        for ne in r.get('needs_estimate', []):
+            if ne['task_code'] not in seen_needs:
+                seen_needs.add(ne['task_code'])
+                needs_estimate.append({'task_code': ne['task_code'], 'fase': ne['fase']})
 
     # Pas 4 — rellegir planned_* finals (post-recompute) i calcular en_risc.
     fresh = {m.id: m for m in
@@ -368,7 +389,8 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
         })
 
     return {'fets': fets, 'creats': creats, 'reassignats': reassignats,
-            'omesos': omesos, 'warnings': warnings, 'resultats': resultats}
+            'omesos': omesos, 'warnings': warnings, 'resultats': resultats,
+            'needs_estimate': needs_estimate}
 
 
 @transaction.atomic

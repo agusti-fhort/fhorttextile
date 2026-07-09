@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    CustomerPOMAliasViewSet,
     GarmentGroupViewSet,
     GarmentPOMMapViewSet,
     GarmentTypeViewSet,
@@ -25,6 +26,7 @@ router.register('grading-rule-sets', GradingRuleSetViewSet, basename='grading-ru
 router.register('grading-rules', GradingRuleViewSet, basename='grading-rule')
 router.register('garment-pom-maps', GarmentPOMMapViewSet, basename='garment-pom-map')
 router.register('item-base-measurements', ItemBaseMeasurementViewSet, basename='item-base-measurement')
+router.register('customer-pom-aliases', CustomerPOMAliasViewSet, basename='customer-pom-alias')
 
 # Sprint 7A — POM wizard. The 'poms/suggerits/', 'poms/cerca/' and
 # 'poms/crear-tenant/' paths would collide with POMMasterViewSet detail (poms/<pk>/);
@@ -68,4 +70,19 @@ try:
 except Exception:
     _size_map_paths = []
 
-urlpatterns = _sprint7_pom_paths + _size_map_paths + router.urls
+# Diccionari de nomenclatura del client (setup): plantilla + preview + commit.
+try:
+    from .dictionary_views import (
+        dictionary_template_view,
+        dictionary_preview_view,
+        dictionary_commit_view,
+    )
+    _dictionary_paths = [
+        path('pom/customers/<int:customer_id>/dictionary/template/', dictionary_template_view),
+        path('pom/customers/<int:customer_id>/dictionary/preview/',  dictionary_preview_view),
+        path('pom/customers/<int:customer_id>/dictionary/commit/',   dictionary_commit_view),
+    ]
+except Exception:
+    _dictionary_paths = []
+
+urlpatterns = _sprint7_pom_paths + _size_map_paths + _dictionary_paths + router.urls

@@ -1,3 +1,5 @@
+> ⚠️ SUPERADA 2026-07-07 — implementada (import SVG integrat a l'editor, S6). Consulta només com a històric.
+
 # MICROPROVA F4 - SVG real CALLIE al PoC Paper.js
 
 Data: 2026-06-28

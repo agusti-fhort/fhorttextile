@@ -338,6 +338,44 @@ def create_piece_fitting(session_id: int, model_id: int, *, created_by_id: int |
     return pf, n
 
 
+def consolidate_base_from_fitting(pf, *, auth_user=None):
+    """B3: consolida les línies de TALLA BASE d'un PieceFitting a BaseMeasurement.
+
+    Per cada línia de la talla base amb valor_real informat i ≠ valor_teoric (una
+    rectificació real), escriu BaseMeasurement(model, pom).base_value_cm = valor_real,
+    origen='FITTED' (el senyal F1 registra el canvi). Retorna la llista de línies base
+    consolidades — el cridador hi fa Welford/versionat si cal.
+
+    Reusat pel `close` (comportament idèntic al bloc inline anterior) i per la propagació
+    conscient (consolidar la realitat mesurada abans que el motor llegeixi la base).
+    """
+    from fhort.fitting.models import PieceFittingLine
+    from fhort.models_app.models import BaseMeasurement
+    model = pf.model
+    sf = pf.grading_version.size_fitting
+    base_size = (model.base_size_label or '').strip()
+    consolidated = []
+    for line in PieceFittingLine.objects.filter(piece_fitting=pf).select_related('pom'):
+        if line.valor_real is None:
+            continue
+        if abs(line.valor_real - line.valor_teoric) < 1e-6:
+            continue  # no change on this line
+        if line.size_label.strip() != base_size:
+            continue  # PEÇA 4: la sessió de fitting toca NOMÉS la talla base
+        bm, _created = BaseMeasurement.objects.get_or_create(
+            model=model, pom=line.pom,
+            defaults={'base_value_cm': line.valor_real, 'origen': 'FITTED'},
+        )
+        bm.base_value_cm = line.valor_real
+        bm.origen = 'FITTED'
+        bm._changed_by = auth_user
+        bm._fitting_ref = sf            # MeasurementChangeLog.fitting_ref (→ SizeFitting)
+        bm._motiu = f'Fitting · sessió {pf.session_id} · peça {pf.pk}'
+        bm.save()
+        consolidated.append(line)
+    return consolidated
+
+
 def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = None,
                         allow_reopen_sealed: bool = False) -> dict:
     """Close a PieceFitting, applying validated BASE real values with FUNCTIONAL versioning.
@@ -356,15 +394,13 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
     Returns: {'changed', 'base_changed', 'override_changed', 'new_version'}.
     'override_changed' es manté per compat. de forma però SEMPRE és False (PEÇA 4).
     """
-    from fhort.fitting.models import PieceFitting, PieceFittingLine
-    from fhort.models_app.models import BaseMeasurement
+    from fhort.fitting.models import PieceFitting
 
     pf = PieceFitting.objects.select_related(
         'model', 'grading_version', 'grading_version__size_fitting',
     ).get(pk=piece_fitting_id)
     model = pf.model
     sf = pf.grading_version.size_fitting
-    base_size = (model.base_size_label or '').strip()
 
     # Resolve users: UserProfile (fitting layer) + its auth.User (F1 log layer).
     profile = None
@@ -374,40 +410,17 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
         profile = UserProfile.objects.select_related('user').filter(pk=user_profile_id).first()
         auth_user = profile.user if profile else None
 
-    lines = list(PieceFittingLine.objects.filter(piece_fitting=pf).select_related('pom'))
-
-    changed = 0
-    base_changed = False
     override_changed = False
 
-    for line in lines:
-        if line.valor_real is None:
-            continue
-        if abs(line.valor_real - line.valor_teoric) < 1e-6:
-            continue  # no change on this line
-        is_base = line.size_label.strip() == base_size
-        if not is_base:
-            # PEÇA 4: la sessió de fitting toca NOMÉS la talla base. Els ajustos per talla
-            # (breaks) es fan a l'editor propagat del model (ModelGradingOverride, via
-            # set-size-override — PEÇA 1/2), no en tancar una sessió. Abans aquí s'escrivia
-            # un ModelGradingOverride per talla; s'ha retirat per desfer el deute sessió→override.
-            # Per tant una talla no-base ni compta com a canvi, ni alimenta Welford, ni versiona.
-            continue
-        changed += 1
+    # PEÇA 4 / B3: la consolidació de la talla base a BaseMeasurement viu al helper
+    # consolidate_base_from_fitting (compartit amb la propagació conscient). Les talles
+    # no-base s'ignoren (els breaks per talla van per ModelGradingOverride). Welford i el
+    # versionat es fan aquí sobre les línies consolidades.
+    consolidated = consolidate_base_from_fitting(pf, auth_user=auth_user)
+    changed = len(consolidated)
+    base_changed = bool(consolidated)
 
-        # Root change → BaseMeasurement (the F1 signal writes the change log).
-        bm, _created = BaseMeasurement.objects.get_or_create(
-            model=model, pom=line.pom,
-            defaults={'base_value_cm': line.valor_real, 'origen': 'FITTED'},
-        )
-        bm.base_value_cm = line.valor_real
-        bm.origen = 'FITTED'
-        bm._changed_by = auth_user
-        bm._fitting_ref = sf            # MeasurementChangeLog.fitting_ref (→ SizeFitting)
-        bm._motiu = f'Fitting · sessió {pf.session_id} · peça {pf.pk}'
-        bm.save()
-        base_changed = True
-
+    for line in consolidated:
         # Welford (keyed by codi_client within the tenant).
         if model.garment_type_id:
             try:

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { taskTypes as taskTypesApi, plan as planApi, modelTasks as modelTaskItems } from '../api/endpoints'
+import { taskTypes as taskTypesApi, plan as planApi, modelTasks as modelTaskItems, timeAnalysis } from '../api/endpoints'
+import { taskTypeLabel } from '../utils/taskType'
 import { selS, primaryBtn } from './ui/buttons'
 
 // Wizard modal d'assignació de tasques (task_type × persona × data opcional) sobre 1..N models.
@@ -58,6 +59,8 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
   const [submitting, setSubmitting] = useState(false)
   const [submitResult, setSubmitResult] = useState(null)
   const [submitError, setSubmitError] = useState(null)
+  const [captureVals, setCaptureVals] = useState({})         // task_code → minuts (captura conscient)
+  const [capturing, setCapturing] = useState(false)
 
   // ── Càrrega de TaskType actius + tasques ja assignades dels models (mount) ───
   useEffect(() => {
@@ -170,12 +173,36 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
     planApi.assignBatch(payload)
       .then(r => {
         setSubmitResult(r.data)
-        setTimeout(() => { onSuccess?.(); onClose?.() }, 2000)
+        if (r.data.needs_estimate?.length) {
+          // Captura conscient: no tanquem; el PM entra els minuts que falten i es reintenta.
+          const init = {}
+          r.data.needs_estimate.forEach(ne => { init[ne.task_code] = '' })
+          setCaptureVals(init)
+        } else {
+          setTimeout(() => { onSuccess?.(); onClose?.() }, 2000)
+        }
       })
       .catch(err => {
         setSubmitError(err.response?.data?.error || t('taskassign.err_assign'))
       })
       .finally(() => setSubmitting(false))
+  }
+
+  // Desa les llavors capturades (origen=CAPTURA) i reintenta l'assignació.
+  const onCaptureAndRetry = () => {
+    const entries = submitResult?.needs_estimate || []
+    for (const ne of entries) {
+      const v = parseInt(captureVals[ne.task_code], 10)
+      if (!v || v <= 0) { setSubmitError(t('taskassign.capture_invalid')); return }
+    }
+    setCapturing(true)
+    setSubmitError(null)
+    Promise.all(entries.map(ne =>
+      timeAnalysis.captureSeed({ task_code: ne.task_code, minuts: parseInt(captureVals[ne.task_code], 10) })
+    ))
+      .then(() => { setSubmitResult(null); setCaptureVals({}); onConfirm() })
+      .catch(err => setSubmitError(err.response?.data?.error || t('taskassign.err_capture')))
+      .finally(() => setCapturing(false))
   }
 
   const ttNom = (code) => taskTypes.find(x => x.code === code)?.name || code
@@ -227,7 +254,7 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
                     return (
                       <option key={tt.id} value={tt.id} disabled={isBlocked}
                         style={isBlocked ? { color: 'var(--text-muted)' } : undefined}>
-                        {tt.code} · {tt.name}{isBlocked ? ` ${t('taskassign.already_assigned')}` : ''}
+                        {tt.code} · {taskTypeLabel(t, tt.code, tt.name)}{isBlocked ? ` ${t('taskassign.already_assigned')}` : ''}
                       </option>
                     )
                   })}
@@ -349,7 +376,40 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
 
           {/* ── ZONA D — Resum / Resultats ── */}
           <div style={{ marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-            {submitResult ? (
+            {submitResult?.needs_estimate?.length ? (
+              // Captura conscient del PM: falten estimacions per poder planificar.
+              <div>
+                <div style={{
+                  fontSize: 'var(--fs-body)', padding: '8px 12px', borderRadius: 6, marginBottom: 10,
+                  background: 'var(--warn-bg)', color: 'var(--warn)',
+                }}>
+                  <i className="ti ti-clock-question" />{' '}
+                  {t('taskassign.needs_estimate_intro', { count: submitResult.needs_estimate.length })}
+                </div>
+                <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                  {submitResult.needs_estimate.map(ne => (
+                    <div key={ne.task_code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                      <span style={{ flex: 1, fontSize: 'var(--fs-body)', fontWeight: 500 }}>
+                        {taskTypeLabel(t, ne.task_code)}
+                        <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 'var(--fs-label)' }}>{ne.fase}</span>
+                      </span>
+                      <input type="number" min="1" inputMode="numeric"
+                        value={captureVals[ne.task_code] ?? ''}
+                        onChange={e => setCaptureVals(v => ({ ...v, [ne.task_code]: e.target.value }))}
+                        placeholder={t('taskassign.minutes')}
+                        style={{ ...selS, width: 110 }} />
+                      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{t('taskassign.min_abbr')}</span>
+                    </div>
+                  ))}
+                </div>
+                {submitError && (
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--err)', marginTop: 8 }}>{submitError}</div>
+                )}
+                <button onClick={onCaptureAndRetry} disabled={capturing} style={{ ...primaryBtn, marginTop: 12 }}>
+                  {capturing ? t('taskassign.capturing') : t('taskassign.capture_save_retry')}
+                </button>
+              </div>
+            ) : submitResult ? (
               // Resultats post-submit (visibles 2s abans de tancar)
               <div>
                 <div style={{

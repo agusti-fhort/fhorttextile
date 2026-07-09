@@ -11,6 +11,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework import status
 
+from fhort.pom.size_labels import canonical_size_label
+
 
 def normalize_size_run(raw):
     """Convert any size_run format to 'XXS·XS·S·M·L·XL'."""
@@ -168,16 +170,29 @@ def _parse_excel_poms(file_bytes: bytes):
                 continue
 
             header = rows[header_idx]
-            # Columnes de talla: col E (índex 4) endavant, excloent toleràncies.
+            # Columnes de talla: col E (índex 4) endavant. B2: les columnes de tolerància
+            # ('tol') ja NO es descarten — es capturen com a tol_minus/tol_plus. Una sola
+            # columna 'Tol' (sense signe) → mateix valor a minus i plus (simètrica).
             size_cols = []  # [(col_index, label)]
+            tol_minus_ci = tol_plus_ci = tol_single_ci = None
             for ci in range(4, len(header)):
                 label = header[ci]
                 if label is None or str(label).strip() == '':
                     continue
-                if 'tol' in str(label).strip().lower():
+                low = str(label).strip().lower()
+                if 'tol' in low:
+                    if '-' in low or 'min' in low:
+                        tol_minus_ci = ci
+                    elif '+' in low or 'plus' in low or 'max' in low:
+                        tol_plus_ci = ci
+                    else:
+                        tol_single_ci = ci
                     continue
                 size_cols.append((ci, str(label).strip()))
             talles = [lbl for _, lbl in size_cols]
+
+            def _cell(row, ci):
+                return _num(row[ci]) if (ci is not None and ci < len(row)) else None
 
             poms = []
             for row in rows[header_idx + 1:]:
@@ -190,12 +205,22 @@ def _parse_excel_poms(file_bytes: bytes):
                         nv = _num(row[ci])
                         if nv is not None:
                             values[lbl] = nv
+                tm = _cell(row, tol_minus_ci)
+                tp = _cell(row, tol_plus_ci)
+                ts = _cell(row, tol_single_ci)
+                if ts is not None:
+                    if tm is None:
+                        tm = ts
+                    if tp is None:
+                        tp = ts
                 desc = row[2] if len(row) > 2 and row[2] is not None else ''
                 poms.append({
                     'codi_fitxa': str(a).strip(),
                     'descripcio': str(desc).strip(),
                     'dim': _num(row[3]) if len(row) > 3 else None,
                     'values': values,
+                    'tol_minus': tm,
+                    'tol_plus': tp,
                 })
             return poms, talles
     finally:
@@ -413,12 +438,15 @@ def import_session_talles_view(request, token):
     system_labels = []
     if model.size_system_id:
         system_labels = list(model.size_system.talles.values_list('etiqueta', flat=True))
-    destins = {_norm_label(x) for x in configurat} | {_norm_label(x) for x in system_labels}
-    destins |= {_norm_label(v) for v in mapeig.values()}
-    mapeig_norm = {_norm_label(k) for k in mapeig.keys()}
+    # B1: comparem en forma CANÒNICA (XXL≡2XL) perquè una etiqueta del document que difereix
+    # només en la notació X-repetida trobi el seu destí al run del tenant. El mapeig manual es
+    # manté com a escapatòria; el guardat de l'etiqueta tenant es fa al reconcile d'import.
+    destins = {canonical_size_label(x) for x in configurat} | {canonical_size_label(x) for x in system_labels}
+    destins |= {canonical_size_label(v) for v in mapeig.values()}
+    mapeig_norm = {canonical_size_label(k) for k in mapeig.keys()}
 
     sense_desti = [t for t in talles_sel
-                   if _norm_label(t) not in destins and _norm_label(t) not in mapeig_norm]
+                   if canonical_size_label(t) not in destins and canonical_size_label(t) not in mapeig_norm]
     ready = bool(talles_sel) and not sense_desti
 
     rc = dict(session.run_conciliat or {})
@@ -480,91 +508,87 @@ _POM_SYNONYMS = {
     'lining length at center front':   'lining length',
     'lining length at center back':    'lining length',
     'lining bottom width along hem':   'lining hem width',
-    # NEW — Brownie positional POMs (override the previous ones on collision, per spec
-    # S19; duplicate keys make the last one win).
-    'waist position':                  'waist position distance',
-    'hip position':                    'hip position distance',
-    'straight back body length':       'body length back',
-    'front armhole curve':             'armhole',
-    'collar width':                    'neck tie length',
-    'body zip length':                 'zip',
-    'lining length at center front':   'lining',
-    'lining length at center back':    'lining',
-    'lining bottom width along hem':   'lining bottom',
+    # El bloc "Brownie positional POMs" (nomenclatura del customer BRW disfressada de sinònim
+    # canònic) s'ha MIGRAT a CustomerPOMAlias (origen=MIGRACIO), migració pom 0031 (N2-4a,
+    # DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08). Els sinònims genèrics d'aquest diccionari es
+    # conserven; el matcher llegeix els àlies com a estratègia (a) prioritària (N3 fet, veure
+    # find_pom_master més avall).
 }
 
 
-def find_pom_master(code, description):
+def find_pom_master(code, description, customer=None):
     """
     Find the most suitable POMMaster.
     Return (pom_master, match_type, confidence)
     confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'NO_MATCH'
+
+    ORDRE (DIAGNOSI_NOMENCLATURA_ALIES_2026-07-08, N3):
+      (a) ÀLIES exacte del `customer` (CustomerPOMAlias) → HIGH. Requereix `customer`; si és None
+          (context sense client) se salta. El `client_code` d'un àlies pot ser un codi posicional
+          (LOS 'H.6') O el text de la descripció del client (BRW 'front armhole curve') → es prova
+          contra `code` I contra `description`.
+      (b) descripció + sinònims canònics → HIGH/MEDIUM (nom_client, POMGlobal.nom_en).
+      (c) codi numèric + 'lining' → MEDIUM.
+      (d) FALLBACK TRANSITORI (deprecació — objectiu de la diagnosi: treure `codi_client` del
+          matcher): `codi_client` exacte i root-prefix → LOW. Amb el llindar d'auto-vinculació
+          (c2b19bd) un LOW NO auto-vincula: cau a pendents amb el suggeriment visible. Abans
+          anaven PRIMER amb HIGH; ara són l'últim recurs, per sota de l'àlies i la descripció.
     """
-    from fhort.pom.models import POMMaster
+    from fhort.pom.models import POMMaster, CustomerPOMAlias
 
-    # Strategy 1 — exact match by codi_client. Va PRIMER: un codi_client EXACTE sempre ha de
-    # guanyar un match per prefix (p.ex. 'SH DR' → 'SH DR', no 'SH'). Abans anava DESPRÉS del
-    # root-prefix i 'SH DR' es resolia erròniament a 'SH' (col·lisió que perdia 'SH DR').
-    if code:
-        pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).first()
-        if pm:
-            return pm, 'exact_code', 'HIGH'
-
-    # Strategy 0 — codis posicionals lletra+dígit (D1, G2s...): sense exacte, prova el root de
-    # lletres inicials. DESPRÉS de l'exacte perquè no segresti codis amb sufix com 'SH DR'.
-    if code:
-        m = _re.match(r'^([A-Za-z]+)', code)
-        if m and m.group(1) != code:
-            root = m.group(1)
-            pm = POMMaster.objects.filter(codi_client__iexact=root, actiu=True).first()
-            if pm:
-                return pm, 'root_code_match', 'MEDIUM'
-
-    if not description:
-        return None, 'no_match', 'NO_MATCH'
-
-    desc_clean = description.lower().strip()
+    desc_clean = (description or '').lower().strip()
     desc_base = _re.sub(r'\s*[\(\[].*?[\)\]]', '', desc_clean).strip()
 
-    # Strategy 2 — explicit synonym (curated table).
-    syn = _POM_SYNONYMS.get(desc_clean) or _POM_SYNONYMS.get(desc_base)
-    if syn:
+    # (a) Àlies de nomenclatura del client. Va PRIMER: un codi/descripció reclamat explícitament
+    # per un àlies d'AQUEST customer mana sobre qualsevol heurística de descripció.
+    if customer is not None:
+        for key in (k for k in (code, desc_clean) if k):
+            alias = (CustomerPOMAlias.objects
+                     .filter(customer=customer, client_code__iexact=key)
+                     .select_related('pom').first())
+            if alias and alias.pom.actiu:
+                return alias.pom, 'alias_match', 'HIGH'
+
+    if desc_clean:
+        # Strategy 2 — explicit synonym (curated table).
+        syn = _POM_SYNONYMS.get(desc_clean) or _POM_SYNONYMS.get(desc_base)
+        if syn:
+            for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
+                nom = (pm.nom_client or '').lower()
+                if syn in nom or nom in syn:
+                    return pm, 'synonym_match', 'HIGH'
+            for pm in POMMaster.objects.select_related('pom_global').filter(
+                pom_global__isnull=False, actiu=True,
+            ):
+                nom_en = (pm.pom_global.nom_en or '').lower()
+                if syn in nom_en or nom_en in syn:
+                    return pm, 'synonym_global_match', 'HIGH'
+
+        # Strategy 3 — match by nom_client (exact=HIGH, contains=MEDIUM).
         for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
             nom = (pm.nom_client or '').lower()
-            if syn in nom or nom in syn:
-                return pm, 'synonym_match', 'HIGH'
+            if desc_base and len(desc_base) > 3:
+                if desc_base == nom:
+                    return pm, 'exact_description', 'HIGH'
+                if desc_base in nom or nom in desc_base:
+                    return pm, 'description_match', 'MEDIUM'
+
+        # Strategy 4 — match by POMGlobal nom_en / abbreviation.
         for pm in POMMaster.objects.select_related('pom_global').filter(
             pom_global__isnull=False, actiu=True,
         ):
-            nom_en = (pm.pom_global.nom_en or '').lower()
-            if syn in nom_en or nom_en in syn:
-                return pm, 'synonym_global_match', 'HIGH'
+            pg = pm.pom_global
+            nom_en = (pg.nom_en or '').lower()
+            abbrev = (pg.abbreviation or '').lower()
+            if desc_base and len(desc_base) > 3:
+                if desc_base == nom_en:
+                    return pm, 'global_exact', 'HIGH'
+                if desc_base in nom_en or nom_en in desc_base:
+                    return pm, 'global_name_match', 'MEDIUM'
+            if code and code.lower() == abbrev:
+                return pm, 'abbreviation_match', 'HIGH'
 
-    # Strategy 3 — match by nom_client (exact=HIGH, contains=MEDIUM).
-    for pm in POMMaster.objects.select_related('pom_global').filter(actiu=True):
-        nom = (pm.nom_client or '').lower()
-        if desc_base and len(desc_base) > 3:
-            if desc_base == nom:
-                return pm, 'exact_description', 'HIGH'
-            if desc_base in nom or nom in desc_base:
-                return pm, 'description_match', 'MEDIUM'
-
-    # Strategy 4 — match by POMGlobal nom_en / abbreviation.
-    for pm in POMMaster.objects.select_related('pom_global').filter(
-        pom_global__isnull=False, actiu=True,
-    ):
-        pg = pm.pom_global
-        nom_en = (pg.nom_en or '').lower()
-        abbrev = (pg.abbreviation or '').lower()
-        if desc_base and len(desc_base) > 3:
-            if desc_base == nom_en:
-                return pm, 'global_exact', 'HIGH'
-            if desc_base in nom_en or nom_en in desc_base:
-                return pm, 'global_name_match', 'MEDIUM'
-        if code and code.lower() == abbrev:
-            return pm, 'abbreviation_match', 'HIGH'
-
-    # Strategy 5 — pure numeric codes → lining.
+    # (c) Strategy — pure numeric codes → lining.
     if code and code.isdigit():
         desc_lower = (description or '').lower()
         if 'lining' in desc_lower:
@@ -572,6 +596,26 @@ def find_pom_master(code, description):
                 nom = (pm.nom_client or '').lower()
                 if 'lining' in nom:
                     return pm, 'numeric_lining_match', 'MEDIUM'
+
+    # (d) FALLBACK TRANSITORI — `codi_client` exacte. Abans era la 1a estratègia amb HIGH; ara és
+    # penúltim recurs amb LOW (deprecació): l'àlies i la descripció manen. Un exacte que arriba
+    # aquí no ha resolt per àlies ni per descripció → suggeriment feble, no auto-vinculació.
+    if code:
+        pm = POMMaster.objects.filter(codi_client__iexact=code, actiu=True).first()
+        if pm:
+            return pm, 'legacy_code_match', 'LOW'
+
+    # (d) FALLBACK TRANSITORI (ÚLTIM RECURS) — root de lletres inicials per a codis posicionals
+    # (D1, G2s → D, G). NO es rooteja la nomenclatura d'AGRUPACIÓ 'LLETRA.NÚMERO' (H.6, G.3, J.2):
+    # la lletra és un grup del document, no un codi de mesura, i col·lapsaria a un POM d'una sola
+    # lletra aliè. Confiança LOW: darrer recurs, no una vinculació segura.
+    if code and not _re.match(r'^[A-Za-z]+\.\d', code):
+        m = _re.match(r'^([A-Za-z]+)', code)
+        if m and m.group(1) != code:
+            root = m.group(1)
+            pm = POMMaster.objects.filter(codi_client__iexact=root, actiu=True).first()
+            if pm:
+                return pm, 'root_code_match', 'LOW'
 
     return None, 'no_match', 'NO_MATCH'
 
@@ -667,9 +711,11 @@ def _extraccio_via_excel(session, api_key):
                 pass
 
     # 7-8. Matching POM + format IDÈNTIC al de la via Opus.
+    # N3: customer del model per resoldre els àlies de nomenclatura del client (paritat amb Opus).
+    import_customer = session.model.customer if session.model_id else None
     poms_extrets = []
     for i, p in enumerate(raw_poms):
-        pm, match_type, confidence = find_pom_master(p['codi_fitxa'], p['descripcio'])
+        pm, match_type, confidence = find_pom_master(p['codi_fitxa'], p['descripcio'], customer=import_customer)
         poms_extrets.append({
             'codi_fitxa': p['codi_fitxa'],
             'descripcio': p['descripcio'],
@@ -679,6 +725,8 @@ def _extraccio_via_excel(session, api_key):
             'match_type': match_type,
             'confidence': confidence,
             'values': p['values'],
+            'tol_minus': p.get('tol_minus'),   # B2: tolerància del document (None si no en porta)
+            'tol_plus': p.get('tol_plus'),
             'actiu': True,
             'ordre': i,
         })
@@ -809,12 +857,16 @@ def import_session_extraccio_view(request, token):
     measurements = extracted.get('measurements', []) or []
 
     # Matching POM per fila.
+    # N3 (DIAGNOSI_NOMENCLATURA_ALIES): customer del model → el matcher resol els àlies de
+    # nomenclatura d'AQUEST client abans que per descripció. Si el model no en té, customer=None
+    # (comportament previ: resol per descripció).
+    import_customer = session.model.customer if session.model_id else None
     poms_extrets = []
     n_low, n_nomatch = 0, 0
     for i, msr in enumerate(measurements):
         codi_fitxa = (msr.get('client_code') or msr.get('code') or '').strip()
         descripcio = (msr.get('description') or '').strip()
-        pm, match_type, confidence = find_pom_master(codi_fitxa, descripcio)
+        pm, match_type, confidence = find_pom_master(codi_fitxa, descripcio, customer=import_customer)
         if confidence == 'LOW':
             n_low += 1
         if pm is None:
@@ -828,6 +880,8 @@ def import_session_extraccio_view(request, token):
             'match_type': match_type,
             'confidence': confidence,
             'values': msr.get('values') or {},
+            'tol_minus': msr.get('tol_minus'),   # B2: tolerància del document (None si absent)
+            'tol_plus': msr.get('tol_plus'),
             'actiu': bool(pm),  # per defecte només actius els que tenen match
             'ordre': i,
         })
@@ -1211,9 +1265,24 @@ def import_session_confirmar_view(request, token):
         if run_detectat and base_detectada and target_codi:
             mr = match_size_system(target_codi, run_detectat, base_detectada)
             if mr.ok and mr.score == 1.0 and mr.base_ok:
+                # B1: el match és canònic (XXL≡2XL) però el model ha de parlar SEMPRE la llengua
+                # del tenant → traduïm cada etiqueta del document a la SizeDefinition del sistema,
+                # i remapem les claus de `valors` en el mateix moviment perquè el run, la base i
+                # els valors quedin alineats (grading llegeix el run internament).
+                from fhort.pom.models import SizeDefinition
+                _tenant_labels = list(SizeDefinition.objects.filter(size_system=mr.size_system)
+                                      .values_list('etiqueta', flat=True))
+                _canon_to_tenant = {canonical_size_label(e): e for e in _tenant_labels}
+
+                def _to_tenant(lbl):
+                    return _canon_to_tenant.get(canonical_size_label(lbl), lbl)
+
+                run_tenant = [_to_tenant(l) for l in run_detectat]
+                base_detectada = _to_tenant(base_detectada)
+                valors = {pid: {_to_tenant(k): v for k, v in d.items()} for pid, d in valors.items()}
                 model.size_system = mr.size_system
                 model.base_size_label = base_detectada
-                model.size_run_model = '·'.join(run_detectat)
+                model.size_run_model = '·'.join(run_tenant)
                 model.save(update_fields=['size_system', 'base_size_label', 'size_run_model'])
             else:
                 session.avisos = (session.avisos or []) + [
@@ -1246,25 +1315,39 @@ def import_session_confirmar_view(request, token):
 
         n_bm = 0
         confirmed_pom_ids = []
+        from fhort.pom.services import maybe_learn_customer_alias
         for i, p in enumerate(poms):
             pid = int(p['pom_master_id'])
             pm = POMMaster.objects.filter(id=pid).first()
             if not pm:
                 continue
             base_val = valors.get(pid, {}).get(base_size)
+            _defaults = {
+                'base_value_cm': base_val,
+                'nom_fitxa': p.get('codi_fitxa') or '',
+                'origen': 'IMPORTED',
+                'is_active': True,
+                'ordre': i,
+                'notes': p.get('descripcio') or '',
+            }
+            # B2: només escrivim tolerància si el document en porta (asimètrica, contracte de
+            # Size Check). Si no en porta, NO incloem les claus → null → fallback al catàleg.
+            if p.get('tol_minus') is not None:
+                _defaults['tolerancia_minus'] = p['tol_minus']
+            if p.get('tol_plus') is not None:
+                _defaults['tolerancia_plus'] = p['tol_plus']
             BaseMeasurement.objects.update_or_create(
-                model=model, pom=pm,
-                defaults={
-                    'base_value_cm': base_val,
-                    'nom_fitxa': p.get('codi_fitxa') or '',
-                    'origen': 'IMPORTED',
-                    'is_active': True,
-                    'ordre': i,
-                    'notes': p.get('descripcio') or '',
-                },
+                model=model, pom=pm, defaults=_defaults,
             )
             confirmed_pom_ids.append(pid)
             n_bm += 1
+
+            # Biblioteca del client: si el tècnic ha resolt aquest codi de document
+            # manualment (el matcher no l'encerta sol), sembra un CustomerPOMAlias
+            # reutilitzable per a futures importacions. NO toca cap model existent.
+            maybe_learn_customer_alias(
+                model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
+                origen='IMPORT')
 
         # ── 2. Identificador del contenidor SF (NO es crea encara: si hi ha conflicte de grading
         # sense decisió, retornem 409 + rollback i NO volem deixar cap SizeFitting orfe).

@@ -25,3 +25,9 @@ httpx==0.28.1
 openpyxl==3.1.5
 Pillow==12.2.0
 python-dotenv==1.2.2
+
+# --- Documents comercials (B2): generació de PDF (pure-python, cap dependència nativa) ---
+reportlab==4.5.1
+# Normalització del logo de l'emissor: rasteritza SVG → PNG per a la capçalera dels documents.
+# Depèn de la lib nativa libcairo2 (ja al sistema); només s'importa a l'upload del logo.
+cairosvg==2.9.0

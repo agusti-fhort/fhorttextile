@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { taskTypes } from '../api/endpoints';
 import i18n from '../i18n';
 import { formatMinutes } from '../utils/format';
+import { taskTypeLabel } from '../utils/taskType';
 
 const API = import.meta.env.VITE_API_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('access_token')}` });
@@ -136,7 +137,7 @@ export default function RegistreActivitat() {
                    background:'var(--bg-card)', color:'var(--text-main)' }}>
           <option value="">{t('registre.all_tasks', 'Totes les tasques')}</option>
           {taskTypeList.map(tt => (
-            <option key={tt.id} value={tt.id}>{tt.name || tt.code}</option>
+            <option key={tt.id} value={tt.id}>{taskTypeLabel(t, tt.code, tt.name)}</option>
           ))}
         </select>
 
