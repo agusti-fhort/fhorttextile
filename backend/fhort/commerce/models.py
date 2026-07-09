@@ -625,10 +625,16 @@ class DeliveryNote(AbstractDocument):
     DN_STATUS_CHOICES = [
         ('DRAFT', 'Draft'),
         ('ISSUED', 'Issued'),
+        ('INVOICED', 'Invoiced'),   # v2 — presentat al client i acceptat (marcatge individual/massiu)
     ]
     status = models.CharField(max_length=20, choices=DN_STATUS_CHOICES, default='DRAFT')
     issued_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
                                   null=True, blank=True, related_name='delivery_notes_issued')
+    # v2 — traça del pas ISSUED→INVOICED ("presentat al client, OK"). NO és la factura (B5):
+    # és l'avançada d'estat. invoiced_at/by null mentre l'albarà no s'ha marcat com facturat.
+    invoiced_at = models.DateField(null=True, blank=True)
+    invoiced_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='delivery_notes_invoiced')
 
     class Meta:
         ordering = ['-created_at']
@@ -648,8 +654,10 @@ class DeliveryNote(AbstractDocument):
         de Quote/SalesOrder, NO regenera venciments: l'albarà no en porta (decisió Agus). Les
         línies DEDUCTION (line_total negatiu) resten soles de la base agregada del seu tipus."""
         from .services import compute_document_totals
+        # v2 — els totals es calculen SOBRE LÍNIES VISIBLES. Les amagades (visible=False) existeixen
+        # a BD per traçabilitat/cost però no compten al document ni al PDF.
         self.subtotal, self.tax_amount, self.total, self.tax_breakdown = compute_document_totals(
-            self, self.lines.all())
+            self, self.lines.filter(visible=True))
         self.save(update_fields=['subtotal', 'tax_amount', 'total', 'tax_breakdown', 'updated_at'])
 
     def delete(self, *args, **kwargs):
@@ -696,6 +704,14 @@ class DeliveryNoteLine(AbstractDocumentLine):
     # perquè el redisseny de l'albarà v2 la pugui explotar. null = línia sense temps associat.
     internal_minutes = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
                                             help_text="Minuts interns reals; fora del document (mai al PDF).")
+    # v2 — visibilitat al document. L'ull de la UI la commuta. Les línies NO visibles existeixen a
+    # BD (traçabilitat, cost) però NO compten als totals ni surten al PDF (recalculate_totals i el
+    # PDF filtren visible=True). "No cobrar" = línia a preu 0 amb ull obert; "no mostrar" = ull tancat.
+    visible = models.BooleanField(default=True)
+    # v2 — model d'origen de la línia, per compondre l'albarà agrupat per MODEL sense dependre de la
+    # cadena de FK (una tasca pot tenir work_order=NULL). S'omple del model_task o manualment.
+    model = models.ForeignKey('models_app.Model', on_delete=models.SET_NULL, null=True, blank=True,
+                              related_name='delivery_note_lines')
 
     class Meta:
         ordering = ['delivery_note', 'position', 'id']
