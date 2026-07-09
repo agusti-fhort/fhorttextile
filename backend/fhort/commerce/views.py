@@ -334,6 +334,19 @@ class DeliveryNoteViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixin
             return [IsAuthenticated()]
         return super().get_permissions()
 
+    @action(detail=False, methods=['get'])
+    def billable(self, request):
+        """GET commerce/delivery-notes/billable/?customer=<id> — safata d'albaranables (v2)
+        agrupada per model (tasques Done + extres + deduccions + despeses sense línia d'albarà).
+        Gate CONFIGURE. Parteix de ModelTask: veu també la feina amb work_order=NULL (R2)."""
+        from fhort.tasks.models import Customer
+        customer_id = request.query_params.get('customer')
+        customer = Customer.objects.filter(pk=customer_id).first()
+        if customer is None:
+            return Response({'detail': 'Client no trobat.'}, status=status.HTTP_404_NOT_FOUND)
+        from .services import get_billable_items
+        return Response({'customer': customer.id, 'groups': get_billable_items(customer)})
+
     @action(detail=False, methods=['post'])
     def generate(self, request):
         """POST commerce/delivery-notes/generate/ — genera un albarà DRAFT amb línies proposades

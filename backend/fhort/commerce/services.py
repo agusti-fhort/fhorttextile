@@ -420,6 +420,105 @@ def issue_delivery_note(delivery_note, user=None):
     return delivery_note
 
 
+# ── Albarà v2 — safata d'albaranables per model ──────────────────────────────────────────
+
+def _model_header(model):
+    """Capçalera de bloc-model per a la safata i la fitxa (camps definitoris, diagnosi BLOC 2+3)."""
+    if model is None:
+        return {'id': None, 'codi_intern': '', 'codi_client': '', 'nom_prenda': '',
+                'collection': '', 'temporada': '', 'any': None}
+    return {
+        'id': model.id,
+        'codi_intern': model.codi_intern,
+        'codi_client': model.codi_client or '',
+        'nom_prenda': model.nom_prenda or '',
+        'collection': model.collection or '',
+        'temporada': model.temporada or '',
+        'any': model.any,
+    }
+
+
+def get_billable_items(customer):
+    """Safata d'albaranables d'un client (v2), agrupada per MODEL. Parteix de ModelTask (NO de
+    WorkOrder): així recull també la feina amb work_order=NULL que el flux v1 no podia veure (R2
+    de la diagnosi). Un ítem surt de la safata quan JA té una línia d'albarà (DRAFT o ISSUED):
+    `delivery_note_lines__isnull=True` evita el doble comptatge; esborrar el DRAFT (CASCADE de
+    línies) el retorna. NO filtra per `facturable` (descartat): "no cobrar" es decideix a la línia
+    (preu 0). Lectura pura, no persisteix res. Els ítems sense model resoluble van a un bloc
+    `model=None` (no es descarten silenciosament)."""
+    from django.db.models import Sum
+    from fhort.tasks.models import ModelTask
+    from .models import WorkOrderAdjustment, Expense
+
+    groups = {}  # key (model_id o None) -> {'model': header, 'items': [...]}
+
+    def _bucket(model):
+        key = model.id if model is not None else None
+        g = groups.get(key)
+        if g is None:
+            g = {'model': _model_header(model), 'items': []}
+            groups[key] = g
+        return g
+
+    # TASK — ModelTask Done sense línia d'albarà (el model FK mai és null).
+    for t in (ModelTask.objects
+              .filter(model__customer=customer, status='Done', delivery_note_lines__isnull=True)
+              .select_related('task_type', 'model', 'work_order')):
+        wo = t.work_order
+        if wo is not None and wo.kind == 'ORDER':
+            price = Decimal(str((wo.price_snapshot or {}).get('unit_price') or '0')).quantize(_CENT)
+        else:
+            price = Decimal('0.00')   # COLLECTOR o work_order=NULL: el Salva posa preu en DRAFT
+        minutes = t.timers.aggregate(m=Sum('minuts'))['m'] or 0
+        _bucket(t.model)['items'].append({
+            'kind': 'TASK', 'ref': t.task_type.code,
+            'description': f"{t.task_type.name} · {t.model.codi_intern}",
+            'proposed_qty': str(Decimal('1.00')), 'proposed_unit': None,
+            'proposed_price': str(price), 'internal_minutes': str(Decimal(minutes)),
+            'source_dates': {'started_at': t.started_at.isoformat() if t.started_at else None,
+                             'finished_at': t.finished_at.isoformat() if t.finished_at else None},
+            'model_task_id': t.id, 'work_order_id': wo.id if wo else None,
+        })
+
+    # EXTRA / DEDUCTION — WorkOrderAdjustment sense línia, via model_task.model o wo.model.
+    for adj in (WorkOrderAdjustment.objects
+                .filter(work_order__customer=customer, kind__in=['EXTRA_BILL', 'DEDUCTION'],
+                        delivery_note_lines__isnull=True)
+                .select_related('work_order__model', 'model_task__model')):
+        model = (adj.model_task.model if adj.model_task_id else None) or adj.work_order.model
+        if adj.kind == 'EXTRA_BILL':
+            kind, price = 'EXTRA', Decimal(adj.amount or 0).quantize(_CENT)
+        else:
+            kind, price = 'DEDUCTION', (-abs(Decimal(adj.amount or 0))).quantize(_CENT)
+        _bucket(model)['items'].append({
+            'kind': kind, 'ref': adj.kind,
+            'description': adj.description or ('Extra' if kind == 'EXTRA' else 'Deducció'),
+            'proposed_qty': str(Decimal('1.00')), 'proposed_unit': None,
+            'proposed_price': str(price), 'internal_minutes': None,
+            'source_dates': {'started_at': None,
+                             'finished_at': adj.resolved_at.isoformat() if adj.resolved_at else None},
+            'adjustment_id': adj.id, 'work_order_id': adj.work_order_id,
+        })
+
+    # EXPENSE — Expense sense línia, via wo.model. Preu = sale_price, qty = quantity.
+    for exp in (Expense.objects
+                .filter(work_order__customer=customer, delivery_note_lines__isnull=True)
+                .select_related('work_order__model', 'product')):
+        _bucket(exp.work_order.model)['items'].append({
+            'kind': 'EXPENSE', 'ref': exp.product.code if exp.product_id else None,
+            'description': exp.description or (exp.product.name if exp.product_id else 'Despesa'),
+            'proposed_qty': str(Decimal(exp.quantity or 0).quantize(_CENT)), 'proposed_unit': None,
+            'proposed_price': str(Decimal(exp.sale_price or 0).quantize(_CENT)),
+            'internal_minutes': None,
+            'source_dates': {'started_at': None,
+                             'finished_at': exp.incurred_at.isoformat() if exp.incurred_at else None},
+            'expense_id': exp.id, 'work_order_id': exp.work_order_id,
+        })
+
+    # Ordena per codi_intern (el bloc sense model, codi_intern='', queda primer).
+    return sorted(groups.values(), key=lambda g: g['model']['codi_intern'] or '')
+
+
 def apply_commercial_review(work_order, items, user=None):
     """Revisió COMERCIAL d'un WO tancat (B4b, decisió Agus 2026-07-08): el comercial fixa el
     PREU DE VENDA dels extres i deduccions. Acte posterior i separat del tancament del tècnic.
