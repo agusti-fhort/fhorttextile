@@ -93,8 +93,13 @@ class ItemFitxerViewSet(mixins.CreateModelMixin,
         """Descàrrega gated per capçalera Authorization."""
         return serve_fitxer(self.get_object())
 
+    # NOTA: aquí NO es posa `permission_classes=[AllowAny]` a l'@action (com sí fa
+    # ModelFitxerViewSet): aquest ViewSet sobreescriu get_permissions(), que decideix per
+    # `self.action` i mai llegeix self.permission_classes → seria codi mort i una trampa de
+    # manteniment. `authentication_classes=[]` sí que hi va: get_authenticators() no està
+    # sobreescrit i llegeix l'atribut en temps real.
     @action(detail=True, methods=['get'], url_path='download-signed',
-            permission_classes=[AllowAny], authentication_classes=[])
+            authentication_classes=[])
     def download_signed(self, request, pk=None):
         """Descàrrega signada (D13). Vegeu ModelFitxerViewSet.download_signed."""
         token = request.query_params.get('token') or ''

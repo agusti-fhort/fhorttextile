@@ -42,8 +42,12 @@ class ItemFitxerSerializer(serializers.ModelSerializer):
     class Meta:
         model = ItemFitxer
         fields = '__all__'
-        read_only_fields = ('data_pujada', 'versio', 'is_current', 'checksum',
-                            'mimetype', 'mida_bytes', 'pujat_per')
+        # TOT read-only: l'escriptura la governa save_item_file (via ViewSet.create), mai el
+        # serializer. Amb `garment_type_item`/`versio_anterior` escrivibles, un futur PATCH
+        # podria reencadenar un fitxer a un ALTRE item saltant-se el guard cross-item de create().
+        read_only_fields = ('data_pujada', 'versio', 'is_current', 'checksum', 'mimetype',
+                            'mida_bytes', 'pujat_per', 'garment_type_item', 'versio_anterior',
+                            'fitxer', 'nom_fitxer', 'tipus')
 
     def get_download_url(self, obj):
         from .services_fitxers import ITEM_DOWNLOAD_SALT
