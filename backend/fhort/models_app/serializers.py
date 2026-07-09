@@ -4,10 +4,31 @@ from .models import BaseMeasurement, Contracte, LiniaContracte, Model, ModelFitx
 
 
 class ModelFitxerSerializer(serializers.ModelSerializer):
+    download_url = serializers.SerializerMethodField()
+
     class Meta:
         model = ModelFitxer
         fields = '__all__'
         read_only_fields = ('data_pujada',)
+
+    def get_download_url(self, obj):
+        """URL absoluta i signada (D13) cap a la descàrrega gated.
+
+        `<a href>` i `<img src>` no poden portar Authorization; el permís viatja al token,
+        que només rep qui ja s'ha autenticat per llegir aquesta fila. Sense `request` al
+        context no es pot construir una URL absoluta → None (mateix patró que _asset_urls,
+        ftt_document_views.py:40-46).
+        """
+        from django.core import signing
+
+        from .services_fitxers import DOWNLOAD_SALT
+
+        request = self.context.get('request')
+        if request is None or not obj.fitxer:
+            return None
+        token = signing.dumps(obj.id, salt=DOWNLOAD_SALT)
+        return request.build_absolute_uri(
+            f'/api/v1/model-fitxers/{obj.id}/download-signed/?token={token}')
 
 
 class ModelListSerializer(serializers.ModelSerializer):

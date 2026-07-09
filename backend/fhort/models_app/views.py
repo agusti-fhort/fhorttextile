@@ -2,10 +2,10 @@ import datetime
 from decimal import Decimal, InvalidOperation
 
 from django.db import connection, transaction
-from rest_framework import viewsets
+from rest_framework import mixins, viewsets
 from rest_framework.decorators import api_view, parser_classes, permission_classes, action
 from rest_framework.parsers import FormParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
@@ -13,6 +13,7 @@ import django_filters
 
 from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
+from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
 from .serializers import (
     BaseMeasurementSerializer,
     ModelDetailSerializer,
@@ -132,12 +133,25 @@ class ModelViewSet(viewsets.ModelViewSet):
         return Response({'counts': counts, 'total': sum(counts.values())})
 
 
-class ModelFitxerViewSet(viewsets.ModelViewSet):
+class ModelFitxerFilter(django_filters.FilterSet):
+    """Eix únic `tipus` (S03a · P1). `?tipus__in=PATRO,ESCALAT` per als panells que
+    agrupen més d'un rol. `categoria` ja no és filtrable: és un eix deprecat i buit."""
+    tipus__in = django_filters.BaseInFilter(field_name='tipus', lookup_expr='in')
+
+    class Meta:
+        model = ModelFitxer
+        fields = ['model', 'tipus', 'enviat_ia', 'is_current', 'mimetype']
+
+
+class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet):
+    """Lectura (list/retrieve/versions) + esborrat. NO exposa create/update: l'ÚNICA via
+    d'escriptura és services_fitxers.save_model_file, que manté la invariant is_current
+    de la cadena de versions. El ViewSet genèric la saltava (S03a · P0.1)."""
     permission_classes = [IsAuthenticated]
     serializer_class = ModelFitxerSerializer
     queryset = ModelFitxer.objects.select_related('model', 'pujat_per').all()
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['model', 'categoria', 'tipus', 'enviat_ia', 'is_current', 'mimetype']
+    filterset_class = ModelFitxerFilter
     ordering_fields = ['data_pujada']
     ordering = ['-data_pujada']
 
@@ -148,6 +162,55 @@ class ModelFitxerViewSet(viewsets.ModelViewSet):
         chain = get_version_chain(self.get_object())
         serializer = self.get_serializer(chain, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        """GET /api/v1/model-fitxers/<id>/download/ — descàrrega GATED per Authorization.
+
+        Els bytes de /media/ els serveix nginx per `alias`, sense que Django hi intervingui:
+        no hi ha cap check d'autenticació ni de tenant. Aquest endpoint és la porta que sí
+        el fa. El queryset ja està acotat al schema del tenant per django-tenants.
+
+        Per a consumidors que NO poden posar capçaleres (<a href>, <img src>), vegeu
+        `download_signed` (D13).
+        """
+        from .services_fitxers import serve_model_file
+        return serve_model_file(self.get_object())
+
+    @action(detail=True, methods=['get'], url_path='download-signed',
+            permission_classes=[AllowAny], authentication_classes=[])
+    def download_signed(self, request, pk=None):
+        """GET /api/v1/model-fitxers/<id>/download-signed/?token=… — descàrrega SIGNADA (D13).
+
+        `<a href>` i `<img src>` no poden portar capçalera Authorization (el JWT viu a
+        localStorage). La porta és un token de curta vida (TTL_SIGNATURA) emès pel serializer
+        NOMÉS a qui ja s'ha autenticat per a llegir la fila. AllowAny és deliberat: el permís
+        el porta el token, no la sessió.
+
+        El tenant l'aïlla el Host (django-tenants), com a la resta de l'API → el token no
+        n'ha de portar cap. El payload és l'id: si el token d'un fitxer s'enganxa a la URL
+        d'un altre, no valida.
+
+        `?inline=1` → Content-Disposition: inline, per als previsualitzadors (<iframe> de PDF).
+        """
+        from django.core import signing
+        from django.http import HttpResponseForbidden
+
+        from .services_fitxers import serve_model_file
+
+        token = request.query_params.get('token') or ''
+        try:
+            signed_id = signing.loads(token, salt=DOWNLOAD_SALT, max_age=DOWNLOAD_TTL)
+        except signing.SignatureExpired:
+            return HttpResponseForbidden('Enllaç de descàrrega caducat.')
+        except signing.BadSignature:
+            return HttpResponseForbidden('Enllaç de descàrrega no vàlid.')
+
+        if str(signed_id) != str(pk):
+            return HttpResponseForbidden('El token no correspon a aquest fitxer.')
+
+        inline = request.query_params.get('inline') == '1'
+        return serve_model_file(self.get_object(), as_attachment=not inline)
 
 
 # D-12 — Watchpoints: advertències de text lliure que viatgen amb el model a través dels gates.
@@ -1076,10 +1139,10 @@ def upload_file_view(request, model_id):
 
     from .services_fitxers import save_model_file
 
-    # Contracte Finder: categoria/tipus opcionals (neutres si no es donen). Sense
-    # autoincrement per tipus — la versió la governa el servei via la cadena.
+    # Contracte Finder: `tipus` opcional (neutre si no es dona). Sense autoincrement per
+    # tipus — la versió la governa el servei via la cadena. `categoria` ja no s'accepta
+    # (eix deprecat, S03a · P1.2): el Finder no l'ha enviada mai.
     tipus = request.data.get('tipus') or None
-    categoria = request.data.get('categoria') or None
     nom = request.data.get('nom') or uploaded_file.name
 
     # versio_anterior_id opcional → encadena una nova versió d'un fitxer existent.
@@ -1095,7 +1158,6 @@ def upload_file_view(request, model_id):
     mf = save_model_file(
         model, uploaded_file,
         versio_anterior=versio_anterior,
-        categoria=categoria,
         tipus=tipus,
         origen='upload',
         nom=nom,
@@ -1109,7 +1171,6 @@ def upload_file_view(request, model_id):
         'id': mf.id,
         'nom_fitxer': mf.nom_fitxer,
         'tipus': mf.tipus,
-        'categoria': mf.categoria,
         'versio': mf.versio,
         'is_current': mf.is_current,
         'versio_anterior': mf.versio_anterior_id,

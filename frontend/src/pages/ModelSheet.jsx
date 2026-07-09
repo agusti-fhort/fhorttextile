@@ -1185,6 +1185,14 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
 const PREVIEW_IMG_RE = /\.(jpg|jpeg|png|svg|webp|gif)$/i
 const FILES_MONO = 'IBM Plex Mono, monospace'
 
+// D13: <img>/<iframe> no poden portar Authorization → URL signada de curta vida. `inline=1`
+// perquè el PDF es renderitzi a l'iframe en lloc de descarregar-se (Content-Disposition).
+// El regex de preview s'aplica al NOM del fitxer, mai a la URL: ara acaba en ?token=…
+function previewUrl(f) {
+  if (!f) return null
+  return f.download_url ? `${f.download_url}&inline=1` : (f.url_extern || null)
+}
+
 function fileExt(nom) {
   const m = (nom || '').match(/\.([a-z0-9]+)$/i)
   return m ? m[1].toLowerCase() : ''
@@ -1304,7 +1312,7 @@ function TabFiles({ modelId }) {
               <button type="button" onClick={() => setPopup(null)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-h2)' }}>✕</button>
             </div>
-            {PREVIEW_IMG_RE.test(popup.url || '') ? (
+            {PREVIEW_IMG_RE.test(popup.nom || '') ? (
               <img src={popup.url} alt={popup.nom}
                 style={{ maxWidth: '80vw', maxHeight: '80vh', objectFit: 'contain' }} />
             ) : (
@@ -1352,7 +1360,7 @@ function TabFiles({ modelId }) {
                       </span>
                     )}
                     <button type="button"
-                      onClick={() => setPopup({ url: v.fitxer || v.url, nom: v.nom_fitxer })}
+                      onClick={() => setPopup({ url: previewUrl(v), nom: v.nom_fitxer })}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                       <i className="ti ti-eye" aria-hidden="true" />
                     </button>
@@ -1422,7 +1430,7 @@ function TabFiles({ modelId }) {
           <div style={{ width: 340, flexShrink: 0 }}>
             {selected ? (
               <FileDetail key={selected.id} fitxer={selected}
-                onPreview={() => setPopup({ url: selected.fitxer || selected.url_extern || selected.url, nom: selected.nom_fitxer })}
+                onPreview={() => setPopup({ url: previewUrl(selected), nom: selected.nom_fitxer })}
                 onHistory={() => openHistory(selected)}
                 onNewVersion={file => handleUpload(file, selected.id)}
                 onEdit={() => navigate(`/models/${modelId}/ftt/${selected.id}`)}
@@ -1491,7 +1499,7 @@ function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onEdit, onDele
   // Document .ftt editable: el botó "Edita" obre l'editor de fitxa sobre aquest ModelFitxer.
   const isTechSheet = fitxer.tipus === 'TECHSHEET' || ext === 'ftt'
   const isEditable = isTechSheet
-  const url = fitxer.fitxer || fitxer.url_extern || fitxer.url
+  const url = previewUrl(fitxer)
   const mt = fitxer.mimetype || ''
   // Cascada: imatge → <img>; PDF → icona (no hi ha pdf.js, no rasteritzem); altres → icona.
   const isImg = (mt.startsWith('image/') || PREVIEW_IMG_RE.test(fitxer.nom_fitxer || '')) && url && !imgError

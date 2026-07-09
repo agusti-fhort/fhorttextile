@@ -127,33 +127,73 @@ def _decode_dataurl(src):
     return data, (m.group("mime") or "application/octet-stream")
 
 
+def _map_object_tree(obj, mapper):
+    """Aplica `mapper` a l'objecte i, recursivament, als seus `children`.
+
+    Mirall exacte de mapObjectTree (TechSheetEditor.jsx:152-156): els objectes de l'editor
+    són un ARBRE (grups amb fills), no una llista plana. Un recorregut pla es deixaria les
+    imatges niades dins de grups.
+    """
+    obj = mapper(dict(obj))
+    children = obj.get("children")
+    if isinstance(children, list):
+        obj["children"] = [_map_object_tree(c, mapper) for c in children]
+    return obj
+
+
+def _extract_inline_objects(objects, assets):
+    """Treu els `src` dataURL dels objectes (i dels seus fills) a `assets`, in-place al dict."""
+    def mapper(obj):
+        src = obj.get("src")
+        if isinstance(src, str) and src.startswith("data:"):
+            decoded = _decode_dataurl(src)
+            if decoded is not None:
+                data, mime = decoded
+                # sha16 del contingut: el mateix binari mai es duplica i re-desar és estable.
+                name = "%s.%s" % (_sha256(data)[:16], _MIME_EXT.get(mime, "bin"))
+                assets[name] = data
+                obj["src"] = ASSETS_PREFIX + name
+        return obj
+
+    return [_map_object_tree(o, mapper) for o in objects or []]
+
+
+def extract_document_assets(document_json):
+    """document.json → (document.json sense dataURL, assets:{nom->bytes}).   [S03a · P3]
+
+    Font ÚNICA de l'extracció inline→assets: hi criden el camí de PLANTILLES (v2_to_document)
+    i el de DOCUMENTS (services_ftt_document.save_document). Preserva TOTA la resta del
+    document: `guides` de pàgina, claus desconegudes i l'arbre de fills. Idempotent: un
+    document sense dataURL torna igual i amb assets={}.
+    """
+    assets = {}
+    doc = dict(document_json)
+    pages_out = []
+    for page in doc.get("pages") or []:
+        page = dict(page)
+        page["objects"] = _extract_inline_objects(page.get("objects"), assets)
+        pages_out.append(page)
+    doc["pages"] = pages_out
+    return doc, assets
+
+
 def v2_to_document(template_json, metadata=None):
     """template_json v2 → (document_json v-ftt, assets:{nom->bytes}).
 
     Extreu cada binari inline (objecte amb `src` dataURL) a assets/<sha16>.<ext> i hi
     deixa `src='assets/<nom>'`. La resta de l'objecte es conserva intacta.
     """
-    page_format = template_json.get("pageFormat") or DEFAULT_PAGE_FORMAT
     assets = {}
     pages_out = []
     for page in template_json.get("pages") or []:
-        objs_out = []
-        for obj in page.get("objects") or []:
-            obj = dict(obj)
-            src = obj.get("src")
-            if isinstance(src, str) and src.startswith("data:"):
-                decoded = _decode_dataurl(src)
-                if decoded is not None:
-                    data, mime = decoded
-                    name = "%s.%s" % (_sha256(data)[:16], _MIME_EXT.get(mime, "bin"))
-                    assets[name] = data
-                    obj["src"] = ASSETS_PREFIX + name
-            objs_out.append(obj)
-        pages_out.append({"id": page.get("id"), "objects": objs_out})
+        pages_out.append({
+            "id": page.get("id"),
+            "objects": _extract_inline_objects(page.get("objects"), assets),
+        })
     document = {
         "ftt_schema": FTT_DOCUMENT_SCHEMA,
         "metadata": metadata or {},
-        "pageFormat": page_format,
+        "pageFormat": template_json.get("pageFormat") or DEFAULT_PAGE_FORMAT,
         "pages": pages_out,
     }
     return document, assets
@@ -165,16 +205,18 @@ def document_to_v2(document_json, asset_src=None):
     `asset_src(nom) -> str` reescriu les refs `assets/<nom>` (p.ex. a URL absoluta servida
     pel backend). Per defecte les deixa com `assets/<nom>`.
     """
+    def mapper(obj):
+        src = obj.get("src")
+        if isinstance(src, str) and src.startswith(ASSETS_PREFIX) and asset_src is not None:
+            obj["src"] = asset_src(src[len(ASSETS_PREFIX):])
+        return obj
+
     pages_out = []
     for page in document_json.get("pages") or []:
-        objs_out = []
-        for obj in page.get("objects") or []:
-            obj = dict(obj)
-            src = obj.get("src")
-            if isinstance(src, str) and src.startswith(ASSETS_PREFIX) and asset_src is not None:
-                obj["src"] = asset_src(src[len(ASSETS_PREFIX):])
-            objs_out.append(obj)
-        pages_out.append({"id": page.get("id"), "objects": objs_out})
+        pages_out.append({
+            "id": page.get("id"),
+            "objects": [_map_object_tree(o, mapper) for o in page.get("objects") or []],
+        })
     return {
         "version": 2,
         "pageFormat": document_json.get("pageFormat") or DEFAULT_PAGE_FORMAT,

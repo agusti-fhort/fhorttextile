@@ -158,8 +158,37 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# TLS el termina nginx; gunicorn rep HTTP pla. Sense això, request.scheme és 'http' i tot
+# build_absolute_uri() emet URLs http:// dins pàgines https:// → mixed content. nginx ja
+# envia la capçalera (sites-enabled/ftt-staging:32,43). Necessari per a D13 (download_url
+# signada); de retruc arregla també _asset_urls (ftt_document_views.py:40-46) i la 'url' de
+# upload_file_view, que fins ara emetien http:// absolut.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# S03a · P2a — aïllament del media per tenant. Fins ara TOTS els schemas escrivien al
+# mateix path físic (inert amb 1 tenant, col·lisió amb el segon). S'usa la classe de
+# django_tenants (dependència ja present, cap de nova) en lloc d'una de pròpia: resol
+# location=MEDIA_ROOT/<schema> i base_url=/media/<schema>/ des de connection.schema_name.
+#
+# CONSEQÜÈNCIA CLAU: el `name` que es desa a la BD segueix sent RELATIU a l'arrel del
+# tenant (p.ex. 'model_fitxers/2026/06/x.ftt'), perquè el prefix del schema viu a
+# `location`, no al nom. Per tant el trasllat de bytes NO ha de reescriure la BD.
+#
+# Tots els FileField/ImageField del projecte pertanyen a TENANT_APPS (models_app, tasks,
+# fitting, accounts) → el storage per defecte pot ser tenant-aware sense excepcions.
+MULTITENANT_RELATIVE_MEDIA_ROOT = '%s'   # %s = schema_name
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django_tenants.files.storage.TenantFileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+}
 
 # Comercial Studio (B2) — directori de fonts TTF per als PDF (Montserrat). Configurable via
 # env per a producció. Si les fonts no hi són, el pdf_service fa fallback a Helvetica (WARNING).

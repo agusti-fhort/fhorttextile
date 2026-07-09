@@ -55,10 +55,12 @@ function ModelFilesPanel({ modelId }) {
 
   useEffect(() => {
     let cancelled = false
+    // Eix únic `tipus` (S03a · P1). Marcades queda amb el filtre correcte tot i que avui cap
+    // escriptor emet tipus='MARCADA': és un forat amb nom, l'omplirà el flux de marcada.
     Promise.all([
-      modelFitxers.list({ model: modelId, categoria: 'Patro' }),
+      modelFitxers.list({ model: modelId, tipus__in: 'PATRO,ESCALAT' }),
       modelFitxers.list({ model: modelId, tipus: 'MARCADA' }),
-      modelFitxers.list({ model: modelId, categoria: 'Document' }),
+      modelFitxers.list({ model: modelId, tipus: 'DOCUMENT' }),
     ])
       .then(([p, m, d]) => {
         if (cancelled) return
@@ -81,7 +83,8 @@ function ModelFilesPanel({ modelId }) {
         <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }}>{t('fitting.info.no_files')}</div>
       ) : (
         files.map(f => {
-          const url = f.fitxer || f.url_extern || null
+          // D13: URL signada de curta vida. Un <a href> no pot portar Authorization.
+          const url = f.download_url || f.url_extern || null
           return (
             <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', padding: '3px 0' }}>
               <i className="ti ti-file" style={{ fontSize: 13, color: 'var(--gold)' }} />

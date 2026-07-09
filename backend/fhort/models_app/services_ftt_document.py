@@ -180,7 +180,6 @@ def create_document(model, *, document_json=None, assets=None, preview=None, nom
         model,
         ContentFile(blob, name=filename),
         tipus=ModelFitxer.TIPUS_TECHSHEET,
-        categoria="Document",
         nom=filename,
     )
 
@@ -199,17 +198,24 @@ def save_document(head_fitxer, document_json, *, assets=None, preview=None):
     """Desa una versió nova encadenada del document.
 
     Els assets existents es conserven (es fusionen amb els nous) perquè el document.json
-    pot referir-los sense reenviar-ne els bytes. tipus/categoria s'hereten del predecessor
-    via save_model_file. Retorna el nou cap de cadena.
+    pot referir-los sense reenviar-ne els bytes. `tipus` s'hereta del predecessor via
+    save_model_file. Retorna el nou cap de cadena.
+
+    S03a · P3 — abans d'empaquetar, els binaris inline (imatges noves de l'editor, que hi
+    arriben com a dataURL) s'extreuen a assets/<sha16>.<ext>. Cap dataURL nou es persisteix
+    dins document.json. Les fitxes velles amb inline es sanegen soles en re-desar-se: no cal
+    cap migració de dades. Idempotent (sha del contingut → re-desar no fa créixer res).
     """
+    document_json, inline_assets = services_ftt.extract_document_assets(document_json)
     existing = load_document(head_fitxer).get("assets", {})
     if assets:
         existing.update(assets)
+    existing.update(inline_assets)
     blob = services_ftt.pack(document_json, assets=existing, preview=preview)
     return save_model_file(
         head_fitxer.model,
         ContentFile(blob, name=head_fitxer.nom_fitxer),
-        versio_anterior=head_fitxer,  # tipus/categoria heretats
+        versio_anterior=head_fitxer,  # tipus heretat
         nom=head_fitxer.nom_fitxer,
     )
 
@@ -227,7 +233,6 @@ def save_export(source_ftt, file, *, nom=None):
         source_ftt.model,
         file,
         tipus=ModelFitxer.TIPUS_EXPORT,
-        categoria="Document",
         nom=filename,
     )
     export.generat_des_de = source_ftt
