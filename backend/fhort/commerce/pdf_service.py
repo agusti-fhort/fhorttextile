@@ -38,6 +38,11 @@ LGREY = colors.HexColor('#DDDDDD')
 DARK = colors.HexColor('#1A1A1A')
 DGREY = colors.HexColor('#555555')
 ROWLINE = colors.HexColor('#F0F0F0')
+# Albarà v2 — franja per model (LITERAL del prototip validat).
+CREAM = colors.HexColor('#FBF9F5')
+MODEL_BAND = colors.HexColor('#F4EFE4')
+DET_ROWLINE = colors.HexColor('#F2EFE9')
+FETA_COL, PEND_COL = '#4a7a3a', '#b5892a'   # marcador ● feta (verd) / ● pendent (ambre)
 
 # Geometria (LITERAL del fitxer de referència v7). Un sol origen X per a tot.
 PAGE_W, PAGE_H = A4
@@ -332,6 +337,230 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
             style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
                 ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# Albarà v2 — PDF compost per MODEL (prototip validat). Franja per model + detalls columnats
+# + subtotal per model. Capçalera i client heretats del pressupost (mateixa família, geometria
+# LITERAL). Només línies VISIBLES (visible=True); les amagades no surten ni compten. Cap dada
+# interna (cost/temps/tècnic) al document.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+DET_COLS = [78 * mm, 22 * mm, 16 * mm, 16 * mm, 20 * mm, 22 * mm]  # Descr·Data·Qt·Unitat·Preu·Import = 174
+_UNIT_DEFAULT = 'ut'
+
+
+def generate_delivery_note_pdf(delivery_note):
+    """Retorna els bytes del PDF d'un albarà v2 compost per model. Agrupa les línies VISIBLES pel
+    seu model FK; per cada model dibuixa una franja (fons cream) amb ref intern + nom + [ref client
+    si difereix] + collection + temporada/any + data de lliurament (última tasca), els detalls
+    columnats, els comentaris lliures (MANUAL) en cursiva i el subtotal del model. Els totals són
+    els del document (calculats sobre línies visibles). SENSE venciments, SENSE cost intern."""
+    F = _fonts()
+    FL, FR, FS, FB = F[F_LIGHT], F[F_REG], F[F_SEMI], F[F_BOLD]
+    cfg = _tenant_cfg()
+
+    def s(name, font=FL, size=8.5, align=TA_LEFT, color=DARK, leading=None):
+        return ParagraphStyle(name, fontName=font, fontSize=size, textColor=color,
+                              alignment=align, leading=leading or size * 1.35)
+
+    S = s('n')
+    SB = s('b', font=FS)
+    SR = s('r', align=TA_RIGHT)
+    SRB = s('rb', font=FS, align=TA_RIGHT)
+    SSM_G = s('smg', size=7.5, color=DGREY)
+    SSM_I = s('smi', size=7.5, color=GREY)
+    SSM_R = s('smr', size=7.5, align=TA_RIGHT)
+    S_TITDOC = s('titdoc', font=FL, size=14, color=GOLD, align=TA_RIGHT)
+    S_CLIENT = s('cli', font=FL, size=13)
+    S_LABEL = s('lbl', size=7, color=GREY)
+    S_LABEL_R = s('lblr', size=7, color=GREY, align=TA_RIGHT)
+    S_MDELIV = s('mdeliv', size=7.5, color=DGREY, align=TA_RIGHT)
+
+    buf = BytesIO()
+    doc = BaseDocTemplate(buf, pagesize=A4,
+                          leftMargin=ML, rightMargin=MR, topMargin=MT, bottomMargin=MB,
+                          title=delivery_note.document_number or 'Albarà')
+    frame = Frame(ML, MB, CW, PAGE_H - MT - MB,
+                  leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
+    doc.addPageTemplates([PageTemplate(id='main', frames=[frame])])
+    story = []
+
+    # ═══ CAPÇALERA (heretada del pressupost validat) ═══
+    LOGO_MAX_H, LOGO_MAX_W = 15 * mm, 45 * mm
+
+    def _brand_flowable():
+        logo = getattr(cfg, 'logo_file', None)
+        path = None
+        if logo:
+            try:
+                path = logo.path
+            except Exception:  # noqa: BLE001
+                path = None
+        if path and os.path.isfile(path):
+            try:
+                img = Image(path)
+                ratio = (img.imageWidth or 1) / (img.imageHeight or 1)
+                h, w = LOGO_MAX_H, LOGO_MAX_H * ratio
+                if w > LOGO_MAX_W:
+                    w, h = LOGO_MAX_W, LOGO_MAX_W / ratio
+                img.drawWidth, img.drawHeight = w, h
+                img.hAlign = 'LEFT'
+                return img
+            except Exception:  # noqa: BLE001
+                logger.warning("PDF logo: no s'ha pogut llegir logo_file (%s); fallback de text.", path)
+        return Paragraph(f'<font name="{FS}" color="#B8860B">Fhort</font> '
+                         f'<font name="{FL}" color="#888888">Textile Tech</font>', s('logo', size=14))
+
+    left_rows = [[_brand_flowable()], [Spacer(1, 2 * mm)]]
+    nom_emissor = (getattr(cfg, 'nom_empresa', '') or '').strip()
+    if nom_emissor:
+        left_rows.append([Paragraph(nom_emissor, s('en', font=FS, size=7.5))])
+    left = Table(left_rows, colWidths=[COL_LEFT_W], style=TableStyle(ZP))
+
+    meta = Table([
+        [Paragraph('Número', S_LABEL_R), Paragraph(delivery_note.document_number or '—', SSM_R)],
+        [Paragraph('Data', S_LABEL_R), Paragraph(_fmt_date(delivery_note.issued_at), SSM_R)],
+    ], colWidths=[COL_RIGHT_W - 30 * mm, 30 * mm], style=TableStyle(ZP))
+    right = Table([[Paragraph('Albarà', S_TITDOC)], [Spacer(1, 2 * mm)], [meta]],
+                  colWidths=[COL_RIGHT_W], style=TableStyle(ZP))
+    story.append(Table([[left, right]], colWidths=[COL_LEFT_W, COL_RIGHT_W],
+        style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')] + ZP)))
+    story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY, spaceBefore=5 * mm, spaceAfter=4 * mm))
+
+    # ═══ CLIENT ═══
+    c = delivery_note.customer
+    story.append(Paragraph('Per a:', S_LABEL))
+    story.append(Spacer(1, 1 * mm))
+    story.append(Paragraph(c.rao_social or c.nom, S_CLIENT))
+    oneliner = _customer_oneliner(c)
+    if oneliner:
+        story.append(Paragraph(oneliner, SSM_G))
+    story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY, spaceBefore=4 * mm, spaceAfter=5 * mm))
+
+    # ═══ AGRUPACIÓ per model (només línies VISIBLES) ═══
+    from collections import OrderedDict
+    groups = OrderedDict()
+    for ln in (delivery_note.lines.filter(visible=True)
+               .select_related('model', 'model_task').order_by('position', 'id')):
+        groups.setdefault(ln.model_id, []).append(ln)
+
+    def _model_block(header_line, lines):
+        m = header_line.model
+        ref = (m.codi_intern if m else '') or '—'
+        name = (m.nom_prenda if m else '') or ''
+        refclient = None
+        if m and m.codi_client and m.codi_client != m.codi_intern:
+            refclient = m.codi_client
+        collection = (m.collection if m else '') or ''
+        season = ' '.join(x for x in [(m.temporada if m else ''), str(m.any) if (m and m.any) else ''] if x)
+        # Detall = tot menys els comentaris (MANUAL, sota el bloc). Parcial = alguna tasca no-Done.
+        det_lines = [l for l in lines if l.line_kind != 'MANUAL']
+        comments = [l for l in lines if l.line_kind == 'MANUAL']
+        partial = any(l.model_task_id and l.model_task and l.model_task.status != 'Done' for l in det_lines)
+        # Data de lliurament = última finished_at de les tasques incloses.
+        fdates = [l.model_task.finished_at for l in det_lines if l.model_task_id and l.model_task and l.model_task.finished_at]
+        deliver = _fmt_date(max(fdates)) if fdates else '—'
+
+        els = []
+        # --- FRANJA DE MODEL (ample complet) ---
+        meta_bits = []
+        if refclient:
+            meta_bits.append(f'ref. client {refclient}')
+        if collection:
+            meta_bits.append(collection)
+        if season:
+            meta_bits.append(season)
+        meta_txt = '  ·  '.join(meta_bits)
+        band = Table([[
+            Paragraph(f'<font name="{FS}" color="#B8860B">{ref}</font>&nbsp;&nbsp;'
+                      f'<font name="{FS}" color="#1A1A1A">{name}</font>&nbsp;&nbsp;'
+                      f'<font name="{FL}" color="#888888" size="7.5">{meta_txt}</font>', s('band', size=10)),
+            Paragraph(f'Lliurament · {deliver}', S_MDELIV),
+        ]], colWidths=[CW * 0.68, CW * 0.32], style=TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), MODEL_BAND),
+            ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('LEFTPADDING', (0, 0), (0, 0), 8), ('RIGHTPADDING', (-1, 0), (-1, 0), 8),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        els.append(band)
+        # --- DETALLS COLUMNATS ---
+        head = [Paragraph('Descripció', s('dh', font=FS, size=7, color=GREY)),
+                Paragraph('Data', s('dh2', font=FS, size=7, color=GREY)),
+                Paragraph('Qt.', s('dh3', font=FS, size=7, color=GREY, align=TA_RIGHT)),
+                Paragraph('Unitat', s('dh4', font=FS, size=7, color=GREY)),
+                Paragraph('Preu', s('dh5', font=FS, size=7, color=GREY, align=TA_RIGHT)),
+                Paragraph('Import', s('dh6', font=FS, size=7, color=GREY, align=TA_RIGHT))]
+        rows = [head]
+        for l in det_lines:
+            desc = (l.description or '').strip() or (l.product.name if l.product_id else '—')
+            if partial and l.model_task_id:
+                done = l.model_task and l.model_task.status == 'Done'
+                col = FETA_COL if done else PEND_COL
+                desc = f'{desc}  <font color="{col}" size="6.5">● {"feta" if done else "pendent"}</font>'
+            date = _fmt_date(l.model_task.finished_at) if (l.model_task_id and l.model_task and l.model_task.finished_at) else '—'
+            rows.append([
+                Paragraph(desc, s('ld', size=8)),
+                Paragraph(date, SSM_I),
+                Paragraph(_money(l.quantity), s('lq', size=8, align=TA_RIGHT)),
+                Paragraph(_UNIT_DEFAULT, s('lu', size=8)),
+                Paragraph(_money(l.unit_price), s('lp', size=8, align=TA_RIGHT)),
+                Paragraph(f'{_money(l.line_total)} €', s('li', size=8, align=TA_RIGHT)),
+            ])
+        els.append(Table(rows, colWidths=DET_COLS, style=TableStyle([
+            ('LINEBELOW', (0, 0), (-1, 0), 0.4, LGREY),
+            ('LINEBELOW', (0, 1), (-1, -1), 0.25, DET_ROWLINE),
+            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('LEFTPADDING', (0, 0), (0, -1), 8), ('RIGHTPADDING', (-1, 0), (-1, -1), 8),
+            ('LEFTPADDING', (1, 0), (-1, -1), 2), ('RIGHTPADDING', (0, 0), (-2, -1), 4),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ])))
+        # --- COMENTARIS LLIURES (MANUAL) del model, cursiva gris sota el bloc ---
+        for cm in comments:
+            els.append(Table([[Paragraph(f'<i>{(cm.description or "").strip()}</i>',
+                s('cmt', size=7.5, color=GREY))]], colWidths=[CW], style=TableStyle([
+                ('LEFTPADDING', (0, 0), (-1, -1), 8), ('TOPPADDING', (0, 0), (-1, -1), 2),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2)])))
+        # --- SUBTOTAL MODEL ---
+        subtotal = sum((Decimal(l.line_total or 0) for l in det_lines), Decimal('0'))
+        els.append(Table([[Paragraph('Subtotal model', s('stl', size=7.5, color=DGREY, align=TA_RIGHT)),
+                           Paragraph(f'{_money(subtotal)} €', s('stv', font=FS, size=9, align=TA_RIGHT))]],
+            colWidths=[CW - 30 * mm, 30 * mm], style=TableStyle([
+            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (-1, 0), (-1, 0), 8),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')])))
+        return els
+
+    first = True
+    for _mid, lines in groups.items():
+        if not first:
+            story.append(HRFlowable(width='100%', thickness=0.3, color=LGREY, spaceBefore=6 * mm, spaceAfter=6 * mm))
+        first = False
+        for el in _model_block(lines[0], lines):
+            story.append(el)
+
+    story.append(Spacer(1, 8 * mm))
+
+    # ═══ RESUM (sense venciments; totals sobre línies visibles = els del document) ═══
+    pct = _tax_pct(delivery_note.subtotal, delivery_note.tax_amount)
+    story.append(Table([
+        ['', Paragraph('Base imposable', S), Paragraph(f'{_money(delivery_note.subtotal)} €', SR)],
+        ['', Paragraph(f'I.V.A. {pct}%', S), Paragraph(f'{_money(delivery_note.tax_amount)} €', SR)],
+        ['', Paragraph('Import total', SB), Paragraph(f'{_money(delivery_note.total)} €', SRB)],
+    ], colWidths=[104 * mm, 44 * mm, 26 * mm], style=TableStyle([
+        ('LINEABOVE', (1, 2), (2, 2), 0.5, LGREY),
+        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)])))
+
+    # ═══ OBSERVACIONS (notes de l'albarà; sense pagament/venciments) ═══
+    if (delivery_note.notes or '').strip():
+        story.append(Spacer(1, 8 * mm))
+        story.append(Table([[Paragraph('Observacions', S_LABEL)],
+                            [Paragraph(delivery_note.notes.replace('\n', ' '), SSM_G)]],
+            colWidths=[CW], style=TableStyle(ZP + [('LINEABOVE', (0, 0), (0, 0), 0.5, LGREY)])))
 
     doc.build(story)
     return buf.getvalue()

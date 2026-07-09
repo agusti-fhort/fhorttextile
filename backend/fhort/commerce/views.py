@@ -444,8 +444,8 @@ class DeliveryNoteViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixin
         """PDF de l'albarà: reutilitza el generador genèric amb títol 'Albarà' i SENSE bloc de
         venciments/condicions de pagament (show_payment=False)."""
         dn = self.get_object()
-        from .pdf_service import generate_document_pdf
-        pdf_bytes = generate_document_pdf(dn, doc_title='Albarà', show_payment=False)
+        from .pdf_service import generate_delivery_note_pdf
+        pdf_bytes = generate_delivery_note_pdf(dn)
         resp = HttpResponse(pdf_bytes, content_type='application/pdf')
         resp['Content-Disposition'] = f'attachment; filename="{dn.document_number or "albara"}.pdf"'
         return resp

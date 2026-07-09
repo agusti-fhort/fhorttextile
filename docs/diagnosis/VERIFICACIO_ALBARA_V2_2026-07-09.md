@@ -68,6 +68,33 @@ apareix pel costat WO, no per la consulta de línies — comportament esperat.
 PDF per model (prototip visual amb l'Agus primer), Settlement/B5 (l'INVOICED n'és l'avançada),
 gate de tier, informes.
 
+## PDF v2 per model (prototip validat portat a `pdf_service`)
+
+`generate_delivery_note_pdf(delivery_note) -> bytes` (a `commerce/pdf_service.py`), geometria
+LITERAL del prototip validat; capçalera i client heretats del pressupost (mateixa família).
+Franja per model (fons `MODEL_BAND #F4EFE4`) amb ref intern + nom + [ref client si difereix] +
+collection + temporada/any + "Lliurament · <última finished_at>"; detalls columnats (Descripció ·
+Data · Qt · Unitat · Preu · Import), marcador `● feta`/`● pendent` si el model és parcial,
+comentaris MANUAL en cursiva, subtotal per model, HR 0.3pt entre models, resum sense venciments.
+La `pdf` action del `DeliveryNoteViewSet` ara crida aquest generador (substitueix el pla de B4c).
+
+**Verificació runtime (Brownie real, txn revertida) — 8/8 PASS:**
+| Comprovació | Resultat |
+|---|---|
+| Model amagat (182, `visible=False`) NO surt; visibles = {162,169} | **PASS** |
+| Model 169 parcial (tasca reoberta en DRAFT → `● pendent`) | **PASS** |
+| Model 162 complet (sense marcador) | **PASS** |
+| Subtotals per model (162=30,00 · 169=45,00) | **PASS** |
+| Total document = 75,00 (182 amagat exclòs dels totals) | **PASS** |
+| Comentari MANUAL present i visible | **PASS** |
+| Cap dada interna (min/temps/cost/tècnic) a les descripcions | **PASS** |
+| PDF vàlid (`%PDF`, 25.471 bytes) | **PASS** |
+
+Selecció/agrupació verificades replicant EXACTAMENT el que llegeix el generador (línies visibles →
+grup per model → parcial via `model_task.status` → subtotal). Render visual no disponible al box
+(sense poppler): mostra a `albara_v2_sample.pdf` (arrel del repo, no committat) per a la confirmació
+visual de l'Agus. **A confirmar amb l'Agus:** línia de cortesia a "0,00 €" (mantenir 0, no "Inclòs").
+
 ## Estat final
-FASE 1 (backend, gate 10/10) + FASE 2 (UI) completes a `dev`, **sense push** (el push el fa l'Agus).
-Cadena de 10 commits verds (P1–P9 + docs). Revisar amb `git show <hash>`.
+FASE 1 (backend, gate 10/10) + FASE 2 (UI) + PDF v2 per model completes a `dev`, **sense push**
+(el push el fa l'Agus). Revisar amb `git show <hash>`.
