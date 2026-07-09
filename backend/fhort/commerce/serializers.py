@@ -318,14 +318,19 @@ class DeliveryNoteLineSerializer(serializers.ModelSerializer):
     DRAFT viu al model i es replica aquí per a un 400 net (patró QuoteLine)."""
     product_code = serializers.CharField(source='product.code', read_only=True, default=None)
     product_name = serializers.CharField(source='product.name', read_only=True, default=None)
+    model_intern = serializers.CharField(source='model.codi_intern', read_only=True, default=None)
 
     class Meta:
         model = DeliveryNoteLine
         fields = ['id', 'delivery_note', 'line_kind', 'product', 'product_code', 'product_name',
-                  'description', 'quantity', 'unit_price', 'line_total', 'position',
+                  'description', 'quantity', 'unit_price', 'line_total', 'position', 'visible',
+                  'model', 'model_intern', 'internal_minutes',
                   'work_order', 'model_task', 'expense', 'adjustment']
-        read_only_fields = ['delivery_note', 'line_kind', 'product', 'quantity', 'line_total',
-                            'position', 'work_order', 'model_task', 'expense', 'adjustment']
+        # v2 — editables en DRAFT: description, quantity, unit_price, visible. La resta (traçabilitat,
+        # model, internal_minutes, line_total) read-only: es fixen en compondre la línia.
+        read_only_fields = ['delivery_note', 'line_kind', 'product', 'line_total', 'position',
+                            'model', 'model_intern', 'internal_minutes',
+                            'work_order', 'model_task', 'expense', 'adjustment']
 
     def validate(self, data):
         dn = getattr(self.instance, 'delivery_note', None)

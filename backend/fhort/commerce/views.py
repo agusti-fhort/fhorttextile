@@ -368,6 +368,35 @@ class DeliveryNoteViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixin
                             status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(dn).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['post'])
+    def draft(self, request):
+        """POST commerce/delivery-notes/draft/ — retorna el DRAFT obert del client o en crea un de
+        nou (un per client alhora). Gate CONFIGURE. Body: {customer}."""
+        from fhort.tasks.models import Customer
+        customer = Customer.objects.filter(pk=request.data.get('customer')).first()
+        if customer is None:
+            return Response({'detail': 'Client no trobat.'}, status=status.HTTP_404_NOT_FOUND)
+        from .services import create_or_get_draft
+        dn, created = create_or_get_draft(customer, user=getattr(request.user, 'profile', None))
+        return Response(self.get_serializer(dn).data,
+                        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='add-lines')
+    def add_lines(self, request, pk=None):
+        """POST commerce/delivery-notes/{id}/add-lines/ — afegeix línies al DRAFT a partir dels
+        ítems seleccionats de la safata. Gate CONFIGURE. Body: {items:[{kind, model_task_id|
+        adjustment_id|expense_id}]}. Els ítems ja albaranats s'ometen (idempotent)."""
+        dn = self.get_object()
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import add_lines_to_draft
+        try:
+            created = add_lines_to_draft(dn, request.data.get('items') or [],
+                                         user=getattr(request.user, 'profile', None))
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        dn.refresh_from_db()
+        return Response({'added': len(created), **self.get_serializer(dn).data})
+
     @action(detail=True, methods=['post'])
     def issue(self, request, pk=None):
         """POST commerce/delivery-notes/{id}/issue/ — emet el DRAFT (→ISSUED, congela línies).
@@ -401,11 +430,33 @@ class DeliveryNoteViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixin
 
 
 class DeliveryNoteLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin,
-                              mixins.ListModelMixin, mixins.UpdateModelMixin,
+                              mixins.ListModelMixin, mixins.CreateModelMixin,
+                              mixins.UpdateModelMixin, mixins.DestroyModelMixin,
                               viewsets.GenericViewSet):
-    """Línies d'albarà (edició filtrada per ?delivery_note=). Només PATCH de preu/descripció en
-    DRAFT (guard replicat al serializer per a un 400 net); FK de traçabilitat read-only. Sense
-    create/destroy per API: les línies neixen de `generate/`."""
-    queryset = DeliveryNoteLine.objects.select_related('delivery_note', 'product').all()
+    """Línies d'albarà (edició filtrada per ?delivery_note=). PATCH de preu/descripció/qty/visible
+    en DRAFT (guard replicat al serializer per a un 400 net); FK de traçabilitat read-only. `create`
+    crea una línia MANUAL (comentari lliure) en un DRAFT; `destroy` treu una línia del DRAFT. Les
+    línies proposades neixen de `add-lines/` (v2) o `generate/` (v1)."""
+    queryset = DeliveryNoteLine.objects.select_related('delivery_note', 'product', 'model').all()
     serializer_class = DeliveryNoteLineSerializer
     filterset_fields = ['delivery_note', 'line_kind']
+
+    def create(self, request, *args, **kwargs):
+        """POST commerce/delivery-note-lines/ — crea una línia MANUAL (comentari/lliure) en un DRAFT.
+        Body: {delivery_note, description, quantity?, unit_price?, visible?}. line_kind forçat MANUAL."""
+        from decimal import Decimal
+        dn = DeliveryNote.objects.filter(pk=request.data.get('delivery_note')).first()
+        if dn is None:
+            return Response({'detail': 'Albarà no trobat.'}, status=status.HTTP_404_NOT_FOUND)
+        if dn.status != 'DRAFT':
+            return Response({'detail': "No es poden afegir línies a un albarà que no és DRAFT."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        line = DeliveryNoteLine(
+            delivery_note=dn, line_kind='MANUAL',
+            description=str(request.data.get('description') or '')[:300],
+            quantity=Decimal(str(request.data.get('quantity') or '0')),
+            unit_price=Decimal(str(request.data.get('unit_price') or '0')),
+            visible=bool(request.data.get('visible', True)),
+            position=dn.lines.count() + 1)
+        line.save()
+        return Response(self.get_serializer(line).data, status=status.HTTP_201_CREATED)

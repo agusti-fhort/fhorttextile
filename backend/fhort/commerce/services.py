@@ -519,6 +519,102 @@ def get_billable_items(customer):
     return sorted(groups.values(), key=lambda g: g['model']['codi_intern'] or '')
 
 
+def create_or_get_draft(customer, user=None):
+    """Retorna el DRAFT obert del client o en crea un de nou. Un per client alhora: mentre n'hi ha
+    un d'obert, tot 'afegir' hi apunta (add_lines_to_draft). A diferència de generate_delivery_note,
+    NEIX BUIT (composició manual per check). Retorna (draft, created)."""
+    from .models import DeliveryNote
+    existing = (DeliveryNote.objects.filter(customer=customer, status='DRAFT')
+                .order_by('created_at').first())
+    if existing is not None:
+        return existing, False
+    return DeliveryNote.objects.create(customer=customer, created_by=user), True
+
+
+def add_lines_to_draft(draft, selected_items, user=None):
+    """Crea una DeliveryNoteLine per ítem seleccionat de la safata, amb les FK d'origen correctes
+    (model_task/adjustment/expense), el model FK (agrupació), line_kind, product (IVA), visible=True
+    i els valors proposats (editables després en DRAFT). Resol cada origen AUTORITZAT contra la BD
+    (mateix client, sense línia prèvia) → un ítem ja albaranat s'omet (idempotent, no doble compta).
+    Retorna les línies creades. `selected_items`: [{kind, model_task_id|adjustment_id|expense_id}]."""
+    from django.core.exceptions import ValidationError
+    from django.db.models import Sum
+    from fhort.tasks.models import ModelTask
+    from .models import DeliveryNoteLine, WorkOrderAdjustment, Expense
+    if draft.status != 'DRAFT':
+        raise ValidationError("Només es poden afegir línies a un albarà en esborrany (DRAFT).")
+    cid = draft.customer_id
+    created = []
+    with transaction.atomic():
+        pos = draft.lines.count()
+        for sel in selected_items:
+            kind = sel.get('kind')
+            line = None
+            if kind == 'TASK':
+                t = (ModelTask.objects.filter(
+                        pk=sel.get('model_task_id'), model__customer_id=cid, status='Done',
+                        delivery_note_lines__isnull=True)
+                     .select_related('task_type', 'model', 'work_order', 'work_order__order_line__product')
+                     .first())
+                if t is None:
+                    continue
+                wo = t.work_order
+                if wo is not None and wo.kind == 'ORDER':
+                    product = wo.order_line.product if wo.order_line_id else None
+                    price = Decimal(str((wo.price_snapshot or {}).get('unit_price') or '0'))
+                else:
+                    product, price = None, Decimal('0')
+                minutes = t.timers.aggregate(m=Sum('minuts'))['m'] or 0
+                line = DeliveryNoteLine(
+                    delivery_note=draft, line_kind='TASK', model_id=t.model_id, model_task=t,
+                    work_order=wo, product=product, quantity=Decimal('1'),
+                    unit_price=price.quantize(_CENT, rounding=ROUND_HALF_UP),
+                    description=f"{t.task_type.name} · {t.model.codi_intern}"[:300],
+                    internal_minutes=Decimal(minutes))
+            elif kind in ('EXTRA', 'DEDUCTION'):
+                adj_kind = 'EXTRA_BILL' if kind == 'EXTRA' else 'DEDUCTION'
+                adj = (WorkOrderAdjustment.objects.filter(
+                        pk=sel.get('adjustment_id'), work_order__customer_id=cid, kind=adj_kind,
+                        delivery_note_lines__isnull=True)
+                       .select_related('work_order__order_line__product', 'work_order__model',
+                                       'model_task__model').first())
+                if adj is None:
+                    continue
+                wo = adj.work_order
+                product = wo.order_line.product if (wo.kind == 'ORDER' and wo.order_line_id) else None
+                model = (adj.model_task.model if adj.model_task_id else None) or wo.model
+                if kind == 'EXTRA':
+                    price, desc = Decimal(adj.amount or 0), (adj.description or "Extra")
+                else:
+                    price, desc = -abs(Decimal(adj.amount or 0)), (adj.description or "Deducció")
+                line = DeliveryNoteLine(
+                    delivery_note=draft, line_kind=kind, model=model, adjustment=adj,
+                    work_order=wo, product=product, quantity=Decimal('1'),
+                    unit_price=price.quantize(_CENT, rounding=ROUND_HALF_UP), description=desc[:300])
+            elif kind == 'EXPENSE':
+                exp = (Expense.objects.filter(
+                        pk=sel.get('expense_id'), work_order__customer_id=cid,
+                        delivery_note_lines__isnull=True)
+                       .select_related('work_order__model', 'product').first())
+                if exp is None:
+                    continue
+                line = DeliveryNoteLine(
+                    delivery_note=draft, line_kind='EXPENSE', model=exp.work_order.model,
+                    expense=exp, work_order=exp.work_order, product=exp.product,
+                    unit_price=Decimal(exp.sale_price or 0).quantize(_CENT, rounding=ROUND_HALF_UP),
+                    quantity=Decimal(exp.quantity or 0).quantize(_CENT, rounding=ROUND_HALF_UP),
+                    description=(exp.description or (exp.product.name if exp.product_id else "Despesa"))[:300])
+            else:
+                continue
+            pos += 1
+            line.position = pos
+            line.visible = True
+            line.save()
+            created.append(line)
+    draft.refresh_from_db()
+    return created
+
+
 def apply_commercial_review(work_order, items, user=None):
     """Revisió COMERCIAL d'un WO tancat (B4b, decisió Agus 2026-07-08): el comercial fixa el
     PREU DE VENDA dels extres i deduccions. Acte posterior i separat del tancament del tècnic.
