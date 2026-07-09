@@ -1,5 +1,10 @@
 # DIAGNOSI — Sistema de fitxers del Model
 
+> ⚠️ SUPERADA 2026-07-09 — per `DIAGNOSI_S03_ARXIUS_2026-07-09.md` i `DIAGNOSI_S03_ARXIUS_2.md`.
+> El fork de contenidors ja no existeix (`files.FitxerVersio` jubilat al commit `dfee1b3`) i el
+> cens de disc d'aquest doc ("8 fitxers reals") està desfasat (221 fitxers).
+> Consulta només com a històric.
+
 > Sessió de diagnosi (Patró A) — READ-ONLY absolut. Cap codi tocat, cap migració, cap push, cap PROD.
 > Staging `/var/www/ftt-staging` (branca `dev`). Backend amb apps sota `fhort/`; frontends a `frontend/` i `frontend-backoffice/`.
 > Regla: FETS amb referència `fitxer:línia`. Idees només com **💡 PROPOSTA (a validar)**. Decisions = de l'Agus (⚖️).
