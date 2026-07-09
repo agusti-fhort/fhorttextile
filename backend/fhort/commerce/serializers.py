@@ -318,18 +318,27 @@ class DeliveryNoteLineSerializer(serializers.ModelSerializer):
     DRAFT viu al model i es replica aquí per a un 400 net (patró QuoteLine)."""
     product_code = serializers.CharField(source='product.code', read_only=True, default=None)
     product_name = serializers.CharField(source='product.name', read_only=True, default=None)
+    # v2 — capçalera de bloc-model (agrupació al detall/PDF); read-only, per compondre els blocs.
     model_intern = serializers.CharField(source='model.codi_intern', read_only=True, default=None)
+    model_codi_client = serializers.CharField(source='model.codi_client', read_only=True, default=None)
+    model_nom = serializers.CharField(source='model.nom_prenda', read_only=True, default=None)
+    model_collection = serializers.CharField(source='model.collection', read_only=True, default=None)
+    model_temporada = serializers.CharField(source='model.temporada', read_only=True, default=None)
+    model_any = serializers.IntegerField(source='model.any', read_only=True, default=None)
+    # v2 — data de fi de la tasca inclosa (la data de lliurament del model = la darrera d'aquestes).
+    task_finished_at = serializers.DateTimeField(source='model_task.finished_at', read_only=True, default=None)
 
     class Meta:
         model = DeliveryNoteLine
         fields = ['id', 'delivery_note', 'line_kind', 'product', 'product_code', 'product_name',
                   'description', 'quantity', 'unit_price', 'line_total', 'position', 'visible',
-                  'model', 'model_intern', 'internal_minutes',
+                  'model', 'model_intern', 'model_codi_client', 'model_nom', 'model_collection',
+                  'model_temporada', 'model_any', 'internal_minutes', 'task_finished_at',
                   'work_order', 'model_task', 'expense', 'adjustment']
         # v2 — editables en DRAFT: description, quantity, unit_price, visible. La resta (traçabilitat,
         # model, internal_minutes, line_total) read-only: es fixen en compondre la línia.
         read_only_fields = ['delivery_note', 'line_kind', 'product', 'line_total', 'position',
-                            'model', 'model_intern', 'internal_minutes',
+                            'model', 'internal_minutes',
                             'work_order', 'model_task', 'expense', 'adjustment']
 
     def validate(self, data):

@@ -441,10 +441,21 @@ export const commerce = {
     generate: (data) => client.post('/api/v1/commerce/delivery-notes/generate/', data),
     issue: (id) => client.post(`/api/v1/commerce/delivery-notes/${id}/issue/`),   // DRAFT→ISSUED (congela)
     pdf: (id) => client.get(`/api/v1/commerce/delivery-notes/${id}/pdf/`, { responseType: 'blob' }),
+    // v2 — safata d'albaranables per model. ?customer=<id> → {customer, groups:[{model, items}]}.
+    billable: (params) => client.get('/api/v1/commerce/delivery-notes/billable/', { params }),
+    // v2 — retorna el DRAFT obert del client o en crea un. {customer} → 200/201.
+    draft: (data) => client.post('/api/v1/commerce/delivery-notes/draft/', data),
+    // v2 — afegeix línies seleccionades de la safata al DRAFT. {items:[{kind, *_id}]}.
+    addLines: (id, data) => client.post(`/api/v1/commerce/delivery-notes/${id}/add-lines/`, data),
+    // v2 — marcatge ISSUED→INVOICED (individual i massiu {ids:[…]}).
+    markInvoiced: (id) => client.post(`/api/v1/commerce/delivery-notes/${id}/mark-invoiced/`),
+    markInvoicedBulk: (data) => client.post('/api/v1/commerce/delivery-notes/mark-invoiced-bulk/', data),
   },
   deliveryNoteLines: {
     list: (params) => client.get('/api/v1/commerce/delivery-note-lines/', { params }),   // ?delivery_note=
-    update: (id, data) => client.patch(`/api/v1/commerce/delivery-note-lines/${id}/`, data),   // preu/descr en DRAFT
+    update: (id, data) => client.patch(`/api/v1/commerce/delivery-note-lines/${id}/`, data),   // preu/descr/visible en DRAFT
+    create: (data) => client.post('/api/v1/commerce/delivery-note-lines/', data),   // v2 — línia MANUAL
+    remove: (id) => client.delete(`/api/v1/commerce/delivery-note-lines/${id}/`),   // v2 — treu línia del DRAFT
   },
 }
 

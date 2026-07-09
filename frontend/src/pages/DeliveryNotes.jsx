@@ -5,18 +5,18 @@ import { commerce, customers as customersApi } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Table from '../components/ui/Table'
 import Badge from '../components/ui/Badge'
-import { selS } from '../components/ui/buttons'
+import { selS, primaryBtn } from '../components/ui/buttons'
 
-// Mòdul Comercial — B4c · Albarans (llista). Document derivat que agrega 1..N WorkOrder CLOSED
-// del mateix client. No es creen aquí: neixen de "Generar albarà" a la fitxa d'Encàrrec.
-// Plantilla Orders.jsx.
+// Mòdul Comercial — B4c/v2 · Albarans (llista). L'albarà v2 es COMPON per model des de la safata
+// d'albaranables d'un client ("Compondre albarà" → obre/crea el DRAFT del client). Cicle
+// DRAFT→ISSUED→INVOICED. Plantilla Orders.jsx.
 const MONO = 'IBM Plex Mono, monospace'
 const actBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
   padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
 }
-const STATUSES = ['DRAFT', 'ISSUED']
-const STATUS_VARIANT = { DRAFT: 'gold', ISSUED: 'ok' }
+const STATUSES = ['DRAFT', 'ISSUED', 'INVOICED']
+const STATUS_VARIANT = { DRAFT: 'gold', ISSUED: 'ok', INVOICED: 'gate' }
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
 
 export function DNStatusBadge({ status, t }) {
@@ -33,6 +33,17 @@ export default function DeliveryNotes() {
   const [customers, setCustomers] = useState([])
   const [statusF, setStatusF] = useState('')
   const [customerF, setCustomerF] = useState('')
+  const [composeFor, setComposeFor] = useState('')   // customer id seleccionat al modal de composició
+  const [composing, setComposing] = useState(false)
+  const [showCompose, setShowCompose] = useState(false)
+
+  const doCompose = () => {
+    if (!composeFor) return
+    setComposing(true)
+    commerce.deliveryNotes.draft({ customer: composeFor })
+      .then(res => navigate(`/comercial/albarans/${res.data.id}`))
+      .catch(() => { setComposing(false); setError(true) })
+  }
 
   const rows = (res) => res.data?.results ?? (Array.isArray(res.data) ? res.data : [])
   const fetchList = useCallback(() => commerce.deliveryNotes.list({ ordering: '-created_at', page_size: 500 }).then(rows), [])
@@ -68,9 +79,14 @@ export default function DeliveryNotes() {
 
   return (
     <div style={{ minWidth: 0, maxWidth: 1000 }}>
-      <div style={{ marginBottom: '1rem' }}>
-        <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('deliverynotes.title')}</h1>
-        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('deliverynotes.subtitle')}</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem', flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('deliverynotes.title')}</h1>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('deliverynotes.subtitle')}</p>
+        </div>
+        <button onClick={() => { setComposeFor(''); setShowCompose(true) }} style={{ ...primaryBtn }}>
+          <i className="ti ti-layout-grid-add" style={{ fontSize: 14, marginRight: 6 }} />{t('deliverynotes.compose_action')}
+        </button>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -91,6 +107,38 @@ export default function DeliveryNotes() {
               <Table columns={columns} data={shown} loading={false} empty={t('deliverynotes.empty')} />
             </div>
           )}
+
+      {showCompose && (
+        <div onClick={() => !composing && setShowCompose(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--white)', borderRadius: 12, padding: '1.2rem 1.4rem',
+            maxWidth: 460, width: '100%', border: '0.5px solid var(--gray-l)',
+          }}>
+            <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 6, fontFamily: MONO }}>
+              {t('deliverynotes.compose_title')}
+            </h2>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 14 }}>
+              {t('deliverynotes.compose_hint')}
+            </p>
+            <select value={composeFor} onChange={e => setComposeFor(e.target.value)}
+              style={{ ...selS, width: '100%', marginBottom: 16 }} disabled={composing}>
+              <option value="">{t('deliverynotes.compose_pick_customer')}</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+            </select>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={doCompose} disabled={composing || !composeFor} style={{ ...primaryBtn }}>
+                {t('deliverynotes.compose_confirm')}
+              </button>
+              <button onClick={() => setShowCompose(false)} disabled={composing} style={actBtn}>
+                {t('deliverynotes.issue_cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
