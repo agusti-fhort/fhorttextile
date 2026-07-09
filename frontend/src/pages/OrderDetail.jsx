@@ -7,6 +7,7 @@ import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import PdfButton from '../components/ui/PdfButton'
 import { selS, primaryBtn } from '../components/ui/buttons'
+import { DocumentHeader, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { OrderStatusBadge, allocatedPct } from './Orders'
 
 // Mòdul Comercial — B3b · fitxa de comanda (read-only). Línies i venciments congelats (neixen de
@@ -151,33 +152,55 @@ export default function OrderDetail() {
   const lines = order.lines || []
   const dueDates = order.due_dates || []
 
+  // Columnes de línia del sistema unificat. Read-only; l'expansió (models·tasques·%) va sota la fila.
+  const orderColumns = [
+    { key: 'desc', label: t('orders.col_concept'), render: l => l.description || l.product_name },
+    { key: 'alloc', label: t('orders.col_import_imputat'), align: 'right', width: 100,
+      render: l => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }} title={t('orders.allocated')}>{Number(l.qty_allocated).toFixed(2)}/{Number(l.quantity).toFixed(2)}</span> },
+    { key: 'price', label: t('orders.col_price'), align: 'right', width: 100,
+      render: l => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{money(l.unit_price)}</span> },
+    { key: 'total', label: t('orders.col_import'), align: 'right', width: 100,
+      render: l => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{money(l.line_total)}</span> },
+  ]
+  const renderLineActions = (l) => {
+    const open = expanded.has(l.id)
+    return (
+      <>
+        <RowBtn icon={open ? 'ti-chevron-down' : 'ti-chevron-right'} active={open}
+          title={t(open ? 'orders.collapse' : 'orders.expand')} onClick={() => toggleLine(l)} />
+        {canEdit && order.status === 'OPEN' && Number(l.qty_allocated) < Number(l.quantity) && (
+          <RowBtn icon="ti-link" disabled={busy} title={t('orders.assign_model')} onClick={() => openAssign(l)} />
+        )}
+      </>
+    )
+  }
+
   return (
     <div style={{ minWidth: 0, maxWidth: 900 }}>
       <button onClick={() => navigate('/comercial/comandes')} style={{ ...smallBtn, marginBottom: 12 }}>
         <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('orders.back')}
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-        <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, fontFamily: MONO }}>{order.document_number}</h1>
-        <OrderStatusBadge status={order.status} t={t} />
-        <span style={{ marginLeft: 'auto' }}>
+      <DocumentHeader
+        reference={order.document_number}
+        statusBadge={<OrderStatusBadge status={order.status} t={t} />}
+        customer={order.customer_nom}
+        actions={<>
           <PdfButton onClick={doPdf} disabled={busy} label={t('orders.download_pdf')} />
-        </span>
+          {canEdit && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)' }}>
+              {t('orders.status')}:
+              <select value={order.status} onChange={e => changeStatus(e.target.value)} disabled={busy} style={{ ...selS }}>
+                {STATUSES.map(s => <option key={s} value={s}>{t(`orders.status_${s}`)}</option>)}
+              </select>
+            </label>
+          )}
+        </>}
+      />
+
+      <div style={{ marginTop: 12 }}>
+        <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
       </div>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 16 }}>{order.customer_nom}</p>
-
-      {canEdit && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)' }}>
-            {t('orders.status')}:
-            <select value={order.status} onChange={e => changeStatus(e.target.value)} disabled={busy} style={{ ...selS }}>
-              {STATUSES.map(s => <option key={s} value={s}>{t(`orders.status_${s}`)}</option>)}
-            </select>
-          </label>
-        </div>
-      )}
-
-      <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
       <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 12 }}>{t('orders.readonly_note')}</p>
 
@@ -191,44 +214,16 @@ export default function OrderDetail() {
         </div>
       </Section>
 
-      {/* Línies (read-only) + totals */}
+      {/* Línies (read-only, desplegables) */}
       <Section title={t('orders.lines')}>
-        {lines.length === 0 && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('orders.lines_empty')}</p>}
-        {lines.map(l => {
-          const open = expanded.has(l.id)
-          return (
-            <div key={l.id}>
-              <Row>
-                <button onClick={() => toggleLine(l)} style={chevBtn}
-                  title={t(open ? 'orders.collapse' : 'orders.expand')}>
-                  <i className={`ti ti-chevron-${open ? 'down' : 'right'}`} style={{ fontSize: 14 }} />
-                </button>
-                <span style={{ flex: 1 }}>{l.description || l.product_name}</span>
-                <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }} title={t('orders.allocated')}>
-                  {Number(l.qty_allocated).toFixed(2)}/{Number(l.quantity).toFixed(2)}
-                </span>
-                <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{money(l.unit_price)}</span>
-                <span style={{ fontFamily: MONO, fontWeight: 600, minWidth: 90, textAlign: 'right' }}>{money(l.line_total)}</span>
-                {canEdit && order.status === 'OPEN' && Number(l.qty_allocated) < Number(l.quantity) && (
-                  <button onClick={() => openAssign(l)} disabled={busy} style={smallBtn} title={t('orders.assign_model')}>
-                    <i className="ti ti-link" style={{ fontSize: 13 }} />
-                  </button>
-                )}
-              </Row>
-              {open && <LineExpansion a={alloc[l.id]} t={t} />}
-            </div>
-          )
-        })}
-        <div style={{ marginTop: 12, paddingTop: 8, borderTop: '0.5px solid var(--gray-l)', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-          <Total label={t('orders.subtotal')} value={money(order.subtotal)} />
-          {(order.tax_breakdown || []).map((b, i) => (
-            <Total key={i} label={`${t('orders.vat')} ${Number(b.rate)}% · ${t('orders.base')} ${money(b.base)}`} value={money(b.tax)} />
-          ))}
-          {(!order.tax_breakdown || order.tax_breakdown.length === 0) &&
-            <Total label={t('orders.tax_amount')} value={money(order.tax_amount)} />}
-          <Total label={t('orders.total')} value={money(order.total)} strong />
-        </div>
+        {lines.length === 0
+          ? <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('orders.lines_empty')}</p>
+          : <LineTable columns={orderColumns} rows={lines} renderActions={renderLineActions}
+              renderExpansion={l => expanded.has(l.id) ? <LineExpansion a={alloc[l.id]} t={t} /> : null} />}
       </Section>
+      <div style={{ marginBottom: 16 }}>
+        <DocumentSummary lines={orderSummaryLines(order, t)} />
+      </div>
 
       {/* Venciments materialitzats */}
       <Section title={t('orders.due_dates')}>
@@ -375,20 +370,24 @@ function LineExpansion({ a, t }) {
     </div>
   )
 }
-const chevBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray)', padding: '0 2px', display: 'flex', alignItems: 'center' }
 const expBox = { padding: '10px 12px', margin: '0 0 2px', background: 'var(--bg-muted)', borderRadius: 8, fontSize: 'var(--fs-caption)' }
 const expMuted = { fontSize: 'var(--fs-caption)', color: 'var(--gray)', fontFamily: MONO }
 const expMeta = { fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontFamily: MONO }
 const woPill = { fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '0 6px', borderRadius: 10, border: '0.5px solid var(--gold)' }
 const taskChip = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 12, background: 'var(--white)', border: '0.5px solid var(--gray-l)', fontSize: 'var(--fs-caption)', fontFamily: MONO }
 
-function Total({ label, value, strong }) {
-  return (
-    <div style={{ display: 'flex', gap: 16, minWidth: 220, justifyContent: 'space-between' }}>
-      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontWeight: strong ? 600 : 400 }}>{label}</span>
-      <span style={{ fontFamily: MONO, fontWeight: strong ? 700 : 400 }}>{value}</span>
-    </div>
-  )
+// Línies del resum fiscal de la comanda (subtotal · desglossament IVA per tipus · total).
+function orderSummaryLines(order, t) {
+  const rows = [{ label: t('orders.subtotal'), value: money(order.subtotal) }]
+  if ((order.tax_breakdown || []).length) {
+    order.tax_breakdown.forEach(b => rows.push({
+      label: `${t('orders.vat')} ${Number(b.rate)}% · ${t('orders.base')} ${money(b.base)}`, value: money(b.tax),
+    }))
+  } else {
+    rows.push({ label: t('orders.tax_amount'), value: money(order.tax_amount) })
+  }
+  rows.push({ label: t('orders.total'), value: money(order.total), strong: true })
+  return rows
 }
 
 function Meta({ label, value }) {
