@@ -19,7 +19,7 @@ import json
 import os
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django_tenants.utils import get_tenant_model, schema_context
 
 from fhort.models_app.models import ModelFitxer
@@ -33,8 +33,15 @@ def _chain_roots(rows):
     root_of = {}
 
     def root(fid):
-        path = []
+        path, visiting = [], set()
         while fid not in root_of:
+            # Guard de cicle: versio_anterior hauria de ser acíclic, però aquesta comanda
+            # existeix precisament per auditar dades corruptes. Un cicle es tanca sobre si
+            # mateix i es reporta com a cadena (amb 0 o >1 caps), no penja la comanda.
+            if fid in visiting:
+                root_of[fid] = fid
+                break
+            visiting.add(fid)
             path.append(fid)
             pred = by_id[fid]['versio_anterior_id']
             if pred is None or pred not in by_id:
@@ -101,12 +108,16 @@ class Command(BaseCommand):
                             help='Sortida JSON en lloc de text.')
 
     def handle(self, *args, **opts):
+        known = list(get_tenant_model().objects
+                     .exclude(schema_name='public')
+                     .values_list('schema_name', flat=True))
         if opts['schema']:
+            if opts['schema'] not in known:
+                raise CommandError(
+                    f"Schema '{opts['schema']}' no existeix. Tenants: {', '.join(known) or '(cap)'}")
             schemas = [opts['schema']]
         else:
-            schemas = list(get_tenant_model().objects
-                           .exclude(schema_name='public')
-                           .values_list('schema_name', flat=True))
+            schemas = known
 
         report = {}
         for schema in schemas:
