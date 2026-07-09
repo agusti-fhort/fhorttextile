@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.filters import SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Q, ProtectedError
 
@@ -685,7 +686,25 @@ class SupplierViewSet(viewsets.ModelViewSet):
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['active']
+    search_fields = ['codi', 'nom']   # cercador de la pàgina Clients (codi, nom)
+
+    def get_queryset(self):
+        """Comptadors agregats en UNA sola consulta (annotate, cap N+1): ofertes presentades
+        (SENT) / acceptades (ACCEPTED), comandes obertes (OPEN) i albarans. `?exclude_self=1`
+        amaga el customer propi (is_self) — només la pàgina Clients l'envia; la resta de consumidors
+        (selectors de client) segueixen veient-lo."""
+        qs = Customer.objects.annotate(
+            cnt_quotes_sent=Count('quotes', filter=Q(quotes__status='SENT'), distinct=True),
+            cnt_quotes_accepted=Count('quotes', filter=Q(quotes__status='ACCEPTED'), distinct=True),
+            cnt_orders_open=Count('salesorders', filter=Q(salesorders__status='OPEN'), distinct=True),
+            cnt_delivery_notes=Count('deliverynotes', distinct=True),
+        )
+        p = self.request.query_params.get('exclude_self')
+        if p and p.lower() not in ('0', 'false', ''):
+            qs = qs.exclude(is_self=True)
+        return qs
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):

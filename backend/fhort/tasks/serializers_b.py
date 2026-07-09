@@ -52,6 +52,13 @@ class SupplierSerializer(serializers.ModelSerializer):
 
 
 class CustomerSerializer(serializers.ModelSerializer):
+    # Comptadors agregats (annotate del CustomerViewSet). SerializerMethodField amb default 0 perquè
+    # les respostes fora de list (create/update) — que no venen annotades — no petin.
+    quotes_sent = serializers.SerializerMethodField()
+    quotes_accepted = serializers.SerializerMethodField()
+    orders_open = serializers.SerializerMethodField()
+    delivery_notes_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Customer
         # logo: ImageField → URL (absoluta si el ViewSet passa `request` al context, que és
@@ -62,8 +69,22 @@ class CustomerSerializer(serializers.ModelSerializer):
                   'pais', 'email_facturacio', 'condicions_pagament', 'descompte_pct',
                   'persona_contacte', 'telefon_contacte',
                   # Comercial Studio (B3a) — règim fiscal + condicions de pagament per defecte.
-                  'tax_regime', 'vat_number', 'payment_method', 'payment_terms']
+                  'tax_regime', 'vat_number', 'payment_method', 'payment_terms',
+                  # Pàgina Clients (annotate): ofertes presentades/acceptades, comandes obertes, albarans.
+                  'quotes_sent', 'quotes_accepted', 'orders_open', 'delivery_notes_count']
         read_only_fields = ['logo']
+
+    def get_quotes_sent(self, o):
+        return getattr(o, 'cnt_quotes_sent', 0) or 0
+
+    def get_quotes_accepted(self, o):
+        return getattr(o, 'cnt_quotes_accepted', 0) or 0
+
+    def get_orders_open(self, o):
+        return getattr(o, 'cnt_orders_open', 0) or 0
+
+    def get_delivery_notes_count(self, o):
+        return getattr(o, 'cnt_delivery_notes', 0) or 0
 
 
 class ProductionSerializer(serializers.ModelSerializer):
