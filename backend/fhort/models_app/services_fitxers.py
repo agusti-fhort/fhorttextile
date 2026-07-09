@@ -67,16 +67,14 @@ def save_model_file(model, file, *, versio_anterior=None, categoria=None,
         tipus=tipus or 'ALTRES',
         versio=versio,
         is_current=True,
-        path_servidor='',
         versio_anterior=versio_anterior,
         mida_bytes=mida,
         checksum=checksum,
         mimetype=mimetype,
         origen=origen,
     )
-    # save=False: completem path_servidor amb el nom real abans del INSERT.
+    # save=False: el FileField escriu els bytes i fixa .name; el INSERT ve després.
     fitxer.fitxer.save(nom_fitxer, file, save=False)
-    fitxer.path_servidor = fitxer.fitxer.name
     fitxer.save()
 
     if versio_anterior is not None and versio_anterior.is_current:

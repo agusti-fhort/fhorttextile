@@ -356,7 +356,6 @@ class ModelFitxer(models.Model):
     versio = models.PositiveIntegerField(default=1)
     # Invariant: exactament un is_current=True per cadena versio_anterior (el cap).
     is_current = models.BooleanField(default=True, db_index=True)
-    path_servidor = models.CharField(max_length=500)
     versio_anterior = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
@@ -391,13 +390,6 @@ class ModelFitxer(models.Model):
         help_text="URL externa si el fitxer no s'emmagatzema aquí",
     )
     descripcio = models.TextField(null=True, blank=True)
-
-    def get_url(self):
-        if self.url_extern:
-            return self.url_extern
-        if self.fitxer:
-            return self.fitxer.url
-        return None
 
     enviat_ia = models.BooleanField(default=False)
     resultat_ia_path = models.CharField(max_length=500, null=True, blank=True)
