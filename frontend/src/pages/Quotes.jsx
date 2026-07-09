@@ -96,7 +96,7 @@ export default function Quotes() {
     <div style={{ minWidth: 0, maxWidth: 1000 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('quotes.title')}</h1>
+          <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('quotes.title')}</h1>
           <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('quotes.subtitle')}</p>
         </div>
         {canEdit && (

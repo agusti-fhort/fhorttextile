@@ -109,7 +109,7 @@ export default function QuoteDetail() {
       </button>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO }}>{quote.document_number}</h1>
+        <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, fontFamily: MONO }}>{quote.document_number}</h1>
         <StatusBadge status={quote.status} t={t} />
         <span style={{ marginLeft: 'auto' }}>
           <PdfButton onClick={doPdf} disabled={busy} label={t('quotes.download_pdf')} />
@@ -150,7 +150,7 @@ export default function QuoteDetail() {
 function Section({ title, hint, children }) {
   return (
     <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 16, marginBottom: 16 }}>
-      <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, fontFamily: MONO, marginBottom: hint ? 2 : 10 }}>{title}</h2>
+      <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, fontFamily: MONO, marginBottom: hint ? 2 : 10 }}>{title}</h2>
       {hint && <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 10 }}>{hint}</p>}
       {children}
     </div>

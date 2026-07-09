@@ -76,7 +76,7 @@ export default function WorkOrders() {
   return (
     <div style={{ minWidth: 0, maxWidth: 1000 }}>
       <div style={{ marginBottom: '1rem' }}>
-        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('workorders.title')}</h1>
+        <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('workorders.title')}</h1>
         <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('workorders.subtitle')}</p>
       </div>
 
