@@ -6,6 +6,7 @@ import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
+import PdfButton from '../components/ui/PdfButton'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import { StatusBadge } from './Quotes'
 
@@ -110,6 +111,9 @@ export default function QuoteDetail() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
         <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO }}>{quote.document_number}</h1>
         <StatusBadge status={quote.status} t={t} />
+        <span style={{ marginLeft: 'auto' }}>
+          <PdfButton onClick={doPdf} disabled={busy} label={t('quotes.download_pdf')} />
+        </span>
       </div>
       <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 16 }}>{quote.customer_nom}</p>
 
@@ -117,9 +121,6 @@ export default function QuoteDetail() {
         <button onClick={doSend} disabled={busy || !editable || !hasLines} style={primaryBtn}
           title={!isDraft ? t('quotes.send_only_draft') : (!hasLines ? t('quotes.send_needs_lines') : '')}>
           <i className="ti ti-send" style={{ fontSize: 14 }} /> {t('quotes.send')}
-        </button>
-        <button onClick={doPdf} disabled={busy} style={smallBtn}>
-          <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {t('quotes.download_pdf')}
         </button>
         {canConvert && (
           <button onClick={() => setConfirmConvert(true)} disabled={busy} style={primaryBtn}>

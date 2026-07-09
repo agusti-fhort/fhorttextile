@@ -5,6 +5,7 @@ import useAuthStore from '../store/auth'
 import { commerce, models as modelsApi } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
+import PdfButton from '../components/ui/PdfButton'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import { OrderStatusBadge, allocatedPct } from './Orders'
 
@@ -159,22 +160,22 @@ export default function OrderDetail() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
         <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO }}>{order.document_number}</h1>
         <OrderStatusBadge status={order.status} t={t} />
+        <span style={{ marginLeft: 'auto' }}>
+          <PdfButton onClick={doPdf} disabled={busy} label={t('orders.download_pdf')} />
+        </span>
       </div>
       <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 16 }}>{order.customer_nom}</p>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button onClick={doPdf} disabled={busy} style={smallBtn}>
-          <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {t('orders.download_pdf')}
-        </button>
-        {canEdit && (
+      {canEdit && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)' }}>
             {t('orders.status')}:
             <select value={order.status} onChange={e => changeStatus(e.target.value)} disabled={busy} style={{ ...selS }}>
               {STATUSES.map(s => <option key={s} value={s}>{t(`orders.status_${s}`)}</option>)}
             </select>
           </label>
-        )}
-      </div>
+        </div>
+      )}
 
       <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
