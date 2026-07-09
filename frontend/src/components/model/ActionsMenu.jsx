@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan } from '../../api/endpoints'
+import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan, commerce } from '../../api/endpoints'
 import Modal from '../ui/Modal'
 import { selS } from '../ui/buttons'
 import TaskAssignWizard from '../TaskAssignWizard'
@@ -35,6 +35,11 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
   const [form, setForm] = useState({})
   const [elegibles, setElegibles] = useState([])   // assistents amb schedule_fittings (modal fitting)
   const [loadingEleg, setLoadingEleg] = useState(false)
+  const [orders, setOrders] = useState([])         // comandes OPEN del client (modal assign_order)
+
+  // Clients distints de la selecció (l'assignació a comanda exigeix un sol client).
+  const customerIds = [...new Set(list.map(m => m.customer).filter(Boolean))]
+  const multiCustomer = customerIds.length > 1
 
   useEffect(() => {
     suppliersApi.list({ active: 'true', ordering: 'name', page_size: 500 }).then(r => setSupps(r.data?.results ?? r.data ?? [])).catch(() => {})
@@ -52,6 +57,14 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
 
   const openModal = (kind) => {
     setOpen(false)
+    if (kind === 'assign_order') {
+      setForm({ order_id: '', line_id: '' })
+      setOrders([])
+      if (!multiCustomer && customerIds[0]) {
+        commerce.orders.list({ customer: customerIds[0], status: 'OPEN', page_size: 200 })
+          .then(r => setOrders(r.data?.results ?? r.data ?? [])).catch(() => setOrders([]))
+      }
+    }
     if (kind === 'production') setForm({ supplier_id: '', phase: defaultPhase, expected_at: '', notes: '' })
     if (kind === 'fitting') {
       setForm({ fase: single ? single.fase_actual : CURRENT, data: todayISO(), expected_at: '',
@@ -76,7 +89,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
     let ok = 0; const omesos = []
     for (const m of list) {
       try { await perModel(m); ok++ }
-      catch (e) { omesos.push(`${m.codi_intern}: ${e.response?.data?.error || 'error'}`) }
+      catch (e) { omesos.push(`${m.codi_intern}: ${e.response?.data?.error || e.response?.data?.detail || 'error'}`) }
     }
     setBusy(false); setModal(null)
     const txt = t('model_sheet.bulk_done', { ok }) + (omesos.length ? ' · ' + t('model_sheet.bulk_skipped', { n: omesos.length }) : '')
@@ -169,6 +182,13 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
   }
   const runAdvance = () => runBulk(m => { const nx = nextPhase(m.fase_actual); if (!nx) throw { response: { data: { error: t('model_sheet.phase_top') } } }; return modelsApi.gate(m.id, { to_phase: nx }) })
   const runBack = () => runBulk(m => { const pv = prevPhase(m.fase_actual); if (!pv) throw { response: { data: { error: t('model_sheet.phase_first') } } }; return modelsApi.regress(m.id, { to_phase: pv }) })
+  // v2 albarà — assignar N models a una línia de comanda OPEN (reutilitza assign_model_to_order_line
+  // un-a-un: cada crida imputa +1 a la línia). El client ha de ser únic (guard del servei).
+  const selectedOrder = orders.find(o => String(o.id) === String(form.order_id))
+  const runAssignOrder = () => {
+    if (!form.line_id) { onFeedback({ type: 'err', text: t('model_sheet.assign_order_pick_line') }); return }
+    runBulk(m => commerce.orderLines.assignModel(form.line_id, { model_id: m.id }))
+  }
 
   // B — La creació de Watchpoints (D-12) viu ara a l'overlay flotant de la capçalera del model
   // (WatchpointDrawer → WatchpointsPanel), única porta de creació. Aquí ja no hi ha "Fer comentari".
@@ -179,6 +199,7 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
     { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: list.length > 0 },
     // Convocar fitting des del llenç (un sol model): obre la convocatòria amb el model precarregat.
     { key: 'convene_fitting', label: t('model_sheet.convene_fitting'), icon: 'ti-shirt', enabled: !!single },
+    { key: 'assign_order', label: t('model_sheet.assign_order'), icon: 'ti-clipboard-list', enabled: list.length > 0 },
     { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: someNext },
     { key: 'back', label: t('model_sheet.back_phase'), icon: 'ti-arrow-left', enabled: somePrev },
   ]
@@ -233,6 +254,41 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
           <Row label={t('model_sheet.phase')}><select style={fullSel} value={form.phase} onChange={e => setForm(f => ({ ...f, phase: e.target.value }))}>{phaseSelectOptions(true)}</select></Row>
           <Row label={t('model_sheet.expected_at') + ' *'}><input type="date" style={fullSel} value={form.expected_at} onChange={e => setForm(f => ({ ...f, expected_at: e.target.value }))} /></Row>
           <Row label={t('model_sheet.notes')}><textarea style={{ ...fullSel, minHeight: 50, resize: 'vertical' }} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></Row>
+        </Modal>
+      )}
+
+      {modal === 'assign_order' && (
+        <Modal title={t('model_sheet.assign_order')} confirmLabel={busy ? t('model_sheet.working') : t('model_sheet.assign_order_confirm')} cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy || multiCustomer || !form.line_id} onConfirm={runAssignOrder} onCancel={() => !busy && setModal(null)}>
+          {multiCustomer ? (
+            <div style={warnBox}>{t('model_sheet.assign_order_multi_customer')}</div>
+          ) : (
+            <>
+              {!single && <div style={infoBox}>{t('model_sheet.assign_order_bulk', { n: list.length })}</div>}
+              <div style={{ ...infoBox, background: 'var(--gold-pale)', color: 'var(--text-main)' }}>
+                {t('model_sheet.assign_order_customer')}: <strong>{list[0]?.customer_nom || '—'}</strong>
+              </div>
+              <Row label={t('model_sheet.assign_order_order')}>
+                <select style={fullSel} value={form.order_id} onChange={e => setForm(f => ({ ...f, order_id: e.target.value, line_id: '' }))}>
+                  <option value="">— {t('model_sheet.assign_order_pick_order')} —</option>
+                  {orders.map(o => <option key={o.id} value={o.id}>{o.document_number}</option>)}
+                </select>
+              </Row>
+              {orders.length === 0 && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>{t('model_sheet.assign_order_no_orders')}</div>}
+              {selectedOrder && (
+                <Row label={t('model_sheet.assign_order_line')}>
+                  <select style={fullSel} value={form.line_id} onChange={e => setForm(f => ({ ...f, line_id: e.target.value }))}>
+                    <option value="">— {t('model_sheet.assign_order_pick_line')} —</option>
+                    {(selectedOrder.lines || []).map(l => {
+                      const free = Number(l.quantity ?? 0) - Number(l.qty_allocated ?? 0)
+                      return <option key={l.id} value={l.id} disabled={free <= 0}>
+                        {(l.product_name || l.product_code || `#${l.id}`)} · {Number(l.qty_allocated ?? 0)}/{Number(l.quantity ?? 0)}{free <= 0 ? ` (${t('model_sheet.assign_order_full')})` : ''}
+                      </option>
+                    })}
+                  </select>
+                </Row>
+              )}
+            </>
+          )}
         </Modal>
       )}
 

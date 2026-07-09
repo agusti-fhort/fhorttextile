@@ -14,6 +14,8 @@ class ModelListSerializer(serializers.ModelSerializer):
     garment_type = serializers.SerializerMethodField()
     responsable = serializers.SerializerMethodField()
     garment_type_item_nom = serializers.CharField(source='garment_type_item.name', read_only=True)
+    # v2 albarà — client del model (per a l'acció massiva "Assignar a comanda": mateix client).
+    customer_nom = serializers.CharField(source='customer.nom', read_only=True, default=None)
     # Pas 5C — dates del cicle (annotacions Subquery al queryset del ViewSet).
     entrada_prod = serializers.DateTimeField(read_only=True)
     arribada_proto = serializers.DateTimeField(read_only=True)
@@ -31,6 +33,8 @@ class ModelListSerializer(serializers.ModelSerializer):
             'collection',
             'temporada',
             'any',
+            'customer',
+            'customer_nom',
             'created_at',
             'garment_type',
             'garment_type_item_nom',
