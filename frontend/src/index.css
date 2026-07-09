@@ -11,7 +11,8 @@
   --gold:       #c27a2a;
   --gold-l:     #c68338;
   --gold-pale:  #f5e6d0;
-  --grana:      #8a1f3d; /* grana (garnet) — accent dels botons de document PDF (P7) */
+  --grana:      #8a1f3d; /* grana (garnet) — color de marca */
+  --pdf-accent: var(--grana); /* accent semàntic dels botons de document PDF (mateix color que grana) */
   --border:     #e0d5c5;
   --base-hairline: #e3cfa3; /* filet de la columna de talla base (graella fitting) */
 
