@@ -36,10 +36,12 @@ from .views import (
 
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
 from .ftt_template_views import DocumentTemplateViewSet
+from .item_fitxer_views import ItemFitxerViewSet
 
 router = DefaultRouter()
 router.register('models', ModelViewSet, basename='model')
 router.register('model-fitxers', ModelFitxerViewSet, basename='model-fitxer')
+router.register('item-fitxers', ItemFitxerViewSet, basename='item-fitxer')
 router.register('base-measurements', BaseMeasurementViewSet, basename='base-measurement')
 router.register('size-checks', SizeCheckViewSet, basename='size-check')
 router.register('size-check-lines', SizeCheckLineViewSet, basename='size-check-line')

@@ -1,6 +1,24 @@
 from rest_framework import serializers
 
-from .models import BaseMeasurement, Contracte, LiniaContracte, Model, ModelFitxer, Watchpoint
+from .models import (BaseMeasurement, Contracte, ItemFitxer, LiniaContracte, Model,
+                     ModelFitxer, Watchpoint)
+
+
+def _signed_download_url(obj, request, *, salt, ruta):
+    """URL absoluta i signada (D13). Compartida per ModelFitxer i ItemFitxer.
+
+    `<a href>` i `<img src>` no poden portar Authorization; el permís viatja al token, que
+    només rep qui ja s'ha autenticat per llegir aquesta fila. Sense `request` al context no
+    es pot construir una URL absoluta → None (mateix patró que _asset_urls,
+    ftt_document_views.py:40-46). Cada model té el SEU salt: si en compartissin un, un token
+    emès per a ModelFitxer id=5 validaria a ItemFitxer id=5.
+    """
+    from django.core import signing
+
+    if request is None or not obj.fitxer:
+        return None
+    token = signing.dumps(obj.id, salt=salt)
+    return request.build_absolute_uri(f'/api/v1/{ruta}/{obj.id}/download-signed/?token={token}')
 
 
 class ModelFitxerSerializer(serializers.ModelSerializer):
@@ -12,23 +30,25 @@ class ModelFitxerSerializer(serializers.ModelSerializer):
         read_only_fields = ('data_pujada',)
 
     def get_download_url(self, obj):
-        """URL absoluta i signada (D13) cap a la descàrrega gated.
-
-        `<a href>` i `<img src>` no poden portar Authorization; el permís viatja al token,
-        que només rep qui ja s'ha autenticat per llegir aquesta fila. Sense `request` al
-        context no es pot construir una URL absoluta → None (mateix patró que _asset_urls,
-        ftt_document_views.py:40-46).
-        """
-        from django.core import signing
-
         from .services_fitxers import DOWNLOAD_SALT
+        return _signed_download_url(obj, self.context.get('request'),
+                                    salt=DOWNLOAD_SALT, ruta='model-fitxers')
 
-        request = self.context.get('request')
-        if request is None or not obj.fitxer:
-            return None
-        token = signing.dumps(obj.id, salt=DOWNLOAD_SALT)
-        return request.build_absolute_uri(
-            f'/api/v1/model-fitxers/{obj.id}/download-signed/?token={token}')
+
+class ItemFitxerSerializer(serializers.ModelSerializer):
+    """Mirall d'ModelFitxerSerializer per al catàleg (S03b · P4)."""
+    download_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ItemFitxer
+        fields = '__all__'
+        read_only_fields = ('data_pujada', 'versio', 'is_current', 'checksum',
+                            'mimetype', 'mida_bytes', 'pujat_per')
+
+    def get_download_url(self, obj):
+        from .services_fitxers import ITEM_DOWNLOAD_SALT
+        return _signed_download_url(obj, self.context.get('request'),
+                                    salt=ITEM_DOWNLOAD_SALT, ruta='item-fitxers')
 
 
 class ModelListSerializer(serializers.ModelSerializer):

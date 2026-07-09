@@ -174,8 +174,8 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
         Per a consumidors que NO poden posar capçaleres (<a href>, <img src>), vegeu
         `download_signed` (D13).
         """
-        from .services_fitxers import serve_model_file
-        return serve_model_file(self.get_object())
+        from .services_fitxers import serve_fitxer
+        return serve_fitxer(self.get_object())
 
     @action(detail=True, methods=['get'], url_path='download-signed',
             permission_classes=[AllowAny], authentication_classes=[])
@@ -196,7 +196,7 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
         from django.core import signing
         from django.http import HttpResponseForbidden
 
-        from .services_fitxers import serve_model_file
+        from .services_fitxers import serve_fitxer
 
         token = request.query_params.get('token') or ''
         try:
@@ -210,7 +210,7 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
             return HttpResponseForbidden('El token no correspon a aquest fitxer.')
 
         inline = request.query_params.get('inline') == '1'
-        return serve_model_file(self.get_object(), as_attachment=not inline)
+        return serve_fitxer(self.get_object(), as_attachment=not inline)
 
 
 # D-12 — Watchpoints: advertències de text lliure que viatgen amb el model a través dels gates.
