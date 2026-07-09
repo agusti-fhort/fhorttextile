@@ -6,17 +6,15 @@ import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
-import Table from '../components/ui/Table'
+import Badge from '../components/ui/Badge'
+import { LineTable, RowBtn } from '../components/commercial'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import TranslatableField, { pickTranslation } from '../components/ui/TranslatableField'
 
-// Mòdul Comercial Studio — B1 · Mestre d'articles (pàgina Productes). Plantilla Suppliers.jsx.
+// Mòdul Comercial Studio — B1 · Mestre d'articles (pàgina Productes). Sistema visual unificat
+// del mòdul comercial (LineTable + RowBtn + Badge, tipografia continguda).
 // Escriptura gated CONFIGURE (backend); el gate de tier del mòdul arriba a B5.
 const MONO = 'IBM Plex Mono, monospace'
-const actBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
-}
 
 export default function Products() {
   const { t, i18n } = useTranslation()
@@ -82,34 +80,35 @@ export default function Products() {
   }
 
   const columns = [
-    { key: 'code', label: t('products.col_code'), render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.code}</span> },
+    { key: 'code', label: t('products.col_code'), width: 140, render: r => <span style={{ fontWeight: 600 }}>{r.code}</span> },
     { key: 'name', label: t('products.col_name'), render: r => pickTranslation(r, 'name', lang) },
     { key: 'nature', label: t('products.col_nature'), render: r => natureLabel(r.nature) },
-    { key: 'price', label: t('products.col_price'), render: r => (
-      <span style={{ fontFamily: MONO }}>{priceSummary(r)}</span>
+    { key: 'price', label: t('products.col_price'), align: 'right', width: 150, render: r => priceSummary(r) },
+    { key: 'active', label: t('products.col_active'), width: 110, render: r => (
+      <Badge variant={r.active ? 'ok' : 'gray'}>{r.active ? t('products.active') : t('products.inactive')}</Badge>
     ) },
-    { key: 'active', label: t('products.col_active'), render: r => (
-      <span style={{
-        fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px', borderRadius: 999, fontFamily: MONO,
-        background: r.active ? 'var(--ok-bg)' : 'var(--gray-l)', color: r.active ? 'var(--ok)' : 'var(--gray)',
-      }}>{r.active ? t('products.active') : t('products.inactive')}</span>
-    ) },
-    { key: '_a', label: '', align: 'right', render: r => (
-      <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-        <button onClick={() => navigate(`/comercial/productes/${r.id}`)} disabled={saving} style={actBtn}>{t('products.open')}</button>
-        {canEdit && <>
-          <button onClick={() => setModal({ mode: 'edit', prod: r })} disabled={saving} style={actBtn}>{t('products.edit')}</button>
-          <button onClick={() => toggleActive(r)} disabled={saving} style={actBtn}>{r.active ? t('products.deactivate') : t('products.activate')}</button>
-          <button onClick={() => remove(r)} disabled={saving} style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>{t('products.delete')}</button>
-        </>}
-      </span>) },
   ]
+
+  const renderActions = (r) => (
+    <>
+      <RowBtn icon="ti-arrow-right" title={t('products.open')} disabled={saving}
+        onClick={() => navigate(`/comercial/productes/${r.id}`)} />
+      {canEdit && <>
+        <RowBtn icon="ti-pencil" title={t('products.edit')} disabled={saving}
+          onClick={() => setModal({ mode: 'edit', prod: r })} />
+        <RowBtn icon={r.active ? 'ti-circle-check' : 'ti-circle'} active={r.active}
+          title={r.active ? t('products.deactivate') : t('products.activate')} disabled={saving}
+          onClick={() => toggleActive(r)} />
+        <RowBtn icon="ti-trash" danger title={t('products.delete')} disabled={saving} onClick={() => remove(r)} />
+      </>}
+    </>
+  )
 
   return (
     <div style={{ minWidth: 0, maxWidth: 1000 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('products.title')}</h1>
+          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('products.title')}</h1>
           <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('products.subtitle')}</p>
         </div>
         {canEdit && (
@@ -123,9 +122,13 @@ export default function Products() {
 
       {loading ? <Center>{t('products.loading')}</Center>
         : error ? <Center>{t('products.error')}</Center>
-          : (
-            <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
-              <Table columns={columns} data={items} loading={false} empty={t('products.empty')} />
+          : items.length === 0 ? (
+            <div style={{ border: '0.5px solid var(--border)', borderRadius: 12, background: 'var(--white)', padding: 24, textAlign: 'center', color: 'var(--gray)', fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
+              {t('products.empty')}
+            </div>
+          ) : (
+            <div style={{ border: '0.5px solid var(--border)', borderRadius: 12, background: 'var(--white)', overflow: 'hidden' }}>
+              <LineTable columns={columns} rows={items} renderActions={renderActions} />
             </div>
           )}
 
