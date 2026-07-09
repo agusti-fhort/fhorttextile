@@ -253,6 +253,9 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     agregats) i adjustments. El detall de tasques s'omet a la llista (evita N+1)."""
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
     model_codi = serializers.CharField(source='model.codi_intern', read_only=True, default=None)
+    # v2 albarà — traçabilitat de la cadena comanda→WO→albarà (números de document, read-only).
+    order_number = serializers.CharField(source='order_line.order.document_number', read_only=True, default=None)
+    delivery_note_number = serializers.CharField(source='delivery_note.document_number', read_only=True, default=None)
     n_tasks = serializers.SerializerMethodField()
     tasks = serializers.SerializerMethodField()
     adjustments = WorkOrderAdjustmentSerializer(many=True, read_only=True)
@@ -260,8 +263,8 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkOrder
         fields = ['id', 'number', 'kind', 'origin', 'status', 'customer', 'customer_nom',
-                  'model', 'model_codi', 'order_line', 'period', 'delivery_note',
-                  'price_snapshot', 'recipe_snapshot',
+                  'model', 'model_codi', 'order_line', 'order_number', 'period', 'delivery_note',
+                  'delivery_note_number', 'price_snapshot', 'recipe_snapshot',
                   'closed_at', 'closed_by', 'created_at', 'n_tasks', 'tasks', 'adjustments']
 
     def get_n_tasks(self, obj):
@@ -327,10 +330,14 @@ class DeliveryNoteLineSerializer(serializers.ModelSerializer):
     model_any = serializers.IntegerField(source='model.any', read_only=True, default=None)
     # v2 — data de fi de la tasca inclosa (la data de lliurament del model = la darrera d'aquestes).
     task_finished_at = serializers.DateTimeField(source='model_task.finished_at', read_only=True, default=None)
+    # v2 — número/estat de l'albarà (traçabilitat: albarans que inclouen un model, filtre ?model=).
+    dn_number = serializers.CharField(source='delivery_note.document_number', read_only=True, default=None)
+    dn_status = serializers.CharField(source='delivery_note.status', read_only=True, default=None)
 
     class Meta:
         model = DeliveryNoteLine
-        fields = ['id', 'delivery_note', 'line_kind', 'product', 'product_code', 'product_name',
+        fields = ['id', 'delivery_note', 'dn_number', 'dn_status', 'line_kind', 'product',
+                  'product_code', 'product_name',
                   'description', 'quantity', 'unit_price', 'line_total', 'position', 'visible',
                   'model', 'model_intern', 'model_codi_client', 'model_nom', 'model_collection',
                   'model_temporada', 'model_any', 'internal_minutes', 'task_finished_at',

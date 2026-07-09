@@ -65,10 +65,11 @@ class ModelViewSet(viewsets.ModelViewSet):
             return qs
         # Pas 5C — enriquiment de la LLISTA: 3 dates de cicle (Subquery correlat, sense N+1) +
         # prefetch dels assignees per al "principal + N" (tècnics).
-        from django.db.models import OuterRef, Subquery, Prefetch
+        from django.db.models import OuterRef, Subquery, Prefetch, Exists
         from django.utils import timezone
         from fhort.tasks.models import Production, ModelTask
         from fhort.fitting.models import FittingSession
+        from fhort.commerce.models import WorkOrder
         today = timezone.localdate()
         return qs.annotate(
             entrada_prod=Subquery(Production.objects
@@ -80,6 +81,8 @@ class ModelViewSet(viewsets.ModelViewSet):
             fitting_prev=Subquery(FittingSession.objects
                 .filter(model=OuterRef('pk'), data__gte=today)
                 .order_by('data').values('data')[:1]),
+            # v2 albarà — traçabilitat: el model té encàrrec real (WO ORDER) o va directe (col·lector).
+            has_order=Exists(WorkOrder.objects.filter(model=OuterRef('pk'), kind='ORDER')),
         ).prefetch_related(Prefetch(
             'model_tasks',
             queryset=ModelTask.objects.exclude(assignee__isnull=True).select_related('assignee'),

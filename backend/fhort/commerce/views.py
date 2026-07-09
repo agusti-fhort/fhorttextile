@@ -262,7 +262,7 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
     queryset = WorkOrder.objects.select_related('customer', 'model', 'closed_by', 'order_line') \
         .prefetch_related('adjustments', 'tasks__task_type').all()
     serializer_class = WorkOrderSerializer
-    filterset_fields = ['kind', 'status', 'customer', 'period']
+    filterset_fields = ['kind', 'status', 'customer', 'period', 'model']
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
@@ -468,7 +468,7 @@ class DeliveryNoteLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin,
     línies proposades neixen de `add-lines/` (v2) o `generate/` (v1)."""
     queryset = DeliveryNoteLine.objects.select_related('delivery_note', 'product', 'model').all()
     serializer_class = DeliveryNoteLineSerializer
-    filterset_fields = ['delivery_note', 'line_kind']
+    filterset_fields = ['delivery_note', 'line_kind', 'model']
 
     def create(self, request, *args, **kwargs):
         """POST commerce/delivery-note-lines/ — crea una línia MANUAL (comentari/lliure) en un DRAFT.

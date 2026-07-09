@@ -156,6 +156,11 @@ function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale }) {
           {m.codi_client && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>· {m.codi_client}</span>}
           {m.collection && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>· {m.collection}</span>}
           <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{m.temporada}{m.any ? ` ${m.any}` : ''}</span>
+          <span title={t(m.has_order ? 'models_list.with_order_hint' : 'models_list.direct_hint')} style={{
+            fontSize: 'var(--fs-caption)', padding: '2px 7px', borderRadius: 5, fontFamily: MONO,
+            background: m.has_order ? 'var(--ok-bg)' : 'var(--gray-l)',
+            color: m.has_order ? 'var(--ok)' : 'var(--gray)',
+          }}>{t(m.has_order ? 'models_list.with_order' : 'models_list.direct')}</span>
           <button onClick={onDelete} title={t('models_list.delete')} style={delBtn}><i className="ti ti-trash" /></button>
         </div>
         {/* Fila 2 — operativa */}
