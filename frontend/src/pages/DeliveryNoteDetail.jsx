@@ -6,24 +6,23 @@ import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Badge from '../components/ui/Badge'
+import PdfButton from '../components/ui/PdfButton'
 import { selS, primaryBtn } from '../components/ui/buttons'
+import { DocumentHeader, ModelCard, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { DNStatusBadge } from './DeliveryNotes'
 
-// Mòdul Comercial — v2 · fitxa/composició d'albarà. Es compon per MODEL des de la safata
-// d'albaranables del client (tasques Done + extres + despeses + deduccions, seleccionats per check).
-// Blocs per model amb capçalera i subtotal; l'ull commuta la visibilitat (les línies amagades no
-// compten al total ni surten al PDF). Cicle DRAFT→ISSUED (congela)→INVOICED (presentat al client).
+// Mòdul Comercial — v2 · fitxa/composició d'albarà (reskin: sistema visual comercial unificat).
+// Es compon per MODEL des de la safata d'albaranables del client (tasques Done + extres + despeses +
+// deduccions, seleccionats per check). Blocs per model amb capçalera i subtotal; l'ull commuta la
+// visibilitat (les línies amagades no compten al total ni surten al PDF). Cicle DRAFT→ISSUED
+// (congela)→INVOICED. Comportament INTACTE respecte v2; només canvia el markup (components compartits).
 const MONO = 'IBM Plex Mono, monospace'
 const smallBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
   padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
+  display: 'inline-flex', alignItems: 'center', gap: 4,
 }
 const inp = { ...selS, minWidth: 0 }
-const cell = { padding: '6px 10px', fontSize: 'var(--fs-body)', borderTop: '0.5px solid var(--gray-l)' }
-const sectionTitle = {
-  fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
-  textTransform: 'uppercase', letterSpacing: '0.04em', margin: '18px 0 8px',
-}
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
 const KIND_VARIANT = { TASK: 'ok', EXTRA: 'gold', DEDUCTION: 'err', EXPENSE: 'warn', MANUAL: 'gray' }
 
@@ -203,6 +202,76 @@ export default function DeliveryNoteDetail() {
 
   const lines = dn.lines || []
   const visibleCount = lines.filter(l => l.visible).length
+  const internalTotal = lines.reduce((s, l) => s + (l.internal_cost != null ? Number(l.internal_cost) : 0), 0)
+  const hasInternal = lines.some(l => l.internal_cost != null || l.internal_minutes != null)
+  const internalLabels = { time: t('deliverynotes.line_time'), tecnic: t('deliverynotes.line_tecnic'), cost: t('deliverynotes.line_cost') }
+
+  // Columnes de línia (sistema unificat). Cel·les editables amb el patró save-on-blur (INTACTE).
+  const columns = [
+    { key: 'kind', label: t('deliverynotes.line_kind'),
+      render: l => <Badge variant={KIND_VARIANT[l.line_kind] || 'gray'}>{t(`deliverynotes.kind_${l.line_kind}`)}</Badge> },
+    { key: 'desc', label: t('deliverynotes.line_desc'),
+      render: l => editable
+        ? <input value={editVal(l, 'description')} disabled={busy}
+            onChange={e => setEdit(l.id, 'description', e.target.value)} onBlur={() => saveLine(l)}
+            style={{ ...inp, width: '100%' }} />
+        : (l.description || l.product_name || '—') },
+    { key: 'qty', label: t('deliverynotes.line_qty'), align: 'right', width: 90,
+      render: l => editable
+        ? <input type="number" step="0.01" value={editVal(l, 'quantity')} disabled={busy}
+            onChange={e => setEdit(l.id, 'quantity', e.target.value)} onBlur={() => saveLine(l)}
+            style={{ ...inp, width: 70, textAlign: 'right' }} />
+        : <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{Number(l.quantity ?? 0)}</span> },
+    { key: 'price', label: t('deliverynotes.line_price'), align: 'right', width: 110,
+      render: l => editable
+        ? <input type="number" step="0.01" value={editVal(l, 'unit_price')} disabled={busy}
+            onChange={e => setEdit(l.id, 'unit_price', e.target.value)} onBlur={() => saveLine(l)}
+            style={{ ...inp, width: 100, textAlign: 'right' }} />
+        : <span style={{ fontFamily: MONO }}>{money(l.unit_price)}</span> },
+    { key: 'total', label: t('deliverynotes.line_total'), align: 'right', width: 100,
+      render: l => <span style={{ fontFamily: MONO, color: Number(l.line_total ?? 0) < 0 ? 'var(--err)' : 'inherit' }}>{money(l.line_total)}</span> },
+  ]
+
+  const renderActions = editable ? (l) => (
+    <>
+      <RowBtn icon={l.visible ? 'ti-eye' : 'ti-eye-off'} active={l.visible} disabled={busy}
+        title={l.visible ? t('deliverynotes.hide') : t('deliverynotes.show')} onClick={() => toggleVisible(l)} />
+      <RowBtn icon="ti-x" danger disabled={busy}
+        title={t('deliverynotes.remove_line')} onClick={() => removeLine(l)} />
+    </>
+  ) : undefined
+
+  // Barra d'accions de la capçalera (segons el sistema de la casa; mai text pla).
+  const headerActions = (
+    <>
+      <PdfButton label={t('deliverynotes.download_pdf')} onClick={doPdf} />
+      {editable && (
+        <button onClick={openTray} disabled={busy} style={smallBtn}>
+          <i className="ti ti-inbox" style={{ fontSize: 14 }} />{t('deliverynotes.tray_action')}
+        </button>
+      )}
+      {editable && (
+        <button onClick={addComment} disabled={busy} style={smallBtn}>
+          <i className="ti ti-message-plus" style={{ fontSize: 14 }} />{t('deliverynotes.add_comment')}
+        </button>
+      )}
+      {editable && (
+        <button onClick={() => setConfirmIssue(true)} disabled={busy || visibleCount === 0} style={{ ...primaryBtn, marginLeft: 0 }}>
+          <i className="ti ti-send" style={{ fontSize: 14 }} />{t('deliverynotes.issue_action')}
+        </button>
+      )}
+      {isIssued && canConfigure && (
+        <button onClick={doMarkInvoiced} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>
+          <i className="ti ti-checkbox" style={{ fontSize: 14 }} />{t('deliverynotes.mark_invoiced')}
+        </button>
+      )}
+      {editable && (
+        <button onClick={doDelete} disabled={busy} style={smallBtn} title={t('deliverynotes.delete')}>
+          <i className="ti ti-trash" style={{ fontSize: 13 }} />
+        </button>
+      )}
+    </>
+  )
 
   return (
     <div style={{ minWidth: 0, maxWidth: 1000 }}>
@@ -210,167 +279,66 @@ export default function DeliveryNoteDetail() {
         <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('deliverynotes.back')}
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO }}>{dn.document_number}</h1>
-        <DNStatusBadge status={dn.status} t={t} />
-      </div>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 16 }}>
-        {dn.customer_nom}
-        {dn.invoiced_at && <> · {t('deliverynotes.invoiced_on')} {String(dn.invoiced_at).slice(0, 10)}</>}
-      </p>
+      <DocumentHeader
+        reference={dn.document_number}
+        statusBadge={<DNStatusBadge status={dn.status} t={t} />}
+        customer={<>{dn.customer_nom}{dn.invoiced_at && <> · {t('deliverynotes.invoiced_on')} {String(dn.invoiced_at).slice(0, 10)}</>}</>}
+        actions={headerActions}
+      />
 
-      <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        <button onClick={doPdf} style={smallBtn}>
-          <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {t('deliverynotes.download_pdf')}
-        </button>
-        {editable && (
-          <button onClick={openTray} disabled={busy} style={smallBtn}>
-            <i className="ti ti-inbox" style={{ fontSize: 14, marginRight: 4 }} />{t('deliverynotes.tray_action')}
-          </button>
-        )}
-        {editable && (
-          <button onClick={addComment} disabled={busy} style={smallBtn}>
-            <i className="ti ti-message-plus" style={{ fontSize: 14, marginRight: 4 }} />{t('deliverynotes.add_comment')}
-          </button>
-        )}
-        {editable && (
-          <button onClick={() => setConfirmIssue(true)} disabled={busy || visibleCount === 0} style={{ ...primaryBtn }}>
-            <i className="ti ti-send" style={{ fontSize: 14, marginRight: 6 }} />{t('deliverynotes.issue_action')}
-          </button>
-        )}
-        {isIssued && canConfigure && (
-          <button onClick={doMarkInvoiced} disabled={busy} style={{ ...primaryBtn }}>
-            <i className="ti ti-checkbox" style={{ fontSize: 14, marginRight: 6 }} />{t('deliverynotes.mark_invoiced')}
-          </button>
-        )}
-        {editable && (
-          <button onClick={doDelete} disabled={busy} style={smallBtn} title={t('deliverynotes.delete')}>
-            <i className="ti ti-trash" style={{ fontSize: 13 }} />
-          </button>
-        )}
+      <div style={{ marginTop: 12 }}>
+        <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
       </div>
 
       {/* Blocs per model */}
       {lines.length === 0 && (
-        <div style={{ ...sectionTitle }}>{t('deliverynotes.empty_lines')}</div>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: '18px 0' }}>{t('deliverynotes.empty_lines')}</p>
       )}
-      {blocks.map(block => {
-        const subtotal = block.lines.filter(l => l.visible).reduce((s, l) => s + Number(l.line_total ?? 0), 0)
-        const dates = block.lines.map(l => l.task_finished_at).filter(Boolean).sort()
-        const deliveredAt = dates.length ? dates[dates.length - 1].slice(0, 10) : null
-        const h = block.header
-        const showClient = h.model_codi_client && h.model_codi_client !== h.model_intern
-        return (
-          <div key={block.model ?? 'general'} style={{ marginBottom: 14 }}>
-            {/* Capçalera de bloc-model */}
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
-              {block.model ? (
-                <>
-                  <span style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)' }}>{h.model_intern}</span>
-                  {showClient && <span style={{ fontFamily: MONO, color: 'var(--gold)', fontSize: 'var(--fs-label)' }}>· {h.model_codi_client}</span>}
-                  {h.model_nom && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{h.model_nom}</span>}
-                  {(h.model_collection || h.model_temporada || h.model_any) && (
-                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>
-                      {[h.model_collection, h.model_temporada, h.model_any].filter(Boolean).join(' · ')}
-                    </span>
-                  )}
-                  {deliveredAt && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>· {t('deliverynotes.delivered_at')} {deliveredAt}</span>}
-                </>
-              ) : (
-                <span style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('deliverynotes.general_block')}</span>
-              )}
-            </div>
-
-            <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 10, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textAlign: 'left' }}>
-                    <th style={{ padding: '6px 10px' }}>{t('deliverynotes.line_kind')}</th>
-                    <th style={{ padding: '6px 10px' }}>{t('deliverynotes.line_desc')}</th>
-                    <th style={{ padding: '6px 10px', textAlign: 'right' }}>{t('deliverynotes.line_qty')}</th>
-                    <th style={{ padding: '6px 10px', textAlign: 'right' }}>{t('deliverynotes.line_price')}</th>
-                    <th style={{ padding: '6px 10px', textAlign: 'right' }}>{t('deliverynotes.line_total')}</th>
-                    <th style={{ padding: '6px 10px', textAlign: 'right' }}>{t('deliverynotes.line_time')}</th>
-                    <th style={{ padding: '6px 10px', width: 60 }} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {block.lines.map(l => {
-                    const neg = Number(l.line_total ?? 0) < 0
-                    const faded = !l.visible
-                    return (
-                      <tr key={l.id} style={{ opacity: faded ? 0.4 : 1 }}>
-                        <td style={cell}><Badge variant={KIND_VARIANT[l.line_kind] || 'gray'}>{t(`deliverynotes.kind_${l.line_kind}`)}</Badge></td>
-                        <td style={cell}>
-                          {editable ? (
-                            <input value={editVal(l, 'description')} disabled={busy}
-                              onChange={e => setEdit(l.id, 'description', e.target.value)}
-                              onBlur={() => saveLine(l)} style={{ ...inp, width: '100%' }} />
-                          ) : (l.description || l.product_name || '—')}
-                        </td>
-                        <td style={{ ...cell, textAlign: 'right' }}>
-                          {editable ? (
-                            <input type="number" step="0.01" value={editVal(l, 'quantity')} disabled={busy}
-                              onChange={e => setEdit(l.id, 'quantity', e.target.value)}
-                              onBlur={() => saveLine(l)} style={{ ...inp, width: 70, textAlign: 'right' }} />
-                          ) : <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{Number(l.quantity ?? 0)}</span>}
-                        </td>
-                        <td style={{ ...cell, textAlign: 'right' }}>
-                          {editable ? (
-                            <input type="number" step="0.01" value={editVal(l, 'unit_price')} disabled={busy}
-                              onChange={e => setEdit(l.id, 'unit_price', e.target.value)}
-                              onBlur={() => saveLine(l)} style={{ ...inp, width: 100, textAlign: 'right' }} />
-                          ) : <span style={{ fontFamily: MONO }}>{money(l.unit_price)}</span>}
-                        </td>
-                        <td style={{ ...cell, textAlign: 'right', fontFamily: MONO, color: neg ? 'var(--err)' : 'inherit' }}>{money(l.line_total)}</td>
-                        <td style={{ ...cell, textAlign: 'right', fontFamily: MONO, color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>
-                          {l.internal_minutes != null ? `${Number(l.internal_minutes)}′` : '—'}
-                        </td>
-                        <td style={{ ...cell, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          {editable && (
-                            <>
-                              <button onClick={() => toggleVisible(l)} disabled={busy} style={{ ...smallBtn, padding: '3px 6px', border: 'none' }}
-                                title={l.visible ? t('deliverynotes.hide') : t('deliverynotes.show')}>
-                                <i className={`ti ${l.visible ? 'ti-eye' : 'ti-eye-off'}`} style={{ fontSize: 15 }} />
-                              </button>
-                              <button onClick={() => removeLine(l)} disabled={busy} style={{ ...smallBtn, padding: '3px 6px', border: 'none' }}
-                                title={t('deliverynotes.remove_line')}>
-                                <i className="ti ti-x" style={{ fontSize: 14 }} />
-                              </button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {/* Subtotal per model */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 4, fontSize: 'var(--fs-label)' }}>
-              <span style={{ color: 'var(--text-muted)' }}>{t('deliverynotes.model_subtotal')}</span>
-              <span style={{ fontFamily: MONO, fontWeight: 600, minWidth: 90, textAlign: 'right' }}>{money(subtotal)}</span>
-            </div>
-          </div>
-        )
-      })}
-
-      {/* Totals del document */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-        <table style={{ borderCollapse: 'collapse', minWidth: 260 }}>
-          <tbody>
-            <tr><td style={{ padding: '3px 10px', color: 'var(--text-muted)' }}>{t('deliverynotes.subtotal')}</td>
-              <td style={{ padding: '3px 10px', textAlign: 'right', fontFamily: MONO }}>{money(dn.subtotal)}</td></tr>
-            <tr><td style={{ padding: '3px 10px', color: 'var(--text-muted)' }}>{t('deliverynotes.tax')}</td>
-              <td style={{ padding: '3px 10px', textAlign: 'right', fontFamily: MONO }}>{money(dn.tax_amount)}</td></tr>
-            <tr style={{ borderTop: '0.5px solid var(--gray-l)' }}>
-              <td style={{ padding: '5px 10px', fontWeight: 600 }}>{t('deliverynotes.total')}</td>
-              <td style={{ padding: '5px 10px', textAlign: 'right', fontFamily: MONO, fontWeight: 600 }}>{money(dn.total)}</td></tr>
-          </tbody>
-        </table>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '16px 0' }}>
+        {blocks.map(block => {
+          const subtotal = block.lines.filter(l => l.visible).reduce((s, l) => s + Number(l.line_total ?? 0), 0)
+          const dates = block.lines.map(l => l.task_finished_at).filter(Boolean).sort()
+          const deliveredAt = dates.length ? dates[dates.length - 1].slice(0, 10) : null
+          const h = block.header
+          const showClient = h.model_codi_client && h.model_codi_client !== h.model_intern
+          const metaParts = []
+          if (showClient) metaParts.push(h.model_codi_client)
+          const camp = [h.model_collection, h.model_temporada, h.model_any].filter(Boolean).join(' · ')
+          if (camp) metaParts.push(camp)
+          if (deliveredAt) metaParts.push(`${t('deliverynotes.delivered_at')} ${deliveredAt}`)
+          const rows = block.lines.map(l => ({
+            ...l,
+            internal: {
+              minutes: l.internal_minutes,
+              tecnic: l.internal_tecnic,
+              cost: l.internal_cost != null ? money(l.internal_cost) : '—',
+            },
+          }))
+          return (
+            <ModelCard key={block.model ?? 'general'}
+              reference={block.model ? h.model_intern : undefined}
+              name={block.model ? (h.model_nom || h.model_intern) : t('deliverynotes.general_block')}
+              meta={metaParts.join(' · ') || undefined}
+              subtotalLabel={t('deliverynotes.model_subtotal')} subtotal={money(subtotal)}>
+              <LineTable columns={columns} rows={rows} renderActions={renderActions}
+                showInternal={hasInternal} internalLabels={internalLabels}
+                rowStyle={l => ({ opacity: l.visible === false ? 0.4 : 1 })} />
+            </ModelCard>
+          )
+        })}
       </div>
+
+      {/* Resum del document (contenidor propi separat + cost intern al peu) */}
+      <DocumentSummary
+        lines={[
+          { label: t('deliverynotes.subtotal'), value: money(dn.subtotal) },
+          { label: t('deliverynotes.tax'), value: money(dn.tax_amount) },
+          { label: t('deliverynotes.total'), value: money(dn.total), strong: true },
+        ]}
+        showInternal={hasInternal}
+        internalLabel={t('deliverynotes.internal_cost_foot')}
+        internalValue={money(internalTotal)}
+      />
 
       {/* Safata d'albaranables */}
       {trayOpen && (
@@ -382,7 +350,7 @@ export default function DeliveryNoteDetail() {
             background: 'var(--white)', borderRadius: 12, padding: '1.2rem 1.4rem',
             maxWidth: 720, width: '100%', maxHeight: '85vh', overflowY: 'auto', border: '0.5px solid var(--gray-l)',
           }}>
-            <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>
               {t('deliverynotes.tray_title')}
             </h2>
             <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 14 }}>
@@ -410,7 +378,7 @@ export default function DeliveryNoteDetail() {
                   </div>
                 )))}
             <div style={{ display: 'flex', gap: 8, marginTop: 12, position: 'sticky', bottom: 0, background: 'var(--white)', paddingTop: 8 }}>
-              <button onClick={addPicked} disabled={trayBusy || picked.size === 0} style={{ ...primaryBtn }}>
+              <button onClick={addPicked} disabled={trayBusy || picked.size === 0} style={{ ...primaryBtn, marginLeft: 0 }}>
                 {t('deliverynotes.tray_add', { n: picked.size })}
               </button>
               <button onClick={() => setTrayOpen(false)} disabled={trayBusy} style={smallBtn}>{t('deliverynotes.issue_cancel')}</button>
@@ -429,14 +397,14 @@ export default function DeliveryNoteDetail() {
             background: 'var(--white)', borderRadius: 12, padding: '1.2rem 1.4rem',
             maxWidth: 460, width: '100%', border: '0.5px solid var(--gray-l)',
           }}>
-            <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
               {t('deliverynotes.issue_title')}
             </h2>
             <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>
               {t('deliverynotes.issue_warning')}
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={doIssue} disabled={busy} style={{ ...primaryBtn }}>{t('deliverynotes.issue_confirm')}</button>
+              <button onClick={doIssue} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>{t('deliverynotes.issue_confirm')}</button>
               <button onClick={() => setConfirmIssue(false)} disabled={busy} style={smallBtn}>{t('deliverynotes.issue_cancel')}</button>
             </div>
           </div>

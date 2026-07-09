@@ -333,6 +333,35 @@ class DeliveryNoteLineSerializer(serializers.ModelSerializer):
     # v2 — número/estat de l'albarà (traçabilitat: albarans que inclouen un model, filtre ?model=).
     dn_number = serializers.CharField(source='delivery_note.document_number', read_only=True, default=None)
     dn_status = serializers.CharField(source='delivery_note.status', read_only=True, default=None)
+    # Reskin (columna interna de cost, NOMÉS pantalla, mai al PDF): tècnic que va registrar el temps
+    # de la tasca i cost = minuts interns × tarifa/hora (TenantConfig). Derivats; null sense minuts.
+    internal_tecnic = serializers.SerializerMethodField()
+    internal_cost = serializers.SerializerMethodField()
+
+    def _hourly_rate(self):
+        # Memoitzat al serializer fill (compartit per totes les línies del many=True): 1 sola lectura.
+        if not hasattr(self, '_hr_cache'):
+            from fhort.accounts.models import TenantConfig
+            cfg = TenantConfig.objects.first()
+            self._hr_cache = cfg.hourly_rate if (cfg and cfg.hourly_rate is not None) else None
+        return self._hr_cache
+
+    def get_internal_tecnic(self, obj):
+        if not obj.model_task_id or not obj.internal_minutes:
+            return None
+        from django.db.models import Sum
+        row = (obj.model_task.timers.values('tecnic__nom_complet')
+               .annotate(m=Sum('minuts')).order_by('-m').first())
+        return (row or {}).get('tecnic__nom_complet')
+
+    def get_internal_cost(self, obj):
+        rate = self._hourly_rate()
+        if rate is None or obj.internal_minutes is None:
+            return None
+        from decimal import Decimal, ROUND_HALF_UP
+        cost = (Decimal(obj.internal_minutes) / Decimal(60) * Decimal(rate)).quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return str(cost)
 
     class Meta:
         model = DeliveryNoteLine
@@ -340,7 +369,8 @@ class DeliveryNoteLineSerializer(serializers.ModelSerializer):
                   'product_code', 'product_name',
                   'description', 'quantity', 'unit_price', 'line_total', 'position', 'visible',
                   'model', 'model_intern', 'model_codi_client', 'model_nom', 'model_collection',
-                  'model_temporada', 'model_any', 'internal_minutes', 'task_finished_at',
+                  'model_temporada', 'model_any', 'internal_minutes', 'internal_tecnic',
+                  'internal_cost', 'task_finished_at',
                   'work_order', 'model_task', 'expense', 'adjustment']
         # v2 — editables en DRAFT: description, quantity, unit_price, visible. La resta (traçabilitat,
         # model, internal_minutes, line_total) read-only: es fixen en compondre la línia.

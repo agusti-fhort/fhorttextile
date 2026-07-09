@@ -6,7 +6,8 @@
 // columns: [{ key, label, align='left', width, render(row), editable, value(row), onEdit(row, val), inputMode }]
 // rows: [{ id, ... , internal?: { minutes, tecnic, cost } }]
 // renderActions(row) → node (botons row-btn a l'esquerra). showInternal → afegeix Temps·Tècnic·Cost.
-// internalLabels: { time, tecnic, cost }.
+// internalLabels: { time, tecnic, cost }. rowStyle(row) → estil extra de la fila (p.ex. fade d'una
+// línia amagada).
 import { minutesToHhMm, tecnicShort } from './format'
 
 const MONO = 'IBM Plex Mono, monospace'
@@ -29,7 +30,7 @@ function cellContent(col, row) {
   return col.render ? col.render(row) : (row[col.key] ?? '')
 }
 
-export default function LineTable({ columns = [], rows = [], renderActions, showInternal = false, internalLabels = {} }) {
+export default function LineTable({ columns = [], rows = [], renderActions, showInternal = false, internalLabels = {}, rowStyle }) {
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO }}>
@@ -50,7 +51,7 @@ export default function LineTable({ columns = [], rows = [], renderActions, show
         </thead>
         <tbody>
           {rows.map(row => (
-            <tr key={row.id}>
+            <tr key={row.id} style={rowStyle ? rowStyle(row) : undefined}>
               {renderActions && (
                 <td style={{ ...td, whiteSpace: 'nowrap' }}>
                   <span style={{ display: 'inline-flex', gap: 4 }}>{renderActions(row)}</span>
@@ -61,9 +62,9 @@ export default function LineTable({ columns = [], rows = [], renderActions, show
               ))}
               {showInternal && (
                 <>
-                  <td style={{ ...td, ...internCell, textAlign: 'right' }}>{minutesToHhMm(row.internal?.minutes)}</td>
+                  <td style={{ ...td, ...internCell, textAlign: 'right' }}>{row.internal?.minutes != null ? minutesToHhMm(row.internal.minutes) : '—'}</td>
                   <td style={{ ...td, ...internCell }}>{tecnicShort(row.internal?.tecnic)}</td>
-                  <td style={{ ...td, ...internCell, textAlign: 'right' }}>{row.internal?.cost}</td>
+                  <td style={{ ...td, ...internCell, textAlign: 'right' }}>{row.internal?.cost ?? '—'}</td>
                 </>
               )}
             </tr>
