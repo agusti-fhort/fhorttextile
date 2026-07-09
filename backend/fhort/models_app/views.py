@@ -5,7 +5,7 @@ from django.db import connection, transaction
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import api_view, parser_classes, permission_classes, action
 from rest_framework.parsers import FormParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
@@ -13,6 +13,7 @@ import django_filters
 
 from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
+from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
 from .serializers import (
     BaseMeasurementSerializer,
     ModelDetailSerializer,
@@ -164,44 +165,52 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
 
     @action(detail=True, methods=['get'])
     def download(self, request, pk=None):
-        """GET /api/v1/model-fitxers/<id>/download/ — descàrrega GATED (S03a · P2b).
+        """GET /api/v1/model-fitxers/<id>/download/ — descàrrega GATED per Authorization.
 
         Els bytes de /media/ els serveix nginx per `alias`, sense que Django hi intervingui:
         no hi ha cap check d'autenticació ni de tenant. Aquest endpoint és la porta que sí
         el fa. El queryset ja està acotat al schema del tenant per django-tenants.
 
-        nginx fa la feina pesada via X-Accel-Redirect cap a `location /protected-media/`
-        (internal) — Django no serveix mai els bytes. Vegeu docs/OPS_S03_NGINX.md.
-        En DEBUG (sense nginx al davant) es degrada a FileResponse.
+        Per a consumidors que NO poden posar capçaleres (<a href>, <img src>), vegeu
+        `download_signed` (D13).
         """
-        import os
-        from urllib.parse import quote
+        from .services_fitxers import serve_model_file
+        return serve_model_file(self.get_object())
 
-        from django.conf import settings
-        from django.http import FileResponse, HttpResponse, HttpResponseRedirect
+    @action(detail=True, methods=['get'], url_path='download-signed',
+            permission_classes=[AllowAny], authentication_classes=[])
+    def download_signed(self, request, pk=None):
+        """GET /api/v1/model-fitxers/<id>/download-signed/?token=… — descàrrega SIGNADA (D13).
 
-        mf = self.get_object()
-        if mf.url_extern:
-            return HttpResponseRedirect(mf.url_extern)
-        if not mf.fitxer:
-            return Response({'error': 'El fitxer no té bytes associats.'}, status=404)
+        `<a href>` i `<img src>` no poden portar capçalera Authorization (el JWT viu a
+        localStorage). La porta és un token de curta vida (TTL_SIGNATURA) emès pel serializer
+        NOMÉS a qui ja s'ha autenticat per a llegir la fila. AllowAny és deliberat: el permís
+        el porta el token, no la sessió.
 
-        # Content-Disposition: RFC 5987 per als noms amb accents/espais (BRW-…_fitxa.ftt passa,
-        # però els noms pujats per l'usuari no tenen per què ser ASCII).
-        nom = mf.nom_fitxer or os.path.basename(mf.fitxer.name)
-        disposition = f"attachment; filename*=UTF-8''{quote(nom)}"
+        El tenant l'aïlla el Host (django-tenants), com a la resta de l'API → el token no
+        n'ha de portar cap. El payload és l'id: si el token d'un fitxer s'enganxa a la URL
+        d'un altre, no valida.
 
-        if settings.DEBUG:
-            return FileResponse(mf.fitxer.open('rb'), as_attachment=True, filename=nom)
+        `?inline=1` → Content-Disposition: inline, per als previsualitzadors (<iframe> de PDF).
+        """
+        from django.core import signing
+        from django.http import HttpResponseForbidden
 
-        # El path intern és relatiu a MEDIA_ROOT i JA porta el prefix del schema, perquè
-        # TenantFileSystemStorage el resol a `location` (P2a).
-        rel = os.path.relpath(mf.fitxer.path, str(settings.MEDIA_ROOT))
-        response = HttpResponse(status=200)
-        response['X-Accel-Redirect'] = '/protected-media/' + quote(rel)
-        response['Content-Disposition'] = disposition
-        response['Content-Type'] = mf.mimetype or 'application/octet-stream'
-        return response
+        from .services_fitxers import serve_model_file
+
+        token = request.query_params.get('token') or ''
+        try:
+            signed_id = signing.loads(token, salt=DOWNLOAD_SALT, max_age=DOWNLOAD_TTL)
+        except signing.SignatureExpired:
+            return HttpResponseForbidden('Enllaç de descàrrega caducat.')
+        except signing.BadSignature:
+            return HttpResponseForbidden('Enllaç de descàrrega no vàlid.')
+
+        if str(signed_id) != str(pk):
+            return HttpResponseForbidden('El token no correspon a aquest fitxer.')
+
+        inline = request.query_params.get('inline') == '1'
+        return serve_model_file(self.get_object(), as_attachment=not inline)
 
 
 # D-12 — Watchpoints: advertències de text lliure que viatgen amb el model a través dels gates.

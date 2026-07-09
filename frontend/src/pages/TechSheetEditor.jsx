@@ -2770,11 +2770,15 @@ export default function TechSheetEditor() {
   }
   const addModelFitxer = async (f) => {
     if (!locked) return
-    let url = f.url_extern
-    if (!url && f.fitxer) url = f.fitxer.startsWith('http') ? f.fitxer : `${API}${f.fitxer}`
+    // D13: aquest fetch SÍ pot portar Authorization → va per l'endpoint AUTENTICAT, no pel
+    // signat. Abans apuntava directament a /media/ (servit per nginx, sense cap gate).
+    // url_extern viu en un altre origen: s'hi va sense capçalera (no li enviem el token).
+    const extern = !!f.url_extern
+    const url = extern ? f.url_extern : (f.id ? `${API}/api/v1/model-fitxers/${f.id}/download/` : null)
     if (!url) return
     try {
-      const blob = await fetch(url).then(r => { if (!r.ok) throw new Error('fetch'); return r.blob() })
+      const blob = await fetch(url, extern ? undefined : { headers: uploadHeaders })
+        .then(r => { if (!r.ok) throw new Error('fetch'); return r.blob() })
       const dataURL = await new Promise((res, rej) => {
         const fr = new FileReader()
         fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('fr'))

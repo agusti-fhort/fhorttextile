@@ -158,6 +158,13 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# TLS el termina nginx; gunicorn rep HTTP pla. Sense això, request.scheme és 'http' i tot
+# build_absolute_uri() emet URLs http:// dins pàgines https:// → mixed content. nginx ja
+# envia la capçalera (sites-enabled/ftt-staging:32,43). Necessari per a D13 (download_url
+# signada); de retruc arregla també _asset_urls (ftt_document_views.py:40-46) i la 'url' de
+# upload_file_view, que fins ara emetien http:// absolut.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
