@@ -1182,6 +1182,7 @@
     "loading": "Cargando configuración…",
     "error": "No se pudo completar la operación.",
     "saved": "Configuración guardada.",
+    "save_mismatch": "No se han podido guardar: {{fields}}. Inténtalo de nuevo.",
     "save": "Guardar",
     "nom_empresa": "Nombre comercial",
     "fiscal_section": "Datos fiscales (emisor de los documentos)",

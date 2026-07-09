@@ -13,6 +13,22 @@ const MONO = 'IBM Plex Mono, monospace'
 const UNITS = ['CM', 'INCH']
 const NORMS = ['ISO_8559', 'ASTM_D13']
 
+// Compara el payload enviat amb la resposta 200 del backend i torna els camps que NO s'han
+// desat (per no mostrar mai un "desat" fals). `hourly_rate` es compara numèricament (el backend
+// normalitza els decimals, p.ex. "25" → "25.00"); la resta com a text normalitzat.
+const _norm = (v) => (v == null ? '' : String(v).trim())
+function unsavedFields(payload, data) {
+  if (!data) return Object.keys(payload)
+  return Object.keys(payload).filter(k => {
+    if (k === 'hourly_rate') {
+      const a = payload[k] == null || payload[k] === '' ? null : Number(payload[k])
+      const b = data[k] == null || data[k] === '' ? null : Number(data[k])
+      return a !== b
+    }
+    return _norm(payload[k]) !== _norm(data[k])
+  })
+}
+
 export default function GeneralConfig() {
   const { t } = useTranslation()
   const me = useAuthStore(s => s.user)
@@ -62,7 +78,7 @@ export default function GeneralConfig() {
 
   const save = () => {
     setSaving(true); setFeedback(null)
-    tenantConfig.update({
+    const payload = {
       nom_empresa: f.nom_empresa, unitat_mesura: f.unitat_mesura,
       norma_referencia: f.norma_referencia,
       legal_name: f.legal_name, tax_id: f.tax_id, address: f.address,
@@ -70,9 +86,20 @@ export default function GeneralConfig() {
       email: f.email, phone: f.phone,
       hourly_rate: f.hourly_rate === '' ? null : f.hourly_rate,
       iban: f.iban, payment_notes: f.payment_notes,
-    })
-      .then(() => setFeedback({ type: 'ok', text: t('config_general.saved') }))
-      .catch(() => setFeedback({ type: 'err', text: t('config_general.error') }))
+    }
+    tenantConfig.update(payload)
+      .then(res => {
+        // Toast d'èxit NOMÉS si la resposta confirma els valors enviats; mai un "desat" fals.
+        const unsaved = unsavedFields(payload, res.data)
+        if (unsaved.length) {
+          setFeedback({ type: 'err', text: t('config_general.save_mismatch', {
+            fields: unsaved.map(k => t(`config_general.${k}`)).join(', ') }) })
+        } else {
+          hydrate(res.data)   // reflecteix l'estat persistit real
+          setFeedback({ type: 'ok', text: t('config_general.saved') })
+        }
+      })
+      .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.error || e?.response?.data?.detail || t('config_general.error') }))
       .finally(() => setSaving(false))
   }
 
@@ -83,7 +110,7 @@ export default function GeneralConfig() {
     setSaving(true); setFeedback(null)
     tenantConfig.uploadLogo(file)
       .then(res => { hydrate(res.data); setFeedback({ type: 'ok', text: t('config_general.logo_uploaded') }) })
-      .catch(() => setFeedback({ type: 'err', text: t('config_general.error') }))
+      .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.error || t('config_general.error') }))
       .finally(() => setSaving(false))
   }
 

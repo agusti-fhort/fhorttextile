@@ -1182,6 +1182,7 @@
     "loading": "Carregant configuració…",
     "error": "No s'ha pogut completar l'operació.",
     "saved": "Configuració desada.",
+    "save_mismatch": "No s'han pogut desar: {{fields}}. Torna-ho a provar.",
     "save": "Desar",
     "nom_empresa": "Nom comercial",
     "fiscal_section": "Dades fiscals (emissor dels documents)",

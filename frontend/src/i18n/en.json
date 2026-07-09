@@ -1182,6 +1182,7 @@
     "loading": "Loading configuration…",
     "error": "The operation could not be completed.",
     "saved": "Settings saved.",
+    "save_mismatch": "Could not save: {{fields}}. Please try again.",
     "save": "Save",
     "nom_empresa": "Trade name",
     "fiscal_section": "Tax details (document issuer)",
