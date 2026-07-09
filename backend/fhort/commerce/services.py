@@ -340,7 +340,8 @@ def generate_delivery_note(work_orders, user=None):
         pos = 0
 
         def _add(line_kind, unit_price, quantity, description, product=None,
-                 work_order=None, model_task=None, expense=None, adjustment=None):
+                 work_order=None, model_task=None, expense=None, adjustment=None,
+                 internal_minutes=None):
             nonlocal pos
             pos += 1
             DeliveryNoteLine(
@@ -349,6 +350,7 @@ def generate_delivery_note(work_orders, user=None):
                 quantity=Decimal(quantity).quantize(_CENT, rounding=ROUND_HALF_UP),
                 description=description[:300], product=product, work_order=work_order,
                 model_task=model_task, expense=expense, adjustment=adjustment, position=pos,
+                internal_minutes=(Decimal(internal_minutes) if internal_minutes is not None else None),
             ).save()
 
         for wo in wos:
@@ -360,9 +362,13 @@ def generate_delivery_note(work_orders, user=None):
                     status='Done', off_recipe=False):
                 label = f"{t.task_type.name} · {t.model.codi_intern}"
                 if wo.kind == 'COLLECTOR':
+                    # Temps intern = lògica comercial, FORA del document (decisió Agus). Els minuts
+                    # es guarden a internal_minutes; la línia surt amb quantity=1 i sense "(N min)"
+                    # a la descripció (el PDF mai els mostra). El Salva posa preu en DRAFT.
                     minutes = t.timers.aggregate(m=Sum('minuts'))['m'] or 0
-                    _add('TASK', Decimal('0'), Decimal(minutes),
-                         f"{label} ({minutes} min)", product=None, work_order=wo, model_task=t)
+                    _add('TASK', Decimal('0'), Decimal('1'), label,
+                         product=None, work_order=wo, model_task=t,
+                         internal_minutes=Decimal(minutes))
                 else:
                     _add('TASK', snap_price, Decimal('1'), label,
                          product=order_product, work_order=wo, model_task=t)

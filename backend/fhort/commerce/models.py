@@ -691,6 +691,11 @@ class DeliveryNoteLine(AbstractDocumentLine):
     adjustment = models.ForeignKey('commerce.WorkOrderAdjustment', on_delete=models.SET_NULL,
                                    null=True, blank=True, related_name='delivery_note_lines')
     line_kind = models.CharField(max_length=20, choices=LINE_KIND_CHOICES, default='MANUAL')
+    # Temps intern (minuts reals Σ TimerEntrada) d'una tasca de col·lector. Dada de LÒGICA
+    # COMERCIAL, mai de document: no entra ni al PDF ni al total (quantity=1). Es guarda a part
+    # perquè el redisseny de l'albarà v2 la pugui explotar. null = línia sense temps associat.
+    internal_minutes = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                            help_text="Minuts interns reals; fora del document (mai al PDF).")
 
     class Meta:
         ordering = ['delivery_note', 'position', 'id']
