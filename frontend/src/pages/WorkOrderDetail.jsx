@@ -7,6 +7,7 @@ import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Badge from '../components/ui/Badge'
 import { selS, primaryBtn } from '../components/ui/buttons'
+import { DocumentHeader, LineTable, RowBtn } from '../components/commercial'
 import { WOStatusBadge, WOKindBadge } from './WorkOrders'
 import { formatMinutes } from '../utils/format'
 
@@ -24,7 +25,6 @@ const sectionTitle = {
   fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
   textTransform: 'uppercase', letterSpacing: '0.04em', margin: '18px 0 8px',
 }
-const cell = { padding: '6px 10px', fontSize: 'var(--fs-body)', borderTop: '0.5px solid var(--gray-l)' }
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
 const rows = (res) => res.data?.results ?? (Array.isArray(res.data) ? res.data : [])
 
@@ -186,73 +186,100 @@ export default function WorkOrderDetail() {
       .map(a => ({ mt: a.model_task, label: a.description || `#${a.model_task}`, minutes: null, isDeduction: true })),
   ]
 
+  // ── Columnes del sistema unificat (LineTable) per a les tres taules de l'encàrrec ──
+  const taskColumns = [
+    { key: 'type', label: t('workorders.task_type'), render: tk => (
+      <span>
+        <span style={{ fontWeight: 500 }}>{tk.task_type_name || tk.task_type_code}</span>
+        {tk.off_recipe && (
+          <span style={{ marginLeft: 8, fontSize: 'var(--fs-label)', color: 'var(--err)' }}>
+            <i className="ti ti-flag" style={{ fontSize: 12, marginRight: 3 }} />{t('workorders.off_recipe')}
+          </span>
+        )}
+      </span>
+    ) },
+    { key: 'status', label: t('workorders.task_status'),
+      render: tk => <Badge variant={TASK_STATUS_VARIANT[tk.status] || 'gray'}>{t(`workorders.status_task_${tk.status}`, { defaultValue: tk.status })}</Badge> },
+    { key: 'minutes', label: t('workorders.task_minutes'), align: 'right',
+      render: tk => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{formatMinutes(tk.minutes ?? 0)}</span> },
+  ]
+
+  const expColumns = [
+    { key: 'product', label: t('workorders.exp_product'), render: ex => ex.product_name },
+    { key: 'supplier', label: t('workorders.exp_supplier'), render: ex => ex.supplier_name },
+    { key: 'cost', label: t('workorders.exp_cost'), align: 'right', render: ex => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{money(ex.cost_price)}</span> },
+    { key: 'sale', label: t('workorders.exp_sale'), align: 'right', render: ex => <span style={{ fontFamily: MONO }}>{money(ex.sale_price)}</span> },
+    { key: 'qty', label: t('workorders.exp_qty'), align: 'right', render: ex => <span style={{ fontFamily: MONO }}>{Number(ex.quantity ?? 0)}</span> },
+  ]
+  const expActions = canConfigure ? (ex) => (
+    <RowBtn icon="ti-trash" danger disabled={busy} title={t('workorders.exp_remove')} onClick={() => removeExpense(ex.id)} />
+  ) : undefined
+
+  const reviewColumns = [
+    { key: 'item', label: t('workorders.review_item'), render: r => (
+      <>{r.label}{r.minutes != null && <span style={{ marginLeft: 8, fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>{formatMinutes(r.minutes)}</span>}</>
+    ) },
+    { key: 'kind', label: t('workorders.review_kind'), render: r => {
+      const v = review[r.mt] || { kind: r.isDeduction ? 'DEDUCTION' : 'EXTRA_BILL', amount: '0' }
+      return r.isDeduction
+        ? <Badge variant="gray">{t('workorders.adj_DEDUCTION')}</Badge>
+        : (
+          <select value={v.kind} disabled={!canConfigure}
+            onChange={e => setReview({ ...review, [r.mt]: { ...v, kind: e.target.value } })} style={inp}>
+            <option value="EXTRA_BILL">{t('workorders.adj_EXTRA_BILL')}</option>
+            <option value="EXTRA_ABSORB">{t('workorders.adj_EXTRA_ABSORB')}</option>
+          </select>
+        )
+    } },
+    { key: 'amount', label: t('workorders.review_amount'), align: 'right', render: r => {
+      const v = review[r.mt] || { kind: r.isDeduction ? 'DEDUCTION' : 'EXTRA_BILL', amount: '0' }
+      return <input type="number" step="0.01" value={v.amount} disabled={!canConfigure}
+        onChange={e => setReview({ ...review, [r.mt]: { ...v, kind: v.kind, amount: e.target.value } })}
+        style={{ ...inp, width: 90, textAlign: 'right' }} />
+    } },
+  ]
+  const reviewTableRows = reviewRows.map(r => ({ ...r, id: r.mt }))
+
   return (
     <div style={{ minWidth: 0, maxWidth: 900 }}>
       <button onClick={() => navigate('/comercial/encarrecs')} style={{ ...smallBtn, marginBottom: 12 }}>
         <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('workorders.back')}
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO }}>{wo.number}</h1>
-        <WOKindBadge kind={wo.kind} t={t} />
-        <WOStatusBadge status={wo.status} t={t} />
-      </div>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 16 }}>
-        {wo.customer_nom} · {wo.kind === 'COLLECTOR' ? wo.period : (wo.model_codi || '—')}
-      </p>
+      <DocumentHeader
+        reference={wo.number}
+        statusBadge={<><WOKindBadge kind={wo.kind} t={t} /><WOStatusBadge status={wo.status} t={t} /></>}
+        customer={`${wo.customer_nom} · ${wo.kind === 'COLLECTOR' ? wo.period : (wo.model_codi || '—')}`}
+        actions={<>
+          {canClose && isOpen && (
+            <button onClick={() => doClose()} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>
+              <i className="ti ti-lock" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.close_action')}
+            </button>
+          )}
+          {/* B4c — generar albarà: WO tancat i encara no albaranat. Si ja ho està, enllaç a l'albarà. */}
+          {isClosed && canConfigure && !wo.delivery_note && (
+            <button onClick={openDnModal} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>
+              <i className="ti ti-file-invoice" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.dn_generate')}
+            </button>
+          )}
+          {isClosed && wo.delivery_note && (
+            <button onClick={() => navigate(`/comercial/albarans/${wo.delivery_note}`)} style={smallBtn}>
+              <i className="ti ti-file-invoice" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.dn_view')}
+            </button>
+          )}
+        </>}
+      />
 
-      <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        {canClose && isOpen && (
-          <button onClick={() => doClose()} disabled={busy} style={{ ...primaryBtn }}>
-            <i className="ti ti-lock" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.close_action')}
-          </button>
-        )}
-        {/* B4c — generar albarà: WO tancat i encara no albaranat. Si ja ho està, enllaç a l'albarà. */}
-        {isClosed && canConfigure && !wo.delivery_note && (
-          <button onClick={openDnModal} disabled={busy} style={{ ...primaryBtn }}>
-            <i className="ti ti-file-invoice" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.dn_generate')}
-          </button>
-        )}
-        {isClosed && wo.delivery_note && (
-          <button onClick={() => navigate(`/comercial/albarans/${wo.delivery_note}`)} style={smallBtn}>
-            <i className="ti ti-file-invoice" style={{ fontSize: 14, marginRight: 6 }} /> {t('workorders.dn_view')}
-          </button>
-        )}
+      <div style={{ marginTop: 12 }}>
+        <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
       </div>
 
       {/* Tasques */}
       <div style={sectionTitle}>{t('workorders.tasks')}</div>
       {tasks.length === 0 ? <p style={{ color: 'var(--text-muted)' }}>{t('workorders.tasks_empty')}</p> : (
         <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 10, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textAlign: 'left' }}>
-                <th style={{ padding: '6px 10px' }}>{t('workorders.task_type')}</th>
-                <th style={{ padding: '6px 10px' }}>{t('workorders.task_status')}</th>
-                <th style={{ padding: '6px 10px', textAlign: 'right' }}>{t('workorders.task_minutes')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map(tk => (
-                <tr key={tk.id} style={{ borderLeft: tk.off_recipe ? '3px solid var(--err)' : '3px solid transparent' }}>
-                  <td style={cell}>
-                    <span style={{ fontWeight: 500 }}>{tk.task_type_name || tk.task_type_code}</span>
-                    {tk.off_recipe && (
-                      <span style={{ marginLeft: 8, fontSize: 'var(--fs-label)', color: 'var(--err)' }}>
-                        <i className="ti ti-flag" style={{ fontSize: 12, marginRight: 3 }} />{t('workorders.off_recipe')}
-                      </span>
-                    )}
-                  </td>
-                  <td style={cell}>
-                    <Badge variant={TASK_STATUS_VARIANT[tk.status] || 'gray'}>{t(`workorders.status_task_${tk.status}`, { defaultValue: tk.status })}</Badge>
-                  </td>
-                  <td style={{ ...cell, textAlign: 'right', fontFamily: MONO, color: 'var(--text-muted)' }}>{formatMinutes(tk.minutes ?? 0)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <LineTable columns={taskColumns} rows={tasks}
+            rowStyle={tk => ({ borderLeft: tk.off_recipe ? '3px solid var(--err)' : '3px solid transparent' })} />
         </div>
       )}
 
@@ -260,36 +287,7 @@ export default function WorkOrderDetail() {
       <div style={sectionTitle}>{t('workorders.expenses')}</div>
       {expenses.length > 0 && (
         <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 10, overflow: 'hidden', marginBottom: 10 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textAlign: 'left' }}>
-                <th style={{ padding: '6px 10px' }}>{t('workorders.exp_product')}</th>
-                <th style={{ padding: '6px 10px' }}>{t('workorders.exp_supplier')}</th>
-                <th style={{ padding: '6px 10px', textAlign: 'right' }}>{t('workorders.exp_cost')}</th>
-                <th style={{ padding: '6px 10px', textAlign: 'right' }}>{t('workorders.exp_sale')}</th>
-                <th style={{ padding: '6px 10px', textAlign: 'right' }}>{t('workorders.exp_qty')}</th>
-                {canConfigure && <th style={{ padding: '6px 10px' }} />}
-              </tr>
-            </thead>
-            <tbody>
-              {expenses.map(ex => (
-                <tr key={ex.id}>
-                  <td style={cell}>{ex.product_name}</td>
-                  <td style={cell}>{ex.supplier_name}</td>
-                  <td style={{ ...cell, textAlign: 'right', fontFamily: MONO, color: 'var(--text-muted)' }}>{money(ex.cost_price)}</td>
-                  <td style={{ ...cell, textAlign: 'right', fontFamily: MONO }}>{money(ex.sale_price)}</td>
-                  <td style={{ ...cell, textAlign: 'right', fontFamily: MONO }}>{Number(ex.quantity ?? 0)}</td>
-                  {canConfigure && (
-                    <td style={{ ...cell, textAlign: 'right' }}>
-                      <button onClick={() => removeExpense(ex.id)} disabled={busy} style={smallBtn} title={t('workorders.exp_remove')}>
-                        <i className="ti ti-trash" style={{ fontSize: 13 }} />
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <LineTable columns={expColumns} rows={expenses} renderActions={expActions} />
         </div>
       )}
       {canConfigure && (
@@ -324,44 +322,7 @@ export default function WorkOrderDetail() {
         <>
           <div style={sectionTitle}>{t('workorders.review')}</div>
           <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 10, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textAlign: 'left' }}>
-                  <th style={{ padding: '6px 10px' }}>{t('workorders.review_item')}</th>
-                  <th style={{ padding: '6px 10px' }}>{t('workorders.review_kind')}</th>
-                  <th style={{ padding: '6px 10px', textAlign: 'right' }}>{t('workorders.review_amount')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reviewRows.map(r => {
-                  const v = review[r.mt] || { kind: r.isDeduction ? 'DEDUCTION' : 'EXTRA_BILL', amount: '0' }
-                  return (
-                    <tr key={r.mt}>
-                      <td style={cell}>
-                        {r.label}
-                        {r.minutes != null && <span style={{ marginLeft: 8, fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>{formatMinutes(r.minutes)}</span>}
-                      </td>
-                      <td style={cell}>
-                        {r.isDeduction ? (
-                          <Badge variant="gray">{t('workorders.adj_DEDUCTION')}</Badge>
-                        ) : (
-                          <select value={v.kind} disabled={!canConfigure}
-                            onChange={e => setReview({ ...review, [r.mt]: { ...v, kind: e.target.value } })} style={inp}>
-                            <option value="EXTRA_BILL">{t('workorders.adj_EXTRA_BILL')}</option>
-                            <option value="EXTRA_ABSORB">{t('workorders.adj_EXTRA_ABSORB')}</option>
-                          </select>
-                        )}
-                      </td>
-                      <td style={{ ...cell, textAlign: 'right' }}>
-                        <input type="number" step="0.01" value={v.amount} disabled={!canConfigure}
-                          onChange={e => setReview({ ...review, [r.mt]: { ...v, kind: v.kind, amount: e.target.value } })}
-                          style={{ ...inp, width: 90, textAlign: 'right' }} />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <LineTable columns={reviewColumns} rows={reviewTableRows} />
           </div>
           {canConfigure && (
             <button onClick={saveReview} disabled={busy} style={{ ...primaryBtn, marginTop: 8 }}>
@@ -382,7 +343,7 @@ export default function WorkOrderDetail() {
             maxWidth: 520, width: '100%', maxHeight: '80vh', overflowY: 'auto',
             border: '0.5px solid var(--gray-l)',
           }}>
-            <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
               {t('workorders.close_title')}
             </h2>
             {hardBlockers.length > 0 && (
@@ -426,7 +387,7 @@ export default function WorkOrderDetail() {
             maxWidth: 520, width: '100%', maxHeight: '80vh', overflowY: 'auto',
             border: '0.5px solid var(--gray-l)',
           }}>
-            <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
               {t('workorders.dn_title')}
             </h2>
             <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
