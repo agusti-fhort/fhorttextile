@@ -300,9 +300,16 @@ def tenant_config_view(request):
             if field in request.data:
                 setattr(config, field, request.data[field])
         if 'logo_file' in request.FILES:
+            # L'usuari puja SVG/PNG/JPG; el backend el normalitza SEMPRE a un PNG ràster que
+            # reportlab dibuixa a la capçalera (fi de l'exigència "màxim 15 mm PNG").
+            from fhort.accounts.logo import normalize_logo
+            try:
+                content = normalize_logo(request.FILES['logo_file'])
+            except ValueError as e:
+                return Response({'error': f'Logo no vàlid: {e}'}, status=400)
             if config.logo_file:
                 config.logo_file.delete(save=False)   # neteja el fitxer anterior
-            config.logo_file = request.FILES['logo_file']
+            config.logo_file = content
         config.save()
         return Response(TenantConfigSerializer(config, context=ctx).data)
 
