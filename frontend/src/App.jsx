@@ -24,6 +24,8 @@ const WorkOrders = lazy(() => import('./pages/WorkOrders'))
 const WorkOrderDetail = lazy(() => import('./pages/WorkOrderDetail'))
 const DeliveryNotes = lazy(() => import('./pages/DeliveryNotes'))
 const DeliveryNoteDetail = lazy(() => import('./pages/DeliveryNoteDetail'))
+// TEMPORAL (esborrable) — banc de proves del sistema visual comercial unificat. Ruta /comercial/_kit.
+const CommercialKitDemo = lazy(() => import('./pages/CommercialKitDemo'))
 const FittingDetail = lazy(() => import('./pages/FittingDetail'))
 const FittingSessionList = lazy(() => import('./pages/FittingSessionList'))
 const FittingSessionNew = lazy(() => import('./pages/FittingSessionNew'))
@@ -279,6 +281,8 @@ export default function App() {
           {/* Comercial (B4c) — albarans (DeliveryNote). */}
           <Route path="comercial/albarans" element={<DeliveryNotes />} />
           <Route path="comercial/albarans/:id" element={<DeliveryNoteDetail />} />
+          {/* TEMPORAL (esborrable) — banc de proves dels components del sistema visual comercial. */}
+          <Route path="comercial/_kit" element={<CommercialKitDemo />} />
           <Route path="planificacio" element={<Planning />} />
           {/* Calendari propi (agenda) read-only: obert a qualsevol autenticat (scope per dades a
               calendar/events); NO gatejat per canPlan, a diferència de la gestió /planificacio. */}

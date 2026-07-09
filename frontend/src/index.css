@@ -13,6 +13,8 @@
   --gold-pale:  #f5e6d0;
   --grana:      #8a1f3d; /* grana (garnet) — color de marca */
   --pdf-accent: var(--grana); /* accent semàntic dels botons de document PDF (mateix color que grana) */
+  --model-band: #f7efe1; /* cream — franja de capçalera de les cards d'entitat (mòdul comercial) */
+  --intern-bg:  #edeff0; /* gris fred — columna/peu de cost intern (NOMÉS pantalla, mai al PDF) */
   --border:     #e0d5c5;
   --base-hairline: #e3cfa3; /* filet de la columna de talla base (graella fitting) */
 
