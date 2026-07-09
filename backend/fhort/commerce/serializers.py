@@ -98,16 +98,16 @@ class PaymentTermLineSerializer(serializers.ModelSerializer):
         fields = ['id', 'percentage', 'days_offset', 'position']
 
 
-class PaymentTermsSerializer(serializers.ModelSerializer):
+class PaymentTermsSerializer(TranslationsSerializerMixin, serializers.ModelSerializer):
     """Condició de pagament amb fraccions nested WRITABLE (M4): les fraccions s'editen sempre
     com a conjunt i es desen amb la condició en una sola crida. Guard Σ%=100 aplicat aquí per a
     l'escriptura via API (mateix invariant que PaymentTermLine.clean); el frontend en mostra
-    l'error de forma clara."""
+    l'error de forma clara. `name` és traduïble (`translations`); l'EN viu a la columna."""
     lines = PaymentTermLineSerializer(many=True, required=False)
 
     class Meta:
         model = PaymentTerms
-        fields = ['id', 'code', 'name', 'active', 'lines']
+        fields = ['id', 'code', 'name', 'translations', 'active', 'lines']
 
     def validate(self, data):
         lines = data.get('lines')
@@ -119,12 +119,18 @@ class PaymentTermsSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        # create/update propis (fraccions nested) → cal integrar-hi les traduccions a mà,
+        # perquè no passen pel create/update del TranslationsSerializerMixin.
+        translations = validated_data.pop('translations', None)
         lines = validated_data.pop('lines', [])
         terms = PaymentTerms.objects.create(**validated_data)
         self._sync_lines(terms, lines)
+        if translations:
+            self._write_translations(terms, translations)
         return terms
 
     def update(self, instance, validated_data):
+        translations = validated_data.pop('translations', None)
         lines = validated_data.pop('lines', None)
         for k, v in validated_data.items():
             setattr(instance, k, v)
@@ -132,6 +138,8 @@ class PaymentTermsSerializer(serializers.ModelSerializer):
         if lines is not None:
             instance.lines.all().delete()
             self._sync_lines(instance, lines)
+        if translations is not None:
+            self._write_translations(instance, translations)
         return instance
 
     @staticmethod

@@ -360,9 +360,13 @@ class SalesOrderLine(AbstractDocumentLine):
 # CONDICIONS DE PAGAMENT (B3a) — condició reutilitzable + fraccions (venciments).
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
-class PaymentTerms(models.Model):
+class PaymentTerms(TranslatableMixin, models.Model):
     """Condició de pagament reutilitzable (p.ex. 50-50, 30D). Les fraccions viuen a `lines`.
-    S'assigna per defecte al Customer i s'hi pot fer override per document (AbstractDocument)."""
+    S'assigna per defecte al Customer i s'hi pot fer override per document (AbstractDocument).
+    `name` surt al PDF en l'idioma del document/client: EN canònic a la columna, idiomes
+    addicionals a i18n_content.Translation (patró híbrid)."""
+    TRANSLATABLE_FIELDS = ('name',)
+
     code = models.SlugField(max_length=30, unique=True)
     name = models.CharField(max_length=100, help_text="Nom canònic; display i18n a la UI.")
     active = models.BooleanField(default=True)
