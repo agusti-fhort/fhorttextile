@@ -8,6 +8,7 @@ import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
 import Table from '../components/ui/Table'
 import { selS, primaryBtn } from '../components/ui/buttons'
+import TranslatableField, { pickTranslation } from '../components/ui/TranslatableField'
 
 // Mòdul Comercial Studio — B1 · Mestre d'articles (pàgina Productes). Plantilla Suppliers.jsx.
 // Escriptura gated CONFIGURE (backend); el gate de tier del mòdul arriba a B5.
@@ -18,7 +19,8 @@ const actBtn = {
 }
 
 export default function Products() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const lang = i18n.resolvedLanguage || i18n.language || 'ca'
   const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
@@ -81,7 +83,7 @@ export default function Products() {
 
   const columns = [
     { key: 'code', label: t('products.col_code'), render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.code}</span> },
-    { key: 'name', label: t('products.col_name'), render: r => r.name },
+    { key: 'name', label: t('products.col_name'), render: r => pickTranslation(r, 'name', lang) },
     { key: 'nature', label: t('products.col_nature'), render: r => natureLabel(r.nature) },
     { key: 'price', label: t('products.col_price'), render: r => (
       <span style={{ fontFamily: MONO }}>{priceSummary(r)}</span>
@@ -143,6 +145,8 @@ function ProductModal({ mode, prod, units, t, saving, setSaving, onCancel, onSav
   const isEdit = mode === 'edit'
   const [code, setCode] = useState(prod?.code || '')
   const [name, setName] = useState(prod?.name || '')
+  const [description, setDescription] = useState(prod?.description || '')
+  const [translations, setTranslations] = useState(prod?.translations || {})
   const [nature, setNature] = useState(prod?.nature || 'INTERNAL_SERVICE')
   const [priceMode, setPriceMode] = useState(prod?.price_mode || 'FIXED')
   const [basePrice, setBasePrice] = useState(prod?.base_price ?? '')
@@ -156,7 +160,8 @@ function ProductModal({ mode, prod, units, t, saving, setSaving, onCancel, onSav
     if (invalid) { onError(t('products.required')); return }
     setSaving(true)
     const payload = {
-      code: code.trim(), name: name.trim(), nature, price_mode: priceMode,
+      code: code.trim(), name: name.trim(), description: description.trim(), translations,
+      nature, price_mode: priceMode,
       base_price: basePrice === '' ? null : basePrice,
       sale_rate: saleRate === '' ? null : saleRate,
       markup_pct: markup === '' ? 0 : markup,
@@ -175,7 +180,10 @@ function ProductModal({ mode, prod, units, t, saving, setSaving, onCancel, onSav
       cancelLabel={t('products.cancel')} confirmLabel={isEdit ? t('products.save') : t('products.create')}
       onCancel={onCancel} onConfirm={submit} confirmDisabled={saving || invalid}>
       <Field label={t('products.col_code')}><input value={code} onChange={e => setCode(e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
-      <Field label={t('products.col_name')}><input value={name} onChange={e => setName(e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
+      <TranslatableField label={t('products.col_name')} field="name" value={name} onChange={setName}
+        translations={translations} onTranslationsChange={setTranslations} />
+      <TranslatableField label={t('products.description')} field="description" value={description} onChange={setDescription}
+        translations={translations} onTranslationsChange={setTranslations} multiline />
       <Field label={t('products.col_nature')}>
         <select value={nature} onChange={e => setNature(e.target.value)} style={{ ...selS, width: '100%' }}>
           {NATURES.map(n => <option key={n} value={n}>{t(`products.nature_${n}`)}</option>)}

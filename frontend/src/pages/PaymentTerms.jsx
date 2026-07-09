@@ -7,6 +7,7 @@ import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
 import Table from '../components/ui/Table'
 import { selS, primaryBtn } from '../components/ui/buttons'
+import TranslatableField, { pickTranslation } from '../components/ui/TranslatableField'
 
 // Mòdul Comercial — M4 · Condicions de pagament (PaymentTerms). Llista + fitxa amb fraccions
 // (percentage, days_offset, position). Les fraccions s'editen com a conjunt i es desen amb la
@@ -18,7 +19,8 @@ const actBtn = {
 }
 
 export default function PaymentTerms() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const lang = i18n.resolvedLanguage || i18n.language || 'ca'
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
 
@@ -70,7 +72,7 @@ export default function PaymentTerms() {
 
   const columns = [
     { key: 'code', label: t('payment_terms.col_code'), render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.code}</span> },
-    { key: 'name', label: t('payment_terms.col_name'), render: r => r.name },
+    { key: 'name', label: t('payment_terms.col_name'), render: r => pickTranslation(r, 'name', lang) },
     { key: 'fractions', label: t('payment_terms.col_fractions'), render: r => (
       <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{fractionsSummary(r)}</span>
     ) },
@@ -126,6 +128,7 @@ function PaymentTermModal({ mode, term, t, saving, setSaving, onCancel, onSaved,
   const isEdit = mode === 'edit'
   const [code, setCode] = useState(term?.code || '')
   const [name, setName] = useState(term?.name || '')
+  const [translations, setTranslations] = useState(term?.translations || {})
   const [active, setActive] = useState(term?.active ?? true)
   const [lines, setLines] = useState(
     (term?.lines || []).map(l => ({ percentage: String(l.percentage), days_offset: String(l.days_offset), position: l.position }))
@@ -142,7 +145,7 @@ function PaymentTermModal({ mode, term, t, saving, setSaving, onCancel, onSaved,
     if (invalid) { onError(t('payment_terms.required')); return }
     setSaving(true)
     const payload = {
-      code: code.trim(), name: name.trim(), active,
+      code: code.trim(), name: name.trim(), translations, active,
       lines: lines.map((l, idx) => ({
         percentage: l.percentage === '' ? '0' : l.percentage,
         days_offset: l.days_offset === '' ? 0 : parseInt(l.days_offset, 10),
@@ -165,9 +168,8 @@ function PaymentTermModal({ mode, term, t, saving, setSaving, onCancel, onSaved,
       <Field label={t('payment_terms.col_code')}>
         <input value={code} onChange={e => setCode(e.target.value)} placeholder="ex: 50-50" style={{ ...selS, width: '100%' }} />
       </Field>
-      <Field label={t('payment_terms.col_name')}>
-        <input value={name} onChange={e => setName(e.target.value)} style={{ ...selS, width: '100%' }} />
-      </Field>
+      <TranslatableField label={t('payment_terms.col_name')} field="name" value={name} onChange={setName}
+        translations={translations} onTranslationsChange={setTranslations} />
 
       <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase' }}>

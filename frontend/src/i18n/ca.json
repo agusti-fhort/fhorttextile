@@ -1032,9 +1032,14 @@
     "persona_contacte": "Persona de contacte",
     "telefon_contacte": "Telèfon de contacte"
   },
+  "i18n_field": {
+    "languages": "Idiomes",
+    "panel_hint": "Traduccions addicionals a l'anglès (valor base). Buit = usa la base."
+  },
   "products": {
     "title": "Productes",
     "subtitle": "Mestre d'articles: serveis, mercaderies i packs",
+    "description": "Descripció",
     "new": "Nou producte",
     "new_title": "Nou producte",
     "edit_title": "Editar producte",

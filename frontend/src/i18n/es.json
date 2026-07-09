@@ -1032,9 +1032,14 @@
     "persona_contacte": "Persona de contacto",
     "telefon_contacte": "Teléfono de contacto"
   },
+  "i18n_field": {
+    "languages": "Idiomas",
+    "panel_hint": "Traducciones adicionales al inglés (valor base). Vacío = usa la base."
+  },
   "products": {
     "title": "Productos",
     "subtitle": "Maestro de artículos: servicios, mercancías y packs",
+    "description": "Descripción",
     "new": "Nuevo producto",
     "new_title": "Nuevo producto",
     "edit_title": "Editar producto",

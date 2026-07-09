@@ -6,6 +6,7 @@ import { commerce, taskTypes, suppliers as suppliersApi, garmentTypeItems } from
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import { selS, primaryBtn } from '../components/ui/buttons'
+import { pickTranslation } from '../components/ui/TranslatableField'
 
 // Mòdul Comercial Studio — B1 · fitxa d'article: nucli + satèl·lits (recepta, proveïdors,
 // components, excepcions GTI). Excepcions = LLISTA FILTRABLE + "afegir", mai graella densa.
@@ -17,7 +18,8 @@ const smallBtn = {
 const delBtn = { ...smallBtn, color: 'var(--err)', borderColor: 'var(--err)' }
 
 export default function ProductDetail() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const lang = i18n.resolvedLanguage || i18n.language || 'ca'
   const { id } = useParams()
   const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
@@ -71,7 +73,12 @@ export default function ProductDetail() {
       <div style={{ marginBottom: 4 }}>
         <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, fontFamily: MONO }}>{prod.code}</h1>
       </div>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 16 }}>{prod.name}</p>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: prod.description ? 6 : 16 }}>{pickTranslation(prod, 'name', lang)}</p>
+      {pickTranslation(prod, 'description', lang) && (
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16, whiteSpace: 'pre-wrap' }}>
+          {pickTranslation(prod, 'description', lang)}
+        </p>
+      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         <Tag>{t(`products.nature_${prod.nature}`)}</Tag>
         <Tag>{t(`products.mode_${prod.price_mode}`)}</Tag>

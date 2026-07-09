@@ -1032,9 +1032,14 @@
     "persona_contacte": "Contact person",
     "telefon_contacte": "Contact phone"
   },
+  "i18n_field": {
+    "languages": "Languages",
+    "panel_hint": "Additional translations to English (base value). Empty = uses the base."
+  },
   "products": {
     "title": "Products",
     "subtitle": "Article master: services, goods and packs",
+    "description": "Description",
     "new": "New product",
     "new_title": "New product",
     "edit_title": "Edit product",
