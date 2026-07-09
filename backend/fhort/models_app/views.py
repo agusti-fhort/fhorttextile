@@ -162,6 +162,47 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
         serializer = self.get_serializer(chain, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        """GET /api/v1/model-fitxers/<id>/download/ — descàrrega GATED (S03a · P2b).
+
+        Els bytes de /media/ els serveix nginx per `alias`, sense que Django hi intervingui:
+        no hi ha cap check d'autenticació ni de tenant. Aquest endpoint és la porta que sí
+        el fa. El queryset ja està acotat al schema del tenant per django-tenants.
+
+        nginx fa la feina pesada via X-Accel-Redirect cap a `location /protected-media/`
+        (internal) — Django no serveix mai els bytes. Vegeu docs/OPS_S03_NGINX.md.
+        En DEBUG (sense nginx al davant) es degrada a FileResponse.
+        """
+        import os
+        from urllib.parse import quote
+
+        from django.conf import settings
+        from django.http import FileResponse, HttpResponse, HttpResponseRedirect
+
+        mf = self.get_object()
+        if mf.url_extern:
+            return HttpResponseRedirect(mf.url_extern)
+        if not mf.fitxer:
+            return Response({'error': 'El fitxer no té bytes associats.'}, status=404)
+
+        # Content-Disposition: RFC 5987 per als noms amb accents/espais (BRW-…_fitxa.ftt passa,
+        # però els noms pujats per l'usuari no tenen per què ser ASCII).
+        nom = mf.nom_fitxer or os.path.basename(mf.fitxer.name)
+        disposition = f"attachment; filename*=UTF-8''{quote(nom)}"
+
+        if settings.DEBUG:
+            return FileResponse(mf.fitxer.open('rb'), as_attachment=True, filename=nom)
+
+        # El path intern és relatiu a MEDIA_ROOT i JA porta el prefix del schema, perquè
+        # TenantFileSystemStorage el resol a `location` (P2a).
+        rel = os.path.relpath(mf.fitxer.path, str(settings.MEDIA_ROOT))
+        response = HttpResponse(status=200)
+        response['X-Accel-Redirect'] = '/protected-media/' + quote(rel)
+        response['Content-Disposition'] = disposition
+        response['Content-Type'] = mf.mimetype or 'application/octet-stream'
+        return response
+
 
 # D-12 — Watchpoints: advertències de text lliure que viatgen amb el model a través dels gates.
 class WatchpointViewSet(viewsets.ModelViewSet):
