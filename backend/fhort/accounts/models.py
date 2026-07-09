@@ -49,6 +49,19 @@ class TenantConfig(models.Model):
     # es mostra al document. `payment_notes` = text lliure (forma de pagament, referències, etc.).
     iban             = models.CharField(max_length=34, blank=True, help_text="IBAN de cobrament (emissor).")
     payment_notes    = models.TextField(blank=True, help_text="Notes de pagament de l'emissor (PDF).")
+    # Comercial Studio (Empresa/fiscal) — dades fiscals de l'EMISSOR per a la capçalera dels documents
+    # PDF (oferta/comanda/albarà). Additives (blank), mirall conceptual del vocabulari fiscal de
+    # tasks.Customer (receptor) perquè el PDF llegeixi emissor i receptor amb la mateixa forma. Fi del
+    # hardcode de capçalera ("FHORT MANAGEMENT, SL / Salmerón 165…"). `nom_empresa` (S1) queda com a nom
+    # comercial curt; `legal_name` és la raó social legal. `country` = ISO 3166-1 alpha-2 (mirall Customer.pais).
+    legal_name       = models.CharField(max_length=200, blank=True, help_text="Raó social legal de l'emissor.")
+    tax_id           = models.CharField(max_length=20, blank=True, help_text="NIF/VAT/tax id de l'emissor.")
+    address          = models.CharField(max_length=200, blank=True, help_text="Adreça de l'emissor.")
+    postal_code      = models.CharField(max_length=20, blank=True)
+    city             = models.CharField(max_length=100, blank=True)
+    country          = models.CharField(max_length=2, default='ES', help_text="ISO 3166-1 alpha-2.")
+    email            = models.EmailField(blank=True)
+    phone            = models.CharField(max_length=40, blank=True)
     creat_at         = models.DateTimeField(auto_now_add=True)
     actualitzat_at   = models.DateTimeField(auto_now=True)
 
