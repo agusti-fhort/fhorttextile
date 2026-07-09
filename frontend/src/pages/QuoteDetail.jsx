@@ -8,6 +8,7 @@ import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
 import PdfButton from '../components/ui/PdfButton'
 import { selS, primaryBtn } from '../components/ui/buttons'
+import { DocumentHeader, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { StatusBadge } from './Quotes'
 
 // Mòdul Comercial Studio — B2 · fitxa d'oferta: capçalera + línies + totals + PDF.
@@ -17,7 +18,6 @@ const smallBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
   padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
 }
-const delBtn = { ...smallBtn, color: 'var(--err)', borderColor: 'var(--err)' }
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
 
 // Baixa un Blob com a fitxer (mateix helper que BulkImportWizard).
@@ -108,32 +108,34 @@ export default function QuoteDetail() {
         <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('quotes.back')}
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-        <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, fontFamily: MONO }}>{quote.document_number}</h1>
-        <StatusBadge status={quote.status} t={t} />
-        <span style={{ marginLeft: 'auto' }}>
-          <PdfButton onClick={doPdf} disabled={busy} label={t('quotes.download_pdf')} />
-        </span>
-      </div>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 16 }}>{quote.customer_nom}</p>
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button onClick={doSend} disabled={busy || !editable || !hasLines} style={primaryBtn}
-          title={!isDraft ? t('quotes.send_only_draft') : (!hasLines ? t('quotes.send_needs_lines') : '')}>
-          <i className="ti ti-send" style={{ fontSize: 14 }} /> {t('quotes.send')}
-        </button>
-        {canConvert && (
-          <button onClick={() => setConfirmConvert(true)} disabled={busy} style={primaryBtn}>
-            <i className="ti ti-arrow-right-circle" style={{ fontSize: 14 }} /> {t('quotes.convert')}
+      <DocumentHeader
+        reference={quote.document_number}
+        statusBadge={<StatusBadge status={quote.status} t={t} />}
+        customer={quote.customer_nom}
+        actions={<>
+          <button onClick={doSend} disabled={busy || !editable || !hasLines} style={{ ...primaryBtn, marginLeft: 0 }}
+            title={!isDraft ? t('quotes.send_only_draft') : (!hasLines ? t('quotes.send_needs_lines') : '')}>
+            <i className="ti ti-send" style={{ fontSize: 14 }} /> {t('quotes.send')}
           </button>
-        )}
-      </div>
+          <PdfButton onClick={doPdf} disabled={busy} label={t('quotes.download_pdf')} />
+          {canConvert && (
+            <button onClick={() => setConfirmConvert(true)} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>
+              <i className="ti ti-arrow-right-circle" style={{ fontSize: 14 }} /> {t('quotes.convert')}
+            </button>
+          )}
+        </>}
+      />
 
-      <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+      <div style={{ marginTop: 12 }}>
+        <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+      </div>
 
       {!isDraft && <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 12 }}>{t('quotes.locked_note')}</p>}
 
       <LinesSection quote={quote} editable={editable} products={products} t={t} reload={reload} ok={ok} err={err} />
+      <div style={{ marginBottom: 16 }}>
+        <DocumentSummary lines={quoteSummaryLines(quote, t)} />
+      </div>
       <DetailsSection quote={quote} editable={editable} paymentTerms={paymentTerms} t={t} reload={reload} ok={ok} err={err} />
 
       {confirmConvert && (
@@ -157,8 +159,18 @@ function Section({ title, hint, children }) {
   )
 }
 
-function Row({ children }) {
-  return <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderTop: '0.5px solid var(--bg-muted)' }}>{children}</div>
+// Línies del resum fiscal del document (subtotal · desglossament IVA per tipus · total).
+function quoteSummaryLines(quote, t) {
+  const rows = [{ label: t('quotes.subtotal'), value: money(quote.subtotal) }]
+  if ((quote.tax_breakdown || []).length) {
+    quote.tax_breakdown.forEach(b => rows.push({
+      label: `${t('quotes.vat')} ${Number(b.rate)}% · ${t('quotes.base')} ${money(b.base)}`, value: money(b.tax),
+    }))
+  } else {
+    rows.push({ label: t('quotes.tax_amount'), value: money(quote.tax_amount) })
+  }
+  rows.push({ label: t('quotes.total'), value: money(quote.total), strong: true })
+  return rows
 }
 
 // --- Línies de l'oferta: afegir/treure (només DRAFT) + totals ---
@@ -192,29 +204,24 @@ function LinesSection({ quote, editable, products, t, reload, ok, err }) {
     commerce.quoteLines.remove(lid).then(() => reload()).then(() => ok(t('quotes.line_removed'))).catch(err).finally(() => setBusy(false))
   }
 
+  const columns = [
+    { key: 'desc', label: t('quotes.col_concept'), render: l => l.description || l.product_name },
+    { key: 'qty', label: t('quotes.col_qty'), align: 'right', width: 90,
+      render: l => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>×{Number(l.quantity).toFixed(2)}</span> },
+    { key: 'price', label: t('quotes.col_unit_price'), align: 'right', width: 110,
+      render: l => <span style={{ fontFamily: MONO }}>{money(l.unit_price)}</span> },
+    { key: 'total', label: t('quotes.col_total'), align: 'right', width: 100,
+      render: l => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{money(l.line_total)}</span> },
+  ]
+  const renderActions = editable ? (l) => (
+    <RowBtn icon="ti-trash" danger disabled={busy} title={t('quotes.remove')} onClick={() => del(l.id)} />
+  ) : undefined
+
   return (
     <Section title={t('quotes.lines')} hint={t('quotes.lines_hint')}>
-      {lines.length === 0 && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('quotes.lines_empty')}</p>}
-      {lines.map(l => (
-        <Row key={l.id}>
-          <span style={{ flex: 1 }}>{l.description || l.product_name}</span>
-          <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>×{Number(l.quantity).toFixed(2)}</span>
-          <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{money(l.unit_price)}</span>
-          <span style={{ fontFamily: MONO, fontWeight: 600, minWidth: 90, textAlign: 'right' }}>{money(l.line_total)}</span>
-          {editable && <button onClick={() => del(l.id)} disabled={busy} style={delBtn}>{t('quotes.remove')}</button>}
-        </Row>
-      ))}
-
-      {/* Totals — subtotal + desglossament fiscal per tipus (tax_breakdown) + total */}
-      <div style={{ marginTop: 12, paddingTop: 8, borderTop: '0.5px solid var(--gray-l)', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-        <Total label={t('quotes.subtotal')} value={money(quote.subtotal)} />
-        {(quote.tax_breakdown || []).map((b, i) => (
-          <Total key={i} label={`${t('quotes.vat')} ${Number(b.rate)}% · ${t('quotes.base')} ${money(b.base)}`} value={money(b.tax)} />
-        ))}
-        {(!quote.tax_breakdown || quote.tax_breakdown.length === 0) &&
-          <Total label={t('quotes.tax_amount')} value={money(quote.tax_amount)} />}
-        <Total label={t('quotes.total')} value={money(quote.total)} strong />
-      </div>
+      {lines.length === 0
+        ? <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('quotes.lines_empty')}</p>
+        : <LineTable columns={columns} rows={lines} renderActions={renderActions} />}
 
       {editable && (
         <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -229,15 +236,6 @@ function LinesSection({ quote, editable, products, t, reload, ok, err }) {
         </div>
       )}
     </Section>
-  )
-}
-
-function Total({ label, value, strong }) {
-  return (
-    <div style={{ display: 'flex', gap: 16, minWidth: 220, justifyContent: 'space-between' }}>
-      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontWeight: strong ? 600 : 400 }}>{label}</span>
-      <span style={{ fontFamily: MONO, fontWeight: strong ? 700 : 400 }}>{value}</span>
-    </div>
   )
 }
 

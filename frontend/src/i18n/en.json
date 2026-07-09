@@ -1239,6 +1239,7 @@
     "col_created": "Created",
     "col_qty": "Quantity",
     "col_unit_price": "Unit price",
+    "col_concept": "Concept",
     "status_DRAFT": "Draft",
     "status_SENT": "Sent",
     "status_ACCEPTED": "Accepted",

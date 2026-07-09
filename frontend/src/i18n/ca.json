@@ -1239,6 +1239,7 @@
     "col_created": "Creada",
     "col_qty": "Quantitat",
     "col_unit_price": "Preu unitari",
+    "col_concept": "Concepte",
     "status_DRAFT": "Esborrany",
     "status_SENT": "Enviada",
     "status_ACCEPTED": "Acceptada",
