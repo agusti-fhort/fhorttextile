@@ -46,6 +46,28 @@ Script executat contra Brownie, tota la seqüència dins un `transaction.atomic(
   `force=True` només a la migració `retype_scaling_to_grading`; els altres 2 call-sites interns
   (size_check, tancament POM) no reprocessen tasques Done (exclouen `status='Done'`), no cal tocar-los.
 
-## Pendent (FASE 2, no verificat aquí)
-UI de composició (P6), assignació bulk a Models (P7), traçabilitat (P8), rename Pendents (P9).
-FORA D'SCOPE: PDF per model, Settlement/B5, gate de tier, informes.
+## FASE 2 — UI + assignació + traçabilitat (commits + build)
+
+| Peça | Hash | Focus | Verd |
+|---|---|---|---|
+| P6 | `d24bd7d` | Pantalla de composició: safata per model (selecció per check), blocs-model amb capçalera + subtotal, ull de visibilitat, temps intern en gris, comentaris MANUAL, INVOICED | `npm run build` net |
+| P7 | `ddfb6c8` | Acció massiva "Assignar a comanda" al menú de Models (reutilitza `assign_model_to_order_line`; guard un sol client) | build net |
+| P8 | `821ec7e` | Traçabilitat: badge "amb comanda/directe" a Models + bloc cadena comanda→WO→albarà a la fitxa (lectura pura) | build net |
+| P9 | `aeb49e6` | Rename tab Planificació "Pendents" → "Pendents d'assignar" (label i18n) | build net |
+
+Guardians de front (delta): i18n ca/en/es en paritat (verificat per script a cada peça); icones
+Tabler outline; colors via tokens CSS; IBM Plex Mono. Rutes noves resoltes (billable, draft,
+add-lines, mark-invoiced, mark-invoiced-bulk). `has_order` i els números de document (WorkOrder/
+DeliveryNoteLine) verificats a runtime contra `fhort`.
+
+Nota (anotació, no bloqueja): el bloc de traçabilitat de la fitxa mostra els albarans v1 via
+`WorkOrder.delivery_note` i els v2 via `?model=` a les línies; un albarà v1 (línies amb `model=NULL`)
+apareix pel costat WO, no per la consulta de línies — comportament esperat.
+
+## FORA D'SCOPE (confirmat)
+PDF per model (prototip visual amb l'Agus primer), Settlement/B5 (l'INVOICED n'és l'avançada),
+gate de tier, informes.
+
+## Estat final
+FASE 1 (backend, gate 10/10) + FASE 2 (UI) completes a `dev`, **sense push** (el push el fa l'Agus).
+Cadena de 10 commits verds (P1–P9 + docs). Revisar amb `git show <hash>`.
