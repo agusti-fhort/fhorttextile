@@ -1292,7 +1292,7 @@
   "planning": {
     "title": "Planificación",
     "subtitle": "Asigna modelos a técnicos; el motor calcula las fechas automáticamente",
-    "tab_pending": "Pendientes",
+    "tab_pending": "Pendientes de asignar",
     "tab_assigned": "Asignadas",
     "search_ph": "Buscar modelo o nombre…",
     "col_model": "Modelo",

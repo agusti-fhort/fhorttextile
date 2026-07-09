@@ -1292,7 +1292,7 @@
   "planning": {
     "title": "Planning",
     "subtitle": "Assign models to technicians; the engine computes the dates automatically",
-    "tab_pending": "Pending",
+    "tab_pending": "Pending assignment",
     "tab_assigned": "Assigned",
     "search_ph": "Search model or name…",
     "col_model": "Model",
