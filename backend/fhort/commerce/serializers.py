@@ -6,6 +6,8 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from fhort.i18n_content.serializers import TranslationsSerializerMixin
+
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
     Quote, QuoteLine, PaymentTerms, PaymentTermLine, SalesOrder, SalesOrderLine,
@@ -69,9 +71,10 @@ class ProductPriceGTISerializer(serializers.ModelSerializer):
         fields = ['id', 'product', 'garment_type_item', 'gti_code', 'gti_name', 'price']
 
 
-class ProductSerializer(serializers.ModelSerializer):
+class ProductSerializer(TranslationsSerializerMixin, serializers.ModelSerializer):
     """Llista/creació/edició dels camps NUCLI de l'article. Els satèl·lits es llegeixen
-    a la fitxa (camps *_detail) i s'editen pels seus endpoints propis."""
+    a la fitxa (camps *_detail) i s'editen pels seus endpoints propis. `name`/`description`
+    guarden l'EN canònic; els idiomes addicionals viuen a `translations` (patró híbrid)."""
     unit_code = serializers.CharField(source='unit.code', read_only=True)
     recipe_lines = ProductRecipeSerializer(many=True, read_only=True)
     suppliers = ProductSupplierSerializer(many=True, read_only=True)
@@ -80,8 +83,9 @@ class ProductSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ['id', 'code', 'name', 'nature', 'price_mode', 'base_price', 'sale_rate',
-                  'markup_pct', 'tax_rate', 'unit', 'unit_code', 'active', 'created_at', 'updated_at',
+        fields = ['id', 'code', 'name', 'description', 'translations', 'nature', 'price_mode',
+                  'base_price', 'sale_rate', 'markup_pct', 'tax_rate', 'unit', 'unit_code',
+                  'active', 'created_at', 'updated_at',
                   'recipe_lines', 'suppliers', 'components', 'price_exceptions']
         read_only_fields = ['created_at', 'updated_at']
 

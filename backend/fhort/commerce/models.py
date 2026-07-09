@@ -15,6 +15,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from fhort.i18n_content.models import TranslatableMixin
+
 _CENT = Decimal('0.01')
 
 # Fonaments dels documents comercials (B2+): abstractes + comptador de numeració.
@@ -42,7 +44,7 @@ class Unit(models.Model):
         return self.code
 
 
-class Product(models.Model):
+class Product(TranslatableMixin, models.Model):
     """Article comercial del catàleg del tenant: servei intern/extern, mercaderia o pack.
 
     ⚠️ NO confondre amb `tasks.Production` (confecció externa d'una peça): homofonia visual,
@@ -70,8 +72,13 @@ class Product(models.Model):
         ('FIXED', 'Fixed'),
         ('TIME_BASED', 'Time based'),
     ]
+    # Camps traduïbles (patró híbrid): la columna guarda l'EN canònic (fallback sempre present);
+    # els idiomes addicionals viuen a i18n_content.Translation.
+    TRANSLATABLE_FIELDS = ('name', 'description')
+
     code = models.SlugField(max_length=60, unique=True)
     name = models.CharField(max_length=200, help_text="Nom canònic EN; display i18n a la UI.")
+    description = models.TextField(blank=True, help_text="Descripció canònica EN; display i18n a la UI.")
     nature = models.CharField(max_length=20, choices=NATURE_CHOICES)
     price_mode = models.CharField(max_length=20, choices=PRICE_MODE_CHOICES, default='FIXED')
     base_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
