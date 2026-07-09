@@ -1213,7 +1213,7 @@ def import_session_confirmar_view(request, token):
       2. SizeFitting contenidor (sense GradingVersion/GradedSpec): el grading PROPAGAT no es
          reté; es projecta conscientment des de la regla del model (deltes+breaks), D-10.
       3. NO sessions de fitting (cap FittingSession).
-      4. PDF → ModelFitxer(categoria='Document', versio NNN, naming {codi}_DOCUMENT_{NNN});
+      4. PDF → ModelFitxer(tipus='DOCUMENT', versio NNN, naming {codi}_DOCUMENT_{NNN});
          re-import → versio_anterior apunta a l'anterior.
       5. session.estat='CONFIRMAT'.
     """
@@ -1487,14 +1487,14 @@ def import_session_confirmar_view(request, token):
         if grading_avisos:
             session.avisos = (session.avisos or []) + grading_avisos
 
-        # ── 4. PDF/document → ModelFitxer(categoria='Document') amb versionat (re-import = v2).
+        # ── 4. PDF/document → ModelFitxer(tipus='DOCUMENT') amb versionat (re-import = v2).
         #     Delega la invariant a save_model_file (B2): re-import encadena (versio_anterior)
         #     i deixa is_current correcte. El naming {codi}_DOCUMENT_{NNN} es passa explícit.
         doc_fitxer = None
         if session.document:
             from .services_fitxers import save_model_file
             anterior = ModelFitxer.objects.filter(
-                model=model, categoria='Document',
+                model=model, tipus='DOCUMENT',
             ).order_by('-id').first()
             num = (anterior.versio + 1) if anterior else 1
             ext = os.path.splitext(session.document.name)[1] or '.pdf'
@@ -1506,7 +1506,7 @@ def import_session_confirmar_view(request, token):
                 session.document.close()
             doc_fitxer = save_model_file(
                 model, ContentFile(doc_bytes),
-                versio_anterior=anterior, categoria='Document', tipus='DOCUMENT',
+                versio_anterior=anterior, tipus='DOCUMENT',
                 origen='upload', nom=nom,
             )
             doc_fitxer.pujat_per = user_profile

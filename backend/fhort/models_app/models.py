@@ -326,6 +326,9 @@ class Model(models.Model):
 
 
 class ModelFitxer(models.Model):
+    # DEPRECAT (S03a · P1.2) — eix mort. `tipus` és l'ÚNIC eix de classificació viu.
+    # Ningú l'escriu amb valor semàntic ni el llegeix; el camp es conserva (patró G2:
+    # deixar de llegir abans de deixar d'existir) i es farà drop en un sprint posterior.
     CATEGORIA_CHOICES = [
         ('Patro', 'Patró'),
         ('Disseny', 'Disseny'),
@@ -341,18 +344,31 @@ class ModelFitxer(models.Model):
         ('ia_ocr', 'IA OCR'),
     ]
 
-    # Valors reservats de `tipus` per al sistema de documents .ftt. El camp `tipus`
-    # és CharField lliure (sense choices) → són convencions de codi, no constraints
-    # de BD: no requereixen migració. La invariant is_current/versio (save_model_file)
-    # és agnòstica al tipus.
+    # EIX ÚNIC (S03a · P1.1). Els 9 primers valors són els que ja circulaven de facto com a
+    # convenció de codi (byte-idèntics, cap migració de dades); RUL i SKETCH_SVG són nous.
+    # La invariant is_current/versio (save_model_file) segueix sent agnòstica al tipus.
+    TIPUS_CHOICES = [
+        ('ALTRES', 'Altres'),
+        ('DOCUMENT', 'Document'),
+        ('TECHSHEET', 'Fitxa tècnica (.ftt)'),
+        ('EXPORT', "PDF d'export"),
+        ('PATRO', 'Patró'),
+        ('ESCALAT', 'Escalat'),
+        ('SKETCH_FLETXES', 'Sketch amb fletxes'),
+        ('SKETCH_NET', 'Sketch net'),
+        ('SKETCH_SVG', 'Sketch SVG'),
+        ('MARCADA', 'Marcada'),
+        ('RUL', 'RUL'),
+    ]
+
     TIPUS_TECHSHEET = 'TECHSHEET'   # document editable .ftt (fitxa tècnica)
     TIPUS_EXPORT = 'EXPORT'         # PDF d'export generat des d'un document .ftt
     FTT_EXTENSION = '.ftt'
 
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='fitxers')
     nom_fitxer = models.CharField(max_length=255)
-    categoria = models.CharField(max_length=20, choices=CATEGORIA_CHOICES)
-    tipus = models.CharField(max_length=30, default='ALTRES', blank=True)
+    categoria = models.CharField(max_length=20, choices=CATEGORIA_CHOICES, blank=True)
+    tipus = models.CharField(max_length=30, choices=TIPUS_CHOICES, default='ALTRES', blank=True)
     versio = models.PositiveIntegerField(default=1)
     # Invariant: exactament un is_current=True per cadena versio_anterior (el cap).
     is_current = models.BooleanField(default=True, db_index=True)

@@ -55,10 +55,12 @@ function ModelFilesPanel({ modelId }) {
 
   useEffect(() => {
     let cancelled = false
+    // Eix únic `tipus` (S03a · P1). Marcades queda amb el filtre correcte tot i que avui cap
+    // escriptor emet tipus='MARCADA': és un forat amb nom, l'omplirà el flux de marcada.
     Promise.all([
-      modelFitxers.list({ model: modelId, categoria: 'Patro' }),
+      modelFitxers.list({ model: modelId, tipus__in: 'PATRO,ESCALAT' }),
       modelFitxers.list({ model: modelId, tipus: 'MARCADA' }),
-      modelFitxers.list({ model: modelId, categoria: 'Document' }),
+      modelFitxers.list({ model: modelId, tipus: 'DOCUMENT' }),
     ])
       .then(([p, m, d]) => {
         if (cancelled) return

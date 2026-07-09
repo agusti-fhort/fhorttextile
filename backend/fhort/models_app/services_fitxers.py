@@ -34,17 +34,17 @@ def _guess_mimetype(file, nom):
 
 
 @transaction.atomic
-def save_model_file(model, file, *, versio_anterior=None, categoria=None,
+def save_model_file(model, file, *, versio_anterior=None,
                     tipus=None, origen='upload', nom=None):
     """Desa un fitxer de model respectant la invariant de cadena.
 
     - Sense `versio_anterior`: cadena nova → versio=1, is_current=True, versio_anterior=NULL.
     - Amb `versio_anterior`: encadena → versio=pred.versio+1, is_current=True al nou i
-      is_current=False al predecessor. `categoria`/`tipus` s'hereten del predecessor si no
-      s'especifiquen.
+      is_current=False al predecessor. `tipus` s'hereta del predecessor si no s'especifica.
 
     Retorna el `ModelFitxer` creat. És l'ÚNIC punt que escriu `is_current`/`versio` en una
-    pujada; cap autoincrement per `tipus`.
+    pujada; cap autoincrement per `tipus`. `categoria` (eix deprecat, S03a · P1.2) es deixa
+    buida: ningú l'escriu amb valor semàntic ni la llegeix.
     """
     nom_fitxer = nom or getattr(file, 'name', None) or 'fitxer'
     checksum = _compute_checksum(file)
@@ -53,8 +53,6 @@ def save_model_file(model, file, *, versio_anterior=None, categoria=None,
 
     if versio_anterior is not None:
         versio = (versio_anterior.versio or 0) + 1
-        if categoria is None:
-            categoria = versio_anterior.categoria
         if tipus is None:
             tipus = versio_anterior.tipus
     else:
@@ -63,7 +61,7 @@ def save_model_file(model, file, *, versio_anterior=None, categoria=None,
     fitxer = ModelFitxer(
         model=model,
         nom_fitxer=nom_fitxer,
-        categoria=categoria or '',
+        categoria='',
         tipus=tipus or 'ALTRES',
         versio=versio,
         is_current=True,

@@ -132,6 +132,16 @@ class ModelViewSet(viewsets.ModelViewSet):
         return Response({'counts': counts, 'total': sum(counts.values())})
 
 
+class ModelFitxerFilter(django_filters.FilterSet):
+    """Eix únic `tipus` (S03a · P1). `?tipus__in=PATRO,ESCALAT` per als panells que
+    agrupen més d'un rol. `categoria` ja no és filtrable: és un eix deprecat i buit."""
+    tipus__in = django_filters.BaseInFilter(field_name='tipus', lookup_expr='in')
+
+    class Meta:
+        model = ModelFitxer
+        fields = ['model', 'tipus', 'enviat_ia', 'is_current', 'mimetype']
+
+
 class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet):
     """Lectura (list/retrieve/versions) + esborrat. NO exposa create/update: l'ÚNICA via
     d'escriptura és services_fitxers.save_model_file, que manté la invariant is_current
@@ -140,7 +150,7 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
     serializer_class = ModelFitxerSerializer
     queryset = ModelFitxer.objects.select_related('model', 'pujat_per').all()
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['model', 'categoria', 'tipus', 'enviat_ia', 'is_current', 'mimetype']
+    filterset_class = ModelFitxerFilter
     ordering_fields = ['data_pujada']
     ordering = ['-data_pujada']
 
@@ -1079,10 +1089,10 @@ def upload_file_view(request, model_id):
 
     from .services_fitxers import save_model_file
 
-    # Contracte Finder: categoria/tipus opcionals (neutres si no es donen). Sense
-    # autoincrement per tipus — la versió la governa el servei via la cadena.
+    # Contracte Finder: `tipus` opcional (neutre si no es dona). Sense autoincrement per
+    # tipus — la versió la governa el servei via la cadena. `categoria` ja no s'accepta
+    # (eix deprecat, S03a · P1.2): el Finder no l'ha enviada mai.
     tipus = request.data.get('tipus') or None
-    categoria = request.data.get('categoria') or None
     nom = request.data.get('nom') or uploaded_file.name
 
     # versio_anterior_id opcional → encadena una nova versió d'un fitxer existent.
@@ -1098,7 +1108,6 @@ def upload_file_view(request, model_id):
     mf = save_model_file(
         model, uploaded_file,
         versio_anterior=versio_anterior,
-        categoria=categoria,
         tipus=tipus,
         origen='upload',
         nom=nom,
@@ -1112,7 +1121,6 @@ def upload_file_view(request, model_id):
         'id': mf.id,
         'nom_fitxer': mf.nom_fitxer,
         'tipus': mf.tipus,
-        'categoria': mf.categoria,
         'versio': mf.versio,
         'is_current': mf.is_current,
         'versio_anterior': mf.versio_anterior_id,
