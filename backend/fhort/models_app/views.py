@@ -2,7 +2,7 @@ import datetime
 from decimal import Decimal, InvalidOperation
 
 from django.db import connection, transaction
-from rest_framework import viewsets
+from rest_framework import mixins, viewsets
 from rest_framework.decorators import api_view, parser_classes, permission_classes, action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -132,7 +132,10 @@ class ModelViewSet(viewsets.ModelViewSet):
         return Response({'counts': counts, 'total': sum(counts.values())})
 
 
-class ModelFitxerViewSet(viewsets.ModelViewSet):
+class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet):
+    """Lectura (list/retrieve/versions) + esborrat. NO exposa create/update: l'ÚNICA via
+    d'escriptura és services_fitxers.save_model_file, que manté la invariant is_current
+    de la cadena de versions. El ViewSet genèric la saltava (S03a · P0.1)."""
     permission_classes = [IsAuthenticated]
     serializer_class = ModelFitxerSerializer
     queryset = ModelFitxer.objects.select_related('model', 'pujat_per').all()
