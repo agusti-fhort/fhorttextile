@@ -173,11 +173,17 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
     story = []
 
     # ═══ CAPÇALERA ═══
-    # Marca: logo del tenant (logo_file) si existeix; si no, text de fallback.
+    # Marca: logo del tenant (logo_file) si n'hi ha; si no, text de fallback. El logo_file és un
+    # ImageField ràster (Pillow) → reportlab Image() el dibuixa. Un SVG NO és vàlid aquí (ni Pillow
+    # ni reportlab el resolen): cal pujar PNG/JPG. Alçada acotada a 15mm, amplada per aspecte (amb
+    # sostre de seguretat perquè un logo molt ample no desbordi la columna esquerra). El fallback
+    # de text NOMÉS surt si logo_file és buit o la imatge no es pot llegir.
+    LOGO_MAX_H, LOGO_MAX_W = 15 * mm, 45 * mm
+
     def _brand_flowable():
         logo = getattr(cfg, 'logo_file', None)
         path = None
-        if logo:
+        if logo:  # ImageFieldFile buit → bool False → fallback de text.
             try:
                 path = logo.path
             except Exception:  # noqa: BLE001 — storage sense path local
@@ -185,13 +191,15 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
         if path and os.path.isfile(path):
             try:
                 img = Image(path)
-                w = 35 * mm
-                img.drawWidth = w
-                img.drawHeight = w * (img.imageHeight / img.imageWidth)
+                ratio = (img.imageWidth or 1) / (img.imageHeight or 1)
+                h, w = LOGO_MAX_H, LOGO_MAX_H * ratio
+                if w > LOGO_MAX_W:  # logo molt ample → limita per amplada, recalcula alçada
+                    w, h = LOGO_MAX_W, LOGO_MAX_W / ratio
+                img.drawWidth, img.drawHeight = w, h
                 img.hAlign = 'LEFT'
                 return img
-            except Exception:  # noqa: BLE001 — imatge malmesa → text de fallback
-                pass
+            except Exception:  # noqa: BLE001 — imatge malmesa/format no ràster → text de fallback
+                logger.warning("PDF logo: no s'ha pogut llegir logo_file (%s); fallback de text.", path)
         return Paragraph(f'<font name="{FS}" color="#B8860B">Fhort</font> '
                          f'<font name="{FL}" color="#888888">Textile Tech</font>',
                          s('logo', size=14))
