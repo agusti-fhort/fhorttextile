@@ -165,9 +165,23 @@ class TenantConfigSerializer(serializers.Serializer):
     norma_referencia = serializers.ChoiceField(choices=['ISO_8559', 'ASTM_D13'])
     nom_empresa = serializers.CharField(allow_blank=True)
     logo_url = serializers.URLField(allow_blank=True)
+    # Comercial Studio (P6) — logo pujat (fitxer) exposat com a URL (absoluta si el view passa
+    # `request` al context). L'escriptura és via upload multipart al mateix endpoint, no per aquest camp.
+    logo_file = serializers.SerializerMethodField()
     # Comercial Studio (B1) — tarifa interna de cost per hora (plana). ≠ Product.sale_rate.
     hourly_rate = serializers.DecimalField(max_digits=10, decimal_places=2,
                                            required=False, allow_null=True)
+    # Comercial Studio (P6) — dades de pagament de l'emissor per als documents PDF.
+    iban = serializers.CharField(allow_blank=True, required=False)
+    payment_notes = serializers.CharField(allow_blank=True, required=False)
+
+    def get_logo_file(self, obj):
+        f = getattr(obj, 'logo_file', None)
+        if not f:
+            return None
+        url = f.url
+        req = self.context.get('request')
+        return req.build_absolute_uri(url) if req else url
 
 
 class POMGlobalLightSerializer(serializers.Serializer):

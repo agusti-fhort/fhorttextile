@@ -1130,7 +1130,16 @@
     "unit_inch": "Polzades (inch)",
     "norma_referencia": "Norma de referència",
     "hourly_rate": "Tarifa interna de cost (€/hora)",
-    "hourly_rate_hint": "Cost intern per hora dels serveis. No és una tarifa de venda."
+    "hourly_rate_hint": "Cost intern per hora dels serveis. No és una tarifa de venda.",
+    "logo": "Logotip",
+    "logo_hint": "Ràster (PNG/JPG). Surt a la capçalera dels documents PDF; alçada màx. 15 mm.",
+    "logo_upload": "Puja logo",
+    "logo_replace": "Substitueix logo",
+    "logo_uploaded": "Logotip actualitzat.",
+    "iban": "IBAN",
+    "iban_hint": "Compte de cobrament. Surt al peu de les ofertes i comandes.",
+    "payment_notes": "Notes de pagament",
+    "payment_notes_hint": "Text lliure (forma de pagament, referències). Surt al peu del document."
   },
   "payment_terms": {
     "title": "Condicions de pagament",

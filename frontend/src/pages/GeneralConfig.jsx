@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { tenantConfig } from '../api/endpoints'
@@ -22,18 +22,27 @@ export default function GeneralConfig() {
   const [error, setError] = useState(false)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState(null)
-  const [f, setF] = useState({ nom_empresa: '', unitat_mesura: 'CM', norma_referencia: 'ISO_8559', hourly_rate: '' })
+  const [f, setF] = useState({ nom_empresa: '', unitat_mesura: 'CM', norma_referencia: 'ISO_8559', hourly_rate: '', iban: '', payment_notes: '' })
+  const [logo, setLogo] = useState(null)   // URL del logo del tenant (preview)
+  const logoRef = useRef(null)
   const set = (k, v) => setF(prev => ({ ...prev, [k]: v }))
+
+  const hydrate = (d) => {
+    setF({
+      nom_empresa: d.nom_empresa || '',
+      unitat_mesura: d.unitat_mesura || 'CM',
+      norma_referencia: d.norma_referencia || 'ISO_8559',
+      hourly_rate: d.hourly_rate ?? '',
+      iban: d.iban || '',
+      payment_notes: d.payment_notes || '',
+    })
+    setLogo(d.logo_file || null)
+  }
 
   useEffect(() => {
     let alive = true
     tenantConfig.get()
-      .then(res => { if (alive) setF({
-        nom_empresa: res.data.nom_empresa || '',
-        unitat_mesura: res.data.unitat_mesura || 'CM',
-        norma_referencia: res.data.norma_referencia || 'ISO_8559',
-        hourly_rate: res.data.hourly_rate ?? '',
-      }) })
+      .then(res => { if (alive) hydrate(res.data) })
       .catch(() => { if (alive) setError(true) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
@@ -45,8 +54,20 @@ export default function GeneralConfig() {
       nom_empresa: f.nom_empresa, unitat_mesura: f.unitat_mesura,
       norma_referencia: f.norma_referencia,
       hourly_rate: f.hourly_rate === '' ? null : f.hourly_rate,
+      iban: f.iban, payment_notes: f.payment_notes,
     })
       .then(() => setFeedback({ type: 'ok', text: t('config_general.saved') }))
+      .catch(() => setFeedback({ type: 'err', text: t('config_general.error') }))
+      .finally(() => setSaving(false))
+  }
+
+  const onLogoPick = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setSaving(true); setFeedback(null)
+    tenantConfig.uploadLogo(file)
+      .then(res => { hydrate(res.data); setFeedback({ type: 'ok', text: t('config_general.logo_uploaded') }) })
       .catch(() => setFeedback({ type: 'err', text: t('config_general.error') }))
       .finally(() => setSaving(false))
   }
@@ -57,15 +78,30 @@ export default function GeneralConfig() {
   return (
     <div style={{ minWidth: 0, maxWidth: 560 }}>
       <div style={{ marginBottom: '1rem' }}>
-        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('config_general.title')}</h1>
+        <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('config_general.title')}</h1>
         <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('config_general.subtitle')}</p>
       </div>
 
       <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
+      <input ref={logoRef} type="file" accept="image/*" hidden onChange={onLogoPick} />
       <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 20 }}>
         <Field label={t('config_general.nom_empresa')}>
           <input value={f.nom_empresa} onChange={e => set('nom_empresa', e.target.value)} disabled={!canEdit} style={{ ...selS, width: '100%' }} />
+        </Field>
+        <Field label={t('config_general.logo')} hint={t('config_general.logo_hint')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 88, height: 44, border: '0.5px solid var(--gray-l)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-muted)', overflow: 'hidden', flex: 'none' }}>
+              {logo
+                ? <img src={logo} alt="logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                : <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--gray)', fontFamily: MONO }}>—</span>}
+            </div>
+            {canEdit && (
+              <button onClick={() => logoRef.current?.click()} disabled={saving} style={{ ...selS, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <i className="ti ti-photo" style={{ fontSize: 14 }} />{logo ? t('config_general.logo_replace') : t('config_general.logo_upload')}
+              </button>
+            )}
+          </div>
         </Field>
         <Field label={t('config_general.unitat_mesura')}>
           <select value={f.unitat_mesura} onChange={e => set('unitat_mesura', e.target.value)} disabled={!canEdit} style={{ ...selS, width: '100%' }}>
@@ -80,6 +116,14 @@ export default function GeneralConfig() {
         <Field label={t('config_general.hourly_rate')} hint={t('config_general.hourly_rate_hint')}>
           <input type="text" inputMode="decimal" value={f.hourly_rate} onChange={e => set('hourly_rate', e.target.value)}
             disabled={!canEdit} placeholder="ex: 25.00" style={{ ...selS, width: '100%' }} />
+        </Field>
+        <Field label={t('config_general.iban')} hint={t('config_general.iban_hint')}>
+          <input value={f.iban} onChange={e => set('iban', e.target.value)} disabled={!canEdit}
+            placeholder="ES00 0000 0000 0000 0000 0000" style={{ ...selS, width: '100%' }} />
+        </Field>
+        <Field label={t('config_general.payment_notes')} hint={t('config_general.payment_notes_hint')}>
+          <textarea value={f.payment_notes} onChange={e => set('payment_notes', e.target.value)} disabled={!canEdit}
+            rows={2} style={{ ...selS, width: '100%', resize: 'vertical', fontFamily: MONO }} />
         </Field>
 
         {canEdit && (

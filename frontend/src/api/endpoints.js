@@ -10,6 +10,11 @@ export const auth = {
 export const tenantConfig = {
   get: () => client.get('/api/v1/tenant-config/'),
   update: (data) => client.patch('/api/v1/tenant-config/', data),
+  // P6 — puja el logo del tenant (multipart) al mateix endpoint; retorna la config actualitzada.
+  uploadLogo: (file) => {
+    const fd = new FormData(); fd.append('logo_file', file)
+    return client.patch('/api/v1/tenant-config/', fd)
+  },
 }
 
 // Client NET (sense interceptor Bearer) per a la recuperació de contrasenya pública:

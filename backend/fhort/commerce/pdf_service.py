@@ -297,7 +297,15 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
     peu_l_rows = [[Paragraph(peu_label, S_LABEL)]]
     if quote.notes:
         peu_l_rows.append([Paragraph(quote.notes.replace('\n', ' '), SSM_G)])
-    # TODO B-fi: IBAN/dades bancàries com a camp propi de TenantConfig (avui no existeix).
+    # IBAN + notes de pagament de l'emissor (TenantConfig, P6) — fi del hardcode. Només al bloc de
+    # pagament (oferta/comanda); l'albarà (show_payment=False) no en porta.
+    if show_payment:
+        iban = (getattr(cfg, 'iban', '') or '').strip()
+        if iban:
+            peu_l_rows.append([Paragraph(f'IBAN: {iban}', SSM_G)])
+        pay_notes = (getattr(cfg, 'payment_notes', '') or '').strip()
+        if pay_notes:
+            peu_l_rows.append([Paragraph(pay_notes.replace('\n', ' '), SSM_G)])
     peu_l = Table(peu_l_rows, colWidths=[COL_LEFT_W - 6 * mm],
                   style=TableStyle(ZP + [('LINEABOVE', (0, 0), (0, 0), 0.5, LGREY)]))
 

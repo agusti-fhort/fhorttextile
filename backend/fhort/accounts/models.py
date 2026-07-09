@@ -44,6 +44,11 @@ class TenantConfig(models.Model):
     # dels serveis interns: Σ cascada(task_code, GTI) × hourly_rate. ≠ Product.sale_rate (VENDA).
     # null = no fixada (la cascada de cost recorrerà a captura quan calgui). Per-perfil = v2.
     hourly_rate      = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # Comercial Studio (P6) — dades bancàries/pagament de l'emissor per als documents PDF (oferta i
+    # comanda). El PDF les llegeix d'aquí (fi del hardcode). `iban` = compte de cobrament; blank = no
+    # es mostra al document. `payment_notes` = text lliure (forma de pagament, referències, etc.).
+    iban             = models.CharField(max_length=34, blank=True, help_text="IBAN de cobrament (emissor).")
+    payment_notes    = models.TextField(blank=True, help_text="Notes de pagament de l'emissor (PDF).")
     creat_at         = models.DateTimeField(auto_now_add=True)
     actualitzat_at   = models.DateTimeField(auto_now=True)
 

@@ -1130,7 +1130,16 @@
     "unit_inch": "Inches (inch)",
     "norma_referencia": "Reference standard",
     "hourly_rate": "Internal cost rate (€/hour)",
-    "hourly_rate_hint": "Internal hourly cost of services. Not a sale rate."
+    "hourly_rate_hint": "Internal hourly cost of services. Not a sale rate.",
+    "logo": "Logo",
+    "logo_hint": "Raster (PNG/JPG). Shown in the PDF document header; max. height 15 mm.",
+    "logo_upload": "Upload logo",
+    "logo_replace": "Replace logo",
+    "logo_uploaded": "Logo updated.",
+    "iban": "IBAN",
+    "iban_hint": "Collection account. Shown in the footer of quotes and orders.",
+    "payment_notes": "Payment notes",
+    "payment_notes_hint": "Free text (payment method, references). Shown in the document footer."
   },
   "payment_terms": {
     "title": "Payment terms",

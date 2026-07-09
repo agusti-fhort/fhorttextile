@@ -1130,7 +1130,16 @@
     "unit_inch": "Pulgadas (inch)",
     "norma_referencia": "Norma de referencia",
     "hourly_rate": "Tarifa interna de coste (€/hora)",
-    "hourly_rate_hint": "Coste interno por hora de los servicios. No es una tarifa de venta."
+    "hourly_rate_hint": "Coste interno por hora de los servicios. No es una tarifa de venta.",
+    "logo": "Logotipo",
+    "logo_hint": "Ráster (PNG/JPG). Aparece en la cabecera de los documentos PDF; altura máx. 15 mm.",
+    "logo_upload": "Subir logo",
+    "logo_replace": "Sustituir logo",
+    "logo_uploaded": "Logotipo actualizado.",
+    "iban": "IBAN",
+    "iban_hint": "Cuenta de cobro. Aparece en el pie de ofertas y pedidos.",
+    "payment_notes": "Notas de pago",
+    "payment_notes_hint": "Texto libre (forma de pago, referencias). Aparece en el pie del documento."
   },
   "payment_terms": {
     "title": "Condiciones de pago",

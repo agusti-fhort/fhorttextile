@@ -288,17 +288,23 @@ def tenant_config_view(request):
         from fhort.pom.s2_serializers import TenantConfigSerializer
 
         config = TenantConfig.get_or_create_default()
+        ctx = {'request': request}   # perquè logo_file surti com a URL absoluta
 
         if request.method == 'GET':
-            return Response(TenantConfigSerializer(config).data)
+            return Response(TenantConfigSerializer(config, context=ctx).data)
 
-        # PATCH
-        allowed = ['unitat_mesura', 'norma_referencia', 'nom_empresa', 'logo_url', 'hourly_rate']
+        # PATCH — camps escalars + upload opcional del logo (multipart, camp 'logo_file').
+        allowed = ['unitat_mesura', 'norma_referencia', 'nom_empresa', 'logo_url', 'hourly_rate',
+                   'iban', 'payment_notes']
         for field in allowed:
             if field in request.data:
                 setattr(config, field, request.data[field])
+        if 'logo_file' in request.FILES:
+            if config.logo_file:
+                config.logo_file.delete(save=False)   # neteja el fitxer anterior
+            config.logo_file = request.FILES['logo_file']
         config.save()
-        return Response(TenantConfigSerializer(config).data)
+        return Response(TenantConfigSerializer(config, context=ctx).data)
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
