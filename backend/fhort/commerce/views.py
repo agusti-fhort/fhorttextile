@@ -410,6 +410,35 @@ class DeliveryNoteViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixin
             return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(dn).data)
 
+    @action(detail=True, methods=['post'], url_path='mark-invoiced')
+    def mark_invoiced(self, request, pk=None):
+        """POST commerce/delivery-notes/{id}/mark-invoiced/ — ISSUED→INVOICED. Gate CONFIGURE."""
+        dn = self.get_object()
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import mark_delivery_note_invoiced
+        try:
+            mark_delivery_note_invoiced(dn, user=getattr(request.user, 'profile', None))
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(dn).data)
+
+    @action(detail=False, methods=['post'], url_path='mark-invoiced-bulk')
+    def mark_invoiced_bulk(self, request):
+        """POST commerce/delivery-notes/mark-invoiced-bulk/ — marcatge massiu ISSUED→INVOICED.
+        Gate CONFIGURE. Body: {ids:[...]}. Retorna {marked, skipped} (els no-ISSUED s'ometen)."""
+        from .services import mark_delivery_note_invoiced
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        ids = request.data.get('ids') or []
+        profile = getattr(request.user, 'profile', None)
+        marked, skipped = [], []
+        for dn in DeliveryNote.objects.filter(pk__in=ids):
+            try:
+                mark_delivery_note_invoiced(dn, user=profile)
+                marked.append(dn.id)
+            except DjangoValidationError:
+                skipped.append(dn.id)
+        return Response({'marked': marked, 'skipped': skipped})
+
     @action(detail=True, methods=['get'])
     def pdf(self, request, pk=None):
         """PDF de l'albarà: reutilitza el generador genèric amb títol 'Albarà' i SENSE bloc de

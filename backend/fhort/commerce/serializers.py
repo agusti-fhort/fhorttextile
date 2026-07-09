@@ -347,17 +347,19 @@ class DeliveryNoteSerializer(serializers.ModelSerializer):
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
     lines = DeliveryNoteLineSerializer(many=True, read_only=True)
     issued_by_nom = serializers.CharField(source='issued_by.nom_complet', read_only=True, default=None)
+    invoiced_by_nom = serializers.CharField(source='invoiced_by.nom_complet', read_only=True, default=None)
     work_orders_included = serializers.SerializerMethodField()
 
     class Meta:
         model = DeliveryNote
         fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom', 'status',
-                  'issued_at', 'issued_by', 'issued_by_nom', 'subtotal', 'tax_amount', 'total',
+                  'issued_at', 'issued_by', 'issued_by_nom', 'invoiced_at', 'invoiced_by',
+                  'invoiced_by_nom', 'subtotal', 'tax_amount', 'total',
                   'tax_breakdown', 'notes', 'created_at', 'updated_at', 'lines',
                   'work_orders_included']
         read_only_fields = ['document_number', 'doc_type', 'customer', 'status', 'issued_at',
-                            'issued_by', 'subtotal', 'tax_amount', 'total', 'tax_breakdown',
-                            'created_at', 'updated_at']
+                            'issued_by', 'invoiced_at', 'invoiced_by', 'subtotal', 'tax_amount',
+                            'total', 'tax_breakdown', 'created_at', 'updated_at']
 
     def get_work_orders_included(self, obj):
         return [{'id': w.id, 'number': w.number, 'kind': w.kind}

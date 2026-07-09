@@ -409,14 +409,32 @@ def issue_delivery_note(delivery_note, user=None):
     from django.core.exceptions import ValidationError
     if delivery_note.status != 'DRAFT':
         raise ValidationError("Només es pot emetre un albarà en esborrany (DRAFT).")
-    if not delivery_note.lines.exists():
-        raise ValidationError("L'albarà no té cap línia; no es pot emetre.")
+    # v2 — el guard compta línies VISIBLES: un albarà només d'ítems amagats no té document a emetre.
+    if not delivery_note.lines.filter(visible=True).exists():
+        raise ValidationError("L'albarà no té cap línia visible; no es pot emetre.")
     with transaction.atomic():
         delivery_note.status = 'ISSUED'
         delivery_note.issued_by = user
         if not delivery_note.issued_at:
             delivery_note.issued_at = timezone.now().date()
         delivery_note.save(update_fields=['status', 'issued_by', 'issued_at', 'updated_at'])
+    return delivery_note
+
+
+def mark_delivery_note_invoiced(delivery_note, user=None):
+    """Marca un albarà ISSUED→INVOICED ("presentat al client, OK"; v2). NO és la factura (B5): és
+    l'avançada d'estat. Guard: només des d'ISSUED (DRAFT no; un INVOICED ja marcat és idempotent).
+    Llança ValidationError. Marcatge individual o massiu (el bucle massiu viu a la view)."""
+    from django.core.exceptions import ValidationError
+    if delivery_note.status == 'INVOICED':
+        return delivery_note
+    if delivery_note.status != 'ISSUED':
+        raise ValidationError("Només es pot marcar com facturat un albarà emès (ISSUED).")
+    delivery_note.status = 'INVOICED'
+    delivery_note.invoiced_by = user
+    if not delivery_note.invoiced_at:
+        delivery_note.invoiced_at = timezone.now().date()
+    delivery_note.save(update_fields=['status', 'invoiced_by', 'invoiced_at', 'updated_at'])
     return delivery_note
 
 
