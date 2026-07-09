@@ -174,6 +174,15 @@ class TenantConfigSerializer(serializers.Serializer):
     # Comercial Studio (P6) — dades de pagament de l'emissor per als documents PDF.
     iban = serializers.CharField(allow_blank=True, required=False)
     payment_notes = serializers.CharField(allow_blank=True, required=False)
+    # Comercial Studio (Empresa/fiscal) — identitat fiscal de l'emissor per a la capçalera dels PDF.
+    legal_name = serializers.CharField(allow_blank=True, required=False)
+    tax_id = serializers.CharField(allow_blank=True, required=False)
+    address = serializers.CharField(allow_blank=True, required=False)
+    postal_code = serializers.CharField(allow_blank=True, required=False)
+    city = serializers.CharField(allow_blank=True, required=False)
+    country = serializers.CharField(allow_blank=True, required=False)
+    email = serializers.EmailField(allow_blank=True, required=False)
+    phone = serializers.CharField(allow_blank=True, required=False)
 
     def get_logo_file(self, obj):
         f = getattr(obj, 'logo_file', None)

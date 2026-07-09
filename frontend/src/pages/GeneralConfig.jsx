@@ -22,7 +22,11 @@ export default function GeneralConfig() {
   const [error, setError] = useState(false)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState(null)
-  const [f, setF] = useState({ nom_empresa: '', unitat_mesura: 'CM', norma_referencia: 'ISO_8559', hourly_rate: '', iban: '', payment_notes: '' })
+  const [f, setF] = useState({
+    nom_empresa: '', legal_name: '', tax_id: '', address: '', postal_code: '', city: '',
+    country: 'ES', email: '', phone: '',
+    unitat_mesura: 'CM', norma_referencia: 'ISO_8559', hourly_rate: '', iban: '', payment_notes: '',
+  })
   const [logo, setLogo] = useState(null)   // URL del logo del tenant (preview)
   const logoRef = useRef(null)
   const set = (k, v) => setF(prev => ({ ...prev, [k]: v }))
@@ -30,6 +34,14 @@ export default function GeneralConfig() {
   const hydrate = (d) => {
     setF({
       nom_empresa: d.nom_empresa || '',
+      legal_name: d.legal_name || '',
+      tax_id: d.tax_id || '',
+      address: d.address || '',
+      postal_code: d.postal_code || '',
+      city: d.city || '',
+      country: d.country || 'ES',
+      email: d.email || '',
+      phone: d.phone || '',
       unitat_mesura: d.unitat_mesura || 'CM',
       norma_referencia: d.norma_referencia || 'ISO_8559',
       hourly_rate: d.hourly_rate ?? '',
@@ -53,6 +65,9 @@ export default function GeneralConfig() {
     tenantConfig.update({
       nom_empresa: f.nom_empresa, unitat_mesura: f.unitat_mesura,
       norma_referencia: f.norma_referencia,
+      legal_name: f.legal_name, tax_id: f.tax_id, address: f.address,
+      postal_code: f.postal_code, city: f.city, country: f.country,
+      email: f.email, phone: f.phone,
       hourly_rate: f.hourly_rate === '' ? null : f.hourly_rate,
       iban: f.iban, payment_notes: f.payment_notes,
     })
@@ -84,11 +99,53 @@ export default function GeneralConfig() {
 
       <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
-      <input ref={logoRef} type="file" accept="image/*" hidden onChange={onLogoPick} />
+      <input ref={logoRef} type="file" accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg" hidden onChange={onLogoPick} />
       <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 20 }}>
         <Field label={t('config_general.nom_empresa')}>
           <input value={f.nom_empresa} onChange={e => set('nom_empresa', e.target.value)} disabled={!canEdit} style={{ ...selS, width: '100%' }} />
         </Field>
+
+        {/* Identitat fiscal de l'emissor — surt a la capçalera dels documents PDF (fi del hardcode). */}
+        <p style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--gray)', textTransform: 'uppercase', margin: '4px 0 12px', letterSpacing: '.04em' }}>{t('config_general.fiscal_section')}</p>
+        <Field label={t('config_general.legal_name')} hint={t('config_general.legal_name_hint')}>
+          <input value={f.legal_name} onChange={e => set('legal_name', e.target.value)} disabled={!canEdit} style={{ ...selS, width: '100%' }} />
+        </Field>
+        <Field label={t('config_general.tax_id')}>
+          <input value={f.tax_id} onChange={e => set('tax_id', e.target.value)} disabled={!canEdit} placeholder="B12345678" style={{ ...selS, width: '100%' }} />
+        </Field>
+        <Field label={t('config_general.address')}>
+          <input value={f.address} onChange={e => set('address', e.target.value)} disabled={!canEdit} style={{ ...selS, width: '100%' }} />
+        </Field>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: '0 0 120px' }}>
+            <Field label={t('config_general.postal_code')}>
+              <input value={f.postal_code} onChange={e => set('postal_code', e.target.value)} disabled={!canEdit} style={{ ...selS, width: '100%' }} />
+            </Field>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Field label={t('config_general.city')}>
+              <input value={f.city} onChange={e => set('city', e.target.value)} disabled={!canEdit} style={{ ...selS, width: '100%' }} />
+            </Field>
+          </div>
+          <div style={{ flex: '0 0 90px' }}>
+            <Field label={t('config_general.country')} hint={t('config_general.country_hint')}>
+              <input value={f.country} onChange={e => set('country', e.target.value.toUpperCase().slice(0, 2))} disabled={!canEdit} placeholder="ES" style={{ ...selS, width: '100%' }} />
+            </Field>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Field label={t('config_general.email')}>
+              <input type="email" value={f.email} onChange={e => set('email', e.target.value)} disabled={!canEdit} placeholder="hola@empresa.cat" style={{ ...selS, width: '100%' }} />
+            </Field>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Field label={t('config_general.phone')}>
+              <input value={f.phone} onChange={e => set('phone', e.target.value)} disabled={!canEdit} style={{ ...selS, width: '100%' }} />
+            </Field>
+          </div>
+        </div>
+
         <Field label={t('config_general.logo')} hint={t('config_general.logo_hint')}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 88, height: 44, border: '0.5px solid var(--gray-l)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-muted)', overflow: 'hidden', flex: 'none' }}>

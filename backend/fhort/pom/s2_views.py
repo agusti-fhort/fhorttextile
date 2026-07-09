@@ -295,7 +295,8 @@ def tenant_config_view(request):
 
         # PATCH — camps escalars + upload opcional del logo (multipart, camp 'logo_file').
         allowed = ['unitat_mesura', 'norma_referencia', 'nom_empresa', 'logo_url', 'hourly_rate',
-                   'iban', 'payment_notes']
+                   'iban', 'payment_notes', 'legal_name', 'tax_id', 'address', 'postal_code',
+                   'city', 'country', 'email', 'phone']
         for field in allowed:
             if field in request.data:
                 setattr(config, field, request.data[field])
