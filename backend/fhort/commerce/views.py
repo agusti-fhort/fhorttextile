@@ -205,6 +205,35 @@ class SalesOrderLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mix
     serializer_class = SalesOrderLineSerializer
     filterset_fields = ['order', 'product']
 
+    def get_permissions(self):
+        if self.action == 'allocation':   # expansió read-only: obert a autenticats
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
+    @action(detail=True, methods=['get'])
+    def allocation(self, request, pk=None):
+        """GET commerce/order-lines/{id}/allocation/ — expansió READ-ONLY de la línia (P4): els
+        models assignats (via WorkOrder), les seves tasques de recepta amb estat, i el % imputat.
+        Alimenta el desplegable de la fitxa de comanda. No escriu res."""
+        from decimal import Decimal
+        line = self.get_object()
+        q, alloc = Decimal(line.quantity or 0), Decimal(line.qty_allocated or 0)
+        pct = float((alloc / q * 100).quantize(Decimal('0.1'))) if q > 0 else 0.0
+        wos = line.work_orders.select_related('model').prefetch_related('tasks__task_type').order_by('id')
+        work_orders = [{
+            'id': wo.id, 'number': wo.number, 'status': wo.status, 'kind': wo.kind,
+            'model': ({'id': wo.model.id, 'codi_intern': wo.model.codi_intern,
+                       'nom_prenda': wo.model.nom_prenda} if wo.model_id else None),
+            'tasks': [{
+                'id': tk.id, 'code': tk.task_type.code, 'name': tk.task_type.name,
+                'status': tk.status, 'off_recipe': tk.off_recipe,
+            } for tk in sorted(wo.tasks.all(), key=lambda x: (x.off_recipe, x.order, x.id))],
+        } for wo in wos]
+        return Response({
+            'line_id': line.id, 'quantity': str(q), 'qty_allocated': str(alloc),
+            'pct_allocated': pct, 'work_orders': work_orders,
+        })
+
     @action(detail=True, methods=['post'], url_path='assign-model')
     def assign_model(self, request, pk=None):
         """POST commerce/order-lines/{id}/assign-model/ — assigna un model a la línia i crea el

@@ -58,6 +58,9 @@ export default function OrderDetail() {
   const [assign, setAssign] = useState(null)               // { line } | null
   const [pq, setPq] = useState({ search: '', temporada: '', collection: '' })
   const [picker, setPicker] = useState({ models: [], count: 0, loading: false, modelId: '' })
+  // P4 — desplegable read-only per línia: models assignats + tasques + % imputat (lazy).
+  const [expanded, setExpanded] = useState(() => new Set())
+  const [alloc, setAlloc] = useState({})   // { [lineId]: { loading | error | data } }
 
   const reload = useCallback(() => commerce.orders.get(id)
     .then(res => setOrder(res.data)).catch(() => setError(true)), [id])
@@ -112,6 +115,19 @@ export default function OrderDetail() {
     }, 200)
     return () => clearTimeout(id)
   }, [assign, pq, order?.customer])
+
+  // P4 — plega/desplega una línia; carrega l'expansió el primer cop (lazy).
+  const toggleLine = (line) => {
+    const id = line.id
+    const isOpen = expanded.has(id)
+    setExpanded(s => { const n = new Set(s); isOpen ? n.delete(id) : n.add(id); return n })
+    if (!isOpen && !alloc[id]) {
+      setAlloc(a => ({ ...a, [id]: { loading: true } }))
+      commerce.orderLines.allocation(id)
+        .then(res => setAlloc(a => ({ ...a, [id]: { data: res.data } })))
+        .catch(() => setAlloc(a => ({ ...a, [id]: { error: true } })))
+    }
+  }
 
   const doAssign = () => {
     if (!picker.modelId) return
@@ -177,21 +193,31 @@ export default function OrderDetail() {
       {/* Línies (read-only) + totals */}
       <Section title={t('orders.lines')}>
         {lines.length === 0 && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('orders.lines_empty')}</p>}
-        {lines.map(l => (
-          <Row key={l.id}>
-            <span style={{ flex: 1 }}>{l.description || l.product_name}</span>
-            <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }} title={t('orders.allocated')}>
-              {Number(l.qty_allocated).toFixed(2)}/{Number(l.quantity).toFixed(2)}
-            </span>
-            <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{money(l.unit_price)}</span>
-            <span style={{ fontFamily: MONO, fontWeight: 600, minWidth: 90, textAlign: 'right' }}>{money(l.line_total)}</span>
-            {canEdit && order.status === 'OPEN' && Number(l.qty_allocated) < Number(l.quantity) && (
-              <button onClick={() => openAssign(l)} disabled={busy} style={smallBtn} title={t('orders.assign_model')}>
-                <i className="ti ti-link" style={{ fontSize: 13 }} />
-              </button>
-            )}
-          </Row>
-        ))}
+        {lines.map(l => {
+          const open = expanded.has(l.id)
+          return (
+            <div key={l.id}>
+              <Row>
+                <button onClick={() => toggleLine(l)} style={chevBtn}
+                  title={t(open ? 'orders.collapse' : 'orders.expand')}>
+                  <i className={`ti ti-chevron-${open ? 'down' : 'right'}`} style={{ fontSize: 14 }} />
+                </button>
+                <span style={{ flex: 1 }}>{l.description || l.product_name}</span>
+                <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }} title={t('orders.allocated')}>
+                  {Number(l.qty_allocated).toFixed(2)}/{Number(l.quantity).toFixed(2)}
+                </span>
+                <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{money(l.unit_price)}</span>
+                <span style={{ fontFamily: MONO, fontWeight: 600, minWidth: 90, textAlign: 'right' }}>{money(l.line_total)}</span>
+                {canEdit && order.status === 'OPEN' && Number(l.qty_allocated) < Number(l.quantity) && (
+                  <button onClick={() => openAssign(l)} disabled={busy} style={smallBtn} title={t('orders.assign_model')}>
+                    <i className="ti ti-link" style={{ fontSize: 13 }} />
+                  </button>
+                )}
+              </Row>
+              {open && <LineExpansion a={alloc[l.id]} t={t} />}
+            </div>
+          )
+        })}
         <div style={{ marginTop: 12, paddingTop: 8, borderTop: '0.5px solid var(--gray-l)', display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
           <Total label={t('orders.subtotal')} value={money(order.subtotal)} />
           {(order.tax_breakdown || []).map((b, i) => (
@@ -307,6 +333,53 @@ function Section({ title, children }) {
 function Row({ children }) {
   return <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderTop: '0.5px solid var(--bg-muted)' }}>{children}</div>
 }
+
+// P4 — panell read-only d'una línia: models assignats (via WO), tasques amb estat, % imputat.
+const TASK_COL = { Done: 'var(--ok)', InProgress: 'var(--gold)', Paused: 'var(--warn)', Pending: 'var(--gray)' }
+function LineExpansion({ a, t }) {
+  if (!a || a.loading) return <div style={expBox}><span style={expMuted}>{t('orders.alloc_loading')}</span></div>
+  if (a.error) return <div style={expBox}><span style={expMuted}>{t('orders.alloc_error')}</span></div>
+  const d = a.data || {}
+  const wos = d.work_orders || []
+  return (
+    <div style={expBox}>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: wos.length ? 10 : 0 }}>
+        <span style={expMeta}>{t('orders.alloc_pct')}: <b style={{ color: 'var(--text-main)' }}>{d.pct_allocated}%</b></span>
+        <span style={expMeta}>{Number(d.qty_allocated ?? 0).toFixed(2)}/{Number(d.quantity ?? 0).toFixed(2)}</span>
+      </div>
+      {wos.length === 0
+        ? <span style={expMuted}>{t('orders.alloc_no_models')}</span>
+        : wos.map(wo => (
+          <div key={wo.id} style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: MONO, fontWeight: 700, color: 'var(--gold)', fontSize: 'var(--fs-caption)' }}>{wo.model ? wo.model.codi_intern : '—'}</span>
+              {wo.model?.nom_prenda && <span style={{ fontSize: 'var(--fs-caption)' }}>{wo.model.nom_prenda}</span>}
+              <span style={{ fontFamily: MONO, color: 'var(--gray)', fontSize: 'var(--fs-caption)' }}>· {wo.number}</span>
+              <span style={{ ...woPill, borderColor: wo.status === 'CLOSED' ? 'var(--ok)' : 'var(--gold)', color: wo.status === 'CLOSED' ? 'var(--ok)' : 'var(--gold)' }}>{t(`orders.wo_${wo.status}`, wo.status)}</span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingLeft: 4 }}>
+              {wo.tasks.length === 0
+                ? <span style={expMuted}>—</span>
+                : wo.tasks.map(tk => (
+                  <span key={tk.id} style={taskChip} title={tk.code}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: TASK_COL[tk.status] || 'var(--gray)', flex: 'none' }} />
+                    {tk.name}
+                    {tk.off_recipe && <span style={{ color: 'var(--gold)', fontWeight: 600 }}>· {t('orders.alloc_extra')}</span>}
+                    <span style={{ color: TASK_COL[tk.status] || 'var(--gray)', fontWeight: 600 }}>{t(`model_sheet.dashboard.task_status.${tk.status}`, tk.status)}</span>
+                  </span>
+                ))}
+            </div>
+          </div>
+        ))}
+    </div>
+  )
+}
+const chevBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray)', padding: '0 2px', display: 'flex', alignItems: 'center' }
+const expBox = { padding: '10px 12px', margin: '0 0 2px', background: 'var(--bg-muted)', borderRadius: 8, fontSize: 'var(--fs-caption)' }
+const expMuted = { fontSize: 'var(--fs-caption)', color: 'var(--gray)', fontFamily: MONO }
+const expMeta = { fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontFamily: MONO }
+const woPill = { fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '0 6px', borderRadius: 10, border: '0.5px solid var(--gold)' }
+const taskChip = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 12, background: 'var(--white)', border: '0.5px solid var(--gray-l)', fontSize: 'var(--fs-caption)', fontFamily: MONO }
 
 function Total({ label, value, strong }) {
   return (

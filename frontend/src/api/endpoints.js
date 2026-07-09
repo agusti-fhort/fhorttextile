@@ -407,6 +407,8 @@ export const commerce = {
     update: (id, data) => client.patch(`/api/v1/commerce/order-lines/${id}/`, data),   // qty_allocated
     // B4b — assigna un model a la línia i crea el WO ORDER (migra el col·lector). {model_id}
     assignModel: (id, data) => client.post(`/api/v1/commerce/order-lines/${id}/assign-model/`, data),
+    // P4 — expansió read-only: models assignats (via WO), tasques amb estat, % imputat.
+    allocation: (id) => client.get(`/api/v1/commerce/order-lines/${id}/allocation/`),
   },
   // Encàrrecs / ordres de treball (B4a). No es creen per POST (ORDER=wizard, COLLECTOR=hook).
   workOrders: {
