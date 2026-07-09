@@ -5,6 +5,7 @@ import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Tr
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
 import FhortLogo from '../components/brand/FhortLogo'
+import FilePicker from '../components/model/FilePicker'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 import { booleanOp } from './ftt/paperbool'
@@ -1312,6 +1313,7 @@ export default function TechSheetEditor() {
   const [conflict, setConflict] = useState(null)
   const [saveState, setSaveState] = useState(null)  // null|'saving'|'saved'|'error'
   const [fitxers, setFitxers] = useState([])
+  const [filePicker, setFilePicker] = useState(false)   // S03b · P7
   const [sizeFittings, setSizeFittings] = useState([])
   const [tableData, setTableData] = useState({})    // {objId: jsonData|null} fora del JSON
   const [notice, setNotice] = useState(null)        // toast efímer (p.ex. "ja hi ha capçalera")
@@ -3408,9 +3410,10 @@ export default function TechSheetEditor() {
         // R1: placeholder — el flux d'import de mesures es dissenyarà més endavant (sense handler).
         ribbonTool({ key: 'import-measures', icon: 'ti-ruler', label: t('tech_sheet.import_measurements'), disabled: true, title: `${t('tech_sheet.import_measurements')} · ${t('tech_sheet.coming_soon')}` }),
         ribbonTool({ key: 'image', icon: 'ti-photo-plus', label: t('tech_sheet.tool_image'), onClick: () => openImport('image') }),
+        // S03b · P7 — el "futur tab Components" que anunciava la NOTA (R1): un sol botó que obre
+        // el FilePicker (Model / Catàleg / Importar), en lloc dels N botons de fitxer d'abans.
+        ribbonTool({ key: 'files', icon: 'ti-folder', label: t('tech_sheet.tool_files'), onClick: () => setFilePicker(true), disabled: !locked }),
       ]
-      // NOTA (R1): els botons de "Fitxers del model" s'han retirat del ribbon; addModelFitxer i la
-      // càrrega de `fitxers` es conserven al codi per al futur tab Components.
     }
     return [
       ribbonTool({ key: 'align-left', icon: 'ti-layout-align-left', label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: selectedObjects.length < 2 }),
@@ -3583,7 +3586,18 @@ export default function TechSheetEditor() {
         </div>
       </div>
 
-      <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      {/* position:relative → àncora del FilePicker. El drawer viu DINS de <main>, no al root:
+          si s'ancorés al root taparia el botó d'Exportar PDF de la capçalera i els controls de
+          zoom del peu (són position:static i qualsevol element posicionat els cobreix). */}
+      <main style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
+        {filePicker && (
+          <FilePicker
+            modelId={id}
+            garmentTypeItemId={model?.garment_type_item}
+            onClose={() => setFilePicker(false)}
+            onInsert={(f) => { addModelFitxer(f); setFilePicker(false) }}
+          />
+        )}
         {/* ── Paleta d'eines vertical (C2) — 6 categories + flyouts estil Adobe (PAL-1) ── */}
         {locked && (
           <div style={{ width: 46, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', overflowX: 'visible', padding: '8px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>

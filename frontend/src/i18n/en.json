@@ -2469,8 +2469,9 @@
     "zoom_fit": "Fit to screen",
     "no_color": "No color",
     "more_colors": "More colors",
-    "consultation_badge": "Read-only",
-    "consultation_hint": "Consultation — no time tracking. Changes are still saved, but no time is logged against any task."
+    "consultation_badge": "No time tracking",
+    "consultation_hint": "Consultation — no time tracking. Changes are still saved, but no time is logged against any task.",
+    "tool_files": "Files"
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",
@@ -3068,5 +3069,21 @@
     "open_readonly": "Open read-only",
     "open_error": "Could not open the tech sheet.",
     "unexpected_response": "The server responded unexpectedly. The tech sheet was not opened."
+  },
+  "file_picker": {
+    "title": "Files",
+    "close": "Close",
+    "tab_model": "Model",
+    "tab_catalog": "Catalogue",
+    "tab_import": "Import",
+    "insert": "Insert",
+    "use_in_model": "Use in model",
+    "used_ok": "{{nom}} copied to the model",
+    "use_error": "Could not copy the file to the model.",
+    "import_ok": "{{nom}} uploaded to the model",
+    "import_error": "Could not upload the file.",
+    "import_hint": "The file is uploaded to the model, not to the catalogue.",
+    "empty": "No files",
+    "no_item": "This model has no garment type item assigned."
   }
 }

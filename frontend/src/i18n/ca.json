@@ -2470,7 +2470,8 @@
     "no_color": "Cap color",
     "more_colors": "Més colors",
     "consultation_badge": "Consulta",
-    "consultation_hint": "Consulta — sense registre de temps. Els canvis es desen igual, però no s'imputa temps a cap tasca."
+    "consultation_hint": "Consulta — sense registre de temps. Els canvis es desen igual, però no s'imputa temps a cap tasca.",
+    "tool_files": "Fitxers"
   },
   "estat_badge": {
     "pendent_inputs": "Pendent d'inputs",
@@ -3068,5 +3069,21 @@
     "open_readonly": "Obrir en consulta",
     "open_error": "No s'ha pogut obrir la fitxa tècnica.",
     "unexpected_response": "El servidor ha respost de manera inesperada. No s'ha obert la fitxa."
+  },
+  "file_picker": {
+    "title": "Fitxers",
+    "close": "Tancar",
+    "tab_model": "Model",
+    "tab_catalog": "Catàleg",
+    "tab_import": "Importar",
+    "insert": "Inserir",
+    "use_in_model": "Usar al model",
+    "used_ok": "{{nom}} copiat al model",
+    "use_error": "No s'ha pogut copiar el fitxer al model.",
+    "import_ok": "{{nom}} pujat al model",
+    "import_error": "No s'ha pogut pujar el fitxer.",
+    "import_hint": "El fitxer es puja al model, no al catàleg.",
+    "empty": "Cap fitxer",
+    "no_item": "Aquest model no té cap tipus de peça assignat."
   }
 }

@@ -2470,7 +2470,8 @@
     "no_color": "Sin color",
     "more_colors": "Más colores",
     "consultation_badge": "Consulta",
-    "consultation_hint": "Consulta — sin registro de tiempo. Los cambios se guardan igualmente, pero no se imputa tiempo a ninguna tarea."
+    "consultation_hint": "Consulta — sin registro de tiempo. Los cambios se guardan igualmente, pero no se imputa tiempo a ninguna tarea.",
+    "tool_files": "Archivos"
   },
   "estat_badge": {
     "pendent_inputs": "Pendiente de inputs",
@@ -3068,5 +3069,21 @@
     "open_readonly": "Abrir en consulta",
     "open_error": "No se ha podido abrir la ficha técnica.",
     "unexpected_response": "El servidor ha respondido de forma inesperada. No se ha abierto la ficha."
+  },
+  "file_picker": {
+    "title": "Archivos",
+    "close": "Cerrar",
+    "tab_model": "Modelo",
+    "tab_catalog": "Catálogo",
+    "tab_import": "Importar",
+    "insert": "Insertar",
+    "use_in_model": "Usar en el modelo",
+    "used_ok": "{{nom}} copiado al modelo",
+    "use_error": "No se ha podido copiar el archivo al modelo.",
+    "import_ok": "{{nom}} subido al modelo",
+    "import_error": "No se ha podido subir el archivo.",
+    "import_hint": "El archivo se sube al modelo, no al catálogo.",
+    "empty": "Ningún archivo",
+    "no_item": "Este modelo no tiene ningún tipo de prenda asignado."
   }
 }

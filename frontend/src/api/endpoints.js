@@ -96,9 +96,18 @@ export const watchpoints = {
   reopen: (id) => client.post(`/api/v1/watchpoints/${id}/reopen/`),
 }
 
-// Fitxers del model (read-only) — panell info de fitting (5B.6-B1).
+// Fitxers del model — panell info de fitting (5B.6-B1) i FilePicker de l'editor (S03b · P7).
+// L'escriptura NO passa per aquí: puja per models/<id>/upload-fitxer/ (multipart, fetch cru).
 export const modelFitxers = {
   list: (params) => client.get('/api/v1/model-fitxers/', { params }),
+}
+
+// Fitxers del CATÀLEG, ancorats a un GarmentTypeItem (S03b · P4/P5).
+export const itemFitxers = {
+  list: (params) => client.get('/api/v1/item-fitxers/', { params }),
+  // Cicle ①: crea una CÒPIA al model (derivat_de_item), no toca l'ItemFitxer.
+  usarAlModel: (id, modelId) =>
+    client.post(`/api/v1/item-fitxers/${id}/usar-al-model/`, { model_id: modelId }),
 }
 
 export const poms = {
