@@ -11,9 +11,11 @@ export const tenantConfig = {
   get: () => client.get('/api/v1/tenant-config/'),
   update: (data) => client.patch('/api/v1/tenant-config/', data),
   // P6 — puja el logo del tenant (multipart) al mateix endpoint; retorna la config actualitzada.
+  // Content-Type: undefined perquè axios/el navegador posin el boundary multipart (el client per
+  // defecte és application/json — sense això, el fitxer no arriba a request.FILES). Patró de la casa.
   uploadLogo: (file) => {
     const fd = new FormData(); fd.append('logo_file', file)
-    return client.patch('/api/v1/tenant-config/', fd)
+    return client.patch('/api/v1/tenant-config/', fd, { headers: { 'Content-Type': undefined } })
   },
 }
 
