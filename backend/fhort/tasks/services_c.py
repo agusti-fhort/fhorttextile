@@ -93,13 +93,24 @@ def assign_work_order(task, when):
 
 
 @transaction.atomic
-def transition_task(task, to_status, profile):
+def transition_task(task, to_status, profile, force=False):
     """Aplica una transició d'estat. Imposa 'una sola InProgress per tècnic' (global):
     en entrar a InProgress, pausa l'altra InProgress del mateix tècnic (tanca timer + log).
-    Retorna dict amb la tasca i, si escau, la pausada automàticament."""
+    Retorna dict amb la tasca i, si escau, la pausada automàticament.
+
+    `force=True` salta NOMÉS el guard d'albarà (reobertura): reservat a rutines internes de
+    migració que reprocessen històric (retype command). La porta d'usuari mai el passa."""
     frm = task.status
     if to_status not in ALLOWED.get(frm, set()):
         raise TransitionError(f'Transició no permesa: {frm} → {to_status}')
+
+    # v2 — guard de reobertura: una tasca amb línia en albarà EMÈS (ISSUED/INVOICED) no es pot
+    # reobrir (rectificació = extra nova que genera línia al proper albarà). DRAFT NO bloqueja
+    # (encara es pot desfer esborrant el DRAFT). Limitat estrictament a Done→InProgress.
+    if not force and frm == 'Done' and to_status == 'InProgress':
+        if task.delivery_note_lines.filter(
+                delivery_note__status__in=['ISSUED', 'INVOICED']).exists():
+            raise TransitionError('No es pot reobrir una tasca ja albaranada (albarà emès).')
 
     paused_task_id = None
     now = timezone.now()
