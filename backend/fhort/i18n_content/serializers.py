@@ -24,8 +24,41 @@ class TranslationsSerializerMixin(serializers.Serializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        data['translations'] = self._read_translations(instance)
+        data['translations'] = self._get_translations(instance)
         return data
+
+    def _get_translations(self, instance):
+        """Traduccions de l'objecte com a { camp: { idioma: text } }. En llista (many=True)
+        llegeix d'una precàrrega feta en 1 sola query per a tota la pàgina (fi del N+1); en
+        objecte únic (retrieve/create/update) fa la consulta directa (1 query)."""
+        fields = getattr(instance, 'TRANSLATABLE_FIELDS', ())
+        if not fields:
+            return {}
+        parent = self.parent
+        if isinstance(parent, serializers.ListSerializer) and parent.instance is not None:
+            cache = self._page_cache(parent, instance.__class__, fields)
+            out = {f: {} for f in fields}
+            out.update(cache.get(instance.pk, {}))
+            return out
+        return self._read_translations(instance)
+
+    @staticmethod
+    def _page_cache(parent, model, fields):
+        """Precàrrega batch memoïtzada al ListSerializer: totes les Translation dels objectes
+        de la pàgina en 1 query (content_type + object_id__in). Es construeix un sol cop per
+        serialització de llista, independentment del nombre d'objectes."""
+        cache = getattr(parent, '_translations_page_cache', None)
+        if cache is not None:
+            return cache
+        cache = {}
+        pks = [obj.pk for obj in parent.instance]
+        if pks:
+            ct = ContentType.objects.get_for_model(model)
+            rows = Translation.objects.filter(content_type=ct, object_id__in=pks, field__in=fields)
+            for r in rows:
+                cache.setdefault(r.object_id, {}).setdefault(r.field, {})[r.language] = r.text
+        parent._translations_page_cache = cache
+        return cache
 
     @staticmethod
     def _read_translations(instance):
