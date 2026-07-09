@@ -462,7 +462,8 @@
     "users": "Usuarios y roles",
     "company_calendar": "Calendario de empresa",
     "planning": "Planificación",
-    "planning_calendar": "Calendario"
+    "planning_calendar": "Calendario",
+    "tech_sheet": "Ficha técnica"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -627,7 +628,11 @@
         "section": "Próximos hitos",
         "empty": "Ningún hito próximo",
         "at_risk": "En riesgo",
-        "type": { "tasca": "Tarea", "confeccio": "Confección", "fitting": "Prueba" }
+        "type": {
+          "tasca": "Tarea",
+          "confeccio": "Confección",
+          "fitting": "Prueba"
+        }
       },
       "section_technical": "Detalle técnico",
       "tech_next_phase": "Siguiente fase",
@@ -637,13 +642,23 @@
       "tech_base_size": "Talla base",
       "tech_base_active": "Medidas base activas",
       "tech_tasks_open": "Tareas abiertas",
-      "fitxa_estat": { "obert": "Abierta", "tancat": "Cerrada" },
+      "fitxa_estat": {
+        "obert": "Abierta",
+        "tancat": "Cerrada"
+      },
       "phase": {
-        "Pending": "Pendiente", "Dev": "Desarrollo", "Proto": "Prototipo",
-        "SizeSet": "Juego de tallas", "PP": "Preproducción", "TOP": "Producción"
+        "Pending": "Pendiente",
+        "Dev": "Desarrollo",
+        "Proto": "Prototipo",
+        "SizeSet": "Juego de tallas",
+        "PP": "Preproducción",
+        "TOP": "Producción"
       },
       "task_status": {
-        "Pending": "Pendiente", "Paused": "Pausada", "InProgress": "En curso", "Done": "Hecha"
+        "Pending": "Pendiente",
+        "Paused": "Pausada",
+        "InProgress": "En curso",
+        "Done": "Hecha"
       },
       "workplan": {
         "title": "Plan de trabajo",
@@ -685,8 +700,11 @@
         "gate_regress": "Vuelto a {{phase}}",
         "task_transition": "{{task}} · {{status}}",
         "context": {
-          "import": "importación", "manual": "manual", "fitting": "fitting",
-          "calculated": "calculado", "standard": "estándar"
+          "import": "importación",
+          "manual": "manual",
+          "fitting": "fitting",
+          "calculated": "calculado",
+          "standard": "estándar"
         }
       }
     },
@@ -1115,22 +1133,76 @@
   "workorders": {
     "title": "Encargos",
     "subtitle": "Contenedores de ejecución: encargos de modelo y colectores mensuales por cliente",
-    "col_number": "Número", "col_kind": "Tipo", "col_customer": "Cliente",
-    "col_target": "Modelo / período", "col_status": "Estado", "col_tasks": "Tareas",
-    "kind_ORDER": "Encargo", "kind_COLLECTOR": "Colector",
-    "status_OPEN": "Abierto", "status_CLOSED": "Cerrado",
-    "filter_kind_all": "Todos los tipos", "filter_status_all": "Todos los estados", "filter_customer_all": "Todos los clientes",
-    "open": "Abrir", "back": "Volver a los encargos", "loading": "Cargando encargos…",
-    "empty": "Ningún encargo.", "error": "No se ha podido completar la operación.",
-    "close_action": "Cerrar encargo", "closed_ok": "Encargo cerrado.", "close_error": "No se ha podido cerrar el encargo.",
-    "tasks": "Tareas", "tasks_empty": "Ninguna tarea.", "task_type": "Tipo de tarea", "task_status": "Estado", "task_minutes": "Tiempo",
+    "col_number": "Número",
+    "col_kind": "Tipo",
+    "col_customer": "Cliente",
+    "col_target": "Modelo / período",
+    "col_status": "Estado",
+    "col_tasks": "Tareas",
+    "kind_ORDER": "Encargo",
+    "kind_COLLECTOR": "Colector",
+    "status_OPEN": "Abierto",
+    "status_CLOSED": "Cerrado",
+    "filter_kind_all": "Todos los tipos",
+    "filter_status_all": "Todos los estados",
+    "filter_customer_all": "Todos los clientes",
+    "open": "Abrir",
+    "back": "Volver a los encargos",
+    "loading": "Cargando encargos…",
+    "empty": "Ningún encargo.",
+    "error": "No se ha podido completar la operación.",
+    "close_action": "Cerrar encargo",
+    "closed_ok": "Encargo cerrado.",
+    "close_error": "No se ha podido cerrar el encargo.",
+    "tasks": "Tareas",
+    "tasks_empty": "Ninguna tarea.",
+    "task_type": "Tipo de tarea",
+    "task_status": "Estado",
+    "task_minutes": "Tiempo",
     "off_recipe": "Fuera de receta",
-    "status_task_Done": "Hecha", "status_task_InProgress": "En curso", "status_task_Paused": "Pausada", "status_task_Pending": "Pendiente",
-    "adjustments": "Ajustes", "adj_EXTRA_BILL": "Extra facturado", "adj_EXTRA_ABSORB": "Extra absorbido", "adj_DEDUCTION": "Deducción",
-    "close_title": "Cerrar el encargo", "blockers_hard": "Tareas que bloquean (resuélvelas en el kanban):",
-    "blockers_extra": "Extras por resolver:", "pending_title": "Tareas pendientes (receta no ejecutada):",
-    "close_deduct": "Deducir pendientes y cerrar", "close_confirm": "Confirmar cierre", "close_cancel": "Cancelar",
-    "expenses": "Gastos", "exp_product": "Artículo", "exp_supplier": "Proveedor", "exp_cost": "Coste", "exp_sale": "Precio venta", "exp_qty": "Cant.", "exp_add": "Añadir", "exp_remove": "Quitar", "exp_saved": "Gasto guardado.", "exp_error": "No se ha podido guardar el gasto.", "exp_suppliers_compare": "Precios proveedores", "review": "Revisión comercial", "review_item": "Concepto", "review_kind": "Tipo", "review_amount": "Importe venta", "review_save": "Guardar revisión", "review_saved": "Revisión guardada.", "review_error": "No se ha podido guardar la revisión.", "dn_generate": "Generar albarán", "dn_view": "Ver albarán", "dn_title": "Generar albarán", "dn_help": "Se creará un albarán borrador con las líneas propuestas. Puedes añadir otros encargos cerrados del mismo cliente.", "dn_others": "Otros encargos a incluir", "dn_blocked": "No se puede generar el albarán", "dn_blocked_help": "Revisa los extras pendientes en la sección Revisión comercial de cada encargo.", "dn_confirm": "Generar", "dn_cancel": "Cancelar", "dn_error": "No se ha podido generar el albarán."
+    "status_task_Done": "Hecha",
+    "status_task_InProgress": "En curso",
+    "status_task_Paused": "Pausada",
+    "status_task_Pending": "Pendiente",
+    "adjustments": "Ajustes",
+    "adj_EXTRA_BILL": "Extra facturado",
+    "adj_EXTRA_ABSORB": "Extra absorbido",
+    "adj_DEDUCTION": "Deducción",
+    "close_title": "Cerrar el encargo",
+    "blockers_hard": "Tareas que bloquean (resuélvelas en el kanban):",
+    "blockers_extra": "Extras por resolver:",
+    "pending_title": "Tareas pendientes (receta no ejecutada):",
+    "close_deduct": "Deducir pendientes y cerrar",
+    "close_confirm": "Confirmar cierre",
+    "close_cancel": "Cancelar",
+    "expenses": "Gastos",
+    "exp_product": "Artículo",
+    "exp_supplier": "Proveedor",
+    "exp_cost": "Coste",
+    "exp_sale": "Precio venta",
+    "exp_qty": "Cant.",
+    "exp_add": "Añadir",
+    "exp_remove": "Quitar",
+    "exp_saved": "Gasto guardado.",
+    "exp_error": "No se ha podido guardar el gasto.",
+    "exp_suppliers_compare": "Precios proveedores",
+    "review": "Revisión comercial",
+    "review_item": "Concepto",
+    "review_kind": "Tipo",
+    "review_amount": "Importe venta",
+    "review_save": "Guardar revisión",
+    "review_saved": "Revisión guardada.",
+    "review_error": "No se ha podido guardar la revisión.",
+    "dn_generate": "Generar albarán",
+    "dn_view": "Ver albarán",
+    "dn_title": "Generar albarán",
+    "dn_help": "Se creará un albarán borrador con las líneas propuestas. Puedes añadir otros encargos cerrados del mismo cliente.",
+    "dn_others": "Otros encargos a incluir",
+    "dn_blocked": "No se puede generar el albarán",
+    "dn_blocked_help": "Revisa los extras pendientes en la sección Revisión comercial de cada encargo.",
+    "dn_confirm": "Generar",
+    "dn_cancel": "Cancelar",
+    "dn_error": "No se ha podido generar el albarán."
   },
   "orders": {
     "title": "Pedidos",
@@ -1152,7 +1224,29 @@
     "filter_customer_all": "Todos los clientes",
     "open": "Abrir",
     "back": "Volver a pedidos",
-    "assign_model": "Asignar modelo", "assign_title": "Asignar modelo a la línea", "assign_pick_model": "Elige un modelo", "assign_gti_warn": "El modelo no tiene garment type; comprueba la compatibilidad.", "assign_migrate_note": "Las tareas del modelo en el colector se moverán al nuevo encargo.", "assign_cancel": "Cancelar", "assign_confirm": "Asignar", "assign_done": "Encargo {{wo}} creado · {{n}} tareas migradas", "assign_search_ph": "Busca por código o nombre…", "assign_all_seasons": "Todas las temporadas", "assign_collection_ph": "Colección…", "assign_loading": "Cargando modelos…", "assign_empty": "Ningún modelo coincide.", "assign_more": "Refina la búsqueda ({{n}} modelos)", "expand": "Desplegar", "collapse": "Plegar", "alloc_loading": "Cargando…", "alloc_error": "No se ha podido cargar la expansión.", "alloc_no_models": "Ningún modelo asignado todavía.", "alloc_pct": "% imputado", "alloc_extra": "extra", "wo_OPEN": "Abierto", "wo_CLOSED": "Cerrado",
+    "assign_model": "Asignar modelo",
+    "assign_title": "Asignar modelo a la línea",
+    "assign_pick_model": "Elige un modelo",
+    "assign_gti_warn": "El modelo no tiene garment type; comprueba la compatibilidad.",
+    "assign_migrate_note": "Las tareas del modelo en el colector se moverán al nuevo encargo.",
+    "assign_cancel": "Cancelar",
+    "assign_confirm": "Asignar",
+    "assign_done": "Encargo {{wo}} creado · {{n}} tareas migradas",
+    "assign_search_ph": "Busca por código o nombre…",
+    "assign_all_seasons": "Todas las temporadas",
+    "assign_collection_ph": "Colección…",
+    "assign_loading": "Cargando modelos…",
+    "assign_empty": "Ningún modelo coincide.",
+    "assign_more": "Refina la búsqueda ({{n}} modelos)",
+    "expand": "Desplegar",
+    "collapse": "Plegar",
+    "alloc_loading": "Cargando…",
+    "alloc_error": "No se ha podido cargar la expansión.",
+    "alloc_no_models": "Ningún modelo asignado todavía.",
+    "alloc_pct": "% imputado",
+    "alloc_extra": "extra",
+    "wo_OPEN": "Abierto",
+    "wo_CLOSED": "Cerrado",
     "loading": "Cargando pedidos…",
     "empty": "Ningún pedido.",
     "error": "No se pudo completar la operación.",
@@ -1494,8 +1588,13 @@
     "title": "Calendario de empresa",
     "subtitle": "Define los tramos horarios laborables por día de la semana",
     "days": {
-      "mon": "Lunes", "tue": "Martes", "wed": "Miércoles", "thu": "Jueves",
-      "fri": "Viernes", "sat": "Sábado", "sun": "Domingo"
+      "mon": "Lunes",
+      "tue": "Martes",
+      "wed": "Miércoles",
+      "thu": "Jueves",
+      "fri": "Viernes",
+      "sat": "Sábado",
+      "sun": "Domingo"
     },
     "no_work": "No laborable",
     "add_tram": "Añadir tramo",
@@ -1592,8 +1691,18 @@
     }
   },
   "kanban": {
-    "temporades": { "SS": "SS · Primavera/Verano", "FW": "FW · Otoño/Invierno", "CO": "CO · Cruise", "SP": "SP · Especial" },
-    "estats": { "Nou": "Nuevo", "EnCurs": "En curso", "EnRevisio": "En revisión", "Tancat": "Cerrado" }
+    "temporades": {
+      "SS": "SS · Primavera/Verano",
+      "FW": "FW · Otoño/Invierno",
+      "CO": "CO · Cruise",
+      "SP": "SP · Especial"
+    },
+    "estats": {
+      "Nou": "Nuevo",
+      "EnCurs": "En curso",
+      "EnRevisio": "En revisión",
+      "Tancat": "Cerrado"
+    }
   },
   "model": {
     "title": "Modelos",
@@ -2004,7 +2113,6 @@
     "validated_table": "Tabla validada",
     "work_title": "Medición del proto · validación"
   },
-
   "time_tracking": {
     "title": "Tiempos",
     "subtitle": "Control de timers del técnico",
@@ -2021,7 +2129,6 @@
     "weekly_total": "Total semanal",
     "min_value": "{{n}}min"
   },
-
   "model_measurements": {
     "err_grading": "Error generando el grading",
     "notice_no_item": "Este modelo no tiene tipo de ítem (garment_type_item) definido: no se materializan los POMs de la plantilla.",
@@ -2067,7 +2174,6 @@
     "save_pom_err": "No se ha podido grabar POM.",
     "unsaved_pom_hint": "Graba POM para cerrar la tarea y activar Medidas."
   },
-
   "model_fabric": {
     "err_close_table": "No se ha podido cerrar la tabla.",
     "title": "Fabric & Shrinkage",
@@ -2086,7 +2192,6 @@
     "closing": "Cerrando…",
     "close_finish": "Cerrar y finalizar"
   },
-
   "tech_sheet": {
     "back_to_model": "Volver al modelo",
     "doc_editor": "Editor de documentos",
@@ -2363,7 +2468,9 @@
     "zoom_reset": "Zoom 100%",
     "zoom_fit": "Ajustar a pantalla",
     "no_color": "Sin color",
-    "more_colors": "Más colores"
+    "more_colors": "Más colores",
+    "consultation_badge": "Consulta",
+    "consultation_hint": "Consulta — sin registro de tiempo. Los cambios se guardan igualmente, pero no se imputa tiempo a ninguna tarea."
   },
   "estat_badge": {
     "pendent_inputs": "Pendiente de inputs",
@@ -2814,7 +2921,13 @@
     "assigning": "Asignando…"
   },
   "import_wizard": {
-    "step": { "sizes": "Tallas", "poms": "POMs", "measures": "Medidas", "fabric": "Tejido", "save": "Guardar" },
+    "step": {
+      "sizes": "Tallas",
+      "poms": "POMs",
+      "measures": "Medidas",
+      "fabric": "Tejido",
+      "save": "Guardar"
+    },
     "err_status": "Error {{status}}",
     "err_connection": "Error de conexión: {{detail}}",
     "err_catalog": "Error al cargar el catálogo: {{detail}}",
@@ -2945,5 +3058,15 @@
     "resolve": "Resolver",
     "reopen": "Reabrir",
     "resolved_by": "resuelta por {{who}}"
+  },
+  "tech_sheet_entry": {
+    "title": "Ficha técnica",
+    "subtitle": "Elige un modelo para abrir su ficha técnica.",
+    "search_placeholder": "Busca por código o nombre de modelo…",
+    "no_models": "Ningún modelo encontrado",
+    "not_allowed": "No tienes la ficha técnica en tu lista de tareas, así que no puedes abrirla para trabajar en ella ({{codi}}).",
+    "open_readonly": "Abrir en consulta",
+    "open_error": "No se ha podido abrir la ficha técnica.",
+    "unexpected_response": "El servidor ha respondido de forma inesperada. No se ha abierto la ficha."
   }
 }

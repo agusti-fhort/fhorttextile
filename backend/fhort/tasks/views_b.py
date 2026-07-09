@@ -532,10 +532,16 @@ def open_model_task_view(request, model_id):
         return Response({'error': f"Tipus de tasca '{code}' no trobat o inactiu."}, status=http_status.HTTP_404_NOT_FOUND)
     profile = getattr(request.user, 'profile', None)
     if profile is None:
-        return Response({'error': 'Usuari sense perfil en aquest tenant.'}, status=http_status.HTTP_403_FORBIDDEN)
+        return Response({'error': 'Usuari sense perfil en aquest tenant.', 'code': 'no_profile'},
+                        status=http_status.HTTP_403_FORBIDDEN)
     # GUARD allow-list: només pots obrir un tipus que executes (admin = bypass) — igual que claim.
+    # `code` discriminant (S03b · P6, D10): el menú de fitxa ha de distingir "no tens aquest
+    # tipus a l'allow-list" (→ ofereix obrir en consulta) de qualsevol altre 403 (bloqueig dur).
+    # Sense això, el frontend hauria de fer match sobre el text del missatge. Additiu: cap
+    # consumidor existent llegeix aquesta clau.
     if code not in get_allowed_task_types(request.user):
-        return Response({'error': f"No pots obrir una tasca del tipus '{code}' (no és a la teva allow-list)."},
+        return Response({'error': f"No pots obrir una tasca del tipus '{code}' (no és a la teva allow-list).",
+                         'code': 'task_type_not_allowed'},
                         status=http_status.HTTP_403_FORBIDDEN)
     # 1. Crea-si-falta (mirall de define_model_tasks_view). La canònica és la prevista.
     task = ModelTask.objects.filter(model=model, task_type=tt, origen='prevista').first()

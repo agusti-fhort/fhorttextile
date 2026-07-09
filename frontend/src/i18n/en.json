@@ -462,7 +462,8 @@
     "users": "Users & roles",
     "company_calendar": "Company calendar",
     "planning": "Planning",
-    "planning_calendar": "Calendar"
+    "planning_calendar": "Calendar",
+    "tech_sheet": "Tech sheet"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -627,7 +628,11 @@
         "section": "Upcoming milestones",
         "empty": "No upcoming milestones",
         "at_risk": "At risk",
-        "type": { "tasca": "Task", "confeccio": "Production", "fitting": "Fitting" }
+        "type": {
+          "tasca": "Task",
+          "confeccio": "Production",
+          "fitting": "Fitting"
+        }
       },
       "section_technical": "Technical detail",
       "tech_next_phase": "Next phase",
@@ -637,13 +642,23 @@
       "tech_base_size": "Base size",
       "tech_base_active": "Active base measurements",
       "tech_tasks_open": "Open tasks",
-      "fitxa_estat": { "obert": "Open", "tancat": "Closed" },
+      "fitxa_estat": {
+        "obert": "Open",
+        "tancat": "Closed"
+      },
       "phase": {
-        "Pending": "Pending", "Dev": "Development", "Proto": "Prototype",
-        "SizeSet": "Size set", "PP": "Pre-production", "TOP": "Production"
+        "Pending": "Pending",
+        "Dev": "Development",
+        "Proto": "Prototype",
+        "SizeSet": "Size set",
+        "PP": "Pre-production",
+        "TOP": "Production"
       },
       "task_status": {
-        "Pending": "Pending", "Paused": "Paused", "InProgress": "In progress", "Done": "Done"
+        "Pending": "Pending",
+        "Paused": "Paused",
+        "InProgress": "In progress",
+        "Done": "Done"
       },
       "workplan": {
         "title": "Work plan",
@@ -685,8 +700,11 @@
         "gate_regress": "Reverted to {{phase}}",
         "task_transition": "{{task}} · {{status}}",
         "context": {
-          "import": "import", "manual": "manual", "fitting": "fitting",
-          "calculated": "calculated", "standard": "standard"
+          "import": "import",
+          "manual": "manual",
+          "fitting": "fitting",
+          "calculated": "calculated",
+          "standard": "standard"
         }
       }
     },
@@ -1115,22 +1133,76 @@
   "workorders": {
     "title": "Work orders",
     "subtitle": "Execution containers: model work orders and monthly per-client collectors",
-    "col_number": "Number", "col_kind": "Kind", "col_customer": "Customer",
-    "col_target": "Model / period", "col_status": "Status", "col_tasks": "Tasks",
-    "kind_ORDER": "Order", "kind_COLLECTOR": "Collector",
-    "status_OPEN": "Open", "status_CLOSED": "Closed",
-    "filter_kind_all": "All kinds", "filter_status_all": "All statuses", "filter_customer_all": "All customers",
-    "open": "Open", "back": "Back to work orders", "loading": "Loading work orders…",
-    "empty": "No work orders.", "error": "The operation could not be completed.",
-    "close_action": "Close work order", "closed_ok": "Work order closed.", "close_error": "The work order could not be closed.",
-    "tasks": "Tasks", "tasks_empty": "No tasks.", "task_type": "Task type", "task_status": "Status", "task_minutes": "Time",
+    "col_number": "Number",
+    "col_kind": "Kind",
+    "col_customer": "Customer",
+    "col_target": "Model / period",
+    "col_status": "Status",
+    "col_tasks": "Tasks",
+    "kind_ORDER": "Order",
+    "kind_COLLECTOR": "Collector",
+    "status_OPEN": "Open",
+    "status_CLOSED": "Closed",
+    "filter_kind_all": "All kinds",
+    "filter_status_all": "All statuses",
+    "filter_customer_all": "All customers",
+    "open": "Open",
+    "back": "Back to work orders",
+    "loading": "Loading work orders…",
+    "empty": "No work orders.",
+    "error": "The operation could not be completed.",
+    "close_action": "Close work order",
+    "closed_ok": "Work order closed.",
+    "close_error": "The work order could not be closed.",
+    "tasks": "Tasks",
+    "tasks_empty": "No tasks.",
+    "task_type": "Task type",
+    "task_status": "Status",
+    "task_minutes": "Time",
     "off_recipe": "Off recipe",
-    "status_task_Done": "Done", "status_task_InProgress": "In progress", "status_task_Paused": "Paused", "status_task_Pending": "Pending",
-    "adjustments": "Adjustments", "adj_EXTRA_BILL": "Extra billed", "adj_EXTRA_ABSORB": "Extra absorbed", "adj_DEDUCTION": "Deduction",
-    "close_title": "Close the work order", "blockers_hard": "Blocking tasks (resolve them in the kanban):",
-    "blockers_extra": "Extras to resolve:", "pending_title": "Pending tasks (recipe not executed):",
-    "close_deduct": "Deduct pending and close", "close_confirm": "Confirm close", "close_cancel": "Cancel",
-    "expenses": "Expenses", "exp_product": "Product", "exp_supplier": "Supplier", "exp_cost": "Cost", "exp_sale": "Sale price", "exp_qty": "Qty", "exp_add": "Add", "exp_remove": "Remove", "exp_saved": "Expense saved.", "exp_error": "Could not save the expense.", "exp_suppliers_compare": "Supplier prices", "review": "Commercial review", "review_item": "Item", "review_kind": "Kind", "review_amount": "Sale amount", "review_save": "Save review", "review_saved": "Review saved.", "review_error": "Could not save the review.", "dn_generate": "Generate delivery note", "dn_view": "View delivery note", "dn_title": "Generate delivery note", "dn_help": "A draft delivery note will be created with proposed lines. You can add other closed work orders of the same customer.", "dn_others": "Other work orders to include", "dn_blocked": "Cannot generate the delivery note", "dn_blocked_help": "Review the pending extras in the Commercial review section of each work order.", "dn_confirm": "Generate", "dn_cancel": "Cancel", "dn_error": "Could not generate the delivery note."
+    "status_task_Done": "Done",
+    "status_task_InProgress": "In progress",
+    "status_task_Paused": "Paused",
+    "status_task_Pending": "Pending",
+    "adjustments": "Adjustments",
+    "adj_EXTRA_BILL": "Extra billed",
+    "adj_EXTRA_ABSORB": "Extra absorbed",
+    "adj_DEDUCTION": "Deduction",
+    "close_title": "Close the work order",
+    "blockers_hard": "Blocking tasks (resolve them in the kanban):",
+    "blockers_extra": "Extras to resolve:",
+    "pending_title": "Pending tasks (recipe not executed):",
+    "close_deduct": "Deduct pending and close",
+    "close_confirm": "Confirm close",
+    "close_cancel": "Cancel",
+    "expenses": "Expenses",
+    "exp_product": "Product",
+    "exp_supplier": "Supplier",
+    "exp_cost": "Cost",
+    "exp_sale": "Sale price",
+    "exp_qty": "Qty",
+    "exp_add": "Add",
+    "exp_remove": "Remove",
+    "exp_saved": "Expense saved.",
+    "exp_error": "Could not save the expense.",
+    "exp_suppliers_compare": "Supplier prices",
+    "review": "Commercial review",
+    "review_item": "Item",
+    "review_kind": "Kind",
+    "review_amount": "Sale amount",
+    "review_save": "Save review",
+    "review_saved": "Review saved.",
+    "review_error": "Could not save the review.",
+    "dn_generate": "Generate delivery note",
+    "dn_view": "View delivery note",
+    "dn_title": "Generate delivery note",
+    "dn_help": "A draft delivery note will be created with proposed lines. You can add other closed work orders of the same customer.",
+    "dn_others": "Other work orders to include",
+    "dn_blocked": "Cannot generate the delivery note",
+    "dn_blocked_help": "Review the pending extras in the Commercial review section of each work order.",
+    "dn_confirm": "Generate",
+    "dn_cancel": "Cancel",
+    "dn_error": "Could not generate the delivery note."
   },
   "orders": {
     "title": "Orders",
@@ -1152,7 +1224,29 @@
     "filter_customer_all": "All customers",
     "open": "Open",
     "back": "Back to orders",
-    "assign_model": "Assign model", "assign_title": "Assign model to line", "assign_pick_model": "Pick a model", "assign_gti_warn": "The model has no garment type; check compatibility.", "assign_migrate_note": "The model's collector tasks will move to the new work order.", "assign_cancel": "Cancel", "assign_confirm": "Assign", "assign_done": "Work order {{wo}} created · {{n}} tasks migrated", "assign_search_ph": "Search by code or name…", "assign_all_seasons": "All seasons", "assign_collection_ph": "Collection…", "assign_loading": "Loading models…", "assign_empty": "No models match.", "assign_more": "Refine your search ({{n}} models)", "expand": "Expand", "collapse": "Collapse", "alloc_loading": "Loading…", "alloc_error": "Could not load the expansion.", "alloc_no_models": "No model assigned yet.", "alloc_pct": "% allocated", "alloc_extra": "extra", "wo_OPEN": "Open", "wo_CLOSED": "Closed",
+    "assign_model": "Assign model",
+    "assign_title": "Assign model to line",
+    "assign_pick_model": "Pick a model",
+    "assign_gti_warn": "The model has no garment type; check compatibility.",
+    "assign_migrate_note": "The model's collector tasks will move to the new work order.",
+    "assign_cancel": "Cancel",
+    "assign_confirm": "Assign",
+    "assign_done": "Work order {{wo}} created · {{n}} tasks migrated",
+    "assign_search_ph": "Search by code or name…",
+    "assign_all_seasons": "All seasons",
+    "assign_collection_ph": "Collection…",
+    "assign_loading": "Loading models…",
+    "assign_empty": "No models match.",
+    "assign_more": "Refine your search ({{n}} models)",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "alloc_loading": "Loading…",
+    "alloc_error": "Could not load the expansion.",
+    "alloc_no_models": "No model assigned yet.",
+    "alloc_pct": "% allocated",
+    "alloc_extra": "extra",
+    "wo_OPEN": "Open",
+    "wo_CLOSED": "Closed",
     "loading": "Loading orders…",
     "empty": "No orders.",
     "error": "The operation could not be completed.",
@@ -1494,8 +1588,13 @@
     "title": "Company calendar",
     "subtitle": "Define working time slots per day of the week",
     "days": {
-      "mon": "Monday", "tue": "Tuesday", "wed": "Wednesday", "thu": "Thursday",
-      "fri": "Friday", "sat": "Saturday", "sun": "Sunday"
+      "mon": "Monday",
+      "tue": "Tuesday",
+      "wed": "Wednesday",
+      "thu": "Thursday",
+      "fri": "Friday",
+      "sat": "Saturday",
+      "sun": "Sunday"
     },
     "no_work": "Non-working",
     "add_tram": "Add slot",
@@ -1592,8 +1691,18 @@
     }
   },
   "kanban": {
-    "temporades": { "SS": "SS · Spring/Summer", "FW": "FW · Fall/Winter", "CO": "CO · Cruise", "SP": "SP · Special" },
-    "estats": { "Nou": "New", "EnCurs": "In progress", "EnRevisio": "In review", "Tancat": "Closed" }
+    "temporades": {
+      "SS": "SS · Spring/Summer",
+      "FW": "FW · Fall/Winter",
+      "CO": "CO · Cruise",
+      "SP": "SP · Special"
+    },
+    "estats": {
+      "Nou": "New",
+      "EnCurs": "In progress",
+      "EnRevisio": "In review",
+      "Tancat": "Closed"
+    }
   },
   "model": {
     "title": "Models",
@@ -2004,7 +2113,6 @@
     "validated_table": "Validated table",
     "work_title": "Proto measurement · check"
   },
-
   "time_tracking": {
     "title": "Time tracking",
     "subtitle": "Technician timer tracking",
@@ -2021,7 +2129,6 @@
     "weekly_total": "Weekly total",
     "min_value": "{{n}}min"
   },
-
   "model_measurements": {
     "err_grading": "Error generating grading",
     "notice_no_item": "This model has no item type (garment_type_item) defined: the template POMs are not materialized.",
@@ -2067,7 +2174,6 @@
     "save_pom_err": "Could not save POM.",
     "unsaved_pom_hint": "Save POM to close the task and enable Measurements."
   },
-
   "model_fabric": {
     "err_close_table": "Could not close the table.",
     "title": "Fabric & Shrinkage",
@@ -2086,7 +2192,6 @@
     "closing": "Closing…",
     "close_finish": "Close and finish"
   },
-
   "tech_sheet": {
     "back_to_model": "Back to model",
     "doc_editor": "Document editor",
@@ -2363,7 +2468,9 @@
     "zoom_reset": "Zoom 100%",
     "zoom_fit": "Fit to screen",
     "no_color": "No color",
-    "more_colors": "More colors"
+    "more_colors": "More colors",
+    "consultation_badge": "Read-only",
+    "consultation_hint": "Consultation — no time tracking. Changes are still saved, but no time is logged against any task."
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",
@@ -2814,7 +2921,13 @@
     "assigning": "Assigning…"
   },
   "import_wizard": {
-    "step": { "sizes": "Sizes", "poms": "POMs", "measures": "Measurements", "fabric": "Fabric", "save": "Save" },
+    "step": {
+      "sizes": "Sizes",
+      "poms": "POMs",
+      "measures": "Measurements",
+      "fabric": "Fabric",
+      "save": "Save"
+    },
     "err_status": "Error {{status}}",
     "err_connection": "Connection error: {{detail}}",
     "err_catalog": "Error loading the catalogue: {{detail}}",
@@ -2945,5 +3058,15 @@
     "resolve": "Resolve",
     "reopen": "Reopen",
     "resolved_by": "resolved by {{who}}"
+  },
+  "tech_sheet_entry": {
+    "title": "Tech sheet",
+    "subtitle": "Pick a model to open its tech sheet.",
+    "search_placeholder": "Search by model code or name…",
+    "no_models": "No models found",
+    "not_allowed": "The tech sheet is not in your task list, so you cannot open it to work on it ({{codi}}).",
+    "open_readonly": "Open read-only",
+    "open_error": "Could not open the tech sheet.",
+    "unexpected_response": "The server responded unexpectedly. The tech sheet was not opened."
   }
 }

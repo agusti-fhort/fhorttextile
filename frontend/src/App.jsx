@@ -40,6 +40,7 @@ const BulkImportWizard = lazy(() => import('./pages/BulkImportWizard'))
 const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
+const TechSheetEntry = lazy(() => import('./pages/TechSheetEntry'))
 const DissenyPlaceholder = lazy(() => import('./pages/DissenyPlaceholder'))
 const ItemAuthoring = lazy(() => import('./pages/ItemAuthoring'))
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
@@ -233,6 +234,8 @@ export default function App() {
           </ProtectedRoute>
         }>
           <Route index element={<Dashboard />} />
+          {/* D10 — porta-menú de la fitxa tècnica (S03b · P6): tria model → open-task → editor. */}
+          <Route path="fitxa-tecnica" element={<TechSheetEntry />} />
           <Route path="models" element={<Models />} />
           <Route path="models/nou" element={<ModelWizard />} />
           <Route path="models/importar-colleccio" element={<BulkImportWizard />} />

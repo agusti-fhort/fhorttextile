@@ -4233,6 +4233,16 @@ export default function TechSheetEditor() {
         <span style={{ fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>
           v{sheet?.versio ?? 1} · {badge.text}
         </span>
+        {/* D10 — sense task_id l'editor desa igual però NO imputa temps (guard a :1862). Fins ara
+            era silenciós; ara es fa visible. NO bloqueja cap acció d'edició. */}
+        {!taskId && (
+          <span title={t('tech_sheet.consultation_hint')}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 10,
+                     border: `1px solid ${COL.border}`, color: COL.textMuted, whiteSpace: 'nowrap' }}>
+            <i className="ti ti-clock-off" aria-hidden="true" style={{ fontSize: 12 }} />
+            {t('tech_sheet.consultation_badge')}
+          </span>
+        )}
         {saveLabel && <span>{saveLabel}</span>}
         {notice && <span style={{ color: 'var(--warn)', background: 'var(--gold-pale)', border: `1px solid ${COL.gold}`, padding: '2px 8px', borderRadius: 5 }}>{notice}</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>

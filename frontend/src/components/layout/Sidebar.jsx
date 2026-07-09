@@ -40,6 +40,8 @@ const navGroups = [
   ]},
   // Disseny — documents .ftt (fitxes/maquetació) i patró DXF. Consulta oberta (sense `cap`).
   { sectionKey: 'nav.section_disseny', items: [
+    // D10 — porta-menú: tria model → open-task('tech_sheet') → editor (o consulta si l'allow-list ho nega).
+    { to: '/fitxa-tecnica', labelKey: 'nav.tech_sheet', icon: 'ti-file-description' },
     { to: '/disseny/documents', labelKey: 'nav.documents', icon: 'ti-file-text' },
     { to: '/disseny/patro-dxf', labelKey: 'nav.patro_dxf', icon: 'ti-vector' },
   ]},
