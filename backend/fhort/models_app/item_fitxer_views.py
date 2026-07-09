@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from fhort.accounts.capabilities import CONFIGURE, HasCapability
 from fhort.tasks.models import GarmentTypeItem
 
-from .models import ItemFitxer
+from .models import ItemFitxer, Model
 from .serializers import ItemFitxerSerializer
 from .services_fitxers import (DOWNLOAD_TTL, ITEM_DOWNLOAD_SALT, UploadRejected,
                                get_version_chain, save_item_file, serve_fitxer,
@@ -42,7 +42,8 @@ class ItemFitxerViewSet(mixins.CreateModelMixin,
         # token (D13) i s'exclou de tot gate. Escriptura: CONFIGURE (com GarmentTypeItemViewSet).
         if self.action == 'download_signed':
             return [AllowAny()]
-        if self.action in ('list', 'retrieve', 'versions', 'download'):
+        # `usar_al_model` escriu al MODEL, no al catàleg → mateix gate que upload_file_view.
+        if self.action in ('list', 'retrieve', 'versions', 'download', 'usar_al_model'):
             return [IsAuthenticated()]
         p = HasCapability()
         self.required_capability = CONFIGURE
@@ -115,3 +116,55 @@ class ItemFitxerViewSet(mixins.CreateModelMixin,
 
         inline = request.query_params.get('inline') == '1'
         return serve_fitxer(self.get_object(), as_attachment=not inline)
+
+    @action(detail=True, methods=['post'], url_path='usar-al-model')
+    def usar_al_model(self, request, pk=None):
+        """POST /api/v1/item-fitxers/<id>/usar-al-model/  Body: {model_id}   [S03b · P5]
+
+        Cicle ① catàleg→model: **importació, no edició in-place**. Crea un ModelFitxer NOU al
+        model amb els MATEIXOS bytes i el mateix `tipus`, amb `derivat_de_item` apuntant a
+        l'origen. L'ItemFitxer NO es toca mai: no és una edició compartida, és una còpia amb
+        procedència.
+
+        Un `.ftt` es copia tal qual: el ZIP és auto-contingut des de S03a · P3 (els `src` són
+        noms interns `assets/<sha16>.<ext>`), per tant no cal reescriure cap referència. La
+        resta de tipus (DXF, SVG, PDF, imatges) són còpia directa de bytes.
+
+        NO existeix la promoció inversa (② model→catàleg): forat amb nom, diferit.
+
+        Gate: `IsAuthenticated` (via get_permissions), el MATEIX que `upload_file_view`.
+        L'escriptura va al MODEL, no al catàleg: qui pot pujar un fitxer al model pot
+        importar-n'hi un. Exigir CONFIGURE aquí impediria al tècnic fer la seva feina.
+        """
+        from .serializers import ModelFitxerSerializer
+        from .services_fitxers import save_model_file
+
+        origen = self.get_object()
+        if not origen.fitxer:
+            return Response({'error': "El fitxer d'origen no té bytes."}, status=400)
+
+        model_id = request.data.get('model_id')
+        if not model_id:
+            return Response({'error': 'model_id és obligatori.'}, status=400)
+        model = get_object_or_404(Model, pk=model_id)
+
+        # Còpia de bytes: es reobre l'origen i es passa a save_model_file, que recalcula
+        # checksum/mida/mimetype sobre el contingut real (no els copia a cegues) i manté la
+        # invariant de cadena del ModelFitxer nou (cadena pròpia: versio=1, is_current=True).
+        origen.fitxer.open('rb')
+        try:
+            nou = save_model_file(model, origen.fitxer, tipus=origen.tipus,
+                                  origen='upload', nom=origen.nom_fitxer)
+        finally:
+            origen.fitxer.close()
+
+        nou.derivat_de_item = origen
+        camps = ['derivat_de_item']
+        perfil = getattr(request.user, 'profile', None)
+        if perfil is not None:
+            nou.pujat_per = perfil
+            camps.append('pujat_per')
+        nou.save(update_fields=camps)
+
+        return Response(ModelFitxerSerializer(nou, context={'request': request}).data,
+                        status=201)

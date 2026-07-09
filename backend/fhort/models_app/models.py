@@ -389,6 +389,16 @@ class ModelFitxer(models.Model):
         blank=True,
         related_name='exports_generats',
     )
+    # Procedència del catàleg (S03b · P5): aquest fitxer és una CÒPIA importada d'un
+    # ItemFitxer. No és una edició compartida — l'origen no es toca mai i pot desaparèixer
+    # (SET_NULL) sense afectar la còpia del model.
+    derivat_de_item = models.ForeignKey(
+        'models_app.ItemFitxer',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='usos_a_models',
+    )
     accessible_portal = models.BooleanField(default=False)
     pujat_per = models.ForeignKey(
         'accounts.UserProfile',
