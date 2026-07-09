@@ -15,7 +15,16 @@ const smallBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
   padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
 }
+// Picker de models (Modal 3) — input/select i files denses.
+const pInp = {
+  padding: '5px 9px', border: '0.5px solid var(--gray-l)', borderRadius: 6,
+  fontSize: 'var(--fs-caption)', fontFamily: MONO, background: 'var(--white)', color: 'var(--text-main)',
+}
+const pickMsg = { padding: '18px 10px', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-caption)', fontFamily: MONO }
+const pickFase = { fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '1px 7px', borderRadius: 10, background: 'var(--gold)', color: 'var(--white)' }
 const STATUSES = ['OPEN', 'COMPLETED', 'CANCELLED']
+const SEASONS = ['SS', 'FW', 'CO', 'SP']
+const PICK_PAGE = 40
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
 const fmtDate = (d) => d || '—'
 
@@ -44,8 +53,11 @@ export default function OrderDetail() {
   const [order, setOrder] = useState(null)
   const [feedback, setFeedback] = useState(null)
   const [busy, setBusy] = useState(false)
-  // Modal 3 — assignar model a una línia (B4b): { line, models:[], modelId }
-  const [assign, setAssign] = useState(null)
+  // Modal 3 — assignar model a una línia (B4b). Picker patró pàgina Models: cerca (codi/nom) +
+  // filtres (temporada/col·lecció) + llista densa; filtre implícit pel customer de la comanda.
+  const [assign, setAssign] = useState(null)               // { line } | null
+  const [pq, setPq] = useState({ search: '', temporada: '', collection: '' })
+  const [picker, setPicker] = useState({ models: [], count: 0, loading: false, modelId: '' })
 
   const reload = useCallback(() => commerce.orders.get(id)
     .then(res => setOrder(res.data)).catch(() => setError(true)), [id])
@@ -74,20 +86,37 @@ export default function OrderDetail() {
       .finally(() => setBusy(false))
   }
 
-  // Modal 3 — obre el selector de models del client de la comanda.
+  // Modal 3 — obre el picker de models (filtre implícit pel client de la comanda).
   const openAssign = (line) => {
     setFeedback(null)
-    modelsApi.list({ customer: order.customer, page_size: 500 })
-      .then(res => {
-        const list = res.data?.results ?? (Array.isArray(res.data) ? res.data : [])
-        setAssign({ line, models: list, modelId: '' })
-      })
-      .catch(() => setFeedback({ type: 'err', text: t('orders.error') }))
+    setPq({ search: '', temporada: '', collection: '' })
+    setPicker({ models: [], count: 0, loading: true, modelId: '' })
+    setAssign({ line })
   }
+  // Cerca server-side amb debounce: recarrega quan canvien cerca/filtres (mai el flat de 2000).
+  useEffect(() => {
+    if (!assign) return
+    const params = { customer: order.customer, ordering: '-data_entrada', page_size: PICK_PAGE }
+    if (pq.search) params.search = pq.search
+    if (pq.temporada) params.temporada = pq.temporada
+    if (pq.collection) params.collection = pq.collection
+    setPicker(p => ({ ...p, loading: true }))
+    const id = setTimeout(() => {
+      modelsApi.list(params)
+        .then(res => {
+          const d = res.data
+          const list = Array.isArray(d) ? d : (d.results || [])
+          setPicker(p => ({ ...p, models: list, count: d.count ?? list.length, loading: false }))
+        })
+        .catch(() => setPicker(p => ({ ...p, models: [], count: 0, loading: false })))
+    }, 200)
+    return () => clearTimeout(id)
+  }, [assign, pq, order?.customer])
+
   const doAssign = () => {
-    if (!assign?.modelId) return
+    if (!picker.modelId) return
     setBusy(true); setFeedback(null)
-    commerce.orderLines.assignModel(assign.line.id, { model_id: Number(assign.modelId) })
+    commerce.orderLines.assignModel(assign.line.id, { model_id: Number(picker.modelId) })
       .then(res => {
         const d = res.data
         const msg = t('orders.assign_done', { wo: d.work_order?.number, n: d.migrated_tasks ?? 0 })
@@ -194,35 +223,70 @@ export default function OrderDetail() {
           alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 12, padding: '1.2rem 1.4rem',
-            maxWidth: 460, width: '100%', border: '0.5px solid var(--gray-l)',
+            background: 'var(--white)', borderRadius: 12, padding: '1rem 1.2rem',
+            maxWidth: 560, width: '100%', border: '0.5px solid var(--gray-l)',
+            display: 'flex', flexDirection: 'column', maxHeight: '82vh',
           }}>
-            <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 2, fontFamily: MONO }}>
               {t('orders.assign_title')}
             </h2>
-            <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 12 }}>
+            <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', marginBottom: 10 }}>
               {assign.line.description || assign.line.product_name}
             </p>
-            <select value={assign.modelId} onChange={e => setAssign({ ...assign, modelId: e.target.value })}
-              style={{ ...selS, width: '100%', marginBottom: 8 }}>
-              <option value="">{t('orders.assign_pick_model')}…</option>
-              {assign.models.map(m => (
-                <option key={m.id} value={m.id}>{m.codi_intern} · {m.nom_prenda || '—'}</option>
-              ))}
-            </select>
+
+            {/* Toolbar de cerca + filtres (patró pàgina Models) */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+              <input value={pq.search} autoFocus onChange={e => setPq({ ...pq, search: e.target.value })}
+                placeholder={t('orders.assign_search_ph')} style={{ ...pInp, flex: 1, minWidth: 160 }} />
+              <select value={pq.temporada} onChange={e => setPq({ ...pq, temporada: e.target.value })} style={pInp}>
+                <option value="">{t('orders.assign_all_seasons')}</option>
+                {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <input value={pq.collection} onChange={e => setPq({ ...pq, collection: e.target.value })}
+                placeholder={t('orders.assign_collection_ph')} style={{ ...pInp, width: 130 }} />
+            </div>
+
+            {/* Llista densa amb scroll — clic per seleccionar */}
+            <div style={{ flex: 1, overflowY: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 8, minHeight: 120 }}>
+              {picker.loading ? (
+                <div style={pickMsg}>{t('orders.assign_loading')}</div>
+              ) : picker.models.length === 0 ? (
+                <div style={pickMsg}>{t('orders.assign_empty')}</div>
+              ) : picker.models.map(m => {
+                const sel = String(m.id) === String(picker.modelId)
+                return (
+                  <div key={m.id} onClick={() => setPicker(p => ({ ...p, modelId: m.id }))} style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', cursor: 'pointer',
+                    borderBottom: '0.5px solid var(--bg-muted)',
+                    background: sel ? 'var(--gold-pale)' : 'transparent',
+                  }}>
+                    <span style={{ fontFamily: MONO, fontWeight: 700, color: 'var(--gold)', fontSize: 'var(--fs-caption)' }}>{m.codi_intern}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-caption)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.nom_prenda || '—'}</span>
+                    <span style={pickFase}>{m.fase_actual ? t(`model_sheet.dashboard.phase.${m.fase_actual}`, m.fase_actual) : '—'}</span>
+                    {sel && <i className="ti ti-check" style={{ fontSize: 13, color: 'var(--gold)' }} />}
+                  </div>
+                )
+              })}
+            </div>
+            {!picker.loading && picker.count > picker.models.length && (
+              <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--gray)', margin: '6px 0 0' }}>
+                {t('orders.assign_more', { n: picker.count })}
+              </p>
+            )}
+
             {(() => {
-              const sel = assign.models.find(m => String(m.id) === String(assign.modelId))
+              const sel = picker.models.find(m => String(m.id) === String(picker.modelId))
               return sel && !sel.garment_type_item_nom
-                ? <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)', marginBottom: 8 }}>
+                ? <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--gold)', margin: '8px 0 0' }}>
                     <i className="ti ti-alert-triangle" style={{ fontSize: 13, marginRight: 4 }} />{t('orders.assign_gti_warn')}</p>
                 : null
             })()}
-            <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 12 }}>
+            <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: '8px 0 10px' }}>
               {t('orders.assign_migrate_note')}
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => setAssign(null)} disabled={busy} style={smallBtn}>{t('orders.assign_cancel')}</button>
-              <button onClick={doAssign} disabled={busy || !assign.modelId} style={{ ...primaryBtn }}>{t('orders.assign_confirm')}</button>
+              <button onClick={doAssign} disabled={busy || !picker.modelId} style={{ ...primaryBtn }}>{t('orders.assign_confirm')}</button>
             </div>
           </div>
         </div>

@@ -1088,7 +1088,7 @@
     "filter_customer_all": "Tots els clients",
     "open": "Obrir",
     "back": "Tornar a comandes",
-    "assign_model": "Assignar model", "assign_title": "Assignar model a la línia", "assign_pick_model": "Tria un model", "assign_gti_warn": "El model no té garment type; comprova la compatibilitat.", "assign_migrate_note": "Les tasques del model al col·lector es mouran a l'encàrrec nou.", "assign_cancel": "Cancel·lar", "assign_confirm": "Assignar", "assign_done": "Encàrrec {{wo}} creat · {{n}} tasques migrades",
+    "assign_model": "Assignar model", "assign_title": "Assignar model a la línia", "assign_pick_model": "Tria un model", "assign_gti_warn": "El model no té garment type; comprova la compatibilitat.", "assign_migrate_note": "Les tasques del model al col·lector es mouran a l'encàrrec nou.", "assign_cancel": "Cancel·lar", "assign_confirm": "Assignar", "assign_done": "Encàrrec {{wo}} creat · {{n}} tasques migrades", "assign_search_ph": "Cerca per codi o nom…", "assign_all_seasons": "Totes les temporades", "assign_collection_ph": "Col·lecció…", "assign_loading": "Carregant models…", "assign_empty": "Cap model coincideix.", "assign_more": "Refina la cerca ({{n}} models)",
     "loading": "Carregant comandes…",
     "empty": "Cap comanda.",
     "error": "No s'ha pogut completar l'operació.",

@@ -1088,7 +1088,7 @@
     "filter_customer_all": "All customers",
     "open": "Open",
     "back": "Back to orders",
-    "assign_model": "Assign model", "assign_title": "Assign model to line", "assign_pick_model": "Pick a model", "assign_gti_warn": "The model has no garment type; check compatibility.", "assign_migrate_note": "The model's collector tasks will move to the new work order.", "assign_cancel": "Cancel", "assign_confirm": "Assign", "assign_done": "Work order {{wo}} created · {{n}} tasks migrated",
+    "assign_model": "Assign model", "assign_title": "Assign model to line", "assign_pick_model": "Pick a model", "assign_gti_warn": "The model has no garment type; check compatibility.", "assign_migrate_note": "The model's collector tasks will move to the new work order.", "assign_cancel": "Cancel", "assign_confirm": "Assign", "assign_done": "Work order {{wo}} created · {{n}} tasks migrated", "assign_search_ph": "Search by code or name…", "assign_all_seasons": "All seasons", "assign_collection_ph": "Collection…", "assign_loading": "Loading models…", "assign_empty": "No models match.", "assign_more": "Refine your search ({{n}} models)",
     "loading": "Loading orders…",
     "empty": "No orders.",
     "error": "The operation could not be completed.",
