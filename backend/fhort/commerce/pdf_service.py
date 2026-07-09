@@ -125,6 +125,70 @@ def _customer_oneliner(c):
     return ' · '.join(parts)
 
 
+# ── Capçalera de l'EMISSOR (TenantConfig) — compartida per tots els documents ────────────────
+# Fi del hardcode: la identitat fiscal de l'emissor (legal_name/address/tax_id/email/phone) es
+# llegeix de TenantConfig. Fallback NET: cada línia surt només si té contingut. El logo_file ja
+# ve normalitzat a PNG ràster (accounts/logo.py), així que reportlab sempre el pot dibuixar.
+_LOGO_MAX_H, _LOGO_MAX_W = 15 * mm, 45 * mm
+
+
+def _emissor_oneliner(cfg):
+    """Adreça, CP ciutat, país de l'emissor en una línia (omet buits). Mirall de _customer_oneliner."""
+    if not cfg:
+        return ''
+    loc = ' '.join(x for x in [(cfg.postal_code or '').strip(), (cfg.city or '').strip()] if x)
+    return ', '.join(x for x in [(cfg.address or '').strip(), loc, (cfg.country or '').strip()] if x)
+
+
+def _brand_flowable(cfg, s, FS, FL):
+    """Logo del tenant (logo_file, PNG ràster normalitzat) acotat a 15 mm d'alçada; si no n'hi ha o
+    no es pot llegir, text de fallback 'Fhort Textile Tech'."""
+    logo = getattr(cfg, 'logo_file', None)
+    path = None
+    if logo:  # ImageFieldFile buit → bool False → fallback de text.
+        try:
+            path = logo.path
+        except Exception:  # noqa: BLE001 — storage sense path local
+            path = None
+    if path and os.path.isfile(path):
+        try:
+            img = Image(path)
+            ratio = (img.imageWidth or 1) / (img.imageHeight or 1)
+            h, w = _LOGO_MAX_H, _LOGO_MAX_H * ratio
+            if w > _LOGO_MAX_W:  # logo molt ample → limita per amplada, recalcula alçada
+                w, h = _LOGO_MAX_W, _LOGO_MAX_W / ratio
+            img.drawWidth, img.drawHeight = w, h
+            img.hAlign = 'LEFT'
+            return img
+        except Exception:  # noqa: BLE001 — imatge malmesa → text de fallback
+            logger.warning("PDF logo: no s'ha pogut llegir logo_file (%s); fallback de text.", path)
+    return Paragraph(f'<font name="{FS}" color="#B8860B">Fhort</font> '
+                     f'<font name="{FL}" color="#888888">Textile Tech</font>', s('logo', size=14))
+
+
+def _emissor_left(cfg, s, FS, FL):
+    """Columna esquerra de la capçalera: marca + identitat fiscal de l'emissor (TenantConfig).
+    Cada línia és opcional (fallback net). Compartida per generate_document_pdf i _delivery_note."""
+    rows = [[_brand_flowable(cfg, s, FS, FL)], [Spacer(1, 2 * mm)]]
+    if cfg:
+        S_EN = s('en', font=FS, size=7.5)
+        S_EM = s('em', size=7, color=GREY)   # línies fiscals secundàries, gris discret
+        name = (getattr(cfg, 'legal_name', '') or getattr(cfg, 'nom_empresa', '') or '').strip()
+        if name:
+            rows.append([Paragraph(name, S_EN)])
+        oneliner = _emissor_oneliner(cfg)
+        if oneliner:
+            rows.append([Paragraph(oneliner, S_EM)])
+        tax_id = (getattr(cfg, 'tax_id', '') or '').strip()
+        if tax_id:
+            rows.append([Paragraph(f'NIF: {tax_id}', S_EM)])
+        contact = ' · '.join(x for x in [(getattr(cfg, 'email', '') or '').strip(),
+                                         (getattr(cfg, 'phone', '') or '').strip()] if x)
+        if contact:
+            rows.append([Paragraph(contact, S_EM)])
+    return Table(rows, colWidths=[COL_LEFT_W], style=TableStyle(ZP))
+
+
 def _tax_pct(subtotal, tax_amount):
     """% d'IVA derivat de subtotal/impostos; 21 per defecte si no es pot inferir."""
     s = Decimal(subtotal or 0)
@@ -178,43 +242,8 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
     story = []
 
     # ═══ CAPÇALERA ═══
-    # Marca: logo del tenant (logo_file) si n'hi ha; si no, text de fallback. El logo_file és un
-    # ImageField ràster (Pillow) → reportlab Image() el dibuixa. Un SVG NO és vàlid aquí (ni Pillow
-    # ni reportlab el resolen): cal pujar PNG/JPG. Alçada acotada a 15mm, amplada per aspecte (amb
-    # sostre de seguretat perquè un logo molt ample no desbordi la columna esquerra). El fallback
-    # de text NOMÉS surt si logo_file és buit o la imatge no es pot llegir.
-    LOGO_MAX_H, LOGO_MAX_W = 15 * mm, 45 * mm
-
-    def _brand_flowable():
-        logo = getattr(cfg, 'logo_file', None)
-        path = None
-        if logo:  # ImageFieldFile buit → bool False → fallback de text.
-            try:
-                path = logo.path
-            except Exception:  # noqa: BLE001 — storage sense path local
-                path = None
-        if path and os.path.isfile(path):
-            try:
-                img = Image(path)
-                ratio = (img.imageWidth or 1) / (img.imageHeight or 1)
-                h, w = LOGO_MAX_H, LOGO_MAX_H * ratio
-                if w > LOGO_MAX_W:  # logo molt ample → limita per amplada, recalcula alçada
-                    w, h = LOGO_MAX_W, LOGO_MAX_W / ratio
-                img.drawWidth, img.drawHeight = w, h
-                img.hAlign = 'LEFT'
-                return img
-            except Exception:  # noqa: BLE001 — imatge malmesa/format no ràster → text de fallback
-                logger.warning("PDF logo: no s'ha pogut llegir logo_file (%s); fallback de text.", path)
-        return Paragraph(f'<font name="{FS}" color="#B8860B">Fhort</font> '
-                         f'<font name="{FL}" color="#888888">Textile Tech</font>',
-                         s('logo', size=14))
-
-    left_rows = [[_brand_flowable()], [Spacer(1, 2 * mm)]]
-    nom_emissor = (getattr(cfg, 'nom_empresa', '') or '').strip()
-    if nom_emissor:
-        left_rows.append([Paragraph(nom_emissor, s('en', font=FS, size=7.5))])
-    # TODO B-fi: adreça/NIF/email de l'emissor quan TenantConfig els tingui (avui no existeixen).
-    left = Table(left_rows, colWidths=[COL_LEFT_W], style=TableStyle(ZP))
+    # Emissor = TenantConfig (marca + identitat fiscal), via helper compartit. Fi del hardcode.
+    left = _emissor_left(cfg, s, FS, FL)
 
     meta_rows = [
         [Paragraph('Número', S_LABEL_R), Paragraph(quote.document_number or '—', SSM_R)],
@@ -389,37 +418,8 @@ def generate_delivery_note_pdf(delivery_note):
     doc.addPageTemplates([PageTemplate(id='main', frames=[frame])])
     story = []
 
-    # ═══ CAPÇALERA (heretada del pressupost validat) ═══
-    LOGO_MAX_H, LOGO_MAX_W = 15 * mm, 45 * mm
-
-    def _brand_flowable():
-        logo = getattr(cfg, 'logo_file', None)
-        path = None
-        if logo:
-            try:
-                path = logo.path
-            except Exception:  # noqa: BLE001
-                path = None
-        if path and os.path.isfile(path):
-            try:
-                img = Image(path)
-                ratio = (img.imageWidth or 1) / (img.imageHeight or 1)
-                h, w = LOGO_MAX_H, LOGO_MAX_H * ratio
-                if w > LOGO_MAX_W:
-                    w, h = LOGO_MAX_W, LOGO_MAX_W / ratio
-                img.drawWidth, img.drawHeight = w, h
-                img.hAlign = 'LEFT'
-                return img
-            except Exception:  # noqa: BLE001
-                logger.warning("PDF logo: no s'ha pogut llegir logo_file (%s); fallback de text.", path)
-        return Paragraph(f'<font name="{FS}" color="#B8860B">Fhort</font> '
-                         f'<font name="{FL}" color="#888888">Textile Tech</font>', s('logo', size=14))
-
-    left_rows = [[_brand_flowable()], [Spacer(1, 2 * mm)]]
-    nom_emissor = (getattr(cfg, 'nom_empresa', '') or '').strip()
-    if nom_emissor:
-        left_rows.append([Paragraph(nom_emissor, s('en', font=FS, size=7.5))])
-    left = Table(left_rows, colWidths=[COL_LEFT_W], style=TableStyle(ZP))
+    # ═══ CAPÇALERA (heretada del pressupost validat) — emissor = TenantConfig, helper compartit ═══
+    left = _emissor_left(cfg, s, FS, FL)
 
     meta = Table([
         [Paragraph('Número', S_LABEL_R), Paragraph(delivery_note.document_number or '—', SSM_R)],
