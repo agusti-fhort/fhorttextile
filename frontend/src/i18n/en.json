@@ -3091,6 +3091,7 @@
     "col_data": "Date"
   },
   "tech_sheet_entry": {
+    "open": "Open",
     "title": "Tech sheet",
     "subtitle": "Pick a model to open its tech sheet.",
     "search_placeholder": "Search by model code or name…",

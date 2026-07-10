@@ -59,16 +59,17 @@ const cap = {
   fontSize: 'var(--fs-body)', color: 'var(--text-muted)', padding: '2px 4px',
 }
 
-function Carpeta({ icona, titol, subtitol, comptador, onClick }) {
+function Carpeta({ icona, titol, subtitol, comptador, onClick, onDoubleClick, actiu = false }) {
   return (
-    <button type="button" onClick={onClick} style={{
+    <button type="button" onClick={onClick} onDoubleClick={onDoubleClick} aria-current={actiu || undefined} style={{
       display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-      padding: '10px 12px', background: 'transparent', cursor: 'pointer', fontFamily: MONO,
+      padding: '10px 12px', cursor: 'pointer', fontFamily: MONO,
+      background: actiu ? 'var(--gold-pale)' : 'transparent',
       border: 'none', borderBottom: '0.5px solid var(--border)',
     }}>
       <i className={`ti ${icona}`} aria-hidden="true" style={{ fontSize: 18, color: 'var(--gold)', flexShrink: 0 }} />
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontWeight: 500 }}>{titol}</span>
+        <span style={{ display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontWeight: actiu ? 700 : 500 }}>{titol}</span>
         {subtitol && <span style={{ display: 'block', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>{subtitol}</span>}
       </span>
       {comptador !== undefined && (
@@ -152,10 +153,11 @@ export default function AssetNavigator({
   const modelDe = useCallback((id) => (modelsTots || []).find(m => m.id === id), [modelsTots])
   const gtiDe = useCallback((id) => (gtis || []).find(g => g.id === id), [gtis])
 
-  const anarAModel = (m) => {
-    if (mode === 'models') { onPick?.(m); return }
-    patch({ tab: 'models', cust: m.customer_nom, any: m.any, temp: m.temporada, modelId: m.id, gtId: null, gtiId: null })
-  }
+  // En mode='models' un model és una FULLA seleccionable (el peu la confirma), no una carpeta on
+  // s'entra: no hi ha res a dins que aquest mode sàpiga ensenyar. En mode='files' sí que s'hi entra.
+  const anarAModel = (m) => patch({
+    tab: 'models', cust: m.customer_nom, any: m.any, temp: m.temporada, modelId: m.id, gtId: null, gtiId: null,
+  })
   const anarAGti = (gti) => patch({ tab: 'catalog', gtId: gti.garment_type, gtiId: gti.id, modelId: null })
 
   // ── Breadcrumb ───────────────────────────────────────────────────────────
@@ -165,7 +167,8 @@ export default function AssetNavigator({
     if (nav.cust) molles.push({ txt: nav.cust, go: () => patch({ any: null, temp: null, modelId: null }) })
     if (nav.any) molles.push({ txt: String(nav.any), go: () => patch({ temp: null, modelId: null }) })
     if (nav.temp) molles.push({ txt: nav.temp, go: () => patch({ modelId: null }) })
-    if (nav.modelId) molles.push({ txt: modelDe(nav.modelId)?.codi_intern || '…', go: null })
+    // En mode='models' el model és una selecció, no una ubicació: no és una molla del camí.
+    if (nav.modelId && mode === 'files') molles.push({ txt: modelDe(nav.modelId)?.codi_intern || '…', go: null })
   } else {
     molles.push({ txt: t('asset_navigator.tab_catalog'), go: () => patch({ gtId: null, gtiId: null }) })
     if (nav.gtId) molles.push({ txt: (gts || []).find(g => g.id === nav.gtId)?.codi_client || '…', go: () => patch({ gtiId: null }) })
@@ -183,7 +186,9 @@ export default function AssetNavigator({
           : modelsTrobats.map(m => (
             <Carpeta key={`m${m.id}`} icona="ti-file-text" titol={m.codi_intern}
               subtitol={[m.nom_prenda, m.customer_nom].filter(Boolean).join(' · ')}
-              onClick={() => anarAModel(m)} />
+              actiu={mode === 'models' && nav.modelId === m.id}
+              onClick={() => anarAModel(m)}
+              onDoubleClick={mode === 'models' ? () => onPick?.(m) : undefined} />
           ))}
         {mode === 'files' && (<>
           <Secció titol={t('asset_navigator.group_catalog', { n: resCatalegCerca?.length ?? 0 })} />
@@ -199,9 +204,12 @@ export default function AssetNavigator({
       </div>
     )
   } else if (nav.tab === 'models') {
-    if (nav.modelId) cos = <FileList files={fitxersVisibles} selectedId={triat?.id} onSelect={setTriat} onOpen={(f) => onPick?.(f)} />
+    if (nav.modelId && mode === 'files') cos = <FileList files={fitxersVisibles} selectedId={triat?.id} onSelect={setTriat} onOpen={(f) => onPick?.(f)} />
     else if (nav.temp) cos = perTemporada.map(m => (
-      <Carpeta key={m.id} icona="ti-file-text" titol={m.codi_intern} subtitol={m.nom_prenda} onClick={() => anarAModel(m)} />
+      <Carpeta key={m.id} icona="ti-file-text" titol={m.codi_intern} subtitol={m.nom_prenda}
+        actiu={mode === 'models' && nav.modelId === m.id}
+        onClick={() => anarAModel(m)}
+        onDoubleClick={mode === 'models' ? () => onPick?.(m) : undefined} />
     ))
     else if (nav.any) cos = temporades.map(s => <Carpeta key={s} icona="ti-folder" titol={s} onClick={() => patch({ temp: s })} />)
     else if (nav.cust) cos = anys.map(a => <Carpeta key={a} icona="ti-folder" titol={String(a)} onClick={() => patch({ any: a })} />)

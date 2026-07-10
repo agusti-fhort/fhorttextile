@@ -3091,6 +3091,7 @@
     "col_data": "Fecha"
   },
   "tech_sheet_entry": {
+    "open": "Abrir",
     "title": "Ficha técnica",
     "subtitle": "Elige un modelo para abrir su ficha técnica.",
     "search_placeholder": "Busca por código o nombre de modelo…",

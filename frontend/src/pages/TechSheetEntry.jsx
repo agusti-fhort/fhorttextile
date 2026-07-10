@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { models as modelsApi } from '../api/endpoints'
+import AssetNavigator from '../components/assets/AssetNavigator'
 
 // D10 — porta-menú de la fitxa tècnica (S03b · P6).
 //
@@ -13,57 +14,31 @@ import { models as modelsApi } from '../api/endpoints'
 // Sidebar-com-a-ruta: les entrades del Sidebar són NavLink declaratius (`to:`); no hi ha cap
 // precedent d'entrada amb onClick. Per això el menú apunta a aquesta pàgina en comptes d'obrir
 // un modal des del Sidebar: mateix resultat per a l'usuari, sense trencar el patró del menú.
+//
+// S03c · C5.1 — la llista plana de 12 models (i la seva cerca pròpia) han estat substituïdes per
+// l'AssetNavigator en mode='models', INLINE: aquesta pàgina no és una capa sobre res, és la
+// pàgina sencera. La cerca, les facetes Client▸Any▸Temporada i el debounce ara viuen al
+// navegador, que és el mateix que fa servir l'editor — una sola superfície de navegació d'actius.
+// `obrir` i `obrirConsulta` no s'han tocat: el navegador retorna un model i prou.
 
 const MONO = 'IBM Plex Mono, monospace'
-const PAGE_SIZE = 12
-
-const inputStyle = {
-  width: '100%', padding: '10px 12px', borderRadius: 4,
-  border: '0.5px solid var(--gray-l)', fontFamily: MONO,
-  fontSize: 'var(--fs-body)', background: 'var(--white)', boxSizing: 'border-box',
-}
-
-const rowStyle = {
-  display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-  padding: '10px 12px', textAlign: 'left', cursor: 'pointer',
-  background: 'transparent', border: 'none',
-  borderBottom: '0.5px solid var(--border)', fontFamily: MONO,
-  fontSize: 'var(--fs-body)', color: 'var(--text-main)',
-}
 
 export default function TechSheetEntry() {
   const navigate = useNavigate()
   const { t } = useTranslation()
 
-  const [search, setSearch] = useState('')
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState(null)
   // Quan el backend rebutja per allow-list, guardem el model per oferir la consulta.
   const [consultaModel, setConsultaModel] = useState(null)
-
-  const load = useCallback(() => {
-    setLoading(true)
-    const params = { ordering: '-data_entrada', page_size: PAGE_SIZE }
-    if (search) params.search = search
-    modelsApi.list(params)
-      .then(r => {
-        const d = r.data
-        setItems(Array.isArray(d) ? d : (d.results || []))
-      })
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false))
-  }, [search])
-
-  useEffect(() => {
-    const id = setTimeout(load, 250)   // debounce de la cerca
-    return () => clearTimeout(id)
-  }, [load])
+  // Memòria de camí a nivell de PÀGINA (mai localStorage): tornar enrere des d'un model rebutjat
+  // no ha de fer recomençar la navegació pel client i la temporada.
+  const [nav, setNav] = useState({ tab: 'models', cust: null, any: null, temp: null, modelId: null, gtId: null, gtiId: null })
 
   const obrirConsulta = (modelId) => navigate(`/models/${modelId}/fitxa`)
 
   const obrir = async (model) => {
+    if (!model) return
     setBusyId(model.id)
     setError(null)
     setConsultaModel(null)
@@ -93,7 +68,7 @@ export default function TechSheetEntry() {
   }
 
   return (
-    <div style={{ padding: '1.5rem', maxWidth: 720 }}>
+    <div style={{ padding: '1.5rem', maxWidth: 860 }}>
       <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4 }}>
         {t('tech_sheet_entry.title')}
       </h1>
@@ -101,18 +76,9 @@ export default function TechSheetEntry() {
         {t('tech_sheet_entry.subtitle')}
       </p>
 
-      <input
-        type="search"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder={t('tech_sheet_entry.search_placeholder')}
-        aria-label={t('tech_sheet_entry.search_placeholder')}
-        style={inputStyle}
-      />
-
       {error && (
         <div role="alert" style={{
-          marginTop: 12, padding: '10px 12px', borderRadius: 4,
+          marginBottom: 12, padding: '10px 12px', borderRadius: 4,
           border: '0.5px solid var(--err)', color: 'var(--err)',
           fontSize: 'var(--fs-body)',
         }}>
@@ -123,7 +89,7 @@ export default function TechSheetEntry() {
 
       {consultaModel && (
         <div role="alert" style={{
-          marginTop: 12, padding: '12px', borderRadius: 4,
+          marginBottom: 12, padding: '12px', borderRadius: 4,
           border: '0.5px solid var(--gold)', fontSize: 'var(--fs-body)',
         }}>
           <div style={{ marginBottom: 8 }}>
@@ -145,28 +111,14 @@ export default function TechSheetEntry() {
         </div>
       )}
 
-      <div style={{ marginTop: 16, border: '0.5px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
-        {loading ? (
-          <div style={{ padding: 16, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-            {t('app.loading')}
-          </div>
-        ) : items.length === 0 ? (
-          <div style={{ padding: 16, fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-            {t('tech_sheet_entry.no_models')}
-          </div>
-        ) : items.map(m => (
-          <button key={m.id} type="button" style={rowStyle}
-            disabled={busyId !== null}
-            onClick={() => obrir(m)}>
-            <i className="ti ti-file-text" aria-hidden="true" style={{ color: 'var(--gold)' }} />
-            <span style={{ fontWeight: 500 }}>{m.codi_intern}</span>
-            <span style={{ color: 'var(--text-muted)', flex: 1 }}>{m.nom_prenda || '—'}</span>
-            {busyId === m.id && (
-              <span style={{ color: 'var(--text-muted)' }}>{t('app.loading')}</span>
-            )}
-          </button>
-        ))}
-      </div>
+      <AssetNavigator
+        mode="models"
+        inline
+        nav={nav}
+        onNav={setNav}
+        onPick={obrir}
+        actionLabel={busyId ? t('app.loading') : t('tech_sheet_entry.open')}
+      />
     </div>
   )
 }

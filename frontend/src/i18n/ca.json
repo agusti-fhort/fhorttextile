@@ -3091,6 +3091,7 @@
     "col_data": "Data"
   },
   "tech_sheet_entry": {
+    "open": "Obre",
     "title": "Fitxa tècnica",
     "subtitle": "Tria un model per obrir-ne la fitxa tècnica.",
     "search_placeholder": "Cerca per codi o nom de model…",
