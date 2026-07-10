@@ -227,7 +227,8 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
     # Rebutjat / Descartat: NO es propaga; la tasca queda viva. Si ve data_represa, reagenda.
     reagendada = False
     if final_estat in ('Rebutjat', 'Descartat') and data_represa:
-        reagendada = _reagenda_tasca_size_check(model, data_represa)
+        from fhort.tasks.services_scheduling import reagenda_tasca
+        reagendada = reagenda_tasca(model, data_represa, task_type_code='size_check')
 
     sc.estat = final_estat
     sc.resolt_per = profile
@@ -248,30 +249,6 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
     }
 
 
-def _reagenda_tasca_size_check(model, data_represa) -> bool:
-    """Fixa la tasca size_check del model a `data_represa` al calendari laboral: planned_start
-    (08:00 del primer instant hàbil) + planned_end (+estimated o 60') + planned_locked, status
-    Pending. Gate tou: sense tasca o data invàlida → False (no peta)."""
-    import datetime as _dt
-    try:
-        from django.utils import timezone as djtz
-        from fhort.tasks.models import ModelTask
-        from fhort.planning.calendar_service import next_working_slot, add_working_minutes
-
-        task = (ModelTask.objects
-                .filter(model=model, task_type__code='size_check')
-                .exclude(status='Done').order_by('-id').first())
-        if task is None:
-            return False
-        d = _dt.date.fromisoformat(data_represa) if isinstance(data_represa, str) else data_represa
-        prof = task.assignee
-        naive_start = next_working_slot(prof, _dt.datetime.combine(d, _dt.time(8, 0)))
-        naive_end = add_working_minutes(prof, naive_start, task.estimated_minutes or 60)
-        task.planned_start = djtz.make_aware(naive_start)
-        task.planned_end = djtz.make_aware(naive_end)
-        task.planned_locked = True
-        task.save(update_fields=['planned_start', 'planned_end', 'planned_locked', 'updated_at'])
-        return True
-    except Exception as e:
-        logger.warning(f"SizeCheck reagenda: no s'ha pogut reagendar size_check del model {model.pk}: {e}")
-        return False
+# Sprint Y — `_reagenda_tasca_size_check` s'ha extret i parametritzat a
+# `tasks/services_scheduling.py::reagenda_tasca(model, data_represa, task_type_code)`, perquè la
+# convocatòria el pugui reusar. El caller de sota l'invoca directament (cap wrapper).
