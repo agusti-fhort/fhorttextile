@@ -1802,6 +1802,9 @@
       "all": "Todas"
     },
     "session": {
+      "panel_title": "Sesión de fitting",
+      "expand": "Desplegar",
+      "collapse": "Plegar",
       "fase": "Fase",
       "estat": "Estado",
       "date": "Fecha",

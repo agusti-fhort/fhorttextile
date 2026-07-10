@@ -1802,6 +1802,9 @@
       "all": "All"
     },
     "session": {
+      "panel_title": "Fitting session",
+      "expand": "Expand",
+      "collapse": "Collapse",
       "fase": "Phase",
       "estat": "Status",
       "date": "Date",

@@ -5,6 +5,7 @@ import MeasureGrid from './MeasureGrid'
 import EditorHeader from './EditorHeader'
 import DependencyPanel from './DependencyPanel'
 import WatchpointsPanel from './WatchpointsPanel'
+import SessionPanel from './SessionPanel'
 
 // CHECK sobre l'editor únic MeasureGrid (substitueix SizeCheckWork): UNA graella amb l'historial
 // d'estadis (base-stages, read-only) com a columnes + la columna activa 'Real' (valor_real) + el
@@ -356,6 +357,8 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     <div>
       <EditorHeader model={model} onBack={onBack} />
       <DependencyPanel model={model} />
+      {/* Sprint Y — en mode sessió (font fitting), el panell de la sessió: context + Canvis/Observacions/Imatges. */}
+      {ctx.fittingSession && <SessionPanel session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} grid={raw?.grid} />}
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
         onSave={readOnly ? undefined : onSave} onNomSave={canEditNom ? onNomSave : undefined}
         editCodi reorderable={canReorder} onReorder={canReorder ? onReorder : undefined}

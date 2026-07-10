@@ -1802,6 +1802,9 @@
       "all": "Totes"
     },
     "session": {
+      "panel_title": "Sessió de fitting",
+      "expand": "Desplegar",
+      "collapse": "Plegar",
       "fase": "Fase",
       "estat": "Estat",
       "date": "Data",

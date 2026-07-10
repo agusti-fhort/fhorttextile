@@ -552,9 +552,18 @@ export const pieceFittingLines = {
   propagar: (id, valorReal) => client.post(`/api/v1/piece-fitting-lines/${id}/propagar/`, { valor_real: valorReal }),
 }
 
-// 5B.6-B3 — Fotos de la sessió (llistar; pujada ajornada a B2).
+// 5B.6-B3 — Fotos de la sessió (llistar) · Sprint Y — pujada multipart.
 export const fittingPhotos = {
   list: (params) => client.get('/api/v1/fitting-photos/', { params }),
+  // Sprint Y — substitueix el client.post cru de FittingDetail i OMPLE piece_fitting (abans null):
+  // la foto queda ancorada a la peça concreta, no només a la sessió.
+  upload: (sessionId, file, pieceFittingId = null) => {
+    const fd = new FormData()
+    fd.append('session', sessionId)
+    fd.append('fitxer', file)
+    if (pieceFittingId) fd.append('piece_fitting', pieceFittingId)
+    return client.post('/api/v1/fitting-photos/', fd)
+  },
 }
 
 // SC-1 — Size Check: validació del proto a talla base, ABANS del fitting.
