@@ -178,6 +178,28 @@ def save_item_file(item, file, *, versio_anterior=None, tipus=None, nom=None):
     return fitxer
 
 
+def marcar_procedencia(nou, user, **camps):
+    """Escriu la procedència i l'autor d'una còpia importada, en un sol UPDATE.
+
+    Comú als dos cicles d'importació: catàleg→model (`derivat_de_item`) i model→model
+    (`derivat_de_model`). És l'únic tros que comparteixen de veritat — la còpia de bytes
+    difereix (el `.ftt` model→model es reescriu, vegeu D16) i la font també. Mateix criteri
+    que `save_model_file` vs `save_item_file`: es comparteix el que és realment comú, no
+    s'inventa un helper parametritzat que surti més llarg i més opac.
+
+    NO toca `is_current`/`versio`: d'aquells n'és únic escriptor `save_model_file`.
+    """
+    for camp, valor in camps.items():
+        setattr(nou, camp, valor)
+    noms = list(camps)
+    perfil = getattr(user, 'profile', None)
+    if perfil is not None:
+        nou.pujat_per = perfil
+        noms.append('pujat_per')
+    nou.save(update_fields=noms)
+    return nou
+
+
 def delete_fitxer_bytes(fitxer):
     """Esborra els bytes d'un ModelFitxer O d'un ItemFitxer. Font única, com `serve_fitxer`.
 

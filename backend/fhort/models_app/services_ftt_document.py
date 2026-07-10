@@ -271,6 +271,32 @@ def unfreeze_document(document_json, assets):
     return {**document_json, 'metadata': {}, 'pages': pages}, nets, report
 
 
+def reescriure_ftt_per_model(blob, model_desti):
+    """Bytes d'un `.ftt` del model A → bytes del mateix `.ftt` per al model B (D16).
+
+    unfreeze (treu tot el que és de A) → resolve_placeholders (congela amb les dades de B).
+    El resultat és indistingible d'instanciar la plantilla directament sobre B: el document
+    importat torna a ser "jove". Retorna (blob_nou, report).
+
+    El `preview.png` NO es propaga: és un render dels valors de A i quedaria com una 5a cosa
+    materialitzada de l'origen. Es regenera sol al primer desat des de l'editor.
+    """
+    paquet = services_ftt.unpack(blob)
+    document_json, assets, report = unfreeze_document(
+        paquet['document_json'], paquet.get('assets') or {})
+    document_json, assets_desti = resolve_placeholders(document_json, model_desti)
+    assets.update(assets_desti)
+    return services_ftt.pack(document_json, assets=assets), report
+
+
+def es_ftt(fitxer):
+    """True si el ModelFitxer és un document .ftt (per tipus o per extensió)."""
+    if fitxer.tipus == ModelFitxer.TIPUS_TECHSHEET:
+        return True
+    nom = fitxer.nom_fitxer or ''
+    return nom.lower().endswith(ModelFitxer.FTT_EXTENSION)
+
+
 def create_document(model, *, document_json=None, assets=None, preview=None, nom=None):
     """Crea la v1 d'un document .ftt per al model (cadena nova, is_current=True)."""
     if document_json is None:

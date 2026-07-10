@@ -21,8 +21,8 @@ from fhort.tasks.models import GarmentTypeItem
 from .models import ItemFitxer, Model
 from .serializers import ItemFitxerSerializer
 from .services_fitxers import (DOWNLOAD_TTL, ITEM_DOWNLOAD_SALT, UploadRejected,
-                               delete_fitxer_bytes, get_version_chain, save_item_file,
-                               serve_fitxer, validate_upload)
+                               delete_fitxer_bytes, get_version_chain, marcar_procedencia,
+                               save_item_file, serve_fitxer, validate_upload)
 
 
 class ItemFitxerViewSet(mixins.CreateModelMixin,
@@ -163,13 +163,8 @@ class ItemFitxerViewSet(mixins.CreateModelMixin,
         finally:
             origen.fitxer.close()
 
-        nou.derivat_de_item = origen
-        camps = ['derivat_de_item']
-        perfil = getattr(request.user, 'profile', None)
-        if perfil is not None:
-            nou.pujat_per = perfil
-            camps.append('pujat_per')
-        nou.save(update_fields=camps)
+        # Mateix helper que el germà model→model (views.ModelFitxerViewSet.usar_al_model).
+        marcar_procedencia(nou, request.user, derivat_de_item=origen)
 
         return Response(ModelFitxerSerializer(nou, context={'request': request}).data,
                         status=201)

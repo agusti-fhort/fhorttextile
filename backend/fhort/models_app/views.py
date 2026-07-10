@@ -165,6 +165,70 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
         delete_fitxer_bytes(instance)
         instance.delete()
 
+    @action(detail=True, methods=['post'], url_path='usar-al-model')
+    def usar_al_model(self, request, pk=None):
+        """POST /api/v1/model-fitxers/<id>/usar-al-model/  Body: {model_id}   [S03c · C3.2]
+
+        Cicle model→model: **importació, no edició in-place**. Crea un ModelFitxer NOU al model
+        destí amb `derivat_de_model` apuntant a l'origen. L'origen NO es toca mai.
+
+        Germà d'`item_fitxer_views.usar_al_model` (catàleg→model), amb UNA diferència de fons:
+        allà «un `.ftt` es copia tal qual» perquè un ItemFitxer no porta dades de model. Aquí
+        **és fals**: un `.ftt` d'un model A porta text congelat, l'asset del logo del seu
+        client, un objecte image amb la URL del logo i metadata, tot de A (Q4.4). Per això el
+        `.ftt` es descongela i es re-resol contra el model destí (D16). La resta de tipus
+        (PDF, DXF, SVG, imatges) són còpia directa de bytes, com al germà.
+
+        Gate: `IsAuthenticated` (permission_classes del ViewSet), el MATEIX que `upload_file_view`:
+        l'escriptura va al model destí, i qui pot pujar-hi un fitxer pot importar-n'hi un.
+        """
+        from django.core.files.base import ContentFile
+        from django.shortcuts import get_object_or_404
+
+        from . import services_ftt_document as ftt_svc
+        from .services_fitxers import marcar_procedencia, save_model_file
+
+        origen = self.get_object()
+        if not origen.fitxer:
+            return Response({'error': "El fitxer d'origen no té bytes."}, status=400)
+
+        model_id = request.data.get('model_id')
+        if not model_id:
+            return Response({'error': 'model_id és obligatori.'}, status=400)
+        desti = get_object_or_404(Model, pk=model_id)
+
+        if desti.pk == origen.model_id:
+            return Response(
+                {'error': 'El model destí és el mateix que el del fitxer origen.'}, status=400)
+
+        report = None
+        origen.fitxer.open('rb')
+        try:
+            if ftt_svc.es_ftt(origen):
+                # D16 — el .ftt no es copia tal qual: es descongela i es re-resol contra el destí.
+                blob, report = ftt_svc.reescriure_ftt_per_model(origen.fitxer.read(), desti)
+                font = ContentFile(blob, name=origen.nom_fitxer)
+            else:
+                font = origen.fitxer
+            nou = save_model_file(desti, font, tipus=origen.tipus,
+                                  origen='upload', nom=origen.nom_fitxer)
+        except ValueError as e:
+            # unpack() llança ValueError amb missatge clar si el .ftt està corromput.
+            return Response({'error': f'.ftt origen il·legible: {e}'}, status=400)
+        finally:
+            origen.fitxer.close()
+
+        marcar_procedencia(nou, request.user, derivat_de_model=origen)
+
+        dades = ModelFitxerSerializer(nou, context={'request': request}).data
+        if report is not None and not report['te_marques']:
+            # Degradació anunciada (D16): .ftt anterior a la marca `field_key`. Els camps de
+            # plantilla congelats segueixen mostrant dades del model origen.
+            dades['avis'] = ('El document és anterior al marcatge de camps: els camps de '
+                             'plantilla mantenen les dades del model origen i cal editar-los '
+                             'a mà.')
+        return Response(dades, status=201)
+
     @action(detail=True, methods=['get'])
     def versions(self, request, pk=None):
         """Cadena de versions completa (read-only) del fitxer, ordenada per versio."""
