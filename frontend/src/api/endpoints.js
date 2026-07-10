@@ -109,6 +109,10 @@ export const modelFitxers = {
 // Fitxers del CATÀLEG, ancorats a un GarmentTypeItem (S03b · P4/P5).
 export const itemFitxers = {
   list: (params) => client.get('/api/v1/item-fitxers/', { params }),
+  // P4 · gated CONFIGURE al backend. `Content-Type: undefined` perquè el navegador hi posi el
+  // boundary multipart: si s'hi força un valor, `request.FILES` arriba buit.
+  create: (formData) => client.post('/api/v1/item-fitxers/', formData,
+    { headers: { 'Content-Type': undefined } }),
   // Cicle ①: crea una CÒPIA al model (derivat_de_item), no toca l'ItemFitxer.
   usarAlModel: (id, modelId) =>
     client.post(`/api/v1/item-fitxers/${id}/usar-al-model/`, { model_id: modelId }),

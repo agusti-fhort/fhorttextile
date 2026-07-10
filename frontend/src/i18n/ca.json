@@ -944,6 +944,13 @@
     "order_hint": "Afecta l'ordre de les tasques a la planificació."
   },
   "garment_types": {
+    "files_title": "Fitxers",
+    "files_pick_item": "Tria un item per veure'n els fitxers",
+    "files_all_versions": "Totes les versions",
+    "files_upload": "Puja",
+    "files_empty": "Aquest item no té fitxers",
+    "files_upload_ok": "«{{nom}}» pujat al catàleg",
+    "files_upload_error": "No s'ha pogut pujar el fitxer",
     "title": "Garment Types",
     "subtitle": "Tipus de peça i les seves variants (items per complexitat)",
     "new": "Nou tipus",

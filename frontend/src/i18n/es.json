@@ -944,6 +944,13 @@
     "order_hint": "Afecta al orden de las tareas en la planificación."
   },
   "garment_types": {
+    "files_title": "Archivos",
+    "files_pick_item": "Elige un item para ver sus archivos",
+    "files_all_versions": "Todas las versiones",
+    "files_upload": "Sube",
+    "files_empty": "Este item no tiene archivos",
+    "files_upload_ok": "«{{nom}}» subido al catálogo",
+    "files_upload_error": "No se ha podido subir el archivo",
     "title": "Garment Types",
     "subtitle": "Tipos de prenda y sus variantes (items por complejidad)",
     "new": "Nuevo tipo",

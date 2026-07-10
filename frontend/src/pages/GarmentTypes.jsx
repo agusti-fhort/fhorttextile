@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
-import { garmentTypes, garmentTypeItems } from '../api/endpoints'
+import { garmentTypes, garmentTypeItems, itemFitxers } from '../api/endpoints'
+import FileList from '../components/assets/FileList'
+import { UPLOAD_ACCEPT } from '../utils/uploads'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
@@ -37,6 +39,12 @@ export default function GarmentTypes() {
   const [items, setItems] = useState([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [typeModal, setTypeModal] = useState(null)
+  // D21 · secció Fitxers del DETALL: un GTI triat, els seus ItemFitxer.
+  const [filesItemId, setFilesItemId] = useState(null)
+  const [filesRes, setFilesRes] = useState({ clau: null, rows: null })
+  const [filesNonce, setFilesNonce] = useState(0)
+  const [allVersions, setAllVersions] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   const loadTypes = useCallback(() => {
     setError(false)
@@ -67,7 +75,52 @@ export default function GarmentTypes() {
 
   useEffect(() => { loadDetail(selectedId) }, [selectedId, loadDetail])
 
+  // Els fitxers del GTI triat. Per defecte NOMÉS els caps de cadena (`is_current`): la vista és
+  // de consulta del catàleg, i FileList ja mostra la columna `v`. L'historial complet és una
+  // pregunta diferent i s'ha de demanar — per això va darrere d'un interruptor, no d'un desplegable
+  // per fila: les cadenes són curtes i barrejar-les per nom seria més confús que una llista plana.
+  //
+  // El resultat va LLIGAT a la clau que el va demanar (mateix patró que `useLlista` de
+  // l'AssetNavigator): mentre no casen, encara carreguem → `null`. Així no s'ensenyen mai els
+  // fitxers de l'item anterior, i cap effect no crida `setState` de manera síncrona.
+  const clauFitxers = filesItemId ? `${filesItemId}:${allVersions}:${filesNonce}` : null
+  useEffect(() => {
+    if (!clauFitxers) return undefined
+    let viu = true
+    const params = { garment_type_item: filesItemId, ordering: '-data_pujada' }
+    if (!allVersions) params.is_current = true
+    itemFitxers.list(params)
+      .then(r => { if (viu) setFilesRes({ clau: clauFitxers, rows: r.data?.results ?? (Array.isArray(r.data) ? r.data : []) }) })
+      .catch(() => { if (viu) setFilesRes({ clau: clauFitxers, rows: [] }) })
+    return () => { viu = false }
+  }, [clauFitxers, filesItemId, allVersions])
+  const files = filesRes.clau === clauFitxers ? filesRes.rows : null
+
+  const pujarFitxer = async (file) => {
+    if (!file || !filesItemId) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('garment_type_item', filesItemId)
+      fd.append('fitxer', file)
+      fd.append('nom', file.name)
+      await itemFitxers.create(fd)
+      setFilesNonce(n => n + 1)          // rellegeix la llista
+      await loadDetail(selectedId)       // i el `fitxers_count` de les cards
+      setFeedback({ type: 'ok', text: t('garment_types.files_upload_ok', { nom: file.name }) })
+    } catch (e) {
+      setFeedback({ type: 'err', text: e?.response?.data?.error || t('garment_types.files_upload_error') })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // En canviar de type, la selecció d'un item d'un ALTRE type deixa de tenir sentit. Es fa al
+  // gest que canvia el type, no a un effect: l'effect només reaccionaria després de renderitzar.
+  const triarType = (typeId) => { setSelectedId(typeId); setFilesItemId(null) }
+
   const selected = types.find(x => x.id === selectedId) || null
+  const filesItem = items.find(x => x.id === filesItemId) || null
   const groups = [...new Set(types.map(x => x.grup).filter(Boolean))].sort()
   const shown = types.filter(x => {
     const s = search.trim().toLowerCase()
@@ -133,7 +186,7 @@ export default function GarmentTypes() {
                 <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
                   {shown.length === 0 ? <Center>{t('garment_types.empty')}</Center>
                     : shown.map(x => (
-                      <div key={x.id} onClick={() => setSelectedId(x.id)} style={{
+                      <div key={x.id} onClick={() => triarType(x.id)} style={{
                         padding: '9px 12px', cursor: 'pointer', borderBottom: '0.5px solid var(--gray-l)',
                         background: x.id === selectedId ? 'var(--warn-bg)' : 'transparent',
                       }}>
@@ -193,10 +246,45 @@ export default function GarmentTypes() {
                           {items.map(it => (
                             <ItemCard key={it.id} it={it} t={t} canEdit={canEdit}
                               onEdit={() => navigate(`/garment-type-items/${it.id}/editar`)}
-                              onDelete={() => deleteItem(it)} />
+                              onDelete={() => deleteItem(it)}
+                              actiu={it.id === filesItemId}
+                              onFiles={() => setFilesItemId(id => (id === it.id ? null : it.id))} />
                           ))}
                         </div>
                       )}
+
+                    {/* (4) D21 — FITXERS del GTI triat, amb el FileList compartit del navegador */}
+                    {items.length > 0 && (
+                      <section style={{ marginTop: 18, border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflow: 'hidden' }}>
+                        <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '0.5px solid var(--gray-l)' }}>
+                          <i className="ti ti-folder" aria-hidden="true" style={{ color: 'var(--gold)' }} />
+                          <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, flex: 1 }}>
+                            {t('garment_types.files_title')}
+                            {filesItem && <span style={{ color: 'var(--gray)', fontWeight: 400 }}> · {filesItem.code}</span>}
+                          </span>
+                          {filesItemId && (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={allVersions} onChange={e => setAllVersions(e.target.checked)} />
+                              {t('garment_types.files_all_versions')}
+                            </label>
+                          )}
+                          {/* Gate CONFIGURE: el mateix que ja regeix a crear/editar/esborrar type i item,
+                              i el mateix que el backend imposa a `ItemFitxerViewSet.create` (P4). */}
+                          {filesItemId && canEdit && (
+                            <label style={{ ...actBtn, color: 'var(--gold)', borderColor: 'var(--gold)', opacity: uploading ? 0.5 : 1, cursor: uploading ? 'default' : 'pointer' }}>
+                              <i className="ti ti-file-upload" aria-hidden="true" /> {uploading ? t('garment_types.loading') : t('garment_types.files_upload')}
+                              <input type="file" hidden disabled={uploading} accept={UPLOAD_ACCEPT}
+                                onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; pujarFitxer(f) }} />
+                            </label>
+                          )}
+                        </header>
+                        {!filesItemId
+                          ? <div style={{ padding: 20, textAlign: 'center', color: 'var(--gray)', fontFamily: MONO, fontSize: 'var(--fs-body)', fontStyle: 'italic' }}>
+                              {t('garment_types.files_pick_item')}
+                            </div>
+                          : <FileList files={files} emptyLabel={t('garment_types.files_empty')} />}
+                      </section>
+                    )}
                   </div>
                 )}
               </div>
@@ -277,14 +365,14 @@ function Field({ label, children }) {
 
 // Card curta d'item: porta d'entrada a la pàgina d'autoria + termòmetre de completesa
 // (POMs · grading · talla base). NO repeteix el detall que s'edita dins (B3).
-function ItemCard({ it, t, canEdit, onEdit, onDelete }) {
+function ItemCard({ it, t, canEdit, onEdit, onDelete, onFiles, actiu = false }) {
   const hasGrading = !!it.grading_rule_set_nom
   const hasBase = it.base_size_label != null
   const hasPoms = (it.poms_count || 0) > 0
   const facets = [hasPoms, hasGrading, hasBase]
   const done = facets.filter(Boolean).length
   return (
-    <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ border: `0.5px solid ${actiu ? 'var(--gold)' : 'var(--gray-l)'}`, borderRadius: 12, background: actiu ? 'var(--gold-pale)' : 'var(--white)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)' }}>
@@ -304,6 +392,12 @@ function ItemCard({ it, t, canEdit, onEdit, onDelete }) {
         <StatusLine label={t('garment_types.card_grading')} value={it.grading_rule_set_nom || '—'} on={hasGrading} />
         <StatusLine label={t('garment_types.card_basesize')} value={it.base_size_label || '—'} on={hasBase} />
       </div>
+      {/* D21 — consulta de fitxers: gate de LECTURA (IsAuthenticated), no CONFIGURE. Qui pot veure
+          el catàleg pot veure'n els fitxers; només pujar-ne demana CONFIGURE. */}
+      <button onClick={onFiles} aria-pressed={actiu}
+        style={{ ...actBtn, textAlign: 'left', color: actiu ? 'var(--gold)' : 'var(--text-muted)', borderColor: actiu ? 'var(--gold)' : 'var(--gray-l)' }}>
+        <i className="ti ti-folder" aria-hidden="true" /> {t('garment_types.files_title')} · {it.fitxers_count ?? 0}
+      </button>
       {canEdit && (
         <div style={{ display: 'flex', gap: 6, marginTop: 'auto', paddingTop: 4 }}>
           <button onClick={onEdit} style={{ ...actBtn, flex: 1, color: 'var(--gold)', borderColor: 'var(--gold)' }}>

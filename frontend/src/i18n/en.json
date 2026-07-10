@@ -944,6 +944,13 @@
     "order_hint": "Affects the order of tasks in planning."
   },
   "garment_types": {
+    "files_title": "Files",
+    "files_pick_item": "Pick an item to see its files",
+    "files_all_versions": "All versions",
+    "files_upload": "Upload",
+    "files_empty": "This item has no files",
+    "files_upload_ok": "“{{nom}}” uploaded to the catalogue",
+    "files_upload_error": "Could not upload the file",
     "title": "Garment Types",
     "subtitle": "Garment types and their variants (items by complexity)",
     "new": "New type",
