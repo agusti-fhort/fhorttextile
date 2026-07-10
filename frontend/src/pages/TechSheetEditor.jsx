@@ -6,6 +6,7 @@ import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
 import FhortLogo from '../components/brand/FhortLogo'
 import FilePicker from '../components/model/FilePicker'
+import AssetNavigator from '../components/assets/AssetNavigator'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 import { booleanOp } from './ftt/paperbool'
@@ -23,6 +24,13 @@ const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 // ════════════════════════════════════════════════════════════════════════════
 
 const API = import.meta.env.VITE_API_URL || ''
+
+// C5.3 — què compta com a "geometria" avui, a l'hora de filtrar la font FTT del panell d'import.
+// Són els tipus que el canvas SAP rebre ara mateix: un SVG hi entra com a path editable i una
+// imatge com a dataURL. PATRO/ESCALAT/MARCADA queden fora perquè són DXF, i el motor DXF encara
+// no hi és (`import_dxf_soon`): oferir-los seria oferir un carreró sense sortida.
+const TIPUS_GEOMETRIA = ['SKETCH_SVG', 'SKETCH_NET', 'SKETCH_FLETXES']
+const GEOMETRIA_INSERIBLE = /\.(svg|png|jpe?g|webp|gif)$/i
 
 // Geometria: A4 horitzontal 297×210mm. Visualització 1mm = 2.4px → 713×504px.
 // Constants i helpers compartits amb TechSheetTemplateEditor (TS-3): s'exporten perquè
@@ -1342,6 +1350,8 @@ export default function TechSheetEditor() {
   const [dockTab, setDockTab] = useState('properties')   // D2: pestanya activa del dock dret
   const [importMode, setImportMode] = useState(null)     // IMP-1: null | 'image' | 'garment' (panell d'import al dock)
   const [importFile, setImportFile] = useState(null)     // IMP-2: fitxer triat (no s'insereix fins a "Inserir")
+  const [importNavOpen, setImportNavOpen] = useState(false)   // C5.3: AssetNavigator com a font "FTT"
+  const [importNav, setImportNav] = useState({ tab: 'models', cust: null, any: null, temp: null, modelId: null, gtId: null, gtiId: null })
   const [importDrag, setImportDrag] = useState(false)    // IMP-2: ressaltat de la drop zone
   const [ratioLocked, setRatioLocked] = useState(true)
   const [shiftHeld, setShiftHeld] = useState(false)   // S1: Shift premuda → resize proporcional
@@ -3313,6 +3323,41 @@ export default function TechSheetEditor() {
     e.preventDefault(); setImportDrag(false)
     onImportPick(e.dataTransfer.files?.[0])
   }
+
+  // S03c · C5.3 — l'ALTRA font del panell d'import: el tenant sencer, no la màquina local.
+  // Aquí NO hi ha `usar-al-model`: no vinculem el fitxer, n'importem els BYTES (un SVG es
+  // converteix en paths editables; una imatge s'encasta com a dataURL). El document no en
+  // guarda cap referència, de manera que no hi ha sobirania a defensar — al contrari que a C5.2.
+  const importarDelTenant = async (f) => {
+    if (!locked || !f) return
+    setImportNavOpen(false)
+    const nom = (f.nom_fitxer || '').toLowerCase()
+    // Un ItemFitxer porta `garment_type_item`; un ModelFitxer, `model`. Cada mon te el seu
+    // endpoint de descarrega autenticat (D13); `url_extern` viu fora i no li enviem el token.
+    const extern = !!f.url_extern
+    const mon = f.garment_type_item != null ? 'item-fitxers' : 'model-fitxers'
+    const url = extern ? f.url_extern : `${API}/api/v1/${mon}/${f.id}/download/`
+    try {
+      const r = await fetch(url, extern ? undefined : { headers: uploadHeaders })
+      if (!r.ok) throw new Error('fetch')
+      if (nom.endsWith('.svg')) {
+        await importFlatSvgText(await r.text())     // SVG → path editable, com el camí local
+      } else if (nom.endsWith('.dxf')) {
+        flash(t('tech_sheet.import_dxf_soon'))      // el motor DXF segueix pendent
+      } else {
+        const blob = await r.blob()
+        const dataURL = await new Promise((res, rej) => {
+          const fr = new FileReader()
+          fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('fr'))
+          fr.readAsDataURL(blob)
+        })
+        addImageFromDataURL(dataURL)
+      }
+      closeImport()
+    } catch {
+      flash(t('tech_sheet.flat_import_error'))
+    }
+  }
   const ribbonTabs = [
     { id: 'file', label: t('tech_sheet.ribbon_file') },
     { id: 'page', label: t('tech_sheet.ribbon_page') },
@@ -3598,6 +3643,18 @@ export default function TechSheetEditor() {
             onInsert={(f) => { addModelFitxer(f); setFilePicker(false) }}
           />
         )}
+        {importNavOpen && (
+          <AssetNavigator
+            mode="files"
+            filterTipus={TIPUS_GEOMETRIA}
+            pickable={(f) => GEOMETRIA_INSERIBLE.test(f.nom_fitxer || '')}
+            nav={importNav}
+            onNav={setImportNav}
+            onClose={() => setImportNavOpen(false)}
+            onPick={importarDelTenant}
+            actionLabel={t('tech_sheet.import_btn_insert')}
+          />
+        )}
         {/* ── Paleta d'eines vertical (C2) — 6 categories + flyouts estil Adobe (PAL-1) ── */}
         {locked && (
           <div style={{ width: 46, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', overflowX: 'visible', padding: '8px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
@@ -3822,10 +3879,19 @@ export default function TechSheetEditor() {
                     style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 6px', border: `1px solid ${COL.gold}`, borderRadius: 6, background: COL.goldPale, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'default' }}>
                     <i className="ti ti-folder" /> {t('tech_sheet.import_from_local')}
                   </button>
-                  <button type="button" disabled title={t('tech_sheet.import_soon')}
-                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 6px', border: `1px solid ${COL.border}`, borderRadius: 6, background: 'transparent', color: COL.textMuted, fontFamily: FONT, fontSize: 'var(--fs-body)', opacity: 0.5, cursor: 'default' }}>
-                    <i className="ti ti-building-warehouse" /> {t('tech_sheet.import_from_ftt')} ({t('tech_sheet.import_soon')})
-                  </button>
+                  {/* C5.3 — font "FTT": el tenant sencer. Nomes per a `garment`: en mode `image`
+                      no hi ha cap tipus de fitxer que el filtre de geometria sapiga oferir. */}
+                  {importMode === 'garment' ? (
+                    <button type="button" onClick={() => setImportNavOpen(true)}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 6px', border: `1px solid ${COL.gold}`, borderRadius: 6, background: 'transparent', color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer' }}>
+                      <i className="ti ti-building-warehouse" /> {t('tech_sheet.import_from_ftt')}
+                    </button>
+                  ) : (
+                    <button type="button" disabled title={t('tech_sheet.import_soon')}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 6px', border: `1px solid ${COL.border}`, borderRadius: 6, background: 'transparent', color: COL.textMuted, fontFamily: FONT, fontSize: 'var(--fs-body)', opacity: 0.5, cursor: 'default' }}>
+                      <i className="ti ti-building-warehouse" /> {t('tech_sheet.import_from_ftt')} ({t('tech_sheet.import_soon')})
+                    </button>
+                  )}
                 </div>
 
                 {/* Drop zone (origen local) */}
