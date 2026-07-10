@@ -1910,7 +1910,9 @@
       "save_and_back": "Save and go back",
       "seal_error": "Error sealing the session.",
       "uploading": "Uploading…",
-      "view_measures": "View / edit table"
+      "view_measures": "View / edit table",
+      "partial_close": "Saved {{done}} of {{total}} pieces. The session was not closed: review it before leaving.",
+      "not_sealed": "The session could not be closed: some pieces are unresolved. Resolve them and save again."
     },
     "convocatoria": "Fitting call",
     "group": {

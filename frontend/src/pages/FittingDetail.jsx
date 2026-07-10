@@ -194,26 +194,40 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
     setBusy(true); setError(null)
     const toClose = (grids || []).filter(hasSaveChanges)
     ;(async () => {
+      let done = 0
       if (toClose.length) {
         setProgress({ done: 0, total: toClose.length })
-        let done = 0
         for (const g of toClose) {
           try {
             await pieceFittings.close(g.id)
             done += 1; setProgress({ done, total: toClose.length })
           } catch (e) {
-            setError(t('fitting.save.save_error', { piece: g.model?.codi || g.id }))
+            // P3 — tancament PARCIAL: hi ha peces ja tancades (i GradingVersions v+1 creades) i la
+            // sessió segueix oberta. No hi ha rollback ni reintent: s'informa i NO es navega.
+            setError(done
+              ? t('fitting.save.partial_close', { done, total: toClose.length })
+              : t('fitting.save.save_error', { piece: g.model?.codi || g.id }))
             setBusy(false); return
           }
         }
       }
+      let estat = null
       try {
-        await fittingSessions.seal(session.id)   // D4: segellat independent (no toca fase)
+        const res = await fittingSessions.seal(session.id)   // D4: segellat independent (no toca fase)
+        estat = res.data?.estat
       } catch (e) {
         setError(t('fitting.save.seal_error'))
         setBusy(false); return
       }
-      setBusy(false); onSaved()
+      setBusy(false)
+      // P3 — el segellat pot ser un no-op silenciós: amb un GarmentSet, `_seal_session` retorna
+      // sense tancar si queden peces sense resoldre. Abans es navegava igual i l'usuari marxava
+      // creient que havia gravat. Ara es comprova l'estat REAL que retorna `seal`.
+      if (estat !== 'Tancada') {
+        setError(t('fitting.save.not_sealed'))
+        return
+      }
+      onSaved()
     })()
   }
 
@@ -524,6 +538,10 @@ export default function FittingDetail() {
       .finally(() => setLoading(false))
   }, [loadSession])
 
+  // P3 — sortida EXPLÍCITA. Abans era `navigate(-1)`: depenia de l'historial del navegador
+  // (podia tornar a qualsevol lloc) i no transportava cap context.
+  const sortida = useCallback(() => navigate('/fittings'), [navigate])
+
   const reloadGrid = useCallback(() => {
     if (!activePieceId) { setGrid(null); return Promise.resolve() }
     setGridLoading(true)
@@ -663,7 +681,7 @@ export default function FittingDetail() {
           session={session}
           pieces={pieces}
           onBack={() => setReviewMode(false)}
-          onSaved={() => navigate(-1)}
+          onSaved={sortida}
           onDone={() => { loadSession().then(reloadGrid) }}
           onShowGrid={() => setReviewMode(false)}
           onCreatePiece={createPiece}
@@ -680,7 +698,7 @@ export default function FittingDetail() {
               session={session}
               pieces={pieces}
               onBack={() => setReviewMode(false)}
-              onSaved={() => navigate(-1)}
+              onSaved={sortida}
               onDone={() => { loadSession().then(reloadGrid) }}
               onShowGrid={() => setReviewMode(false)}
               onCreatePiece={createPiece}

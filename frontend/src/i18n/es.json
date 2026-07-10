@@ -1910,7 +1910,9 @@
       "save_and_back": "Guardar y volver",
       "seal_error": "Error al cerrar la sesión.",
       "uploading": "Subiendo…",
-      "view_measures": "Ver / editar tabla"
+      "view_measures": "Ver / editar tabla",
+      "partial_close": "Se han grabado {{done}} de {{total}} piezas. La sesión no se ha cerrado: revísala antes de salir.",
+      "not_sealed": "La sesión no se ha podido cerrar: quedan piezas sin resolver. Resuélvelas y vuelve a grabar."
     },
     "convocatoria": "Convocatoria",
     "group": {

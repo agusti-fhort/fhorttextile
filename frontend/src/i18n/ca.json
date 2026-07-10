@@ -1910,7 +1910,9 @@
       "save_and_back": "Gravar i tornar",
       "seal_error": "Error segellant la sessió.",
       "uploading": "Pujant…",
-      "view_measures": "Veure / editar taula"
+      "view_measures": "Veure / editar taula",
+      "partial_close": "S'han gravat {{done}} de {{total}} peces. La sessió no s'ha tancat: revisa-la abans de sortir.",
+      "not_sealed": "La sessió no s'ha pogut tancar: queden peces sense resoldre. Resol-les i torna a gravar."
     },
     "convocatoria": "Convocatòria",
     "group": {
