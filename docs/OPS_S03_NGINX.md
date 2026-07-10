@@ -23,6 +23,7 @@ Dins el `server { server_name staging.fhorttextile.tech; ... }`, al costat del `
     # `internal` = inabastable des de fora; només Django el pot invocar per capçalera.
     location /protected-media/ {
         internal;
+        auth_basic off;
         alias /var/www/ftt-staging/backend/media/;
     }
 ```
@@ -32,6 +33,14 @@ Aplicar amb:
 ```bash
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+## Nota — `auth_basic off` al bloc `/protected-media/`
+Descobert 2026-07-09 provant el flux real (no per lectura de codi): l'`auth_basic` de
+nivell servidor s'aplica també a les subrequests internes generades per `X-Accel-Redirect`,
+tret que s'apagui explícitament al bloc. Sense aquesta línia, la descàrrega gated donava
+401 encara que Django emetés la capçalera correcta. A PROD no hi ha `auth_basic`, per tant
+aquesta línia hi és inofensiva (apaga una cosa que no existeix) — es manté per si algun
+entorn futur en té.
 
 ## Sobre el `location /media/` existent
 
