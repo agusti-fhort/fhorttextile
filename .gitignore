@@ -10,7 +10,7 @@ frontend/.env
 frontend/.env.development
 backoffice/dist/
 backoffice/dist/
-backoffice/
+frontend-backoffice/dist/
 ESTAT_PROJECTE.md
 ESTAT_BACKOFFICE.md
 
