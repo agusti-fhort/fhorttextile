@@ -497,6 +497,24 @@ class ItemBaseMeasurement(models.Model):
 
 
 class GradingRuleSet(models.Model):
+    # PROVINENÇA-LITE (llei PROVINENÇA, DECISIONS.md:348 — versió mínima; el document d'origen i
+    # el snapshot dels values_by_size queden diferits amb nom). Sense aquest eix, res distingeix un
+    # ruleset canònic d'un derivat d'un run de client, i una còpia cega a un tenant nou violaria
+    # RUN-CLIENT (DECISIONS.md:304, la regla com a secret industrial).
+    # NULL = "no classificat": l'estat de les files anteriors al camp. El tanca el backfill
+    # (`manage.py set_grading_origen`), que és decisió humana, no automàtica.
+    ORIGEN_CANONICAL = 'CANONICAL'    # catàleg propi de FHORT: viatja a un tenant nou
+    ORIGEN_CLIENT_RUN = 'CLIENT_RUN'  # derivat d'un run/fitxa d'un client: MAI viatja
+    ORIGEN_IMPORT = 'IMPORT'          # entrat des d'una font externa, sense run de client
+    ORIGEN_CHOICES = [
+        (ORIGEN_CANONICAL, 'Canònic FHORT'),
+        (ORIGEN_CLIENT_RUN, 'Derivat de run de client'),
+        (ORIGEN_IMPORT, 'Importat'),
+    ]
+    origen = models.CharField(
+        max_length=12, choices=ORIGEN_CHOICES, null=True, blank=True,
+        help_text="Procedència. NULL = no classificat (anterior a la llei PROVINENÇA).")
+
     nom = models.CharField(max_length=120)
     garment_group = models.ForeignKey(
         GarmentGroup,
