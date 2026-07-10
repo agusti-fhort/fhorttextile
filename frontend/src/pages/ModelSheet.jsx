@@ -285,6 +285,33 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     return () => { cancelled = true }
   }, [fittingSessionParam])
 
+  // Sprint Y — MATERIALITZACIÓ en obrir (decisió 6): si s'entra amb ?fitting_session= però SENSE
+  // task_id (fulla de convocatòria / redirect de /fittings/<id>), s'obre la tasca size_check lligada
+  // a la sessió (Y1: FK + obre la sessió Programada) i s'entra en mode Mesures pel MATEIX mecanisme
+  // que J1b (activeTaskRef per pausar en sortir). Amb task_id ja present, mana J1b i això no dispara.
+  const autoSessionRef = useRef(false)
+  useEffect(() => {
+    if (autoSessionRef.current || loading) return
+    if (activeTab === 'Mesures' && fittingSessionParam && !taskParam) {
+      autoSessionRef.current = true
+      models.openTask(parseInt(id), 'size_check', fittingSessionParam)
+        .then(res => {
+          const tid = res.data.task_id
+          setEditTaskId(tid)
+          activeTaskRef.current = tid
+          setEditing('Mesures')
+        })
+        .catch(() => setFeedback({ type: 'err', text: t('model_sheet.open_task_err') }))
+    }
+  }, [loading, activeTab, fittingSessionParam, taskParam, id, t])
+
+  // Sprint Y — retorn després de gravar/descartar la sessió (Y5): a la fulla del grup si ve d'una
+  // convocatòria; si no, a la llista de fittings.
+  const onSessionSaved = useCallback(() => {
+    const conv = fittingSession?.convocatoria
+    navigate(conv ? `/fittings/convocatoria/${conv}` : '/fittings')
+  }, [fittingSession, navigate])
+
   // BLOC 1 — pom via URL ?mode=entry (WorkPlan/menú "Definició POM"): la tasca ve En curs però SENSE task_id
   // a la URL, així que el ModelSheet no la coneixia → quedava InProgress orfe (GAP P3 pom). La registrem pel
   // MATEIX punt comú que el botó intern: enterEdit('Mesures','pom') (openTask idempotent → activeTaskRef),
@@ -497,6 +524,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 source={fittingSession ? fittingSource : null}
                 sourceCtx={fittingSession ? { fittingSession } : null}
                 lockRules={!!fittingSession}
+                onSessionSaved={fittingSession ? onSessionSaved : null}
                 onFeedback={fb => setFeedback(fb)} onResolved={exitEdit} onBack={exitEdit} />
             ) : (
               <CheckMeasureEditor model={model} readOnly />

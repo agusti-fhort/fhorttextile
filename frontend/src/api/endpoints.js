@@ -45,7 +45,9 @@ export const models = {
   // Capa de Projecte: definir tasques d'un model i avançar fase (gate del responsable).
   defineTasks: (id, data) => client.post(`/api/v1/models/${id}/define-tasks/`, data),   // {task_type_ids:[...]}
   // Porta-menú: obre una tasca concreta del model (crea-si-falta + auto-assign + En curs). {code}
-  openTask: (id, code) => client.post(`/api/v1/models/${id}/open-task/`, { code }),
+  // Sprint Y — fittingSessionId opcional: lliga la tasca a la sessió (FK) i obre la sessió Programada.
+  openTask: (id, code, fittingSessionId = null) =>
+    client.post(`/api/v1/models/${id}/open-task/`, { code, ...(fittingSessionId ? { fitting_session_id: fittingSessionId } : {}) }),
   // Acte lleuger de gènesi POM: base+nomenclatura+regles i tanca la tasca pom. No propaga.
   gravarPom: (id, data) => client.post(`/api/v1/models/${id}/gravar-pom/`, data),
   gate: (id, data) => client.post(`/api/v1/models/${id}/gate/`, data),                   // {to_phase} o {to_phases:[...]}

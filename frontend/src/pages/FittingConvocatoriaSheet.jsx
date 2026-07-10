@@ -62,8 +62,15 @@ export default function FittingConvocatoriaSheet() {
     ? `${primera.data}${primera.fase ? ` · ${primera.fase}` : ''} · ${t('fitting.sheet.n_models', { n: sessions.length })}`
     : ''
 
-  // Entrar a una sessió portant la convocatòria: en gravar, es torna EXACTAMENT aquí (P3b).
-  const entrar = (s) => navigate(`/fittings/${s.id}`, { state: { convocatoria: uuid } })
+  // Sprint Y — obrir una sessió = obrir la TASCA de presa de mesures a la superfície Mesures amb
+  // context de sessió (ModelSheet materialitza la tasca i, en gravar, torna a aquesta fulla via la
+  // convocatòria de la pròpia sessió). Sessions segellades (Tancada/Anullada) → split de lectura de
+  // FittingDetail (Y7 el conserva).
+  const SEALED = ['Tancada', 'Anullada']
+  const obrir = (s) => {
+    if (SEALED.includes(s.estat)) { navigate(`/fittings/${s.id}`); return }
+    navigate(`/models/${s.model}?tab=Mesures&fitting_session=${s.id}`)
+  }
 
   return (
     <div style={{ padding: '1.5rem 2rem' }}>
@@ -93,7 +100,7 @@ export default function FittingConvocatoriaSheet() {
             {sessions.map(s => {
               const wps = wpByModel[s.model] || []
               return (
-                <tr key={s.id} onClick={() => entrar(s)} style={{ cursor: 'pointer', borderTop: '1px solid var(--border)' }}>
+                <tr key={s.id} onClick={() => obrir(s)} style={{ cursor: 'pointer', borderTop: '1px solid var(--border)' }}>
                   <td style={{ padding: '10px 12px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{hora(s)}</td>
                   <td style={{ padding: '10px 12px', fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
                     {s.target?.label || `#${s.model}`}
