@@ -7,12 +7,15 @@ cadena hi ha EXACTAMENT UN registre amb `is_current=True` (el cap). `save_model_
 """
 
 import hashlib
+import logging
 import mimetypes
 import os
 
 from django.db import transaction
 
 from .models import ItemFitxer, ModelFitxer
+
+logger = logging.getLogger(__name__)
 
 # D13 — descàrrega signada. Font única dels salts i del TTL: hi beuen els serializers (qui
 # signen) i els ViewSets (qui verifiquen). Canviar un salt invalida tots els enllaços vius.
@@ -169,6 +172,30 @@ def save_item_file(item, file, *, versio_anterior=None, tipus=None, nom=None):
         versio_anterior.save(update_fields=['is_current'])
 
     return fitxer
+
+
+def delete_fitxer_bytes(fitxer):
+    """Esborra els bytes d'un ModelFitxer O d'un ItemFitxer. Font única, com `serve_fitxer`.
+
+    `mixins.DestroyModelMixin` fa `instance.delete()`, i des de Django 1.3 el `FileField` no
+    s'engancha a `post_delete` → esborrar la fila deixa els bytes orfes al disc. Els dos
+    ViewSets de fitxers hi criden des de `perform_destroy`.
+
+    Segueix el precedent d'`extraction_views.py:66-75`: guard `exists()` i `try/except` que
+    **mai bloqueja l'esborrat de la fila**. Un fitxer ja absent del disc (fila fantasma) no
+    ha d'impedir netejar la BD — és exactament el cas que volem poder resoldre.
+    """
+    from django.core.files.storage import default_storage
+
+    name = fitxer.fitxer.name if fitxer.fitxer else ''
+    if not name:
+        return
+    try:
+        if default_storage.exists(name):
+            default_storage.delete(name)
+    except Exception:
+        # No es propaga: la fila s'ha de poder esborrar encara que el disc falli.
+        logger.warning("Bytes no esborrats per a '%s'", name, exc_info=True)
 
 
 def serve_fitxer(fitxer, *, as_attachment=True):

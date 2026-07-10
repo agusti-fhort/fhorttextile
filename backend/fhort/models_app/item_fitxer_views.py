@@ -21,8 +21,8 @@ from fhort.tasks.models import GarmentTypeItem
 from .models import ItemFitxer, Model
 from .serializers import ItemFitxerSerializer
 from .services_fitxers import (DOWNLOAD_TTL, ITEM_DOWNLOAD_SALT, UploadRejected,
-                               get_version_chain, save_item_file, serve_fitxer,
-                               validate_upload)
+                               delete_fitxer_bytes, get_version_chain, save_item_file,
+                               serve_fitxer, validate_upload)
 
 
 class ItemFitxerViewSet(mixins.CreateModelMixin,
@@ -48,6 +48,11 @@ class ItemFitxerViewSet(mixins.CreateModelMixin,
         p = HasCapability()
         self.required_capability = CONFIGURE
         return [p]
+
+    def perform_destroy(self, instance):
+        """Esborra els bytes abans de la fila: `instance.delete()` sol deixa orfes al disc."""
+        delete_fitxer_bytes(instance)
+        instance.delete()
 
     def create(self, request, *args, **kwargs):
         """POST /api/v1/item-fitxers/  (multipart: garment_type_item, fitxer, [tipus], [nom],

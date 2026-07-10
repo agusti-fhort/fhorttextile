@@ -155,6 +155,12 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
     ordering_fields = ['data_pujada']
     ordering = ['-data_pujada']
 
+    def perform_destroy(self, instance):
+        """Esborra els bytes abans de la fila: `instance.delete()` sol deixa orfes al disc."""
+        from .services_fitxers import delete_fitxer_bytes
+        delete_fitxer_bytes(instance)
+        instance.delete()
+
     @action(detail=True, methods=['get'])
     def versions(self, request, pk=None):
         """Cadena de versions completa (read-only) del fitxer, ordenada per versio."""
