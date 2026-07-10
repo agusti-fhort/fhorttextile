@@ -77,6 +77,30 @@ Una peça és **verda** i l'agent pot continuar SOLAMENT si TOTS els controls ap
 Si **tot** verd → continua sol. Si **qualsevol** vermell/bandera → s'atura, reporta
 `fitxer:línia` + quin control + per què, i ESPERA el CTO. No construeix sobre una peça no-verda.
 
+### 2.1 El verd acaba al SERVEI VIU, no al `check` (incident 2026-07-10)
+
+**Tota cadena Patró B que toqui backend acaba amb restart del servei i un smoke contra el
+servei viu.** `manage.py check` corre en un procés fresc: valida el codi, però **no** valida
+l'ordre d'import de gunicorn ni l'estat del procés que ja corre.
+
+Per què importa, amb el cas real: S03b va deixar els 6 commits verds (`check` net a cadascun,
+comprovat després un per un). Però els workers de gunicorn havien arrencat **76 minuts abans**
+que la classe `ItemFitxer` existís. L'URLconf de Django es carrega **mandrosament, a la primera
+petició**; quan aquesta va arribar (11 hores després), el worker va llegir del disc el
+`services_fitxers.py` NOU contra el mòdul `models` VELL que tenia en memòria → `ImportError`.
+Codi correcte, procés enverinat. Verificar contra un servei que encara corre codi vell és
+**verificar el passat**.
+
+Corol·lari: si l'agent no pot reiniciar (regla de "MAI deploy"), el report ha de dir-ho
+EXPLÍCITAMENT com a acció pendent del CTO, no donar la peça per verificada.
+
+### 2.2 En verificació, tot endpoint mutant va dins `atomic()` amb rollback (incident 2026-07-09)
+
+**Un endpoint és mutant fins que es demostri el contrari**, encara que sembli idempotent.
+`POST /open-task/` és idempotent en el seu RESULTAT, però no en els seus EFECTES: obre un
+`TimerEntrada` i escriu una `TaskTransition` cada vegada. Cridar-lo en una sessió de verificació
+fora de transacció va deixar una tasca `InProgress` amb un timer obert a staging.
+
 ---
 
 ## 3. Regles dures (passi el que passi, a tots els patrons)
@@ -97,6 +121,11 @@ Si **tot** verd → continua sol. Si **qualsevol** vermell/bandera → s'atura, 
 
 ## 4. Aprenentatges concrets (de la pràctica, s'amplien)
 
+- **Qualsevol `mkdir` dins `media/` el segueix un `chown www-data:www-data`.** gunicorn corre com
+  a `www-data`; un subdirectori creat per root fa que tota escriptura hi peti amb
+  `PermissionError` → 500 silenciós a l'upload. Ha passat dos cops (logos del tenant; i
+  `move_media_tenant --apply` corrent com a root, que va deixar `media/<schema>/` sencer de root
+  i va trencar TOTA escriptura a media durant 11 h sense que cap `check` ho veiés).
 - **Els controls funcionen:** a D-3 el verificador va VETAR la peça 1 (un comentari deia "cap
   automatisme" però `services_c.py:91` fa Pending→Dev). Es va corregir dins scope → VERD. Si
   aturen un comentari imprecís, aturen un error real.
