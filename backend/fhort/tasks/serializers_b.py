@@ -24,7 +24,7 @@ class ModelTaskSerializer(serializers.ModelSerializer):
                   'status', 'origen', 'assignee', 'order', 'created_at', 'updated_at',
                   'started_at', 'finished_at', 'estimated_minutes', 'rectifications',
                   'planned_start', 'planned_end', 'planned_locked',
-                  'work_order', 'off_recipe']
+                  'work_order', 'off_recipe', 'fitting_session']
         # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
         # origen el fixa el backend en crear (prevista per defecte; ad_hoc des de l'arbre global,
         # Sprint 4) → read-only per al client.
@@ -36,7 +36,7 @@ class ModelTaskSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at', 'origen',
                             'started_at', 'finished_at', 'estimated_minutes',
                             'planned_start', 'planned_end', 'planned_locked',
-                            'work_order', 'off_recipe']
+                            'work_order', 'off_recipe', 'fitting_session']
 
     def get_rectifications(self, obj):
         return rectification_count(obj)

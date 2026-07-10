@@ -567,6 +567,28 @@ def open_model_task_view(request, model_id):
         cleanup_queue_order([old_assignee_id, profile.id], [task.model_id])
         recompute_for_technicians([old_assignee_id, profile.id])
     task.refresh_from_db()
+
+    # Sprint Y — context de sessió de fitting: la convocatòria (contenidor) llança aquesta tasca de
+    # presa de mesures. Opcional i additiu: sense `fitting_session_id`, el camí del check esporàdic
+    # queda idèntic. Amb ell: valida pertinença al model, escriu el FK (punter MUTABLE: reapunta si ja
+    # en tenia un altre, decisió 4) i, si la sessió és Programada, l'obre (Programada→Oberta).
+    fitting_session_id = (request.data or {}).get('fitting_session_id')
+    if fitting_session_id:
+        from fhort.fitting.models import FittingSession
+        from fhort.fitting.services import open_session
+        try:
+            fs = FittingSession.objects.get(pk=fitting_session_id)
+        except FittingSession.DoesNotExist:
+            return Response({'error': 'Sessió de fitting no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+        if fs.model_id != model.id:
+            return Response({'error': 'La sessió de fitting no és del mateix model que la tasca.',
+                             'code': 'session_model_mismatch'}, status=http_status.HTTP_400_BAD_REQUEST)
+        if task.fitting_session_id != fs.id:
+            task.fitting_session = fs
+            task.save(update_fields=['fitting_session', 'updated_at'])
+        if fs.estat == 'Programada':
+            open_session(fs.id)
+
     # F4 — gate SUPER SUAU: informem de quins camps de config falten (font única F1), però NO bloquegem
     # l'obertura de la tasca. El Watchpoint persistent (F2/F3) ja mostra l'avís accionable; el tècnic decideix.
     from fhort.models_app.services import model_config_missing
