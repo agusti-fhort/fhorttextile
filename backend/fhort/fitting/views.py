@@ -452,10 +452,23 @@ class PieceFittingViewSet(mixins.RetrieveModelMixin,
 
     @action(detail=True, methods=['post'])
     def close(self, request, pk=None):
+        # XB: reobertura explícita d'un grading segellat (aprovada). Default False →
+        # comportament actual intacte. La UI que activa el flag pertany al Sprint Y
+        # (ancorada a la tasca); aquí només s'exposa el contracte.
+        allow_reopen = bool(request.data.get('allow_reopen_sealed', False))
         try:
-            result = services.close_piece_fitting(int(pk), user_profile_id=_profile_id(request))
+            result = services.close_piece_fitting(
+                int(pk), user_profile_id=_profile_id(request),
+                allow_reopen_sealed=allow_reopen,
+            )
         except ValueError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            # El guard D-1 (motor, intocable) llança ValueError nu quan la GradingVersion
+            # activa està aprovada. El codi de client s'afegeix AQUÍ, a la view, no al motor:
+            # 'grading_sealed' permet al client oferir la reobertura sense parsejar el text.
+            body = {'error': str(e)}
+            if 'segellada a producció' in str(e):
+                body['code'] = 'grading_sealed'
+            return Response(body, status=status.HTTP_400_BAD_REQUEST)
         return Response(result)
 
     @action(detail=True, methods=['post'])

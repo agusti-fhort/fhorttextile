@@ -539,7 +539,7 @@ export const fittingSessions = {
 export const pieceFittings = {
   get: (id) => client.get(`/api/v1/piece-fittings/${id}/`),
   setGate: (id, resultat, motiu = '') => client.post(`/api/v1/piece-fittings/${id}/set-gate/`, { resultat, motiu }),
-  close: (id) => client.post(`/api/v1/piece-fittings/${id}/close/`),
+  close: (id, data) => client.post(`/api/v1/piece-fittings/${id}/close/`, data || {}),
   // 5B.6-B3 — revert atòmic de reals a l'estat d'obertura (valor_real := valor_teoric).
   discard: (id) => client.post(`/api/v1/piece-fittings/${id}/discard/`),
 }
