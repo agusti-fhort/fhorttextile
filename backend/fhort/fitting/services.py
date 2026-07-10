@@ -439,59 +439,65 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
 
     override_changed = False
 
-    # PEÇA 4 / B3: la consolidació de la talla base a BaseMeasurement viu al helper
-    # consolidate_base_from_fitting (compartit amb la propagació conscient). Les talles
-    # no-base s'ignoren (els breaks per talla van per ModelGradingOverride). Welford i el
-    # versionat es fan aquí sobre les línies consolidades.
-    consolidated = consolidate_base_from_fitting(pf, auth_user=auth_user)
-    changed = len(consolidated)
-    base_changed = bool(consolidated)
+    # XA (sprint fonaments-de-gravat): tot el cos escriptor —consolidació a BaseMeasurement
+    # (+ senyal F1), Welford, versionat funcional (guard D-1) i seal— dins UNA transacció.
+    # Si el guard D-1 (o qualsevol pas posterior) llança, el rollback desfà BaseMeasurement,
+    # MeasurementChangeLog i el Welford junts: cap escriptura residual. El ValueError propaga
+    # fora del `with` (rollback) i la view el converteix en 400. Cap reordenació interna.
+    with transaction.atomic():
+        # PEÇA 4 / B3: la consolidació de la talla base a BaseMeasurement viu al helper
+        # consolidate_base_from_fitting (compartit amb la propagació conscient). Les talles
+        # no-base s'ignoren (els breaks per talla van per ModelGradingOverride). Welford i el
+        # versionat es fan aquí sobre les línies consolidades.
+        consolidated = consolidate_base_from_fitting(pf, auth_user=auth_user)
+        changed = len(consolidated)
+        base_changed = bool(consolidated)
 
-    for line in consolidated:
-        # Welford (keyed by codi_client within the tenant).
-        if model.garment_type_id:
-            try:
-                from fhort.pom.services import update_client_profile
-                update_client_profile(
-                    codi_client=model.codi_client,
-                    garment_type_id=model.garment_type_id,
-                    pom_id=line.pom_id,
-                    size=line.size_label,
-                    value_cm=line.valor_real,
-                )
-            except Exception as e:
-                logger.warning(f"Welford update failed: {e}")
+        for line in consolidated:
+            # Welford (keyed by codi_client within the tenant).
+            if model.garment_type_id:
+                try:
+                    from fhort.pom.services import update_client_profile
+                    update_client_profile(
+                        codi_client=model.codi_client,
+                        garment_type_id=model.garment_type_id,
+                        pom_id=line.pom_id,
+                        size=line.size_label,
+                        value_cm=line.valor_real,
+                    )
+                except Exception as e:
+                    logger.warning(f"Welford update failed: {e}")
 
-    new_version_number = None
-    if changed:
-        # PEÇA 1: versionat funcional centralitzat al helper (guard D-1 + desactiva actives +
-        # crea v+1 + measurements_version++ si base_changed + re-propaga). Mateix comportament
-        # que el bloc inline anterior; ara compartit amb resolve_size_check i la propagació
-        # conscient (PEÇA 2).
-        from fhort.pom.services import bump_grading_version_and_generate
-        new_version = bump_grading_version_and_generate(
-            sf.pk,
-            base_changed=base_changed,
-            profile_id=user_profile_id,
-            allow_reopen_sealed=allow_reopen_sealed,
-            nom=f'Fitting sessió {pf.session_id}',
-            reopen_context=f'PieceFitting {pf.pk}',
-        )
-        new_version_number = new_version.version_number
+        new_version_number = None
+        if changed:
+            # PEÇA 1: versionat funcional centralitzat al helper (guard D-1 + desactiva actives +
+            # crea v+1 + measurements_version++ si base_changed + re-propaga). Mateix comportament
+            # que el bloc inline anterior; ara compartit amb resolve_size_check i la propagació
+            # conscient (PEÇA 2).
+            from fhort.pom.services import bump_grading_version_and_generate
+            new_version = bump_grading_version_and_generate(
+                sf.pk,
+                base_changed=base_changed,
+                profile_id=user_profile_id,
+                allow_reopen_sealed=allow_reopen_sealed,
+                nom=f'Fitting sessió {pf.session_id}',
+                reopen_context=f'PieceFitting {pf.pk}',
+            )
+            new_version_number = new_version.version_number
 
-        # Brain stub (decoupled; no propagation yet).
-        from fhort.fitting.brain import on_fitting_measurement_changed
-        on_fitting_measurement_changed(
-            piece_fitting_id=pf.pk,
-            model_id=model.pk,
-            base_changed=base_changed,
-            new_grading_version_id=new_version.pk,
-        )
+            # Brain stub (decoupled; no propagation yet).
+            from fhort.fitting.brain import on_fitting_measurement_changed
+            on_fitting_measurement_changed(
+                piece_fitting_id=pf.pk,
+                model_id=model.pk,
+                base_changed=base_changed,
+                new_grading_version_id=new_version.pk,
+            )
 
-    # Segellat correcte: single-model tanca en gravar; GarmentSet espera que totes les
-    # peces estiguin resoltes (session_can_advance). _seal_session és idempotent i captura
-    # la durada real al tancament.
-    _seal_session(pf.session)
+        # Segellat correcte: single-model tanca en gravar; GarmentSet espera que totes les
+        # peces estiguin resoltes (session_can_advance). _seal_session és idempotent i captura
+        # la durada real al tancament.
+        _seal_session(pf.session)
 
     result = {
         'changed': changed,
