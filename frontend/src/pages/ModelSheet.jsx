@@ -5,11 +5,12 @@ import Feedback from '../components/ui/Feedback'
 import ActionsMenu from '../components/model/ActionsMenu'
 import WatchpointDrawer from '../components/model/WatchpointDrawer'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
+import { fittingSource } from '../components/model/measureSources'
 import MeasuresEntryPanel from '../components/model/MeasuresEntryPanel'
 import PropagatedEditor from './PropagatedEditor'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
-import { models, watchpoints, modelTasks } from '../api/endpoints'
+import { models, watchpoints, modelTasks, fittingSessions } from '../api/endpoints'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
@@ -95,6 +96,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // El task_id/session entrants (J1b) es plomaran a sobre d'aquest mateix mecanisme més endavant.
   const tabParam = sp.get('tab')
   const taskParam = sp.get('task_id')
+  // Sprint Y — context de sessió de fitting: ?tab=Mesures&task_id=&fitting_session= fa que el tab
+  // Mesures obri la font FITTING (eix base, regles read-only) en comptes del check. Es ploma sobre el
+  // MATEIX mecanisme de task_id (J1b), sense mecanisme paral·lel.
+  const fittingSessionParam = sp.get('fitting_session')
   // ?mode=entry → "Definició POM" via URL: obre el tab Mesures en mode ENTRADA (genesi/wizard) encara
   // que el model JA tingui mesures (l'usuari ve a definir/afegir POMs, no a consultar).
   const entryMode = sp.get('mode') === 'entry'
@@ -186,6 +191,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // mount/unmount de ruta (EscalatTask/ModelMeasurements) a enter/exit de mode.
   const [editing, setEditing] = useState(null)        // null | 'Mesures' | 'Escalat'
   const [editTaskId, setEditTaskId] = useState(null)
+  // Sprint Y — sessió de fitting resolta (quan hi ha ?fitting_session=): la font fitting la rep per
+  // sourceCtx. null = camí del check normal.
+  const [fittingSession, setFittingSession] = useState(null)
   // PEÇA 2 — guard 400: open-task deixa la tasca En curs (InProgress). Aquest ref recorda quina tasca està
   // VIVA per pausar-la EXACTAMENT UN COP. Sense ell, exitEdit i el cleanup de desmuntatge demanaven tots
   // dos transition→Paused sobre la mateixa tasca → la 2a era Paused→Paused, que ALLOWED rebutja amb 400
@@ -265,6 +273,17 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       setEditing('Mesures')
     }
   }, [loading, activeTab, taskParam])
+
+  // Sprint Y — resol la sessió de fitting entrant (?fitting_session=) perquè la font fitting la rebi.
+  // Es fa un cop; la sessió és el contenidor, el treball i el compta-temps van per la tasca (task_id).
+  useEffect(() => {
+    if (!fittingSessionParam) { setFittingSession(null); return }
+    let cancelled = false
+    fittingSessions.get(fittingSessionParam)
+      .then(r => { if (!cancelled) setFittingSession(r.data) })
+      .catch(() => { if (!cancelled) setFittingSession(null) })
+    return () => { cancelled = true }
+  }, [fittingSessionParam])
 
   // BLOC 1 — pom via URL ?mode=entry (WorkPlan/menú "Definició POM"): la tasca ve En curs però SENSE task_id
   // a la URL, així que el ModelSheet no la coneixia → quedava InProgress orfe (GAP P3 pom). La registrem pel
@@ -472,7 +491,12 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
               </div>
             </div>
             {editing === 'Mesures' ? (
+              // Sprint Y — amb sessió de fitting resolta: font FITTING + lockRules (règim/deltes/nom
+              // read-only, preses editables). Sense sessió: font check per defecte, comportament idèntic.
               <CheckMeasureEditor model={model} readOnly={false} taskId={editTaskId}
+                source={fittingSession ? fittingSource : null}
+                sourceCtx={fittingSession ? { fittingSession } : null}
+                lockRules={!!fittingSession}
                 onFeedback={fb => setFeedback(fb)} onResolved={exitEdit} onBack={exitEdit} />
             ) : (
               <CheckMeasureEditor model={model} readOnly />

@@ -170,33 +170,132 @@ function RegleEditCell({ modelId, row, sizeRun, onFeedback }) {
   )
 }
 
-export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false, taskId = null }) {
+// FONT per defecte: el CHECK. Encapsula els 4 seams (load · buildGroups/buildRows · makeOnSave ·
+// buildLeadCols) reusant els sub-components d'aquest fitxer. El comportament és idèntic al d'abans
+// de Sprint Y; el component només l'orquestra a través de la font (cap `if (mode)` escampat).
+const checkSource = {
+  kind: 'check',
+  supportsResolve: true,
+  supportsReorder: true,
+
+  load(model, ctx) {
+    // CONSULTA: NO obre cap check (només llegeix el més recent). TREBALL: open idempotent.
+    const checkP = ctx.readOnly
+      ? sizeChecks.list({ model: model.id, ordering: '-created_at', page_size: 1 })
+          .then(r => { const rows = r.data?.results ?? r.data ?? []; return rows.length ? sizeChecks.get(rows[0].id).then(x => x.data) : null })
+          .catch(() => null)
+      : sizeChecks.open(model.id).then(r => r.data).catch(() => null)
+    return Promise.all([models.baseStages(model.id).then(r => r.data).catch(() => null), checkP])
+      .then(([stages, chk]) => {
+        if (!chk && !ctx.readOnly) ctx.onFeedback?.({ type: 'err', text: ctx.t('sizecheck.open_error') })
+        return { baseData: stages, check: chk }
+      })
+  },
+
+  buildGroups(raw, ctx) {
+    const stages = raw.baseData?.stages || []
+    return [{
+      key: 'base',
+      label: raw.baseData?.base_size || ctx.t('basestage.stage_measure'),
+      accent: true,
+      historyCols: stages.map((s, i) => ({ key: s.key, label: <StageLabel ctx={s.context} at={i === 0 ? null : s.at} first={i === 0} /> })),
+      activeLabel: ctx.t('sizecheck.col_real'),
+      trailCols: [{ key: 'dn', label: `${ctx.t('sizecheck.col_decision')} · ${ctx.t('sizecheck.col_note')}` }],
+    }]
+  },
+
+  buildRows(raw, ctx) {
+    const stages = raw.baseData?.stages || []
+    const lineByPom = {}
+    for (const l of (raw.check?.lines || [])) lineByPom[l.pom_id] = l
+    return (raw.baseData?.rows || []).map(r => {
+      const line = lineByPom[r.pom_id]
+      return {
+        pom_id: r.pom_id,
+        codi: r.nom_fitxa || r.pom_code,
+        pom_code: r.pom_code,
+        nom_en: r.nom_en, nom_local: r.nom_ca,
+        nom_fitxa: r.nom_fitxa, bm_id: r.base_measurement_id,
+        is_key: r.is_key,
+        logica: line?.logica, increment_base: line?.increment_base,
+        increment_break: line?.increment_break, talla_break_label: line?.talla_break_label,
+        tol_minus: line?.tol_minus, tol_plus: line?.tol_plus,
+        cells: { base: {
+          history: Object.fromEntries(stages.map(s => [s.key, (s.key in r.takes) ? r.takes[s.key] : null])),
+          active: line ? { lineId: line.id, value: line.valor_real ?? line.valor_teoric, baseValue: line.valor_teoric, tol: { minus: line.tol_minus, plus: line.tol_plus } } : null,
+          trail: { dn: line ? (ctx.readOnly ? <ReadOnlyDecisioNota line={line} /> : <DecisioNotaCell line={line} />) : null },
+        } },
+      }
+    })
+  },
+
+  makeOnSave() {
+    return (lineId, value) => sizeCheckLines.update(lineId, { valor_real: value })
+  },
+
+  onNomSave(bmId, value) {
+    return baseMeasurements.update(bmId, { nom_fitxa: value || null })
+  },
+
+  onReorder(model, orderedBmIds) {
+    return baseMeasurements.reorder(model.id, orderedBmIds)
+  },
+
+  // Règim: en CONSULTA (o lockRules), lectura (logica + etiqueta de regla). En TREBALL, la regla
+  // (delta + break) és EDITABLE — patrimoni viu del model (P3). Sprint Y: lockRules la posa en
+  // lectura sense fer read-only les preses (mode sessió de fitting sobre la font check no s'usa avui,
+  // però la branca és coherent amb la font fitting).
+  buildLeadCols(raw, ctx) {
+    const lockRegle = ctx.readOnly || ctx.lockRules
+    return [{
+      key: 'regim', label: ctx.t('fitting.grid.regime'), width: lockRegle ? 118 : 184,
+      render: (row) => (lockRegle ? (
+        <div>
+          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-main)' }}>{row.logica ?? '—'}</div>
+          {regleLabel(row, ctx.t) && (
+            <div style={{ fontSize: 'var(--fs-caption)', color: TEXT_2, whiteSpace: 'nowrap', marginTop: 1 }}>{regleLabel(row, ctx.t)}</div>
+          )}
+        </div>
+      ) : (
+        <RegleEditCell modelId={ctx.model.id} row={row} sizeRun={ctx.sizeRun} onFeedback={ctx.onFeedback} />
+      )),
+    }, {
+      key: 'tol', label: ctx.t('sizecheck.col_tolerance'), width: 72,
+      render: (row) => (
+        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>
+          {row.tol_minus != null ? `-${row.tol_minus}/+${row.tol_plus}` : '—'}
+        </span>
+      ),
+    }]
+  },
+}
+
+export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false, taskId = null, source = null, sourceCtx = null, lockRules = false }) {
   const { t } = useTranslation()
-  const [baseData, setBaseData] = useState(null)
-  const [check, setCheck] = useState(null)
+  const src = source || checkSource
+  const [raw, setRaw] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState(null)
   const [reschedule, setReschedule] = useState(null)
   const [reDate, setReDate] = useState('')
 
+  // Run de talles del model (per al desplegable "a partir de" del break de la regla).
+  const sizeRun = (model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean)
+  const ctx = { t, model, readOnly, lockRules, onFeedback, sizeRun, fittingSession: sourceCtx?.fittingSession }
+
   const load = useCallback(() => {
     setLoading(true)
-    // CONSULTA: NO obre cap check (només llegeix el més recent). TREBALL: open idempotent.
-    const checkP = readOnly
-      ? sizeChecks.list({ model: model.id, ordering: '-created_at', page_size: 1 })
-          .then(r => { const rows = r.data?.results ?? r.data ?? []; return rows.length ? sizeChecks.get(rows[0].id).then(x => x.data) : null })
-          .catch(() => null)
-      : sizeChecks.open(model.id).then(r => r.data).catch(() => null)
-    Promise.all([models.baseStages(model.id).then(r => r.data).catch(() => null), checkP])
-      .then(([stages, chk]) => {
-        setBaseData(stages); setCheck(chk)
-        if (!chk && !readOnly) onFeedback?.({ type: 'err', text: t('sizecheck.open_error') })
-      }).finally(() => setLoading(false))
-  }, [model.id, readOnly, onFeedback, t])
+    Promise.resolve(src.load(model, { t, readOnly, onFeedback, fittingSession: sourceCtx?.fittingSession }))
+      .then(r => setRaw(r))
+      .catch(() => { setRaw(null); onFeedback?.({ type: 'err', text: t('sizecheck.open_error') }) })
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.id, readOnly, src, sourceCtx?.fittingSession])
 
   useEffect(() => { load() }, [load])
 
+  const check = raw?.check || null
   const hasDescartades = (check?.lines || []).some(l => l.decisio === 'valor_descartat')
   const onResolveClick = (estat) => {
     if (estat === 'Acceptat') {
@@ -225,95 +324,44 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       .finally(() => setBusy(false))
   }
 
-  const onSave = useCallback((lineId, value) => sizeCheckLines.update(lineId, { valor_real: value }), [])
-  // Reordena els POM del model (DnD): desa l'ordre global i rellegeix. L'ordre es materialitza a Grading
-  // en propagar (totes les taules llegeixen order_by('ordre')).
-  const onReorder = useCallback((orderedBmIds) =>
-    baseMeasurements.reorder(model.id, orderedBmIds)
-      .then(() => load())
-      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.reorder_err') })), [model.id, load, onFeedback, t])
-  // P4 — autoria del nom a nivell MODEL: desa nom_fitxa de la BaseMeasurement (NO el POM tenant).
-  // Rellegeix en desar (mirall d'onReorder) perquè el prop modelName arribi actualitzat al NomCell i
-  // l'input no reverteixi al valor stale en perdre el focus.
+  // onSave el fa la font (check: PATCH size-check-line; fitting: despatx STEP/LINEAR). Depèn de raw
+  // (el fitting hi llegeix el mapa de règims). onNomSave/onReorder: comuns, delegats a la font i
+  // rellegint (mirall del comportament anterior). lockRules bloqueja el nom (mode sessió).
+  const onSave = useCallback((lineId, value) => (raw ? src.makeOnSave(raw, ctx)(lineId, value) : Promise.resolve()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [raw, src])
   const onNomSave = useCallback((bmId, value) =>
-    baseMeasurements.update(bmId, { nom_fitxa: value || null })
+    Promise.resolve(src.onNomSave?.(bmId, value))
       .then(() => load())
-      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.nom_save_err') })), [load, onFeedback, t])
+      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.nom_save_err') })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [src, load, onFeedback, t])
+  const onReorder = useCallback((orderedBmIds) =>
+    Promise.resolve(src.onReorder?.(model, orderedBmIds))
+      .then(() => load())
+      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.reorder_err') })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [src, model.id, load, onFeedback, t])
 
   if (loading) return <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('common.loading')}</div>
 
-  const stages = baseData?.stages || []
-  const lineByPom = {}
-  for (const l of (check?.lines || [])) lineByPom[l.pom_id] = l
-  const groups = [{
-    key: 'base',
-    label: baseData?.base_size || t('basestage.stage_measure'),
-    accent: true,
-    historyCols: stages.map((s, i) => ({ key: s.key, label: <StageLabel ctx={s.context} at={i === 0 ? null : s.at} first={i === 0} /> })),
-    activeLabel: t('sizecheck.col_real'),
-    trailCols: [{ key: 'dn', label: `${t('sizecheck.col_decision')} · ${t('sizecheck.col_note')}` }],
-  }]
-  const rows = (baseData?.rows || []).map(r => {
-    const line = lineByPom[r.pom_id]
-    return {
-      pom_id: r.pom_id,
-      codi: r.nom_fitxa || r.pom_code,
-      pom_code: r.pom_code,
-      nom_en: r.nom_en, nom_local: r.nom_ca,
-      nom_fitxa: r.nom_fitxa, bm_id: r.base_measurement_id,
-      is_key: r.is_key,
-      logica: line?.logica, increment_base: line?.increment_base,
-      increment_break: line?.increment_break, talla_break_label: line?.talla_break_label,
-      tol_minus: line?.tol_minus, tol_plus: line?.tol_plus,
-      cells: { base: {
-        history: Object.fromEntries(stages.map(s => [s.key, (s.key in r.takes) ? r.takes[s.key] : null])),
-        // SEMBRA: la columna Real parteix amb l'última mesura vàlida (valor_teoric vigent) com a
-        // prefill VISUAL; com que MeasureGrid només persisteix a onChange, una columna sembrada-i-no-
-        // tocada deixa valor_real=null i el motor (resolve_size_check) NO escriu base.
-        active: line ? { lineId: line.id, value: line.valor_real ?? line.valor_teoric, baseValue: line.valor_teoric, tol: { minus: line.tol_minus, plus: line.tol_plus } } : null,
-        trail: { dn: line ? (readOnly ? <ReadOnlyDecisioNota line={line} /> : <DecisioNotaCell line={line} />) : null },
-      } },
-    }
-  })
-
-  // Run de talles del model (per al desplegable "a partir de" del break de la regla).
-  const sizeRun = (model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean)
-
-  // Columna Règim: en CONSULTA, lectura (logica + etiqueta de regla a 2 línies). En TREBALL, la regla
-  // (delta + break) és EDITABLE — patrimoni viu del model (P3): escriu a ModelGradingRule i el motor
-  // la propaga des d'ella. El fitting també edita el règim (al seu editor); aquí s'autora a la base.
-  const leadCols = [{
-    key: 'regim', label: t('fitting.grid.regime'), width: readOnly ? 118 : 184,
-    render: (row) => (readOnly ? (
-      <div>
-        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-main)' }}>{row.logica ?? '—'}</div>
-        {regleLabel(row, t) && (
-          <div style={{ fontSize: 'var(--fs-caption)', color: TEXT_2, whiteSpace: 'nowrap', marginTop: 1 }}>{regleLabel(row, t)}</div>
-        )}
-      </div>
-    ) : (
-      <RegleEditCell modelId={model.id} row={row} sizeRun={sizeRun} onFeedback={onFeedback} />
-    )),
-  }, {
-    // Tolerància (lectura): es mostra tal com ve (-minus/+plus); NO es col·lapsa a ±únic (deute sprint POMs).
-    key: 'tol', label: t('sizecheck.col_tolerance'), width: 72,
-    render: (row) => (
-      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>
-        {row.tol_minus != null ? `-${row.tol_minus}/+${row.tol_plus}` : '—'}
-      </span>
-    ),
-  }]
+  // Els 4 seams de dades venen SEMPRE de la font — cap `if (mode)` escampat pel render.
+  const groups = raw ? src.buildGroups(raw, ctx) : []
+  const rows = raw ? src.buildRows(raw, ctx) : []
+  const leadCols = raw ? src.buildLeadCols(raw, ctx) : []
+  const canReorder = !readOnly && src.supportsReorder
+  const canEditNom = !readOnly && !lockRules   // lockRules: nomenclatura read-only, preses editables
 
   return (
     <div>
       <EditorHeader model={model} onBack={onBack} />
       <DependencyPanel model={model} />
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
-        onSave={readOnly ? undefined : onSave} onNomSave={readOnly ? undefined : onNomSave}
-        editCodi reorderable={!readOnly} onReorder={readOnly ? undefined : onReorder}
+        onSave={readOnly ? undefined : onSave} onNomSave={canEditNom ? onNomSave : undefined}
+        editCodi reorderable={canReorder} onReorder={canReorder ? onReorder : undefined}
         empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>} />
 
-      {!readOnly && check && rows.length > 0 && (
+      {src.supportsResolve && !readOnly && check && rows.length > 0 && (
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
           <button style={btn('gold')} disabled={busy} onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.save')}</button>
           <button style={btn('err')} disabled={busy} onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard')}</button>
