@@ -56,6 +56,25 @@ Django genera ja apunten a la nova arrel, però **els bytes encara són a la vel
 Si es reinicia gunicorn **abans** del pas 3, tot el media (logos, PDFs, `.ftt`, previews) dona
 404 fins que s'executi. El pas 3 és idempotent i verifica ell mateix el resultat.
 
+### El pas 3 ja fa el `chown` (D19, S03c · C1.4)
+
+**Història (es conserva, no s'esborra):** fins a S03c, `move_media_tenant --apply` creava els
+directoris de destí amb `os.makedirs`, és a dir **amb l'owner del procés** — `root` al deploy.
+Com que gunicorn corre com `www-data`, tot upload posterior fallava amb
+`500 [Errno 13] Permission denied`. És la causa provada de l'incident del 2026-07-10
+(`docs/diagnosis/INCIDENT_2026-07-10_STAGING.md`), i calia reparar-ho a mà amb un
+`chown -R www-data:www-data backend/media/` després del pas 3.
+
+**Ara és automàtic.** El pas 3 normalitza l'owner de **cada** directori que crea (no només de
+la fulla: `model_fitxers/2026/06` són tres nivells nous) i de cada fitxer que mou. Es configura
+amb `--owner` (per defecte `www-data:www-data`) i només actua amb `--apply`. Si la comanda no
+corre com a root, el `chown` falla amb un **avís clar i no bloqueja** el trasllat: en aquest cas
+cal aplicar el `chown` a mà, com deia el runbook antic.
+
+El pas manual genèric per a subdirectoris de media **segueix vigent** per a tot el que NO mou
+aquesta comanda (p.ex. `mkdir` d'un directori d'upload nou): vegeu `docs/deploy.md`, § owner de
+`backend/media/`.
+
 ## Nota: staging corre amb `DEBUG=true`
 
 `backend/.env` de staging té `DEBUG=true`, per tant l'endpoint `download/` hi agafa el

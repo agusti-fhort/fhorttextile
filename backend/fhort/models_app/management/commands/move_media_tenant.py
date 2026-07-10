@@ -44,6 +44,24 @@ def _referenced_names(model, field_name):
             .values_list(field_name, flat=True) if n]
 
 
+def _dirs_a_crear(path):
+    """Els directoris que `os.makedirs(path)` haurà de crear, de l'arrel cap a la fulla.
+
+    `os.makedirs` en crea DIVERSOS (`.../model_fitxers/2026/06`) i tots neixen amb l'owner del
+    procés. Un chown només a la fulla deixaria els pares de root — la causa exacta de
+    l'incident del 2026-07-10. Cal saber quins són nous ABANS de crear-los.
+    """
+    nous = []
+    p = path
+    while p and not os.path.exists(p):
+        nous.append(p)
+        pare = os.path.dirname(p)
+        if pare == p:      # arrel del filesystem: atura
+            break
+        p = pare
+    return list(reversed(nous))
+
+
 class Command(BaseCommand):
     help = 'Mou els bytes de media a MEDIA_ROOT/<schema>/ (dry-run per defecte). No toca la BD.'
 
@@ -51,6 +69,27 @@ class Command(BaseCommand):
         parser.add_argument('--apply', action='store_true',
                             help='Executa el trasllat. Sense aquest flag només mostra el pla.')
         parser.add_argument('--schema', help='Limita el trasllat a aquest schema.')
+        parser.add_argument(
+            '--owner', default='www-data:www-data',
+            help='owner[:group] dels directoris creats i dels fitxers moguts (--apply). '
+                 'Gunicorn corre com www-data; si media/ és de root, tot upload dona 500.')
+
+    def _chown(self, path):
+        """chown best-effort. Si el procés no és root, avisa UN cop i continua: el trasllat
+        de bytes és la feina d'aquesta comanda; l'owner és higiene, no ha de fer petar res."""
+        if self._owner is None:
+            return
+        user, group = self._owner
+        try:
+            shutil.chown(path, user=user, group=group)
+        except (PermissionError, LookupError, OSError) as e:
+            if not self._chown_avisat:
+                self._chown_avisat = True
+                self.stdout.write(self.style.WARNING(
+                    f'  AVÍS: chown {user}:{group} ha fallat ({e.__class__.__name__}: {e}).\n'
+                    f'  Cal executar la comanda com a root, o aplicar el chown a mà després:\n'
+                    f'    chown -R {user}:{group} {os.path.join(str(settings.MEDIA_ROOT))}\n'
+                    f'  (avís emès un sol cop; el trasllat continua)'))
 
     def handle(self, *args, **opts):
         media_root = str(settings.MEDIA_ROOT)
@@ -69,7 +108,21 @@ class Command(BaseCommand):
 
         apply = opts['apply']
         mode = self.style.WARNING('APPLY') if apply else self.style.SUCCESS('DRY-RUN')
-        self.stdout.write(f'MEDIA_ROOT: {media_root}   mode: {mode}')
+
+        # D19 — owner dels directoris nous. `os.makedirs` els crea amb l'owner del procés
+        # (root al deploy) i `shutil.move` només preserva l'owner si és el MATEIX filesystem
+        # (os.rename); cross-FS cau a copy2, que fa copystat però NO chown.
+        self._chown_avisat = False
+        raw = (opts['owner'] or '').strip()
+        if not raw:
+            self._owner = None
+        else:
+            user, _, group = raw.partition(':')
+            self._owner = (user, group or user)
+
+        self.stdout.write(f'MEDIA_ROOT: {media_root}   mode: {mode}'
+                          + (f'   owner: {self._owner[0]}:{self._owner[1]}'
+                             if self._owner and apply else ''))
 
         for schema in known:
             self.stdout.write(self.style.MIGRATE_HEADING(f'\n=== {schema}'))
@@ -99,8 +152,14 @@ class Command(BaseCommand):
                         moguts += 1
                         self.stdout.write(f'  {name}  →  {schema}/{name}')
                         if apply:
-                            os.makedirs(os.path.dirname(dst), exist_ok=True)
+                            dst_dir = os.path.dirname(dst)
+                            nous = _dirs_a_crear(dst_dir)
+                            os.makedirs(dst_dir, exist_ok=True)
+                            for d in nous:
+                                self._chown(d)
                             shutil.move(src, dst)
+                            # També el fitxer: cross-FS, copy2 no fa chown i arriba com a root.
+                            self._chown(dst)
 
             self.stdout.write(
                 f'  resum: {moguts} a moure · {ja_fet} ja fets · {absents} fantasmes')
