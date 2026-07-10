@@ -138,6 +138,9 @@ class FittingSessionDetailSerializer(serializers.ModelSerializer):
             'model_codi_client', 'model_temporada', 'model_any',
             'model_persona', 'assistents', 'lloc',
             'responsable', 'responsable_nom', 'notes', 'created_at',
+            # P4 — la sessió ha de saber de quina convocatòria ve, per tornar-hi en gravar.
+            # El serializer de LLISTA ja l'exposava; el de detall no.
+            'convocatoria',
             'created_by', 'created_by_nom', 'piece_fittings', 'photos', 'can_advance',
         ]
 

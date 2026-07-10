@@ -97,7 +97,10 @@ class POMAlertViewSet(viewsets.ModelViewSet):
 class FittingSessionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['model', 'garment_set', 'fase', 'estat', 'data', 'responsable']
+    # P4 — `convocatoria` (UUID, db_index) permet demanar les sessions d'una fulla amb
+    # ?convocatoria=<uuid>. Fins ara el client baixava la llista sencera i la particionava.
+    filterset_fields = ['model', 'garment_set', 'fase', 'estat', 'data', 'responsable',
+                        'convocatoria']
     ordering_fields = ['data', 'created_at']
     ordering = ['-data', '-created_at']
 
