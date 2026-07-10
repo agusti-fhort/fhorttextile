@@ -468,16 +468,32 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
     """Autosave only: PATCH a cell's valor_real / nota. No list/create/destroy/PUT."""
     permission_classes = [IsAuthenticated]
     serializer_class = PieceFittingLineSerializer
-    # select_related fins a la sessió: el guard d'estat (fitting_line_is_locked) la consulta
+    # select_related fins a la sessió i al model: els dos guards (estat i eix) els consulten
     # sense queries extra a partial_update/propagar.
-    queryset = PieceFittingLine.objects.select_related('pom', 'piece_fitting__session').all()
+    queryset = PieceFittingLine.objects.select_related(
+        'pom', 'piece_fitting__session', 'piece_fitting__model').all()
     http_method_names = ['get', 'patch', 'post', 'head', 'options']
 
-    def partial_update(self, request, *args, **kwargs):
-        # Guard: sessió segellada (Tancada/Anullada) → rebutja ABANS de desar; delega si editable.
-        line = self.get_object()
+    def _rebuig_escriptura(self, line):
+        """Guards d'escriptura, compartits per `partial_update` i `propagar`. Retorna una
+        Response de rebuig, o None si la línia és editable.
+
+        Ordre deliberat: primer l'estat de la sessió (una sessió segellada no s'edita ni tan
+        sols a la base), després l'eix (P1).
+        """
         if services.fitting_line_is_locked(line):
             return Response({'detail': SEALED_SESSION_DETAIL}, status=status.HTTP_409_CONFLICT)
+        if services.fitting_line_is_non_base(line):
+            # 400, no 409: no és conflicte d'estat sinó escriptura fora de l'eix del fitting.
+            return Response({'detail': services.NON_BASE_LINE_DETAIL},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return None
+
+    def partial_update(self, request, *args, **kwargs):
+        # Guards ABANS de desar; delega només si la línia és editable.
+        rebuig = self._rebuig_escriptura(self.get_object())
+        if rebuig is not None:
+            return rebuig
         return super().partial_update(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'], url_path='propagar')
@@ -495,9 +511,12 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
         line = self.get_object()
         pf = line.piece_fitting
 
-        # Guard: sessió segellada (Tancada/Anullada) → cap escriptura, abans de qualsevol save.
-        if services.fitting_line_is_locked(line):
-            return Response({'detail': SEALED_SESSION_DETAIL}, status=status.HTTP_409_CONFLICT)
+        # Guards (sessió segellada · eix no-base) abans de qualsevol save. L'ancoratge només
+        # es pot fer des de la talla BASE; la propagació a les germanes, en canvi, es manté:
+        # els seus valor_real són DERIVATS del motor, no feina del tècnic (P1).
+        rebuig = self._rebuig_escriptura(line)
+        if rebuig is not None:
+            return rebuig
 
         def _resp(propagat, motiu, warnings=None):
             linies = (PieceFittingLine.objects

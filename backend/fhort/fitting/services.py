@@ -27,6 +27,33 @@ def fitting_line_is_locked(line) -> bool:
     return line.piece_fitting.session.estat in SEALED_SESSION_ESTATS
 
 
+# ── P1 — guard d'eix base ────────────────────────────────────────────────────
+# DECISIONS.md §2: el fitting és un ESTADI de la taula base; tot treball multi-talla és
+# Escalat. Fins ara la vista acceptava escriptures a QUALSEVOL talla i `close_piece_fitting`
+# només consolidava la BASE (consolidate_base_from_fitting): les no-base morien amb la sessió,
+# sense cap avís. El guard tanca el forat a la porta d'entrada.
+NON_BASE_LINE_DETAIL = (
+    'El fitting només edita la talla base del model. '
+    'Les altres talles es treballen a Escalat.'
+)
+
+
+def fitting_line_is_non_base(line) -> bool:
+    """True si la línia NO és de la talla base del seu model → escriptura prohibida (P1).
+
+    MATEIXA font i MATEIXA normalització que `consolidate_base_from_fitting` (`model.
+    base_size_label` amb `.strip()` als dos costats). Si divergissin, la vista acceptaria
+    escriptures que el `close` descartaria en silenci — que és exactament el forat que es tapa.
+
+    Model sense `base_size_label` (avui: cap): no es pot determinar la base → NO es bloqueja,
+    per no deixar el fitting inservible. Aquelles línies ja no les consolidava ningú.
+    """
+    base = (line.piece_fitting.model.base_size_label or '').strip()
+    if not base:
+        return False
+    return line.size_label.strip() != base
+
+
 # ── Peça 1 — guard de solapament ─────────────────────────────────────────────
 class SessionOverlapError(Exception):
     """Conflicte DUR: ja hi ha una sessió viva del mateix model que solapa la franja
