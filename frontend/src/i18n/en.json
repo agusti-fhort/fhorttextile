@@ -1934,7 +1934,16 @@
       "discard_label": "Reason (optional):",
       "use_discard": "Use Discard for sessions already open."
     },
-    "key_measure": "Key measure"
+    "key_measure": "Key measure",
+    "sheet": {
+      "title": "Fitting sheet",
+      "hour": "Time",
+      "watchpoints": "Watchpoints",
+      "no_watchpoints": "None",
+      "n_models": "{{n}} models",
+      "load_error": "Could not load the fitting sheet.",
+      "open_sheet": "Open today's sheet"
+    }
   },
   "wizard_base_size_required": "The size system has changed. Select the base size.",
   "common": {
@@ -3061,6 +3070,25 @@
     "resolve": "Resolve",
     "reopen": "Reopen",
     "resolved_by": "resolved by {{who}}"
+  },
+  "asset_navigator": {
+    "title": "Asset navigator",
+    "tab_models": "Models",
+    "tab_catalog": "Catalogue",
+    "breadcrumb": "Breadcrumb",
+    "search_all": "Search models and catalogue…",
+    "search_models": "Search models…",
+    "group_models": "Models ({{n}})",
+    "group_catalog": "Catalogue ({{n}})",
+    "no_results": "No results",
+    "no_files": "No files",
+    "pick_model": "Pick a model",
+    "pick_file": "Pick a file",
+    "use": "Use",
+    "derived_from": "from {{origen}}",
+    "col_nom": "Name",
+    "col_tipus": "Type",
+    "col_data": "Date"
   },
   "tech_sheet_entry": {
     "title": "Tech sheet",

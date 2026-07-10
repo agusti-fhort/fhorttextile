@@ -1934,7 +1934,16 @@
       "discard_label": "Motivo (opcional):",
       "use_discard": "Usa Descartar para sesiones ya abiertas."
     },
-    "key_measure": "Key measure"
+    "key_measure": "Key measure",
+    "sheet": {
+      "title": "Hoja de convocatoria",
+      "hour": "Hora",
+      "watchpoints": "Puntos de vigilancia",
+      "no_watchpoints": "Ninguno",
+      "n_models": "{{n}} modelos",
+      "load_error": "No se ha podido cargar la convocatoria.",
+      "open_sheet": "Abrir hoja del día"
+    }
   },
   "wizard_base_size_required": "El sistema de tallas ha cambiado. Selecciona la talla base.",
   "common": {
@@ -3061,6 +3070,25 @@
     "resolve": "Resolver",
     "reopen": "Reabrir",
     "resolved_by": "resuelta por {{who}}"
+  },
+  "asset_navigator": {
+    "title": "Navegador de activos",
+    "tab_models": "Modelos",
+    "tab_catalog": "Catálogo",
+    "breadcrumb": "Ruta de navegación",
+    "search_all": "Busca modelos y catálogo…",
+    "search_models": "Busca modelos…",
+    "group_models": "Modelos ({{n}})",
+    "group_catalog": "Catálogo ({{n}})",
+    "no_results": "Sin resultados",
+    "no_files": "Sin archivos",
+    "pick_model": "Elige un modelo",
+    "pick_file": "Elige un archivo",
+    "use": "Utilizar",
+    "derived_from": "de {{origen}}",
+    "col_nom": "Nombre",
+    "col_tipus": "Tipo",
+    "col_data": "Fecha"
   },
   "tech_sheet_entry": {
     "title": "Ficha técnica",

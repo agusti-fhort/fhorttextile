@@ -1934,7 +1934,16 @@
       "discard_label": "Motiu (opcional):",
       "use_discard": "Usa Descartar per a sessions ja obertes."
     },
-    "key_measure": "Key measure"
+    "key_measure": "Key measure",
+    "sheet": {
+      "title": "Fulla de convocatòria",
+      "hour": "Hora",
+      "watchpoints": "Punts de vigilància",
+      "no_watchpoints": "Cap",
+      "n_models": "{{n}} models",
+      "load_error": "No s'ha pogut carregar la convocatòria.",
+      "open_sheet": "Obrir fulla del dia"
+    }
   },
   "wizard_base_size_required": "El sistema de talles ha canviat. Selecciona la talla base.",
   "common": {
@@ -3061,6 +3070,25 @@
     "resolve": "Resoldre",
     "reopen": "Reobrir",
     "resolved_by": "resolta per {{who}}"
+  },
+  "asset_navigator": {
+    "title": "Navegador d'actius",
+    "tab_models": "Models",
+    "tab_catalog": "Catàleg",
+    "breadcrumb": "Camí de navegació",
+    "search_all": "Cerca models i catàleg…",
+    "search_models": "Cerca models…",
+    "group_models": "Models ({{n}})",
+    "group_catalog": "Catàleg ({{n}})",
+    "no_results": "Cap resultat",
+    "no_files": "Cap fitxer",
+    "pick_model": "Tria un model",
+    "pick_file": "Tria un fitxer",
+    "use": "Utilitza",
+    "derived_from": "de {{origen}}",
+    "col_nom": "Nom",
+    "col_tipus": "Tipus",
+    "col_data": "Data"
   },
   "tech_sheet_entry": {
     "title": "Fitxa tècnica",
