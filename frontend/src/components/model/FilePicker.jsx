@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { modelFitxers, itemFitxers } from '../../api/endpoints'
+import { UPLOAD_ACCEPT } from '../../utils/uploads'
 
 // FilePicker de l'editor de fitxa (S03b · P7). Reactiva el punt d'entrada que el comentari
 // de TechSheetEditor.jsx anticipava ("futur tab Components").
@@ -184,6 +185,7 @@ export default function FilePicker({ modelId, garmentTypeItemId, onInsert, onClo
               {t('file_picker.import_hint')}
             </p>
             <input type="file" disabled={busy}
+              accept={UPLOAD_ACCEPT}
               aria-label={t('file_picker.tab_import')}
               onChange={e => importar(e.target.files?.[0])}
               style={{ fontSize: 'var(--fs-body)', fontFamily: MONO }} />

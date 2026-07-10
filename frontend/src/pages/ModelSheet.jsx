@@ -10,6 +10,7 @@ import PropagatedEditor from './PropagatedEditor'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
 import { models, watchpoints, modelTasks } from '../api/endpoints'
+import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
 import TasksTab from '../components/model/TasksTab'
@@ -1394,7 +1395,7 @@ function TabFiles({ modelId }) {
         }}>
           {uploading ? t('model_sheet.uploading') : t('model_sheet.upload')}
           <input type="file" style={{ display: 'none' }}
-            accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf,.ftt"
+            accept={UPLOAD_ACCEPT}
             disabled={uploading}
             onChange={e => e.target.files[0] && handleUpload(e.target.files[0])} />
         </label>
@@ -1566,7 +1567,7 @@ function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onEdit, onDele
               <label title={t('model_sheet.new_version')} style={{ ...actBtn }}>
                 <i className="ti ti-plus" aria-hidden="true" /> {t('model_sheet.new_version')}
                 <input type="file" style={{ display: 'none' }}
-                  accept=".pdf,.png,.jpg,.jpeg,.svg,.webp,.gif,.dxf,.ftt"
+                  accept={UPLOAD_ACCEPT}
                   onChange={e => e.target.files[0] && onNewVersion(e.target.files[0])} />
               </label>
               <button type="button" onClick={onHistory} title={t('model_sheet.version_history')} style={actBtn}>
