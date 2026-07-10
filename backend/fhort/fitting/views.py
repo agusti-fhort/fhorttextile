@@ -1,5 +1,6 @@
 import logging
 
+from django.db import IntegrityError
 from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, mixins, status
@@ -158,6 +159,15 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
             )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError:
+            # XD — la peça (session, model) ja existeix: unique_together de PieceFitting.
+            # No es fa get_or_create (la semàntica del servei —materialitzar línies— queda
+            # intacta): es torna 409 llegible perquè el cridador programàtic del Sprint Y
+            # sigui idempotent. Substitueix el 500 cru que deixava el `create` nu.
+            return Response(
+                {'error': 'Aquesta peça ja existeix a la sessió.', 'code': 'piece_exists'},
+                status=status.HTTP_409_CONFLICT,
+            )
         out = PieceFittingGridSerializer(pf, context={'request': request})
         return Response({'n_linies': n, **out.data}, status=status.HTTP_201_CREATED)
 
