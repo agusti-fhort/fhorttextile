@@ -214,21 +214,32 @@ def serve_fitxer(fitxer, *, as_attachment=True):
     (`<iframe>` de PDF): amb `attachment` el navegador descarregaria en lloc de renderitzar.
 
     - `url_extern` → 302 (el fitxer no viu aquí). ItemFitxer no té aquest camp: `getattr`.
-    - sense bytes → 404.
+    - sense nom, o amb nom però sense bytes al disc (fila fantasma) → 404 JSON.
     - DEBUG → FileResponse (no hi ha nginx al davant).
     """
     from urllib.parse import quote
 
     from django.conf import settings
+    from django.core.files.storage import default_storage
     from django.http import (FileResponse, HttpResponse, HttpResponseRedirect,
                              JsonResponse)
+
+    def _sense_bytes():
+        # JSON, no HTML: manté el contracte del 404 que servia DRF abans de l'extracció.
+        return JsonResponse({'error': 'El fitxer no té bytes associats.'}, status=404)
 
     url_extern = getattr(fitxer, 'url_extern', None)
     if url_extern:
         return HttpResponseRedirect(url_extern)
     if not fitxer.fitxer:
-        # JSON, no HTML: manté el contracte del 404 que servia DRF abans de l'extracció.
-        return JsonResponse({'error': 'El fitxer no té bytes associats.'}, status=404)
+        return _sense_bytes()
+    # Un FieldFile és falsy només si no té `name`: el guard de sobre comprova existència de
+    # NOM, no de BYTES. Una fila fantasma (nom desat, bytes absents del disc) el passava i
+    # petava més avall — 500 en DEBUG (`FileResponse.open`), i en producció un 404 d'nginx
+    # sense el JSON del contracte, perquè la branca X-Accel no toca mai el disc. Amb aquest
+    # guard el contracte és el MATEIX en tots dos entorns.
+    if not default_storage.exists(fitxer.fitxer.name):
+        return _sense_bytes()
 
     nom = fitxer.nom_fitxer or os.path.basename(fitxer.fitxer.name)
 
