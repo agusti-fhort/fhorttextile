@@ -1,10 +1,14 @@
 """
 fhort/pom/s2_views.py — Sprint S2 views
 """
+import logging
+
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(['GET'])
@@ -174,12 +178,25 @@ def clone_sizing_profile_view(request, pk):
         with transaction.atomic():
             # Clone the GradingRuleSet (el nom de la variant viu a GradingRuleSet.nom)
             original_rs = original.grading_rule_set
+
+            # PROVINENÇA (decisió CTO 2026-07-10): una versió de client és CLIENT_RUN encara que
+            # sigui autoria manual i no vingui de cap run importat. Mai viatja a un tenant nou.
+            # El customer surt del perfil clonat o del seu ruleset; si cap dels dos el té (clon
+            # d'un estàndard pur), l'origen ja tanca la fuita i deixem traça al log.
+            variant_customer = original.customer or original_rs.customer
+            if variant_customer is None:
+                logger.warning(
+                    "GradingRuleSet CLIENT_RUN sense customer resoluble (clon de perfil %s, "
+                    "nom=%r): procedència tancada per origen.", original.pk, nom_client)
+
             nou_rs = GradingRuleSet.objects.create(
                 nom=nom_client,
                 codi_sistema=f"{original_rs.codi_sistema}_CUSTOM",
                 target=original_rs.target,
                 construction=original_rs.construction,
                 fit_type=original_rs.fit_type,
+                origen=GradingRuleSet.ORIGEN_CLIENT_RUN,
+                customer=variant_customer,
                 is_system_default=False,
                 parent_version=original_rs,
                 version_number=original_rs.version_number + 1,

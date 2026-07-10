@@ -4,6 +4,9 @@ Funcions sense I/O ni persistència, compartides entre el wizard de Size Map
 (size_map_views.py) i, més endavant, el camí d'import de fitxa. Aïllar-les aquí
 evita importar un mòdul de *views* des d'un altre (i els cicles que això comporta).
 """
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _norm(label) -> str:
@@ -225,7 +228,7 @@ def derive_break_fields(logica, increment, valors_step, run_ordenat):
 
 def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_ids,
                             size_system, garment_group, target_codi, construction_codi,
-                            fit_type_codi, nom, nom_sufix_unic, avisos):
+                            fit_type_codi, nom, nom_sufix_unic, avisos, customer=None):
     """Deriva (o reutilitza) el GradingRuleSet d'una graduació a partir dels valors per talla.
 
     Pura de model: rep run/base/valors + la classificació (per CODIS) + el nom, i RETORNA el
@@ -241,6 +244,8 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
       codi__iexact aquí dins (None si no resol).
     - nom: nom primari del ruleset; nom_sufix_unic: sufix únic i determinista que s'hi afegeix
       NOMÉS si `nom` ja col·lisiona exacte (lògica de 1D).
+    - customer: Customer del run (o None). El ruleset creat aquí és sempre CLIENT_RUN; el
+      customer només enriqueix l'eix de client. Si és None, es deixa un warning al log.
     - La creació de ruleset+regles va dins un transaction.atomic() intern (savepoint): si peta,
       no queda cap ruleset orfe parcial; l'excepció propaga al cridador.
 
@@ -350,6 +355,13 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
         nom_final = nom
         if GradingRuleSet.objects.filter(nom=nom_final).exists():
             nom_final = f"{nom} · {nom_sufix_unic}"
+        # PROVINENÇA: aquest és el camí d'importació d'un run/fitxa → sempre CLIENT_RUN. El
+        # `customer` és desitjable però no imprescindible: si no és resoluble, l'eix de
+        # procedència ja tanca la fuita (el ruleset no viatjarà) i deixem traça al log.
+        if customer is None:
+            logger.warning(
+                "GradingRuleSet CLIENT_RUN sense customer resoluble (nom=%r): "
+                "procedència tancada per origen, però l'eix de client queda buit.", nom_final)
         new_rule_set = GradingRuleSet.objects.create(
             nom=nom_final,
             size_system=size_system,
@@ -359,6 +371,8 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
             fit_type=rs_fit,
             is_system_default=False,
             actiu=True,
+            origen=GradingRuleSet.ORIGEN_CLIENT_RUN,
+            customer=customer,
         )
         if rs_target:
             new_rule_set.targets.add(rs_target)

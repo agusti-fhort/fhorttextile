@@ -503,9 +503,16 @@ class GradingRuleSet(models.Model):
     # RUN-CLIENT (DECISIONS.md:304, la regla com a secret industrial).
     # NULL = "no classificat": l'estat de les files anteriors al camp. El tanca el backfill
     # (`manage.py set_grading_origen`), que és decisió humana, no automàtica.
-    ORIGEN_CANONICAL = 'CANONICAL'    # catàleg propi de FHORT: viatja a un tenant nou
-    ORIGEN_CLIENT_RUN = 'CLIENT_RUN'  # derivat d'un run/fitxa d'un client: MAI viatja
-    ORIGEN_IMPORT = 'IMPORT'          # entrat des d'una font externa, sense run de client
+    # SEMÀNTICA (decisió CTO 2026-07-10):
+    #   CANONICAL  — catàleg propi de FHORT: viatja a un tenant nou.
+    #   CLIENT_RUN — DERIVAT DE CLIENT, tant si ve d'un run/fitxa importat com si és autoria
+    #                manual per a un client concret (p.ex. clonar un perfil estàndard en una
+    #                versió de client). MAI viatja. El valor no es renomenarà: si algun dia
+    #                la paraula "run" molesta, és un rename cosmètic del choice.
+    #   IMPORT     — entrat des d'una font externa sense client darrere.
+    ORIGEN_CANONICAL = 'CANONICAL'
+    ORIGEN_CLIENT_RUN = 'CLIENT_RUN'
+    ORIGEN_IMPORT = 'IMPORT'
     ORIGEN_CHOICES = [
         (ORIGEN_CANONICAL, 'Canònic FHORT'),
         (ORIGEN_CLIENT_RUN, 'Derivat de run de client'),

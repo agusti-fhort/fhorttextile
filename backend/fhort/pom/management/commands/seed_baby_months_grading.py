@@ -80,9 +80,11 @@ class Command(BaseCommand):
                 f"SizeDefinition '{BASE_SIZE_LABEL}' de {SIZE_SYSTEM_CODE} no existeix.")
 
         # 3. Rule set (idempotent)
+        # PROVINENÇA: seed de catàleg propi de FHORT → CANONICAL (viatja a un tenant nou).
         rs, _ = GradingRuleSet.objects.update_or_create(
             nom=RULE_SET_NAME, size_system=ss,
-            defaults={'actiu': True, 'version_number': 1},
+            defaults={'actiu': True, 'version_number': 1,
+                      'origen': GradingRuleSet.ORIGEN_CANONICAL},
         )
 
         # 4. Regles (talla_base és obligatori al model → base_def)

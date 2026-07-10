@@ -326,6 +326,8 @@ class Command(BaseCommand):
                 for d in rs_data:
                     ss_codi = rs_size_system.get(d['codi_sistema'], '')
                     ss = ss_map.get(ss_codi)
+                    # PROVINENÇA: seed de catàleg → CANONICAL. (Comanda OBSOLETA: aborta amb
+                    # CommandError abans d'arribar aquí; s'estampa per coherència del cens.)
                     rs = GradingRuleSet.objects.create(
                         nom=d['nom_en'],
                         codi_sistema=d['codi_sistema'],
@@ -336,6 +338,7 @@ class Command(BaseCommand):
                         is_system_default=d['is_system_default'],
                         version_number=1,
                         actiu=True,
+                        origen=GradingRuleSet.ORIGEN_CANONICAL,
                     )
                     rs_map[d['codi_sistema']] = rs
                     rs_base_size[d['codi_sistema']] = d['base_size']
