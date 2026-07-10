@@ -1143,13 +1143,20 @@ def upload_file_view(request, model_id):
     if not uploaded_file:
         return Response({'error': 'fitxer és obligatori'}, status=400)
 
-    from .services_fitxers import save_model_file
+    from .services_fitxers import UploadRejected, save_model_file, validate_upload
 
     # Contracte Finder: `tipus` opcional (neutre si no es dona). Sense autoincrement per
     # tipus — la versió la governa el servei via la cadena. `categoria` ja no s'accepta
     # (eix deprecat, S03a · P1.2): el Finder no l'ha enviada mai.
     tipus = request.data.get('tipus') or None
     nom = request.data.get('nom') or uploaded_file.name
+
+    # D12/D18 — mateix guard i mateixa resposta 400 que ItemFitxerViewSet.create: aquest era
+    # l'únic camí d'upload que no validava ni extensió ni mida.
+    try:
+        validate_upload(uploaded_file, nom)
+    except UploadRejected as e:
+        return Response({'error': str(e)}, status=400)
 
     # versio_anterior_id opcional → encadena una nova versió d'un fitxer existent.
     versio_anterior = None

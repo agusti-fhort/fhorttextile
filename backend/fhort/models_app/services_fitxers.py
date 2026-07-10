@@ -40,6 +40,10 @@ ALLOWED_UPLOAD_EXTENSIONS = frozenset({
     '.svg',                                  # SKETCH_SVG
     '.rul', '.txt',                          # RUL
     '.png', '.jpg', '.jpeg', '.webp', '.gif',   # sketches i imatges
+    # D18 — `upload_file_view` no validava res i hi ha 1 `.xlsx` real a la BD (218 files).
+    # Endollar-hi `validate_upload` sense afegir-los rebutjaria dades que el sistema ja accepta.
+    # `.xls` acompanya `.xlsx` pel mateix motiu que `.jpg` acompanya `.jpeg`.
+    '.xlsx', '.xls',                         # fulls de càlcul (mesures, BOM)
 })
 
 
