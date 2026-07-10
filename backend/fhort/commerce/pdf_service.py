@@ -113,11 +113,26 @@ def _tenant_cfg():
         return None
 
 
+def _amb_pais(trossos, pais):
+    """Uneix els trossos d'una adreça i hi afegeix el país NOMÉS si hi ha adreça.
+
+    `pais`/`country` tenen `default='ES'` i **mai** són buits (tasks/models.py:172 i :216;
+    tenants/models.py). Filtrar-los amb un `if x` final no els descarta: un client sense cap dada
+    fiscal — els tres de staging — imprimia una línia solitària que deia literalment «ES» sota el
+    seu nom, a tots els documents. El país qualifica una adreça; sense adreça no qualifica res.
+    """
+    addr = ', '.join(x for x in trossos if x)
+    if not addr:
+        return ''
+    pais = (pais or '').strip()
+    return f'{addr}, {pais}' if pais else addr
+
+
 def _customer_oneliner(c):
     """Adreça · NIF del client en una sola línia (omet buits)."""
     parts = []
-    addr = ', '.join(x for x in [c.adreca_linia1, c.adreca_linia2,
-                                 ' '.join(y for y in [c.codi_postal, c.ciutat] if y), c.pais] if x)
+    addr = _amb_pais([c.adreca_linia1, c.adreca_linia2,
+                      ' '.join(y for y in [c.codi_postal, c.ciutat] if y)], c.pais)
     if addr:
         parts.append(addr)
     if c.nif:
@@ -137,7 +152,7 @@ def _emissor_oneliner(cfg):
     if not cfg:
         return ''
     loc = ' '.join(x for x in [(cfg.postal_code or '').strip(), (cfg.city or '').strip()] if x)
-    return ', '.join(x for x in [(cfg.address or '').strip(), loc, (cfg.country or '').strip()] if x)
+    return _amb_pais([(cfg.address or '').strip(), loc], cfg.country)
 
 
 def _brand_flowable(cfg, s, FS, FL):
