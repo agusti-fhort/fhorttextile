@@ -23,6 +23,11 @@ def _signed_download_url(obj, request, *, salt, ruta):
 
 class ModelFitxerSerializer(serializers.ModelSerializer):
     download_url = serializers.SerializerMethodField()
+    # S03c · C2.3 — el Finder mostra qui va pujar el fitxer, no el seu id (taula #8). ADDITIU:
+    # `pujat_per` (PK) es manté per als consumidors actuals. Sense N+1: els dos ViewSets ja fan
+    # select_related('pujat_per'). `default=None` cobreix pujat_per NULL (FK nullable).
+    pujat_per_nom = serializers.CharField(source='pujat_per.nom_complet', read_only=True,
+                                          default=None)
 
     class Meta:
         model = ModelFitxer
@@ -38,6 +43,9 @@ class ModelFitxerSerializer(serializers.ModelSerializer):
 class ItemFitxerSerializer(serializers.ModelSerializer):
     """Mirall d'ModelFitxerSerializer per al catàleg (S03b · P4)."""
     download_url = serializers.SerializerMethodField()
+    # S03c · C2.3 — mirall de ModelFitxerSerializer.pujat_per_nom.
+    pujat_per_nom = serializers.CharField(source='pujat_per.nom_complet', read_only=True,
+                                          default=None)
 
     class Meta:
         model = ItemFitxer
