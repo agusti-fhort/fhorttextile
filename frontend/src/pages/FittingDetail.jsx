@@ -142,10 +142,16 @@ function changedRows(grid) {
   return { sizeLabels, baseLabel, rows, isMod }
 }
 
-// Una peça té canvis a gravar si alguna línia té valor_real ≠ valor_teoric (el que close aplica).
+// Una peça té canvis a gravar si alguna línia de la TALLA BASE té valor_real ≠ valor_teoric.
+// El filtre per talla base NO és redundant amb l'adapter (que ja només pinta la base): `grid.lines`
+// ve de l'API amb totes les talles, i `propagar` reescriu el valor_real de les germanes a cada
+// ancoratge. Sense el filtre, una peça sense cap canvi base es marcava "amb canvis" i es cridava
+// un `close` que no consolidava res — exactament el que fa `consolidate_base_from_fitting` (P1).
 function hasSaveChanges(grid) {
+  const base = (grid.model?.base_size_label || '').trim()
   return (grid.lines || []).some(
-    l => l.valor_real != null && Math.abs(Number(l.valor_real) - Number(l.valor_teoric)) > 1e-6
+    l => (!base || l.size_label === base) &&
+      l.valor_real != null && Math.abs(Number(l.valor_real) - Number(l.valor_teoric)) > 1e-6
   )
 }
 
@@ -543,9 +549,7 @@ export default function FittingDetail() {
   const collection = session.model_temporada ? `${session.model_temporada}${session.model_any ? ` ${session.model_any}` : ''}` : null
   const clientRef = session.model_codi_client || null
 
-  // Matriu: files = POM, columnes ordenades = talles del size run.
-  const present = new Set(lines.map(l => l.size_label))
-  const sizeLabels = orderedSizes(model.size_run_model, present)
+  // Matriu: files = POM. P1 — l'única columna de talla és la BASE (l'eix multi-talla viu a Escalat).
   const pomMap = new Map()
   for (const l of lines) {
     if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, {
@@ -570,9 +574,11 @@ export default function FittingDetail() {
 
   // Projecció de l'eix talles×versions al contracte de MeasureGrid (editor únic). Els valors/ancoratge/
   // focus viuen DINS de MeasureGrid; aquí només es construeixen groups/rows/leadCols/onSave.
-  const gridGroups = buildFittingGroups(sizeLabels, baseLabel, versionNumbers, t)
-  const gridRows = buildFittingRows(pomRows, sizeLabels, versionNumbers)
-  const lineRegimeMap = new Map(lines.map(l => [l.id, l.logica]))
+  const gridGroups = buildFittingGroups(baseLabel, versionNumbers, t)
+  const gridRows = buildFittingRows(pomRows, baseLabel, versionNumbers)
+  // Només les línies de la BASE són editables (guard de vista al backend); la resta ni es pinta.
+  const lineRegimeMap = new Map(
+    lines.filter(l => l.size_label === baseLabel).map(l => [l.id, l.logica]))
   const onGridSave = makeFittingOnSave(lineRegimeMap)
   // P4 — autoria del nom a nivell MODEL: nom_fitxa de BaseMeasurement (NO el POM tenant compartit).
   const onNomSave = (bmId, value) => baseMeasurements.update(bmId, { nom_fitxa: value || null }).catch(() => {})
