@@ -833,8 +833,12 @@ class GarmentTypeItemViewSet(viewsets.ModelViewSet):
                 )
                 .order_by('garment_type', 'complexity_order', 'code'))
     serializer_class = GarmentTypeItemSerializer
-    filter_backends = [DjangoFilterBackend]
+    # S03c · C2.2 — cerca de text per al Finder: abans no n'hi havia cap (taula #5).
+    # `code` i `name` són els únics camps presentables del model: no en té cap altre de nom
+    # (les etiquetes i18n viuen a GarmentType, no a l'item).
+    filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['garment_type', 'active']
+    search_fields = ['code', 'name']
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
