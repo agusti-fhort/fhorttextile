@@ -125,8 +125,15 @@ export default function AssetNavigator({
 
   // Fitxers del node fulla. `is_current=true`: el navegador ensenya el CAP de cada cadena de
   // versions, no l'historial — l'historial viu al tab Fitxers de ModelSheet.
+  //
+  // El node el mana EL TAB ACTIU, no la simple presència de `modelId`/`gtiId`: cada món recorda
+  // el seu camí, i tots dos poden estar posats alhora. Amb `nav.modelId ? … : nav.gtiId ? …`,
+  // entrar en un model i saltar després a CATÀLEG deixava la fulla del GTI ensenyant els fitxers
+  // DEL MODEL — i el consumidor hi feia `usar-al-model` sobre el fitxer equivocat.
   const clauNode = mode === 'models' ? null
-    : nav.modelId ? `m:${nav.modelId}` : nav.gtiId ? `i:${nav.gtiId}` : null
+    : nav.tab === 'models'
+      ? (nav.modelId ? `m:${nav.modelId}` : null)
+      : (nav.gtiId ? `i:${nav.gtiId}` : null)
   const fitxers = useLlista(clauNode, CARREGA.fitxers)
 
   // La selecció també va lligada al node: en canviar de carpeta el peu no pot seguir oferint
