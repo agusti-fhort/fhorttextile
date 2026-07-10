@@ -149,7 +149,11 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
     de la cadena de versions. El ViewSet genèric la saltava (S03a · P0.1)."""
     permission_classes = [IsAuthenticated]
     serializer_class = ModelFitxerSerializer
-    queryset = ModelFitxer.objects.select_related('model', 'pujat_per').all()
+    # S03c · C2.4 — `derivat_de_label` resol el codi de l'origen (model o item): sense els dos
+    # select_related, cada fila derivada faria 2 queries extra.
+    queryset = ModelFitxer.objects.select_related(
+        'model', 'pujat_per',
+        'derivat_de_model__model', 'derivat_de_item__garment_type_item').all()
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = ModelFitxerFilter
     ordering_fields = ['data_pujada']

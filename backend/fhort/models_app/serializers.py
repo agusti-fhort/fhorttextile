@@ -28,16 +28,37 @@ class ModelFitxerSerializer(serializers.ModelSerializer):
     # select_related('pujat_per'). `default=None` cobreix pujat_per NULL (FK nullable).
     pujat_per_nom = serializers.CharField(source='pujat_per.nom_complet', read_only=True,
                                           default=None)
+    # S03c · C2.4 (D17) — procedència llegible. `derivat_de_model` i `derivat_de_item` ja
+    # surten com a id per `fields='__all__'`; aquí es fixen com a NOMÉS LECTURA i s'hi afegeix
+    # una etiqueta curta. Són els PRIMERS lectors d'aquests camps, que fins ara eren write-only.
+    derivat_de_label = serializers.SerializerMethodField()
 
     class Meta:
         model = ModelFitxer
         fields = '__all__'
-        read_only_fields = ('data_pujada',)
+        # La procedència l'escriuen els serveis d'importació (usar_al_model i, a C3, el germà
+        # model→model), mai el serializer.
+        read_only_fields = ('data_pujada', 'derivat_de_model', 'derivat_de_item')
 
     def get_download_url(self, obj):
         from .services_fitxers import DOWNLOAD_SALT
         return _signed_download_url(obj, self.context.get('request'),
                                     salt=DOWNLOAD_SALT, ruta='model-fitxers')
+
+    def get_derivat_de_label(self, obj):
+        """Codi de l'origen: el del MODEL si ve d'un altre model, el de l'ITEM si ve del catàleg.
+
+        Els dos camps són excloents a la pràctica (una còpia té un sol origen), però si mai en
+        coexistissin, model→model mana: és la procedència més específica. Sense N+1: el
+        ViewSet fa select_related dels dos camins.
+        """
+        if obj.derivat_de_model_id:
+            origen = obj.derivat_de_model
+            return origen.model.codi_intern if origen and origen.model_id else None
+        if obj.derivat_de_item_id:
+            origen = obj.derivat_de_item
+            return origen.garment_type_item.code if origen and origen.garment_type_item_id else None
+        return None
 
 
 class ItemFitxerSerializer(serializers.ModelSerializer):

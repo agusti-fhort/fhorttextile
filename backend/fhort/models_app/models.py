@@ -399,6 +399,23 @@ class ModelFitxer(models.Model):
         blank=True,
         related_name='usos_a_models',
     )
+    # Procedència model→model (D17): aquest fitxer és una CÒPIA importada del fitxer d'un
+    # ALTRE model. Germà de `derivat_de_item`, no de `generat_des_de`: els dos primers
+    # codifiquen "còpia amb procedència" i el tercer "artefacte generat des d'un altre
+    # fitxer" (p.ex. un PDF EXPORT d'un .ftt). Barrejar-los amagaria dues semàntiques sota
+    # un sol camp. SET_NULL: l'origen pot desaparèixer sense afectar la còpia.
+    #
+    # ATENCIÓ (Q4.4 de DIAGNOSI_S03C_NAVEGACIO): a diferència de catàleg→model, un `.ftt`
+    # model→model NO es pot copiar tal qual — porta text congelat, l'asset del logo, un
+    # objecte image amb la URL i metadata del model origen. L'endpoint que escriurà aquest
+    # camp (C3) haurà de reescriure'ls. Aquí només s'hi crea el camp.
+    derivat_de_model = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='derivats',
+    )
     accessible_portal = models.BooleanField(default=False)
     pujat_per = models.ForeignKey(
         'accounts.UserProfile',
