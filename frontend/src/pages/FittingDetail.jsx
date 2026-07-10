@@ -538,9 +538,16 @@ export default function FittingDetail() {
       .finally(() => setLoading(false))
   }, [loadSession])
 
-  // P3 — sortida EXPLÍCITA. Abans era `navigate(-1)`: depenia de l'historial del navegador
-  // (podia tornar a qualsevol lloc) i no transportava cap context.
-  const sortida = useCallback(() => navigate('/fittings'), [navigate])
+  // P3 — sortida EXPLÍCITA amb context. Abans era `navigate(-1)`: depenia de l'historial del
+  // navegador i no transportava res. Si la sessió ve d'una convocatòria, es torna a la seva
+  // FULLA; si és individual, a la llista.
+  //
+  // La font és `session.convocatoria` (al detall des de P4a), NO `location.state`: així també
+  // funciona en entrar per URL directa o en recarregar la pàgina.
+  const sortida = useCallback(() => {
+    const conv = session?.convocatoria
+    navigate(conv ? `/fittings/convocatoria/${conv}` : '/fittings')
+  }, [navigate, session])
 
   const reloadGrid = useCallback(() => {
     if (!activePieceId) { setGrid(null); return Promise.resolve() }
@@ -638,7 +645,7 @@ export default function FittingDetail() {
       <div style={{ position: 'sticky', top: 0, zIndex: 10 }}>
         <EditorHeader
           model={{ codi_intern: idCodi, nom_prenda: idNom, base_size_label: model.base_size_label, size_run_model: model.size_run_model }}
-          onBack={() => navigate('/fittings')}
+          onBack={sortida}
           context={
             <>
               <Badge variant="gate">{session.fase_display || session.fase}</Badge>
