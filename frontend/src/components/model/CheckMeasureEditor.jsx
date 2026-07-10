@@ -6,6 +6,7 @@ import EditorHeader from './EditorHeader'
 import DependencyPanel from './DependencyPanel'
 import WatchpointsPanel from './WatchpointsPanel'
 import SessionPanel from './SessionPanel'
+import SessionActions from './SessionActions'
 
 // CHECK sobre l'editor únic MeasureGrid (substitueix SizeCheckWork): UNA graella amb l'historial
 // d'estadis (base-stages, read-only) com a columnes + la columna activa 'Real' (valor_real) + el
@@ -271,7 +272,7 @@ const checkSource = {
   },
 }
 
-export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false, taskId = null, source = null, sourceCtx = null, lockRules = false }) {
+export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false, taskId = null, source = null, sourceCtx = null, lockRules = false, onSessionSaved = null }) {
   const { t } = useTranslation()
   const src = source || checkSource
   const [raw, setRaw] = useState(null)
@@ -372,6 +373,13 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       )}
 
       {/* D-12 — Watchpoints del model (crear en treball, veure sempre). Origen = la tasca actual. */}
+      {/* Sprint Y — accions del mode sessió (gravar-i-tornar + reobertura + descartar). Y6 cablarà
+          el retorn a la fulla via onSessionSaved; per defecte surt de l'edició (onResolved). */}
+      {ctx.fittingSession && !readOnly && (
+        <SessionActions session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} taskId={taskId}
+          onSaved={() => (onSessionSaved || onResolved)?.()} onReload={load} onFeedback={onFeedback} />
+      )}
+
       {model?.id && <WatchpointsPanel modelId={model.id} taskId={taskId} editable={!readOnly} />}
 
       {confirm && (
