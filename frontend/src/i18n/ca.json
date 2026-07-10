@@ -3102,6 +3102,7 @@
     "unexpected_response": "El servidor ha respost de manera inesperada. No s'ha obert la fitxa."
   },
   "file_picker": {
+    "explore_tenant": "Explora tot el tenant",
     "title": "Fitxers",
     "close": "Tancar",
     "tab_model": "Model",

@@ -100,6 +100,10 @@ export const watchpoints = {
 // L'escriptura NO passa per aquí: puja per models/<id>/upload-fitxer/ (multipart, fetch cru).
 export const modelFitxers = {
   list: (params) => client.get('/api/v1/model-fitxers/', { params }),
+  // Cicle model→model (S03c · C3.2): crea una CÒPIA sobirana al model destí (derivat_de_model);
+  // l'origen no es toca mai. Un `.ftt` s'hi descongela i es re-resol contra el destí (D16).
+  usarAlModel: (id, modelId) =>
+    client.post(`/api/v1/model-fitxers/${id}/usar-al-model/`, { model_id: modelId }),
 }
 
 // Fitxers del CATÀLEG, ancorats a un GarmentTypeItem (S03b · P4/P5).

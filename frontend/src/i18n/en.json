@@ -3102,6 +3102,7 @@
     "unexpected_response": "The server responded unexpectedly. The tech sheet was not opened."
   },
   "file_picker": {
+    "explore_tenant": "Browse the whole tenant",
     "title": "Files",
     "close": "Close",
     "tab_model": "Model",

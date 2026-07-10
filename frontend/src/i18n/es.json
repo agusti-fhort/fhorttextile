@@ -3102,6 +3102,7 @@
     "unexpected_response": "El servidor ha respondido de forma inesperada. No se ha abierto la ficha."
   },
   "file_picker": {
+    "explore_tenant": "Explora todo el tenant",
     "title": "Archivos",
     "close": "Cerrar",
     "tab_model": "Modelo",

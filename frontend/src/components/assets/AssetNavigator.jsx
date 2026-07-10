@@ -82,7 +82,7 @@ function Carpeta({ icona, titol, subtitol, comptador, onClick, onDoubleClick, ac
 
 export default function AssetNavigator({
   mode = 'files', filterTipus = null, onPick, onClose, inline = false,
-  actionLabel, nav: navExtern, onNav: onNavExtern,
+  actionLabel, pickable, nav: navExtern, onNav: onNavExtern,
 }) {
   const { t } = useTranslation()
 
@@ -175,6 +175,9 @@ export default function AssetNavigator({
     if (nav.gtiId) molles.push({ txt: gtiDe(nav.gtiId)?.code || '…', go: null })
   }
 
+  // El doble clic de FileList ha de respectar el mateix guard que el peu.
+  const obrirFitxer = (f) => { if (!pickable || pickable(f)) onPick?.(f) }
+
   // ── Cos ──────────────────────────────────────────────────────────────────
   let cos
   if (cerca) {
@@ -204,7 +207,7 @@ export default function AssetNavigator({
       </div>
     )
   } else if (nav.tab === 'models') {
-    if (nav.modelId && mode === 'files') cos = <FileList files={fitxersVisibles} selectedId={triat?.id} onSelect={setTriat} onOpen={(f) => onPick?.(f)} />
+    if (nav.modelId && mode === 'files') cos = <FileList files={fitxersVisibles} selectedId={triat?.id} onSelect={setTriat} onOpen={obrirFitxer} />
     else if (nav.temp) cos = perTemporada.map(m => (
       <Carpeta key={m.id} icona="ti-file-text" titol={m.codi_intern} subtitol={m.nom_prenda}
         actiu={mode === 'models' && nav.modelId === m.id}
@@ -220,7 +223,7 @@ export default function AssetNavigator({
         onClick={() => patch({ cust: c })} />
     ))
   } else {
-    if (nav.gtiId) cos = <FileList files={fitxersVisibles} selectedId={triat?.id} onSelect={setTriat} onOpen={(f) => onPick?.(f)} />
+    if (nav.gtiId) cos = <FileList files={fitxersVisibles} selectedId={triat?.id} onSelect={setTriat} onOpen={obrirFitxer} />
     else if (nav.gtId) cos = gtis === null ? <Buit txt={t('app.loading')} /> : gtis.map(g => (
       <Carpeta key={g.id} icona="ti-layers-intersect" titol={g.code} subtitol={g.name}
         comptador={g.fitxers_count} onClick={() => patch({ gtiId: g.id })} />
@@ -231,7 +234,12 @@ export default function AssetNavigator({
     ))
   }
 
-  const potConfirmar = mode === 'models' ? !!nav.modelId : !!triat
+  // `pickable` deshabilita el peu per als fitxers que el consumidor no sap inserir (p.ex. un PDF
+  // al canvas). Val més un botó apagat que un error DESPRÉS d'haver-ne fet ja la còpia sobirana.
+  const potConfirmar = mode === 'models'
+    ? !!nav.modelId
+    : !!triat && (!pickable || pickable(triat))
+
   const cosNavegador = (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
       {/* 1 · cerca global, sempre visible */}

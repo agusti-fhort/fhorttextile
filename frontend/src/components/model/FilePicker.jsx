@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { modelFitxers, itemFitxers } from '../../api/endpoints'
 import { UPLOAD_ACCEPT } from '../../utils/uploads'
+import AssetNavigator from '../assets/AssetNavigator'
 
 // FilePicker de l'editor de fitxa (S03b · P7). Reactiva el punt d'entrada que el comentari
 // de TechSheetEditor.jsx anticipava ("futur tab Components").
@@ -44,6 +45,10 @@ export default function FilePicker({ modelId, garmentTypeItemId, onInsert, onClo
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
+  const [navOpen, setNavOpen] = useState(false)
+  // Memòria de camí del navegador, a nivell d'aquest panell: obrir-lo i tancar-lo no ha de fer
+  // recomençar la navegació. Mai localStorage.
+  const [nav, setNav] = useState({ tab: 'models', cust: null, any: null, temp: null, modelId: null, gtId: null, gtiId: null })
 
   const loadModel = useCallback(() => {
     modelFitxers.list({ model: modelId, is_current: true, ordering: '-data_pujada' })
@@ -66,6 +71,36 @@ export default function FilePicker({ modelId, garmentTypeItemId, onInsert, onClo
       await itemFitxers.usarAlModel(f.id, modelId)
       loadModel()                                  // ara ja és a la pestanya Model
       setNotice(t('file_picker.used_ok', { nom: f.nom_fitxer }))
+    } catch (e) {
+      setError(e?.response?.data?.error || t('file_picker.use_error'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // S03c · C5.2 — "Explora tot el tenant": el mateix AssetNavigator que la fitxa tècnica, aquí
+  // en modal sobre l'editor. El navegador NOMÉS retorna la selecció; la sobirania la imposa aquí:
+  //
+  //   fitxer del model actual  → s'insereix tal qual
+  //   fitxer d'un ALTRE model  → usar-al-model (model→model, C3.2) i s'insereix la CÒPIA
+  //   ItemFitxer del catàleg   → usar-al-model del germà d'items (cicle ①)
+  //
+  // El que arriba al canvas és SEMPRE un fitxer d'aquest model, mai l'original: si s'hi inserís
+  // l'origen, esborrar el model A trencaria el document del model B. El discriminant és el propi
+  // objecte (un ItemFitxer porta `garment_type_item`; un ModelFitxer porta `model`).
+  const triarDelNavegador = async (f) => {
+    if (!f) return
+    setBusy(true); setError(null); setNotice(null)
+    try {
+      let aInserir = f
+      if (f.garment_type_item != null) {
+        aInserir = (await itemFitxers.usarAlModel(f.id, modelId)).data
+      } else if (String(f.model) !== String(modelId)) {
+        aInserir = (await modelFitxers.usarAlModel(f.id, modelId)).data
+      }
+      setNavOpen(false)
+      if (aInserir !== f) { loadModel(); setNotice(t('file_picker.used_ok', { nom: f.nom_fitxer })) }
+      onInsert(aInserir)
     } catch (e) {
       setError(e?.response?.data?.error || t('file_picker.use_error'))
     } finally {
@@ -165,6 +200,14 @@ export default function FilePicker({ modelId, garmentTypeItemId, onInsert, onClo
         ))}
       </div>
 
+      <div style={{ padding: '8px 12px', borderBottom: '0.5px solid var(--border)' }}>
+        <button type="button" disabled={busy} onClick={() => setNavOpen(true)}
+          style={{ ...actionBtn, width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px' }}>
+          <i className="ti ti-building-warehouse" aria-hidden="true" />
+          {t('file_picker.explore_tenant')}
+        </button>
+      </div>
+
       <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
         {error && (
           <div role="alert" style={{ color: 'var(--err)', fontSize: 'var(--fs-caption)', marginBottom: 8 }}>
@@ -192,6 +235,18 @@ export default function FilePicker({ modelId, garmentTypeItemId, onInsert, onClo
           </div>
         )}
       </div>
+
+      {navOpen && (
+        <AssetNavigator
+          mode="files"
+          nav={nav}
+          onNav={setNav}
+          onClose={() => setNavOpen(false)}
+          onPick={triarDelNavegador}
+          pickable={isImage}
+          actionLabel={t('file_picker.insert')}
+        />
+      )}
     </aside>
   )
 }
