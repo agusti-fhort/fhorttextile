@@ -11,7 +11,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -122,7 +122,13 @@ class ItemFitxerViewSet(mixins.CreateModelMixin,
         inline = request.query_params.get('inline') == '1'
         return serve_fitxer(self.get_object(), as_attachment=not inline)
 
-    @action(detail=True, methods=['post'], url_path='usar-al-model')
+    # `parser_classes` de la CLASSE és `[MultiPartParser, FormParser]` perquè `create` puja bytes.
+    # Aquesta acció no en puja: rep `{model_id}` en JSON, com el germà `ModelFitxerViewSet.
+    # usar_al_model` (que no restringeix parsers i per tant hereta els defaults de DRF). Sense
+    # aquest override, el `client.post(..., {model_id})` d'`endpoints.js` — axios, i per tant
+    # `application/json` — rebotava amb **415**: el camí catàleg→model era inaccessible des de la UI.
+    @action(detail=True, methods=['post'], url_path='usar-al-model',
+            parser_classes=[JSONParser, FormParser, MultiPartParser])
     def usar_al_model(self, request, pk=None):
         """POST /api/v1/item-fitxers/<id>/usar-al-model/  Body: {model_id}   [S03b · P5]
 
