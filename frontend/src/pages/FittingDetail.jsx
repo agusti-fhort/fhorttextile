@@ -204,9 +204,13 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
           } catch (e) {
             // P3 — tancament PARCIAL: hi ha peces ja tancades (i GradingVersions v+1 creades) i la
             // sessió segueix oberta. No hi ha rollback ni reintent: s'informa i NO es navega.
+            // XC — una sola peça (o la primera que falla): mostra el missatge REAL del servidor
+            // (p.ex. el guard D-1 grading segellat), amb el text fix com a fallback. Patró idèntic
+            // a onCreatePiece (:265). Migra literal quan doSave passi a la superfície nova (Sprint Y).
+            const serverMsg = e?.response?.data?.error || e?.response?.data?.detail
             setError(done
               ? t('fitting.save.partial_close', { done, total: toClose.length })
-              : t('fitting.save.save_error', { piece: g.model?.codi || g.id }))
+              : (serverMsg || t('fitting.save.save_error', { piece: g.model?.codi || g.id })))
             setBusy(false); return
           }
         }
