@@ -110,6 +110,9 @@ class SizeSystemSerializer(serializers.ModelSerializer):
 class GarmentTypeSerializer(serializers.ModelSerializer):
     global_codi = serializers.CharField(source='garment_type_global.codi', read_only=True)
     global_nom = serializers.CharField(source='garment_type_global.nom_en', read_only=True)
+    # Annotat al queryset del ViewSet (Count('items')). `default=0` perquè la resposta d'un
+    # POST/PUT serialitza la instància desada, que no ve del queryset i no porta l'anotació.
+    items_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = GarmentType

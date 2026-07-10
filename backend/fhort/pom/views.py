@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -95,7 +96,17 @@ class SizeDefinitionViewSet(viewsets.ModelViewSet):
 
 class GarmentTypeViewSet(viewsets.ModelViewSet):
     serializer_class = GarmentTypeSerializer
-    queryset = GarmentType.objects.select_related('garment_type_global').all()
+    # `items_count` a la BD, no per fila: l'arbre del Finder mostra el compte d'items de cada
+    # garment type i un SerializerMethodField hi faria un N+1 de 19 queries (taula #4).
+    #
+    # `order_by` explícit: `annotate()` afegeix GROUP BY i Django descarta l'ordenació per
+    # defecte a les queries agregades. Aquí no n'hi havia cap de real (Meta.ordering és buit i
+    # l'atribut `ordering` de sota és inert sense OrderingFilter al filter_backends), i la
+    # paginació sense ORDER BY pot repetir o saltar files entre pàgines.
+    queryset = (GarmentType.objects
+                .select_related('garment_type_global')
+                .annotate(items_count=Count('items'))
+                .order_by('codi_client'))
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['actiu', 'grup']
     search_fields = ['codi_client', 'nom_client']

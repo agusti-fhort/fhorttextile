@@ -811,8 +811,27 @@ class _Configure(HasCapability):
 
 class GarmentTypeItemViewSet(viewsets.ModelViewSet):
     # B3b: select_related dels FK de completesa (ruleset/talla base) per evitar N+1 a la graella.
-    queryset = GarmentTypeItem.objects.select_related(
-        'garment_type', 'grading_rule_set', 'base_size_definition').all()
+    # S03c · C2.1: `poms_count` feia un `.count()` per fila (N+1: 57 items = 57 queries) i
+    # `fitxers_count` no existia. Els dos passen a ser anotacions.
+    #
+    # `distinct=True` NO és cosmètic: `pom_maps` i `fitxers` són dues relacions multivaluades
+    # i els seus LEFT JOIN es multipliquen entre si (un item amb 3 POMs i 2 fitxers donaria
+    # poms_count=6 i fitxers_count=6). Amb `distinct` cada Count compta files úniques.
+    #
+    # `fitxers_count` compta NOMÉS `is_current=True`: en un Finder, "fitxers" és el que
+    # l'usuari veu a la carpeta, no la suma de totes les versions històriques de cada cadena.
+    #
+    # `order_by` explícit i idèntic al Meta.ordering: `annotate()` afegeix GROUP BY i Django
+    # descarta l'ordenació per defecte a les queries agregades (el SQL en perdia l'ORDER BY).
+    # Sense això, la paginació d'aquest endpoint deixava de ser determinista.
+    queryset = (GarmentTypeItem.objects
+                .select_related('garment_type', 'grading_rule_set', 'base_size_definition')
+                .annotate(
+                    poms_count=Count('pom_maps', distinct=True),
+                    fitxers_count=Count('fitxers', filter=Q(fitxers__is_current=True),
+                                        distinct=True),
+                )
+                .order_by('garment_type', 'complexity_order', 'code'))
     serializer_class = GarmentTypeItemSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['garment_type', 'active']
