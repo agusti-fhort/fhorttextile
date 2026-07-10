@@ -142,6 +142,9 @@ function changedRows(grid) {
   return { sizeLabels, baseLabel, rows, isMod }
 }
 
+// Estats en què una sessió és de només lectura (mirall de SEALED_SESSION_ESTATS del backend).
+const SEALED_ESTATS = ['Tancada', 'Anullada']
+
 // Una peça té canvis a gravar si alguna línia de la TALLA BASE té valor_real ≠ valor_teoric.
 // El filtre per talla base NO és redundant amb l'adapter (que ja només pinta la base): `grid.lines`
 // ve de l'API amb totes les talles, i `propagar` reescriu el valor_real de les germanes a cada
@@ -484,7 +487,10 @@ export default function FittingDetail() {
   const [gridLoading, setGridLoading] = useState(false)
   const [creatingPiece, setCreatingPiece] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
-  // D2 — la revisió és la pantalla principal; la graella (taula de mesures) és opt-in.
+  // P2 — la graella base és la pantalla de TREBALL i el landing per defecte. La revisió deixa de
+  // ser un pas intermedi (no tenia endpoint ni estat: era un toggle de client) i s'hi arriba amb
+  // "Tornar a revisió". Neix a `true` perquè, mentre la sessió carrega, no es pinti una graella
+  // buida; l'efecte de càrrega la baixa a `false` si la sessió és editable.
   const [reviewMode, setReviewMode] = useState(true)
   // P5: l'editor és MeasureGrid, que OWNS el seu buffer d'edició (reals/ancoratge/focus interns).
   // El remuntatge net per peça es fa via key={activePieceId} a MeasureGrid. Aquí ja no cal estat de cel·la.
@@ -506,8 +512,14 @@ export default function FittingDetail() {
       .then(s => {
         // D2 — en entrar a una sessió Programada, obrir-la automàticament (→ Oberta + started_at).
         if (s && s.estat === 'Programada') {
-          return fittingSessions.open(s.id).then(r => setSession(r.data)).catch(() => {})
+          return fittingSessions.open(s.id).then(r => { setSession(r.data); return r.data }).catch(() => s)
         }
+        return s
+      })
+      .then(s => {
+        // P2 — landing directe: la revisió només és el landing d'una sessió de només lectura
+        // (branca del split de consulta). Si és editable, s'entra a la graella de treball.
+        setReviewMode(!s || SEALED_ESTATS.includes(s.estat))
       })
       .finally(() => setLoading(false))
   }, [loadSession])
@@ -537,7 +549,7 @@ export default function FittingDetail() {
 
   const pieces = session.piece_fittings || []
   // Sessió tancada/anul·lada → tota la revisió és de lectura (split 40/60 amb taula en lectura).
-  const readOnly = session.estat === 'Tancada' || session.estat === 'Anullada'
+  const readOnly = SEALED_ESTATS.includes(session.estat)
   const lines = grid?.lines || []
   const model = grid?.model || {}
   // Trim perquè base_size_label coincideixi amb les etiquetes de talla (poden venir amb espais).
