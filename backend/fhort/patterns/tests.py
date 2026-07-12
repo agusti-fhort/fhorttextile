@@ -405,3 +405,90 @@ class DegradacioElegantTest(unittest.TestCase):
         self.assertEqual([i.codi for i in table.issues], ['delta_count_mismatch'])
         self.assertEqual(table.regles[1].deltes['S'], (2.0, 2.0))
         self.assertEqual(table.regles[1].delta('XL'), (0.0, 0.0))  # forat → zero
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Guard de puresa — la frontera hexagonal, feta complir per una màquina
+# ═════════════════════════════════════════════════════════════════════════════
+
+class PurityGuardTest(unittest.TestCase):
+    """`engine/` és un paquet Python pur i ho ha de continuar sent.
+
+    La frontera hexagonal no s'esfondra d'un cop: s'esfondra el dia que algú necessita
+    `timezone.now()` dins del motor i fa un import "petit". Aquest test és el que fa
+    que aquell dia el sprint es posi vermell.
+
+    Dos controls, perquè un de sol no basta: l'AST enxampa l'import escrit, i el
+    subprocés enxampa el que arriba per una porta del darrere (un import transitiu que
+    acabi carregant Django).
+    """
+
+    ENGINE = Path(__file__).parent / 'engine'
+
+    #: Res d'això pot aparèixer en un import d'`engine/`.
+    PROHIBITS = ('django', 'rest_framework')
+
+    def _moduls(self) -> list[Path]:
+        moduls = sorted(self.ENGINE.glob('*.py'))
+        self.assertGreater(len(moduls), 1, 'No s\'ha trobat el codi de l\'engine.')
+        return moduls
+
+    def test_cap_import_de_django_ni_drf_dins_engine(self):
+        import ast
+
+        for path in self._moduls():
+            with self.subTest(modul=path.name):
+                arbre = ast.parse(path.read_text(), filename=str(path))
+                for node in ast.walk(arbre):
+                    if isinstance(node, ast.Import):
+                        noms = [a.name for a in node.names]
+                    elif isinstance(node, ast.ImportFrom):
+                        # level > 0 és un import relatiu (from .geometry import …):
+                        # intern a l'engine, que és exactament el que ha de fer.
+                        noms = [node.module] if node.level == 0 and node.module else []
+                    else:
+                        continue
+
+                    for nom in noms:
+                        arrel = nom.split('.')[0]
+                        self.assertNotIn(
+                            arrel, self.PROHIBITS,
+                            f'{path.name}:{node.lineno} importa "{nom}". '
+                            f'engine/ és un paquet PUR: els adaptadors van fora.',
+                        )
+                        if arrel == 'fhort' and not nom.startswith('fhort.patterns.engine'):
+                            self.fail(
+                                f'{path.name}:{node.lineno} importa "{nom}": l\'engine '
+                                f'no pot dependre de la resta de l\'app.'
+                            )
+
+    def test_lengine_simporta_sense_django_configurat(self):
+        """El control que no es pot enganyar: importar-ho tot en un procés que no sap
+        què és Django. Si algun mòdul arrossega l'ORM per una via indirecta, peta aquí."""
+        import subprocess
+        import sys
+
+        moduls = [f'fhort.patterns.engine.{p.stem}' for p in self._moduls()
+                  if p.stem != '__init__']
+        codi = (
+            'import importlib, sys\n'
+            'assert "DJANGO_SETTINGS_MODULE" not in __import__("os").environ\n'
+            + '\n'.join(f'importlib.import_module({m!r})' for m in moduls)
+            + '\nassert "django" not in sys.modules, '
+              '"engine ha carregat django per un import transitiu"\n'
+        )
+        entorn = {
+            k: v for k, v in __import__('os').environ.items()
+            if k != 'DJANGO_SETTINGS_MODULE'
+        }
+        proc = subprocess.run(
+            [sys.executable, '-c', codi],
+            cwd=str(Path(__file__).resolve().parents[2]),  # backend/
+            env=entorn,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(
+            proc.returncode, 0,
+            f'L\'engine no s\'importa sense Django:\n{proc.stderr}',
+        )
