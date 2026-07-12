@@ -333,6 +333,63 @@ class PatternPOM(models.Model):
         return f'{self.pom_master_id} @ {self.pattern_piece_id} = {self.valor_mesurat_cm} cm'
 
 
+class ExportAcknowledgement(models.Model):
+    """El gate humà: algú ha llegit l'avís i s'ha fet responsable d'aquesta exportació.
+
+    **És una PRECONDICIÓ DURA, no un registre a posteriori.** Sense una fila d'aquestes no
+    surt ni un byte de niada. La raó no és burocràtica: el que exportem és un fitxer que
+    una màquina de tallar pot convertir en tela tallada, i entre el nostre motor i la taula
+    de tall hi ha d'haver una persona que hagi dit «sí, jo ho he mirat».
+
+    El que es desa és el que caldria per reconstruir la decisió mesos després: **qui** va
+    exportar, **quan**, de **quina versió** del patró, amb **quin grading** (la versió
+    exacta, que és tota la gràcia del pinçament), cap a quin CAD, i —això és el que fa que
+    l'acte sigui un acte i no un clic— **el text literal que se li va ensenyar**. Si el
+    text canvia (i canviarà: avui és PROVISIONAL, pendent d'advocat), els reconeixements
+    vells continuen dient què va acceptar cadascú de debò, i no el que avui diríem que va
+    acceptar.
+    """
+
+    pattern_file = models.ForeignKey(
+        PatternFile, on_delete=models.CASCADE, related_name='export_acknowledgements',
+    )
+    #: La versió del patró, COPIADA (no derivada per FK). Si el `PatternFile` s'esborra o
+    #: la cadena es reescriu, aquesta fila ha de continuar sabent de què parlava.
+    versio_patro = models.PositiveIntegerField()
+
+    #: PROTECT: la versió de grading amb què es va exportar no es pot esborrar mentre hi
+    #: hagi un fitxer al món que se'n va derivar. És l'única manera de tornar a generar
+    #: exactament aquell fitxer.
+    grading_version = models.ForeignKey(
+        'fitting.GradingVersion', on_delete=models.PROTECT,
+        related_name='pattern_export_acknowledgements',
+    )
+    destination_profile = models.CharField(max_length=40)
+
+    usuari = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True,
+        related_name='pattern_exports_reconeguts',
+    )
+    data = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    #: El text EXACTE que l'usuari va veure i acceptar, literal. No una clau i18n: el text.
+    texts_shown = models.TextField()
+
+    class Meta:
+        verbose_name = 'Reconeixement d\'exportació'
+        verbose_name_plural = 'Reconeixements d\'exportació'
+        ordering = ['-data']
+        indexes = [
+            models.Index(fields=['pattern_file', '-data']),
+        ]
+
+    def __str__(self):
+        return (
+            f'{self.pattern_file_id} v{self.versio_patro} · grading '
+            f'{self.grading_version_id} · {self.data:%Y-%m-%d %H:%M}'
+        )
+
+
 class SewRelation(models.Model):
     """Una costura: quins trams d'una peça es cusen amb quins d'una altra.
 

@@ -27,6 +27,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from fhort.fitting.models import GradingVersion
 from fhort.models_app.models import Model
 from fhort.models_app.services_fitxers import (DOWNLOAD_TTL, UploadRejected,
                                                serve_fitxer, validate_upload)
@@ -36,7 +37,8 @@ from .adapters import DjangoGeometryStore
 from .engine.aama_reader import AAMAReader
 from .engine.errors import PatternParseError
 from .engine.rul_reader import RULReader, coherencia_dxf_rul
-from .models import PatternFile
+from .export import PERFILS_DISPONIBLES, ExportBlocked, build_export
+from .models import ExportAcknowledgement, PatternFile
 from .serializers import (PatternFileLlistaSerializer, PatternFileSerializer,
                           PatternGeometrySerializer)
 from .services import delete_pattern_bytes, save_pattern_file
@@ -48,6 +50,79 @@ logger = logging.getLogger(__name__)
 #: només l'id: amb un salt compartit, un token de ModelFitxer id=5 validaria aquí.
 PATTERN_DOWNLOAD_SALT = 'pattern_file_download'
 PATTERN_RUL_DOWNLOAD_SALT = 'pattern_file_rul_download'
+
+#: ⚠️ TEXT PROVISIONAL — PENDENT D'ADVOCAT ABANS DE PRODUCCIÓ REAL.
+#: Viu aquí i no al frontend perquè és el text que es DESA a `ExportAcknowledgement`: el
+#: registre ha de guardar el que l'usuari va veure de debò, i si la font fos el bundle del
+#: navegador, el que quedaria desat seria el que el navegador d'aquell dia deia. El
+#: frontend el rep per l'API i el mostra; no en té una còpia.
+GATE_TEXT_CA = (
+    'Aquest fitxer ha estat generat automàticament. Cal obrir-lo al teu CAD i verificar '
+    'geometria, costures i grading abans de tallar.'
+)
+
+
+def _preview_payload(resultat) -> dict:
+    """El resultat del pipeline → el que el modal ensenya.
+
+    Hi surt tot el que qui exporta ha de poder mirar abans de fer-se'n responsable, i
+    especialment **el que NO ha entrat a la niada**: les omissions no es filtren ni es
+    resumeixen en un número. Un modal que amaga que un POM no s'ha graduat convertiria el
+    gate en un tràmit.
+    """
+    proj = resultat.projeccio
+    return {
+        'talles': [
+            {
+                'talla': sp.talla,
+                'es_base': sp.es_base,
+                'bbox_cm': [round(v / 10.0, 1) for v in sp.bbox],
+                'ok': sp.ok,
+                'poms': [
+                    {
+                        'pom_code': p.pom_code,
+                        'peca': p.peca,
+                        'valor_cm': (round(p.valor_cm, 2) if p.valor_cm is not None else None),
+                        'delta_llegit_cm': (
+                            round(p.delta_llegit_cm, 2)
+                            if p.delta_llegit_cm is not None else None),
+                        'delta_spec_cm': p.delta_spec_cm,
+                        'desviament_cm': p.desviament_cm,
+                        # El valor que la FITXA declara. No té per què coincidir amb el que
+                        # el patró mesura: es mostra perquè es vegi, no perquè quadri.
+                        'valor_spec_cm': p.valor_spec_cm,
+                        'ok': p.ok,
+                        'error': p.error,
+                    }
+                    for p in sp.poms
+                ],
+                'costures': [
+                    {
+                        'sew_id': s.sew_id,
+                        'casa': bool(s.check and s.check.casa),
+                        'missatge': (s.check.missatge if s.check else s.error),
+                        'desviament_cm': (
+                            round(s.check.desviament_cm, 2) if s.check else None),
+                    }
+                    for s in sp.costures
+                ],
+            }
+            for sp in resultat.previews
+        ],
+        'omissions': [
+            {'codi': o.codi, 'pom_code': o.pom_code, 'missatge': o.missatge}
+            for o in proj.omissions
+        ],
+        'problemes_poms': list(resultat.problemes_poms),
+        'regles': proj.regles_actives,
+        'autovalidacio': {
+            'ok': resultat.autovalidacio.ok,
+            'resum': resultat.autovalidacio.resum(),
+            'punts_comparats': resultat.autovalidacio.punts_comparats,
+            'desviacio_maxima_um': resultat.autovalidacio.desviacio_maxima_um,
+        },
+        'text_gate': GATE_TEXT_CA,
+    }
 
 
 def _rul_servable(fp: PatternFile):
@@ -246,6 +321,136 @@ class PatternFileViewSet(mixins.CreateModelMixin,
         doc = DjangoGeometryStore().load_from(fp)
         svg = render_document(doc, piece_name=request.query_params.get('piece', ''))
         return HttpResponse(svg, content_type='image/svg+xml')
+
+    # ── L'escalat: previsualitzar i exportar ─────────────────────────────────
+    @action(detail=True, methods=['get'], url_path='grading-versions')
+    def grading_versions(self, request, pk=None):
+        """Les versions de grading APROVADES del model d'aquest patró. Només aquestes.
+
+        No s'ofereix la «versió activa» ni la «vigent»: `aprovada` i `is_active` són
+        ortogonals (a staging, 3 de les 4 aprovades NO són l'activa), i qui exporta una
+        niada tria una versió SIGNADA, no la que la UI serveix per defecte.
+        """
+        fp = self.get_object()
+        if fp.model_id is None:
+            return Response([])
+
+        versions = (
+            GradingVersion.objects
+            .filter(size_fitting__model_id=fp.model_id, aprovada=True)
+            .select_related('size_fitting')
+            .order_by('-data', '-id')
+        )
+        return Response([
+            {
+                'id': gv.id,
+                'nom': gv.nom,
+                'data': gv.data,
+                'version_number': gv.version_number,
+                'is_active': gv.is_active,
+                'specs': gv.graded_specs.filter(is_active=True).count(),
+            }
+            for gv in versions
+        ])
+
+    @action(detail=True, methods=['post'], url_path='export-preview')
+    def export_preview(self, request, pk=None):
+        """La taula que l'usuari ha de mirar ABANS de reconèixer res.
+
+        Fa el pipeline sencer —projecció, previsualització i autovalidació— i NO torna
+        bytes. Si l'exportació fallaria, ha de fallar aquí, amb el modal obert i el motiu a
+        la vista, i no després que algú hagi clicat que se'n fa responsable.
+        """
+        try:
+            resultat = build_export(
+                self.get_object(),
+                grading_version_id=int(request.data.get('grading_version_id') or 0),
+                destination_profile=request.data.get('destination_profile') or 'polypattern',
+            )
+        except (TypeError, ValueError):
+            return Response({'error': 'Cal un `grading_version_id` numèric.'}, status=400)
+        except ExportBlocked as e:
+            return Response(e.as_dict(), status=422)
+
+        return Response(_preview_payload(resultat))
+
+    @action(detail=True, methods=['post'])
+    def export(self, request, pk=None):
+        """POST … /export/ → el DXF de la niada. **El gate és una precondició dura.**
+
+        `{grading_version_id, destination_profile, acknowledged: true}`.
+
+        Sense `acknowledged`, no es genera res: ni s'arriba a cridar el motor. L'ordre
+        importa —primer el gate, després els bytes— perquè un 403 després d'haver fabricat
+        el fitxer seria un gate de mentida.
+
+        El RUL germà es descarrega a part (`export-rul`), amb els mateixos paràmetres: són
+        dos artefactes, no un (esmena E3), i el navegador no pot baixar-ne dos d'una sola
+        resposta.
+        """
+        fp = self.get_object()
+
+        if request.data.get('acknowledged') is not True:
+            return Response(
+                {
+                    'error': 'Aquesta exportació necessita un reconeixement explícit.',
+                    'text_gate': GATE_TEXT_CA,
+                },
+                status=403,
+            )
+
+        try:
+            grading_version_id = int(request.data.get('grading_version_id') or 0)
+        except (TypeError, ValueError):
+            return Response({'error': 'Cal un `grading_version_id` numèric.'}, status=400)
+
+        perfil = request.data.get('destination_profile') or 'polypattern'
+
+        try:
+            resultat = build_export(fp, grading_version_id, perfil)
+        except ExportBlocked as e:
+            return Response(e.as_dict(), status=422)
+
+        # El registre entra ABANS de servir els bytes: si la BD falla, el fitxer no surt.
+        ExportAcknowledgement.objects.create(
+            pattern_file=fp,
+            versio_patro=fp.versio,
+            grading_version_id=grading_version_id,
+            destination_profile=perfil,
+            usuari=getattr(request.user, 'profile', None),
+            texts_shown=request.data.get('texts_shown') or GATE_TEXT_CA,
+        )
+
+        resposta = HttpResponse(resultat.dxf, content_type='application/dxf')
+        resposta['Content-Disposition'] = f'attachment; filename="{resultat.nom_dxf}"'
+        return resposta
+
+    @action(detail=True, methods=['post'], url_path='export-rul')
+    def export_rul(self, request, pk=None):
+        """El RUL germà de la niada. Mateix gate: sense reconeixement, no hi ha bytes."""
+        fp = self.get_object()
+
+        if request.data.get('acknowledged') is not True:
+            return Response(
+                {'error': 'Aquesta exportació necessita un reconeixement explícit.',
+                 'text_gate': GATE_TEXT_CA},
+                status=403,
+            )
+
+        try:
+            resultat = build_export(
+                fp,
+                int(request.data.get('grading_version_id') or 0),
+                request.data.get('destination_profile') or 'polypattern',
+            )
+        except (TypeError, ValueError):
+            return Response({'error': 'Cal un `grading_version_id` numèric.'}, status=400)
+        except ExportBlocked as e:
+            return Response(e.as_dict(), status=422)
+
+        resposta = HttpResponse(resultat.rul, content_type='application/octet-stream')
+        resposta['Content-Disposition'] = f'attachment; filename="{resultat.nom_rul}"'
+        return resposta
 
     # ── Els bytes ────────────────────────────────────────────────────────────
     @action(detail=True, methods=['get'])
