@@ -70,6 +70,7 @@ TENANT_APPS = [
     'fhort.tasks',
     'fhort.planning',
     'fhort.commerce',
+    'fhort.patterns',
     'fhort.i18n_content',
 ]
 
