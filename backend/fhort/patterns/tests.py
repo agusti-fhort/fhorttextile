@@ -20,6 +20,7 @@ import hashlib
 import io
 import logging
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 import ezdxf
@@ -28,7 +29,8 @@ import ezdxf
 # És cert i és irrellevant (els fitxers reals tampoc no en porten): que no tapi els verds.
 logging.getLogger('ezdxf').setLevel(logging.ERROR)
 
-from fhort.patterns.engine.aama_reader import AAMAReader, unfold_piece
+from fhort.patterns.engine.aama_reader import AAMAReader, fold_piece, unfold_piece
+from fhort.patterns.engine.aama_writer import AAMAWriter, UnknownProfileError
 from fhort.patterns.engine.errors import PatternParseError
 from fhort.patterns.engine.ftt_pom_layer import (
     FTT_POM_LAYER,
@@ -38,11 +40,15 @@ from fhort.patterns.engine.ftt_pom_layer import (
 )
 from fhort.patterns.engine.geometry import (
     Confidence,
+    GradeRuleData,
     LayerRole,
+    POMAnchorData,
     PointKind,
     UnitsMethod,
 )
+from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
 from fhort.patterns.engine.rul_reader import RULReader, coherencia_dxf_rul
+from fhort.patterns.engine.rul_writer import RULWriter
 
 FIXTURES = Path(__file__).parent / 'tests' / 'fixtures'
 AMELIA_DXF = FIXTURES / 'AMELIA_AZUL_prova.dxf'
@@ -57,6 +63,24 @@ def _dxf_bytes(doc) -> bytes:
     stream = io.StringIO()
     doc.write(stream)
     return stream.getvalue().encode('utf-8')
+
+
+#: Mitja peça: el centre (x=0) recte —la vora que va sobre el doblec— i la resta del
+#: contorn irregular, com una mitja esquena de debò. Un rectangle no serviria: tindria
+#: dos eixos candidats i no distingiria un detector correcte d'un de sortós.
+CONTORN_MITJA_PECA = [(0, 0), (100, 20), (120, 100), (90, 180), (0, 200), (0, 0)]
+
+
+def mitja_peca_dxf() -> bytes:
+    """AMELIA porta les peces senceres; el doblec s'ha de provar amb una peça a mitges."""
+    doc = ezdxf.new('R12')
+    block = doc.blocks.new(name='MITJA')
+    block.add_polyline2d(CONTORN_MITJA_PECA, dxfattribs={'layer': '1'})
+    for x, y in CONTORN_MITJA_PECA[:-1]:
+        block.add_point((x, y), dxfattribs={'layer': '2'})
+    block.add_point((60, 10), dxfattribs={'layer': '4'})  # un piquet al costat original
+    doc.modelspace().add_blockref('MITJA', (0, 0))
+    return _dxf_bytes(doc)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -257,22 +281,8 @@ class DoblecTest(unittest.TestCase):
     """AMELIA porta les peces senceres, així que el doblec es prova amb una peça
     dibuixada a mitges, que és com arriben les peces simètriques d'altres CAD."""
 
-    #: Mitja peça: el centre (x=0) recte —la vora que va sobre el doblec— i la resta
-    #: del contorn irregular, com una mitja esquena de debò. Un rectangle no serviria:
-    #: tindria dos eixos candidats i no distingiria un detector correcte d'un de sortós.
-    CONTORN = [(0, 0), (100, 20), (120, 100), (90, 180), (0, 200), (0, 0)]
-
-    def _mitja_peca(self) -> bytes:
-        doc = ezdxf.new('R12')
-        block = doc.blocks.new(name='MITJA')
-        block.add_polyline2d(self.CONTORN, dxfattribs={'layer': '1'})
-        for x, y in self.CONTORN[:-1]:
-            block.add_point((x, y), dxfattribs={'layer': '2'})
-        doc.modelspace().add_blockref('MITJA', (0, 0))
-        return _dxf_bytes(doc)
-
     def test_detecta_leix_de_doblec_per_geometria(self):
-        doc = AAMAReader().read(self._mitja_peca())
+        doc = AAMAReader().read(mitja_peca_dxf())
         piece = doc.piece('MITJA')
         self.assertTrue(piece.has_fold)
         fold = piece.doblec_original
@@ -281,7 +291,7 @@ class DoblecTest(unittest.TestCase):
         self.assertFalse(fold.materialitzat)
 
     def test_desplegar_dobla_lample_i_es_reversible(self):
-        doc = AAMAReader().read(self._mitja_peca())
+        doc = AAMAReader().read(mitja_peca_dxf())
         mitja = doc.piece('MITJA')
         sencera = unfold_piece(mitja)
 
@@ -405,6 +415,258 @@ class DegradacioElegantTest(unittest.TestCase):
         self.assertEqual([i.codi for i in table.issues], ['delta_count_mismatch'])
         self.assertEqual(table.regles[1].deltes['S'], (2.0, 2.0))
         self.assertEqual(table.regles[1].delta('XL'), (0.0, 0.0))  # forat → zero
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# S2 · ESCRIPTURA — el fitxer torna a sortir tal com va entrar
+# ═════════════════════════════════════════════════════════════════════════════
+
+class RoundtripAmeliaTest(unittest.TestCase):
+    """`read(write(read(f))) ≡ read(f)`. La prova de foc del writer."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.original = AAMAReader().read(AMELIA_DXF.read_bytes())
+        cls.tornat = AAMAReader().read(AAMAWriter().write(cls.original))
+
+    def test_round_trip_semanticament_identic(self):
+        report = compare(self.original, self.tornat)
+        self.assertTrue(report.ok, report.resum())
+        self.assertEqual(report.desviacio_maxima_um, 0.0)
+        self.assertEqual(report.punts_comparats, 266)
+
+    def test_el_cens_dentitats_surt_clavat(self):
+        """El writer reprodueix la llei dels TEXT de regla del CAD, no una versió
+        raonable d'aquesta llei: per això el recompte quadra exactament."""
+        self.assertEqual(
+            self.tornat.fingerprint.cens_entitats,
+            self.original.fingerprint.cens_entitats,
+        )
+        self.assertEqual(
+            self.original.fingerprint.cens_entitats,
+            {'TEXT': 123, 'POLYLINE': 16, 'POINT': 266, 'LINE': 4, 'INSERT': 4},
+        )
+
+    def test_les_seccions_buides_segueixen_buides(self):
+        """ezdxf les ompliria. Un fitxer 'millorat' ja no és el fitxer del client."""
+        self.assertTrue(self.tornat.fingerprint.header_buida)
+        self.assertTrue(self.tornat.fingerprint.tables_buida)
+
+    def test_la_coma_decimal_dels_TEXT_es_reprodueix(self):
+        escrit = AAMAWriter().write(self.original).decode()
+        self.assertIn('Quantity: 1,0', escrit)
+        self.assertEqual(
+            self.tornat.fingerprint.separador_decimal,
+            {'coordenades': '.', 'text': ','},
+        )
+
+    def test_la_capa_desconeguda_15_sobreviu(self):
+        """No entendre una capa no és excusa per perdre-la."""
+        self.assertEqual(self.tornat.fingerprint.capes_desconegudes, ('15',))
+        raw = self.tornat.piece('BACK').raw_entities
+        self.assertEqual([(r.dxftype, r.layer, r.text) for r in raw],
+                         [('TEXT', '15', 'BROWNEI RAM NARESH')])
+
+    def test_perfil_desconegut_es_error_dur(self):
+        """Mai un fallback silenciós: exportaria cap a un CAD real un fitxer amb
+        l'empremta d'un altre."""
+        with self.assertRaises(UnknownProfileError):
+            AAMAWriter().write(self.original, perfil='tuka')
+
+    def test_perfil_polypattern_explicit(self):
+        doc = AAMAReader().read(AAMAWriter().write(self.original, perfil='polypattern'))
+        self.assertTrue(compare(self.original, doc).ok)
+
+
+class RoundtripRULTest(unittest.TestCase):
+    def test_el_rul_surt_byte_a_byte_identic(self):
+        orig = AMELIA_RUL.read_bytes()
+        self.assertEqual(RULWriter().write(RULReader().read(orig)), orig)
+
+    def test_round_trip_semantic_del_rul(self):
+        ta = RULReader().read(AMELIA_RUL.read_bytes())
+        tb = RULReader().read(RULWriter().write(ta))
+        self.assertTrue(compare_grade_tables(ta, tb).ok)
+        self.assertEqual(ta, tb)
+
+    def test_amb_deltes_de_debo(self):
+        """Els d'AMELIA són zero; el writer ha de saber escriure'n de reals, amb signe."""
+        base = RULReader().read(AMELIA_RUL.read_bytes())
+        deltes = {'XS': (-6.0, -2.5), 'S': (-3.0, -1.0), 'M': (0.0, 0.0),
+                  'L': (3.0, 1.0), 'XL': (6.5, 2.5)}
+        taula = replace(base, regles={1: GradeRuleData(1, deltes)})
+        tornada = RULReader().read(RULWriter().write(taula))
+        self.assertEqual(tornada.regles[1].deltes, deltes)
+
+
+class FTTPOMLayerWriterTest(unittest.TestCase):
+    """La capa que fa el DXF autocontingut: s'escriu, es rellegeix com a taula, i no
+    embruta res del que ja hi havia."""
+
+    def _amb_poms(self):
+        doc = AAMAReader().read(AMELIA_DXF.read_bytes())
+        back = doc.piece('BACK')
+        pts = back.boundary(LayerRole.CUT).points
+        poms = (
+            POMAnchorData('POM-001', ((pts[0].x, pts[0].y), (pts[10].x, pts[10].y)),
+                          {'nom': 'CHEST WIDTH'}, 525.0),
+            POMAnchorData('POM-014', ((pts[3].x, pts[3].y), (pts[20].x, pts[20].y)),
+                          {'nom': 'BACK LENGTH'}, 700.0),
+        )
+        return replace(doc, pieces=(replace(back, poms=poms),) + doc.pieces[1:])
+
+    def test_la_capa_es_rellegeix_com_a_taula_de_poms(self):
+        doc = self._amb_poms()
+        tornat = AAMAReader().read(
+            AAMAWriter().write(doc, include_ftt_pom_layer=True,
+                               ftt_meta={'versio': 3, 'model': 'BRW-26-SS-0002'})
+        )
+        poms = tornat.piece('BACK').poms
+        self.assertEqual([p.pom_code for p in poms], ['POM-001', 'POM-014'])
+        self.assertEqual(poms[0].valor_mesurat_mm, 525.0)
+        self.assertEqual(poms[0].definicio_mesura['nom'], 'CHEST WIDTH')
+
+        # La geometria i els POMs han de tornar iguals. L'empremta NO: hi hem afegit una
+        # capa a posta, i el comparador ho canta (i fa bé de cantar-ho).
+        report = compare(doc, tornat, comparar_empremta=False)
+        self.assertTrue(report.ok, report.resum())
+        self.assertIn(FTT_POM_LAYER, tornat.fingerprint.capes_presents)
+
+    def test_afegir_la_capa_es_una_diferencia_i_el_comparador_ho_diu(self):
+        """L'eina no ha de callar ni quan el canvi és nostre i volgut."""
+        doc = self._amb_poms()
+        tornat = AAMAReader().read(AAMAWriter().write(doc, include_ftt_pom_layer=True))
+        report = compare(doc, tornat)
+        self.assertFalse(report.ok)
+        self.assertEqual([d.tipus for d in report.diferencies], ['layers'])
+
+    def test_sense_el_parametre_no_hi_ha_capa(self):
+        """Un destí pot rebutjar una capa que no coneix: ha de poder rebre el fitxer sense."""
+        escrit = AAMAWriter().write(self._amb_poms(), include_ftt_pom_layer=False)
+        self.assertNotIn(FTT_POM_LAYER, escrit.decode())
+        self.assertEqual(AAMAReader().read(escrit).piece('BACK').poms, ())
+
+    def test_la_nostra_capa_no_es_una_capa_desconeguda(self):
+        tornat = AAMAReader().read(
+            AAMAWriter().write(self._amb_poms(), include_ftt_pom_layer=True)
+        )
+        self.assertIn(FTT_POM_LAYER, tornat.fingerprint.capes_presents)
+        self.assertNotIn(FTT_POM_LAYER, tornat.fingerprint.capes_desconegudes)
+        # I no s'ha guardat com a rastre literal: si no, es duplicaria en reexportar.
+        capes_raw = {r.layer for r in tornat.piece('BACK').raw_entities}
+        self.assertEqual(capes_raw, {'15'})
+
+    def test_reexportar_no_engreixa_el_fitxer(self):
+        """Quatre voltes seguides: el cens s'ha de quedar quiet.
+
+        Si el FTT-META es confongués amb una metadada del CAD d'origen, el fitxer
+        creixeria una línia per volta i ningú no se n'adonaria fins molt tard.
+        """
+        doc = self._amb_poms()
+        censos = []
+        for volta in range(4):
+            doc = AAMAReader().read(
+                AAMAWriter().write(doc, include_ftt_pom_layer=True,
+                                   ftt_meta={'versio': volta})
+            )
+            censos.append(doc.fingerprint.cens_entitats)
+        self.assertEqual(censos[0], censos[-1])
+        self.assertEqual([p.pom_code for p in doc.piece('BACK').poms],
+                         ['POM-001', 'POM-014'])
+
+
+class ReplegatDoblecTest(unittest.TestCase):
+    """Desplegar i tornar a plegar ha de deixar la peça com estava."""
+
+    def test_cicle_complet_recupera_la_geometria(self):
+        doc = AAMAReader().read(mitja_peca_dxf())
+        mitja = doc.piece('MITJA')
+        sencera = unfold_piece(mitja)
+        replegada = fold_piece(sencera)
+
+        a = mitja.boundary(LayerRole.CUT).points
+        b = replegada.boundary(LayerRole.CUT).points
+        self.assertEqual(len(a), len(b))
+        for pa, pb in zip(a, b):
+            self.assertAlmostEqual(pa.x, pb.x, places=9)
+            self.assertAlmostEqual(pa.y, pb.y, places=9)
+            self.assertIs(pa.kind, pb.kind)
+        self.assertEqual(len(mitja.notches), len(replegada.notches))
+        self.assertFalse(replegada.doblec_original.materialitzat)
+
+    def test_el_costat_es_fixa_en_detectar_no_despres(self):
+        """Un cop desplegada, la peça té punts als dos costats i ja no hi ha manera de
+        saber quin era l'original: per això el costat es guarda en detectar el doblec."""
+        mitja = AAMAReader().read(mitja_peca_dxf()).piece("MITJA")
+        self.assertNotEqual(mitja.doblec_original.costat, 0)
+        self.assertEqual(unfold_piece(mitja).doblec_original.costat,
+                         mitja.doblec_original.costat)
+
+    def test_plegar_una_peca_no_desplegada_no_la_toca(self):
+        back = AAMAReader().read(AMELIA_DXF.read_bytes()).piece('BACK')
+        self.assertIs(fold_piece(back), back)
+
+
+class ComparadorTest(unittest.TestCase):
+    """L'eina no pot donar verd per construcció: ha de saber dir que no."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = AAMAReader().read(AMELIA_DXF.read_bytes())
+
+    def _mou_un_punt(self, doc, delta_mm: float):
+        pieces = list(doc.pieces)
+        p = pieces[0]
+        bs = list(p.boundaries)
+        v = bs[0]
+        pts = list(v.points)
+        pts[5] = replace(pts[5], x=pts[5].x + delta_mm)
+        bs[0] = replace(v, points=tuple(pts))
+        pieces[0] = replace(p, boundaries=tuple(bs))
+        return replace(doc, pieces=tuple(pieces))
+
+    def test_detecta_un_punt_mogut_1_mm(self):
+        report = compare(self.doc, self._mou_un_punt(self.doc, 1.0))
+        self.assertFalse(report.ok)
+        self.assertEqual(report.diferencies[0].tipus, 'point_moved')
+        self.assertAlmostEqual(report.desviacio_maxima_um, 1000.0)
+
+    def test_detecta_fins_i_tot_2_micres(self):
+        report = compare(self.doc, self._mou_un_punt(self.doc, 0.002))
+        self.assertFalse(report.ok)
+        self.assertAlmostEqual(report.desviacio_maxima_um, 2.0)
+
+    def test_la_tolerancia_serveix_dalguna_cosa(self):
+        mutat = self._mou_un_punt(self.doc, 0.002)
+        self.assertTrue(compare(self.doc, mutat, tol_um=10.0).ok)
+        self.assertFalse(compare(self.doc, mutat, tol_um=1.0).ok)
+
+    def test_detecta_una_peca_perduda(self):
+        report = compare(self.doc, replace(self.doc, pieces=self.doc.pieces[:3]))
+        self.assertFalse(report.ok)
+        self.assertIn('piece_missing', [d.tipus for d in report.diferencies])
+
+    def test_detecta_una_capa_menjada_pel_cad_del_mig(self):
+        """El cas que la prova Montse ha de saber contestar."""
+        pieces = list(self.doc.pieces)
+        pieces[0] = replace(pieces[0], unknown_layers=(), raw_entities=())
+        report = compare(self.doc, replace(self.doc, pieces=tuple(pieces)))
+        self.assertFalse(report.ok)
+        self.assertIn('unknown_layers', [d.tipus for d in report.diferencies])
+
+    def test_detecta_un_pom_perdut_pel_cami(self):
+        pts = self.doc.piece('BACK').boundary(LayerRole.CUT).points
+        pom = POMAnchorData('POM-001', ((pts[0].x, pts[0].y), (pts[5].x, pts[5].y)),
+                            {'nom': 'CHEST WIDTH'}, 525.0)
+        amb = replace(self.doc,
+                      pieces=(replace(self.doc.piece('BACK'), poms=(pom,)),) + self.doc.pieces[1:])
+        report = compare(amb, self.doc)
+        self.assertFalse(report.ok)
+        self.assertIn('pom_lost', [d.tipus for d in report.diferencies])
+
+    def test_el_resum_es_llegible(self):
+        self.assertIn('✅', compare(self.doc, self.doc).resum())
+        self.assertIn('❌', compare(self.doc, self._mou_un_punt(self.doc, 1.0)).resum())
 
 
 # ═════════════════════════════════════════════════════════════════════════════
