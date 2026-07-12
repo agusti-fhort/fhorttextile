@@ -274,6 +274,9 @@ class PieceData:
     raw_entities: tuple[RawEntity, ...] = ()
     #: On el modelspace insereix el BLOCK d'aquesta peça.
     insert_at: tuple[float, float] = (0.0, 0.0)
+    #: POMs ancorats a aquesta peça. Buit fins que S6 els sap crear; el writer ja els
+    #: sap projectar a la capa FTT-POM (S2).
+    poms: tuple[POMAnchorData, ...] = ()
 
     def boundary(self, role: LayerRole) -> Optional[BoundaryData]:
         """La primera vora d'un rol donat (el contorn de tall n'és una)."""

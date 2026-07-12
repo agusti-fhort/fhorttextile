@@ -32,6 +32,7 @@ from ezdxf import recover
 from ezdxf.document import Drawing
 
 from .errors import ParseIssue, PatternParseError
+from .ftt_pom_layer import FTT_POM_LAYER, build_poms, collect_ftt_entities
 from .geometry import (
     AAMA_LAYER_ROLES,
     BoundaryData,
@@ -269,10 +270,19 @@ def _read_piece(
     rule_texts: list[tuple[float, float, int]] = []
     raw_entities: list[RawEntity] = []
 
+    ftt_entities: list = []
+
     for e in block:
         layer = e.dxf.layer
         capes.add(layer)
         kind = e.dxftype()
+
+        if layer == FTT_POM_LAYER:
+            # La nostra pròpia capa: ni és desconeguda ni és opaca. Es llegeix com a
+            # taula de POMs (esmena E3) i NO va a raw_entities — si hi anés, una
+            # reexportació l'escriuria dos cops: com a rastre i com a projecció.
+            ftt_entities.append(e)
+            continue
 
         if layer not in AAMA_LAYER_ROLES:
             desconegudes.add(layer)
@@ -345,6 +355,8 @@ def _read_piece(
     has_sew = any(b.role is LayerRole.SEW for b in boundaries)
     fold = _detect_fold(boundaries)
 
+    poms, _meta = build_poms(*collect_ftt_entities(ftt_entities, factor))
+
     piece = PieceData(
         nom_block=block.name,
         boundaries=tuple(boundaries),
@@ -358,6 +370,7 @@ def _read_piece(
         unknown_layers=tuple(sorted(desconegudes, key=_layer_sort_key)),
         raw_entities=tuple(raw_entities),
         insert_at=insert_at,
+        poms=poms,
     )
     return piece, capes, desconegudes, issues
 
@@ -622,7 +635,7 @@ def _empty_sections(data: bytes) -> set[str]:
 
 def _doc_text_anchor(doc: Drawing) -> tuple[float, float]:
     for e in doc.modelspace():
-        if e.dxftype() == 'TEXT':
+        if e.dxftype() == 'TEXT' and e.dxf.layer != FTT_POM_LAYER:
             return (e.dxf.insert.x, e.dxf.insert.y)
     return (0.0, 0.0)
 
@@ -647,7 +660,16 @@ def _insert_points(doc: Drawing) -> dict[str, tuple[float, float]]:
 
 
 def _modelspace_texts(doc: Drawing) -> list[str]:
-    return [e.dxf.text for e in doc.modelspace() if e.dxftype() == 'TEXT']
+    """Els TEXT de metadades del CAD d'origen.
+
+    La capa FTT-POM queda FORA a posta: el `FTT-META` que hi vam posar nosaltres no és
+    una metadada del fitxer d'origen. Si s'hi colés, cada reexportació n'escriuria un
+    de nou i el fitxer aniria engreixant una línia per volta.
+    """
+    return [
+        e.dxf.text for e in doc.modelspace()
+        if e.dxftype() == 'TEXT' and e.dxf.layer != FTT_POM_LAYER
+    ]
 
 
 def _entity_census(doc: Drawing) -> dict[str, int]:

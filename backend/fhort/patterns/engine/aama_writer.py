@@ -38,7 +38,8 @@ from typing import Optional
 
 import ezdxf
 
-from .errors import ParseIssue, PatternEngineError
+from .errors import PatternEngineError
+from .ftt_pom_layer import FTTPOMLayerWriter
 from .geometry import (
     Fingerprint,
     LayerRole,
@@ -96,11 +97,21 @@ class UnknownProfileError(PatternEngineError):
 class AAMAWriter:
     """Implementa la meitat `write` del port `FormatCodec`."""
 
-    def write(self, doc: PatternDocument, perfil: str = '') -> bytes:
+    def write(
+        self,
+        doc: PatternDocument,
+        perfil: str = '',
+        include_ftt_pom_layer: bool = False,
+        ftt_meta: Optional[dict] = None,
+    ) -> bytes:
         """Reprodueix el document.
 
         Sense `perfil`, es guia per l'empremta del fitxer d'origen: reproducció pura.
         Amb `perfil`, escriu segons el dialecte del destí demanat.
+
+        `include_ftt_pom_layer` hi afegeix la capa `FTT-POM` amb els POMs ancorats
+        (v. `ftt_pom_layer`). És opcional a posta: un destí podria rebutjar una capa que
+        no coneix, i llavors ha de poder rebre el fitxer sense.
         """
         cfg = self._config(doc.fingerprint, perfil)
         factor = self._factor(doc.fingerprint)
@@ -109,10 +120,13 @@ class AAMAWriter:
         msp = out.modelspace()
 
         height = doc.fingerprint.text_height or 1.0
+        pom_writer = FTTPOMLayerWriter() if include_ftt_pom_layer else None
 
         for piece in doc.pieces:
             block = out.blocks.new(name=piece.nom_block)
             self._write_piece(block, piece, cfg, factor, height)
+            if pom_writer is not None and piece.poms:
+                pom_writer.write_piece_poms(block, piece.poms, height=height / factor)
             msp.add_blockref(
                 piece.nom_block,
                 self._nat(piece.insert_at, factor),
@@ -120,6 +134,17 @@ class AAMAWriter:
             )
 
         self._write_document_texts(msp, doc.fingerprint, factor)
+
+        if pom_writer is not None:
+            meta = ftt_meta or {}
+            pom_writer.write_document_meta(
+                msp,
+                versio=meta.get('versio', 0),
+                model=meta.get('model', ''),
+                ts=meta.get('ts', ''),
+                at=self._nat(doc.fingerprint.doc_text_anchor, factor),
+                height=height / factor,
+            )
 
         stream = io.StringIO()
         out.write(stream)

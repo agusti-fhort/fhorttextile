@@ -64,6 +64,20 @@ Els XDATA/EED d'AutoCAD serien més nets, però **cap CAD de patronatge en garan
 supervivència** i, sobretot, no els veu ningú. Un TEXT el llegeix el patronista amb els
 ulls, i sobreviu a qualsevol importador que conservi entitats. Redundant i lleig, però
 robust — que és el que ha de ser una projecció.
+
+PRECISIÓ AFEGIDA A S2 (buit de l'especificació original)
+--------------------------------------------------------
+S1 no deia **on** viuen aquestes entitats: el reader les buscava tant al modelspace com
+dins dels BLOCKs. El writer ha de triar-ne un, i tria el **BLOCK de la peça**, perquè un
+POM penja d'una peça (`PatternPOM.pattern_piece`) i no d'un document: si les peces es
+tornen a col·locar, la mesura ha de viatjar amb la seva.
+
+La metadada `FTT-META`, en canvi, és del document sencer i va al **modelspace**.
+
+(Amb el material real la distinció no canvia cap coordenada —els BLOCKs s'insereixen a
+(0,0) i sense escala—, però sí que canvia el dia que un CAD els insereixi desplaçats.
+El reader continua llegint els dos llocs, així que la capa segueix sent compatible amb
+qualsevol dels dos criteris.)
 """
 from __future__ import annotations
 
@@ -127,56 +141,137 @@ def parse_meta_text(text: str) -> Optional[dict]:
     return dict(_RE_KV.findall(m.group('parells')))
 
 
+def collect_ftt_entities(entities, factor: float = 1.0):
+    """Reparteix les entitats de la capa FTT-POM en (etiquetes, mesures).
+
+    Funció pura, compartida: la fan servir tant el `FTTPOMLayerReader` (que treballa
+    sobre un document sencer) com l'`AAMAReader` (que la crida per peça mentre llegeix
+    els BLOCKs). Una sola manera d'entendre la capa.
+    """
+    textos: list[tuple[float, float, str]] = []
+    mesures: list[tuple[float, float, tuple[tuple[float, float], ...]]] = []
+
+    for entity in entities:
+        kind = entity.dxftype()
+        if kind == 'TEXT':
+            ins = entity.dxf.insert
+            textos.append((ins.x * factor, ins.y * factor, entity.dxf.text))
+        elif kind == 'LINE':
+            s, e = entity.dxf.start, entity.dxf.end
+            punts = ((s.x * factor, s.y * factor), (e.x * factor, e.y * factor))
+            mesures.append(
+                ((punts[0][0] + punts[1][0]) / 2, (punts[0][1] + punts[1][1]) / 2, punts)
+            )
+        elif kind == 'POLYLINE':
+            punts = tuple(
+                (v.dxf.location.x * factor, v.dxf.location.y * factor)
+                for v in entity.vertices
+            )
+            if punts:
+                mig = punts[len(punts) // 2]
+                mesures.append((mig[0], mig[1], punts))
+
+    return textos, mesures
+
+
+def build_poms(textos, mesures) -> tuple[tuple[POMAnchorData, ...], dict]:
+    """(etiquetes, mesures) → (POMs, metadades del document)."""
+    metadades: dict = {}
+    poms: list[POMAnchorData] = []
+
+    for tx, ty, text in textos:
+        meta = parse_meta_text(text)
+        if meta is not None:
+            metadades.update(meta)
+            continue
+        pom = parse_pom_text(text)
+        if pom is None:
+            continue
+        # L'etiqueta seu al punt mig de la seva mesura: així s'aparellen.
+        poms.append(POMAnchorData(
+            pom_code=pom.pom_code,
+            punts_ancora=_mesura_mes_propera(tx, ty, mesures),
+            definicio_mesura=pom.definicio_mesura,
+            valor_mesurat_mm=pom.valor_mesurat_mm,
+        ))
+
+    return tuple(poms), metadades
+
+
 class FTTPOMLayerReader:
     """Llegeix la capa `FTT-POM` d'un DXF que hem exportat nosaltres.
 
-    Treballa sobre un document ezdxf ja obert (l'`AAMAReader` ja l'ha llegit: no cal
-    tornar a parsejar el fitxer). El resultat és **una proposta**, no un fet: qui la
-    consumeixi (S6) l'ha de fer validar.
+    Treballa sobre un document ezdxf ja obert. El resultat és **una proposta**, no un
+    fet: qui la consumeixi (S6) l'ha de fer validar.
     """
 
     def read(self, doc) -> tuple[tuple[POMAnchorData, ...], dict]:
         """→ (poms, metadades). Un DXF sense capa FTT-POM torna ((), {}) — no és un error:
         és el cas normal d'un fitxer que ve del client."""
-        textos: list[tuple[float, float, str]] = []
-        mesures: list[tuple[float, float, tuple[tuple[float, float], ...]]] = []
+        textos, mesures = collect_ftt_entities(_ftt_entities(doc))
+        return build_poms(textos, mesures)
 
-        for entity in _ftt_entities(doc):
-            kind = entity.dxftype()
-            if kind == 'TEXT':
-                ins = entity.dxf.insert
-                textos.append((ins.x, ins.y, entity.dxf.text))
-            elif kind == 'LINE':
-                s, e = entity.dxf.start, entity.dxf.end
-                punts = ((s.x, s.y), (e.x, e.y))
-                mesures.append(((s.x + e.x) / 2, (s.y + e.y) / 2, punts))
-            elif kind == 'POLYLINE':
-                punts = tuple((v.dxf.location.x, v.dxf.location.y) for v in entity.vertices)
-                if punts:
-                    mig = punts[len(punts) // 2]
-                    mesures.append((mig[0], mig[1], punts))
 
-        metadades: dict = {}
-        poms: list[POMAnchorData] = []
+class FTTPOMLayerWriter:
+    """Projecta els POMs ancorats a la capa `FTT-POM` d'un DXF.
 
-        for tx, ty, text in textos:
-            meta = parse_meta_text(text)
-            if meta is not None:
-                metadades.update(meta)
+    Escriu la capa segons l'especificació del docstring d'aquest mòdul —que és l'única
+    font: el format no es reescriu aquí, es demana a `format_pom_text()` i
+    `format_meta_text()`, les mateixes funcions que el reader fa servir per desfer-lo.
+
+    Recordatori de la llei: això és una **projecció**. La veritat es queda a la BD; el
+    que surt pel DXF és una còpia perquè el patronista la vegi, i el dia que torni
+    tornarà com a proposta, no com a fet.
+    """
+
+    def write_piece_poms(self, block, poms, height: float = 1.0) -> None:
+        """Les mesures d'una peça, al BLOCK de la peça (precisió S2)."""
+        for pom in poms:
+            punts = pom.punts_ancora
+            if len(punts) < 2:
+                # Un POM sense dos punts no és dibuixable: no s'inventa una línia.
                 continue
-            pom = parse_pom_text(text)
-            if pom is None:
-                continue
-            # L'etiqueta seu al punt mig de la seva mesura: així s'aparellen.
-            punts = _mesura_mes_propera(tx, ty, mesures)
-            poms.append(POMAnchorData(
-                pom_code=pom.pom_code,
-                punts_ancora=punts,
-                definicio_mesura=pom.definicio_mesura,
-                valor_mesurat_mm=pom.valor_mesurat_mm,
-            ))
 
-        return tuple(poms), metadades
+            if len(punts) == 2:
+                block.add_line(punts[0], punts[1], dxfattribs={'layer': FTT_POM_LAYER})
+                mig = (
+                    (punts[0][0] + punts[1][0]) / 2,
+                    (punts[0][1] + punts[1][1]) / 2,
+                )
+            else:
+                # Mesura sobre vora: la polilínia segueix la vora de debò.
+                block.add_polyline2d(list(punts), dxfattribs={'layer': FTT_POM_LAYER})
+                mig = punts[len(punts) // 2]
+
+            etiqueta = format_pom_text(
+                pom.pom_code,
+                pom.definicio_mesura.get('nom', ''),
+                pom.valor_mesurat_mm or 0.0,
+            )
+            block.add_text(
+                etiqueta,
+                dxfattribs={'layer': FTT_POM_LAYER, 'height': height},
+            ).set_placement(mig)
+
+    def write_document_meta(
+        self,
+        msp,
+        versio: int,
+        model: str = '',
+        ts: str = '',
+        at: tuple[float, float] = (0.0, 0.0),
+        height: float = 1.0,
+    ) -> None:
+        """La metadada del document, al modelspace.
+
+        `versio` és la versió del `PatternFile`. A S2 encara no existeix (arriba a S3):
+        qui cridi això sense versió real passa 0, i el TEXT surt amb `v=0` — un
+        placeholder honest, no un número inventat que sembli bo.
+        """
+        msp.add_text(
+            format_meta_text(versio, model=model, ts=ts),
+            dxfattribs={'layer': FTT_POM_LAYER, 'height': height},
+        ).set_placement(at)
 
 
 def _ftt_entities(doc) -> Iterable:
