@@ -285,9 +285,19 @@ class GradeTable:
     talles: tuple[str, ...] = ()                  # ordre del fitxer: XS S M L XL
     talla_base: str = ''                          # SAMPLE SIZE
     regles: dict[int, GradeRuleData] = field(default_factory=dict)
-    unitats: str = ''                             # 'METRIC' | 'IMPERIAL'
+    unitats: str = ''                             # 'METRIC' | 'IMPERIAL' (literal del fitxer)
+    #: Factor aplicat als deltes per portar-los a mm. El RUL declara el SISTEMA
+    #: ('METRIC') però no l'ESCALA, així que amb els deltes d'AMELIA tots a zero la
+    #: suposició (mm, com el DXF germà) no és verificable. Que consti.
+    unitats_factor_mm: float = 1.0
     aama_version: str = ''
     autor: str = ''
+    #: Rareses trobades en llegir (no han impedit la lectura).
+    issues: tuple = ()
+
+    @property
+    def base_index(self) -> int:
+        return self.talles.index(self.talla_base)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
