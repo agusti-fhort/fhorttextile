@@ -149,11 +149,85 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
     de la cadena de versions. El ViewSet genèric la saltava (S03a · P0.1)."""
     permission_classes = [IsAuthenticated]
     serializer_class = ModelFitxerSerializer
-    queryset = ModelFitxer.objects.select_related('model', 'pujat_per').all()
+    # S03c · C2.4 — `derivat_de_label` resol el codi de l'origen (model o item): sense els dos
+    # select_related, cada fila derivada faria 2 queries extra.
+    queryset = ModelFitxer.objects.select_related(
+        'model', 'pujat_per',
+        'derivat_de_model__model', 'derivat_de_item__garment_type_item').all()
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = ModelFitxerFilter
     ordering_fields = ['data_pujada']
     ordering = ['-data_pujada']
+
+    def perform_destroy(self, instance):
+        """Esborra els bytes abans de la fila: `instance.delete()` sol deixa orfes al disc."""
+        from .services_fitxers import delete_fitxer_bytes
+        delete_fitxer_bytes(instance)
+        instance.delete()
+
+    @action(detail=True, methods=['post'], url_path='usar-al-model')
+    def usar_al_model(self, request, pk=None):
+        """POST /api/v1/model-fitxers/<id>/usar-al-model/  Body: {model_id}   [S03c · C3.2]
+
+        Cicle model→model: **importació, no edició in-place**. Crea un ModelFitxer NOU al model
+        destí amb `derivat_de_model` apuntant a l'origen. L'origen NO es toca mai.
+
+        Germà d'`item_fitxer_views.usar_al_model` (catàleg→model), amb UNA diferència de fons:
+        allà «un `.ftt` es copia tal qual» perquè un ItemFitxer no porta dades de model. Aquí
+        **és fals**: un `.ftt` d'un model A porta text congelat, l'asset del logo del seu
+        client, un objecte image amb la URL del logo i metadata, tot de A (Q4.4). Per això el
+        `.ftt` es descongela i es re-resol contra el model destí (D16). La resta de tipus
+        (PDF, DXF, SVG, imatges) són còpia directa de bytes, com al germà.
+
+        Gate: `IsAuthenticated` (permission_classes del ViewSet), el MATEIX que `upload_file_view`:
+        l'escriptura va al model destí, i qui pot pujar-hi un fitxer pot importar-n'hi un.
+        """
+        from django.core.files.base import ContentFile
+        from django.shortcuts import get_object_or_404
+
+        from . import services_ftt_document as ftt_svc
+        from .services_fitxers import marcar_procedencia, save_model_file
+
+        origen = self.get_object()
+        if not origen.fitxer:
+            return Response({'error': "El fitxer d'origen no té bytes."}, status=400)
+
+        model_id = request.data.get('model_id')
+        if not model_id:
+            return Response({'error': 'model_id és obligatori.'}, status=400)
+        desti = get_object_or_404(Model, pk=model_id)
+
+        if desti.pk == origen.model_id:
+            return Response(
+                {'error': 'El model destí és el mateix que el del fitxer origen.'}, status=400)
+
+        report = None
+        origen.fitxer.open('rb')
+        try:
+            if ftt_svc.es_ftt(origen):
+                # D16 — el .ftt no es copia tal qual: es descongela i es re-resol contra el destí.
+                blob, report = ftt_svc.reescriure_ftt_per_model(origen.fitxer.read(), desti)
+                font = ContentFile(blob, name=origen.nom_fitxer)
+            else:
+                font = origen.fitxer
+            nou = save_model_file(desti, font, tipus=origen.tipus,
+                                  origen='upload', nom=origen.nom_fitxer)
+        except ValueError as e:
+            # unpack() llança ValueError amb missatge clar si el .ftt està corromput.
+            return Response({'error': f'.ftt origen il·legible: {e}'}, status=400)
+        finally:
+            origen.fitxer.close()
+
+        marcar_procedencia(nou, request.user, derivat_de_model=origen)
+
+        dades = ModelFitxerSerializer(nou, context={'request': request}).data
+        if report is not None and not report['te_marques']:
+            # Degradació anunciada (D16): .ftt anterior a la marca `field_key`. Els camps de
+            # plantilla congelats segueixen mostrant dades del model origen.
+            dades['avis'] = ('El document és anterior al marcatge de camps: els camps de '
+                             'plantilla mantenen les dades del model origen i cal editar-los '
+                             'a mà.')
+        return Response(dades, status=201)
 
     @action(detail=True, methods=['get'])
     def versions(self, request, pk=None):
@@ -174,8 +248,8 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
         Per a consumidors que NO poden posar capçaleres (<a href>, <img src>), vegeu
         `download_signed` (D13).
         """
-        from .services_fitxers import serve_model_file
-        return serve_model_file(self.get_object())
+        from .services_fitxers import serve_fitxer
+        return serve_fitxer(self.get_object())
 
     @action(detail=True, methods=['get'], url_path='download-signed',
             permission_classes=[AllowAny], authentication_classes=[])
@@ -196,7 +270,7 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
         from django.core import signing
         from django.http import HttpResponseForbidden
 
-        from .services_fitxers import serve_model_file
+        from .services_fitxers import serve_fitxer
 
         token = request.query_params.get('token') or ''
         try:
@@ -210,7 +284,7 @@ class ModelFitxerViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
             return HttpResponseForbidden('El token no correspon a aquest fitxer.')
 
         inline = request.query_params.get('inline') == '1'
-        return serve_model_file(self.get_object(), as_attachment=not inline)
+        return serve_fitxer(self.get_object(), as_attachment=not inline)
 
 
 # D-12 — Watchpoints: advertències de text lliure que viatgen amb el model a través dels gates.
@@ -1137,13 +1211,20 @@ def upload_file_view(request, model_id):
     if not uploaded_file:
         return Response({'error': 'fitxer és obligatori'}, status=400)
 
-    from .services_fitxers import save_model_file
+    from .services_fitxers import UploadRejected, save_model_file, validate_upload
 
     # Contracte Finder: `tipus` opcional (neutre si no es dona). Sense autoincrement per
     # tipus — la versió la governa el servei via la cadena. `categoria` ja no s'accepta
     # (eix deprecat, S03a · P1.2): el Finder no l'ha enviada mai.
     tipus = request.data.get('tipus') or None
     nom = request.data.get('nom') or uploaded_file.name
+
+    # D12/D18 — mateix guard i mateixa resposta 400 que ItemFitxerViewSet.create: aquest era
+    # l'únic camí d'upload que no validava ni extensió ni mida.
+    try:
+        validate_upload(uploaded_file, nom)
+    except UploadRejected as e:
+        return Response({'error': str(e)}, status=400)
 
     # versio_anterior_id opcional → encadena una nova versió d'un fitxer existent.
     versio_anterior = None

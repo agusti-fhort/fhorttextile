@@ -154,7 +154,9 @@ def transition_task(task, to_status, profile, force=False):
         # MÓN TÈCNIC (sagrat): la fase passa a Dev com avui, fora de tota lògica de facturació.
         Model.objects.filter(pk=task.model_id, fase_actual='Pending').update(fase_actual='Dev')
 
-        # MÓN FACTURACIÓ (N10: no-fatal, aïllat — mai bloqueja la transició del tècnic).
+        # MERITACIÓ SaaS (FHORT→tenant). N10: no-fatal, aïllat — mai bloqueja la transició
+        # del tècnic. Llei DUES FACTURACIONS SEPARADES: aquest atomic NO conté res del
+        # mòdul comercial; un error de commerce no pot revertir una meritació amb èxit.
         try:
             with transaction.atomic():
                 rows = Model.objects.filter(
@@ -176,15 +178,21 @@ def transition_task(task, to_status, profile, force=False):
                         opaque_ref=record.opaque_ref,
                         merited_at=now,
                     )
-                # B4a — ENCÀRREC: assigna work_order a CADA primera InProgress de tasca (no
-                # només la del model): el col·lector és per-model×mes però l'assignació és
-                # per-tasca. Idempotent i dins el mateix atomic no-fatal.
+        except Exception:
+            logger.exception("meritacio fallida model=%s task=%s", task.model_id, task.pk)
+            # NO re-raise: el tecnic ja te la transicio feta; el forat es reconcilia despres
+            # amb `reconcile_consumption`.
+
+        # B4a — ENCÀRREC (mòdul comercial, studio→tercers). Món separat: savepoint propi, i
+        # s'intenta encara que la meritació hagi fallat (són independents). Assigna work_order
+        # a CADA primera InProgress de tasca (no només la del model): el col·lector és
+        # per-model×mes però l'assignació és per-tasca. Idempotent.
+        try:
+            with transaction.atomic():
                 assign_work_order(task, now)
         except Exception:
-            logger.exception(
-                "meritacio/assignacio fallida model=%s task=%s", task.model_id, task.pk
-            )
-            # NO re-raise: el tecnic ja te la transicio feta; el forat es reconcilia despres.
+            logger.exception("assignacio work_order fallida model=%s task=%s", task.model_id, task.pk)
+            # NO re-raise: el forat d'encàrrec es reconcilia amb `reconcile_work_orders`.
 
     if to_status == 'Done':
         # Sprint I: alimentar l'estadística Welford amb el temps real (timers ja tancats;

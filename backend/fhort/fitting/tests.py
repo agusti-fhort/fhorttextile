@@ -1,7 +1,10 @@
-"""Test d'integració de l'@action propagar (PG-4b-2).
+"""Test d'integració de l'@action propagar (PG-4b-2) i dels guards d'escriptura.
 
-Propagació de delta en temps d'edició: ancorar una cel·la i, si el règim és LINEAR/canònic,
-reescriure el valor_real de les germanes del mateix POM. valor_teoric mai es toca.
+Propagació de delta en temps d'edició: ancorar la cel·la de la TALLA BASE i, si el règim és
+LINEAR/canònic, reescriure el valor_real de les germanes del mateix POM. valor_teoric mai es toca.
+
+P1 — l'ancoratge només es fa des de la talla base (`fitting_line_is_non_base` → 400): el fitting
+és un ESTADI de la taula base i el treball multi-talla viu a Escalat (DECISIONS.md §2).
 """
 import datetime
 
@@ -98,12 +101,16 @@ class PropagarActionTest(TenantTestCase):
         return {sl: PieceFittingLine.objects.get(pk=self.lines[sl].pk).valor_teoric
                 for sl in ['S', 'M', 'L', 'XL']}
 
-    # ── LINEAR/canònic: ancorar L=50 propaga valor_real S=46,M=48,L=50,XL=52. teoric intacte.
+    # NOTA (P1): l'ancoratge SEMPRE es fa des de la talla BASE del model ('M' aquí). Les
+    # altres talles són read-only al fitting (guard `fitting_line_is_non_base`) i es
+    # treballen a Escalat — DECISIONS.md §2. Vegeu `test_no_base_*`.
+
+    # ── LINEAR/canònic: ancorar M=50 propaga valor_real S=48,M=50,L=52,XL=54. teoric intacte.
     def test_linear_propaga_i_teoric_intacte(self):
-        resp = self._propagar(self.lines['L'], 50)
+        resp = self._propagar(self.lines['M'], 50)
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['propagat'])
-        self.assertEqual(self._reals(), {'S': 46, 'M': 48, 'L': 50, 'XL': 52})
+        self.assertEqual(self._reals(), {'S': 48, 'M': 50, 'L': 52, 'XL': 54})
         self.assertEqual(self._teorics(), TEORICS)   # valor_teoric SENSE canvis
 
     # ── STEP: no propaga; només desa la cel·la ancorada. Germanes valor_real intactes.
@@ -111,26 +118,26 @@ class PropagarActionTest(TenantTestCase):
         self.rule.logica = 'STEP'
         self.rule.increment_base = None
         self.rule.save()
-        resp = self._propagar(self.lines['L'], 50)
+        resp = self._propagar(self.lines['M'], 50)
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.data['propagat'])
         self.assertEqual(resp.data['motiu'], 'STEP')
         reals = self._reals()
-        self.assertEqual(reals['L'], 50)                 # cel·la editada desada
+        self.assertEqual(reals['M'], 50)                 # cel·la editada (base) desada
         self.assertEqual(reals['S'], TEORICS['S'])       # germanes intactes
-        self.assertEqual(reals['M'], TEORICS['M'])
+        self.assertEqual(reals['L'], TEORICS['L'])
         self.assertEqual(reals['XL'], TEORICS['XL'])
         self.assertEqual(self._teorics(), TEORICS)
 
     # ── Sense regla: no propaga; motiu 'sense_regla'. Germanes intactes.
     def test_sense_regla_no_propaga(self):
         self.rule.delete()
-        resp = self._propagar(self.lines['L'], 50)
+        resp = self._propagar(self.lines['M'], 50)
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.data['propagat'])
         self.assertEqual(resp.data['motiu'], 'sense_regla')
         reals = self._reals()
-        self.assertEqual(reals['L'], 50)
+        self.assertEqual(reals['M'], 50)
         self.assertEqual(reals['S'], TEORICS['S'])
         self.assertEqual(reals['XL'], TEORICS['XL'])
 
@@ -139,14 +146,14 @@ class PropagarActionTest(TenantTestCase):
     def test_step_amb_increment_base_no_propaga(self):
         self.rule.logica = 'STEP'        # increment_base=2 ES CONSERVA (latent)
         self.rule.save()
-        resp = self._propagar(self.lines['L'], 50)
+        resp = self._propagar(self.lines['M'], 50)
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.data['propagat'])
         self.assertEqual(resp.data['motiu'], 'STEP')
         reals = self._reals()
-        self.assertEqual(reals['L'], 50)                 # cel·la editada desada
+        self.assertEqual(reals['M'], 50)                 # cel·la editada (base) desada
         self.assertEqual(reals['S'], TEORICS['S'])       # germanes intactes
-        self.assertEqual(reals['M'], TEORICS['M'])
+        self.assertEqual(reals['L'], TEORICS['L'])
         self.assertEqual(reals['XL'], TEORICS['XL'])
 
     # ── PG-4b-3a règim per-POM: helper de POST a l'endpoint set_pom_regim_view.
@@ -205,16 +212,46 @@ class PropagarActionTest(TenantTestCase):
     # La sessió queda Oberta per defecte; _seal() la passa a l'estat segellat.
     # ─────────────────────────────────────────────────────────────────────────
 
-    # ── No-regressió: sessió Oberta → propagar i PATCH funcionen.
+    # ── No-regressió: sessió Oberta → propagar i PATCH sobre la talla BASE funcionen.
     def test_oberta_propagar_i_patch_ok(self):
-        resp = self._propagar(self.lines['L'], 50)
+        resp = self._propagar(self.lines['M'], 50)
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['propagat'])
-        # PATCH d'una cel·la concreta (autosave) sobre sessió Oberta.
+        # PATCH de la cel·la base (autosave) sobre sessió Oberta.
         resp2 = self._patch(self.lines['M'], 99)
         self.assertEqual(resp2.status_code, 200)
         self.assertEqual(
             PieceFittingLine.objects.get(pk=self.lines['M'].pk).valor_real, 99)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # GUARD P1 — eix base: el fitting NOMÉS edita la talla base del model.
+    # Les altres talles es treballen a Escalat (DECISIONS.md §2). 400, res es desa.
+    # ─────────────────────────────────────────────────────────────────────────
+
+    NO_BASE_DETAIL = ('El fitting només edita la talla base del model. '
+                      'Les altres talles es treballen a Escalat.')
+
+    def test_no_base_propagar_400_no_desa(self):
+        resp = self._propagar(self.lines['L'], 50)     # 'L' no és la base ('M')
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['detail'], self.NO_BASE_DETAIL)
+        self.assertEqual(self._reals(), TEORICS)       # res s'ha desat
+        self.assertEqual(self._teorics(), TEORICS)
+
+    def test_no_base_patch_400_no_desa(self):
+        original = PieceFittingLine.objects.get(pk=self.lines['XL'].pk).valor_real
+        resp = self._patch(self.lines['XL'], 50)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['detail'], self.NO_BASE_DETAIL)
+        self.assertEqual(
+            PieceFittingLine.objects.get(pk=self.lines['XL'].pk).valor_real, original)
+
+    def test_segellat_mana_sobre_eix(self):
+        """Sessió segellada + línia no-base → 409 (estat), no 400 (eix): l'ordre dels guards
+        és deliberat i estable."""
+        self._seal('Tancada')
+        resp = self._propagar(self.lines['L'], 50)
+        self.assertEqual(resp.status_code, 409)
 
     # ── Tancada: propagar → 409 i CAP valor_real canvia a BD (no n'hi ha prou amb el codi).
     def test_tancada_propagar_409_no_desa(self):

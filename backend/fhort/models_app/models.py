@@ -389,6 +389,33 @@ class ModelFitxer(models.Model):
         blank=True,
         related_name='exports_generats',
     )
+    # Procedència del catàleg (S03b · P5): aquest fitxer és una CÒPIA importada d'un
+    # ItemFitxer. No és una edició compartida — l'origen no es toca mai i pot desaparèixer
+    # (SET_NULL) sense afectar la còpia del model.
+    derivat_de_item = models.ForeignKey(
+        'models_app.ItemFitxer',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='usos_a_models',
+    )
+    # Procedència model→model (D17): aquest fitxer és una CÒPIA importada del fitxer d'un
+    # ALTRE model. Germà de `derivat_de_item`, no de `generat_des_de`: els dos primers
+    # codifiquen "còpia amb procedència" i el tercer "artefacte generat des d'un altre
+    # fitxer" (p.ex. un PDF EXPORT d'un .ftt). Barrejar-los amagaria dues semàntiques sota
+    # un sol camp. SET_NULL: l'origen pot desaparèixer sense afectar la còpia.
+    #
+    # ATENCIÓ (Q4.4 de DIAGNOSI_S03C_NAVEGACIO): a diferència de catàleg→model, un `.ftt`
+    # model→model NO es pot copiar tal qual — porta text congelat, l'asset del logo, un
+    # objecte image amb la URL i metadata del model origen. L'endpoint que escriurà aquest
+    # camp (C3) haurà de reescriure'ls. Aquí només s'hi crea el camp.
+    derivat_de_model = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='derivats',
+    )
     accessible_portal = models.BooleanField(default=False)
     pujat_per = models.ForeignKey(
         'accounts.UserProfile',
@@ -421,6 +448,52 @@ class ModelFitxer(models.Model):
 
     def __str__(self):
         return f'{self.model.codi_intern} · {self.nom_fitxer} ({self.versio})'
+
+
+def item_fitxer_upload_to(instance, filename):
+    """`{schema}/items/<gti_id>/<filename>` — el prefix del schema el posa el storage
+    (TenantFileSystemStorage, S03a · P2a); aquí només la part relativa al tenant."""
+    return f'items/{instance.garment_type_item_id}/{filename}'
+
+
+class ItemFitxer(models.Model):
+    """Fitxer del CATÀLEG, ancorat a un GarmentTypeItem (S03b · P4).
+
+    Mirall d'`ModelFitxer` a nivell d'item: mateixa invariant de cadena (`versio_anterior`
+    + exactament un `is_current` per cadena, mantinguda per `save_item_file`) i el MATEIX
+    conjunt `ModelFitxer.TIPUS_CHOICES` — no se n'inventa un de nou.
+
+    Diferències deliberades respecte de ModelFitxer:
+    - **Sense `categoria`**: aquell eix va morir a S03a · P1; no es reprodueix en un model nou.
+    - Sense `url_extern`/`origen`/`generat_des_de`/`accessible_portal`: cap consumidor al
+      catàleg. S'afegiran si algun dia hi ha un cas, no per simetria.
+    """
+    garment_type_item = models.ForeignKey(
+        'tasks.GarmentTypeItem', on_delete=models.CASCADE, related_name='fitxers')
+    nom_fitxer = models.CharField(max_length=255)
+    tipus = models.CharField(max_length=30, choices=ModelFitxer.TIPUS_CHOICES,
+                             default='ALTRES', blank=True)
+    versio = models.PositiveIntegerField(default=1)
+    # Invariant: exactament un is_current=True per cadena versio_anterior (el cap).
+    is_current = models.BooleanField(default=True, db_index=True)
+    versio_anterior = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='versions_posteriors')
+    pujat_per = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True,
+        related_name='item_fitxers_pujats')
+    data_pujada = models.DateTimeField(auto_now_add=True)
+    mida_bytes = models.BigIntegerField()
+    fitxer = models.FileField(upload_to=item_fitxer_upload_to, null=True, blank=True)
+    checksum = models.CharField(max_length=64, blank=True)
+    mimetype = models.CharField(max_length=100, blank=True)
+
+    class Meta:
+        verbose_name = 'Fitxer de catàleg (item)'
+        verbose_name_plural = 'Fitxers de catàleg (item)'
+
+    def __str__(self):
+        return f'{self.garment_type_item_id} · {self.nom_fitxer} ({self.versio})'
 
 
 class ImportSession(models.Model):

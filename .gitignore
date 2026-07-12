@@ -10,7 +10,7 @@ frontend/.env
 frontend/.env.development
 backoffice/dist/
 backoffice/dist/
-backoffice/
+frontend-backoffice/dist/
 ESTAT_PROJECTE.md
 ESTAT_BACKOFFICE.md
 
@@ -18,3 +18,5 @@ ESTAT_BACKOFFICE.md
 MAPA_SISTEMA.md
 TRADUCCIONS_I18N_*.xlsx
 albara_v2_sample.pdf
+frontend-backoffice/.env
+frontend-backoffice/.env.*

@@ -1,8 +1,11 @@
-// Adapter de l'eix FITTING (talles × versions) cap al contracte de MeasureGrid (editor únic).
+// Adapter de l'eix FITTING cap al contracte de MeasureGrid (editor únic).
 // Reusa l'esquelet de MeasureGrid; aquí NOMÉS es projecta la dada del fitting als seus `groups`/`rows`.
 // Cap motor tocat: la propagació/STEP es despatxa per l'API existent (makeFittingOnSave).
 //
-// Eix: un GROUP per talla; history = versions read-only (Base, Fit 1…); columna activa = "Fit actual".
+// Eix (P1): UN sol GROUP, la TALLA BASE. history = versions read-only (Base, Fit 1…); columna
+// activa = "Fit actual". El fitting és un ESTADI de la taula base (DECISIONS.md §2): el treball
+// multi-talla viu a Escalat (vegeu `buildEscalatGroups`, més avall, que sí és per talla).
+// Mateix patró d'un sol group que CheckMeasureEditor.
 
 import { pieceFittingLines } from '../../api/endpoints'
 
@@ -10,33 +13,32 @@ import { pieceFittingLines } from '../../api/endpoints'
 const versionLabel = (vn, idx, t) =>
   idx === 0 ? t('fitting.grid.base') : t('fitting.grid.fit', { n: vn - 1 })
 
-// groups = una talla per group; historyCols = versions; activeLabel = "Fit actual". La talla base es
-// marca amb ★ outline a l'etiqueta del group (color només-activa: el fons daurat el porta l'activa).
-export function buildFittingGroups(sizeLabels, baseLabel, versionNumbers, t) {
-  return sizeLabels.map(s => ({
-    key: s,
-    label: s === baseLabel
-      ? <span>{s}<i className="ti ti-star" style={{ fontSize: 10, marginLeft: 4, color: 'var(--gold)' }} /></span>
-      : s,
+// Un sol group: la talla base, marcada amb ★ outline. `historyCols` = versions.
+// Sense `baseLabel` (model sense base_size_label; avui: cap) no hi ha eix → cap group.
+export function buildFittingGroups(baseLabel, versionNumbers, t) {
+  if (!baseLabel) return []
+  return [{
+    key: baseLabel,
+    label: <span>{baseLabel}<i className="ti ti-star" style={{ fontSize: 10, marginLeft: 4, color: 'var(--gold)' }} /></span>,
     historyCols: versionNumbers.map((vn, idx) => ({ key: `v${vn}`, label: versionLabel(vn, idx, t) })),
     activeLabel: t('fitting.grid.fit_current'),
     trailCols: [],
-  }))
+  }]
 }
 
-// rows = files POM amb nomenclatura 2 línies + règim (per al leadCol) + cells per talla.
+// rows = files POM amb nomenclatura 2 línies + règim (per al leadCol) + la cel·la de la talla base.
 // cell.history[`v${vn}`] = valor de la versió; cell.active = la cel·la editable "Fit actual"
-// (lineId + valor_real + baseValue = Base d'aquella talla, per al marcatge vermell difereix-de-base).
-export function buildFittingRows(pomRows, sizeLabels, versionNumbers) {
+// (lineId + valor_real + baseValue = Base, per al marcatge vermell difereix-de-base).
+export function buildFittingRows(pomRows, baseLabel, versionNumbers) {
   return pomRows.map(row => {
     const cells = {}
-    for (const s of sizeLabels) {
-      const line = row.cells[s]
+    if (baseLabel) {
+      const line = row.cells[baseLabel]
       const evoMap = new Map((line?.evolucio || []).map(e => [e.version_number, e.valor_cm]))
       const history = {}
       for (const vn of versionNumbers) history[`v${vn}`] = evoMap.has(vn) ? evoMap.get(vn) : null
       const baseValue = line?.evolucio?.[0]?.valor_cm ?? null
-      cells[s] = {
+      cells[baseLabel] = {
         history,
         active: line ? { lineId: line.id, value: line.valor_real ?? '', baseValue } : null,
       }

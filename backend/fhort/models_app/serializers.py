@@ -1,34 +1,87 @@
 from rest_framework import serializers
 
-from .models import BaseMeasurement, Contracte, LiniaContracte, Model, ModelFitxer, Watchpoint
+from .models import (BaseMeasurement, Contracte, ItemFitxer, LiniaContracte, Model,
+                     ModelFitxer, Watchpoint)
+
+
+def _signed_download_url(obj, request, *, salt, ruta):
+    """URL absoluta i signada (D13). Compartida per ModelFitxer i ItemFitxer.
+
+    `<a href>` i `<img src>` no poden portar Authorization; el permís viatja al token, que
+    només rep qui ja s'ha autenticat per llegir aquesta fila. Sense `request` al context no
+    es pot construir una URL absoluta → None (mateix patró que _asset_urls,
+    ftt_document_views.py:40-46). Cada model té el SEU salt: si en compartissin un, un token
+    emès per a ModelFitxer id=5 validaria a ItemFitxer id=5.
+    """
+    from django.core import signing
+
+    if request is None or not obj.fitxer:
+        return None
+    token = signing.dumps(obj.id, salt=salt)
+    return request.build_absolute_uri(f'/api/v1/{ruta}/{obj.id}/download-signed/?token={token}')
 
 
 class ModelFitxerSerializer(serializers.ModelSerializer):
     download_url = serializers.SerializerMethodField()
+    # S03c · C2.3 — el Finder mostra qui va pujar el fitxer, no el seu id (taula #8). ADDITIU:
+    # `pujat_per` (PK) es manté per als consumidors actuals. Sense N+1: els dos ViewSets ja fan
+    # select_related('pujat_per'). `default=None` cobreix pujat_per NULL (FK nullable).
+    pujat_per_nom = serializers.CharField(source='pujat_per.nom_complet', read_only=True,
+                                          default=None)
+    # S03c · C2.4 (D17) — procedència llegible. `derivat_de_model` i `derivat_de_item` ja
+    # surten com a id per `fields='__all__'`; aquí es fixen com a NOMÉS LECTURA i s'hi afegeix
+    # una etiqueta curta. Són els PRIMERS lectors d'aquests camps, que fins ara eren write-only.
+    derivat_de_label = serializers.SerializerMethodField()
 
     class Meta:
         model = ModelFitxer
         fields = '__all__'
-        read_only_fields = ('data_pujada',)
+        # La procedència l'escriuen els serveis d'importació (usar_al_model i, a C3, el germà
+        # model→model), mai el serializer.
+        read_only_fields = ('data_pujada', 'derivat_de_model', 'derivat_de_item')
 
     def get_download_url(self, obj):
-        """URL absoluta i signada (D13) cap a la descàrrega gated.
-
-        `<a href>` i `<img src>` no poden portar Authorization; el permís viatja al token,
-        que només rep qui ja s'ha autenticat per llegir aquesta fila. Sense `request` al
-        context no es pot construir una URL absoluta → None (mateix patró que _asset_urls,
-        ftt_document_views.py:40-46).
-        """
-        from django.core import signing
-
         from .services_fitxers import DOWNLOAD_SALT
+        return _signed_download_url(obj, self.context.get('request'),
+                                    salt=DOWNLOAD_SALT, ruta='model-fitxers')
 
-        request = self.context.get('request')
-        if request is None or not obj.fitxer:
-            return None
-        token = signing.dumps(obj.id, salt=DOWNLOAD_SALT)
-        return request.build_absolute_uri(
-            f'/api/v1/model-fitxers/{obj.id}/download-signed/?token={token}')
+    def get_derivat_de_label(self, obj):
+        """Codi de l'origen: el del MODEL si ve d'un altre model, el de l'ITEM si ve del catàleg.
+
+        Els dos camps són excloents a la pràctica (una còpia té un sol origen), però si mai en
+        coexistissin, model→model mana: és la procedència més específica. Sense N+1: el
+        ViewSet fa select_related dels dos camins.
+        """
+        if obj.derivat_de_model_id:
+            origen = obj.derivat_de_model
+            return origen.model.codi_intern if origen and origen.model_id else None
+        if obj.derivat_de_item_id:
+            origen = obj.derivat_de_item
+            return origen.garment_type_item.code if origen and origen.garment_type_item_id else None
+        return None
+
+
+class ItemFitxerSerializer(serializers.ModelSerializer):
+    """Mirall d'ModelFitxerSerializer per al catàleg (S03b · P4)."""
+    download_url = serializers.SerializerMethodField()
+    # S03c · C2.3 — mirall de ModelFitxerSerializer.pujat_per_nom.
+    pujat_per_nom = serializers.CharField(source='pujat_per.nom_complet', read_only=True,
+                                          default=None)
+
+    class Meta:
+        model = ItemFitxer
+        fields = '__all__'
+        # TOT read-only: l'escriptura la governa save_item_file (via ViewSet.create), mai el
+        # serializer. Amb `garment_type_item`/`versio_anterior` escrivibles, un futur PATCH
+        # podria reencadenar un fitxer a un ALTRE item saltant-se el guard cross-item de create().
+        read_only_fields = ('data_pujada', 'versio', 'is_current', 'checksum', 'mimetype',
+                            'mida_bytes', 'pujat_per', 'garment_type_item', 'versio_anterior',
+                            'fitxer', 'nom_fitxer', 'tipus')
+
+    def get_download_url(self, obj):
+        from .services_fitxers import ITEM_DOWNLOAD_SALT
+        return _signed_download_url(obj, self.context.get('request'),
+                                    salt=ITEM_DOWNLOAD_SALT, ruta='item-fitxers')
 
 
 class ModelListSerializer(serializers.ModelSerializer):

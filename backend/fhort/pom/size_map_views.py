@@ -778,6 +778,11 @@ def size_map_create_view(request):
             if base_def is None:
                 base_def = SizeDefinition.objects.filter(size_system=ss).order_by('ordre').first()
 
+            # Customer del run: resolt AQUÍ (abans del ruleset) perquè la procedència del
+            # GradingRuleSet el necessita. El fan servir també les GradingRules i els perfils.
+            from fhort.pom.services import maybe_learn_customer_alias
+            alias_customer = _resolve_run_customer(data, src_ssid)
+
             # ---- 4. GradingRuleSet (graduació; el nom és el discriminador de variant) ----
             # nom explícit del payload, o fallback derivat. filter().first() en lloc de
             # get_or_create: GradingRuleSet no té unique (size_system, nom) → evita
@@ -798,8 +803,16 @@ def size_map_create_view(request):
                 # nom si ja existeix, si no en crea una de nova.
                 rule_set = GradingRuleSet.objects.filter(size_system=ss, nom=rs_nom).first()
                 if rule_set is None:
+                    # PROVINENÇA: el wizard de size-map és camí d'importació d'un run → CLIENT_RUN
+                    # encara que el customer no sigui resoluble (run genèric); l'origen ja tanca
+                    # la fuita i el warning en deixa traça.
+                    if alias_customer is None:
+                        logger.warning(
+                            "GradingRuleSet CLIENT_RUN sense customer resoluble (nom=%r): "
+                            "run genèric; procedència tancada per origen.", rs_nom)
                     rule_set = GradingRuleSet.objects.create(
                         nom=rs_nom, size_system=ss, actiu=True, target=target,
+                        origen=GradingRuleSet.ORIGEN_CLIENT_RUN, customer=alias_customer,
                     )
             if target:
                 rule_set.targets.add(target)
@@ -807,11 +820,6 @@ def size_map_create_view(request):
             # R2 — desa els codis no vinculats al ruleset (pendents de vincular).
             rule_set.pendents_vincular = discarded_codes
             rule_set.save(update_fields=['pendents_vincular'])
-
-            # Customer del run: eix client de SizingProfile + sembra de la biblioteca (àlies).
-            # Resolt aquí (sempre) perquè el fan servir tant les GradingRules com els perfils.
-            from fhort.pom.services import maybe_learn_customer_alias
-            alias_customer = _resolve_run_customer(data, src_ssid)
 
             # ---- 5. GradingRules ----
             if base_def is None and grading:

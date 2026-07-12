@@ -14,12 +14,23 @@ totes les seves tasques, i fa la triple escriptura atòmica:
 Idempotent: un model ja meritat (consumption_started_at IS NOT NULL)
 mai es torna a tocar, fins i tot si la comanda es re-executa.
 Ús: manage.py reconcile_consumption [--dry-run] [--tenant SCHEMA]
+
+LLEI — DUES FACTURACIONS SEPARADES (DECISIONS.md §4, 2026-07-07)
+Aquesta comanda pertany a la facturació **backoffice→tenant** (ús de la plataforma)
+i NO pot barrejar-se amb **studio→tercers** (mòdul comercial tenant-side). Fronteres:
+  1. Entitats — no comparteixen models. Res de `commerce` (WorkOrder, DeliveryNote...).
+  2. Imports — `fhort.backoffice` MAI importa `fhort.commerce` (ni transitivament).
+  3. Transacció — cap escriptura de commerce dins l'atomic que merita (D1, T1).
+  4. Reconciliació — cada facturació té la SEVA comanda de backfill.
+El germà d'aquesta comanda a l'altra banda de la frontera és
+`manage.py reconcile_work_orders` (app `commerce`). Els imports de `tasks`/`models_app`
+que hi ha aquí SÍ són feina pròpia: el llibre de meritació es construeix llegint
+l'activitat del tenant. La llei prohibeix `commerce`, no llegir el tenant.
 """
 import uuid
 import logging
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.utils import timezone
 from django_tenants.utils import schema_context, get_tenant_model
 
 logger = logging.getLogger(__name__)
@@ -52,45 +63,13 @@ class Command(BaseCommand):
         total_ok = 0
         total_skip = 0
         total_err = 0
-        total_wo = 0   # B4a — tasques amb work_order assignat retroactivament
 
         for tenant in tenants:
             self.stdout.write(f"\n{'[DRY-RUN] ' if dry_run else ''}Tenant: {tenant.schema_name} ({tenant.codi_tenant})")
 
             with schema_context(tenant.schema_name):
                 from fhort.models_app.models import Model, ConsumptionRecord
-                from fhort.tasks.models import ModelTask, TaskTransition
                 from fhort.tasks.signals import model_consumption_started
-                from fhort.tasks.services_c import assign_work_order
-                from django.db.models import Min
-
-                # B4a — ENCÀRREC: tasques amb activitat però sense work_order (forats
-                # d'assignació: anteriors al hook B4a o amb fallada transitòria). S'assignen
-                # amb la MATEIXA regla, però amb period = MIN(→InProgress) de cada tasca.
-                wo_gaps = (
-                    ModelTask.objects
-                    .filter(work_order__isnull=True,
-                            status__in=['InProgress', 'Done', 'Paused'],
-                            model__customer__isnull=False)
-                    .select_related('model', 'model__customer', 'task_type')
-                )
-                for task in wo_gaps:
-                    first = TaskTransition.objects.filter(
-                        model_task=task, to_status='InProgress').aggregate(f=Min('at'))['f']
-                    when = first or task.started_at or timezone.now()
-                    if dry_run:
-                        self.stdout.write(
-                            f"  [DRY-RUN] WOULD ASSIGN work_order task pk={task.pk} "
-                            f"model={task.model.codi_intern} period={when.strftime('%Y-%m')}")
-                        total_wo += 1
-                        continue
-                    try:
-                        assign_work_order(task, when)
-                        task.refresh_from_db(fields=['work_order'])
-                        if task.work_order_id:
-                            total_wo += 1
-                    except Exception:
-                        logger.exception('reconcile work_order failed task=%s', task.pk)
 
                 # Forats: models amb activitat real i sense marca de meritació
                 gaps = (
@@ -198,5 +177,5 @@ class Command(BaseCommand):
 
         self.stdout.write(
             f"\n{'[DRY-RUN] ' if dry_run else ''}Done: {total_ok} merited, "
-            f"{total_skip} skipped, {total_err} errors, {total_wo} work_orders assigned."
+            f"{total_skip} skipped, {total_err} errors."
         )

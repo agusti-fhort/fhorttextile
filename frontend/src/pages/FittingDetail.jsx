@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, pieceFittings, fittingPhotos, modelFitxers, models, baseMeasurements } from '../api/endpoints'
+import { fittingSessions, pieceFittings, fittingPhotos, modelFitxers, models } from '../api/endpoints'
 import client from '../api/client'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import MeasureGrid from '../components/model/MeasureGrid'
 import EditorHeader from '../components/model/EditorHeader'
-import { buildFittingGroups, buildFittingRows, regimeLeadCol, makeFittingOnSave } from '../components/model/fittingGridAdapter'
+import { buildFittingGroups, buildFittingRows, regimeLeadCol } from '../components/model/fittingGridAdapter'
 import { thStyle, SaveStatus, useDebouncedSave } from './fittingShared'
 
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
@@ -142,10 +142,19 @@ function changedRows(grid) {
   return { sizeLabels, baseLabel, rows, isMod }
 }
 
-// Una peça té canvis a gravar si alguna línia té valor_real ≠ valor_teoric (el que close aplica).
+// Estats en què una sessió és de només lectura (mirall de SEALED_SESSION_ESTATS del backend).
+const SEALED_ESTATS = ['Tancada', 'Anullada']
+
+// Una peça té canvis a gravar si alguna línia de la TALLA BASE té valor_real ≠ valor_teoric.
+// El filtre per talla base NO és redundant amb l'adapter (que ja només pinta la base): `grid.lines`
+// ve de l'API amb totes les talles, i `propagar` reescriu el valor_real de les germanes a cada
+// ancoratge. Sense el filtre, una peça sense cap canvi base es marcava "amb canvis" i es cridava
+// un `close` que no consolidava res — exactament el que fa `consolidate_base_from_fitting` (P1).
 function hasSaveChanges(grid) {
+  const base = (grid.model?.base_size_label || '').trim()
   return (grid.lines || []).some(
-    l => l.valor_real != null && Math.abs(Number(l.valor_real) - Number(l.valor_teoric)) > 1e-6
+    l => (!base || l.size_label === base) &&
+      l.valor_real != null && Math.abs(Number(l.valor_real) - Number(l.valor_teoric)) > 1e-6
   )
 }
 
@@ -185,26 +194,44 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
     setBusy(true); setError(null)
     const toClose = (grids || []).filter(hasSaveChanges)
     ;(async () => {
+      let done = 0
       if (toClose.length) {
         setProgress({ done: 0, total: toClose.length })
-        let done = 0
         for (const g of toClose) {
           try {
             await pieceFittings.close(g.id)
             done += 1; setProgress({ done, total: toClose.length })
           } catch (e) {
-            setError(t('fitting.save.save_error', { piece: g.model?.codi || g.id }))
+            // P3 — tancament PARCIAL: hi ha peces ja tancades (i GradingVersions v+1 creades) i la
+            // sessió segueix oberta. No hi ha rollback ni reintent: s'informa i NO es navega.
+            // XC — una sola peça (o la primera que falla): mostra el missatge REAL del servidor
+            // (p.ex. el guard D-1 grading segellat), amb el text fix com a fallback. Patró idèntic
+            // a onCreatePiece (:265). Migra literal quan doSave passi a la superfície nova (Sprint Y).
+            const serverMsg = e?.response?.data?.error || e?.response?.data?.detail
+            setError(done
+              ? t('fitting.save.partial_close', { done, total: toClose.length })
+              : (serverMsg || t('fitting.save.save_error', { piece: g.model?.codi || g.id })))
             setBusy(false); return
           }
         }
       }
+      let estat = null
       try {
-        await fittingSessions.seal(session.id)   // D4: segellat independent (no toca fase)
+        const res = await fittingSessions.seal(session.id)   // D4: segellat independent (no toca fase)
+        estat = res.data?.estat
       } catch (e) {
         setError(t('fitting.save.seal_error'))
         setBusy(false); return
       }
-      setBusy(false); onSaved()
+      setBusy(false)
+      // P3 — el segellat pot ser un no-op silenciós: amb un GarmentSet, `_seal_session` retorna
+      // sense tancar si queden peces sense resoldre. Abans es navegava igual i l'usuari marxava
+      // creient que havia gravat. Ara es comprova l'estat REAL que retorna `seal`.
+      if (estat !== 'Tancada') {
+        setError(t('fitting.save.not_sealed'))
+        return
+      }
+      onSaved()
     })()
   }
 
@@ -478,7 +505,10 @@ export default function FittingDetail() {
   const [gridLoading, setGridLoading] = useState(false)
   const [creatingPiece, setCreatingPiece] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
-  // D2 — la revisió és la pantalla principal; la graella (taula de mesures) és opt-in.
+  // P2 — la graella base és la pantalla de TREBALL i el landing per defecte. La revisió deixa de
+  // ser un pas intermedi (no tenia endpoint ni estat: era un toggle de client) i s'hi arriba amb
+  // "Tornar a revisió". Neix a `true` perquè, mentre la sessió carrega, no es pinti una graella
+  // buida; l'efecte de càrrega la baixa a `false` si la sessió és editable.
   const [reviewMode, setReviewMode] = useState(true)
   // P5: l'editor és MeasureGrid, que OWNS el seu buffer d'edició (reals/ancoratge/focus interns).
   // El remuntatge net per peça es fa via key={activePieceId} a MeasureGrid. Aquí ja no cal estat de cel·la.
@@ -497,14 +527,23 @@ export default function FittingDetail() {
   useEffect(() => {
     setLoading(true)
     loadSession(true)
-      .then(s => {
-        // D2 — en entrar a una sessió Programada, obrir-la automàticament (→ Oberta + started_at).
-        if (s && s.estat === 'Programada') {
-          return fittingSessions.open(s.id).then(r => setSession(r.data)).catch(() => {})
-        }
-      })
+      // Sprint Y — l'auto-open D2 (Programada→Oberta en entrar) DESAPAREIX: les sessions vives ja no
+      // es treballen aquí (redirect a Mesures, sota), i la sessió s'obre en obrir la TASCA (open-task,
+      // Y1). Aquí només queda el landing de lectura de sessions segellades.
+      .then(s => { setReviewMode(!s || SEALED_ESTATS.includes(s.estat)) })
       .finally(() => setLoading(false))
   }, [loadSession])
+
+  // P3 — sortida EXPLÍCITA amb context. Abans era `navigate(-1)`: depenia de l'historial del
+  // navegador i no transportava res. Si la sessió ve d'una convocatòria, es torna a la seva
+  // FULLA; si és individual, a la llista.
+  //
+  // La font és `session.convocatoria` (al detall des de P4a), NO `location.state`: així també
+  // funciona en entrar per URL directa o en recarregar la pàgina.
+  const sortida = useCallback(() => {
+    const conv = session?.convocatoria
+    navigate(conv ? `/fittings/convocatoria/${conv}` : '/fittings')
+  }, [navigate, session])
 
   const reloadGrid = useCallback(() => {
     if (!activePieceId) { setGrid(null); return Promise.resolve() }
@@ -529,9 +568,17 @@ export default function FittingDetail() {
   }
   if (!session) return null
 
-  const pieces = session.piece_fittings || []
   // Sessió tancada/anul·lada → tota la revisió és de lectura (split 40/60 amb taula en lectura).
-  const readOnly = session.estat === 'Tancada' || session.estat === 'Anullada'
+  const readOnly = SEALED_ESTATS.includes(session.estat)
+
+  // Sprint Y — DISSOLUCIÓ: una sessió VIVA (Oberta/Programada) no es treballa aquí; es dissol a la
+  // superfície Mesures amb context (ModelSheet materialitza la tasca en muntar amb ?fitting_session=).
+  // Només les sessions segellades es queden en aquesta pàgina, com a split de LECTURA (intacte).
+  if (!readOnly) {
+    return <Navigate to={`/models/${session.model}?tab=Mesures&fitting_session=${session.id}`} replace />
+  }
+
+  const pieces = session.piece_fittings || []
   const lines = grid?.lines || []
   const model = grid?.model || {}
   // Trim perquè base_size_label coincideixi amb les etiquetes de talla (poden venir amb espais).
@@ -543,9 +590,7 @@ export default function FittingDetail() {
   const collection = session.model_temporada ? `${session.model_temporada}${session.model_any ? ` ${session.model_any}` : ''}` : null
   const clientRef = session.model_codi_client || null
 
-  // Matriu: files = POM, columnes ordenades = talles del size run.
-  const present = new Set(lines.map(l => l.size_label))
-  const sizeLabels = orderedSizes(model.size_run_model, present)
+  // Matriu: files = POM. P1 — l'única columna de talla és la BASE (l'eix multi-talla viu a Escalat).
   const pomMap = new Map()
   for (const l of lines) {
     if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, {
@@ -570,12 +615,10 @@ export default function FittingDetail() {
 
   // Projecció de l'eix talles×versions al contracte de MeasureGrid (editor únic). Els valors/ancoratge/
   // focus viuen DINS de MeasureGrid; aquí només es construeixen groups/rows/leadCols/onSave.
-  const gridGroups = buildFittingGroups(sizeLabels, baseLabel, versionNumbers, t)
-  const gridRows = buildFittingRows(pomRows, sizeLabels, versionNumbers)
-  const lineRegimeMap = new Map(lines.map(l => [l.id, l.logica]))
-  const onGridSave = makeFittingOnSave(lineRegimeMap)
-  // P4 — autoria del nom a nivell MODEL: nom_fitxa de BaseMeasurement (NO el POM tenant compartit).
-  const onNomSave = (bmId, value) => baseMeasurements.update(bmId, { nom_fitxa: value || null }).catch(() => {})
+  const gridGroups = buildFittingGroups(baseLabel, versionNumbers, t)
+  const gridRows = buildFittingRows(pomRows, baseLabel, versionNumbers)
+  // Sprint Y — gridGroups/gridRows només alimenten ara el split de LECTURA (sessions segellades).
+  // L'edició (onGridSave/onNomSave/lineRegimeMap) s'ha dissolt a la superfície Mesures.
 
   // PG-4b-3c — canvi de règim del POM des de la capçalera de fila. Materialitza NOMÉS si difereix
   // (mirar no materialitza). Èxit → actualitza in-place les línies del POM (logica + deltas) perquè
@@ -602,7 +645,7 @@ export default function FittingDetail() {
       <div style={{ position: 'sticky', top: 0, zIndex: 10 }}>
         <EditorHeader
           model={{ codi_intern: idCodi, nom_prenda: idNom, base_size_label: model.base_size_label, size_run_model: model.size_run_model }}
-          onBack={() => navigate('/fittings')}
+          onBack={sortida}
           context={
             <>
               <Badge variant="gate">{session.fase_display || session.fase}</Badge>
@@ -638,21 +681,9 @@ export default function FittingDetail() {
       {/* Panell info de fitxers del model (toggle des de la icona Info) */}
       {infoOpen && session.model && <ModelFilesPanel modelId={session.model} />}
 
-      {/* Pantalla de revisió "Gravar el fitting" (substitueix la taula de treball) */}
-      {/* Revisió OBERTA (sessió no segellada, "Tornar a revisió"): ReviewScreen sol, sense split. */}
-      {reviewMode && !readOnly && (
-        <ReviewScreen
-          session={session}
-          pieces={pieces}
-          onBack={() => setReviewMode(false)}
-          onSaved={() => navigate(-1)}
-          onDone={() => { loadSession().then(reloadGrid) }}
-          onShowGrid={() => setReviewMode(false)}
-          onCreatePiece={createPiece}
-          creatingPiece={creatingPiece}
-          readOnly={false}
-        />
-      )}
+      {/* Sprint Y — el ReviewScreen de TREBALL i el bloc de graella editable (selector de peça,
+          "Afegir peça", "Tornar a revisió") s'han DISSOLT a la superfície Mesures; les sessions vives
+          ja no arriben aquí (redirect a dalt). Aquesta pàgina només serveix el split de LECTURA. */}
 
       {/* Revisió TANCADA: split 40/60 — esquerra revisió, dreta taula en lectura (peça activa). */}
       {reviewMode && readOnly && (
@@ -662,7 +693,7 @@ export default function FittingDetail() {
               session={session}
               pieces={pieces}
               onBack={() => setReviewMode(false)}
-              onSaved={() => navigate(-1)}
+              onSaved={sortida}
               onDone={() => { loadSession().then(reloadGrid) }}
               onShowGrid={() => setReviewMode(false)}
               onCreatePiece={createPiece}
@@ -685,63 +716,6 @@ export default function FittingDetail() {
           </div>
         </div>
       )}
-
-      {!reviewMode && (<>
-      {/* Selector de peça */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginRight: 4 }}>{t('fitting.piece.select')}:</span>
-        {pieces.map(p => {
-          const active = p.id === activePieceId
-          return (
-            <button key={p.id} onClick={() => setActivePieceId(p.id)} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: active ? 'var(--gold-pale)' : 'var(--white)',
-              color: active ? 'var(--text-main)' : 'var(--text-muted)',
-              border: `1px solid ${active ? 'var(--gold)' : 'var(--border)'}`, borderRadius: 8, padding: '5px 12px',
-              fontSize: 'var(--fs-body)', cursor: 'pointer',
-            }}>
-              {p.model_codi || `#${p.model}`}
-            </button>
-          )
-        })}
-        {session.model && (
-          <button onClick={createPiece} disabled={creatingPiece} style={{
-            background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
-            borderRadius: 8, padding: '5px 12px', fontSize: 'var(--fs-body)', cursor: creatingPiece ? 'default' : 'pointer',
-          }}>+ {creatingPiece ? t('fitting.piece.creating') : t('fitting.piece.create')}</button>
-        )}
-        <button onClick={() => setReviewMode(true)} style={{
-          marginLeft: 'auto', background: 'var(--gold)', color: 'var(--white)', border: 'none',
-          borderRadius: 8, padding: '6px 14px', fontSize: 'var(--fs-body)', fontWeight: 500, cursor: 'pointer',
-        }}>← {t('fitting.save.back_to_review')}</button>
-      </div>
-
-      {pieces.length === 0 && (
-        <Card><div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('fitting.piece.none')}</div></Card>
-      )}
-
-      {/* Graella matricial */}
-      {activePieceId && (
-        <Card padding={0} style={{ marginBottom: '1.5rem' }}>
-          {regimErr && (
-            <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', padding: '6px 10px' }}>{regimErr}</div>
-          )}
-          {gridLoading ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
-          ) : lines.length === 0 ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
-          ) : (
-            <MeasureGrid
-              key={activePieceId}
-              editable
-              rows={gridRows} groups={gridGroups}
-              leadCols={[regimeLeadCol(t, onRegimChange, false)]}
-              onSave={onGridSave} onNomSave={onNomSave}
-            />
-          )}
-        </Card>
-      )}
-      </>)}
 
     </div>
   )

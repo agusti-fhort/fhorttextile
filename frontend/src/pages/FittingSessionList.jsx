@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, models as modelsApi, plan } from '../api/endpoints'
+import { fittingSessions, plan } from '../api/endpoints'
+import AddModelToGroupModal from '../components/model/AddModelToGroupModal'
 import StatCard from '../components/ui/StatCard'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
@@ -73,7 +74,6 @@ export default function FittingSessionList() {
   const [modalGrup, setModalGrup] = useState(null)   // {uuid, tipus, data, start_time, model_id, fase, attendee_ids}
   const [rowAction, setRowAction] = useState(null)   // {id, tipus:'delete'|'discard', motiu, err}
   const [actBusy, setActBusy] = useState(false)
-  const [modelOpts, setModelOpts] = useState([])     // models per al selector add-model
   const [eligibles, setEligibles] = useState([])     // assistents elegibles per attendees
 
   const load = useCallback(() => {
@@ -153,10 +153,8 @@ export default function FittingSessionList() {
   // ── Accions de grup (C2) ──────────────────────────────────────────────────
   const openGrupModal = (uuid, tipus, sessions) => {
     setMenuGrup(null)
-    if (tipus === 'addModel' && !modelOpts.length) {
-      modelsApi.list({ page_size: 500, ordering: 'codi_intern' })
-        .then(r => setModelOpts(r.data.results || r.data || [])).catch(() => {})
-    }
+    // P4 — no és un modal: obre la fulla del dia d'aquesta convocatòria.
+    if (tipus === 'openSheet') { navigate(`/fittings/convocatoria/${uuid}`); return }
     if (tipus === 'attendees' && !eligibles.length) {
       plan.eligibleAttendees().then(r => setEligibles(r.data?.results ?? r.data ?? [])).catch(() => {})
     }
@@ -176,20 +174,6 @@ export default function FittingSessionList() {
     fittingSessions.groupReschedule(modalGrup.uuid, payload)
       .then(() => { setModalGrup(null); load() })
       .catch(e => setModalGrup(m => ({ ...m, err: e.response?.data?.error || 'error' })))
-      .finally(() => setActBusy(false))
-  }
-
-  const doAddModel = () => {
-    if (!modalGrup.model_id) { setModalGrup(m => ({ ...m, err: t('fitting.group.select_model') })); return }
-    setActBusy(true)
-    const payload = { model_id: Number(modalGrup.model_id) }
-    if (modalGrup.fase) payload.fase = modalGrup.fase
-    fittingSessions.groupAddModel(modalGrup.uuid, payload)
-      .then(() => { setModalGrup(null); load() })
-      .catch(e => setModalGrup(m => ({ ...m,
-        err: e.response?.status === 409
-          ? (e.response?.data?.error || t('fitting.group.model_in_group'))
-          : (e.response?.data?.error || 'error') })))
       .finally(() => setActBusy(false))
   }
 
@@ -397,6 +381,7 @@ export default function FittingSessionList() {
                               border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                               minWidth: 170, textAlign: 'left', padding: 4 }}>
                               {[
+                                { k: 'openSheet', icon: 'ti-list-details', label: t('fitting.sheet.open_sheet') },
                                 { k: 'reschedule', icon: 'ti-calendar-event', label: t('fitting.group.reschedule') },
                                 { k: 'addModel', icon: 'ti-plus', label: t('fitting.group.add_model') },
                                 { k: 'attendees', icon: 'ti-users', label: t('fitting.group.attendees') },
@@ -484,26 +469,14 @@ export default function FittingSessionList() {
         </Modal>
       )}
 
+      {/* P4 — mateix component que la fulla de convocatòria; no es reimplementa. */}
       {modalGrup?.tipus === 'addModel' && (
-        <Modal title={t('fitting.group.add_model')}
-          confirmLabel={actBusy ? t('common.saving') : t('common.confirm')}
-          cancelLabel={t('common.cancel')} confirmDisabled={actBusy}
-          onConfirm={doAddModel} onCancel={() => !actBusy && setModalGrup(null)}>
-          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('fitting.session.target')}</label>
-          <select value={modalGrup.model_id} onChange={e => setModalGrup(m => ({ ...m, model_id: e.target.value }))}
-            style={{ width: '100%', marginBottom: 12, padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 'var(--fs-body)' }}>
-            <option value="">— {t('fitting.group.select_model')} —</option>
-            {modelOpts.map(m => (
-              <option key={m.id} value={m.id}>{m.codi_intern}{m.nom_prenda ? ` · ${m.nom_prenda}` : ''}</option>
-            ))}
-          </select>
-          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('fitting.session.fase')}</label>
-          <select value={modalGrup.fase} onChange={e => setModalGrup(m => ({ ...m, fase: e.target.value }))}
-            style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 'var(--fs-body)' }}>
-            {FASES.filter(Boolean).map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
-          {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginTop: 10 }}>{modalGrup.err}</div>}
-        </Modal>
+        <AddModelToGroupModal
+          uuid={modalGrup.uuid}
+          faseInicial={modalGrup.fase}
+          onDone={() => { setModalGrup(null); load() }}
+          onCancel={() => setModalGrup(null)}
+        />
       )}
 
       {modalGrup?.tipus === 'attendees' && (

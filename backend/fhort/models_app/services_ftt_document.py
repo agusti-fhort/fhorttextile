@@ -108,6 +108,17 @@ def _placeholder_values(model):
     return vals  # customer_logo intencionadament absent: es resol com a imatge a _resolve_obj
 
 
+# D16 — marca de procedència del congelat. `resolve_placeholders` congela 'field' → 'text' i
+# perdia tot rastre de quin camp era: la descongelació cega és impossible. La marca és additiva
+# i de cost zero, i sobreviu el round-trip de l'editor (mapObjectTree, TechSheetEditor.jsx:153,
+# no fa whitelist de props). Els .ftt anteriors a aquest commit NO en tenen: vegeu
+# `unfreeze_document`.
+FIELD_MARK = 'field_key'
+
+# Nom de l'asset del logo del client, empaquetat per `_resolve_logo_obj`. L'extensió varia.
+LOGO_ASSET_STEM = 'field_customer_logo'
+
+
 def _resolve_logo_obj(o, model):
     """Resol el placeholder customer_logo: 'image' amb el logo del client com a asset,
     o 'text' buit si el client no en té (mai bloquejant)."""
@@ -121,11 +132,12 @@ def _resolve_logo_obj(o, model):
             finally:
                 logo.close()
             ext = os.path.splitext(logo.name)[1] or '.png'
-            name = 'field_customer_logo' + ext
+            name = LOGO_ASSET_STEM + ext
             return name, data, {
                 'id': o.get('id'), 'type': 'image', 'layer': o.get('layer', 'free'),
                 'x': o.get('x', 0), 'y': o.get('y', 0), 'width': 40, 'height': 16,
                 'src': 'assets/' + name,
+                FIELD_MARK: 'customer_logo',
             }
         except (ValueError, OSError):
             logger.exception("Logo del client %s il·legible; es deixa buit", getattr(cust, 'pk', None))
@@ -134,6 +146,7 @@ def _resolve_logo_obj(o, model):
         'id': o.get('id'), 'type': 'text', 'layer': o.get('layer', 'free'),
         'x': o.get('x', 0), 'y': o.get('y', 0), 'text': '',
         'fontSize': style.get('fontSize', 11),
+        FIELD_MARK: 'customer_logo',
     }
 
 
@@ -145,12 +158,14 @@ def _resolve_obj(o, vals, model, assets_out):
             if name is not None:
                 assets_out[name] = data
             return resolved
-        text = vals.get(o.get('key'), '')
+        key = o.get('key')
+        text = vals.get(key, '')
         style = o.get('style') or {}
         return {
             'id': o.get('id'), 'type': 'text', 'layer': o.get('layer', 'free'),
             'x': o.get('x', 0), 'y': o.get('y', 0), 'text': text,
             'fontSize': style.get('fontSize', 11),
+            FIELD_MARK: key,   # D16 — sense això, el congelat és irreversible
         }
     if o.get('children'):
         return {**o, 'children': [_resolve_obj(c, vals, model, assets_out) for c in o['children']]}
@@ -168,6 +183,118 @@ def resolve_placeholders(document_json, model):
         for p in (document_json.get('pages') or [])
     ]
     return {**document_json, 'pages': pages}, assets
+
+
+def _is_logo_image_obj(o):
+    """Objecte `image kind:'logo'` inserit a mà per l'usuari (TechSheetEditor.jsx:2645).
+
+    El seu `src` és una URL http(s) absoluta cap al logo del model ORIGEN, i
+    `_extract_inline_objects` no la reescriu mai (només toca els dataURL). No és el mateix
+    que l'asset `field_customer_logo` del placeholder: aquell porta marca i es descongela.
+    """
+    if o.get('type') != 'image' or o.get('kind') != 'logo':
+        return False
+    src = o.get('src') or ''
+    return src.startswith('http://') or src.startswith('https://')
+
+
+def _unfreeze_mapper(o, report):
+    """'text'/'image' amb marca → 'field' (geometria intacta). Sense marca, es deixa tal qual."""
+    key = o.get(FIELD_MARK)
+    if not key:
+        return o
+    report['camps_descongelats'] += 1
+    style = dict(o.get('style') or {})
+    # El congelat desa fontSize a l'arrel; el 'field' l'espera dins style (buildFieldChipPrims).
+    if 'fontSize' in o and 'fontSize' not in style:
+        style['fontSize'] = o['fontSize']
+    camp = {
+        'id': o.get('id'), 'type': 'field', 'key': key,
+        'layer': o.get('layer', 'free'), 'x': o.get('x', 0), 'y': o.get('y', 0),
+    }
+    if style:
+        camp['style'] = style
+    return camp
+
+
+def _unfreeze_objects(objects, report):
+    """Elimina les imatges de logo de l'origen i descongela la resta, recursivament."""
+    out = []
+    for o in objects or []:
+        if _is_logo_image_obj(o):
+            report['imatges_logo_eliminades'] += 1
+            continue
+        # _map_object_tree recorre l'arbre (fills inclosos); no pot ELIMINAR nodes, per això
+        # el filtre de logos va a part, en aquest mateix bucle.
+        out.append(services_ftt._map_object_tree(o, lambda x: _unfreeze_mapper(x, report)))
+    return out
+
+
+def unfreeze_document(document_json, assets):
+    """Invers de `resolve_placeholders` (D16). Retorna (document_json, assets, report).
+
+    Un `.ftt` d'un model A porta QUATRE coses materialitzades de A (Q4.4 de
+    DIAGNOSI_S03C_NAVEGACIO); aquesta funció les desfà totes:
+
+      1. Text congelat dels `field` de plantilla → torna a `type:'field'` per la marca
+         `field_key`. Geometria (id/layer/x/y) i estil intactes.
+      2. Asset `assets/field_customer_logo.<ext>` (bytes del logo del client de A) → purgat.
+      3. Objecte `image kind:'logo'` amb URL absoluta al logo de A → eliminat.
+      4. `metadata{}` → buidada.
+
+    La capçalera `data_block kind:'header'` NO es toca: no desa cap valor, es reconstrueix a
+    cada render des de `modelData` (per això D16 en pren la simetria).
+
+    DEGRADACIÓ CONEGUDA I ACCEPTADA: els `.ftt` creats abans que `resolve_placeholders` posés
+    la marca no en tenen cap. Per a aquests, els texts congelats es deixen TAL QUAL (mostraran
+    dades de A) i `report['te_marques']` és False perquè el caller ho pugui advertir. NO s'hi
+    fa cap heurística de matching per contingut: seria fràgil (dos camps amb el mateix valor,
+    text editat a mà) i podria corrompre documents. L'usuari els edita a mà.
+    """
+    report = {'camps_descongelats': 0, 'imatges_logo_eliminades': 0,
+              'assets_logo_purgats': 0, 'te_marques': False}
+
+    pages = [
+        {**p, 'objects': _unfreeze_objects(p.get('objects'), report)}
+        for p in (document_json.get('pages') or [])
+    ]
+    report['te_marques'] = report['camps_descongelats'] > 0
+
+    nets = {}
+    for name, data in (assets or {}).items():
+        if os.path.splitext(name)[0] == LOGO_ASSET_STEM:
+            report['assets_logo_purgats'] += 1
+            continue
+        nets[name] = data
+
+    # metadata buida: `ftt_schema` i `pageFormat` són germans de metadata, no fills — es mantenen.
+    return {**document_json, 'metadata': {}, 'pages': pages}, nets, report
+
+
+def reescriure_ftt_per_model(blob, model_desti):
+    """Bytes d'un `.ftt` del model A → bytes del mateix `.ftt` per al model B (D16).
+
+    unfreeze (treu tot el que és de A) → resolve_placeholders (congela amb les dades de B).
+    El resultat és indistingible d'instanciar la plantilla directament sobre B: el document
+    importat torna a ser "jove". Retorna (blob_nou, report).
+
+    El `preview.png` NO es propaga: és un render dels valors de A i quedaria com una 5a cosa
+    materialitzada de l'origen. Es regenera sol al primer desat des de l'editor.
+    """
+    paquet = services_ftt.unpack(blob)
+    document_json, assets, report = unfreeze_document(
+        paquet['document_json'], paquet.get('assets') or {})
+    document_json, assets_desti = resolve_placeholders(document_json, model_desti)
+    assets.update(assets_desti)
+    return services_ftt.pack(document_json, assets=assets), report
+
+
+def es_ftt(fitxer):
+    """True si el ModelFitxer és un document .ftt (per tipus o per extensió)."""
+    if fitxer.tipus == ModelFitxer.TIPUS_TECHSHEET:
+        return True
+    nom = fitxer.nom_fitxer or ''
+    return nom.lower().endswith(ModelFitxer.FTT_EXTENSION)
 
 
 def create_document(model, *, document_json=None, assets=None, preview=None, nom=None):

@@ -24,7 +24,7 @@ class ModelTaskSerializer(serializers.ModelSerializer):
                   'status', 'origen', 'assignee', 'order', 'created_at', 'updated_at',
                   'started_at', 'finished_at', 'estimated_minutes', 'rectifications',
                   'planned_start', 'planned_end', 'planned_locked',
-                  'work_order', 'off_recipe']
+                  'work_order', 'off_recipe', 'fitting_session']
         # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
         # origen el fixa el backend en crear (prevista per defecte; ad_hoc des de l'arbre global,
         # Sprint 4) → read-only per al client.
@@ -36,7 +36,7 @@ class ModelTaskSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at', 'origen',
                             'started_at', 'finished_at', 'estimated_minutes',
                             'planned_start', 'planned_end', 'planned_locked',
-                            'work_order', 'off_recipe']
+                            'work_order', 'off_recipe', 'fitting_session']
 
     def get_rectifications(self, obj):
         return rectification_count(obj)
@@ -103,7 +103,11 @@ class GarmentTypeItemSerializer(serializers.ModelSerializer):
     # afecten el write path (la pàgina d'autoria escriu via els FK grading_rule_set/base_size_definition).
     grading_rule_set_nom = serializers.SerializerMethodField()
     base_size_label = serializers.SerializerMethodField()
-    poms_count = serializers.SerializerMethodField()
+    # S03c · C2.1 — anotats al queryset del ViewSet, no calculats per fila. `poms_count` feia
+    # `obj.pom_maps.count()` (N+1). `default=0`: la resposta d'un POST/PUT serialitza la
+    # instància desada, que no ve del queryset i no porta les anotacions.
+    poms_count = serializers.IntegerField(read_only=True, default=0)
+    fitxers_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = GarmentTypeItem
@@ -111,17 +115,13 @@ class GarmentTypeItemSerializer(serializers.ModelSerializer):
         # la talla base, escrivibles per la pàgina d'autoria (Fase B). Tots dos nullable.
         fields = ['id', 'garment_type', 'code', 'name', 'complexity_order', 'active',
                   'grading_rule_set', 'base_size_definition',
-                  'grading_rule_set_nom', 'base_size_label', 'poms_count']
+                  'grading_rule_set_nom', 'base_size_label', 'poms_count', 'fitxers_count']
 
     def get_grading_rule_set_nom(self, obj):
         return obj.grading_rule_set.nom if obj.grading_rule_set_id else None
 
     def get_base_size_label(self, obj):
         return obj.base_size_definition.etiqueta if obj.base_size_definition_id else None
-
-    def get_poms_count(self, obj):
-        # Pertinença POM de l'item (GarmentPOMMap.related_name='pom_maps').
-        return obj.pom_maps.count()
 
     def validate(self, attrs):
         # B3a — DRF no crida Model.clean() sol; l'invoquem aquí perquè el constrenyiment d'A3

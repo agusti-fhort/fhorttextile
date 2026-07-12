@@ -1395,6 +1395,7 @@ def import_session_confirmar_view(request, token):
                     nom=f"Importació fitxa · {model.codi_intern}",
                     nom_sufix_unic=sf_codi,
                     avisos=grading_avisos,
+                    customer=model.customer,   # PROVINENÇA: eix de client del run
                 )
                 # P2 — CONFLICTE conscient: regla IMPORTADA (del document) vs RETINGUDA del model.
                 # Comparació per FORMA (grading_rules_match, util pur — NO toca el motor). Si

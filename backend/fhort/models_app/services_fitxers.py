@@ -1,22 +1,70 @@
-"""Servei de versionat de fitxers de Model.
+"""Servei de versionat de fitxers de Model i de Catàleg (item).
 
 FONT ÚNICA DE LA INVARIANT: cada fitxer lògic és una cadena `versio_anterior`. En tota
-cadena hi ha EXACTAMENT UN registre amb `is_current=True` (el cap). `save_model_file` és
-l'únic lloc que toca aquesta invariant — qualsevol escriptor (upload manual, import,
-eines IA) hi delega.
+cadena hi ha EXACTAMENT UN registre amb `is_current=True` (el cap). `save_model_file` i
+`save_item_file` són els únics llocs que toquen aquesta invariant — qualsevol escriptor
+(upload manual, import, eines IA) hi delega.
 """
 
 import hashlib
+import logging
 import mimetypes
+import os
 
 from django.db import transaction
 
-from .models import ModelFitxer
+from .models import ItemFitxer, ModelFitxer
 
-# D13 — descàrrega signada. Font única del salt i del TTL: hi beuen el serializer (qui
-# signa) i el ViewSet (qui verifica). Canviar el salt invalida tots els enllaços vius.
+logger = logging.getLogger(__name__)
+
+# D13 — descàrrega signada. Font única dels salts i del TTL: hi beuen els serializers (qui
+# signen) i els ViewSets (qui verifiquen). Canviar un salt invalida tots els enllaços vius.
+# Els dos salts han de ser DIFERENTS: amb un de sol, un token emès per a ModelFitxer id=5
+# validaria a ItemFitxer id=5 (el payload és només l'id).
 DOWNLOAD_SALT = 'model_fitxer_download'
+ITEM_DOWNLOAD_SALT = 'item_fitxer_download'
 DOWNLOAD_TTL = 900   # segons (15 min): prou per obrir/descarregar, poc per compartir.
+
+# D12 — validació d'upload. NO es copia el forat de Customer.upload_logo (que no valida res).
+# 20 MB, no 25: és el sostre que ja regia a tech_sheet_views.py:45, i és més estricte que el
+# `client_max_body_size 25M` d'nginx. S'adopta el més estricte dels dos ja existents.
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+# Whitelist per EXTENSIÓ, no per mimetype: els formats de domini (.dxf, .rul, .ftt) arriben
+# del navegador com a application/octet-stream o amb mimetypes inconsistents entre sistemes,
+# de manera que filtrar per content_type els rebutjaria falsament. Coherent amb TIPUS_CHOICES.
+ALLOWED_UPLOAD_EXTENSIONS = frozenset({
+    '.ftt',                                  # TECHSHEET
+    '.pdf',                                  # DOCUMENT / EXPORT
+    '.dxf',                                  # PATRO / ESCALAT / MARCADA (CAD)
+    '.svg',                                  # SKETCH_SVG
+    '.rul', '.txt',                          # RUL
+    '.png', '.jpg', '.jpeg', '.webp', '.gif',   # sketches i imatges
+    # D18 — `upload_file_view` no validava res i hi ha 1 `.xlsx` real a la BD (218 files).
+    # Endollar-hi `validate_upload` sense afegir-los rebutjaria dades que el sistema ja accepta.
+    # `.xls` acompanya `.xlsx` pel mateix motiu que `.jpg` acompanya `.jpeg`.
+    '.xlsx', '.xls',                         # fulls de càlcul (mesures, BOM)
+})
+
+
+class UploadRejected(ValueError):
+    """L'upload no passa la validació (mida o extensió). El caller la tradueix a 400."""
+
+
+def validate_upload(file, nom=None):
+    """Guard únic d'upload (D12). Llança UploadRejected amb un missatge per a l'usuari."""
+    nom_fitxer = nom or getattr(file, 'name', '') or ''
+    ext = os.path.splitext(nom_fitxer)[1].lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        permeses = ', '.join(sorted(ALLOWED_UPLOAD_EXTENSIONS))
+        raise UploadRejected(
+            f"Extensió no permesa: '{ext or '(cap)'}'. Permeses: {permeses}.")
+    mida = getattr(file, 'size', None) or 0
+    if mida > MAX_UPLOAD_BYTES:
+        # Un decimal: amb divisió entera, 20 MB + 1 byte es llegia "20 MB. Màxim 20 MB."
+        raise UploadRejected(
+            f'Fitxer massa gran ({mida / (1024 * 1024):.1f} MB). '
+            f'Màxim {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.')
 
 
 def _compute_checksum(file):
@@ -87,33 +135,133 @@ def save_model_file(model, file, *, versio_anterior=None,
     return fitxer
 
 
-def serve_model_file(fitxer, *, as_attachment=True):
-    """Serveix els bytes d'un ModelFitxer delegant-los a nginx (S03a · P2b).
+@transaction.atomic
+def save_item_file(item, file, *, versio_anterior=None, tipus=None, nom=None):
+    """Mirall de `save_model_file` per al catàleg (S03b · P4). Mateixa invariant de cadena.
 
-    Font ÚNICA del servei de bytes: hi criden tant l'endpoint autenticat (`download`) com el
-    signat (`download_signed`). Django no serveix mai els bytes en producció: envia la
-    capçalera `X-Accel-Redirect` cap a `location /protected-media/` (internal) i nginx els
-    escup. Vegeu docs/OPS_S03_NGINX.md.
+    NO s'ha extret un helper genèric compartit amb `save_model_file`: els dos models tenen
+    conjunts de camps diferents (ModelFitxer porta categoria/origen/url_extern/generat_des_de;
+    ItemFitxer no en porta cap). Un helper parametritzat per model + mapa de camps sortiria
+    més llarg i més opac que aquestes 20 línies. El que SÍ es comparteix és el que és
+    realment comú: `_compute_checksum`, `_guess_mimetype` i `validate_upload`.
+    """
+    nom_fitxer = nom or getattr(file, 'name', None) or 'fitxer'
+    checksum = _compute_checksum(file)
+    mida = getattr(file, 'size', None) or 0
+    mimetype = _guess_mimetype(file, nom_fitxer)
+
+    if versio_anterior is not None:
+        versio = (versio_anterior.versio or 0) + 1
+        if tipus is None:
+            tipus = versio_anterior.tipus
+    else:
+        versio = 1
+
+    fitxer = ItemFitxer(
+        garment_type_item=item,
+        nom_fitxer=nom_fitxer,
+        tipus=tipus or 'ALTRES',
+        versio=versio,
+        is_current=True,
+        versio_anterior=versio_anterior,
+        mida_bytes=mida,
+        checksum=checksum,
+        mimetype=mimetype,
+    )
+    fitxer.fitxer.save(nom_fitxer, file, save=False)
+    fitxer.save()
+
+    if versio_anterior is not None and versio_anterior.is_current:
+        versio_anterior.is_current = False
+        versio_anterior.save(update_fields=['is_current'])
+
+    return fitxer
+
+
+def marcar_procedencia(nou, user, **camps):
+    """Escriu la procedència i l'autor d'una còpia importada, en un sol UPDATE.
+
+    Comú als dos cicles d'importació: catàleg→model (`derivat_de_item`) i model→model
+    (`derivat_de_model`). És l'únic tros que comparteixen de veritat — la còpia de bytes
+    difereix (el `.ftt` model→model es reescriu, vegeu D16) i la font també. Mateix criteri
+    que `save_model_file` vs `save_item_file`: es comparteix el que és realment comú, no
+    s'inventa un helper parametritzat que surti més llarg i més opac.
+
+    NO toca `is_current`/`versio`: d'aquells n'és únic escriptor `save_model_file`.
+    """
+    for camp, valor in camps.items():
+        setattr(nou, camp, valor)
+    noms = list(camps)
+    perfil = getattr(user, 'profile', None)
+    if perfil is not None:
+        nou.pujat_per = perfil
+        noms.append('pujat_per')
+    nou.save(update_fields=noms)
+    return nou
+
+
+def delete_fitxer_bytes(fitxer):
+    """Esborra els bytes d'un ModelFitxer O d'un ItemFitxer. Font única, com `serve_fitxer`.
+
+    `mixins.DestroyModelMixin` fa `instance.delete()`, i des de Django 1.3 el `FileField` no
+    s'engancha a `post_delete` → esborrar la fila deixa els bytes orfes al disc. Els dos
+    ViewSets de fitxers hi criden des de `perform_destroy`.
+
+    Segueix el precedent d'`extraction_views.py:66-75`: guard `exists()` i `try/except` que
+    **mai bloqueja l'esborrat de la fila**. Un fitxer ja absent del disc (fila fantasma) no
+    ha d'impedir netejar la BD — és exactament el cas que volem poder resoldre.
+    """
+    from django.core.files.storage import default_storage
+
+    name = fitxer.fitxer.name if fitxer.fitxer else ''
+    if not name:
+        return
+    try:
+        if default_storage.exists(name):
+            default_storage.delete(name)
+    except Exception:
+        # No es propaga: la fila s'ha de poder esborrar encara que el disc falli.
+        logger.warning("Bytes no esborrats per a '%s'", name, exc_info=True)
+
+
+def serve_fitxer(fitxer, *, as_attachment=True):
+    """Serveix els bytes d'un ModelFitxer O d'un ItemFitxer delegant-los a nginx (S03a · P2b).
+
+    Font ÚNICA del servei de bytes: hi criden els endpoints autenticats (`download`) i els
+    signats (`download_signed`) dels dos models. Django no serveix mai els bytes en producció:
+    envia la capçalera `X-Accel-Redirect` cap a `location /protected-media/` (internal) i nginx
+    els escup. Vegeu docs/OPS_S03_NGINX.md.
 
     `as_attachment=False` → `Content-Disposition: inline`, necessari per als previsualitzadors
     (`<iframe>` de PDF): amb `attachment` el navegador descarregaria en lloc de renderitzar.
 
-    - `url_extern` → 302 (el fitxer no viu aquí).
-    - sense bytes → 404.
+    - `url_extern` → 302 (el fitxer no viu aquí). ItemFitxer no té aquest camp: `getattr`.
+    - sense nom, o amb nom però sense bytes al disc (fila fantasma) → 404 JSON.
     - DEBUG → FileResponse (no hi ha nginx al davant).
     """
-    import os
     from urllib.parse import quote
 
     from django.conf import settings
+    from django.core.files.storage import default_storage
     from django.http import (FileResponse, HttpResponse, HttpResponseRedirect,
                              JsonResponse)
 
-    if fitxer.url_extern:
-        return HttpResponseRedirect(fitxer.url_extern)
-    if not fitxer.fitxer:
+    def _sense_bytes():
         # JSON, no HTML: manté el contracte del 404 que servia DRF abans de l'extracció.
         return JsonResponse({'error': 'El fitxer no té bytes associats.'}, status=404)
+
+    url_extern = getattr(fitxer, 'url_extern', None)
+    if url_extern:
+        return HttpResponseRedirect(url_extern)
+    if not fitxer.fitxer:
+        return _sense_bytes()
+    # Un FieldFile és falsy només si no té `name`: el guard de sobre comprova existència de
+    # NOM, no de BYTES. Una fila fantasma (nom desat, bytes absents del disc) el passava i
+    # petava més avall — 500 en DEBUG (`FileResponse.open`), i en producció un 404 d'nginx
+    # sense el JSON del contracte, perquè la branca X-Accel no toca mai el disc. Amb aquest
+    # guard el contracte és el MATEIX en tots dos entorns.
+    if not default_storage.exists(fitxer.fitxer.name):
+        return _sense_bytes()
 
     nom = fitxer.nom_fitxer or os.path.basename(fitxer.fitxer.name)
 

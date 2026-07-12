@@ -27,6 +27,7 @@ const DeliveryNoteDetail = lazy(() => import('./pages/DeliveryNoteDetail'))
 // TEMPORAL (esborrable) — banc de proves del sistema visual comercial unificat. Ruta /comercial/_kit.
 const CommercialKitDemo = lazy(() => import('./pages/CommercialKitDemo'))
 const FittingDetail = lazy(() => import('./pages/FittingDetail'))
+const FittingConvocatoriaSheet = lazy(() => import('./pages/FittingConvocatoriaSheet'))
 const FittingSessionList = lazy(() => import('./pages/FittingSessionList'))
 const FittingSessionNew = lazy(() => import('./pages/FittingSessionNew'))
 const GradingRuleSets = lazy(() => import('./pages/GradingRuleSets'))
@@ -40,6 +41,7 @@ const BulkImportWizard = lazy(() => import('./pages/BulkImportWizard'))
 const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
+const TechSheetEntry = lazy(() => import('./pages/TechSheetEntry'))
 const DissenyPlaceholder = lazy(() => import('./pages/DissenyPlaceholder'))
 const ItemAuthoring = lazy(() => import('./pages/ItemAuthoring'))
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
@@ -233,6 +235,8 @@ export default function App() {
           </ProtectedRoute>
         }>
           <Route index element={<Dashboard />} />
+          {/* D10 — porta-menú de la fitxa tècnica (S03b · P6): tria model → open-task → editor. */}
+          <Route path="fitxa-tecnica" element={<TechSheetEntry />} />
           <Route path="models" element={<Models />} />
           <Route path="models/nou" element={<ModelWizard />} />
           <Route path="models/importar-colleccio" element={<BulkImportWizard />} />
@@ -251,6 +255,8 @@ export default function App() {
           {/* 5B.6 — capa de sessions de fitting (l'antiga SizeFitting es va jubilar al Pas 1 catàlegs) */}
           <Route path="fittings" element={<FittingSessionList />} />
           <Route path="fittings/new" element={<FittingSessionNew />} />
+          {/* P4 — fulla de convocatòria: pas intermedi llista → sessió, per a les sessions de grup. */}
+          <Route path="fittings/convocatoria/:uuid" element={<FittingConvocatoriaSheet />} />
           <Route path="fittings/:id" element={<FittingDetail />} />
           {/* Sprint 5: pàgina Kanban global jubilada → el board per-model viu al Dashboard (/).
               Bloc 3: la pàgina-llistat residual /tasques (Tasks.jsx) també jubilada (endpoint

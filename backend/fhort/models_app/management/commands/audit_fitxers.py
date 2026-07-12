@@ -11,14 +11,15 @@ Dues comprovacions independents:
     NO té constraint a la BD, i fins a S03a el ViewSet genèric la podia saltar.
 
 (b) RECONCILIACIÓ DISC↔BD — fitxers a disc sense fila (orfes) i files amb el fitxer
-    absent del disc (fantasmes). Es recorre qualsevol directori `model_fitxers` sota
-    MEDIA_ROOT, a qualsevol profunditat, de manera que segueix funcionant quan el media
-    passi a estar aïllat per tenant ({schema}/model_fitxers/…).
+    absent del disc (fantasmes). Els dos costats de la comparació han de parlar el MATEIX
+    espai de noms: el de `fitxer.name`, relatiu a l'arrel del TENANT. El prefix del schema
+    viu a `storage.location`, no al `name` (S03a · P2a), de manera que el disc s'ha de
+    recórrer des de `storage.location` — no des de MEDIA_ROOT.
 """
 import json
 import os
 
-from django.conf import settings
+from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand, CommandError
 from django_tenants.utils import get_tenant_model, schema_context
 
@@ -76,15 +77,25 @@ def _audit_chains(rows):
 
 
 def _disk_names():
-    """Noms relatius a MEDIA_ROOT de tot el que hi ha sota qualsevol dir `model_fitxers`."""
-    root = str(settings.MEDIA_ROOT)
+    """Noms de disc TRADUÏTS a l'espai de noms de `fitxer.name` (relatiu al tenant).
+
+    L'arrel és `storage.location` (= MEDIA_ROOT/{schema} amb TenantFileSystemStorage), que és
+    exactament l'origen de coordenades que `storage.path(name)` desfà. És la traducció inversa
+    de `path`, i per això surt del storage i no d'una concatenació a mà: qualsevol canvi a
+    MULTITENANT_RELATIVE_MEDIA_ROOT segueix els dos costats de la comparació alhora.
+
+    Cal cridar-la DINS d'un `schema_context`: `location` es resol per tenant a cada accés.
+    """
+    root = default_storage.location
     found = set()
     for dirpath, _dirnames, filenames in os.walk(root):
         rel_dir = os.path.relpath(dirpath, root)
         if CHAIN_DIR not in rel_dir.split(os.sep):
             continue
         for fn in filenames:
-            found.add(os.path.relpath(os.path.join(dirpath, fn), root))
+            rel = os.path.relpath(os.path.join(dirpath, fn), root)
+            # El FileField sempre desa el `name` amb '/', sigui quin sigui l'os.sep.
+            found.add(rel.replace(os.sep, '/'))
     return found
 
 

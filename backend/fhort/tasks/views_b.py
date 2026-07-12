@@ -532,10 +532,16 @@ def open_model_task_view(request, model_id):
         return Response({'error': f"Tipus de tasca '{code}' no trobat o inactiu."}, status=http_status.HTTP_404_NOT_FOUND)
     profile = getattr(request.user, 'profile', None)
     if profile is None:
-        return Response({'error': 'Usuari sense perfil en aquest tenant.'}, status=http_status.HTTP_403_FORBIDDEN)
+        return Response({'error': 'Usuari sense perfil en aquest tenant.', 'code': 'no_profile'},
+                        status=http_status.HTTP_403_FORBIDDEN)
     # GUARD allow-list: només pots obrir un tipus que executes (admin = bypass) — igual que claim.
+    # `code` discriminant (S03b · P6, D10): el menú de fitxa ha de distingir "no tens aquest
+    # tipus a l'allow-list" (→ ofereix obrir en consulta) de qualsevol altre 403 (bloqueig dur).
+    # Sense això, el frontend hauria de fer match sobre el text del missatge. Additiu: cap
+    # consumidor existent llegeix aquesta clau.
     if code not in get_allowed_task_types(request.user):
-        return Response({'error': f"No pots obrir una tasca del tipus '{code}' (no és a la teva allow-list)."},
+        return Response({'error': f"No pots obrir una tasca del tipus '{code}' (no és a la teva allow-list).",
+                         'code': 'task_type_not_allowed'},
                         status=http_status.HTTP_403_FORBIDDEN)
     # 1. Crea-si-falta (mirall de define_model_tasks_view). La canònica és la prevista.
     task = ModelTask.objects.filter(model=model, task_type=tt, origen='prevista').first()
@@ -561,6 +567,28 @@ def open_model_task_view(request, model_id):
         cleanup_queue_order([old_assignee_id, profile.id], [task.model_id])
         recompute_for_technicians([old_assignee_id, profile.id])
     task.refresh_from_db()
+
+    # Sprint Y — context de sessió de fitting: la convocatòria (contenidor) llança aquesta tasca de
+    # presa de mesures. Opcional i additiu: sense `fitting_session_id`, el camí del check esporàdic
+    # queda idèntic. Amb ell: valida pertinença al model, escriu el FK (punter MUTABLE: reapunta si ja
+    # en tenia un altre, decisió 4) i, si la sessió és Programada, l'obre (Programada→Oberta).
+    fitting_session_id = (request.data or {}).get('fitting_session_id')
+    if fitting_session_id:
+        from fhort.fitting.models import FittingSession
+        from fhort.fitting.services import open_session
+        try:
+            fs = FittingSession.objects.get(pk=fitting_session_id)
+        except FittingSession.DoesNotExist:
+            return Response({'error': 'Sessió de fitting no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+        if fs.model_id != model.id:
+            return Response({'error': 'La sessió de fitting no és del mateix model que la tasca.',
+                             'code': 'session_model_mismatch'}, status=http_status.HTTP_400_BAD_REQUEST)
+        if task.fitting_session_id != fs.id:
+            task.fitting_session = fs
+            task.save(update_fields=['fitting_session', 'updated_at'])
+        if fs.estat == 'Programada':
+            open_session(fs.id)
+
     # F4 — gate SUPER SUAU: informem de quins camps de config falten (font única F1), però NO bloquegem
     # l'obertura de la tasca. El Watchpoint persistent (F2/F3) ja mostra l'avís accionable; el tècnic decideix.
     from fhort.models_app.services import model_config_missing
@@ -805,11 +833,34 @@ class _Configure(HasCapability):
 
 class GarmentTypeItemViewSet(viewsets.ModelViewSet):
     # B3b: select_related dels FK de completesa (ruleset/talla base) per evitar N+1 a la graella.
-    queryset = GarmentTypeItem.objects.select_related(
-        'garment_type', 'grading_rule_set', 'base_size_definition').all()
+    # S03c · C2.1: `poms_count` feia un `.count()` per fila (N+1: 57 items = 57 queries) i
+    # `fitxers_count` no existia. Els dos passen a ser anotacions.
+    #
+    # `distinct=True` NO és cosmètic: `pom_maps` i `fitxers` són dues relacions multivaluades
+    # i els seus LEFT JOIN es multipliquen entre si (un item amb 3 POMs i 2 fitxers donaria
+    # poms_count=6 i fitxers_count=6). Amb `distinct` cada Count compta files úniques.
+    #
+    # `fitxers_count` compta NOMÉS `is_current=True`: en un Finder, "fitxers" és el que
+    # l'usuari veu a la carpeta, no la suma de totes les versions històriques de cada cadena.
+    #
+    # `order_by` explícit i idèntic al Meta.ordering: `annotate()` afegeix GROUP BY i Django
+    # descarta l'ordenació per defecte a les queries agregades (el SQL en perdia l'ORDER BY).
+    # Sense això, la paginació d'aquest endpoint deixava de ser determinista.
+    queryset = (GarmentTypeItem.objects
+                .select_related('garment_type', 'grading_rule_set', 'base_size_definition')
+                .annotate(
+                    poms_count=Count('pom_maps', distinct=True),
+                    fitxers_count=Count('fitxers', filter=Q(fitxers__is_current=True),
+                                        distinct=True),
+                )
+                .order_by('garment_type', 'complexity_order', 'code'))
     serializer_class = GarmentTypeItemSerializer
-    filter_backends = [DjangoFilterBackend]
+    # S03c · C2.2 — cerca de text per al Finder: abans no n'hi havia cap (taula #5).
+    # `code` i `name` són els únics camps presentables del model: no en té cap altre de nom
+    # (les etiquetes i18n viuen a GarmentType, no a l'item).
+    filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['garment_type', 'active']
+    search_fields = ['code', 'name']
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):

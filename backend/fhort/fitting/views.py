@@ -1,5 +1,6 @@
 import logging
 
+from django.db import IntegrityError
 from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, mixins, status
@@ -97,7 +98,10 @@ class POMAlertViewSet(viewsets.ModelViewSet):
 class FittingSessionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['model', 'garment_set', 'fase', 'estat', 'data', 'responsable']
+    # P4 — `convocatoria` (UUID, db_index) permet demanar les sessions d'una fulla amb
+    # ?convocatoria=<uuid>. Fins ara el client baixava la llista sencera i la particionava.
+    filterset_fields = ['model', 'garment_set', 'fase', 'estat', 'data', 'responsable',
+                        'convocatoria']
     ordering_fields = ['data', 'created_at']
     ordering = ['-data', '-created_at']
 
@@ -155,6 +159,15 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
             )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError:
+            # XD — la peça (session, model) ja existeix: unique_together de PieceFitting.
+            # No es fa get_or_create (la semàntica del servei —materialitzar línies— queda
+            # intacta): es torna 409 llegible perquè el cridador programàtic del Sprint Y
+            # sigui idempotent. Substitueix el 500 cru que deixava el `create` nu.
+            return Response(
+                {'error': 'Aquesta peça ja existeix a la sessió.', 'code': 'piece_exists'},
+                status=status.HTTP_409_CONFLICT,
+            )
         out = PieceFittingGridSerializer(pf, context={'request': request})
         return Response({'n_linies': n, **out.data}, status=status.HTTP_201_CREATED)
 
@@ -449,10 +462,23 @@ class PieceFittingViewSet(mixins.RetrieveModelMixin,
 
     @action(detail=True, methods=['post'])
     def close(self, request, pk=None):
+        # XB: reobertura explícita d'un grading segellat (aprovada). Default False →
+        # comportament actual intacte. La UI que activa el flag pertany al Sprint Y
+        # (ancorada a la tasca); aquí només s'exposa el contracte.
+        allow_reopen = bool(request.data.get('allow_reopen_sealed', False))
         try:
-            result = services.close_piece_fitting(int(pk), user_profile_id=_profile_id(request))
+            result = services.close_piece_fitting(
+                int(pk), user_profile_id=_profile_id(request),
+                allow_reopen_sealed=allow_reopen,
+            )
         except ValueError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            # El guard D-1 (motor, intocable) llança ValueError nu quan la GradingVersion
+            # activa està aprovada. El codi de client s'afegeix AQUÍ, a la view, no al motor:
+            # 'grading_sealed' permet al client oferir la reobertura sense parsejar el text.
+            body = {'error': str(e)}
+            if 'segellada a producció' in str(e):
+                body['code'] = 'grading_sealed'
+            return Response(body, status=status.HTTP_400_BAD_REQUEST)
         return Response(result)
 
     @action(detail=True, methods=['post'])
@@ -468,16 +494,32 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
     """Autosave only: PATCH a cell's valor_real / nota. No list/create/destroy/PUT."""
     permission_classes = [IsAuthenticated]
     serializer_class = PieceFittingLineSerializer
-    # select_related fins a la sessió: el guard d'estat (fitting_line_is_locked) la consulta
+    # select_related fins a la sessió i al model: els dos guards (estat i eix) els consulten
     # sense queries extra a partial_update/propagar.
-    queryset = PieceFittingLine.objects.select_related('pom', 'piece_fitting__session').all()
+    queryset = PieceFittingLine.objects.select_related(
+        'pom', 'piece_fitting__session', 'piece_fitting__model').all()
     http_method_names = ['get', 'patch', 'post', 'head', 'options']
 
-    def partial_update(self, request, *args, **kwargs):
-        # Guard: sessió segellada (Tancada/Anullada) → rebutja ABANS de desar; delega si editable.
-        line = self.get_object()
+    def _rebuig_escriptura(self, line):
+        """Guards d'escriptura, compartits per `partial_update` i `propagar`. Retorna una
+        Response de rebuig, o None si la línia és editable.
+
+        Ordre deliberat: primer l'estat de la sessió (una sessió segellada no s'edita ni tan
+        sols a la base), després l'eix (P1).
+        """
         if services.fitting_line_is_locked(line):
             return Response({'detail': SEALED_SESSION_DETAIL}, status=status.HTTP_409_CONFLICT)
+        if services.fitting_line_is_non_base(line):
+            # 400, no 409: no és conflicte d'estat sinó escriptura fora de l'eix del fitting.
+            return Response({'detail': services.NON_BASE_LINE_DETAIL},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return None
+
+    def partial_update(self, request, *args, **kwargs):
+        # Guards ABANS de desar; delega només si la línia és editable.
+        rebuig = self._rebuig_escriptura(self.get_object())
+        if rebuig is not None:
+            return rebuig
         return super().partial_update(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'], url_path='propagar')
@@ -495,9 +537,12 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
         line = self.get_object()
         pf = line.piece_fitting
 
-        # Guard: sessió segellada (Tancada/Anullada) → cap escriptura, abans de qualsevol save.
-        if services.fitting_line_is_locked(line):
-            return Response({'detail': SEALED_SESSION_DETAIL}, status=status.HTTP_409_CONFLICT)
+        # Guards (sessió segellada · eix no-base) abans de qualsevol save. L'ancoratge només
+        # es pot fer des de la talla BASE; la propagació a les germanes, en canvi, es manté:
+        # els seus valor_real són DERIVATS del motor, no feina del tècnic (P1).
+        rebuig = self._rebuig_escriptura(line)
+        if rebuig is not None:
+            return rebuig
 
         def _resp(propagat, motiu, warnings=None):
             linies = (PieceFittingLine.objects

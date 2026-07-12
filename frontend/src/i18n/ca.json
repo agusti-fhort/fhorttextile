@@ -462,7 +462,8 @@
     "users": "Usuaris i rols",
     "company_calendar": "Calendari d'empresa",
     "planning": "Planificació",
-    "planning_calendar": "Calendari"
+    "planning_calendar": "Calendari",
+    "tech_sheet": "Fitxa tècnica"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -627,7 +628,11 @@
         "section": "Properes fites",
         "empty": "Cap fita propera",
         "at_risk": "En risc",
-        "type": { "tasca": "Tasca", "confeccio": "Confecció", "fitting": "Fitting" }
+        "type": {
+          "tasca": "Tasca",
+          "confeccio": "Confecció",
+          "fitting": "Fitting"
+        }
       },
       "section_technical": "Detall tècnic",
       "tech_next_phase": "Següent fase",
@@ -637,13 +642,23 @@
       "tech_base_size": "Talla base",
       "tech_base_active": "Mesures base actives",
       "tech_tasks_open": "Tasques obertes",
-      "fitxa_estat": { "obert": "Oberta", "tancat": "Tancada" },
+      "fitxa_estat": {
+        "obert": "Oberta",
+        "tancat": "Tancada"
+      },
       "phase": {
-        "Pending": "Pendent", "Dev": "Desenvolupament", "Proto": "Prototip",
-        "SizeSet": "Joc de talles", "PP": "Preproducció", "TOP": "Producció"
+        "Pending": "Pendent",
+        "Dev": "Desenvolupament",
+        "Proto": "Prototip",
+        "SizeSet": "Joc de talles",
+        "PP": "Preproducció",
+        "TOP": "Producció"
       },
       "task_status": {
-        "Pending": "Pendent", "Paused": "Pausada", "InProgress": "En curs", "Done": "Feta"
+        "Pending": "Pendent",
+        "Paused": "Pausada",
+        "InProgress": "En curs",
+        "Done": "Feta"
       },
       "workplan": {
         "title": "Pla de treball",
@@ -685,8 +700,11 @@
         "gate_regress": "Tornat a {{phase}}",
         "task_transition": "{{task}} · {{status}}",
         "context": {
-          "import": "importació", "manual": "manual", "fitting": "fitting",
-          "calculated": "calculat", "standard": "estàndard"
+          "import": "importació",
+          "manual": "manual",
+          "fitting": "fitting",
+          "calculated": "calculat",
+          "standard": "estàndard"
         }
       }
     },
@@ -926,6 +944,13 @@
     "order_hint": "Afecta l'ordre de les tasques a la planificació."
   },
   "garment_types": {
+    "files_title": "Fitxers",
+    "files_pick_item": "Tria un item per veure'n els fitxers",
+    "files_all_versions": "Totes les versions",
+    "files_upload": "Puja",
+    "files_empty": "Aquest item no té fitxers",
+    "files_upload_ok": "«{{nom}}» pujat al catàleg",
+    "files_upload_error": "No s'ha pogut pujar el fitxer",
     "title": "Garment Types",
     "subtitle": "Tipus de peça i les seves variants (items per complexitat)",
     "new": "Nou tipus",
@@ -1115,22 +1140,76 @@
   "workorders": {
     "title": "Encàrrecs",
     "subtitle": "Contenidors d'execució: encàrrecs de model i col·lectors mensuals per client",
-    "col_number": "Número", "col_kind": "Tipus", "col_customer": "Client",
-    "col_target": "Model / període", "col_status": "Estat", "col_tasks": "Tasques",
-    "kind_ORDER": "Encàrrec", "kind_COLLECTOR": "Col·lector",
-    "status_OPEN": "Obert", "status_CLOSED": "Tancat",
-    "filter_kind_all": "Tots els tipus", "filter_status_all": "Tots els estats", "filter_customer_all": "Tots els clients",
-    "open": "Obrir", "back": "Tornar als encàrrecs", "loading": "Carregant encàrrecs…",
-    "empty": "Cap encàrrec.", "error": "No s'ha pogut completar l'operació.",
-    "close_action": "Tancar encàrrec", "closed_ok": "Encàrrec tancat.", "close_error": "No s'ha pogut tancar l'encàrrec.",
-    "tasks": "Tasques", "tasks_empty": "Cap tasca.", "task_type": "Tipus de tasca", "task_status": "Estat", "task_minutes": "Temps",
+    "col_number": "Número",
+    "col_kind": "Tipus",
+    "col_customer": "Client",
+    "col_target": "Model / període",
+    "col_status": "Estat",
+    "col_tasks": "Tasques",
+    "kind_ORDER": "Encàrrec",
+    "kind_COLLECTOR": "Col·lector",
+    "status_OPEN": "Obert",
+    "status_CLOSED": "Tancat",
+    "filter_kind_all": "Tots els tipus",
+    "filter_status_all": "Tots els estats",
+    "filter_customer_all": "Tots els clients",
+    "open": "Obrir",
+    "back": "Tornar als encàrrecs",
+    "loading": "Carregant encàrrecs…",
+    "empty": "Cap encàrrec.",
+    "error": "No s'ha pogut completar l'operació.",
+    "close_action": "Tancar encàrrec",
+    "closed_ok": "Encàrrec tancat.",
+    "close_error": "No s'ha pogut tancar l'encàrrec.",
+    "tasks": "Tasques",
+    "tasks_empty": "Cap tasca.",
+    "task_type": "Tipus de tasca",
+    "task_status": "Estat",
+    "task_minutes": "Temps",
     "off_recipe": "Fora de recepta",
-    "status_task_Done": "Feta", "status_task_InProgress": "En curs", "status_task_Paused": "Pausada", "status_task_Pending": "Pendent",
-    "adjustments": "Ajustos", "adj_EXTRA_BILL": "Extra facturat", "adj_EXTRA_ABSORB": "Extra absorbit", "adj_DEDUCTION": "Deducció",
-    "close_title": "Tancar l'encàrrec", "blockers_hard": "Tasques que bloquegen (resol-les al kanban):",
-    "blockers_extra": "Extres per resoldre:", "pending_title": "Tasques pendents (recepta no executada):",
-    "close_deduct": "Deduir pendents i tancar", "close_confirm": "Confirmar tancament", "close_cancel": "Cancel·lar",
-    "expenses": "Despeses", "exp_product": "Article", "exp_supplier": "Proveïdor", "exp_cost": "Cost", "exp_sale": "Preu venda", "exp_qty": "Qt.", "exp_add": "Afegir", "exp_remove": "Treure", "exp_saved": "Despesa desada.", "exp_error": "No s'ha pogut desar la despesa.", "exp_suppliers_compare": "Preus proveïdors", "review": "Revisió comercial", "review_item": "Concepte", "review_kind": "Tipus", "review_amount": "Import venda", "review_save": "Desar revisió", "review_saved": "Revisió desada.", "review_error": "No s'ha pogut desar la revisió.", "dn_generate": "Generar albarà", "dn_view": "Veure albarà", "dn_title": "Generar albarà", "dn_help": "Es crearà un albarà esborrany amb les línies proposades. Pots afegir-hi altres encàrrecs tancats del mateix client.", "dn_others": "Altres encàrrecs a incloure", "dn_blocked": "No es pot generar l'albarà", "dn_blocked_help": "Revisa els extres pendents a la secció Revisió comercial de cada encàrrec.", "dn_confirm": "Generar", "dn_cancel": "Cancel·lar", "dn_error": "No s'ha pogut generar l'albarà."
+    "status_task_Done": "Feta",
+    "status_task_InProgress": "En curs",
+    "status_task_Paused": "Pausada",
+    "status_task_Pending": "Pendent",
+    "adjustments": "Ajustos",
+    "adj_EXTRA_BILL": "Extra facturat",
+    "adj_EXTRA_ABSORB": "Extra absorbit",
+    "adj_DEDUCTION": "Deducció",
+    "close_title": "Tancar l'encàrrec",
+    "blockers_hard": "Tasques que bloquegen (resol-les al kanban):",
+    "blockers_extra": "Extres per resoldre:",
+    "pending_title": "Tasques pendents (recepta no executada):",
+    "close_deduct": "Deduir pendents i tancar",
+    "close_confirm": "Confirmar tancament",
+    "close_cancel": "Cancel·lar",
+    "expenses": "Despeses",
+    "exp_product": "Article",
+    "exp_supplier": "Proveïdor",
+    "exp_cost": "Cost",
+    "exp_sale": "Preu venda",
+    "exp_qty": "Qt.",
+    "exp_add": "Afegir",
+    "exp_remove": "Treure",
+    "exp_saved": "Despesa desada.",
+    "exp_error": "No s'ha pogut desar la despesa.",
+    "exp_suppliers_compare": "Preus proveïdors",
+    "review": "Revisió comercial",
+    "review_item": "Concepte",
+    "review_kind": "Tipus",
+    "review_amount": "Import venda",
+    "review_save": "Desar revisió",
+    "review_saved": "Revisió desada.",
+    "review_error": "No s'ha pogut desar la revisió.",
+    "dn_generate": "Generar albarà",
+    "dn_view": "Veure albarà",
+    "dn_title": "Generar albarà",
+    "dn_help": "Es crearà un albarà esborrany amb les línies proposades. Pots afegir-hi altres encàrrecs tancats del mateix client.",
+    "dn_others": "Altres encàrrecs a incloure",
+    "dn_blocked": "No es pot generar l'albarà",
+    "dn_blocked_help": "Revisa els extres pendents a la secció Revisió comercial de cada encàrrec.",
+    "dn_confirm": "Generar",
+    "dn_cancel": "Cancel·lar",
+    "dn_error": "No s'ha pogut generar l'albarà."
   },
   "orders": {
     "title": "Comandes",
@@ -1152,7 +1231,29 @@
     "filter_customer_all": "Tots els clients",
     "open": "Obrir",
     "back": "Tornar a comandes",
-    "assign_model": "Assignar model", "assign_title": "Assignar model a la línia", "assign_pick_model": "Tria un model", "assign_gti_warn": "El model no té garment type; comprova la compatibilitat.", "assign_migrate_note": "Les tasques del model al col·lector es mouran a l'encàrrec nou.", "assign_cancel": "Cancel·lar", "assign_confirm": "Assignar", "assign_done": "Encàrrec {{wo}} creat · {{n}} tasques migrades", "assign_search_ph": "Cerca per codi o nom…", "assign_all_seasons": "Totes les temporades", "assign_collection_ph": "Col·lecció…", "assign_loading": "Carregant models…", "assign_empty": "Cap model coincideix.", "assign_more": "Refina la cerca ({{n}} models)", "expand": "Desplegar", "collapse": "Plegar", "alloc_loading": "Carregant…", "alloc_error": "No s'ha pogut carregar l'expansió.", "alloc_no_models": "Cap model assignat encara.", "alloc_pct": "% imputat", "alloc_extra": "extra", "wo_OPEN": "Obert", "wo_CLOSED": "Tancat",
+    "assign_model": "Assignar model",
+    "assign_title": "Assignar model a la línia",
+    "assign_pick_model": "Tria un model",
+    "assign_gti_warn": "El model no té garment type; comprova la compatibilitat.",
+    "assign_migrate_note": "Les tasques del model al col·lector es mouran a l'encàrrec nou.",
+    "assign_cancel": "Cancel·lar",
+    "assign_confirm": "Assignar",
+    "assign_done": "Encàrrec {{wo}} creat · {{n}} tasques migrades",
+    "assign_search_ph": "Cerca per codi o nom…",
+    "assign_all_seasons": "Totes les temporades",
+    "assign_collection_ph": "Col·lecció…",
+    "assign_loading": "Carregant models…",
+    "assign_empty": "Cap model coincideix.",
+    "assign_more": "Refina la cerca ({{n}} models)",
+    "expand": "Desplegar",
+    "collapse": "Plegar",
+    "alloc_loading": "Carregant…",
+    "alloc_error": "No s'ha pogut carregar l'expansió.",
+    "alloc_no_models": "Cap model assignat encara.",
+    "alloc_pct": "% imputat",
+    "alloc_extra": "extra",
+    "wo_OPEN": "Obert",
+    "wo_CLOSED": "Tancat",
     "loading": "Carregant comandes…",
     "empty": "Cap comanda.",
     "error": "No s'ha pogut completar l'operació.",
@@ -1494,8 +1595,13 @@
     "title": "Calendari d'empresa",
     "subtitle": "Defineix els trams horaris laborables per dia de la setmana",
     "days": {
-      "mon": "Dilluns", "tue": "Dimarts", "wed": "Dimecres", "thu": "Dijous",
-      "fri": "Divendres", "sat": "Dissabte", "sun": "Diumenge"
+      "mon": "Dilluns",
+      "tue": "Dimarts",
+      "wed": "Dimecres",
+      "thu": "Dijous",
+      "fri": "Divendres",
+      "sat": "Dissabte",
+      "sun": "Diumenge"
     },
     "no_work": "No laborable",
     "add_tram": "Afegir tram",
@@ -1592,8 +1698,18 @@
     }
   },
   "kanban": {
-    "temporades": { "SS": "SS · Primavera/Estiu", "FW": "FW · Tardor/Hivern", "CO": "CO · Cruise", "SP": "SP · Especial" },
-    "estats": { "Nou": "Nou", "EnCurs": "En curs", "EnRevisio": "En revisió", "Tancat": "Tancat" }
+    "temporades": {
+      "SS": "SS · Primavera/Estiu",
+      "FW": "FW · Tardor/Hivern",
+      "CO": "CO · Cruise",
+      "SP": "SP · Especial"
+    },
+    "estats": {
+      "Nou": "Nou",
+      "EnCurs": "En curs",
+      "EnRevisio": "En revisió",
+      "Tancat": "Tancat"
+    }
   },
   "model": {
     "title": "Models",
@@ -1686,6 +1802,9 @@
       "all": "Totes"
     },
     "session": {
+      "panel_title": "Sessió de fitting",
+      "expand": "Desplegar",
+      "collapse": "Plegar",
       "fase": "Fase",
       "estat": "Estat",
       "date": "Data",
@@ -1799,9 +1918,16 @@
       "read_only": "Sessió tancada o anul·lada (només lectura).",
       "register_measures": "Registrar mesures",
       "save_and_back": "Gravar i tornar",
+      "save_error_generic": "No s'ha pogut gravar la peça.",
+      "discard_ok": "Canvis descartats; les mesures s'han restaurat.",
+      "reopen_title": "Grading segellat",
+      "reopen_body": "Aquest model té una versió de grading aprovada (segellada a producció). Per gravar aquesta presa cal reobrir-la explícitament: es crearà una versió nova i la tasca activa en serà l'autora.",
+      "reopen_confirm": "Reobrir i gravar",
       "seal_error": "Error segellant la sessió.",
       "uploading": "Pujant…",
-      "view_measures": "Veure / editar taula"
+      "view_measures": "Veure / editar taula",
+      "partial_close": "S'han gravat {{done}} de {{total}} peces. La sessió no s'ha tancat: revisa-la abans de sortir.",
+      "not_sealed": "La sessió no s'ha pogut tancar: queden peces sense resoldre. Resol-les i torna a gravar."
     },
     "convocatoria": "Convocatòria",
     "group": {
@@ -1823,7 +1949,16 @@
       "discard_label": "Motiu (opcional):",
       "use_discard": "Usa Descartar per a sessions ja obertes."
     },
-    "key_measure": "Key measure"
+    "key_measure": "Key measure",
+    "sheet": {
+      "title": "Fulla de convocatòria",
+      "hour": "Hora",
+      "watchpoints": "Punts de vigilància",
+      "no_watchpoints": "Cap",
+      "n_models": "{{n}} models",
+      "load_error": "No s'ha pogut carregar la convocatòria.",
+      "open_sheet": "Obrir fulla del dia"
+    }
   },
   "wizard_base_size_required": "El sistema de talles ha canviat. Selecciona la talla base.",
   "common": {
@@ -1928,7 +2063,7 @@
     "pattern_cad": "Patró CAD",
     "pattern_hand": "Patró a mà",
     "pom": "Definició POM",
-    "size_check": "Mesures",
+    "size_check": "Mesurar prenda",
     "grading": "Escalat",
     "tech_sheet": "Fitxa tècnica",
     "pattern_review": "Revisió de patró CAD",
@@ -2004,7 +2139,6 @@
     "validated_table": "Taula validada",
     "work_title": "Mesura del proto · validació"
   },
-
   "time_tracking": {
     "title": "Temps",
     "subtitle": "Control de timers del tècnic",
@@ -2021,7 +2155,6 @@
     "weekly_total": "Total setmanal",
     "min_value": "{{n}}min"
   },
-
   "model_measurements": {
     "err_grading": "Error generant grading",
     "notice_no_item": "Aquest model no té tipus d'ítem (garment_type_item) definit: no es materialitzen els POMs de la plantilla.",
@@ -2067,7 +2200,6 @@
     "save_pom_err": "No s'ha pogut gravar POM.",
     "unsaved_pom_hint": "Grava POM per tancar la tasca i activar Mesures."
   },
-
   "model_fabric": {
     "err_close_table": "No s'ha pogut tancar la taula.",
     "title": "Fabric & Shrinkage",
@@ -2086,7 +2218,6 @@
     "closing": "Tancant…",
     "close_finish": "Tancar i finalitzar"
   },
-
   "tech_sheet": {
     "back_to_model": "Tornar al model",
     "doc_editor": "Editor de documents",
@@ -2363,7 +2494,10 @@
     "zoom_reset": "Zoom 100%",
     "zoom_fit": "Ajustar a pantalla",
     "no_color": "Cap color",
-    "more_colors": "Més colors"
+    "more_colors": "Més colors",
+    "consultation_badge": "Consulta",
+    "consultation_hint": "Consulta — sense registre de temps. Els canvis es desen igual, però no s'imputa temps a cap tasca.",
+    "tool_files": "Fitxers"
   },
   "estat_badge": {
     "pendent_inputs": "Pendent d'inputs",
@@ -2814,7 +2948,13 @@
     "assigning": "Assignant…"
   },
   "import_wizard": {
-    "step": { "sizes": "Talles", "poms": "POMs", "measures": "Mesures", "fabric": "Teixit", "save": "Guardar" },
+    "step": {
+      "sizes": "Talles",
+      "poms": "POMs",
+      "measures": "Mesures",
+      "fabric": "Teixit",
+      "save": "Guardar"
+    },
     "err_status": "Error {{status}}",
     "err_connection": "Error de connexió: {{detail}}",
     "err_catalog": "Error carregant el catàleg: {{detail}}",
@@ -2945,5 +3085,52 @@
     "resolve": "Resoldre",
     "reopen": "Reobrir",
     "resolved_by": "resolta per {{who}}"
+  },
+  "asset_navigator": {
+    "title": "Navegador d'actius",
+    "tab_models": "Models",
+    "tab_catalog": "Catàleg",
+    "breadcrumb": "Camí de navegació",
+    "search_all": "Cerca models i catàleg…",
+    "search_models": "Cerca models…",
+    "group_models": "Models ({{n}})",
+    "group_catalog": "Catàleg ({{n}})",
+    "no_results": "Cap resultat",
+    "no_files": "Cap fitxer",
+    "pick_model": "Tria un model",
+    "pick_file": "Tria un fitxer",
+    "use": "Utilitza",
+    "derived_from": "de {{origen}}",
+    "col_nom": "Nom",
+    "col_tipus": "Tipus",
+    "col_data": "Data"
+  },
+  "tech_sheet_entry": {
+    "open": "Obre",
+    "title": "Fitxa tècnica",
+    "subtitle": "Tria un model per obrir-ne la fitxa tècnica.",
+    "search_placeholder": "Cerca per codi o nom de model…",
+    "no_models": "Cap model trobat",
+    "not_allowed": "No tens la fitxa tècnica a la teva llista de tasques, així que no pots obrir-la per treballar-hi ({{codi}}).",
+    "open_readonly": "Obrir en consulta",
+    "open_error": "No s'ha pogut obrir la fitxa tècnica.",
+    "unexpected_response": "El servidor ha respost de manera inesperada. No s'ha obert la fitxa."
+  },
+  "file_picker": {
+    "explore_tenant": "Explora tot el tenant",
+    "title": "Fitxers",
+    "close": "Tancar",
+    "tab_model": "Model",
+    "tab_catalog": "Catàleg",
+    "tab_import": "Importar",
+    "insert": "Inserir",
+    "use_in_model": "Usar al model",
+    "used_ok": "{{nom}} copiat al model",
+    "use_error": "No s'ha pogut copiar el fitxer al model.",
+    "import_ok": "{{nom}} pujat al model",
+    "import_error": "No s'ha pogut pujar el fitxer.",
+    "import_hint": "El fitxer es puja al model, no al catàleg.",
+    "empty": "Cap fitxer",
+    "no_item": "Aquest model no té cap tipus de peça assignat."
   }
 }

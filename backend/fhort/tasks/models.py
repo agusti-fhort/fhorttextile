@@ -93,6 +93,12 @@ class ModelTask(models.Model):
                                    null=True, blank=True, related_name='tasks')
     # True = extra fora de la recepta del WorkOrder ORDER (marca grana al kanban).
     off_recipe = models.BooleanField(default=False)
+    # Sprint Y — la FittingSession/convocatòria que va llançar aquesta tasca de presa de mesures
+    # (contenidor que agenda; el treball passa per la tasca). FK per string per no importar fitting
+    # a tasks (imports creuats són lazy als dos costats). SET_NULL: si es purga la sessió, la tasca
+    # no cau. Punter MUTABLE: en re-obrir la tasca des d'una altra sessió es reapunta (decisió 4).
+    fitting_session = models.ForeignKey('fitting.FittingSession', on_delete=models.SET_NULL,
+                                        null=True, blank=True, related_name='model_tasks')
 
     class Meta:
         ordering = ['model', 'order']

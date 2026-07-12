@@ -45,7 +45,9 @@ export const models = {
   // Capa de Projecte: definir tasques d'un model i avançar fase (gate del responsable).
   defineTasks: (id, data) => client.post(`/api/v1/models/${id}/define-tasks/`, data),   // {task_type_ids:[...]}
   // Porta-menú: obre una tasca concreta del model (crea-si-falta + auto-assign + En curs). {code}
-  openTask: (id, code) => client.post(`/api/v1/models/${id}/open-task/`, { code }),
+  // Sprint Y — fittingSessionId opcional: lliga la tasca a la sessió (FK) i obre la sessió Programada.
+  openTask: (id, code, fittingSessionId = null) =>
+    client.post(`/api/v1/models/${id}/open-task/`, { code, ...(fittingSessionId ? { fitting_session_id: fittingSessionId } : {}) }),
   // Acte lleuger de gènesi POM: base+nomenclatura+regles i tanca la tasca pom. No propaga.
   gravarPom: (id, data) => client.post(`/api/v1/models/${id}/gravar-pom/`, data),
   gate: (id, data) => client.post(`/api/v1/models/${id}/gate/`, data),                   // {to_phase} o {to_phases:[...]}
@@ -96,9 +98,26 @@ export const watchpoints = {
   reopen: (id) => client.post(`/api/v1/watchpoints/${id}/reopen/`),
 }
 
-// Fitxers del model (read-only) — panell info de fitting (5B.6-B1).
+// Fitxers del model — panell info de fitting (5B.6-B1) i FilePicker de l'editor (S03b · P7).
+// L'escriptura NO passa per aquí: puja per models/<id>/upload-fitxer/ (multipart, fetch cru).
 export const modelFitxers = {
   list: (params) => client.get('/api/v1/model-fitxers/', { params }),
+  // Cicle model→model (S03c · C3.2): crea una CÒPIA sobirana al model destí (derivat_de_model);
+  // l'origen no es toca mai. Un `.ftt` s'hi descongela i es re-resol contra el destí (D16).
+  usarAlModel: (id, modelId) =>
+    client.post(`/api/v1/model-fitxers/${id}/usar-al-model/`, { model_id: modelId }),
+}
+
+// Fitxers del CATÀLEG, ancorats a un GarmentTypeItem (S03b · P4/P5).
+export const itemFitxers = {
+  list: (params) => client.get('/api/v1/item-fitxers/', { params }),
+  // P4 · gated CONFIGURE al backend. `Content-Type: undefined` perquè el navegador hi posi el
+  // boundary multipart: si s'hi força un valor, `request.FILES` arriba buit.
+  create: (formData) => client.post('/api/v1/item-fitxers/', formData,
+    { headers: { 'Content-Type': undefined } }),
+  // Cicle ①: crea una CÒPIA al model (derivat_de_item), no toca l'ItemFitxer.
+  usarAlModel: (id, modelId) =>
+    client.post(`/api/v1/item-fitxers/${id}/usar-al-model/`, { model_id: modelId }),
 }
 
 export const poms = {
@@ -522,7 +541,7 @@ export const fittingSessions = {
 export const pieceFittings = {
   get: (id) => client.get(`/api/v1/piece-fittings/${id}/`),
   setGate: (id, resultat, motiu = '') => client.post(`/api/v1/piece-fittings/${id}/set-gate/`, { resultat, motiu }),
-  close: (id) => client.post(`/api/v1/piece-fittings/${id}/close/`),
+  close: (id, data) => client.post(`/api/v1/piece-fittings/${id}/close/`, data || {}),
   // 5B.6-B3 — revert atòmic de reals a l'estat d'obertura (valor_real := valor_teoric).
   discard: (id) => client.post(`/api/v1/piece-fittings/${id}/discard/`),
 }
@@ -535,9 +554,18 @@ export const pieceFittingLines = {
   propagar: (id, valorReal) => client.post(`/api/v1/piece-fitting-lines/${id}/propagar/`, { valor_real: valorReal }),
 }
 
-// 5B.6-B3 — Fotos de la sessió (llistar; pujada ajornada a B2).
+// 5B.6-B3 — Fotos de la sessió (llistar) · Sprint Y — pujada multipart.
 export const fittingPhotos = {
   list: (params) => client.get('/api/v1/fitting-photos/', { params }),
+  // Sprint Y — substitueix el client.post cru de FittingDetail i OMPLE piece_fitting (abans null):
+  // la foto queda ancorada a la peça concreta, no només a la sessió.
+  upload: (sessionId, file, pieceFittingId = null) => {
+    const fd = new FormData()
+    fd.append('session', sessionId)
+    fd.append('fitxer', file)
+    if (pieceFittingId) fd.append('piece_fitting', pieceFittingId)
+    return client.post('/api/v1/fitting-photos/', fd)
+  },
 }
 
 // SC-1 — Size Check: validació del proto a talla base, ABANS del fitting.
