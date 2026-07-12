@@ -50,6 +50,30 @@ from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
 from fhort.patterns.engine.rul_reader import RULReader, coherencia_dxf_rul
 from fhort.patterns.engine.rul_writer import RULWriter
 
+# ── el que només fa falta per als tests de S3 (adaptadors: SÍ que toquen Django) ──
+import datetime
+import time
+from unittest import mock
+from xml.etree import ElementTree
+
+from django.contrib.auth import get_user_model
+from django.core import signing
+from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, transaction
+from django_tenants.test.cases import TenantTestCase
+from rest_framework.test import APIRequestFactory, force_authenticate
+
+from fhort.models_app.models import Model
+from fhort.models_app.services_fitxers import DOWNLOAD_SALT as MODEL_FITXER_SALT
+from fhort.patterns.adapters import DjangoGeometryStore
+from fhort.patterns.models import PatternFile
+from fhort.patterns.services import save_pattern_file
+from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
+                                  PatternFileViewSet)
+from fhort.pom.models import GarmentType
+from fhort.tasks.models import GarmentTypeItem
+
 FIXTURES = Path(__file__).parent / 'tests' / 'fixtures'
 AMELIA_DXF = FIXTURES / 'AMELIA_AZUL_prova.dxf'
 AMELIA_RUL = FIXTURES / 'AMELIA_AZUL_prova.rul'
@@ -69,6 +93,11 @@ def _dxf_bytes(doc) -> bytes:
 #: contorn irregular, com una mitja esquena de debò. Un rectangle no serviria: tindria
 #: dos eixos candidats i no distingiria un detector correcte d'un de sortós.
 CONTORN_MITJA_PECA = [(0, 0), (100, 20), (120, 100), (90, 180), (0, 200), (0, 0)]
+
+
+def _uploaded(path: Path) -> SimpleUploadedFile:
+    return SimpleUploadedFile(path.name, path.read_bytes(),
+                              content_type='application/octet-stream')
 
 
 def mitja_peca_dxf() -> bytes:
@@ -667,6 +696,336 @@ class ComparadorTest(unittest.TestCase):
     def test_el_resum_es_llegible(self):
         self.assertIn('✅', compare(self.doc, self.doc).resum())
         self.assertIn('❌', compare(self.doc, self._mou_un_punt(self.doc, 1.0)).resum())
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# S3 · PERSISTÈNCIA + API — el motor endollat a FTT
+#
+# Aquests SÍ que necessiten BD i tenant (TenantTestCase), a diferència dels de l'engine.
+# La diferència no és un detall d'infraestructura: és la frontera hexagonal fent-se
+# visible. Tot el que és motor es prova sense Django; tot el que és adaptador, amb.
+# ═════════════════════════════════════════════════════════════════════════════
+
+class PatternsAPITestBase(TenantTestCase):
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Tenant'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TST'
+        tenant.vat_number = 'X0000000X'
+        tenant.tipus_client = 'STANDARD'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='tec', password='x')
+        self.gt = GarmentType.objects.create(
+            codi_client='GT1', nom_client='Garment 1', grup='tops')
+        self.item = GarmentTypeItem.objects.create(
+            garment_type=self.gt, code='item_a', name='Item A')
+        self.model = Model.objects.create(
+            codi_intern='QA-PAT-0001', codi_tenant='TST', any=2026,
+            temporada='SS', sequencial=1,
+        )
+        self.factory = APIRequestFactory()
+
+    def _upload(self, dxf_bytes=None, rul_bytes=None, **extra):
+        dades = {'model': self.model.id}
+        dades.update(extra)
+        if dxf_bytes is not None:
+            dades['fitxer_dxf'] = SimpleUploadedFile(
+                'AMELIA.dxf', dxf_bytes, content_type='application/octet-stream')
+        if rul_bytes is not None:
+            dades['fitxer_rul'] = SimpleUploadedFile(
+                'AMELIA.rul', rul_bytes, content_type='application/octet-stream')
+
+        request = self.factory.post(
+            '/api/v1/patterns/pattern-files/', dades, format='multipart')
+        force_authenticate(request, user=self.user)
+        view = PatternFileViewSet.as_view({'post': 'create'})
+        return view(request)
+
+
+class UploadTest(PatternsAPITestBase):
+    """Pujar l'AMELIA real per l'API i comprovar que arriba sencera a la BD."""
+
+    def test_upload_amelia_persisteix_el_cens_de_S0_B3(self):
+        resp = self._upload(AMELIA_DXF.read_bytes(), AMELIA_RUL.read_bytes())
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        fp = PatternFile.objects.get(pk=resp.data['id'])
+        self.assertEqual(fp.model_id, self.model.id)
+        self.assertEqual(fp.versio, 1)
+        self.assertTrue(fp.is_current)
+        self.assertEqual(fp.font_cad, 'polypattern')
+        self.assertEqual(fp.escala_mm, 1.0)
+        self.assertEqual(fp.unitats_metode, 'geometry')
+        self.assertEqual(fp.unitats_confianca, 'high')
+
+        # El mateix cens que la diagnosi va fer a mà, ara vingut de la BD.
+        self.assertEqual(fp.pieces.count(), 4)
+        esperat = {'BACK': (28, 22, 42), 'FRONT': (38, 22, 86),
+                   'BACK_LINI': (24, 10, 14), 'FRONT_LINI': (44, 12, 50)}
+        for nom, (tall, turn, curve) in esperat.items():
+            with self.subTest(peca=nom):
+                peca = fp.pieces.get(nom_block=nom)
+                punts = peca.points.filter(mena='vertex')
+                self.assertEqual(punts.filter(boundary_index=0).count(), tall)
+                self.assertEqual(punts.filter(tipus='turn').count(), turn)
+                self.assertEqual(punts.filter(tipus='curve').count(), curve)
+                self.assertEqual(peca.points.filter(mena='notch').count(), 2)
+                self.assertFalse(peca.has_sew)
+                self.assertEqual(peca.unknown_layers, ['15'])
+
+        # El RUL germà, llegit i desat.
+        self.assertTrue(fp.te_rul)
+        self.assertEqual(fp.grade_table['talles'], ['XS', 'S', 'M', 'L', 'XL'])
+        self.assertEqual(fp.grade_table['talla_base'], 'M')
+        # DXF i RUL són germans de debò: cap avís de coherència.
+        self.assertNotIn('avisos_coherencia', resp.data)
+
+    def test_upload_sense_rul(self):
+        resp = self._upload(AMELIA_DXF.read_bytes())
+        self.assertEqual(resp.status_code, 201)
+        fp = PatternFile.objects.get(pk=resp.data['id'])
+        self.assertFalse(fp.te_rul)
+        self.assertIsNone(fp.grade_table)
+
+    def test_rul_dun_altre_model_avisa_pero_no_bloqueja(self):
+        """El DXF i el RUL viatgen junts, però ningú no garanteix que siguin germans."""
+        rul_estrany = AMELIA_RUL.read_bytes().replace(b'SAMPLE SIZE:M', b'SAMPLE SIZE:L')
+        resp = self._upload(AMELIA_DXF.read_bytes(), rul_estrany)
+        self.assertEqual(resp.status_code, 201)
+        codis = [a['codi'] for a in resp.data['avisos_coherencia']]
+        self.assertIn('size_mismatch', codis)
+
+    def test_fitxer_corrupte_es_422_amb_detall_mai_500(self):
+        resp = self._upload(b'aixo no es un dxf' * 50)
+        self.assertEqual(resp.status_code, 422)
+        self.assertIn('error', resp.data)
+        self.assertEqual(resp.data['issues'][0]['codi'], 'corrupt_dxf')
+        self.assertEqual(PatternFile.objects.count(), 0)
+
+    def test_extensio_no_permesa(self):
+        dades = {
+            'model': self.model.id,
+            'fitxer_dxf': SimpleUploadedFile('virus.exe', b'MZ', content_type='x'),
+        }
+        request = self.factory.post('/api/v1/patterns/pattern-files/', dades, format='multipart')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_cal_estar_autenticat(self):
+        request = self.factory.post('/api/v1/patterns/pattern-files/', {}, format='multipart')
+        resp = PatternFileViewSet.as_view({'post': 'create'})(request)
+        self.assertIn(resp.status_code, (401, 403))
+
+
+class SobiraniaTest(PatternsAPITestBase):
+    """El XOR: un patró penja d'un Model O d'un ítem, mai de tots dos ni de cap."""
+
+    def test_sense_propietari_es_400(self):
+        dades = {'fitxer_dxf': SimpleUploadedFile('a.dxf', AMELIA_DXF.read_bytes())}
+        request = self.factory.post('/api/v1/patterns/pattern-files/', dades, format='multipart')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_amb_els_dos_propietaris_es_400(self):
+        resp = self._upload(AMELIA_DXF.read_bytes(), garment_type_item=self.item.id)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_la_bd_tambe_ho_impedeix_encara_que_algu_es_salti_la_view(self):
+        """El constraint no és decoració: és l'última línia."""
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                PatternFile.objects.create(nom_fitxer='x.dxf')  # ni model ni ítem
+
+    def test_patro_de_biblioteca_penjat_dun_item(self):
+        dades = {
+            'garment_type_item': self.item.id,
+            'fitxer_dxf': SimpleUploadedFile('a.dxf', AMELIA_DXF.read_bytes()),
+        }
+        request = self.factory.post('/api/v1/patterns/pattern-files/', dades, format='multipart')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(resp.status_code, 201)
+        fp = PatternFile.objects.get(pk=resp.data['id'])
+        self.assertIsNone(fp.model_id)
+        self.assertEqual(fp.garment_type_item_id, self.item.id)
+
+
+class CadenaDeVersionsTest(PatternsAPITestBase):
+
+    def test_encadenar_una_versio_apaga_el_cap_anterior(self):
+        v1 = PatternFile.objects.get(pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        resp = self._upload(AMELIA_DXF.read_bytes(), versio_anterior_id=v1.id)
+        self.assertEqual(resp.status_code, 201)
+
+        v2 = PatternFile.objects.get(pk=resp.data['id'])
+        v1.refresh_from_db()
+        self.assertEqual(v2.versio, 2)
+        self.assertTrue(v2.is_current)
+        self.assertFalse(v1.is_current)
+        self.assertEqual(v2.versio_anterior_id, v1.id)
+
+    def test_bifurcar_una_cadena_es_409(self):
+        """Un fitxer no pot tenir dos futurs. La view ho diu abans que la BD hi arribi."""
+        v1 = PatternFile.objects.get(pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        self._upload(AMELIA_DXF.read_bytes(), versio_anterior_id=v1.id)
+
+        resp = self._upload(AMELIA_DXF.read_bytes(), versio_anterior_id=v1.id)
+        self.assertEqual(resp.status_code, 409)
+        self.assertIn('bifurcar', resp.data['error'])
+
+    def test_i_la_bd_ho_impediria_igualment(self):
+        v1 = PatternFile.objects.get(pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        PatternFile.objects.create(
+            model=self.model, nom_fitxer='v2.dxf', versio=2, versio_anterior=v1)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                PatternFile.objects.create(
+                    model=self.model, nom_fitxer='v2b.dxf', versio=2, versio_anterior=v1)
+
+
+class AdapterRoundtripTest(PatternsAPITestBase):
+    """dataclasses → ORM → dataclasses. Si una traducció perd un camp, el comparador
+    de S2 el troba a faltar: és el mateix que valida el round-trip dels fitxers."""
+
+    def test_el_viatge_danada_i_tornada_no_perd_res(self):
+        original = AAMAReader().read(AMELIA_DXF.read_bytes())
+
+        fp = PatternFile.objects.create(model=self.model, nom_fitxer='a.dxf')
+        store = DjangoGeometryStore()
+        store.save(original, pattern_file=fp)
+        tornat = store.load(fp.id)
+
+        report = compare(original, tornat)
+        self.assertTrue(report.ok, report.resum())
+        self.assertEqual(report.punts_comparats, 266)
+        self.assertEqual(report.desviacio_maxima_um, 0.0)
+
+    def test_lempremta_sobreviu_a_la_bd(self):
+        """Sense empremta no hi ha reproducció: el fitxer exportat seria un DXF
+        qualsevol, no el DXF d'aquest client."""
+        original = AAMAReader().read(AMELIA_DXF.read_bytes())
+        fp = save_pattern_file(model=self.model, dxf=_uploaded(AMELIA_DXF), document=original)
+        DjangoGeometryStore().save(original, pattern_file=fp)
+
+        tornat = DjangoGeometryStore().load(fp.id)
+        self.assertEqual(tornat.fingerprint.font_cad, 'polypattern')
+        self.assertEqual(tornat.fingerprint.capes_desconegudes, ('15',))
+        self.assertEqual(tornat.fingerprint.separador_decimal,
+                         {'coordenades': '.', 'text': ','})
+        self.assertTrue(tornat.fingerprint.header_buida)
+
+    def test_i_des_de_la_bd_es_pot_tornar_a_escriure_el_fitxer(self):
+        """La prova de foc: BD → DXF → llegir → idèntic a l'original. És el que S7 farà."""
+        original = AAMAReader().read(AMELIA_DXF.read_bytes())
+        fp = save_pattern_file(model=self.model, dxf=_uploaded(AMELIA_DXF), document=original)
+        DjangoGeometryStore().save(original, pattern_file=fp)
+
+        des_de_bd = DjangoGeometryStore().load(fp.id)
+        reescrit = AAMAReader().read(AAMAWriter().write(des_de_bd))
+        self.assertTrue(compare(original, reescrit).ok, compare(original, reescrit).resum())
+
+
+class RenderSVGTest(PatternsAPITestBase):
+
+    def _fp(self):
+        return PatternFile.objects.get(pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+
+    def _get_svg(self, fp, **params):
+        request = self.factory.get(
+            f'/api/v1/patterns/pattern-files/{fp.id}/render.svg/', params)
+        force_authenticate(request, user=self.user)
+        return PatternFileViewSet.as_view({'get': 'render_svg'})(request, pk=fp.id)
+
+    def test_el_svg_es_xml_valid_amb_un_path_per_vora(self):
+        resp = self._get_svg(self._fp())
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'image/svg+xml')
+
+        arrel = ElementTree.fromstring(resp.content)  # peta si no és XML vàlid
+        ns = '{http://www.w3.org/2000/svg}'
+        self.assertTrue(arrel.tag.endswith('svg'))
+        grups = arrel.findall(f'{ns}g')
+        self.assertEqual([g.get('id') for g in grups],
+                         ['BACK', 'FRONT', 'BACK_LINI', 'FRONT_LINI'])
+        self.assertTrue(arrel.findall(f'.//{ns}path'))
+
+    def test_una_sola_peca(self):
+        resp = self._get_svg(self._fp(), piece='BACK')
+        arrel = ElementTree.fromstring(resp.content)
+        ns = '{http://www.w3.org/2000/svg}'
+        self.assertEqual([g.get('id') for g in arrel.findall(f'{ns}g')], ['BACK'])
+
+    def test_una_peca_que_no_existeix_no_peta(self):
+        resp = self._get_svg(self._fp(), piece='NO_EXISTEIX')
+        self.assertEqual(resp.status_code, 200)
+        ElementTree.fromstring(resp.content)
+
+
+class DescarregaTest(PatternsAPITestBase):
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(pk=self._upload(
+            AMELIA_DXF.read_bytes(), AMELIA_RUL.read_bytes()).data['id'])
+
+    def _signed(self, pk, token, accio='download_signed', url='download-signed'):
+        request = self.factory.get(
+            f'/api/v1/patterns/pattern-files/{pk}/{url}/', {'token': token})
+        return PatternFileViewSet.as_view({'get': accio})(request, pk=pk)
+
+    def test_token_valid(self):
+        token = signing.dumps(self.fp.id, salt=PATTERN_DOWNLOAD_SALT)
+        self.assertEqual(self._signed(self.fp.id, token).status_code, 200)
+
+    def test_token_dolent(self):
+        self.assertEqual(self._signed(self.fp.id, 'inventat').status_code, 403)
+
+    def test_token_caducat(self):
+        token = signing.dumps(self.fp.id, salt=PATTERN_DOWNLOAD_SALT)
+        with mock.patch('django.core.signing.time.time', return_value=time.time() + 901):
+            self.assertEqual(self._signed(self.fp.id, token).status_code, 403)
+
+    def test_el_token_dun_altre_model_NO_val_aqui(self):
+        """La raó de tenir salts separats. Amb un salt compartit, un token emès per al
+        ModelFitxer id=5 obriria el PatternFile id=5."""
+        token_alie = signing.dumps(self.fp.id, salt=MODEL_FITXER_SALT)
+        self.assertEqual(self._signed(self.fp.id, token_alie).status_code, 403)
+
+    def test_el_token_del_dxf_no_obre_el_rul(self):
+        """Dos artefactes, dos salts: el mateix raonament, un nivell més avall."""
+        token_dxf = signing.dumps(self.fp.id, salt=PATTERN_DOWNLOAD_SALT)
+        resp = self._signed(self.fp.id, token_dxf,
+                            accio='download_rul_signed', url='download-rul-signed')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_el_token_del_rul_si_obre_el_rul(self):
+        token_rul = signing.dumps(self.fp.id, salt=PATTERN_RUL_DOWNLOAD_SALT)
+        resp = self._signed(self.fp.id, token_rul,
+                            accio='download_rul_signed', url='download-rul-signed')
+        self.assertEqual(resp.status_code, 200)
+
+    def test_esborrar_neteja_els_bytes_dels_dos_artefactes(self):
+        dxf_path = self.fp.fitxer_dxf.name
+        rul_path = self.fp.fitxer_rul.name
+        self.assertTrue(default_storage.exists(dxf_path))
+        self.assertTrue(default_storage.exists(rul_path))
+
+        request = self.factory.delete(f'/api/v1/patterns/pattern-files/{self.fp.id}/')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view({'delete': 'destroy'})(request, pk=self.fp.id)
+        self.assertEqual(resp.status_code, 204)
+
+        self.assertFalse(default_storage.exists(dxf_path))
+        self.assertFalse(default_storage.exists(rul_path))
+        self.assertEqual(PatternFile.objects.count(), 0)
 
 
 # ═════════════════════════════════════════════════════════════════════════════

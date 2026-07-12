@@ -156,7 +156,12 @@ class DjangoGeometryStore:
 
     @transaction.atomic
     def save(self, doc: PatternDocument, pattern_file=None, **context) -> int:
-        """Escriu la geometria d'un document sota un `PatternFile` ja existent.
+        """Escriu el document SENCER sota un `PatternFile` existent.
+
+        Sencer vol dir sencer: geometria, empremta i taula de grading. El port promet que
+        `load(save(doc)) ≡ doc`, i una promesa a mitges no és una promesa — un `save` que
+        només desés les peces deixaria el fitxer sense empremta i, per tant, impossible de
+        reproduir a l'exportació, que és precisament per a què serveix.
 
         Reescriu les peces senceres: un `PatternFile` és immutable de facto (una versió
         nova és una fila nova), així que no hi ha cap fusió delicada a fer.
@@ -165,8 +170,9 @@ class DjangoGeometryStore:
             raise ValueError('Cal un PatternFile on penjar la geometria.')
 
         pattern_file.pieces.all().delete()
+        pattern_file.empremta = fingerprint_to_json(doc.fingerprint)
         pattern_file.grade_table = grade_table_to_json(doc.grade_table)
-        pattern_file.save(update_fields=['grade_table'])
+        pattern_file.save(update_fields=['empremta', 'grade_table'])
 
         for piece in doc.pieces:
             self._save_piece(pattern_file, piece)

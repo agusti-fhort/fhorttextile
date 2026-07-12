@@ -14,6 +14,7 @@ Convencions calcades de `commerce/` (S0-B9) i del pipeline de fitxers (S0-B1):
     d'allà obriria el patró id=5 d'aquí.
 """
 import logging
+from dataclasses import replace
 from types import SimpleNamespace
 
 from django.core import signing
@@ -31,7 +32,7 @@ from fhort.models_app.services_fitxers import (DOWNLOAD_TTL, UploadRejected,
                                                serve_fitxer, validate_upload)
 from fhort.tasks.models import GarmentTypeItem
 
-from .adapters import DjangoGeometryStore, grade_table_to_json
+from .adapters import DjangoGeometryStore
 from .engine.aama_reader import AAMAReader
 from .engine.errors import PatternParseError
 from .engine.rul_reader import RULReader, coherencia_dxf_rul
@@ -147,6 +148,9 @@ class PatternFileViewSet(mixins.CreateModelMixin,
                 {'codi': i.codi, 'missatge': i.missatge, 'detall': i.detall}
                 for i in coherencia_dxf_rul(document, grade_table)
             ]
+            # UN sol document, amb el seu grading a dins: el store desa el document
+            # sencer, i així no hi ha dues escriptures que puguin quedar desaparellades.
+            document = replace(document, grade_table=grade_table)
 
         fp = save_pattern_file(
             model=propietari if isinstance(propietari, Model) else None,
@@ -163,12 +167,8 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             fp.pujat_per = profile
             fp.save(update_fields=['pujat_per'])
 
-        # La geometria i, si n'hi ha, la taula del RUL.
-        store = DjangoGeometryStore()
-        store.save(document, pattern_file=fp)
-        if grade_table is not None:
-            fp.grade_table = grade_table_to_json(grade_table)
-            fp.save(update_fields=['grade_table'])
+        # El document sencer: geometria, empremta i taula de grading.
+        DjangoGeometryStore().save(document, pattern_file=fp)
 
         fp.refresh_from_db()
         dades = self.get_serializer(fp).data

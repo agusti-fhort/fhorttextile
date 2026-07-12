@@ -101,17 +101,14 @@ def save_pattern_file(*, model=None, garment_type_item=None, dxf, rul=None,
 
 
 def _aplicar_empremta(fp: PatternFile, document) -> None:
-    """L'empremta del motor, aplanada als camps que es consulten i al JSON sencer.
+    """Aplana als camps de consulta el que la UI ensenya i el que es filtra.
 
-    Els camps solts (`font_cad`, `escala_mm`, `unitats_*`) són els que la UI ensenya i
-    els que es filtren; el JSON és el que fa possible REPRODUIR el fitxer a l'exportació.
-    Duplicar-los és barat i estalvia obrir el JSON per a cada llistat.
+    L'empremta SENCERA (el JSON) no s'escriu aquí: n'és amo el `DjangoGeometryStore`,
+    que desa el document complet. Aquests camps en són una còpia plana perquè un llistat
+    de patrons no hagi d'obrir un JSON per fila.
     """
-    from .adapters import fingerprint_to_json
-
     fp_data = document.fingerprint
     fp.font_cad = fp_data.font_cad or ''
-    fp.empremta = fingerprint_to_json(fp_data)
     if fp_data.unitats:
         fp.escala_mm = fp_data.unitats.factor_to_mm
         fp.unitats_metode = fp_data.unitats.metode.value
