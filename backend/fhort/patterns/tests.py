@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+import math
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -39,14 +40,19 @@ from fhort.patterns.engine.ftt_pom_layer import (
     format_pom_text,
 )
 from fhort.patterns.engine.geometry import (
+    BoundaryData,
     Confidence,
     GradeRuleData,
     LayerRole,
     POMAnchorData,
+    PointData,
     PointKind,
     UnitsMethod,
 )
+from fhort.patterns.engine.measure import MeasureError, resoldre
 from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
+from fhort.patterns.engine.segments import longitud_vora, segmentar_peca, segmentar_vora
+from fhort.patterns.engine.sew import validar
 from fhort.patterns.engine.rul_reader import RULReader, coherencia_dxf_rul
 from fhort.patterns.engine.rul_writer import RULWriter
 
@@ -61,17 +67,19 @@ from django.core import signing
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
+from django.db.models import ProtectedError
 from django_tenants.test.cases import TenantTestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from fhort.models_app.models import Model
 from fhort.models_app.services_fitxers import DOWNLOAD_SALT as MODEL_FITXER_SALT
 from fhort.patterns.adapters import DjangoGeometryStore
-from fhort.patterns.models import PatternFile
+from fhort.patterns.annotation_views import PatternPOMViewSet, SewRelationViewSet
+from fhort.patterns.models import PatternFile, PatternPOM
 from fhort.patterns.services import save_pattern_file
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
                                   PatternFileViewSet)
-from fhort.pom.models import GarmentType
+from fhort.pom.models import GarmentType, POMMaster
 from fhort.tasks.models import GarmentTypeItem
 
 FIXTURES = Path(__file__).parent / 'tests' / 'fixtures'
@@ -1104,6 +1112,278 @@ class DescarregaTest(PatternsAPITestBase):
         self.assertFalse(default_storage.exists(dxf_path))
         self.assertFalse(default_storage.exists(rul_path))
         self.assertEqual(PatternFile.objects.count(), 0)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# S6 · ANOTACIÓ — segments, mesures i costures
+# ═════════════════════════════════════════════════════════════════════════════
+
+class SegmentacioTest(unittest.TestCase):
+    """De gir a gir sobre el contorn de tall. Engine pur."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = AAMAReader().read(AMELIA_DXF.read_bytes())
+
+    def test_els_segments_sumen_el_perimetre(self):
+        """La prova que no es pot falsejar: si un tram falta o es compta dos cops, la
+        suma no dona el perímetre."""
+        esperat = {'BACK': 14, 'FRONT': 10, 'BACK_LINI': 10, 'FRONT_LINI': 8}
+        for piece in self.doc.pieces:
+            with self.subTest(peca=piece.nom_block):
+                segs = segmentar_peca(piece)
+                self.assertEqual(len(segs), esperat[piece.nom_block])
+                cut = piece.boundary(LayerRole.CUT)
+                self.assertAlmostEqual(
+                    sum(s.longitud_mm for s in segs), longitud_vora(cut), places=6)
+
+    def test_hi_ha_un_segment_per_gir(self):
+        """En una vora tancada, N girs → N trams."""
+        for piece in self.doc.pieces:
+            with self.subTest(peca=piece.nom_block):
+                cut = piece.boundary(LayerRole.CUT)
+                girs = sum(1 for p in cut.points if p.kind is PointKind.TURN)
+                self.assertEqual(len(segmentar_peca(piece)), girs)
+
+    def test_els_parametres_van_de_0_a_1(self):
+        for piece in self.doc.pieces:
+            segs = segmentar_peca(piece)
+            self.assertAlmostEqual(segs[0].t_inici, 0.0, places=9)
+            self.assertAlmostEqual(segs[-1].t_fi, 1.0, places=6)
+            for a, b in zip(segs, segs[1:]):
+                self.assertAlmostEqual(a.t_fi, b.t_inici, places=9)
+
+    def test_una_vora_sense_cap_gir_es_un_sol_tram(self):
+        """Un cercle no té cantonades, i tot i així s'hi ha de poder ancorar una costura.
+        Tornar zero trams el deixaria fora de tot."""
+        punts = tuple(
+            PointData(x=math.cos(a) * 100, y=math.sin(a) * 100, kind=PointKind.CURVE)
+            for a in [i * math.pi / 6 for i in range(12)]
+        )
+        vora = BoundaryData(role=LayerRole.CUT, layer='1', points=punts, closed=True)
+        segs = segmentar_vora(vora, 0)
+        self.assertEqual(len(segs), 1)
+        self.assertAlmostEqual(segs[0].t_inici, 0.0)
+        self.assertAlmostEqual(segs[0].t_fi, 1.0)
+
+
+class MesuraTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = AAMAReader().read(AMELIA_DXF.read_bytes())
+        cls.back = cls.doc.piece('BACK')
+        cls.cut = cls.back.boundary(LayerRole.CUT)
+        cls.punts = {i: p for i, p in enumerate(cls.cut.points)}
+        cls.girs = [i for i, p in cls.punts.items() if p.kind is PointKind.TURN]
+
+    def test_recta_i_vora_no_son_el_mateix(self):
+        """Sobre els MATEIXOS dos punts, una cinta estirada i una cinta que resegueix la
+        corba donen coses diferents. Per això el mètode es desa i no s'assumeix."""
+        a, b = self.girs[0], self.girs[len(self.girs) // 2]
+        recta = resoldre(self.back, {'mode': 'points', 'a': a, 'b': b}, self.punts, 'recta')
+        vora = resoldre(self.back, {'mode': 'points', 'a': a, 'b': b}, self.punts, 'vora')
+        self.assertAlmostEqual(recta.valor_cm, 51.29, places=1)
+        self.assertAlmostEqual(vora.valor_cm, 117.71, places=1)
+        self.assertGreater(vora.valor_cm, recta.valor_cm)
+
+    def test_la_mesura_recta_es_la_distancia_euclidiana(self):
+        a, b = self.girs[0], self.girs[1]
+        pa, pb = self.punts[a], self.punts[b]
+        esperat = math.hypot(pb.x - pa.x, pb.y - pa.y) / 10.0
+        r = resoldre(self.back, {'mode': 'points', 'a': a, 'b': b}, self.punts)
+        self.assertAlmostEqual(r.valor_cm, esperat, places=6)
+
+    def test_landmark_es_un_punt_derivat_que_no_existeix(self):
+        """'1 cm sota el punt de sisa': es calcula, no es materialitza. Si es
+        materialitzés com a vèrtex, seria una còpia que envelliria."""
+        a, b = self.girs[0], self.girs[2]
+        base = resoldre(self.back, {'mode': 'points', 'a': a, 'b': b}, self.punts)
+        derivat = resoldre(
+            self.back,
+            {'mode': 'landmark', 'landmark': a, 'offset_cm': 5.0, 'direccio': 'down', 'b': b},
+            self.punts,
+        )
+        self.assertTrue(derivat.derivat)
+        self.assertFalse(base.derivat)
+        self.assertNotAlmostEqual(base.valor_cm, derivat.valor_cm, places=2)
+        # El punt derivat no s'ha afegit a la geometria.
+        self.assertEqual(len(self.back.boundary(LayerRole.CUT).points), 28)
+
+    def test_una_recepta_que_apunta_a_un_punt_desaparegut_ho_diu(self):
+        with self.assertRaises(MeasureError) as ctx:
+            resoldre(self.back, {'mode': 'points', 'a': 9999, 'b': 0}, self.punts)
+        self.assertIn('9999', str(ctx.exception))
+
+    def test_mode_desconegut(self):
+        with self.assertRaises(MeasureError):
+            resoldre(self.back, {'mode': 'telepatia'}, self.punts)
+
+
+class CosturaTest(unittest.TestCase):
+    """El diferencial vol dir coses OPOSADES segons el tipus. És tot el test."""
+
+    def test_casat_que_casa(self):
+        c = validar(500.0, 500.0, 'casat')
+        self.assertTrue(c.casa)
+        self.assertEqual(c.desviament_cm, 0.0)
+
+    def test_casat_que_no_casa_diu_quant(self):
+        c = validar(530.0, 500.0, 'casat')
+        self.assertFalse(c.casa)
+        self.assertAlmostEqual(c.desviament_cm, 3.0)
+        self.assertIn('3.0 cm', c.missatge)
+
+    def test_un_casat_amb_diferencial_declarat_es_un_error_de_tipus(self):
+        """Si un costat ha de sobrar, no és un casat. Val més dir-l'hi que fer-li cas."""
+        c = validar(530.0, 500.0, 'casat', diferencial_cm=3.0)
+        self.assertFalse(c.casa)
+        self.assertIn('frunzit o una pinça', c.missatge)
+
+    def test_frunzit_amb_el_diferencial_promes(self):
+        """La MATEIXA diferència de 3 cm que suspèn un casat, aprova un frunzit."""
+        c = validar(530.0, 500.0, 'frunzit', diferencial_cm=3.0)
+        self.assertTrue(c.casa)
+        self.assertAlmostEqual(c.desviament_cm, 0.0)
+        self.assertIn('sobra 3.0 cm', c.missatge)
+
+    def test_frunzit_que_no_compleix_el_que_prometia(self):
+        c = validar(550.0, 500.0, 'frunzit', diferencial_cm=3.0)
+        self.assertFalse(c.casa)
+        self.assertAlmostEqual(c.desviament_cm, 2.0)
+
+    def test_la_tolerancia_es_1_mm(self):
+        self.assertTrue(validar(500.0, 500.9, 'casat').casa)
+        self.assertFalse(validar(500.0, 502.0, 'casat').casa)
+
+
+class AnotacioAPITest(PatternsAPITestBase):
+    """POMs i costures per l'API, amb el material real."""
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        self.back = self.fp.pieces.get(nom_block='BACK')
+        self.pom_master = POMMaster.objects.create(
+            codi_client='CHEST', nom_client='Amplada de pit')
+        self.girs = list(
+            self.back.points.filter(mena='vertex', tipus='turn', boundary_index=0)
+            .order_by('ordre'))
+
+    def _ancora(self, a, b, pom=None, metode='recta'):
+        request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+            'pattern_piece': self.back.id,
+            'pom_master': (pom or self.pom_master).id,
+            'definicio_mesura': {'mode': 'points', 'a': a.id, 'b': b.id},
+            'metode': metode,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternPOMViewSet.as_view({'post': 'create'})(request)
+
+    def test_els_segments_es_deriven_en_importar(self):
+        """No cal demanar-los: la peça ja ve amb les seves cantonades marcades pel CAD."""
+        self.assertEqual(self.back.segments.count(), 14)
+        self.assertEqual(self.fp.pieces.get(nom_block='FRONT').segments.count(), 10)
+
+    def test_ancorar_un_pom_el_mesura_al_servidor(self):
+        resp = self._ancora(self.girs[0], self.girs[5])
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        pom = PatternPOM.objects.get(pk=resp.data['id'])
+        self.assertIsNotNone(pom.valor_mesurat_cm)
+
+        # El valor és exactament la distància entre els dos punts: no l'ha dit el client.
+        a, b = self.girs[0], self.girs[5]
+        esperat = round(math.hypot(b.x - a.x, b.y - a.y) / 10.0, 2)
+        self.assertAlmostEqual(pom.valor_mesurat_cm, esperat, places=2)
+
+    def test_el_client_no_pot_dictar_el_valor(self):
+        """Encara que l'enviï, el servidor el sobreescriu amb el que diu la geometria."""
+        request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+            'pattern_piece': self.back.id,
+            'pom_master': self.pom_master.id,
+            'definicio_mesura': {'mode': 'points', 'a': self.girs[0].id, 'b': self.girs[5].id},
+            'valor_mesurat_cm': 999.0,          # ← mentida
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        resp = PatternPOMViewSet.as_view({'post': 'create'})(request)
+
+        pom = PatternPOM.objects.get(pk=resp.data['id'])
+        self.assertNotEqual(pom.valor_mesurat_cm, 999.0)
+
+    def test_el_mateix_pom_dos_cops_a_la_mateixa_peca_rebota(self):
+        self.assertEqual(self._ancora(self.girs[0], self.girs[5]).status_code, 201)
+        segon = self._ancora(self.girs[1], self.girs[6])
+        self.assertEqual(segon.status_code, 400)
+
+    def test_no_es_pot_esborrar_un_POMMaster_ancorat(self):
+        """PROTECT: la geometria en depèn. (A la BD el FK és DEFERRABLE, així que qui ho
+        fa complir de debò és l'ORM — i per això es prova aquí i no a psql.)"""
+        self._ancora(self.girs[0], self.girs[5])
+        with self.assertRaises(ProtectedError):
+            self.pom_master.delete()
+
+    def test_la_geometria_serveix_els_poms_ancorats(self):
+        self._ancora(self.girs[0], self.girs[5])
+        request = self.factory.get(f'/api/v1/patterns/pattern-files/{self.fp.id}/geometry/')
+        force_authenticate(request, user=self.user)
+        dades = PatternFileViewSet.as_view({'get': 'geometry'})(request, pk=self.fp.id).data
+
+        back = next(p for p in dades['pieces'] if p['nom_block'] == 'BACK')
+        self.assertEqual(len(back['poms']), 1)
+        self.assertEqual(back['poms'][0]['pom_code'], 'CHEST')
+        self.assertEqual(len(back['segments']), 14)
+
+    # ── costures ─────────────────────────────────────────────────────────────
+    def _costura(self, segs_a, segs_b, tipus='casat', dif=0.0):
+        request = self.factory.post('/api/v1/patterns/sew-relations/', {
+            'model': self.model.id,
+            'segments_a': [s.id for s in segs_a],
+            'segments_b': [s.id for s in segs_b],
+            'tipus': tipus,
+            'diferencial_cm': dif,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        return SewRelationViewSet.as_view({'post': 'create'})(request)
+
+    def test_una_costura_dun_tram_amb_ell_mateix_sempre_casa(self):
+        """El cas trivial que ha de sortir verd: si no, la longitud està mal calculada."""
+        seg = self.back.segments.first()
+        resp = self._costura([seg], [seg])
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertTrue(resp.data['estat']['casa'])
+        self.assertAlmostEqual(
+            resp.data['estat']['longitud_a_cm'], resp.data['estat']['longitud_b_cm'])
+
+    def test_una_costura_de_trams_diferents_no_casa_i_diu_quant(self):
+        segs = list(self.back.segments.all()[:2])
+        resp = self._costura([segs[0]], [segs[1]])
+        self.assertEqual(resp.status_code, 201)
+        estat = resp.data['estat']
+        self.assertFalse(estat['casa'])
+        self.assertGreater(estat['desviament_cm'], 0)
+        self.assertIn('NO casa', estat['missatge'])
+
+    def test_un_frunzit_amb_el_diferencial_correcte_casa(self):
+        """La mateixa parella de trams que suspèn com a casat, aprova com a frunzit si el
+        diferencial declarat és el que de debò els separa."""
+        segs = list(self.back.segments.all()[:2])
+        dolent = self._costura([segs[0]], [segs[1]])
+        diferencia = abs(dolent.data['estat']['diferencia_cm'])
+
+        bo = self._costura([segs[0]], [segs[1]], tipus='frunzit', dif=diferencia)
+        self.assertTrue(bo.data['estat']['casa'], bo.data['estat']['missatge'])
+
+    def test_un_costat_pot_ser_la_suma_de_dos_trams(self):
+        """Una màniga es cus contra una sisa que és davanter + esquena."""
+        a = list(self.back.segments.all()[:2])
+        front = self.fp.pieces.get(nom_block='FRONT')
+        b = list(front.segments.all()[:1])
+        resp = self._costura(a, b)
+        self.assertEqual(resp.status_code, 201)
+        suma = sum(s.t_fi - s.t_inici for s in a)
+        self.assertGreater(resp.data['estat']['longitud_a_cm'], 0)
+        self.assertGreater(suma, 0)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
