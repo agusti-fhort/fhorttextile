@@ -243,9 +243,12 @@ class PatternSegment(models.Model):
     """Un tram d'una vora, en coordenades paramètriques.
 
     És la manera d'ancorar coses (costures, POMs) a una vora sense clavar-les a un índex
-    de vèrtex: si la geometria es mou, el tram continua sent el mateix tram. Encara no
-    l'escriu ningú —el reader no en dedueix cap—, però la taula neix ara perquè S6 hi
-    pengi les costures sense una segona migració del domini.
+    de vèrtex: si la geometria es mou, el tram continua sent el mateix tram.
+
+    Els segments es deriven **de gir a gir** sobre el contorn de tall (S6): els punts de
+    gir són les cantonades que el patronista reconeix com a fronteres —sisa, costat,
+    escot—, i entre dos girs hi ha una vora amb sentit. Els punts de corba no en són
+    frontera: flueixen per dins del tram.
     """
 
     piece = models.ForeignKey(PatternPiece, on_delete=models.CASCADE, related_name='segments')
@@ -261,3 +264,124 @@ class PatternSegment(models.Model):
 
     def __str__(self):
         return f'vora {self.vora} [{self.t_inici:.2f}–{self.t_fi:.2f}]'
+
+
+class PatternPOM(models.Model):
+    """Un POM ancorat a la geometria: la capa que val.
+
+    Això és el que converteix un DXF mort en un patró que sap què mesura. La geometria
+    sola diu on són els punts; el POM ancorat diu que la distància entre AQUESTS dos
+    punts **és** l'amplada de pit, i que quan el grading digui que l'amplada de pit
+    creix 2 cm, són aquests punts els que s'han de moure.
+
+    És una RELACIÓ sobre geometria existent, mai geometria nova (frontera §3.3 del pla):
+    marcar un POM no dibuixa res, assenyala.
+    """
+
+    #: Mesura entre dos punts ancorats.
+    MODE_POINTS = 'points'
+    #: Mesura des d'un punt derivat ("1 cm sota el punt de sisa"). Es persisteix i es
+    #: resol des de S6, però la UI v1 només ofereix el mode de punts: el mode landmark
+    #: entra amb l'editor de receptes, no abans.
+    MODE_LANDMARK = 'landmark'
+
+    pattern_piece = models.ForeignKey(
+        PatternPiece, on_delete=models.CASCADE, related_name='poms',
+    )
+    #: PROTECT: un POM del catàleg que algú ha ancorat a un patró no es pot esborrar
+    #: sense adonar-se'n. La geometria en depèn.
+    pom_master = models.ForeignKey(
+        'pom.POMMaster', on_delete=models.PROTECT, related_name='pattern_poms',
+    )
+
+    #: La recepta. Dues formes, v1:
+    #:   {"mode": "points",   "a": <PatternPoint.id>, "b": <PatternPoint.id>}
+    #:   {"mode": "landmark", "landmark": <PatternPoint.id>, "offset_cm": 1.0,
+    #:    "direccio": "down", "b": <PatternPoint.id>}
+    definicio_mesura = models.JSONField(default=dict)
+
+    #: LLEGIT de la geometria, mai teclejat. Si algú el pogués editar, deixaria de ser
+    #: una mesura del patró per ser una opinió sobre el patró.
+    valor_mesurat_cm = models.FloatField(null=True, blank=True)
+
+    #: Com s'ha mesurat: recta entre punts, o longitud resseguint la vora.
+    METODE_RECTA = 'recta'
+    METODE_VORA = 'vora'
+    METODE_CHOICES = [(METODE_RECTA, 'Distància recta'), (METODE_VORA, 'Longitud per vora')]
+    metode = models.CharField(max_length=10, choices=METODE_CHOICES, default=METODE_RECTA)
+
+    creat_per = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pattern_poms_creats',
+    )
+    data_creacio = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'POM ancorat'
+        verbose_name_plural = 'POMs ancorats'
+        ordering = ['pattern_piece', 'pom_master']
+        constraints = [
+            # Un POM es mesura UNA vegada per peça. Dos ancoratges del mateix POM a la
+            # mateixa peça serien dues veritats sobre la mateixa mesura.
+            models.UniqueConstraint(
+                fields=['pattern_piece', 'pom_master'],
+                name='patternpom_un_ancoratge_per_peca',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.pom_master_id} @ {self.pattern_piece_id} = {self.valor_mesurat_cm} cm'
+
+
+class SewRelation(models.Model):
+    """Una costura: quins trams d'una peça es cusen amb quins d'una altra.
+
+    **Penja del MODEL, no de la peça**, perquè cosir és una operació de MUNTATGE: hi
+    intervenen dues peces i cap de les dues n'és propietària. Una costura que pengés
+    d'una peça seria mitja costura.
+
+    N-a-N a cada costat perquè el món és així: una màniga es cus contra una sisa que és
+    la suma de dos trams (davanter i esquena).
+    """
+
+    TIPUS_CASAT = 'casat'
+    TIPUS_FRUNZIT = 'frunzit'
+    TIPUS_PINCA = 'pinca'
+    TIPUS_CHOICES = [
+        (TIPUS_CASAT, 'Casat'),
+        (TIPUS_FRUNZIT, 'Frunzit'),
+        (TIPUS_PINCA, 'Pinça'),
+    ]
+
+    model = models.ForeignKey(
+        'models_app.Model', on_delete=models.CASCADE, related_name='sew_relations',
+    )
+    segments_a = models.ManyToManyField(
+        PatternSegment, related_name='sew_relations_a',
+    )
+    segments_b = models.ManyToManyField(
+        PatternSegment, related_name='sew_relations_b',
+    )
+    tipus = models.CharField(max_length=10, choices=TIPUS_CHOICES, default=TIPUS_CASAT)
+
+    #: Diferència de longitud ESPERADA entre els dos costats.
+    #: En un CASAT ha de ser 0: si els dos costats no fan el mateix, és un error del
+    #: patró. En un FRUNZIT o una PINÇA, el diferencial és la instrucció de muntatge
+    #: (aquesta és la tela que s'ha d'arronsar), no un defecte. La mateixa xifra vol dir
+    #: coses oposades segons el tipus, i el motor ho ha de saber (V1 §5.3.3).
+    diferencial_cm = models.FloatField(default=0.0)
+
+    notes = models.TextField(blank=True)
+    creat_per = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='sew_relations_creades',
+    )
+    data_creacio = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Costura'
+        verbose_name_plural = 'Costures'
+        ordering = ['model', 'id']
+
+    def __str__(self):
+        return f'{self.get_tipus_display()} (model {self.model_id})'
