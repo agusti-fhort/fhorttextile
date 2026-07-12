@@ -82,8 +82,16 @@ def compare(
     b: PatternDocument,
     tol_um: float = DEFAULT_TOL_UM,
     comparar_empremta: bool = True,
+    comparar_grading: bool = True,
 ) -> RoundtripReport:
-    """Compara dos documents. `a` és la referència; `b`, el que ha tornat del viatge."""
+    """Compara dos documents. `a` és la referència; `b`, el que ha tornat del viatge.
+
+    `comparar_grading=False` quan l'altra banda és un **DXF tot sol**: un DXF no porta
+    taula de regles —la porta el RUL, que és un fitxer germà i un artefacte a part— i
+    trobar-hi a faltar una cosa que aquell format no pot contenir no és detectar un
+    defecte, és comparar peres amb pomes. La taula es compara amb `compare_grade_tables`
+    sobre el RUL, que és on viu.
+    """
     tol_mm = tol_um * MM_PER_UM
     diffs: list[Difference] = []
     max_dev = 0.0
@@ -108,7 +116,8 @@ def compare(
     if comparar_empremta:
         diffs += _compare_fingerprint(a, b)
 
-    diffs += _compare_grading(a.grade_table, b.grade_table)
+    if comparar_grading:
+        diffs += _compare_grading(a.grade_table, b.grade_table)
 
     return RoundtripReport(
         diferencies=tuple(diffs),
@@ -118,9 +127,27 @@ def compare(
     )
 
 
-def compare_grade_tables(a: Optional[GradeTable], b: Optional[GradeTable]) -> RoundtripReport:
-    """Compara només les taules de grading (per al round-trip del RUL tot sol)."""
-    return RoundtripReport(diferencies=tuple(_compare_grading(a, b)))
+def compare_grade_tables(
+    a: Optional[GradeTable],
+    b: Optional[GradeTable],
+    tol_deltes: float = 0.0,
+) -> RoundtripReport:
+    """Compara només les taules de grading (per al round-trip del RUL tot sol).
+
+    `tol_deltes` (en les unitats dels deltes, mm) existeix perquè **el RUL és un canal amb
+    resolució pròpia**: el format real de PolyPattern escriu els deltes amb DOS decimals, i
+    el writer el reprodueix byte a byte perquè aquesta fidelitat és el que fa que el fitxer
+    torni a ser seu. La conseqüència és que un delta de 3.439 mm surt escrit com a 3.44:
+    el fitxer quantitza a 0.01 mm i no hi ha manera d'evitar-ho sense emetre un RUL que el
+    seu CAD ja no reconeixeria.
+
+    Per això, exigir igualtat EXACTA de floats a un round-trip de RUL és demanar-li al
+    format una precisió que no té. Amb `tol_deltes=0` (per defecte) la comparació continua
+    sent exacta —que és el que volen els tests de reproducció pura, on els deltes ja venen
+    del fitxer i hi tornen sense passar per cap càlcul—; qui hi escrigui deltes calculats
+    hi ha de passar la resolució del format.
+    """
+    return RoundtripReport(diferencies=tuple(_compare_grading(a, b, tol_deltes)))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -319,7 +346,11 @@ def _compare_fingerprint(a: PatternDocument, b: PatternDocument) -> list[Differe
     return diffs
 
 
-def _compare_grading(a: Optional[GradeTable], b: Optional[GradeTable]) -> list[Difference]:
+def _compare_grading(
+    a: Optional[GradeTable],
+    b: Optional[GradeTable],
+    tol_deltes: float = 0.0,
+) -> list[Difference]:
     if a is None and b is None:
         return []
     if a is None or b is None:
@@ -337,10 +368,24 @@ def _compare_grading(a: Optional[GradeTable], b: Optional[GradeTable]) -> list[D
             'rules', f'Les regles han canviat: {sorted(a.regles)} → {sorted(b.regles)}.'))
     else:
         for numero, regla in a.regles.items():
-            if regla.deltes != b.regles[numero].deltes:
-                diffs.append(Difference(
-                    'rule_deltas',
-                    f'Els deltes de la regla {numero} han canviat.',
-                    detall={'regla': numero, 'a': regla.deltes, 'b': b.regles[numero].deltes},
-                ))
+            altres = b.regles[numero].deltes
+            if _deltes_iguals(regla.deltes, altres, tol_deltes):
+                continue
+            diffs.append(Difference(
+                'rule_deltas',
+                f'Els deltes de la regla {numero} han canviat.',
+                detall={'regla': numero, 'a': regla.deltes, 'b': altres},
+            ))
     return diffs
+
+
+def _deltes_iguals(a: dict, b: dict, tol: float) -> bool:
+    if set(a) != set(b):
+        return False
+    if tol <= 0:
+        return a == b
+    for talla, (ax, ay) in a.items():
+        bx, by = b[talla]
+        if abs(ax - bx) > tol or abs(ay - by) > tol:
+            return False
+    return True

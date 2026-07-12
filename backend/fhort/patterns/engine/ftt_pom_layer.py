@@ -38,16 +38,28 @@ Per cada POM ancorat, DUES entitats:
 
   · L'**etiqueta**, un `TEXT` a la capa `FTT-POM`, assegut al **punt mig** de la mesura:
 
-        FTT <codi> <nom canònic EN> = <valor> mm
+        FTT "<codi>" <nom canònic EN> = <valor> mm
 
-    Exemple:  `FTT POM-001 CHEST WIDTH = 525.0 mm`
+    Exemple:  `FTT "POM-001" CHEST WIDTH = 525.000 mm`
+    Exemple:  `FTT "HI RLX" HIGH HIP RELAXED = 576.162 mm`
 
-    - El `codi` és el codi canònic del POM (`POMMaster`), sense espais.
+    - El `codi` és el codi canònic del POM (`POMMaster.pom_code`) i va **entre cometes**.
+      ⚠️ ESMENA S7: l'especificació original el donava «sense espais», i el catàleg real
+      diu que no: hi ha codis com `HI RLX` i `LEG OP`. Sense cometes, el parser en llegia
+      només el primer tros (`HI`) i el POM tornava del viatge amb un altre nom — que és
+      **exactament** la mena de defecte que la capa hauria d'ajudar a evitar. Les cometes
+      són el delimitador; el lector encara accepta la forma antiga sense cometes (un codi
+      sense espais) perquè els fitxers ja emesos continuïn sent llegibles.
     - El nom va en **anglès canònic** (la llengua franca del patronatge).
     - El decimal és **sempre PUNT**, i les unitats **sempre mm**, tant si el CAD
       d'origen feia servir coma com si treballava en polzades. Aquesta capa és NOSTRA:
       no imita l'empremta del fitxer, la contradiu deliberadament perquè sigui
       inequívoca.
+    - El valor porta **3 decimals (micres)**. No és precisió de cara a la galeria: la capa
+      ha de tornar del viatge amb el MATEIX valor que va marxar (el guionitzat de S8 demana
+      que es rellegeixi «com a taula idèntica»), i amb un sol decimal un valor de 668.354 mm
+      tornava com a 668.4. Un lliurable que arrodoneix el que diu de si mateix no es pot
+      fer servir per validar res.
 
 I una entitat de **metadades**, una sola per document, `TEXT` a la capa `FTT-POM`:
 
@@ -93,18 +105,26 @@ FTT_POM_LAYER = 'FTT-POM'
 POM_PREFIX = 'FTT'
 META_PREFIX = 'FTT-META'
 
+#: El codi va entre cometes (pot portar espais: 'HI RLX'). La forma antiga —codi sense
+#: cometes ni espais— s'accepta encara: els fitxers que ja hem emès han de continuar sent
+#: llegibles, i un format que trenca els seus propis lliurables antics no és un format.
 _RE_POM = re.compile(
-    r'^FTT\s+(?P<codi>\S+)\s+(?P<nom>.+?)\s*=\s*(?P<valor>-?\d+(?:\.\d+)?)\s*mm\s*$',
+    r'^FTT\s+(?:"(?P<codi_q>[^"]+)"|(?P<codi>\S+))\s+(?P<nom>.+?)\s*=\s*'
+    r'(?P<valor>-?\d+(?:\.\d+)?)\s*mm\s*$',
     re.IGNORECASE,
 )
 _RE_META = re.compile(r'^FTT-META\s+(?P<parells>.*)$', re.IGNORECASE)
 _RE_KV = re.compile(r'(\w+)=(\S+)')
 
+#: Decimals del valor a l'etiqueta. Tres = micres = la unitat en què el comparador mesura
+#: les desviacions. Amb menys, la capa no es pot rellegir igual que es va escriure.
+DECIMALS_VALOR = 3
+
 
 def format_pom_text(codi: str, nom: str, valor_mm: float) -> str:
     """L'etiqueta d'un POM. **S2 (writer) ha de fer servir aquesta funció**, no una
     còpia del format: així l'especificació no pot divergir entre qui escriu i qui llegeix."""
-    return f'{POM_PREFIX} {codi} {nom} = {valor_mm:.1f} mm'
+    return f'{POM_PREFIX} "{codi}" {nom} = {valor_mm:.{DECIMALS_VALOR}f} mm'
 
 
 def format_meta_text(versio: int, model: str = '', ts: str = '') -> str:
@@ -127,7 +147,7 @@ def parse_pom_text(text: str) -> Optional[POMAnchorData]:
     if not m:
         return None
     return POMAnchorData(
-        pom_code=m.group('codi'),
+        pom_code=m.group('codi_q') or m.group('codi'),
         valor_mesurat_mm=float(m.group('valor')),
         definicio_mesura={'nom': m.group('nom').strip()},
     )

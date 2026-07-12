@@ -54,6 +54,11 @@ from .geometry import (
     UnitsMethod,
 )
 
+#: La capa dels piquets. Té nom propi perquè `_rule_at` l'ha de poder aïllar: quan un
+#: piquet seu damunt d'un punt de gir, les seves dues regles conviuen a la mateixa
+#: coordenada i només la capa les distingeix.
+CAPA_PIQUET = frozenset({'4'})
+
 # Dos punts es consideren el mateix punt per sota d'aquesta distància (en unitats
 # natives del fitxer, abans d'escalar). El material real coincideix a la mil·lèsima.
 COINCIDENCE_TOL = 0.01
@@ -268,7 +273,8 @@ def _read_piece(
     grain: Optional[GrainLineData] = None
     textos_capa1: list[str] = []
     meta_anchor: tuple[float, float] = (0.0, 0.0)
-    rule_texts: list[tuple[float, float, int]] = []
+    #: (x, y, número, CAPA). La capa no és decoració: v. `_rule_at`.
+    rule_texts: list[tuple[float, float, int, str]] = []
     raw_entities: list[RawEntity] = []
 
     ftt_entities: list = []
@@ -306,7 +312,7 @@ def _read_piece(
             text = e.dxf.text
             num = _parse_rule_number(text)
             if num is not None:
-                rule_texts.append((e.dxf.insert.x, e.dxf.insert.y, num))
+                rule_texts.append((e.dxf.insert.x, e.dxf.insert.y, num, layer))
             elif layer == '1':
                 textos_capa1.append(text)
                 meta_anchor = (e.dxf.insert.x * factor, e.dxf.insert.y * factor)
@@ -335,7 +341,9 @@ def _read_piece(
                 x=x * factor,
                 y=y * factor,
                 kind=_classify(x, y, classificadors),
-                grade_rule=_rule_at(x, y, rule_texts),
+                # Un vèrtex mai no pren la regla de la capa dels PIQUETS, encara que un
+                # piquet li segui exactament al damunt.
+                grade_rule=_rule_at(x, y, rule_texts, excloure=CAPA_PIQUET),
                 raw=RawTrace(dxftype='VERTEX', layer=layer, handle=str(pl.dxf.handle or '')),
             )
             for x, y in pts_natius
@@ -346,7 +354,8 @@ def _read_piece(
         NotchData(
             x=x * factor,
             y=y * factor,
-            grade_rule=_rule_at(x, y, rule_texts),
+            # I un piquet només pren la SEVA (capa 4), mai la del gir que té a sota.
+            grade_rule=_rule_at(x, y, rule_texts, capes=CAPA_PIQUET),
             raw=RawTrace(dxftype='POINT', layer='4'),
         )
         for x, y in notch_pts
@@ -411,9 +420,31 @@ def _classify(x: float, y: float, classificadors: dict[str, list]) -> PointKind:
     return PointKind.UNCLASSIFIED
 
 
-def _rule_at(x: float, y: float, rule_texts: list[tuple[float, float, int]]) -> Optional[int]:
-    """El número de regla de grading que el CAD ha assegut sobre aquest punt."""
-    for tx, ty, num in rule_texts:
+def _rule_at(
+    x: float,
+    y: float,
+    rule_texts: list[tuple[float, float, int, str]],
+    capes: Optional[frozenset] = None,
+    excloure: frozenset = frozenset(),
+) -> Optional[int]:
+    """El número de regla de grading que el CAD ha assegut sobre aquest punt.
+
+    **La CAPA del TEXT importa, i és una lliçó que ha costat una exportació bloquejada.**
+    Un piquet seu sovint exactament damunt d'un punt de gir (al material real, 3 dels 8 hi
+    seuen). Aleshores, en aquella coordenada, hi ha DOS TEXT de regla: el del gir a la capa
+    2 i el del piquet a la capa 4. Buscar «el TEXT que hi ha en aquest punt» sense mirar de
+    quina capa és retorna el primer que trobi, i el piquet acaba heretant la regla del gir.
+
+    Amb el fitxer d'origen l'error era INVISIBLE —l'AMELIA porta la regla 1 a tot arreu, i
+    agafar la de l'altre també donava 1—, i només apareix quan les regles són diferents per
+    punt: és a dir, **exactament quan hi ha grading de debò**. Que el defecte s'amagués fins
+    al primer fitxer graduat és el que el feia perillós.
+    """
+    for tx, ty, num, capa in rule_texts:
+        if capa in excloure:
+            continue
+        if capes is not None and capa not in capes:
+            continue
         if _same_point((x, y), (tx, ty)):
             return num
     return None

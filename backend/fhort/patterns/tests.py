@@ -38,6 +38,7 @@ from fhort.patterns.engine.ftt_pom_layer import (
     FTTPOMLayerReader,
     format_meta_text,
     format_pom_text,
+    parse_pom_text,
 )
 from fhort.patterns.engine.geometry import (
     BoundaryData,
@@ -392,8 +393,35 @@ class FTTPOMLayerTest(unittest.TestCase):
     def test_el_format_del_text_es_el_de_lespecificacio(self):
         self.assertEqual(
             format_pom_text('POM-001', 'CHEST WIDTH', 525.0),
-            'FTT POM-001 CHEST WIDTH = 525.0 mm',
+            'FTT "POM-001" CHEST WIDTH = 525.000 mm',
         )
+
+    def test_un_codi_amb_espais_sobreviu_al_viatge(self):
+        """ESMENA S7. L'especificació original deia que els codis anaven «sense espais».
+
+        El catàleg real diu que no: hi ha `HI RLX` i `LEG OP`. Sense cometes, el parser en
+        llegia el primer tros i el POM tornava dient-se `HI` — la capa que havia d'evitar
+        errors n'introduïa un. Ho va caçar la porta d'autovalidació de l'exportació.
+        """
+        text = format_pom_text('HI RLX', 'Hip width (relaxed)', 576.162)
+        self.assertEqual(text, 'FTT "HI RLX" Hip width (relaxed) = 576.162 mm')
+
+        pom = parse_pom_text(text)
+        self.assertEqual(pom.pom_code, 'HI RLX')
+        self.assertEqual(pom.definicio_mesura['nom'], 'Hip width (relaxed)')
+        self.assertEqual(pom.valor_mesurat_mm, 576.162)
+
+    def test_la_forma_antiga_sense_cometes_encara_es_llegeix(self):
+        """Un format que trenca els seus propis lliurables antics no és un format."""
+        pom = parse_pom_text('FTT POM-001 CHEST WIDTH = 525.0 mm')
+        self.assertEqual(pom.pom_code, 'POM-001')
+        self.assertEqual(pom.valor_mesurat_mm, 525.0)
+
+    def test_el_valor_no_perd_precisio_en_el_viatge(self):
+        """Amb un sol decimal, 668.354 mm tornava com a 668.4: la capa no es podia fer
+        servir per validar res, que és justament per a què serveix."""
+        pom = parse_pom_text(format_pom_text('M-M79', 'TOTAL LENGTH', 668.354))
+        self.assertAlmostEqual(pom.valor_mesurat_mm, 668.354, places=6)
 
     def test_un_dxf_de_client_no_te_capa_ftt_i_no_es_cap_error(self):
         doc = ezdxf.readfile(str(AMELIA_DXF))
