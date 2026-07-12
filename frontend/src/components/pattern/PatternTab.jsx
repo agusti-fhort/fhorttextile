@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { patterns, models, modelTasks } from '../../api/endpoints'
 import Modal from '../ui/Modal'
-import PatternViewer from './PatternViewer'
+import PatternViewer, { KONVA_COL } from './PatternViewer'
 import POMPicker from './POMPicker'
 import AnnotationPanel from './AnnotationPanel'
 
@@ -198,9 +198,18 @@ export default function PatternTab({ modelId, taskId = null }) {
   }, [actual, modelId])
 
   const onClicPunt = (iman) => {
-    const nous = [...puntsPom, iman.punt].slice(-2)
-    setPuntsPom(nous)
-    if (nous.length === 2) setPickerObert(true)   // dos punts → quin POM és?
+    const punt = iman.punt
+    // Forma FUNCIONAL a posta: llegir `puntsPom` del closure el faria servir el valor
+    // d'abans del clic anterior si dos events arriben junts, i la mesura acabaria unint
+    // un punt amb ell mateix.
+    setPuntsPom(prev => {
+      // Clicar dues vegades el MATEIX punt no és una mesura: és un zero. El segon clic
+      // sobre el punt ja triat el DESTRIA, que és el que espera qui s'ha equivocat.
+      if (prev.length && prev[prev.length - 1].id === punt.id) return prev.slice(0, -1)
+      const nous = [...prev, punt].slice(-2)
+      if (nous.length === 2) setPickerObert(true)   // dos punts → quin POM és?
+      return nous
+    })
   }
 
   const ancorarPOM = async (pomMaster) => {
@@ -819,10 +828,14 @@ function EditorCostura({
       background: 'var(--bg-muted)', borderRadius: 4, padding: '0.4rem 0.6rem',
       marginBottom: '0.5rem', fontSize: 'var(--fs-caption)',
     }}>
-      <button onClick={() => onCostat('a')} style={chip(costatActiu === 'a', '#1f6feb')}>
+      {/* Els chips duen EL MATEIX color que els segments al canvas. No són tokens perquè
+          no n'hi ha cap per a aquests dos colors, i inventar-ne dos al design system per a
+          un editor de costures seria pitjor que compartir la paleta del canvas: el que
+          importa és que el que es clica i el que s'il·lumina siguin del mateix color. */}
+      <button onClick={() => onCostat('a')} style={chip(costatActiu === 'a', KONVA_COL.sewA)}>
         {t('pattern.sew_side_a', { n: segmentsA.length })}
       </button>
-      <button onClick={() => onCostat('b')} style={chip(costatActiu === 'b', '#8250df')}>
+      <button onClick={() => onCostat('b')} style={chip(costatActiu === 'b', KONVA_COL.sewB)}>
         {t('pattern.sew_side_b', { n: segmentsB.length })}
       </button>
 

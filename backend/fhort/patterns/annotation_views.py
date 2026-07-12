@@ -43,6 +43,29 @@ class PatternPOMSerializer(serializers.ModelSerializer):
     def get_pom_nom(self, obj):
         return obj.pom_master.nom_client
 
+    def validate_definicio_mesura(self, valor):
+        """Una recepta que uneix un punt amb ell mateix no és una mesura: és un zero.
+
+        Ho impedeix també la UI (el segon clic sobre el mateix punt el destria), però la
+        llei és del domini i no de la pantalla: qualsevol client que ho intentés hauria de
+        rebotar igual.
+        """
+        mode = valor.get('mode', 'points')
+        if mode == 'points':
+            if valor.get('a') is None or valor.get('b') is None:
+                raise serializers.ValidationError(
+                    'La recepta ha de dir quins dos punts uneix (a i b).')
+            if valor['a'] == valor['b']:
+                raise serializers.ValidationError(
+                    'Els dos extrems de la mesura són el mateix punt: això mesuraria zero.')
+        elif mode == 'landmark':
+            if valor.get('landmark') is None or valor.get('b') is None:
+                raise serializers.ValidationError(
+                    'Una mesura per landmark necessita el punt base i el punt final.')
+        else:
+            raise serializers.ValidationError(f"Mode de mesura desconegut: '{mode}'.")
+        return valor
+
 
 class SewRelationSerializer(serializers.ModelSerializer):
     estat = serializers.SerializerMethodField()

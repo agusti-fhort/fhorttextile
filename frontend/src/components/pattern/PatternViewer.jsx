@@ -25,7 +25,7 @@ import {
 
 // El canvas NO resol var(--…): la paleta de canvas és literal, com KONVA_COL al
 // TechSheetEditor. I NO és la paleta de l'SVG: allà és un document, aquí és una eina.
-const KONVA_COL = {
+export const KONVA_COL = {
   cut: '#1d1d1b',        // contorn de tall — el que es retalla
   sew: '#1f6feb',        // línia de cosit (quan n'hi ha)
   internal: '#868685',   // línies internes
