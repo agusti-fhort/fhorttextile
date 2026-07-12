@@ -297,9 +297,10 @@ export default function App() {
           <Route path="poms" element={<POMs />} />
           <Route path="poms/grading" element={<GradingRuleSets />} />
           <Route path="size-library" element={<SizeLibrary />} />
-          {/* Grup Disseny (F6): documents .ftt i patró DXF. Placeholders fins als sprints propis. */}
+          {/* Grup Disseny (F6): documents .ftt. Placeholder fins al seu sprint propi.
+              La ruta "disseny/patro-dxf" s'ha retirat a S5: era un placeholder buit i el
+              motor de patrons ja viu al tab "Patró" de la fitxa del model. */}
           <Route path="disseny/documents" element={<DissenyPlaceholder titleKey="nav.documents" icon="ti-file-text" />} />
-          <Route path="disseny/patro-dxf" element={<DissenyPlaceholder titleKey="nav.patro_dxf" icon="ti-vector" />} />
           <Route path="disseny/poc-paper" element={<PaperKonvaPoc />} />
           <Route path="onboarding" element={<OnboardingWizard />} />
           <Route path="configuracio/general" element={<GeneralConfig />} />

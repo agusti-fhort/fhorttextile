@@ -43,7 +43,9 @@ const navGroups = [
     // D10 — porta-menú: tria model → open-task('tech_sheet') → editor (o consulta si l'allow-list ho nega).
     { to: '/fitxa-tecnica', labelKey: 'nav.tech_sheet', icon: 'ti-file-description' },
     { to: '/disseny/documents', labelKey: 'nav.documents', icon: 'ti-file-text' },
-    { to: '/disseny/patro-dxf', labelKey: 'nav.patro_dxf', icon: 'ti-vector' },
+    // "Patró DXF" retirat (S5): era un placeholder buit que apuntava al motor de patrons.
+    // El motor ja existeix i viu on ha de viure — al tab "Patró" de la fitxa del model,
+    // perquè un patró pertany a UN model i no és una secció solta del menú.
   ]},
   // Estudi tècnic — gestió INTERNA del tenant (NO el backoffice futur de tots els tenants).
   // B3-M: Clients i Proveïdors s'han mogut a Comercial (mestres comercials). La secció queda
