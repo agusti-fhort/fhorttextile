@@ -15,6 +15,7 @@ import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
 import TasksTab from '../components/model/TasksTab'
+import PatternTab from '../components/pattern/PatternTab'
 
 const API = import.meta.env.VITE_API_URL || ''
 // Menú net (PEÇA 5): Size Check absorbit a Mesures (taula base amb estadis), Producció retirat;
@@ -22,7 +23,9 @@ const API = import.meta.env.VITE_API_URL || ''
 // redirigeix a /mesures (App.jsx), aquí ja no hi ha cap branca 'Size Check'.
 // 'Anàlisi IA' OCULTAT del menú (peça F): inert avui. El case i el component TabAIAnalysis es
 // conserven (no destructiu); simplement no apareix a la banda de pestanyes.
-const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Tasques']
+// 'Patró' va entre Escalat i Fitxa tècnica: és una etapa del flux tècnic (el patró es
+// digitalitza i s'escala), no un annex documental.
+const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Patró', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Tasques']
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
   'Dashboard': 'model_sheet.tab_dashboard',
@@ -30,6 +33,7 @@ const TAB_LABELS = {
   'Resum': 'model_sheet.tab_summary',
   'Mesures': 'model.tabs.mesures',
   'Escalat': 'model_sheet.tab_grading',
+  'Patró': 'model_sheet.tab_pattern',
   'Fitxa tècnica': 'model_sheet.tab_tech_sheet',
   'Fitxers': 'model.tabs.fitxers',
   "Registre d'activitat": 'model_sheet.tab_activity_log',
@@ -578,6 +582,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             onConfirm={() => execPropagar(propStatus.segellada)}
           />
         )}
+        {activeTab === 'Patró' && <PatternTab modelId={parseInt(id)} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
         {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}
