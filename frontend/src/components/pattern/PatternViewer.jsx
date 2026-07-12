@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Stage, Layer, Line, Rect, Group, Arrow } from 'react-konva'
+import { Stage, Layer, Line, Rect, Group, Arrow, Circle, Text } from 'react-konva'
 import { useTranslation } from 'react-i18next'
 import {
   bboxDePeces, capesPresents, escalaPerCabre, longitudVora,
-  puntsPerKonva, tramMesProper,
+  puntMesProper, puntsDelSegment, puntsPerKonva, tramMesProper,
 } from './patternGeometry'
 
 /**
@@ -39,6 +39,9 @@ const KONVA_COL = {
   selBg: 'rgba(194,122,42,0.07)',
   hover: '#c27a2a',
   bg: '#ffffff',
+  pom: '#bf3989',      // la mesura d'un POM ancorat
+  sewA: '#1f6feb',     // costat A d'una costura
+  sewB: '#8250df',     // costat B
 }
 
 const ZOOM_MIN = 0.02
@@ -50,7 +53,16 @@ const ALCADA = 560
 
 const clampZoom = (v) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v))
 
-export default function PatternViewer({ pieces, pecaSel, onTriaPeca }) {
+export default function PatternViewer({
+  pieces, pecaSel, onTriaPeca,
+  // ── mode d'anotació (S6). Sense aquestes props, el visor és el de S5: read-only.
+  mode = 'view',                 // 'view' | 'pom' | 'sew'
+  puntsPom = [],                 // punts ja clicats en mode POM (0, 1 o 2)
+  onClicPunt = null,
+  segmentsA = [], segmentsB = [],
+  costatActiu = 'a',
+  onClicSegment = null,
+}) {
   const { t } = useTranslation()
   const viewportRef = useRef(null)
   const stageRef = useRef(null)
@@ -126,10 +138,18 @@ export default function PatternViewer({ pieces, pecaSel, onTriaPeca }) {
     const xMm = (p.x - pos.x) / zoom
     const yMm = -(p.y - pos.y) / zoom      // desfem el capgirat de l'eix Y
     const tram = tramMesProper(pieces, xMm, yMm, 12 / zoom)
-    setHover({ xMm, yMm, tram })
+    // En mode POM, el cursor s'imanta al punt més proper: marcar una mesura "a ull" no
+    // seria una mesura del patró, seria un dibuix a sobre del patró.
+    const iman = mode === 'pom' ? puntMesProper(pieces, xMm, yMm, 14 / zoom) : null
+    setHover({ xMm, yMm, tram, iman })
+  }
+
+  const onClicStage = () => {
+    if (mode === 'pom' && hover?.iman && onClicPunt) onClicPunt(hover.iman)
   }
 
   const visible = (capa) => capes[capa] && presents.has(capa)
+  const anotant = mode !== 'view'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -143,7 +163,8 @@ export default function PatternViewer({ pieces, pecaSel, onTriaPeca }) {
         ref={viewportRef}
         style={{
           border: '1px solid var(--border)', borderRadius: 8,
-          background: 'var(--white)', overflow: 'hidden', cursor: 'grab',
+          background: 'var(--white)', overflow: 'hidden',
+          cursor: anotant ? 'crosshair' : 'grab',
         }}
       >
         <Stage
@@ -154,10 +175,12 @@ export default function PatternViewer({ pieces, pecaSel, onTriaPeca }) {
           scaleY={zoom}
           x={pos.x}
           y={pos.y}
-          draggable
+          draggable={!anotant}
           onWheel={onWheel}
           onMouseMove={onMouseMove}
           onMouseLeave={() => setHover(null)}
+          onClick={onClicStage}
+          onTap={onClicStage}
           onDragEnd={(e) => setPos({ x: e.target.x(), y: e.target.y() })}
         >
           <Layer>
@@ -167,12 +190,92 @@ export default function PatternViewer({ pieces, pecaSel, onTriaPeca }) {
                 piece={piece}
                 zoom={zoom}
                 sel={piece.nom_block === pecaSel}
-                hiHaSeleccio={!!pecaSel}
+                hiHaSeleccio={!!pecaSel && !anotant}
                 visible={visible}
-                mostraPunts={capes.punts}
-                onClick={() => onTriaPeca(piece.nom_block === pecaSel ? '' : piece.nom_block)}
+                mostraPunts={capes.punts || mode === 'pom'}
+                anotant={anotant}
+                onClick={() => !anotant && onTriaPeca(
+                  piece.nom_block === pecaSel ? '' : piece.nom_block)}
               />
             ))}
+
+            {/* Els POMs ja ancorats: la mesura, dibuixada sobre la geometria que mesura. */}
+            {pieces.flatMap(piece => (piece.poms || []).map(pom => (
+              <PomKonva key={`pom-${pom.id}`} piece={piece} pom={pom} zoom={zoom} />
+            )))}
+
+            {/* Mode SEW: els segments triats, ressaltats. */}
+            {mode === 'sew' && pieces.flatMap(piece =>
+              (piece.segments || []).map(seg => {
+                const enA = segmentsA.includes(seg.id)
+                const enB = segmentsB.includes(seg.id)
+                if (!enA && !enB) return null
+                const pts = puntsDelSegment(piece, seg)
+                if (pts.length < 2) return null
+                return (
+                  <Line
+                    key={`seg-${seg.id}`}
+                    points={pts.flatMap(p => [p.x, -p.y])}
+                    stroke={enA ? KONVA_COL.sewA : KONVA_COL.sewB}
+                    strokeWidth={4 / zoom}
+                    lineCap="round"
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
+                )
+              })
+            )}
+
+            {/* Mode SEW: zones clicables sobre CADA segment (invisibles, però amb hit). */}
+            {mode === 'sew' && onClicSegment && pieces.flatMap(piece =>
+              (piece.segments || []).map(seg => {
+                const pts = puntsDelSegment(piece, seg)
+                if (pts.length < 2) return null
+                return (
+                  <Line
+                    key={`hit-${seg.id}`}
+                    points={pts.flatMap(p => [p.x, -p.y])}
+                    stroke="transparent"
+                    strokeWidth={2 / zoom}
+                    hitStrokeWidth={Math.max(14 / zoom, 5)}
+                    onClick={() => onClicSegment(seg, piece)}
+                    onTap={() => onClicSegment(seg, piece)}
+                    onMouseEnter={(e) => { e.target.getStage().container().style.cursor = 'pointer' }}
+                    onMouseLeave={(e) => { e.target.getStage().container().style.cursor = 'grab' }}
+                    perfectDrawEnabled={false}
+                  />
+                )
+              })
+            )}
+
+            {/* Mode POM: la mesura que s'està marcant, i l'imant sota el cursor. */}
+            {mode === 'pom' && puntsPom.length >= 1 && (
+              <Line
+                points={[
+                  ...puntsPom.flatMap(p => [p.x, -p.y]),
+                  ...(puntsPom.length === 1 && hover?.iman
+                    ? [hover.iman.punt.x, -hover.iman.punt.y] : []),
+                ]}
+                stroke={KONVA_COL.pom}
+                strokeWidth={2 / zoom}
+                dash={[5 / zoom, 3 / zoom]}
+                listening={false}
+                perfectDrawEnabled={false}
+              />
+            )}
+            {mode === 'pom' && puntsPom.map((p, i) => (
+              <Circle
+                key={`sel-${i}`} x={p.x} y={-p.y} r={5 / zoom}
+                fill={KONVA_COL.pom} listening={false} perfectDrawEnabled={false}
+              />
+            ))}
+            {mode === 'pom' && hover?.iman && (
+              <Circle
+                x={hover.iman.punt.x} y={-hover.iman.punt.y} r={6 / zoom}
+                stroke={KONVA_COL.pom} strokeWidth={1.5 / zoom}
+                listening={false} perfectDrawEnabled={false}
+              />
+            )}
           </Layer>
         </Stage>
       </div>
@@ -184,7 +287,54 @@ export default function PatternViewer({ pieces, pecaSel, onTriaPeca }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PecaKonva({ piece, zoom, sel, hiHaSeleccio, visible, mostraPunts, onClick }) {
+/**
+ * Un POM ancorat, dibuixat sobre la geometria que mesura.
+ *
+ * La línia de mesura és la MATEIXA cosa que la capa FTT-POM exportarà al DXF (S2): el que
+ * el patronista veurà al seu CAD és això mateix. Aquí i allà, la mesura es dibuixa on és.
+ */
+function PomKonva({ piece, pom, zoom }) {
+  const punts = puntsDeLaMesura(piece, pom)
+  if (punts.length < 2) return null
+  const mig = {
+    x: (punts[0].x + punts[punts.length - 1].x) / 2,
+    y: (punts[0].y + punts[punts.length - 1].y) / 2,
+  }
+  return (
+    <Group listening={false}>
+      <Line
+        points={punts.flatMap(p => [p.x, -p.y])}
+        stroke={KONVA_COL.pom} strokeWidth={1.8 / zoom}
+        perfectDrawEnabled={false}
+      />
+      {punts.map((p, i) => (
+        <Circle key={i} x={p.x} y={-p.y} r={3 / zoom} fill={KONVA_COL.pom}
+                perfectDrawEnabled={false} />
+      ))}
+      <Text
+        x={mig.x} y={-mig.y - 14 / zoom}
+        text={`${pom.pom_code}${pom.valor_mesurat_cm != null ? ` ${pom.valor_mesurat_cm} cm` : ''}`}
+        fontSize={11 / zoom}
+        fill={KONVA_COL.pom}
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  )
+}
+
+/** Els punts que una recepta de mesura toca (mode `points`; el landmark es resol al servidor). */
+function puntsDeLaMesura(piece, pom) {
+  const def = pom.definicio_mesura || {}
+  const perId = new Map()
+  for (const b of piece.boundaries || []) {
+    for (const p of b.points || []) perId.set(p.id, p)
+  }
+  const a = perId.get(def.a) || perId.get(def.landmark)
+  const b = perId.get(def.b)
+  return a && b ? [a, b] : []
+}
+
+function PecaKonva({ piece, zoom, sel, hiHaSeleccio, visible, mostraPunts, anotant, onClick }) {
   // Els traços es dibuixen amb gruix CONSTANT a pantalla: si el gruix escalés amb el
   // zoom, en allunyar-se el patró es convertiria en una taca negra i en apropar-se
   // desapareixeria.

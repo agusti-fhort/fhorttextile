@@ -118,6 +118,68 @@ export function puntsPerKonva(boundary) {
   return flat
 }
 
+/**
+ * El punt de la geometria més proper al cursor (l'imant del mode d'anotació).
+ *
+ * Marcar un POM "a ull", entre dos vèrtexs, no seria una mesura del patró: seria un
+ * dibuix a sobre del patró. Per això el cursor s'imanta i, si no hi ha cap punt a prop,
+ * no s'ancora res.
+ */
+export function puntMesProper(pieces, x, y, maxDist = 14) {
+  let millor = null
+  for (const piece of pieces) {
+    for (const b of piece.boundaries || []) {
+      for (const p of b.points || []) {
+        const d = distancia(x, y, p.x, p.y)
+        if (d <= maxDist && (!millor || d < millor.dist)) {
+          millor = { dist: d, punt: p, peca: piece.nom_block, pieceId: piece.id }
+        }
+      }
+    }
+  }
+  return millor
+}
+
+/**
+ * Els punts d'un segment, per dibuixar-lo ressaltat.
+ *
+ * El segment es guarda en coordenades PARAMÈTRIQUES (t_inici–t_fi sobre la longitud de
+ * la vora), no en índexs de vèrtex: així continua sent el mateix tram encara que la
+ * geometria es mogui. Aquí es tradueix a punts per pintar-lo.
+ */
+export function puntsDelSegment(piece, segment) {
+  const b = (piece.boundaries || [])[segment.vora]
+  if (!b) return []
+  const pts = b.points || []
+  const n = pts.length
+  if (n < 2) return []
+
+  const trams = b.closed ? n : n - 1
+  const llargs = []
+  let total = 0
+  for (let i = 0; i < trams; i++) {
+    const a = pts[i], c = pts[(i + 1) % n]
+    const d = distancia(a.x, a.y, c.x, c.y)
+    llargs.push(d)
+    total += d
+  }
+  if (total === 0) return []
+
+  const out = []
+  let acumulat = 0
+  for (let i = 0; i < trams; i++) {
+    const t0 = acumulat / total
+    const t1 = (acumulat + llargs[i]) / total
+    // Un tram entra si se solapa amb [t_inici, t_fi] del segment.
+    if (t1 > segment.t_inici - 1e-9 && t0 < segment.t_fi + 1e-9) {
+      if (!out.length) out.push(pts[i])
+      out.push(pts[(i + 1) % n])
+    }
+    acumulat += llargs[i]
+  }
+  return out
+}
+
 /** Quines capes té de debò aquest patró (per no oferir toggles buits). */
 export function capesPresents(pieces) {
   const capes = new Set()

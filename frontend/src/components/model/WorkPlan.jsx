@@ -34,6 +34,11 @@ function toolRoute(task, modelId) {
     // "Escalat" (grading = definir la regla de gradació) → editor propagat editable, amb task_id
     // (compta temps). scaling ("Escalat CAD" = aplicar al patró) és tasca diferent, eina futura → null.
     case 'grading':    return `/models/${modelId}/escalat?task_id=${task.id}`
+    // S6: el patró s'anota al TAB Patró del ModelSheet (POMs i costures sobre la
+    // geometria). Amb task_id: el tab REPRÈN aquesta tasca en lloc d'encunyar-ne una de
+    // nova, igual que fa Mesures.
+    case 'pattern_digit':
+    case 'pattern_cad': return `/models/${modelId}?tab=Patró&task_id=${task.id}`
     default:           return null
   }
 }

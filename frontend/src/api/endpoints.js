@@ -629,7 +629,27 @@ export const patterns = {
 
   // La geometria SENCERA amb coordenades: el que dibuixa el visor Konva. El detall
   // (get) només porta recomptes — un llistat no ha d'arrossegar milers de punts.
+  // Porta també els segments (el que una costura pot triar) i els POMs ja ancorats.
   geometry: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/geometry/`),
+
+  // POMs ancorats (S6). El VALOR no s'envia mai: s'envia la recepta (quins punts) i el
+  // servidor la resol sobre la geometria. Un valor teclejat no seria una mesura del
+  // patró, seria una opinió sobre el patró.
+  poms: {
+    list: (patternFileId) => client.get('/api/v1/patterns/pattern-poms/',
+      { params: { pattern_piece__pattern_file: patternFileId } }),
+    create: (data) => client.post('/api/v1/patterns/pattern-poms/', data),
+    remove: (id) => client.delete(`/api/v1/patterns/pattern-poms/${id}/`),
+  },
+
+  // Costures. L'estat (casa / no casa) el calcula el servidor cada cop sobre la
+  // geometria viva: no es desa, perquè una costura que casava i ja no casa ho ha de dir.
+  sew: {
+    list: (modelId) => client.get('/api/v1/patterns/sew-relations/',
+      { params: { model: modelId } }),
+    create: (data) => client.post('/api/v1/patterns/sew-relations/', data),
+    remove: (id) => client.delete(`/api/v1/patterns/sew-relations/${id}/`),
+  },
 
   // El render està gated per Authorization, i un <img src> no pot portar capçaleres: es
   // baixa com a blob i es mostra per objectURL. (Les DESCÀRREGUES sí que tenen URL

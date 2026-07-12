@@ -3201,6 +3201,33 @@
     "viewer_switch_svg": "Veure el render SVG",
     "viewer_switch_konva": "Tornar al visor interactiu",
     "legend_turn": "Punt de gir (es grada)",
-    "legend_curve": "Punt de corba (flueix)"
+    "legend_curve": "Punt de corba (flueix)",
+    "mode_pom": "Marcar POM",
+    "mode_sew": "Cosir",
+    "mode_exit": "Sortir de l'anotació",
+    "task_running": "Tasca «Patró digitalització» en curs",
+    "pom_hint_first": "Clica el primer punt de la mesura (el cursor s'imanta als punts del patró).",
+    "pom_hint_second": "Clica el segon punt i tria quin POM és.",
+    "pom_search": "Cerca un POM pel codi o pel nom…",
+    "pom_none": "Cap POM trobat.",
+    "pom_unmeasured": "sense mesura",
+    "poms_anchored": "POMs ancorats ({{n}})",
+    "poms_empty": "Cap POM ancorat encara. Entra en mode «Marcar POM» per començar.",
+    "sews": "Costures ({{n}})",
+    "sews_empty": "Cap costura declarada.",
+    "sew_type": {
+      "casat": "Casat",
+      "frunzit": "Frunzit",
+      "pinca": "Pinça"
+    },
+    "sew_side_a": "Costat A ({{n}})",
+    "sew_side_b": "Costat B ({{n}})",
+    "sew_differential": "Diferencial",
+    "sew_declare": "Declarar costura",
+    "err_task": "No s'ha pogut obrir la tasca.",
+    "err_task_not_allowed": "El teu perfil no té permís per executar la tasca «Patró digitalització». Demana a un administrador que l'afegeixi a les teves tasques permeses.",
+    "err_pom": "No s'ha pogut ancorar el POM.",
+    "err_pom_duplicate": "Aquest POM ja està ancorat a aquesta peça: una mesura, una veritat.",
+    "err_sew": "No s'ha pogut declarar la costura."
   }
 }

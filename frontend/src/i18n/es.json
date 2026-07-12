@@ -3201,6 +3201,33 @@
     "viewer_switch_svg": "Ver el render SVG",
     "viewer_switch_konva": "Volver al visor interactivo",
     "legend_turn": "Punto de giro (se escala)",
-    "legend_curve": "Punto de curva (fluye)"
+    "legend_curve": "Punto de curva (fluye)",
+    "mode_pom": "Marcar POM",
+    "mode_sew": "Coser",
+    "mode_exit": "Salir de la anotación",
+    "task_running": "Tarea «Patrón digitalización» en curso",
+    "pom_hint_first": "Clica el primer punto de la medida (el cursor se imanta a los puntos del patrón).",
+    "pom_hint_second": "Clica el segundo punto y elige qué POM es.",
+    "pom_search": "Busca un POM por código o por nombre…",
+    "pom_none": "Ningún POM encontrado.",
+    "pom_unmeasured": "sin medida",
+    "poms_anchored": "POMs anclados ({{n}})",
+    "poms_empty": "Ningún POM anclado todavía. Entra en modo «Marcar POM» para empezar.",
+    "sews": "Costuras ({{n}})",
+    "sews_empty": "Ninguna costura declarada.",
+    "sew_type": {
+      "casat": "Casado",
+      "frunzit": "Fruncido",
+      "pinca": "Pinza"
+    },
+    "sew_side_a": "Lado A ({{n}})",
+    "sew_side_b": "Lado B ({{n}})",
+    "sew_differential": "Diferencial",
+    "sew_declare": "Declarar costura",
+    "err_task": "No se ha podido abrir la tarea.",
+    "err_task_not_allowed": "Tu perfil no tiene permiso para ejecutar la tarea «Patrón digitalización». Pide a un administrador que la añada a tus tareas permitidas.",
+    "err_pom": "No se ha podido anclar el POM.",
+    "err_pom_duplicate": "Este POM ya está anclado a esta pieza: una medida, una verdad.",
+    "err_sew": "No se ha podido declarar la costura."
   }
 }

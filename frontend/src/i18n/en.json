@@ -3201,6 +3201,33 @@
     "viewer_switch_svg": "Show the SVG render",
     "viewer_switch_konva": "Back to the interactive viewer",
     "legend_turn": "Turn point (graded)",
-    "legend_curve": "Curve point (flows)"
+    "legend_curve": "Curve point (flows)",
+    "mode_pom": "Mark POM",
+    "mode_sew": "Sew",
+    "mode_exit": "Exit annotation",
+    "task_running": "“Pattern digitisation” task running",
+    "pom_hint_first": "Click the first point of the measurement (the cursor snaps to the pattern's points).",
+    "pom_hint_second": "Click the second point and pick which POM it is.",
+    "pom_search": "Search a POM by code or name…",
+    "pom_none": "No POM found.",
+    "pom_unmeasured": "not measured",
+    "poms_anchored": "Anchored POMs ({{n}})",
+    "poms_empty": "No POM anchored yet. Enter “Mark POM” mode to start.",
+    "sews": "Seams ({{n}})",
+    "sews_empty": "No seam declared.",
+    "sew_type": {
+      "casat": "Matched",
+      "frunzit": "Gathered",
+      "pinca": "Dart"
+    },
+    "sew_side_a": "Side A ({{n}})",
+    "sew_side_b": "Side B ({{n}})",
+    "sew_differential": "Differential",
+    "sew_declare": "Declare seam",
+    "err_task": "Could not open the task.",
+    "err_task_not_allowed": "Your profile is not allowed to run the “Pattern digitisation” task. Ask an administrator to add it to your allowed tasks.",
+    "err_pom": "Could not anchor the POM.",
+    "err_pom_duplicate": "This POM is already anchored to this piece: one measurement, one truth.",
+    "err_sew": "Could not declare the seam."
   }
 }
