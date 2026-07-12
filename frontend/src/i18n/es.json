@@ -3180,6 +3180,28 @@
     "new_version_confirm": "Subir como v{{seguent}}",
     "err_load": "No se han podido cargar los patrones del modelo.",
     "err_upload": "No se ha podido subir el patrón.",
-    "err_too_big": "El archivo supera el máximo de {{mb}} MB."
+    "err_too_big": "El archivo supera el máximo de {{mb}} MB.",
+    "zoom_in": "Acercar",
+    "zoom_out": "Alejar",
+    "fit": "Encajar",
+    "layer": {
+      "cut": "Corte",
+      "sew": "Costura",
+      "internal": "Internas",
+      "mirror": "Espejo",
+      "notch": "Piquetes",
+      "grain": "Hilo",
+      "points": "Puntos"
+    },
+    "cursor": "{{x}}, {{y}} cm",
+    "segment": "{{peca}} · {{capa}} · tramo de {{cm}} cm",
+    "hover_hint": "Pasa el cursor por encima del patrón para ver las coordenadas y el tamaño de los tramos.",
+    "selected_piece": "{{peca}} · línea de corte: {{cm}} cm",
+    "viewer_interactive": "Visor interactivo",
+    "viewer_document": "Render de documento (SVG)",
+    "viewer_switch_svg": "Ver el render SVG",
+    "viewer_switch_konva": "Volver al visor interactivo",
+    "legend_turn": "Punto de giro (se escala)",
+    "legend_curve": "Punto de curva (fluye)"
   }
 }

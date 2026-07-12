@@ -3180,6 +3180,28 @@
     "new_version_confirm": "Upload as v{{seguent}}",
     "err_load": "Could not load the model's patterns.",
     "err_upload": "Could not upload the pattern.",
-    "err_too_big": "The file exceeds the {{mb}} MB limit."
+    "err_too_big": "The file exceeds the {{mb}} MB limit.",
+    "zoom_in": "Zoom in",
+    "zoom_out": "Zoom out",
+    "fit": "Fit",
+    "layer": {
+      "cut": "Cut",
+      "sew": "Sew",
+      "internal": "Internal",
+      "mirror": "Mirror",
+      "notch": "Notches",
+      "grain": "Grain",
+      "points": "Points"
+    },
+    "cursor": "{{x}}, {{y}} cm",
+    "segment": "{{peca}} · {{capa}} · {{cm}} cm segment",
+    "hover_hint": "Hover over the pattern to see coordinates and segment lengths.",
+    "selected_piece": "{{peca}} · cutting line: {{cm}} cm",
+    "viewer_interactive": "Interactive viewer",
+    "viewer_document": "Document render (SVG)",
+    "viewer_switch_svg": "Show the SVG render",
+    "viewer_switch_konva": "Back to the interactive viewer",
+    "legend_turn": "Turn point (graded)",
+    "legend_curve": "Curve point (flows)"
   }
 }

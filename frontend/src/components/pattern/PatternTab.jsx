@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { patterns } from '../../api/endpoints'
 import Modal from '../ui/Modal'
+import PatternViewer from './PatternViewer'
 
 // Sostre real de pujada: 20 MiB al backend (services_fitxers.MAX_UPLOAD_BYTES), per sota
 // dels 25M d'nginx. Es mostra a l'usuari perquè un DXF de niada pot ser gros i val més
@@ -24,6 +25,11 @@ export default function PatternTab({ modelId }) {
   const [svgUrl, setSvgUrl] = useState('')
   const [svgCarregant, setSvgCarregant] = useState(false)
   const [confirmarVersio, setConfirmarVersio] = useState(null)  // { dxf, rul }
+  const [geometria, setGeometria] = useState(null)
+  const [geoCarregant, setGeoCarregant] = useState(false)
+  // El visor interactiu és la vista principal; l'SVG del servidor continua sent el
+  // render de DOCUMENT (paleta fixa, per imprimir i arxivar) i es pot demanar a part.
+  const [vista, setVista] = useState('konva')   // 'konva' | 'svg'
 
   const dxfRef = useRef(null)
   const rulRef = useRef(null)
@@ -54,12 +60,24 @@ export default function PatternTab({ modelId }) {
 
   useEffect(() => { carregar() }, [carregar])
 
-  // ── el visor ─────────────────────────────────────────────────────────────
-  // El render està gated per Authorization i un <img src> no pot portar capçaleres:
-  // es baixa com a blob i es mostra per objectURL. L'objectURL es revoca sempre, o cada
-  // canvi de peça deixaria un blob viu a la memòria del navegador.
+  // ── la geometria (el que el visor Konva dibuixa) ──────────────────────────
   useEffect(() => {
-    if (!actual) return
+    if (!actual) { setGeometria(null); return }
+    let cancelat = false
+    setGeoCarregant(true)
+    patterns.geometry(actual.id)
+      .then(({ data }) => { if (!cancelat) setGeometria(data) })
+      .catch(() => { if (!cancelat) setGeometria(null) })
+      .finally(() => { if (!cancelat) setGeoCarregant(false) })
+    return () => { cancelat = true }
+  }, [actual])
+
+  // ── l'SVG de document (només quan es demana) ─────────────────────────────
+  // Està gated per Authorization i un <img src> no pot portar capçaleres: es baixa com a
+  // blob i es mostra per objectURL. L'objectURL es revoca sempre, o cada canvi de peça
+  // deixaria un blob viu a la memòria del navegador.
+  useEffect(() => {
+    if (!actual || vista !== 'svg') return
     let cancelat = false
     setSvgCarregant(true)
     patterns.renderSvg(actual.id, pecaSel)
@@ -73,7 +91,7 @@ export default function PatternTab({ modelId }) {
       .catch(() => { if (!cancelat) setSvgUrl('') })
       .finally(() => { if (!cancelat) setSvgCarregant(false) })
     return () => { cancelat = true }
-  }, [actual, pecaSel])
+  }, [actual, pecaSel, vista])
 
   useEffect(() => () => {
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
@@ -143,10 +161,27 @@ export default function PatternTab({ modelId }) {
             <LlistaPeces
               t={t} pieces={actual.pieces} pecaSel={pecaSel} onTria={setPecaSel}
             />
-            <Visor
-              t={t} svgUrl={svgUrl} carregant={svgCarregant}
-              pecaSel={pecaSel} onTot={() => setPecaSel('')}
-            />
+            <div style={{ flex: '2 1 460px', minWidth: 340 }}>
+              <CapcaleraVisor
+                t={t} vista={vista} onCanviaVista={setVista}
+                pecaSel={pecaSel} onTot={() => setPecaSel('')}
+              />
+              {vista === 'konva' ? (
+                geoCarregant || !geometria ? (
+                  <CaixaBuida t={t} text={t('pattern.viewer_loading')} />
+                ) : (
+                  <PatternViewer
+                    pieces={geometria.pieces}
+                    pecaSel={pecaSel}
+                    onTriaPeca={setPecaSel}
+                  />
+                )
+              ) : (
+                <Visor
+                  t={t} svgUrl={svgUrl} carregant={svgCarregant} pecaSel={pecaSel}
+                />
+              )}
+            </div>
           </div>
         </>
       )}
@@ -495,53 +530,79 @@ function LlistaPeces({ t, pieces, pecaSel, onTria }) {
   )
 }
 
-function Visor({ t, svgUrl, carregant, pecaSel, onTot }) {
+function CapcaleraVisor({ t, vista, onCanviaVista, pecaSel, onTot }) {
   return (
-    <div style={{ flex: '2 1 420px', minWidth: 320 }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem',
-      }}>
-        <h3 style={{ fontSize: 'var(--fs-h3)', margin: 0, flex: 1 }}>
-          {pecaSel ? t('pattern.viewer_piece', { peca: pecaSel }) : t('pattern.viewer_all')}
-        </h3>
-        {pecaSel && (
-          <button
-            onClick={onTot}
-            style={{
-              background: 'none', border: '1px solid var(--border)', borderRadius: 4,
-              padding: '0.2rem 0.6rem', cursor: 'pointer', fontSize: 'var(--fs-caption)',
-              display: 'flex', alignItems: 'center', gap: '0.3rem',
-            }}
-          >
-            <i className="ti ti-arrow-back-up" />
-            {t('pattern.viewer_show_all')}
-          </button>
-        )}
-      </div>
-      <div style={{
-        border: '1px solid var(--border)', borderRadius: 8, background: 'var(--white)',
-        padding: '0.5rem', minHeight: 320,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        {carregant && (
-          <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
-            {t('pattern.viewer_loading')}
-          </span>
-        )}
-        {!carregant && !svgUrl && (
-          <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
-            {t('pattern.viewer_error')}
-          </span>
-        )}
-        {!carregant && svgUrl && (
-          // El SVG ve del servidor amb la seva paleta de document: NO es re-tinta.
-          <img
-            src={svgUrl}
-            alt={pecaSel || t('pattern.viewer_all')}
-            style={{ maxWidth: '100%', maxHeight: 560, objectFit: 'contain' }}
-          />
-        )}
-      </div>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem',
+      flexWrap: 'wrap',
+    }}>
+      <h3 style={{ fontSize: 'var(--fs-h3)', margin: 0 }}>
+        {vista === 'konva' ? t('pattern.viewer_interactive') : t('pattern.viewer_document')}
+      </h3>
+      {pecaSel && (
+        <button
+          onClick={onTot}
+          style={{
+            background: 'none', border: '1px solid var(--border)', borderRadius: 4,
+            padding: '0.2rem 0.6rem', cursor: 'pointer', fontSize: 'var(--fs-caption)',
+            display: 'flex', alignItems: 'center', gap: '0.3rem',
+          }}
+        >
+          <i className="ti ti-arrow-back-up" />
+          {t('pattern.viewer_show_all')}
+        </button>
+      )}
+      <span style={{ flex: 1 }} />
+      {/* L'SVG no mor amb el visor: és el render de DOCUMENT (paleta fixa, per imprimir
+          i arxivar) i es pot demanar quan es vulgui. */}
+      <button
+        onClick={() => onCanviaVista(vista === 'konva' ? 'svg' : 'konva')}
+        style={{
+          background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 4,
+          padding: '0.2rem 0.6rem', cursor: 'pointer', fontSize: 'var(--fs-caption)',
+          display: 'flex', alignItems: 'center', gap: '0.3rem',
+        }}
+      >
+        <i className={vista === 'konva' ? 'ti ti-file-vector' : 'ti ti-pointer'} />
+        {vista === 'konva' ? t('pattern.viewer_switch_svg') : t('pattern.viewer_switch_konva')}
+      </button>
+    </div>
+  )
+}
+
+function CaixaBuida({ t, text }) {
+  return (
+    <div style={{
+      border: '1px solid var(--border)', borderRadius: 8, background: 'var(--white)',
+      minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
+    }}>
+      {text}
+    </div>
+  )
+}
+
+function Visor({ t, svgUrl, carregant, pecaSel }) {
+  return (
+    <div style={{
+      border: '1px solid var(--border)', borderRadius: 8, background: 'var(--white)',
+      padding: '0.5rem', minHeight: 320,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      {carregant && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+        {t('pattern.viewer_loading')}
+      </span>}
+      {!carregant && !svgUrl && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+        {t('pattern.viewer_error')}
+      </span>}
+      {!carregant && svgUrl && (
+        // El SVG ve del servidor amb la seva paleta de document: NO es re-tinta.
+        <img
+          src={svgUrl}
+          alt={pecaSel || t('pattern.viewer_all')}
+          style={{ maxWidth: '100%', maxHeight: 560, objectFit: 'contain' }}
+        />
+      )}
     </div>
   )
 }

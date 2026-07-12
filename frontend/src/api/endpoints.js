@@ -627,6 +627,10 @@ export const patterns = {
     { headers: { 'Content-Type': undefined } }),
   remove: (id) => client.delete(`/api/v1/patterns/pattern-files/${id}/`),
 
+  // La geometria SENCERA amb coordenades: el que dibuixa el visor Konva. El detall
+  // (get) només porta recomptes — un llistat no ha d'arrossegar milers de punts.
+  geometry: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/geometry/`),
+
   // El render està gated per Authorization, i un <img src> no pot portar capçaleres: es
   // baixa com a blob i es mostra per objectURL. (Les DESCÀRREGUES sí que tenen URL
   // signada al serializer — download_url / download_rul_url —, i per això no es

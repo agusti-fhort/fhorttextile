@@ -3180,6 +3180,28 @@
     "new_version_confirm": "Pujar com a v{{seguent}}",
     "err_load": "No s'han pogut carregar els patrons del model.",
     "err_upload": "No s'ha pogut pujar el patró.",
-    "err_too_big": "El fitxer supera el màxim de {{mb}} MB."
+    "err_too_big": "El fitxer supera el màxim de {{mb}} MB.",
+    "zoom_in": "Apropar",
+    "zoom_out": "Allunyar",
+    "fit": "Encaixar",
+    "layer": {
+      "cut": "Tall",
+      "sew": "Cosit",
+      "internal": "Internes",
+      "mirror": "Mirall",
+      "notch": "Piquets",
+      "grain": "Fil",
+      "points": "Punts"
+    },
+    "cursor": "{{x}}, {{y}} cm",
+    "segment": "{{peca}} · {{capa}} · tram de {{cm}} cm",
+    "hover_hint": "Passa el cursor per sobre del patró per veure'n les coordenades i la mida dels trams.",
+    "selected_piece": "{{peca}} · contorn de tall: {{cm}} cm",
+    "viewer_interactive": "Visor interactiu",
+    "viewer_document": "Render de document (SVG)",
+    "viewer_switch_svg": "Veure el render SVG",
+    "viewer_switch_konva": "Tornar al visor interactiu",
+    "legend_turn": "Punt de gir (es grada)",
+    "legend_curve": "Punt de corba (flueix)"
   }
 }
