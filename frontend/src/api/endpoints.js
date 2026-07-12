@@ -660,6 +660,29 @@ export const patterns = {
       params: piece ? { piece } : undefined,
       responseType: 'blob',
     }),
+
+  // Escalat i exportació de la niada (S7).
+  export: {
+    // NOMÉS les versions aprovades. `aprovada` i `is_active` són ortogonals: la versió
+    // aprovada d'un model sovint NO és la que la UI serveix per defecte, i qui exporta
+    // una niada tria una versió SIGNADA, no la que passava per allà.
+    gradingVersions: (id) =>
+      client.get(`/api/v1/patterns/pattern-files/${id}/grading-versions/`),
+
+    // El pipeline sencer SENSE bytes: projecció + preview per talla + autovalidació. Si
+    // l'exportació ha de fallar, falla aquí — amb el modal obert i el motiu a la vista.
+    preview: (id, data) =>
+      client.post(`/api/v1/patterns/pattern-files/${id}/export-preview/`, data),
+
+    // Els bytes. Sense `acknowledged: true` el servidor no genera res (403): el gate és
+    // una precondició dura, no un registre a posteriori.
+    dxf: (id, data) =>
+      client.post(`/api/v1/patterns/pattern-files/${id}/export/`, data,
+        { responseType: 'blob' }),
+    rul: (id, data) =>
+      client.post(`/api/v1/patterns/pattern-files/${id}/export-rul/`, data,
+        { responseType: 'blob' }),
+  },
 }
 
 // Sprint M2 — Anàlisi de temps (gated view_team_tasks; set-estimate gated define_tasks).

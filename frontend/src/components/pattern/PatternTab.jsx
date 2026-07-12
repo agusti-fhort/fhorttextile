@@ -5,6 +5,7 @@ import Modal from '../ui/Modal'
 import PatternViewer, { KONVA_COL } from './PatternViewer'
 import POMPicker from './POMPicker'
 import AnnotationPanel from './AnnotationPanel'
+import ExportModal from './ExportModal'
 
 // Sostre real de pujada: 20 MiB al backend (services_fitxers.MAX_UPLOAD_BYTES), per sota
 // dels 25M d'nginx. Es mostra a l'usuari perquè un DXF de niada pot ser gros i val més
@@ -44,6 +45,7 @@ export default function PatternTab({ modelId, taskId = null }) {
   const [diferencial, setDiferencial] = useState(0)
   const [sews, setSews] = useState([])
   const [obrintTasca, setObrintTasca] = useState(false)
+  const [exportObert, setExportObert] = useState(false)
 
   const dxfRef = useRef(null)
   const rulRef = useRef(null)
@@ -333,6 +335,7 @@ export default function PatternTab({ modelId, taskId = null }) {
             t={t} fp={actual} cadena={cadena}
             onCanviaVersio={id => { setPecaSel(''); carregar(id) }}
             pujant={pujant} dxfRef={dxfRef} rulRef={rulRef} onTria={onTriaFitxers}
+            onExporta={() => setExportObert(true)}
           />
           <BarraAnotacio
             t={t} mode={mode} obrint={obrintTasca}
@@ -426,6 +429,10 @@ export default function PatternTab({ modelId, taskId = null }) {
             pujar(dxf, rul, actual.id)
           }}
         />
+      )}
+
+      {exportObert && actual && (
+        <ExportModal patternFile={actual} onCancel={() => setExportObert(false)} />
       )}
     </div>
   )
@@ -531,7 +538,7 @@ function ZonaBuida({ t, pujant, dxfRef, rulRef, onTria }) {
   )
 }
 
-function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxfRef, rulRef, onTria }) {
+function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxfRef, rulRef, onTria, onExporta }) {
   const g = fp.grade_table
   const avisos = fp.avisos_coherencia || []
   const capesDesconegudes = fp.empremta?.capes_desconegudes || []
@@ -631,6 +638,23 @@ function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxfRef, rulRef, onTr
           <BotoDescarrega href={fp.download_rul_url} icona="ti-table-export"
                           text={t('pattern.download_rul')} />
         )}
+
+        {/* Exportar la NIADA: no és descarregar el fitxer del client, és generar-ne un de
+            nou graduat amb el nostre grading. Per això és un botó d'acció i no un enllaç
+            de descàrrega — i per això passa per un gate. */}
+        <button
+          onClick={onExporta}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.35rem',
+            fontSize: 'var(--fs-body)', color: 'var(--white)',
+            border: 'none', borderRadius: 4, background: 'var(--text-main)',
+            padding: '0.3rem 0.7rem', cursor: 'pointer',
+          }}
+        >
+          <i className="ti ti-arrow-up-right" />
+          {t('pattern.exp_button')}
+        </button>
+
         <span style={{ flex: 1 }} />
         <CampsPujada t={t} pujant={pujant} dxfRef={dxfRef} rulRef={rulRef}
                      onTria={onTria} compacte />
