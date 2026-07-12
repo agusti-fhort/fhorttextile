@@ -31,7 +31,8 @@ from .engine.geometry import (
     UnitsFingerprint,
     UnitsMethod,
 )
-from .models import PatternPiece, PatternPoint
+from .engine.segments import segmentar_peca
+from .models import PatternPiece, PatternPoint, PatternSegment
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -277,7 +278,28 @@ class DjangoGeometryStore:
                 rastre=_raw_trace_to_json(n.raw),
             ))
         PatternPoint.objects.bulk_create(punts, batch_size=1000)
+        self._save_segments(row, piece)
         return row
+
+    def _save_segments(self, row: PatternPiece, piece: PieceData) -> None:
+        """Els trams de gir a gir, derivats en importar.
+
+        Es deriven ARA i no quan algú vulgui cosir, perquè són una propietat de la
+        geometria, no una decisió de l'usuari: la peça ja ve amb les seves cantonades
+        marcades pel CAD. Qui declari una costura només ha de triar entre trams que ja hi
+        són.
+        """
+        segments = [
+            PatternSegment(
+                piece=row,
+                vora=s.vora,
+                t_inici=s.t_inici,
+                t_fi=s.t_fi,
+                tipus_vora=s.tipus_vora.value,
+            )
+            for s in segmentar_peca(piece)
+        ]
+        PatternSegment.objects.bulk_create(segments, batch_size=500)
 
     def _load_piece(self, row: PatternPiece) -> PieceData:
         vertexs: dict[int, list[PatternPoint]] = {}
