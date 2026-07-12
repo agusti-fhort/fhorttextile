@@ -119,6 +119,14 @@ class Fingerprint:
     cens_entitats: dict[str, int] = field(default_factory=dict)
     #: TEXTs de metadades del modelspace, literals (autoria, style name, sample size…).
     textos_document: tuple[str, ...] = ()
+    #: On van aquests TEXT, i quina alçada tenen tots els TEXT del fitxer.
+    doc_text_anchor: tuple[float, float] = (0.0, 0.0)
+    text_height: float = 0.0
+    #: El material real porta les seccions HEADER i TABLES **buides**. Reproduir el
+    #: fitxer vol dir tornar-les a deixar buides: omplir-les seria "millorar" l'origen,
+    #: i un fitxer millorat ja no és el fitxer del client.
+    header_buida: bool = False
+    tables_buida: bool = False
 
     def te_capa_desconeguda(self) -> bool:
         return bool(self.capes_desconegudes)
@@ -139,6 +147,22 @@ class RawTrace:
     layer: str = ''
     handle: str = ''
     extra: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True)
+class RawEntity:
+    """Una entitat que el model semàntic NO interpreta però que s'ha de tornar a
+    escriure **tal qual**.
+
+    És el pou on cau tot el que ve de capes que no són a l'estàndard (la 15 d'AMELIA,
+    que porta l'autoria del patronista). No entendre una cosa no és excusa per
+    perdre-la: si el CAD d'origen la va escriure, l'exportació nostra l'ha de tornar.
+    """
+    dxftype: str
+    layer: str
+    punts: tuple[tuple[float, float], ...] = ()
+    text: str = ''
+    height: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -227,6 +251,9 @@ class PieceMetadata:
     quantity: Optional[float] = None
     material: str = ''
     extra: dict[str, str] = field(default_factory=dict)
+    #: On el CAD posa aquests TEXT (al material real, tots quatre al mateix punt).
+    #: El writer els hi torna a posar: reproduir vol dir també reproduir el lloc.
+    anchor: tuple[float, float] = (0.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -243,6 +270,10 @@ class PieceData:
     has_sew: bool = False                         # capa 14 present
     has_fold: bool = False                        # doblec detectat
     unknown_layers: tuple[str, ...] = ()
+    #: Entitats de capes no catalogades, literals, per tornar-les a escriure.
+    raw_entities: tuple[RawEntity, ...] = ()
+    #: On el modelspace insereix el BLOCK d'aquesta peça.
+    insert_at: tuple[float, float] = (0.0, 0.0)
 
     def boundary(self, role: LayerRole) -> Optional[BoundaryData]:
         """La primera vora d'un rol donat (el contorn de tall n'és una)."""

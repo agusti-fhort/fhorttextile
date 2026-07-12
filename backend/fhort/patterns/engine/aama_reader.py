@@ -46,6 +46,7 @@ from .geometry import (
     PieceMetadata,
     PointData,
     PointKind,
+    RawEntity,
     RawTrace,
     UnitsFingerprint,
     UnitsMethod,
@@ -94,18 +95,22 @@ class AAMAReader:
                 [ParseIssue('no_blocks', 'Un DXF de patró ha de portar les peces com a BLOCKS.')],
             )
 
+        inserts = _insert_points(doc)
         issues: list[ParseIssue] = []
         pieces = []
         capes_totals: set[str] = set()
         desconegudes: set[str] = set()
 
         for block in blocks:
-            piece, capes, unknown, piece_issues = _read_piece(block, factor)
+            piece, capes, unknown, piece_issues = _read_piece(
+                block, factor, inserts.get(block.name, (0.0, 0.0))
+            )
             pieces.append(piece)
             capes_totals |= capes
             desconegudes |= unknown
             issues += piece_issues
 
+        buides = _empty_sections(data)
         fingerprint = Fingerprint(
             font_cad=_guess_source_cad(meta_doc),
             dxf_version=doc.dxfversion,
@@ -118,6 +123,10 @@ class AAMAReader:
             unitats=unitats,
             cens_entitats=_entity_census(doc),
             textos_document=tuple(textos_doc),
+            doc_text_anchor=_doc_text_anchor(doc),
+            text_height=_dominant_text_height(doc),
+            header_buida='HEADER' in buides,
+            tables_buida='TABLES' in buides,
         )
 
         # Les issues NO tomben la lectura: un fitxer amb rareses s'ha de poder obrir.
@@ -244,7 +253,9 @@ def _max_piece_dimension(doc: Drawing) -> float:
 # Peça
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _read_piece(block, factor: float) -> tuple[PieceData, set[str], set[str], list[ParseIssue]]:
+def _read_piece(
+    block, factor: float, insert_at: tuple[float, float]
+) -> tuple[PieceData, set[str], set[str], list[ParseIssue]]:
     issues: list[ParseIssue] = []
     capes: set[str] = set()
     desconegudes: set[str] = set()
@@ -254,15 +265,21 @@ def _read_piece(block, factor: float) -> tuple[PieceData, set[str], set[str], li
     notch_pts: list[tuple[float, float]] = []
     grain: Optional[GrainLineData] = None
     textos_capa1: list[str] = []
+    meta_anchor: tuple[float, float] = (0.0, 0.0)
     rule_texts: list[tuple[float, float, int]] = []
+    raw_entities: list[RawEntity] = []
 
     for e in block:
         layer = e.dxf.layer
         capes.add(layer)
+        kind = e.dxftype()
+
         if layer not in AAMA_LAYER_ROLES:
             desconegudes.add(layer)
+            # No l'entenem, però la tornarem a escriure exactament on era.
+            raw_entities.append(_as_raw_entity(e, factor))
+            continue
 
-        kind = e.dxftype()
         if kind == 'POLYLINE':
             polylines.append(e)
         elif kind == 'POINT':
@@ -281,6 +298,7 @@ def _read_piece(block, factor: float) -> tuple[PieceData, set[str], set[str], li
                 rule_texts.append((e.dxf.insert.x, e.dxf.insert.y, num))
             elif layer == '1':
                 textos_capa1.append(text)
+                meta_anchor = (e.dxf.insert.x * factor, e.dxf.insert.y * factor)
 
     boundaries: list[BoundaryData] = []
     for pl in polylines:
@@ -323,7 +341,7 @@ def _read_piece(block, factor: float) -> tuple[PieceData, set[str], set[str], li
         for x, y in notch_pts
     )
 
-    metadata = _piece_metadata(textos_capa1)
+    metadata = _piece_metadata(textos_capa1, meta_anchor)
     has_sew = any(b.role is LayerRole.SEW for b in boundaries)
     fold = _detect_fold(boundaries)
 
@@ -338,8 +356,36 @@ def _read_piece(block, factor: float) -> tuple[PieceData, set[str], set[str], li
         has_sew=has_sew,
         has_fold=fold is not None,
         unknown_layers=tuple(sorted(desconegudes, key=_layer_sort_key)),
+        raw_entities=tuple(raw_entities),
+        insert_at=insert_at,
     )
     return piece, capes, desconegudes, issues
+
+
+def _as_raw_entity(e, factor: float) -> RawEntity:
+    """Una entitat de capa no catalogada, capturada literalment."""
+    kind = e.dxftype()
+    punts: tuple[tuple[float, float], ...] = ()
+    text = ''
+    height = 0.0
+
+    if kind == 'TEXT':
+        ins = e.dxf.insert
+        punts = ((ins.x * factor, ins.y * factor),)
+        text = e.dxf.text
+        height = e.dxf.height * factor
+    elif kind == 'POINT':
+        loc = e.dxf.location
+        punts = ((loc.x * factor, loc.y * factor),)
+    elif kind == 'LINE':
+        s, t = e.dxf.start, e.dxf.end
+        punts = ((s.x * factor, s.y * factor), (t.x * factor, t.y * factor))
+    elif kind == 'POLYLINE':
+        punts = tuple(
+            (v.dxf.location.x * factor, v.dxf.location.y * factor) for v in e.vertices
+        )
+
+    return RawEntity(dxftype=kind, layer=e.dxf.layer, punts=punts, text=text, height=height)
 
 
 def _classify(x: float, y: float, classificadors: dict[str, list]) -> PointKind:
@@ -359,7 +405,7 @@ def _rule_at(x: float, y: float, rule_texts: list[tuple[float, float, int]]) -> 
     return None
 
 
-def _piece_metadata(textos: Iterable[str]) -> PieceMetadata:
+def _piece_metadata(textos: Iterable[str], anchor: tuple[float, float]) -> PieceMetadata:
     kv = _parse_key_values(textos)
     return PieceMetadata(
         piece_name=kv.get('piece name', ''),
@@ -368,6 +414,7 @@ def _piece_metadata(textos: Iterable[str]) -> PieceMetadata:
         material=kv.get('material', ''),
         extra={k: v for k, v in kv.items()
                if k not in ('piece name', 'size', 'quantity', 'material')},
+        anchor=anchor,
     )
 
 
@@ -551,6 +598,52 @@ def _detect_decimal_separators(data: bytes) -> dict[str, str]:
     if text_sep:
         seps['text'] = text_sep
     return seps
+
+
+def _empty_sections(data: bytes) -> set[str]:
+    """Quines seccions venien BUIDES al fitxer d'origen.
+
+    ezdxf, en llegir, omple la HEADER amb els seus valors per defecte i la taula LAYERS
+    amb '0' i 'Defpoints': si li preguntéssim a ell, diria que hi són. Per saber què hi
+    havia de debò cal mirar els bytes. I cal saber-ho, perquè el writer ha de tornar a
+    deixar-les buides: un fitxer "millorat" ja no és el fitxer del client.
+    """
+    text = data.decode('utf-8', errors='replace')
+    linies = [l.strip() for l in text.splitlines()]
+    buides: set[str] = set()
+    for i in range(len(linies) - 3):
+        if linies[i] == 'SECTION' and linies[i + 1] == '2':
+            nom = linies[i + 2]
+            # Buida = SECTION / 2 / <nom> / 0 / ENDSEC, sense res al mig.
+            if linies[i + 3] == '0' and linies[i + 4:i + 5] == ['ENDSEC']:
+                buides.add(nom)
+    return buides
+
+
+def _doc_text_anchor(doc: Drawing) -> tuple[float, float]:
+    for e in doc.modelspace():
+        if e.dxftype() == 'TEXT':
+            return (e.dxf.insert.x, e.dxf.insert.y)
+    return (0.0, 0.0)
+
+
+def _dominant_text_height(doc: Drawing) -> float:
+    altures: Counter = Counter()
+    for block in doc.blocks:
+        if block.name.startswith('*'):
+            continue
+        for e in block:
+            if e.dxftype() == 'TEXT':
+                altures[e.dxf.height] += 1
+    return altures.most_common(1)[0][0] if altures else 0.0
+
+
+def _insert_points(doc: Drawing) -> dict[str, tuple[float, float]]:
+    return {
+        e.dxf.name: (e.dxf.insert.x, e.dxf.insert.y)
+        for e in doc.modelspace()
+        if e.dxftype() == 'INSERT'
+    }
 
 
 def _modelspace_texts(doc: Drawing) -> list[str]:
