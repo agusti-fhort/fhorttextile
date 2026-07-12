@@ -400,6 +400,10 @@ def _detect_fold(boundaries: list[BoundaryData]) -> Optional[FoldData]:
     if ample <= 0 or alt <= 0:
         return None
 
+    # Una peça pot tenir més d'un tram recte que compleixi les condicions (una base
+    # plana i un centre recte, posem per cas). El doblec és el més llarg dels dos: és
+    # la vora que de debò es posa sobre el doblec de la tela.
+    candidats: list[tuple[float, FoldData]] = []
     n = len(cut.points)
     for i in range(n):
         a = cut.points[i]
@@ -413,16 +417,18 @@ def _detect_fold(boundaries: list[BoundaryData]) -> Optional[FoldData]:
             eix = a.x
             if all(p.x >= eix - COINCIDENCE_TOL for p in altres) or \
                all(p.x <= eix + COINCIDENCE_TOL for p in altres):
-                return FoldData(a.x, a.y, b.x, b.y, materialitzat=False)
+                candidats.append((abs(a.y - b.y), FoldData(a.x, a.y, b.x, b.y)))
 
         # Eix horitzontal.
         if abs(a.y - b.y) <= COINCIDENCE_TOL and abs(a.x - b.x) >= FOLD_MIN_RATIO * ample:
             eix = a.y
             if all(p.y >= eix - COINCIDENCE_TOL for p in altres) or \
                all(p.y <= eix + COINCIDENCE_TOL for p in altres):
-                return FoldData(a.x, a.y, b.x, b.y, materialitzat=False)
+                candidats.append((abs(a.x - b.x), FoldData(a.x, a.y, b.x, b.y)))
 
-    return None
+    if not candidats:
+        return None
+    return max(candidats, key=lambda c: c[0])[1]
 
 
 def unfold_piece(piece: PieceData) -> PieceData:
