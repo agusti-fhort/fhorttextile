@@ -617,6 +617,27 @@ export const users = {
   resetLink: (id) => client.post(`/api/v1/users/${id}/reset-link/`),   // -> {url}
 }
 
+// Motor de patrons (S3) — DXF-AAMA + RUL: pujar, llegir, renderitzar, descarregar.
+export const patterns = {
+  list: (modelId) => client.get('/api/v1/patterns/pattern-files/', { params: { model: modelId } }),
+  get: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/`),
+  // Content-Type: undefined perquè el navegador hi posi el boundary multipart; si s'hi
+  // força un valor, request.FILES arriba buit. Patró de la casa (v. itemFitxers.create).
+  upload: (formData) => client.post('/api/v1/patterns/pattern-files/', formData,
+    { headers: { 'Content-Type': undefined } }),
+  remove: (id) => client.delete(`/api/v1/patterns/pattern-files/${id}/`),
+
+  // El render està gated per Authorization, i un <img src> no pot portar capçaleres: es
+  // baixa com a blob i es mostra per objectURL. (Les DESCÀRREGUES sí que tenen URL
+  // signada al serializer — download_url / download_rul_url —, i per això no es
+  // construeixen aquí a mà.)
+  renderSvg: (id, piece = '') =>
+    client.get(`/api/v1/patterns/pattern-files/${id}/render.svg/`, {
+      params: piece ? { piece } : undefined,
+      responseType: 'blob',
+    }),
+}
+
 // Sprint M2 — Anàlisi de temps (gated view_team_tasks; set-estimate gated define_tasks).
 export const timeAnalysis = {
   byPhase: () => client.get('/api/v1/time-analysis/by-phase/'),               // -> {phases, welford_min_samples}
