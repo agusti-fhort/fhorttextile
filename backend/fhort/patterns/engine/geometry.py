@@ -211,14 +211,18 @@ class FoldData:
     """Doblec detectat PER GEOMETRIA (la capa 6 és inconsistent entre CAD).
 
     Quan una peça arriba a mitges, el motor la desplega (materialitza la simetria) i
-    guarda aquí l'eix original, perquè S2 la pugui tornar a plegar en exportar cap a
-    un CAD que treballa a mitges.
+    guarda aquí l'eix original, perquè es pugui tornar a plegar en exportar cap a un CAD
+    que treballa a mitges.
     """
     eix_x1: float
     eix_y1: float
     eix_x2: float
     eix_y2: float
     materialitzat: bool = False
+    #: En quin semiplà de l'eix eren els punts ORIGINALS (+1 / −1). Es fixa en detectar
+    #: el doblec, quan encara se sap: un cop desplegada, la peça té punts als dos
+    #: costats i ja no hi ha manera de deduir quin era el bo.
+    costat: int = 0
 
 
 @dataclass(frozen=True)

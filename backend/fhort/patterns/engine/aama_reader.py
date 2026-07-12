@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import io
 from collections import Counter
+from dataclasses import replace
 from typing import Iterable, Optional
 
 import ezdxf
@@ -445,12 +446,16 @@ def _detect_fold(boundaries: list[BoundaryData]) -> Optional[FoldData]:
 
     Si el fitxer SÍ declara la capa 6, se'n pren l'eix i s'estalvia l'heurística.
     """
+    cut = next((b for b in boundaries if b.role is LayerRole.CUT), None)
+
     declarat = next((b for b in boundaries if b.role is LayerRole.MIRROR), None)
     if declarat is not None and len(declarat.points) >= 2:
         a, b = declarat.points[0], declarat.points[-1]
-        return FoldData(a.x, a.y, b.x, b.y, materialitzat=False)
+        fold = FoldData(a.x, a.y, b.x, b.y, materialitzat=False)
+        punts = cut.points if cut else ()
+        return FoldData(a.x, a.y, b.x, b.y, materialitzat=False,
+                        costat=_costat_dominant(punts, fold))
 
-    cut = next((b for b in boundaries if b.role is LayerRole.CUT), None)
     if cut is None or len(cut.points) < 3:
         return None
 
@@ -488,7 +493,31 @@ def _detect_fold(boundaries: list[BoundaryData]) -> Optional[FoldData]:
 
     if not candidats:
         return None
-    return max(candidats, key=lambda c: c[0])[1]
+    fold = max(candidats, key=lambda c: c[0])[1]
+    # El costat s'ha de fixar ARA, mentre tots els punts són a un sol semiplà.
+    return FoldData(
+        fold.eix_x1, fold.eix_y1, fold.eix_x2, fold.eix_y2,
+        materialitzat=False,
+        costat=_costat_dominant(cut.points, fold),
+    )
+
+
+def _costat(x: float, y: float, fold: FoldData) -> int:
+    """A quin semiplà de l'eix cau un punt: +1, −1, o 0 si hi seu al damunt."""
+    dx = fold.eix_x2 - fold.eix_x1
+    dy = fold.eix_y2 - fold.eix_y1
+    creuament = dx * (y - fold.eix_y1) - dy * (x - fold.eix_x1)
+    if abs(creuament) <= COINCIDENCE_TOL * max(abs(dx) + abs(dy), 1.0):
+        return 0
+    return 1 if creuament > 0 else -1
+
+
+def _costat_dominant(punts, fold: FoldData) -> int:
+    for p in punts:
+        costat = _costat(p.x, p.y, fold)
+        if costat:
+            return costat
+    return 0
 
 
 def unfold_piece(piece: PieceData) -> PieceData:
@@ -519,19 +548,50 @@ def unfold_piece(piece: PieceData) -> PieceData:
         for nd in piece.notches
         if not _on_axis(nd.x, nd.y, fold)
     )
-    return PieceData(
-        nom_block=piece.nom_block,
+    return replace(
+        piece,
         boundaries=boundaries,
         notches=notches,
-        grain=piece.grain,
-        metadata=piece.metadata,
-        rol=piece.rol,
-        doblec_original=FoldData(
-            fold.eix_x1, fold.eix_y1, fold.eix_x2, fold.eix_y2, materialitzat=True
-        ),
-        has_sew=piece.has_sew,
+        doblec_original=replace(fold, materialitzat=True),
         has_fold=True,
-        unknown_layers=piece.unknown_layers,
+    )
+
+
+def fold_piece(piece: PieceData) -> PieceData:
+    """Torna a plegar una peça desplegada: l'invers exacte d'`unfold_piece`.
+
+    Serveix per exportar cap a un CAD que espera rebre les peces simètriques a mitges,
+    com les tenia el fitxer d'origen. El motor treballa sempre amb la peça sencera; el
+    plec és cosa de la porta de sortida.
+
+    Es queda els punts del semiplà original (el que `FoldData.costat` va fixar quan
+    encara se sabia) i els de l'eix mateix, que són la frontissa.
+    """
+    fold = piece.doblec_original
+    if fold is None or not fold.materialitzat or not fold.costat:
+        return piece
+
+    boundaries = tuple(
+        BoundaryData(
+            role=b.role,
+            layer=b.layer,
+            points=tuple(
+                p for p in b.points
+                if _costat(p.x, p.y, fold) in (0, fold.costat)
+            ),
+            closed=b.closed,
+        )
+        for b in piece.boundaries
+    )
+    notches = tuple(
+        n for n in piece.notches
+        if _costat(n.x, n.y, fold) in (0, fold.costat)
+    )
+    return replace(
+        piece,
+        boundaries=boundaries,
+        notches=notches,
+        doblec_original=replace(fold, materialitzat=False),
     )
 
 
