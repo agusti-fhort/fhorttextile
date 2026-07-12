@@ -72,7 +72,7 @@ class PatternFileViewSet(mixins.CreateModelMixin,
     queryset = (
         PatternFile.objects
         .select_related('model', 'garment_type_item', 'pujat_per', 'versio_anterior')
-        .prefetch_related('pieces__points')
+        .prefetch_related('pieces__points', 'pieces__segments', 'pieces__poms__pom_master')
         .all()
     )
     parser_classes = [MultiPartParser, FormParser]

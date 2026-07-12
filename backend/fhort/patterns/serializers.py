@@ -101,6 +101,10 @@ class PatternGeometrySerializer(serializers.ModelSerializer):
                 notches.append({'x': p.x, 'y': p.y, 'grade_rule_num': p.grade_rule_num})
             else:
                 per_vora.setdefault(p.boundary_index, []).append({
+                    # L'id hi és perquè la recepta d'un POM referencia PUNTS: sense ell, la
+                    # UI no podria dir "d'aquest punt a aquell" i el servidor no ho podria
+                    # tornar a resoldre.
+                    'id': p.id,
                     'x': p.x, 'y': p.y,
                     'tipus': p.tipus,
                     'grade_rule_num': p.grade_rule_num,
@@ -139,6 +143,28 @@ class PatternGeometrySerializer(serializers.ModelSerializer):
             'has_fold': piece.has_fold,
             'unknown_layers': piece.unknown_layers,
             'bbox': bbox,
+            # Els trams de gir a gir: el que una costura pot triar (S6).
+            'segments': [
+                {
+                    'id': s.id, 'vora': s.vora,
+                    't_inici': s.t_inici, 't_fi': s.t_fi,
+                    'tipus_vora': s.tipus_vora,
+                }
+                for s in piece.segments.all()
+            ],
+            # Els POMs ja ancorats, per dibuixar-los sobre la geometria.
+            'poms': [
+                {
+                    'id': p.id,
+                    'pom_master': p.pom_master_id,
+                    'pom_code': p.pom_master.codi_client,
+                    'pom_nom': p.pom_master.nom_client,
+                    'definicio_mesura': p.definicio_mesura,
+                    'metode': p.metode,
+                    'valor_mesurat_cm': p.valor_mesurat_cm,
+                }
+                for p in piece.poms.all()
+            ],
         }
 
 
