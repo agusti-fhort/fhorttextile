@@ -969,6 +969,84 @@ class RenderSVGTest(PatternsAPITestBase):
         ElementTree.fromstring(resp.content)
 
 
+class GeometryEndpointTest(PatternsAPITestBase):
+    """El que el visor Konva dibuixa. A diferència del detall (que dona RECOMPTES),
+    aquí hi ha d'haver cada coordenada."""
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+
+    def _geometry(self):
+        request = self.factory.get(
+            f'/api/v1/patterns/pattern-files/{self.fp.id}/geometry/')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view({'get': 'geometry'})(request, pk=self.fp.id)
+        self.assertEqual(resp.status_code, 200)
+        return resp.data
+
+    def test_les_coordenades_hi_son_totes(self):
+        """El cens de S0-B3, ara comptat sobre els punts que arriben al navegador."""
+        dades = self._geometry()
+        self.assertEqual(dades['escala_mm'], 1.0)
+        self.assertEqual(len(dades['pieces']), 4)
+
+        esperat = {'BACK': (28, 22, 42), 'FRONT': (38, 22, 86),
+                   'BACK_LINI': (24, 10, 14), 'FRONT_LINI': (44, 12, 50)}
+        for peca in dades['pieces']:
+            with self.subTest(peca=peca['nom_block']):
+                tall, turn, curve = esperat[peca['nom_block']]
+                vores = {b['role']: b for b in peca['boundaries']}
+                self.assertEqual(len(vores['cut']['points']), tall)
+                self.assertTrue(vores['cut']['closed'])
+
+                tots = [p for b in peca['boundaries'] for p in b['points']]
+                self.assertEqual(sum(1 for p in tots if p['tipus'] == 'turn'), turn)
+                self.assertEqual(sum(1 for p in tots if p['tipus'] == 'curve'), curve)
+                self.assertEqual(len(peca['notches']), 2)
+                self.assertIsNotNone(peca['grain'])
+                self.assertFalse(peca['has_sew'])
+
+    def test_els_punts_venen_en_ordre(self):
+        """L'ordre dins la vora ÉS el contorn: perdre'l vol dir dibuixar un garbuix.
+
+        Es comprova contra la font: la seqüència que arriba al navegador ha de ser
+        EXACTAMENT la que el motor va llegir del fitxer. Sense llindars de distància —
+        un contorn real té arestes llargues legítimes (a la BACK n'hi ha una de 385 mm) i
+        qualsevol llindar seria un número inventat que tant deixaria passar un ordre
+        barrejat com suspendria un contorn correcte.
+        """
+        del_motor = AAMAReader().read(AMELIA_DXF.read_bytes())
+        cut_motor = del_motor.piece('BACK').boundary(LayerRole.CUT)
+
+        dades = self._geometry()
+        back = next(p for p in dades['pieces'] if p['nom_block'] == 'BACK')
+        cut_api = next(b for b in back['boundaries'] if b['role'] == 'cut')
+
+        self.assertEqual(len(cut_api['points']), len(cut_motor.points))
+        for i, (api, motor) in enumerate(zip(cut_api['points'], cut_motor.points)):
+            with self.subTest(punt=i):
+                self.assertAlmostEqual(api['x'], motor.x, places=6)
+                self.assertAlmostEqual(api['y'], motor.y, places=6)
+                self.assertEqual(api['tipus'], motor.kind.value)
+
+    def test_la_regla_de_grading_arriba_al_visor(self):
+        dades = self._geometry()
+        back = next(p for p in dades['pieces'] if p['nom_block'] == 'BACK')
+        tots = [p for b in back['boundaries'] for p in b['points']]
+        turn = [p for p in tots if p['tipus'] == 'turn']
+        curve = [p for p in tots if p['tipus'] == 'curve']
+        self.assertTrue(all(p['grade_rule_num'] == 1 for p in turn))
+        self.assertTrue(all(p['grade_rule_num'] is None for p in curve))
+
+    def test_cal_estar_autenticat(self):
+        request = self.factory.get(
+            f'/api/v1/patterns/pattern-files/{self.fp.id}/geometry/')
+        resp = PatternFileViewSet.as_view({'get': 'geometry'})(request, pk=self.fp.id)
+        self.assertIn(resp.status_code, (401, 403))
+
+
 class DescarregaTest(PatternsAPITestBase):
 
     def setUp(self):

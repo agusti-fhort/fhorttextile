@@ -37,7 +37,8 @@ from .engine.aama_reader import AAMAReader
 from .engine.errors import PatternParseError
 from .engine.rul_reader import RULReader, coherencia_dxf_rul
 from .models import PatternFile
-from .serializers import PatternFileLlistaSerializer, PatternFileSerializer
+from .serializers import (PatternFileLlistaSerializer, PatternFileSerializer,
+                          PatternGeometrySerializer)
 from .services import delete_pattern_bytes, save_pattern_file
 from .svg import render_document
 
@@ -227,6 +228,17 @@ class PatternFileViewSet(mixins.CreateModelMixin,
         return anterior, None
 
     # ── El visor ─────────────────────────────────────────────────────────────
+    @action(detail=True, methods=['get'])
+    def geometry(self, request, pk=None):
+        """La geometria sencera, amb coordenades: el que el visor Konva dibuixa.
+
+        El visor NO dibuixa des de l'SVG del servidor: dibuixa des d'AQUÍ. L'SVG és un
+        render de DOCUMENT (paleta fixa, per imprimir i arxivar); el visor és una eina
+        interactiva que necessita saber què és cada punt per poder-hi reaccionar. Un
+        <img> no et pot dir que el cursor és a sobre d'un punt de gir.
+        """
+        return Response(PatternGeometrySerializer(self.get_object()).data)
+
     @action(detail=True, methods=['get'], url_path='render.svg')
     def render_svg(self, request, pk=None):
         """SVG del conjunt, o d'una peça (`?piece=BACK`). Render propi, no matplotlib."""

@@ -69,6 +69,79 @@ class PatternPieceSerializer(serializers.ModelSerializer):
         }
 
 
+class PatternGeometrySerializer(serializers.ModelSerializer):
+    """La geometria SENCERA, coordenades incloses: el que el visor necessita per dibuixar.
+
+    És una vista a part del detall a posta. El detall serveix per a llistes i fitxes i hi
+    van els RECOMPTES; això és el document geomètric i hi van els milers de punts. Barrejar
+    els dos faria que cada llistat de patrons arrossegués mig megabyte per ensenyar quatre
+    noms.
+
+    **Sense paginació.** Un patró és un document, no una llista: mig contorn no és res.
+    L'AMELIA en té 266 punts — servir-los sencers costa menys que la ceremònia de paginar-los.
+    """
+    pieces = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PatternFile
+        fields = ['id', 'versio', 'escala_mm', 'font_cad', 'pieces']
+        read_only_fields = fields
+
+    def get_pieces(self, obj):
+        return [self._piece(p) for p in obj.pieces.all()]
+
+    def _piece(self, piece):
+        # Els punts arriben ja ordenats pel Meta.ordering de PatternPoint
+        # (piece, mena, boundary_index, ordre): l'ordre dins la vora és el del contorn, i
+        # perdre'l voldria dir dibuixar un garbuix.
+        per_vora: dict[int, list] = {}
+        notches = []
+        for p in piece.points.all():
+            if p.mena == 'notch':
+                notches.append({'x': p.x, 'y': p.y, 'grade_rule_num': p.grade_rule_num})
+            else:
+                per_vora.setdefault(p.boundary_index, []).append({
+                    'x': p.x, 'y': p.y,
+                    'tipus': p.tipus,
+                    'grade_rule_num': p.grade_rule_num,
+                })
+
+        boundaries = [
+            {
+                'index': meta['index'],
+                'role': meta['role'],
+                'layer': meta['layer'],
+                'closed': meta['closed'],
+                'points': per_vora.get(meta['index'], []),
+            }
+            for meta in (piece.contorns or [])
+        ]
+
+        xs = [p.x for p in piece.points.all()]
+        ys = [p.y for p in piece.points.all()]
+        bbox = None
+        if xs:
+            bbox = {
+                'min_x': min(xs), 'min_y': min(ys),
+                'max_x': max(xs), 'max_y': max(ys),
+                'ample': max(xs) - min(xs), 'alt': max(ys) - min(ys),
+            }
+
+        return {
+            'id': piece.id,
+            'nom_block': piece.nom_block,
+            'rol': piece.rol,
+            'metadata': piece.metadata,
+            'boundaries': boundaries,
+            'notches': notches,
+            'grain': piece.grain,
+            'has_sew': piece.has_sew,
+            'has_fold': piece.has_fold,
+            'unknown_layers': piece.unknown_layers,
+            'bbox': bbox,
+        }
+
+
 class PatternFileSerializer(serializers.ModelSerializer):
     pieces = PatternPieceSerializer(many=True, read_only=True)
     download_url = serializers.SerializerMethodField()
