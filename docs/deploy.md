@@ -5,7 +5,8 @@ Referència factual de la configuració de desplegament del servidor de producci
 ## Servidor
 
 - **IP:** 178.105.217.125
-- **Domini:** `fhorttextile.tech` (i `www.fhorttextile.tech`) — ÚNIC projecte d'aquest servidor.
+- **Dominis:** `fhorttextile.tech` (apex, i `www.`) i `app.fhorttextile.tech` (segona porta de
+  l'app, Fase 1+2 dominis, 2026-07-12) — ÚNIC projecte d'aquest servidor.
 - **Stack:** Django (Gunicorn via socket Unix) + nginx servint el `dist/` del frontend React.
 
 > Nota: el codi/regla d'aïllament per a `assessment` / `trading` / `webs` és d'un **altre**
@@ -96,6 +97,31 @@ client.patch(url, formData, { headers: { 'Content-Type': undefined } })
 ```
 
 Comprovar aquest patró en **qualsevol upload nou** (p.ex. DXF del motor de patrons).
+
+## Segona porta de l'app — `app.fhorttextile.tech` (Fase 1+2 dominis, 2026-07-12)
+
+L'app és accessible pels **dos** dominis (`fhorttextile.tech` i `app.fhorttextile.tech`);
+l'apex NO s'ha tocat (mateix vhost, mateix comportament). Peces afegides:
+
+- **Vhost nginx nou:** `/etc/nginx/sites-available/fhort-app` (symlink a `sites-enabled/`).
+  És un clon del block `:443` de `fhort-textile` amb `server_name app.fhorttextile.tech`
+  (mateix `root frontend/dist`, mateix `proxy /api/ → unix:/run/fhort.sock`, mateixos
+  `/static/`, `/media/`, `/protected-media/`), més un block `:80` que redirigeix a HTTPS.
+- **Certificat:** el MATEIX lineage `/etc/letsencrypt/live/fhorttextile.tech/`, expandit a
+  **4 SANs** (`fhorttextile.tech`, `www.`, `backoffice.`, `app.`) via
+  `certbot certonly --nginx --expand --cert-name fhorttextile.tech`. NO és un lineage nou.
+- **Tenant (django-tenants):** fila nova a `public.tenants_domain` →
+  `domain='app.fhorttextile.tech'`, `tenant_id=2` (schema `fhort`), **`is_primary=False`**
+  (el swap de primari és Fase 3, encara no fet). Es crea via `manage.py shell`, no SQL a mà.
+- **Frontend:** `frontend/.env` → `VITE_API_URL=https://app.fhorttextile.tech` (abans l'apex).
+  El `baseURL` d'axios és absolut, així que el bundle apunta a `app.*` per als DOS dominis;
+  quan s'accedeix per l'apex, les crides a l'API van cross-origin a `app.*` (cobert per CORS:
+  `CORS_ALLOWED_ORIGINS` + regex de subdominis a `settings.py`). Cal **rebuild** després de
+  canviar `.env` (`npm run build`); verificar el `.env` ABANS del build (lliçó dels `.env` creuats).
+
+Rollback: retirar el symlink `sites-enabled/fhort-app` + `nginx -t && systemctl reload nginx`;
+esborrar la fila `Domain` d'`app.*` pel shell; revertir `frontend/.env` + rebuild. El cert amb
+4 SANs és inofensiu encara que es reverteixi la resta.
 
 ## Notes operatives
 
