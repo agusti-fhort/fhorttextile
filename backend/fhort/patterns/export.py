@@ -312,9 +312,12 @@ def _autovalidar(
             k for k in set(regles_escrites) | set(regles_rellegides)
             if regles_escrites.get(k) != regles_rellegides.get(k)
         }
+        # key=str perquè les claus barregen `int` i `None` a la posició de la vora (els
+        # piquets no en tenen), i ordenar-les crues peta. Un informe d'error que peta en
+        # muntar-se és pitjor que no tenir-ne.
         diferencies.append(
             f'regles_per_punt: {len(diferents)} punts han canviat de número de regla en '
-            f'el viatge (p. ex. {sorted(diferents)[:3]}).'
+            f'el viatge (p. ex. {sorted(diferents, key=str)[:3]}).'
         )
 
     return Autovalidacio(

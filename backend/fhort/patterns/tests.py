@@ -45,11 +45,21 @@ from fhort.patterns.engine.geometry import (
     Confidence,
     GradeRuleData,
     LayerRole,
+    NotchData,
+    PatternDocument,
+    PieceData,
     POMAnchorData,
     PointData,
     PointKind,
     UnitsMethod,
 )
+from fhort.patterns.engine.grading_projection import (
+    GradingContextError,
+    GradingNotApproved,
+    preview_per_talla,
+    project,
+)
+from fhort.patterns.engine.operations import POMSpec, PointRef, move_points
 from fhort.patterns.engine.measure import MeasureError, resoldre
 from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
 from fhort.patterns.engine.segments import longitud_vora, segmentar_peca, segmentar_vora
@@ -72,11 +82,15 @@ from django.db.models import ProtectedError
 from django_tenants.test.cases import TenantTestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from fhort.fitting.models import GradedSpec, GradingVersion, SizeFitting
 from fhort.models_app.models import Model
 from fhort.models_app.services_fitxers import DOWNLOAD_SALT as MODEL_FITXER_SALT
-from fhort.patterns.adapters import DjangoGeometryStore
+from fhort.patterns.adapters import (DjangoGeometryStore, DjangoGradingSource,
+                                     pom_specs, sew_specs)
 from fhort.patterns.annotation_views import PatternPOMViewSet, SewRelationViewSet
-from fhort.patterns.models import PatternFile, PatternPOM
+from fhort.patterns.export import ExportBlocked, build_export
+from fhort.patterns.models import (ExportAcknowledgement, PatternFile, PatternPOM,
+                                   SewRelation)
 from fhort.patterns.services import save_pattern_file
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
                                   PatternFileViewSet)
@@ -1499,3 +1513,498 @@ class PurityGuardTest(unittest.TestCase):
             proc.returncode, 0,
             f'L\'engine no s\'importa sense Django:\n{proc.stderr}',
         )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# S7 — ESCALAT, EXPORT I GATE
+# ═════════════════════════════════════════════════════════════════════════════
+
+def _vora_recta_amb_corbes() -> PieceData:
+    """Una vora GIR-corba-corba-corba-GIR, equiespaiada.
+
+    L'AMELIA no serveix per provar el reflow: els seus punts d'ancoratge de POM són girs
+    envoltats de girs (els ordres 8-20 del contorn de BACK són TOTS de gir), o sigui que
+    entre ells no hi ha cap punt de corba que hagi de fluir. El reflow hi funciona i dona
+    zero — que és correcte i no demostra res. Aquí, en canvi, les ràtios són conegudes a mà.
+    """
+    punts = (
+        PointData(0.0, 0.0, PointKind.TURN),
+        PointData(10.0, 0.0, PointKind.CURVE),
+        PointData(20.0, 0.0, PointKind.CURVE),
+        PointData(30.0, 0.0, PointKind.CURVE),
+        PointData(40.0, 0.0, PointKind.TURN),
+    )
+    return PieceData(
+        nom_block='RECTA',
+        boundaries=(BoundaryData(role=LayerRole.CUT, layer='1', points=punts, closed=False),),
+        notches=(NotchData(15.0, 0.0),),
+    )
+
+
+class OperacioAtomicaTest(unittest.TestCase):
+    """Moure un punt no és moure un punt (v. docstring d'`operations`)."""
+
+    def setUp(self):
+        self.doc = PatternDocument(pieces=(_vora_recta_amb_corbes(),))
+
+    def test_els_punts_de_corba_flueixen_per_ratio_de_longitud_darc(self):
+        """El gir de l'esquerra es mou 10 mm; el de la dreta, gens. Els de corba es
+        reparteixen el moviment segons què lluny són de cadascun."""
+        res = move_points(self.doc, {PointRef('RECTA', 0, 0): (10.0, 0.0)})
+        punts = res.document.piece('RECTA').boundaries[0].points
+
+        # Ràtios d'arc sobre la geometria original: 0.25, 0.50, 0.75.
+        self.assertAlmostEqual(punts[0].x, 10.0, places=6)   # el gir mogut
+        self.assertAlmostEqual(punts[1].x, 10.0 + 7.5, places=6)
+        self.assertAlmostEqual(punts[2].x, 20.0 + 5.0, places=6)
+        self.assertAlmostEqual(punts[3].x, 30.0 + 2.5, places=6)
+        self.assertAlmostEqual(punts[4].x, 40.0, places=6)   # el gir quiet
+
+    def test_un_gir_quiet_ancora_el_reflow(self):
+        """Si els girs no ancoressin, la vora sencera es desplaçaria rígida i la corba es
+        deformaria: és la diferència entre graduar i arrossegar."""
+        res = move_points(self.doc, {PointRef('RECTA', 0, 0): (10.0, 0.0)})
+        self.assertEqual(res.informe.punts_moguts, 1)
+        self.assertEqual(res.informe.punts_reflow, 3)
+
+    def test_el_piquet_es_queda_sobre_la_vora(self):
+        """Un piquet no té coordenades pròpies: té una posició SOBRE la vora."""
+        res = move_points(self.doc, {PointRef('RECTA', 0, 0): (10.0, 0.0)})
+        piquet = res.document.piece('RECTA').notches[0]
+
+        # Seia a mig camí entre els punts 1 (10→17.5) i 2 (20→25). Hi continua seient.
+        self.assertAlmostEqual(piquet.x, (17.5 + 25.0) / 2, places=6)
+        self.assertAlmostEqual(piquet.y, 0.0, places=6)
+        self.assertEqual(res.informe.piquets_reposicionats, 1)
+
+    def test_el_document_original_no_es_toca_mai(self):
+        """La geometria base persistida no es muta: l'operació construeix un document nou."""
+        abans = self.doc.piece('RECTA').boundaries[0].points[0]
+        res = move_points(self.doc, {PointRef('RECTA', 0, 0): (10.0, 0.0)})
+
+        self.assertAlmostEqual(abans.x, 0.0)
+        self.assertAlmostEqual(self.doc.piece('RECTA').boundaries[0].points[0].x, 0.0)
+        self.assertAlmostEqual(res.document.piece('RECTA').boundaries[0].points[0].x, 10.0)
+        self.assertIsNot(res.document, self.doc)
+
+    def test_moure_un_punt_que_no_hi_es_es_un_avis_no_una_excepcio(self):
+        res = move_points(self.doc, {PointRef('RECTA', 0, 99): (1.0, 0.0)})
+        self.assertIn('punt_inexistent', [a.codi for a in res.informe.avisos])
+
+    def test_el_pom_es_torna_a_LLEGIR_de_la_geometria_moguda(self):
+        """El valor d'un POM no es recalcula amb una fórmula: es torna a mesurar."""
+        spec = POMSpec('W', 'WIDTH', 'RECTA',
+                       PointRef('RECTA', 0, 0), PointRef('RECTA', 0, 4))
+        res = move_points(self.doc, {PointRef('RECTA', 0, 0): (-10.0, 0.0)}, poms=(spec,))
+
+        # La vora feia 40 mm; el gir de l'esquerra se n'ha anat 10 mm cap enfora → 50 mm.
+        self.assertAlmostEqual(res.informe.poms[0].valor_cm, 5.0, places=6)
+
+
+class SewCosidorAMBTallTest(unittest.TestCase):
+    """El camí has_sew, amb fixture sintètic: l'AMELIA no porta capa 14 (S0-B3)."""
+
+    def _peca_amb_cosit(self) -> PieceData:
+        tall = (
+            PointData(0.0, 0.0, PointKind.TURN),
+            PointData(50.0, 0.0, PointKind.CURVE),
+            PointData(100.0, 0.0, PointKind.TURN),
+        )
+        # La línia de cosit, 10 mm endins: el marge de costura.
+        cosit = (
+            PointData(0.0, 10.0, PointKind.TURN),
+            PointData(50.0, 10.0, PointKind.CURVE),
+            PointData(100.0, 10.0, PointKind.TURN),
+        )
+        return PieceData(
+            nom_block='P',
+            boundaries=(
+                BoundaryData(role=LayerRole.CUT, layer='1', points=tall, closed=False),
+                BoundaryData(role=LayerRole.SEW, layer='14', points=cosit, closed=False),
+            ),
+            has_sew=True,
+        )
+
+    def test_el_cosit_segueix_el_tall_per_CORRESPONDENCIA_i_el_marge_es_conserva(self):
+        """No per offset: un offset de polilínia crea vèrtexs a les cantonades (topologia
+        nova, frontera §3.3) i, a més, no és el que fa el grading — la MATEIXA regla mou el
+        punt de tall i el seu company del cosit."""
+        doc = PatternDocument(pieces=(self._peca_amb_cosit(),))
+        res = move_points(doc, {PointRef('P', 0, 2): (20.0, 0.0)})
+
+        peca = res.document.piece('P')
+        tall, cosit = peca.boundaries[0], peca.boundaries[1]
+
+        # El gir del tall s'ha mogut, i el seu company del cosit també.
+        self.assertAlmostEqual(tall.points[2].x, 120.0, places=6)
+        self.assertAlmostEqual(cosit.points[2].x, 120.0, places=6)
+
+        # I el marge de costura es conserva a tot arreu: és la invariant que ha d'aguantar.
+        for pt, pc in zip(tall.points, cosit.points):
+            self.assertAlmostEqual(pc.y - pt.y, 10.0, places=6)
+            self.assertAlmostEqual(pc.x, pt.x, places=6)
+
+        self.assertEqual(res.informe.punts_cosit_propagats, 2)
+
+
+class EscalatTestBase(PatternsAPITestBase):
+    """Un model amb grading APROVAT i un patró amb POMs ancorats: el terreny de S7."""
+
+    #: Els deltes que el grading mana, en cm. Base S (delta 0 per definició).
+    DELTES = {'S': 0.0, 'M': 1.0, 'L': 2.0, 'XL': 3.0, 'XXL': 4.0}
+
+    def setUp(self):
+        super().setUp()
+        self.model.base_size_label = 'S'
+        self.model.size_run_model = 'S·M·L·XL·XXL'
+        self.model.save()
+
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        self.back = self.fp.pieces.get(nom_block='BACK')
+        self.girs = list(
+            self.back.points.filter(mena='vertex', tipus='turn', boundary_index=0)
+            .order_by('ordre'))
+
+        self.pom = POMMaster.objects.create(codi_client='CHEST', nom_client='Chest width')
+        # Un segon POM del catàleg que TÉ grading però que NO s'ancora enlloc.
+        self.pom_orfe = POMMaster.objects.create(codi_client='WAIST', nom_client='Waist')
+
+        from fhort.accounts.models import UserProfile
+        self.profile, _ = UserProfile.objects.get_or_create(
+            user=self.user, defaults={'nom_complet': 'Tec', 'rol_nom': 'admin'})
+
+        self.sf = SizeFitting.objects.create(
+            model=self.model, numero=1, codi='SF-QA-1', tipus='Fit',
+            estat='TallesGenerades', creat_per=self.profile)
+        # aprovada=True i is_active=False A POSTA: són ORTOGONALS (S0-B7.1), i la versió
+        # aprovada d'un model sovint NO és la que la UI serveix. Si el port confongués les
+        # dues coses, aquest fixture el cantaria.
+        self.gv = GradingVersion.objects.create(
+            size_fitting=self.sf, nom='QA aprovada', aprovada=True, is_active=False,
+            creat_per=self.profile)
+
+        for pom, base in ((self.pom, 50.0), (self.pom_orfe, 70.0)):
+            for talla, delta in self.DELTES.items():
+                GradedSpec.objects.create(
+                    grading_version=self.gv, pom=pom, size_label=talla,
+                    graded_value_cm=base + delta, increment_applied_cm=delta,
+                    grading_type_applied='LINEAR', is_active=True,
+                )
+
+        # L'ancoratge: dos girs del contorn de tall de BACK.
+        self.a, self.b = self.girs[0], self.girs[5]
+        self.ancorat = PatternPOM.objects.create(
+            pattern_piece=self.back, pom_master=self.pom,
+            definicio_mesura={'mode': 'points', 'a': self.a.id, 'b': self.b.id},
+            metode='recta',
+        )
+        self.ancorat.valor_mesurat_cm = round(
+            math.hypot(self.b.x - self.a.x, self.b.y - self.a.y) / 10.0, 2)
+        self.ancorat.save()
+
+        self.base_mm = math.hypot(self.b.x - self.a.x, self.b.y - self.a.y)
+
+    def _projectar(self):
+        doc = DjangoGeometryStore().load_from(self.fp)
+        snapshot = DjangoGradingSource().snapshot(self.gv.id)
+        specs, _ = pom_specs(self.fp)
+        return doc, snapshot, specs, project(doc, snapshot, specs, sew_specs(self.fp))
+
+
+class ProjeccioTest(EscalatTestBase):
+
+    def test_el_pom_creix_EXACTAMENT_el_que_el_grading_mana(self):
+        """La invariant de tot el sprint: mesura(talla) − mesura(base) == delta del spec."""
+        doc, snapshot, specs, proj = self._projectar()
+        previews = preview_per_talla(doc, proj, snapshot, specs)
+
+        for sp in previews:
+            pom = sp.poms[0]
+            self.assertAlmostEqual(
+                pom.valor_cm, (self.base_mm / 10.0) + self.DELTES[sp.talla], places=6,
+                msg=f'talla {sp.talla}',
+            )
+            self.assertAlmostEqual(pom.desviament_cm, 0.0, places=9)
+            self.assertTrue(pom.ok)
+
+    def test_saplica_el_DELTA_i_no_el_valor_absolut(self):
+        """`graded_value_cm` (50 cm) i el que el patró mesura (~66 cm) són magnituds
+        DIFERENTS. Aplicar l'absolut estiraria el patró perquè digués el que diu la fitxa."""
+        doc, snapshot, specs, proj = self._projectar()
+        previews = preview_per_talla(doc, proj, snapshot, specs)
+
+        base = next(sp for sp in previews if sp.es_base)
+        self.assertAlmostEqual(base.poms[0].valor_cm, self.base_mm / 10.0, places=6)
+        self.assertEqual(base.poms[0].valor_spec_cm, 50.0)   # el que la fitxa DECLARA
+        self.assertNotAlmostEqual(base.poms[0].valor_cm, 50.0, places=1)
+
+    def test_la_talla_base_no_es_mou(self):
+        _, _, _, proj = self._projectar()
+        for ref, (dx, dy) in proj.deltes_per_talla['S'].items():
+            self.assertAlmostEqual(dx, 0.0, places=9)
+            self.assertAlmostEqual(dy, 0.0, places=9)
+
+    def test_una_regla_per_punt_mogut_i_la_regla_0_per_a_la_resta(self):
+        _, _, _, proj = self._projectar()
+
+        self.assertIn(0, proj.grade_table.regles)
+        for delta in proj.grade_table.regles[0].deltes.values():
+            self.assertEqual(delta, (0.0, 0.0))
+
+        # Els punts de corba no porten regla: flueixen, i és el CAD qui els fa fluir.
+        corbes = [
+            p for peca in proj.document.pieces
+            for b in peca.boundaries for p in b.points
+            if p.kind is PointKind.CURVE
+        ]
+        self.assertTrue(corbes)
+        self.assertTrue(all(p.grade_rule is None for p in corbes))
+
+    def test_el_size_run_i_la_base_surten_del_MODEL_no_del_RUL_del_client(self):
+        """El RUL d'AMELIA gradua XS-S-M-L-XL sobre M. El nostre gradua el que diu el model."""
+        _, _, _, proj = self._projectar()
+        self.assertEqual(proj.grade_table.talles, ('S', 'M', 'L', 'XL', 'XXL'))
+        self.assertEqual(proj.grade_table.talla_base, 'S')
+
+
+class OmissionsTest(EscalatTestBase):
+
+    def test_un_pom_ancorat_sense_spec_es_diu_i_no_es_mou(self):
+        orfe = POMMaster.objects.create(codi_client='SLEEVE', nom_client='Sleeve')
+        PatternPOM.objects.create(
+            pattern_piece=self.back, pom_master=orfe,
+            definicio_mesura={'mode': 'points', 'a': self.girs[1].id, 'b': self.girs[6].id},
+        )
+        doc, snapshot, specs, proj = self._projectar()
+
+        codis = [o.pom_code for o in proj.omissions if o.codi == 'pom_sense_spec']
+        self.assertIn('SLEEVE', codis)
+
+        # I no es mou a cap talla: el seu valor és el mateix a totes.
+        previews = preview_per_talla(doc, proj, snapshot, specs)
+        valors = {
+            round(next(p.valor_cm for p in sp.poms if p.pom_code == 'SLEEVE'), 4)
+            for sp in previews
+        }
+        self.assertEqual(len(valors), 1)
+
+    def test_un_spec_sense_pom_ancorat_es_diu(self):
+        _, _, _, proj = self._projectar()
+        codis = [o.pom_code for o in proj.omissions if o.codi == 'spec_sense_pom']
+        self.assertIn('WAIST', codis)
+
+    def test_les_omissions_no_son_mai_silenci(self):
+        _, _, _, proj = self._projectar()
+        self.assertTrue(proj.omissions)
+        for o in proj.omissions:
+            self.assertTrue(o.missatge)
+
+
+class GuardDelGradingTest(EscalatTestBase):
+
+    def test_un_grading_NO_aprovat_no_escala(self):
+        self.gv.aprovada = False
+        self.gv.save()
+        doc = DjangoGeometryStore().load_from(self.fp)
+        snapshot = DjangoGradingSource().snapshot(self.gv.id)
+        specs, _ = pom_specs(self.fp)
+
+        with self.assertRaises(GradingNotApproved):
+            project(doc, snapshot, specs)
+
+    def test_dues_versions_aprovades_del_mateix_sizefitting_NO_peten_el_port(self):
+        """C2 de S0-B7: cap constraint no impedeix que en coexisteixin dues. Un port que
+        fes `get(aprovada=True)` petaria amb MultipleObjectsReturned **en exportar**."""
+        segona = GradingVersion.objects.create(
+            size_fitting=self.sf, nom='segona aprovada', aprovada=True, version_number=2)
+
+        for gv in (self.gv, segona):
+            snapshot = DjangoGradingSource().snapshot(gv.id)
+            self.assertTrue(snapshot.approved)
+            self.assertEqual(snapshot.grading_version_id, gv.id)
+
+    def test_la_base_ve_DECLARADA_pel_model_no_deduida_del_delta_zero(self):
+        """Un POM amb regla ZERO té delta 0 a TOTES les talles: deduir-ne la base seria
+        agafar-ne una a l'atzar."""
+        snapshot = DjangoGradingSource().snapshot(self.gv.id)
+        self.assertEqual(snapshot.base_size_label, 'S')
+        self.assertEqual(snapshot.size_run, ('S', 'M', 'L', 'XL', 'XXL'))
+
+    def test_una_base_que_no_es_al_size_run_no_passa_en_silenci(self):
+        self.model.base_size_label = 'XXS'
+        self.model.save()
+        doc = DjangoGeometryStore().load_from(self.fp)
+        snapshot = DjangoGradingSource().snapshot(self.gv.id)
+
+        with self.assertRaises(GradingContextError):
+            project(doc, snapshot, pom_specs(self.fp)[0])
+
+
+class SewPerTallaTest(EscalatTestBase):
+    """La validació que un CAD no fa: les costures han de seguir casant a TOTES les talles."""
+
+    def test_una_costura_es_revalida_a_cada_talla(self):
+        front = self.fp.pieces.get(nom_block='FRONT')
+        rel = SewRelation.objects.create(
+            model=self.model, tipus='casat', diferencial_cm=0.0)
+        rel.segments_a.add(self.back.segments.first())
+        rel.segments_b.add(front.segments.first())
+
+        doc, snapshot, specs, proj = self._projectar()
+        previews = preview_per_talla(doc, proj, snapshot, specs, sew_specs(self.fp))
+
+        for sp in previews:
+            self.assertEqual(len(sp.costures), 1, f'talla {sp.talla}')
+            self.assertIsNotNone(sp.costures[0].check)
+            # Casi o no casi, el veredicte hi ha de ser: el silenci no és una resposta.
+            self.assertTrue(sp.costures[0].check.missatge)
+
+
+class GateTest(EscalatTestBase):
+    """El gate és una PRECONDICIÓ DURA: sense reconeixement no hi ha bytes."""
+
+    def _export(self, **cos):
+        request = self.factory.post(
+            f'/api/v1/patterns/pattern-files/{self.fp.id}/export/', cos, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternFileViewSet.as_view({'post': 'export'})(request, pk=self.fp.id)
+
+    def test_sense_reconeixement_no_hi_ha_bytes(self):
+        resp = self._export(grading_version_id=self.gv.id)
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(ExportAcknowledgement.objects.count(), 0)
+
+    def test_un_acknowledged_fals_tampoc(self):
+        resp = self._export(grading_version_id=self.gv.id, acknowledged=False)
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(ExportAcknowledgement.objects.count(), 0)
+
+    def test_amb_reconeixement_surten_els_bytes_i_queda_el_registre(self):
+        resp = self._export(grading_version_id=self.gv.id, acknowledged=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.content.startswith(b'  0\nSECTION'))
+        self.assertIn('attachment', resp['Content-Disposition'])
+
+        ack = ExportAcknowledgement.objects.get()
+        self.assertEqual(ack.pattern_file_id, self.fp.id)
+        self.assertEqual(ack.versio_patro, self.fp.versio)
+        self.assertEqual(ack.grading_version_id, self.gv.id)
+        self.assertEqual(ack.destination_profile, 'polypattern')
+        # El text que se li va ensenyar, literal: si el text canvia, això ha de continuar
+        # dient què va acceptar aquesta persona.
+        self.assertIn('verificar', ack.texts_shown)
+
+    def test_no_es_pot_exportar_amb_un_grading_no_aprovat(self):
+        self.gv.aprovada = False
+        self.gv.save()
+        resp = self._export(grading_version_id=self.gv.id, acknowledged=True)
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(ExportAcknowledgement.objects.count(), 0)
+
+    def test_un_perfil_sense_fitxer_real_de_referencia_es_rebutja(self):
+        """Escriure'n l'empremta sense haver vist mai un fitxer d'aquell CAD seria
+        inventar-se-la, i un round-trip verd contra una empremta inventada dona confiança
+        falsa."""
+        resp = self._export(grading_version_id=self.gv.id, acknowledged=True,
+                            destination_profile='gerber')
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(ExportAcknowledgement.objects.count(), 0)
+
+    def test_la_previsualitzacio_no_deixa_cap_registre(self):
+        """Mirar no és reconèixer."""
+        request = self.factory.post(
+            f'/api/v1/patterns/pattern-files/{self.fp.id}/export-preview/',
+            {'grading_version_id': self.gv.id}, format='json')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view({'post': 'export_preview'})(request, pk=self.fp.id)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['autovalidacio']['ok'])
+        self.assertEqual(len(resp.data['talles']), 5)
+        self.assertEqual(ExportAcknowledgement.objects.count(), 0)
+
+    def test_nomes_sofereixen_versions_APROVADES(self):
+        GradingVersion.objects.create(
+            size_fitting=self.sf, nom='esborrany', aprovada=False, is_active=True)
+
+        request = self.factory.get(
+            f'/api/v1/patterns/pattern-files/{self.fp.id}/grading-versions/')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view(
+            {'get': 'grading_versions'})(request, pk=self.fp.id)
+
+        self.assertEqual([v['id'] for v in resp.data], [self.gv.id])
+
+
+class AutovalidacioTest(EscalatTestBase):
+    """La porta: si el fitxer emès no es torna a llegir igual, NO surt cap byte."""
+
+    def test_lexport_normal_passa_lautovalidacio(self):
+        resultat = build_export(self.fp, self.gv.id, 'polypattern')
+        self.assertTrue(resultat.autovalidacio.ok, resultat.autovalidacio.diferencies)
+        self.assertGreater(resultat.autovalidacio.punts_comparats, 0)
+        self.assertEqual(
+            resultat.autovalidacio.cens_volta_1, resultat.autovalidacio.cens_volta_2)
+
+    def test_un_writer_espatllat_BLOQUEJA_lexportacio(self):
+        """Es trenca el writer a posta: si es menja els TEXT de regla, el fitxer surt sense
+        grading. La porta ho ha de veure i no deixar sortir res."""
+        original = AAMAWriter._write_rule_texts
+
+        def _sabotatge(self, block, piece, factor, height):
+            return None   # el fitxer surt sense cap número de regla
+
+        with mock.patch.object(AAMAWriter, '_write_rule_texts', _sabotatge):
+            with self.assertRaises(ExportBlocked) as ctx:
+                build_export(self.fp, self.gv.id, 'polypattern')
+
+        self.assertIn('diferencies', ctx.exception.detall)
+        self.assertTrue(ctx.exception.detall['diferencies'])
+        self.assertEqual(AAMAWriter._write_rule_texts, original)
+
+    def test_una_geometria_moguda_a_posta_BLOQUEJA_lexportacio(self):
+        """I si el que es corromp és un punt, també: 5 mm de desplaçament silenciós són una
+        peça mal tallada."""
+        original = AAMAWriter._write_piece
+
+        def _sabotatge(self, block, piece, cfg, factor, height):
+            moguda = replace(piece, boundaries=tuple(
+                replace(b, points=tuple(
+                    replace(p, x=p.x + 5.0) if i == 0 else p
+                    for i, p in enumerate(b.points)
+                ))
+                for b in piece.boundaries
+            ))
+            return original(self, block, moguda, cfg, factor, height)
+
+        with mock.patch.object(AAMAWriter, '_write_piece', _sabotatge):
+            with self.assertRaises(ExportBlocked) as ctx:
+                build_export(self.fp, self.gv.id, 'polypattern')
+
+        diferencies = ' '.join(ctx.exception.detall['diferencies'])
+        self.assertIn('point_moved', diferencies)
+
+    def test_la_capa_FTT_POM_del_fitxer_emes_es_rellegeix_com_a_taula(self):
+        """El guionitzat de S8: el DXF que exportem s'ha de poder reimportar i la seva capa
+        POM s'ha de llegir com una taula idèntica als PatternPOM de la BD."""
+        resultat = build_export(self.fp, self.gv.id, 'polypattern')
+        tornat = AAMAReader().read(resultat.dxf)
+
+        poms = {p.pom_code: p for peca in tornat.pieces for p in peca.poms}
+        self.assertIn('CHEST', poms)
+        self.assertAlmostEqual(
+            poms['CHEST'].valor_mesurat_mm, self.base_mm, places=2)
+
+    def test_el_RUL_emes_porta_les_regles_poblades(self):
+        resultat = build_export(self.fp, self.gv.id, 'polypattern')
+        taula = RULReader().read(resultat.rul)
+
+        self.assertEqual(taula.talles, ('S', 'M', 'L', 'XL', 'XXL'))
+        self.assertEqual(taula.talla_base, 'S')
+        self.assertIn(0, taula.regles)
+        # Hi ha d'haver com a mínim una regla que mogui alguna cosa de debò.
+        self.assertTrue(any(
+            any(d != (0.0, 0.0) for d in regla.deltes.values())
+            for num, regla in taula.regles.items() if num != 0
+        ))

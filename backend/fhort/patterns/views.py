@@ -23,7 +23,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -150,7 +150,10 @@ class PatternFileViewSet(mixins.CreateModelMixin,
         .prefetch_related('pieces__points', 'pieces__segments', 'pieces__poms__pom_master')
         .all()
     )
-    parser_classes = [MultiPartParser, FormParser]
+    # MultiPart/Form per a l'upload (que porta els bytes del DXF); JSON per a l'exportació,
+    # que és una crida amb un cos d'objectes. Sense el JSONParser, `POST …/export/` amb un
+    # `application/json` respon 415 i el modal no arriba ni a demanar-ho.
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['model', 'garment_type_item', 'is_current', 'font_cad']
     ordering_fields = ['data_pujada', 'versio']
