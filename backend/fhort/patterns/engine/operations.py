@@ -62,6 +62,7 @@ from .geometry import (
     PointKind,
 )
 from .measure import MeasureError, resoldre
+from .segments import segmentar_vora
 from .sew import SewCheck, validar
 
 MM_PER_CM = 10.0
@@ -708,34 +709,33 @@ def _longitud_tram(
         raise MeasureError(
             f'La vora {seg.vora} no és a la peça «{seg.peca}».')
 
-    i0, i1 = _indexs_del_rang(peca_vella.boundaries[seg.vora], seg.t_inici, seg.t_fi)
+    i0, i1 = _indexs_del_rang(peca_vella.boundaries[seg.vora], seg.vora,
+                              seg.t_inici, seg.t_fi)
     return _longitud_indexs(peca_nova.boundaries[seg.vora], i0, i1)
 
 
 def _indexs_del_rang(
-    boundary: BoundaryData, t_inici: float, t_fi: float
+    boundary: BoundaryData, index_vora: int, t_inici: float, t_fi: float
 ) -> tuple[int, int]:
-    """(t_inici, t_fi) → els índexs de vèrtex que emmarquen el tram, a la vora ORIGINAL."""
-    segments = _longituds_segments(boundary)
-    total = sum(segments) if boundary.closed else sum(segments[:-1] or [0.0])
-    if total <= 0:
-        return 0, 0
+    """(t_inici, t_fi) → els índexs de vèrtex que emmarquen el tram, a la vora ORIGINAL.
 
-    n = len(boundary.points)
-    acumulat = 0.0
-    i0 = i1 = 0
-    trobat_inici = False
-    for j in range(n):
-        r = acumulat / total
-        if not trobat_inici and r >= t_inici - 1e-9:
-            i0 = j
-            trobat_inici = True
-        if r >= t_fi - 1e-9:
-            i1 = j
-            return i0, i1
-        acumulat += segments[j]
+    Es tornen a derivar els trams amb `segmentar_vora` —la MATEIXA funció que els va crear
+    quan es va importar el patró— i es busca el que té aquests `t`. No es reconstrueixen
+    els índexs comptant longitud d'arc des del vèrtex 0, i la raó és fina però mossega:
+    **l'origen de `t` no és el vèrtex 0, és el primer punt de GIR** de la vora. Coincideixen
+    només quan el vèrtex 0 resulta ser un gir (que és el cas a l'AMELIA, i per això l'error
+    passaria desapercebut fins al dia que arribés una peça que comencés per un punt de
+    corba). Preguntar-ho a qui ho sap és més barat que tornar-ho a deduir malament.
+    """
+    for sd in segmentar_vora(boundary, index_vora):
+        if abs(sd.t_inici - t_inici) < 1e-6 and abs(sd.t_fi - t_fi) < 1e-6:
+            return sd.index_inici, sd.index_fi
 
-    return i0, (0 if boundary.closed else n - 1)
+    raise MeasureError(
+        f'El tram [{t_inici:.4f}–{t_fi:.4f}] de la vora {index_vora} no correspon a cap '
+        f'tram de gir a gir de la geometria actual: la costura es va declarar sobre una '
+        f'altra versió del patró.'
+    )
 
 
 def _longitud_indexs(boundary: BoundaryData, i0: int, i1: int) -> float:

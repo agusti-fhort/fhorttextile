@@ -31,6 +31,8 @@ from .engine.geometry import (
     UnitsFingerprint,
     UnitsMethod,
 )
+from .engine.operations import POMSpec, PointRef, SegRef, SewSpec
+from .engine.ports import GradedPOMDelta, GradingSnapshot
 from .engine.segments import segmentar_peca
 from .models import PatternPiece, PatternPoint, PatternSegment
 
@@ -402,4 +404,205 @@ def _raw_trace_from_json(data) -> RawTrace | None:
         layer=data.get('layer', ''),
         handle=data.get('handle', ''),
         extra=tuple(tuple(e) for e in data.get('extra', [])),
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# El port GradingSource — l'ÚNICA porta entre el motor i el grading de l'FTT
+# ═════════════════════════════════════════════════════════════════════════════
+
+class GradingVersionNotFound(Exception):
+    """La versió de grading demanada no existeix."""
+
+
+class DjangoGradingSource:
+    """Implementa el port `GradingSource` (S0-B7.4) llegint `GradedSpec`.
+
+    Les dues condicions que la diagnosi va deixar escrites per a aquest adaptador (B7,
+    C1 i C2) no són consells: cadascuna tapa una manera concreta i documentada que el
+    grading de l'FTT té d'enganyar qui el llegeixi.
+
+    **C2 — el guard d'aprovació és `filter(pk=…)` + comprovar el flag, MAI
+    `get(aprovada=True)`.** Estructuralment poden coexistir diverses `GradingVersion`
+    aprovades del mateix `SizeFitting` (cap constraint no ho impedeix, i `seal_model_grading`
+    marca l'aprovada sense desmarcar-ne cap d'anterior). El dia que passi, un
+    `get(aprovada=True)` petaria amb `MultipleObjectsReturned` **en producció i en el
+    moment d'exportar**. Aquí es demana una versió per PK i se li mira el flag; si no el
+    té, es diu.
+
+    **C1 — el context ve del MODEL, recorrent `grading_version.size_fitting.model`.**
+    `GradingVersion` NO té FK a `Model`, i `GradedSpec` no sap quina és la talla base:
+    la fila de la base no porta cap marca i el seu `increment_applied_cm == 0.0` només per
+    coincidència aritmètica —un POM amb regla ZERO té l'increment a 0 a TOTES les talles—,
+    de manera que **deduir la base pel delta zero és incorrecte**. Es llegeix declarada de
+    `Model.base_size_label`, i el size run de `Model.size_run_model`.
+
+    I una tercera cosa que no és una condició sinó un fet: `aprovada` i `is_active` són
+    **ortogonals**. La versió aprovada d'un model sovint NO és la que la UI serveix (a
+    staging, 3 de les 4 aprovades no són l'activa). Aquí es demana l'APROVADA, i punt: qui
+    exporta tria la versió, no se li endevina.
+    """
+
+    def snapshot(self, grading_version_id: int) -> GradingSnapshot:
+        from fhort.fitting.models import GradedSpec, GradingVersion
+
+        # C2: per PK, i el flag es MIRA (no es filtra).
+        gv = (
+            GradingVersion.objects
+            .filter(pk=grading_version_id)
+            .select_related('size_fitting__model')
+            .first()
+        )
+        if gv is None:
+            raise GradingVersionNotFound(
+                f'La versió de grading {grading_version_id} no existeix.')
+
+        # C1: el context, recorregut explícitament fins al Model.
+        model = gv.size_fitting.model
+        size_run = _parse_size_run(model.size_run_model)
+        base = (model.base_size_label or '').strip()
+
+        specs = (
+            GradedSpec.objects
+            .filter(grading_version_id=gv.pk, is_active=True)
+            .select_related('pom')
+            .order_by('pom_id', 'size_label')
+        )
+
+        return GradingSnapshot(
+            grading_version_id=gv.pk,
+            approved=bool(gv.aprovada),
+            base_size_label=base,
+            size_run=tuple(size_run),
+            deltas=tuple(
+                GradedPOMDelta(
+                    pom_id=s.pom_id,
+                    pom_code=s.pom.pom_code,
+                    size_label=s.size_label,
+                    value_cm=s.graded_value_cm,
+                    delta_cm=s.increment_applied_cm,
+                    rule_applied=s.grading_type_applied,
+                )
+                for s in specs
+            ),
+        )
+
+
+def _parse_size_run(brut: str) -> list[str]:
+    """`Model.size_run_model` → llista ordenada de talles.
+
+    Mateix criteri que el motor de grading (`pom/services.py:52`): el separador és `·`, i
+    el `;` s'hi tolera. Una còpia de la regla, no una versió pròpia: si divergissin, el
+    patró es graduaria amb unes talles i la fitxa amb unes altres.
+    """
+    return [s.strip() for s in (brut or '').replace(';', '·').split('·') if s.strip()]
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Anotacions de S6 → contractes de l'engine (POMSpec / SewSpec)
+# ═════════════════════════════════════════════════════════════════════════════
+
+def point_refs(pattern_file) -> dict[int, PointRef]:
+    """`PatternPoint.id` → `PointRef`. L'engine no sap què és un id de BD; això l'hi tradueix."""
+    refs: dict[int, PointRef] = {}
+    for piece in pattern_file.pieces.all():
+        for p in piece.points.all():
+            refs[p.id] = PointRef(
+                peca=piece.nom_block,
+                vora=(None if p.mena == PatternPoint.MENA_NOTCH else p.boundary_index),
+                ordre=p.ordre,
+            )
+    return refs
+
+
+def pom_specs(pattern_file) -> tuple[tuple[POMSpec, ...], list[str]]:
+    """Els `PatternPOM` d'un fitxer → `POMSpec` de l'engine. → (specs, problemes).
+
+    Els POMs amb una recepta que no es pot traduir (mode `landmark`, que la UI encara no
+    ofereix, o un punt que ja no hi és) NO es descarten en silenci: surten a la llista de
+    problemes perquè qui exporti sàpiga que aquell POM no entrarà a la niada.
+    """
+    refs = point_refs(pattern_file)
+    specs: list[POMSpec] = []
+    problemes: list[str] = []
+
+    for piece in pattern_file.pieces.all():
+        for pom in piece.poms.all():
+            codi = pom.pom_master.pom_code
+            definicio = pom.definicio_mesura or {}
+            mode = definicio.get('mode', 'points')
+
+            if mode != 'points':
+                problemes.append(
+                    f'El POM {codi} fa servir el mode de mesura «{mode}», que la projecció '
+                    f'v1 encara no sap graduar (només «points»). No entrarà a la niada.'
+                )
+                continue
+
+            ref_a = refs.get(definicio.get('a'))
+            ref_b = refs.get(definicio.get('b'))
+            if ref_a is None or ref_b is None:
+                problemes.append(
+                    f'El POM {codi} apunta a un punt que ja no és a la geometria: la seva '
+                    f'recepta ha quedat òrfena. No entrarà a la niada.'
+                )
+                continue
+
+            specs.append(POMSpec(
+                pom_code=codi,
+                nom=pom.pom_master.name_en,
+                peca=piece.nom_block,
+                ref_a=ref_a,
+                ref_b=ref_b,
+                metode=pom.metode,
+                pom_id=pom.pom_master_id,
+            ))
+
+    return tuple(specs), problemes
+
+
+def sew_specs(pattern_file) -> tuple[SewSpec, ...]:
+    """Les `SewRelation` del MODEL del fitxer → `SewSpec` de l'engine.
+
+    Les costures pengen del Model (cosir és muntatge: hi intervenen dues peces i cap no
+    n'és propietària), així que es busquen pel model i es filtren als segments de les peces
+    d'AQUEST fitxer: una costura declarada sobre una versió anterior del patró pot tenir
+    trams que aquí ja no existeixen.
+    """
+    from .models import SewRelation
+
+    if pattern_file.model_id is None:
+        return ()
+
+    peces = {p.id: p.nom_block for p in pattern_file.pieces.all()}
+    fora: list[SewSpec] = []
+
+    for rel in (SewRelation.objects
+                .filter(model_id=pattern_file.model_id)
+                .prefetch_related('segments_a__piece', 'segments_b__piece')):
+        costat_a = _seg_refs(rel.segments_a.all(), peces)
+        costat_b = _seg_refs(rel.segments_b.all(), peces)
+        if not costat_a or not costat_b:
+            continue  # la costura no és d'aquesta versió del patró
+        fora.append(SewSpec(
+            sew_id=rel.id,
+            tipus=rel.tipus,
+            diferencial_cm=rel.diferencial_cm,
+            costat_a=costat_a,
+            costat_b=costat_b,
+        ))
+
+    return tuple(fora)
+
+
+def _seg_refs(segments, peces: dict[int, str]) -> tuple[SegRef, ...]:
+    return tuple(
+        SegRef(
+            peca=peces[s.piece_id],
+            vora=s.vora,
+            t_inici=s.t_inici,
+            t_fi=s.t_fi,
+        )
+        for s in segments
+        if s.piece_id in peces
     )
