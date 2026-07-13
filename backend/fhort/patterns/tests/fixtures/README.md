@@ -31,3 +31,19 @@ mentre `tests/` no sigui un paquet.
 
 - **Cap fitxer Tuka** (AAMA 2.1.1, ~92 punts). Quan arribi, serà la segona empremta i
   desbloquejarà el perfil `tuka` del writer (S2).
+
+## TATE_prova.dxf
+
+- **El patró real del QA**: Blusa TATE Crudo, model `BRW-FW26-0001` (Brownie). Còpia literal
+  de l'exemplar viu `backend/media/fhort/pattern_files/TATE.DXF` (mateix md5).
+- md5 `419337df26602569253e243af735ab78` · 332 260 bytes.
+- Contingut: **10 peces** (`TATE_BACK`, `TATE_FRONT`, `TATE_SLEEVE`, `TATE_NECK_BAND`,
+  `TATE_FRONT_YOKE`, `TATE_FACING_YOKE`, `TATE_FRONT_FACING`, `TATE_NECK_BAND_INTERLINING`,
+  `1rst_collar`, `1rst_sleeve`). Sense RUL germà.
+- **Per què cal, si ja hi ha l'AMELIA:** porta la **capa 14 (línia de COSIT)**, que l'AMELIA
+  no té. És la vora de la qual es deriven els trams de veritat —`segmentar_peca` prefereix el
+  cosit al tall— i fins ara aquella branca no s'havia exercit mai contra material real.
+  A `TATE_FRONT`: vora de tall 196,6 cm · **vora de cosit 183,1 cm** (tancada, 169 punts),
+  25 trams derivats que sumen exactament els 183,1 cm.
+- També aporta vores tancades grans (258 punts al tall del davanter) i 30 punts de gir, que
+  és el que fa que declarar un tram entre dos punts qualssevol tingui sentit de provar.

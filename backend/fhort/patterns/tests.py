@@ -62,8 +62,11 @@ from fhort.patterns.engine.grading_projection import (
 from fhort.patterns.engine.operations import POMSpec, PointRef, move_points
 from fhort.patterns.engine.measure import MeasureError, resoldre
 from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
-from fhort.patterns.engine.segments import longitud_vora, segmentar_peca, segmentar_vora
-from fhort.patterns.engine.sew import validar
+from fhort.patterns.engine.segments import (SegmentError, fraccio_tram, longitud_tram,
+                                            longitud_vora, segmentar_peca, segmentar_vora,
+                                            tram_entre_punts)
+from fhort.patterns.engine.sew import (MENA_EXCES, MENA_SOLAPAMENT, TramCosit, validar,
+                                       validar_cobertura)
 from fhort.patterns.engine.rul_reader import RULReader, coherencia_dxf_rul
 from fhort.patterns.engine.rul_writer import RULWriter
 
@@ -87,10 +90,11 @@ from fhort.models_app.models import Model
 from fhort.models_app.services_fitxers import DOWNLOAD_SALT as MODEL_FITXER_SALT
 from fhort.patterns.adapters import (DjangoGeometryStore, DjangoGradingSource,
                                      pom_specs, sew_specs)
-from fhort.patterns.annotation_views import PatternPOMViewSet, SewRelationViewSet
+from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentViewSet,
+                                             SewRelationViewSet, comprovar_costura)
 from fhort.patterns.export import ExportBlocked, build_export
 from fhort.patterns.models import (ExportAcknowledgement, PatternFile, PatternPOM,
-                                   SewRelation)
+                                   PatternPoint, PatternSegment, SewRelation)
 from fhort.patterns.services import save_pattern_file
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
                                   PatternFileViewSet)
@@ -100,10 +104,15 @@ from fhort.tasks.models import GarmentTypeItem
 FIXTURES = Path(__file__).parent / 'tests' / 'fixtures'
 AMELIA_DXF = FIXTURES / 'AMELIA_AZUL_prova.dxf'
 AMELIA_RUL = FIXTURES / 'AMELIA_AZUL_prova.rul'
+#: El TATE (Brownie, model BRW-FW26-0001): el patró real amb què s'ha fet el QA del Taller.
+#: Aporta el que l'AMELIA no té: **capa 14 (línia de cosit)**, que és la vora de la qual es
+#: deriven els trams de veritat, i 10 peces amb vores tancades de 250+ punts.
+TATE_DXF = FIXTURES / 'TATE_prova.dxf'
 
 #: El material és el contracte. Si algú el toca, els recomptes de sota deixen de
 #: voler dir res i val més que el test ho canti que no pas que passi en silenci.
 AMELIA_DXF_MD5 = '2ae0006e003ebe17326187d79bb587d5'
+TATE_DXF_MD5 = '419337df26602569253e243af735ab78'
 
 
 def _dxf_bytes(doc) -> bytes:
@@ -2008,3 +2017,333 @@ class AutovalidacioTest(EscalatTestBase):
             any(d != (0.0, 0.0) for d in regla.deltes.values())
             for num, regla in taula.regles.items() if num != 0
         ))
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# TALLER DE PATRÓ · W1 — SEGMENTS DECLARATS
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TramEntrePuntsTest(unittest.TestCase):
+    """La primitiva del segment declarat, contra el TATE real.
+
+    El TATE és el patró amb què s'ha fet el QA, i porta el que l'AMELIA no té: capa 14. Els
+    trams de veritat es deriven de la línia de COSIT, i és sobre aquella vora que el
+    patronista declara.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.md5 = hashlib.md5(TATE_DXF.read_bytes()).hexdigest()
+        cls.doc = AAMAReader().read(TATE_DXF.read_bytes())
+        cls.piece = cls.doc.piece('TATE_FRONT')
+        # La vora de COSIT: la que de debò es cus, i de la qual es deriven els trams.
+        cls.vora = next(i for i, b in enumerate(cls.piece.boundaries)
+                        if b.role is LayerRole.SEW)
+        cls.boundary = cls.piece.boundaries[cls.vora]
+        cls.total_mm = longitud_vora(cls.boundary)
+
+    def test_el_material_no_ha_canviat(self):
+        self.assertEqual(self.md5, TATE_DXF_MD5)
+        self.assertTrue(self.boundary.closed)
+        self.assertAlmostEqual(self.total_mm / 10.0, 183.1, places=1)
+
+    def test_els_dos_arcs_sumen_la_vora_sencera(self):
+        """La prova que el tram és una REFERÈNCIA a la vora i no geometria nova: el que hi
+        ha entre dos punts, més el que hi ha per l'altre costat, és la vora i prou."""
+        curt = tram_entre_punts(self.boundary, self.vora, 3, 33)
+        llarg = tram_entre_punts(self.boundary, self.vora, 3, 33, arc_llarg=True)
+
+        self.assertAlmostEqual(curt.longitud_mm + llarg.longitud_mm, self.total_mm, places=6)
+        self.assertLess(curt.longitud_mm, llarg.longitud_mm)
+
+    def test_larc_llarg_dona_la_volta_per_lorigen(self):
+        """Un tram que travessa el punt on la polilínia tanca es guarda amb t_fi < t_inici, i
+        la seva longitud NO és una resta."""
+        llarg = tram_entre_punts(self.boundary, self.vora, 3, 33, arc_llarg=True)
+
+        self.assertLess(llarg.t_fi, llarg.t_inici)   # dona la volta
+        self.assertAlmostEqual(
+            fraccio_tram(llarg.t_inici, llarg.t_fi) * self.total_mm,
+            llarg.longitud_mm, places=6)
+        # Una resta pelada donaria negatiu: és el bug que fraccio_tram evita.
+        self.assertLess(llarg.t_fi - llarg.t_inici, 0)
+
+    def test_punts_a_mig_tram_auto(self):
+        """Els extrems NO han de ser punts de gir: aquest és tot el sentit de declarar.
+
+        Es tria un punt enmig del primer tram derivat i un altre enmig del segon: cap dels
+        dos és frontera de res per al CAD, i tots dos ho són per al patronista.
+        """
+        girs = [i for i, p in enumerate(self.boundary.points) if p.kind is PointKind.TURN]
+        a, b = girs[0] + 3, girs[1] + 5
+        self.assertIsNot(self.boundary.points[a].kind, PointKind.TURN)
+        self.assertIsNot(self.boundary.points[b].kind, PointKind.TURN)
+
+        tram = tram_entre_punts(self.boundary, self.vora, a, b)
+
+        self.assertGreater(tram.longitud_mm, 0)
+        self.assertEqual(tram.index_inici, a)
+        self.assertEqual(tram.index_fi, b)
+
+    def test_el_tram_segueix_la_vora_no_la_recta(self):
+        """La longitud és el RECORREGUT, no la distància entre els extrems. En una corba
+        (una sisa) les dues xifres no s'assemblen, i confondre-les seria mesurar una corda."""
+        girs = [i for i, p in enumerate(self.boundary.points) if p.kind is PointKind.TURN]
+        a, b = girs[0], girs[1]
+        pa, pb = self.boundary.points[a], self.boundary.points[b]
+        recta = math.hypot(pb.x - pa.x, pb.y - pa.y)
+
+        tram = tram_entre_punts(self.boundary, self.vora, a, b)
+
+        self.assertGreater(tram.longitud_mm, recta)
+
+    def test_un_tram_declarat_pot_coincidir_amb_un_dauto(self):
+        """Declarar de gir a gir ha de donar EXACTAMENT el tram derivat. Si no, les dues
+        vies no parlarien de la mateixa vora."""
+        auto = segmentar_peca(self.piece)[0]
+
+        tram = tram_entre_punts(self.boundary, self.vora, auto.index_inici, auto.index_fi)
+
+        self.assertAlmostEqual(tram.longitud_mm, auto.longitud_mm, places=6)
+        self.assertAlmostEqual(tram.t_inici, auto.t_inici, places=9)
+
+    def test_el_mateix_punt_dues_vegades_no_es_cap_tram(self):
+        with self.assertRaises(SegmentError):
+            tram_entre_punts(self.boundary, self.vora, 7, 7)
+
+    def test_un_punt_fora_de_la_vora(self):
+        with self.assertRaises(SegmentError):
+            tram_entre_punts(self.boundary, self.vora, 0, 99999)
+
+    def test_una_vora_oberta_no_te_arc_llarg(self):
+        """No hi ha dos camins entre dos punts d'una línia: demanar-hi el llarg és una
+        contradicció, i es diu, en comptes de tornar l'únic que hi ha fent el distret."""
+        interna = next(b for b in self.piece.boundaries if not b.closed)
+
+        with self.assertRaises(SegmentError):
+            tram_entre_punts(interna, 1, 0, 1, arc_llarg=True)
+
+        # Però el tram normal sí que existeix.
+        tram = tram_entre_punts(interna, 1, 0, 1)
+        self.assertGreater(tram.longitud_mm, 0)
+
+
+class CoberturaVoraTest(unittest.TestCase):
+    """La validació que només es veu mirant la vora sencera.
+
+    Xifres rodones a posta: aquí es prova la REGLA. Que la regla parla de patrons de debò ja
+    ho prova `TramEntrePuntsTest` amb el TATE.
+    """
+
+    def test_dues_costures_que_reclamen_el_mateix_tram(self):
+        """SOLAPAMENT: cadascuna casa perfectament; juntes, cusen dues vegades la mateixa
+        tela. És el defecte que els trams gir→gir feien impossible i els declarats permeten."""
+        trams = [
+            TramCosit(sew_id=1, segment_id=10, t_inici=0.0, t_fi=0.5, nom='lateral'),
+            TramCosit(sew_id=2, segment_id=11, t_inici=0.4, t_fi=0.6, nom='sisa'),
+        ]
+
+        avisos = validar_cobertura(vora=0, longitud_vora_mm=1000.0, trams=trams)
+
+        solap = [a for a in avisos if a.mena == MENA_SOLAPAMENT]
+        self.assertEqual(len(solap), 1)
+        # 0.4→0.5 d'una vora de 100 cm = 10 cm de tela reclamada dues vegades.
+        self.assertAlmostEqual(solap[0].solapament_cm, 10.0, places=2)
+        self.assertEqual(solap[0].sews, (1, 2))
+        self.assertIn('10.0 cm', solap[0].missatge)
+
+    def test_les_costures_sumen_mes_tela_de_la_que_hi_ha(self):
+        """EXCÉS: la peça no té tanta vora. Amb xifres, no amb un 'revisa-ho'."""
+        trams = [
+            TramCosit(sew_id=1, segment_id=10, t_inici=0.0, t_fi=0.7),
+            TramCosit(sew_id=2, segment_id=11, t_inici=0.6, t_fi=1.0),
+        ]
+
+        avisos = validar_cobertura(vora=0, longitud_vora_mm=1000.0, trams=trams)
+
+        exces = [a for a in avisos if a.mena == MENA_EXCES]
+        self.assertEqual(len(exces), 1)
+        self.assertAlmostEqual(exces[0].longitud_vora_cm, 100.0, places=2)
+        self.assertAlmostEqual(exces[0].suma_cosida_cm, 110.0, places=2)
+        self.assertAlmostEqual(exces[0].exces_cm, 10.0, places=2)
+
+    def test_una_vora_ben_coberta_no_diu_res(self):
+        """Trams consecutius que no es trepitgen i hi caben: silenci. Un validador que
+        avisés igualment ensenyaria a ignorar-lo."""
+        trams = [
+            TramCosit(sew_id=1, segment_id=10, t_inici=0.0, t_fi=0.5),
+            TramCosit(sew_id=2, segment_id=11, t_inici=0.5, t_fi=1.0),
+        ]
+
+        self.assertEqual(validar_cobertura(0, 1000.0, trams), [])
+
+    def test_el_solapament_veu_els_trams_que_donen_la_volta(self):
+        """Un tram que passa per l'origen (t_fi < t_inici) es trepitja amb un que comença a
+        zero. Si la comparació fos una resta, no ho veuria."""
+        trams = [
+            TramCosit(sew_id=1, segment_id=10, t_inici=0.9, t_fi=0.1),   # dona la volta
+            TramCosit(sew_id=2, segment_id=11, t_inici=0.0, t_fi=0.05),
+        ]
+
+        avisos = validar_cobertura(vora=0, longitud_vora_mm=1000.0, trams=trams)
+
+        solap = [a for a in avisos if a.mena == MENA_SOLAPAMENT]
+        self.assertEqual(len(solap), 1)
+        self.assertAlmostEqual(solap[0].solapament_cm, 5.0, places=2)
+
+    def test_una_costura_que_es_trepitja_a_ella_mateixa(self):
+        """Els dos trams del MATEIX costat que se superposen: el costat compta la tela dues
+        vegades i la costura sembla més llarga del que és."""
+        trams = [
+            TramCosit(sew_id=1, segment_id=10, t_inici=0.0, t_fi=0.5),
+            TramCosit(sew_id=1, segment_id=11, t_inici=0.3, t_fi=0.6),
+        ]
+
+        avisos = validar_cobertura(vora=0, longitud_vora_mm=1000.0, trams=trams)
+
+        solap = [a for a in avisos if a.mena == MENA_SOLAPAMENT]
+        self.assertEqual(len(solap), 1)
+        self.assertIn('es trepitja a ella mateixa', solap[0].missatge)
+
+    def test_una_vora_degenerada_no_genera_soroll(self):
+        self.assertEqual(validar_cobertura(0, 0.0, [TramCosit(1, 10, 0.0, 1.0)]), [])
+
+
+class SegmentDeclaratAPITest(PatternsAPITestBase):
+    """CRUD del tram declarat, amb el TATE real pujat per l'API."""
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(TATE_DXF.read_bytes()).data['id'])
+        self.front = self.fp.pieces.get(nom_block='TATE_FRONT')
+        # La vora de COSIT: la que es cus i de la qual pengen els trams derivats.
+        self.vora = self.front.segments.filter(origen=PatternSegment.ORIGEN_AUTO).first().vora
+        self.punts = list(
+            self.front.points.filter(mena='vertex', boundary_index=self.vora).order_by('ordre'))
+        # L'altre costat de les costures viu a una peça DIFERENT, com al món: una costura
+        # uneix dues peces. Fer servir un tram de la mateixa vora com a costat B faria que la
+        # costura es trepitgés a ella mateixa —cosa que el validador detecta, correctament, i
+        # que taparia el solapament ENTRE costures que aquests tests volen provar.
+        self.back = self.fp.pieces.get(nom_block='TATE_BACK')
+        trams_back = list(
+            self.back.segments.filter(origen=PatternSegment.ORIGEN_AUTO)[:2])
+        self.tram_back, self.tram_back_2 = trams_back[0], trams_back[1]
+
+    def _declara(self, a, b, nom='costura lateral', **extra):
+        dades = {'point_a': a.id, 'point_b': b.id, 'nom': nom}
+        dades.update(extra)
+        request = self.factory.post(
+            '/api/v1/patterns/pattern-segments/', dades, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternSegmentViewSet.as_view({'post': 'create'})(request)
+
+    def _esborra(self, seg_id):
+        request = self.factory.delete(f'/api/v1/patterns/pattern-segments/{seg_id}/')
+        force_authenticate(request, user=self.user)
+        return PatternSegmentViewSet.as_view({'delete': 'destroy'})(request, pk=seg_id)
+
+    def test_els_derivats_son_auto(self):
+        """La migració els deixa tots 'auto': ningú no els ha declarat."""
+        self.assertGreater(self.front.segments.count(), 0)
+        self.assertFalse(
+            self.front.segments.exclude(origen=PatternSegment.ORIGEN_AUTO).exists())
+
+    def test_declarar_un_tram_entre_dos_punts(self):
+        resp = self._declara(self.punts[3], self.punts[33])
+
+        self.assertEqual(resp.status_code, 201, resp.data)
+        seg = PatternSegment.objects.get(pk=resp.data['id'])
+        self.assertEqual(seg.origen, PatternSegment.ORIGEN_DECLARAT)
+        self.assertEqual(seg.nom, 'costura lateral')
+        self.assertEqual(seg.vora, self.vora)
+        self.assertGreater(resp.data['longitud_cm'], 0)
+        self.assertFalse(resp.data['en_us'])
+
+    def test_larc_llarg_es_mes_llarg(self):
+        curt = self._declara(self.punts[3], self.punts[33], nom='curt')
+        llarg = self._declara(self.punts[3], self.punts[33], nom='llarg', arc_llarg=True)
+
+        self.assertEqual(llarg.status_code, 201, llarg.data)
+        self.assertGreater(llarg.data['longitud_cm'], curt.data['longitud_cm'])
+
+    def test_el_client_no_pot_enviar_la_geometria(self):
+        """Les t no s'accepten: arriben dos punts i el servidor resol. Si el client pogués
+        dictar-les, un tram deixaria de ser una referència a la vora."""
+        resp = self._declara(self.punts[3], self.punts[33], t_inici=0.0, t_fi=1.0)
+
+        seg = PatternSegment.objects.get(pk=resp.data['id'])
+        self.assertNotEqual((seg.t_inici, seg.t_fi), (0.0, 1.0))
+
+    def test_dos_punts_de_peces_diferents(self):
+        altra = self.fp.pieces.get(nom_block='TATE_BACK')
+        punt_altra = altra.points.filter(mena='vertex').first()
+
+        resp = self._declara(self.punts[0], punt_altra)
+
+        self.assertEqual(resp.status_code, 400)
+
+    def test_un_piquet_no_pot_ser_extrem(self):
+        piquet = self.front.points.filter(mena='notch').first()
+        if piquet is None:
+            self.skipTest('El TATE_FRONT no porta piquets.')
+
+        resp = self._declara(self.punts[0], piquet)
+
+        self.assertEqual(resp.status_code, 400)
+
+    def test_esborrar_un_tram_que_ningu_no_cus(self):
+        seg_id = self._declara(self.punts[3], self.punts[33]).data['id']
+
+        resp = self._esborra(seg_id)
+
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(PatternSegment.objects.filter(pk=seg_id).exists())
+
+    def test_no_sesborra_un_tram_que_una_costura_fa_servir(self):
+        """PROTECT a mà (el M2M no en té): esborrar-lo deixaria la costura coixa en silenci."""
+        seg_id = self._declara(self.punts[3], self.punts[33]).data['id']
+        rel = SewRelation.objects.create(model=self.model, tipus='casat')
+        rel.segments_a.add(seg_id)
+        rel.segments_b.add(self.tram_back)
+
+        resp = self._esborra(seg_id)
+
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data['sew_relations'], [rel.id])
+        self.assertTrue(PatternSegment.objects.filter(pk=seg_id).exists())
+
+    def test_la_costura_veu_el_solapament_al_seu_detall(self):
+        """La validació de cobertura viatja al detall de la costura: dues costures que
+        reclamen el mateix tros de vora ho canten, amb els centímetres."""
+        a = self._declara(self.punts[3], self.punts[40], nom='lateral').data['id']
+        b = self._declara(self.punts[30], self.punts[60], nom='sisa').data['id']
+
+        r1 = SewRelation.objects.create(model=self.model, tipus='casat')
+        r1.segments_a.add(a)
+        r1.segments_b.add(self.tram_back)
+        # Cada costura amb el SEU tram d'esquena: si les dues compartissin el mateix,
+        # l'esquena també sortiria solapada (correctament) i taparia el que aquí es prova.
+        r2 = SewRelation.objects.create(model=self.model, tipus='casat')
+        r2.segments_a.add(b)
+        r2.segments_b.add(self.tram_back_2)
+
+        estat = comprovar_costura(r1)
+
+        solap = [c for c in estat['cobertura'] if c['mena'] == MENA_SOLAPAMENT]
+        self.assertTrue(solap, estat['cobertura'])
+        self.assertGreater(solap[0]['solapament_cm'], 0)
+        self.assertEqual(sorted(solap[0]['sews']), sorted([r1.id, r2.id]))
+        self.assertEqual(solap[0]['peca'], 'TATE_FRONT')
+
+    def test_un_tram_que_dona_la_volta_no_mesura_zero(self):
+        """El bug que els trams declarats destapen: la longitud d'un costat es calculava amb
+        una resta, i un tram que passa per l'origen hi donava zero."""
+        volta = self._declara(self.punts[3], self.punts[33], arc_llarg=True).data['id']
+        rel = SewRelation.objects.create(model=self.model, tipus='casat')
+        rel.segments_a.add(volta)
+        rel.segments_b.add(self.tram_back)
+
+        estat = comprovar_costura(rel)
+
+        self.assertGreater(estat['longitud_a_cm'], 0)
