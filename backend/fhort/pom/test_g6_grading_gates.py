@@ -7,6 +7,10 @@ Executat amb `python manage.py test fhort.pom` (el projecte NO fa servir pytest)
     v5 DESACTIVADA mentre la resta del sistema servia la v3 activa: dues superfícies de la UI
     ensenyaven talles diferents del mateix model. El test reprodueix aquella forma exacta.
 
+  · **0b · El gate dur** (`pom/services.py`): exigia `model.grading_rule_set_id` —el PUNTER—
+    quan el motor fa temps que llegeix les regles del MODEL (`ModelGradingRule`) i només cau al
+    set si el model no en té cap. El model 163 (25 regles residents, `grading_rule_set` NULL)
+    no ha pogut graduar mai. El test és aquell model.
 """
 import datetime
 
@@ -15,8 +19,9 @@ from django_tenants.test.cases import TenantTestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from fhort.fitting.models import GradedSpec, GradingVersion, SizeFitting
-from fhort.models_app.models import Model
-from fhort.pom.models import POMMaster, SizeDefinition, SizeSystem
+from fhort.models_app.models import BaseMeasurement, Model, ModelGradingRule
+from fhort.pom.models import GradingRule, GradingRuleSet, POMMaster, SizeDefinition, SizeSystem
+from fhort.pom.services import generate_graded_specs, preview_graded_specs
 
 
 class _G6Base(TenantTestCase):
@@ -111,3 +116,66 @@ class Fork4VersioVigentTest(_G6Base):
         GradingVersion.objects.filter(pk=self.v3.pk).update(is_active=False)
 
         self.assertEqual(self._get().data['grading_version_id'], self.v5.pk)
+
+
+class GateDeLesReglesResidentsTest(_G6Base):
+    """0b — el gate ha de preguntar "té regles?", no "té punter?"."""
+
+    def setUp(self):
+        super().setUp()
+        # El model 163: regles RESIDENTS i CAP grading_rule_set.
+        self.model = self._model('TST-163', rule_set=None)
+        ModelGradingRule.objects.create(
+            model=self.model, pom=self.pom, logica='LINEAR', increment_base=2,
+            actiu=True, origen='MANUAL')
+        BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom, base_value_cm=40, is_active=True)
+        self.sf = self._sf(self.model, 'SF-163')
+
+    def test_un_model_amb_regles_residents_i_SENSE_ruleset_gradua(self):
+        """El cas del 163, que amb el gate antic era un `ValueError` garantit."""
+        self.assertIsNone(self.model.grading_rule_set_id)
+
+        creats = generate_graded_specs(self.sf.id)
+
+        self.assertEqual(creats, 3)   # 3 talles (S·M·L) per a l'únic POM
+        specs = {s.size_label: s.graded_value_cm
+                 for s in GradedSpec.objects.filter(grading_version__size_fitting=self.sf)}
+        # LINEAR, increment 2, base M=40 → la regla RESIDENT és la que ha graduat.
+        self.assertEqual(specs, {'S': 38.0, 'M': 40.0, 'L': 42.0})
+
+    def test_el_preview_diu_el_MATEIX_que_el_generador(self):
+        """El gate viu a dos llocs (generador i preview). Si divergeixen, el wizard ensenya
+        una taula buida per a un model que després gradua igualment."""
+        preview = preview_graded_specs(self.model, {self.pom.id: 40.0})
+
+        self.assertEqual(preview, {self.pom.id: {'S': 38.0, 'M': 40.0, 'L': 42.0}})
+
+    def test_un_model_SENSE_regles_enlloc_continua_sense_poder_graduar(self):
+        """La porta s'alinea amb el motor; no s'obre. Un model sense regles ni residents ni de
+        set no ha de graduar (si no, gradua tot PLA en silenci)."""
+        buit = self._model('TST-BUIT', rule_set=None)
+        BaseMeasurement.objects.create(
+            model=buit, pom=self.pom, base_value_cm=40, is_active=True)
+        sf = self._sf(buit, 'SF-BUIT')
+
+        with self.assertRaises(ValueError) as ctx:
+            generate_graded_specs(sf.id)
+
+        self.assertIn('no té regles de grading', str(ctx.exception))
+        self.assertEqual(preview_graded_specs(buit, {self.pom.id: 40.0}), {})
+
+    def test_el_cami_vell_del_ruleset_no_es_toca(self):
+        """El model 162: cap regla resident, ruleset extern → ha de continuar graduant igual."""
+        rs = GradingRuleSet.objects.create(nom='RS G6')
+        GradingRule.objects.create(rule_set=rs, pom=self.pom, talla_base=self.talla_base,
+                                   logica='LINEAR', increment_base=3, actiu=True)
+        m162 = self._model('TST-162b', rule_set=rs)
+        BaseMeasurement.objects.create(
+            model=m162, pom=self.pom, base_value_cm=40, is_active=True)
+        sf = self._sf(m162, 'SF-162b')
+
+        self.assertEqual(generate_graded_specs(sf.id), 3)
+        specs = {s.size_label: s.graded_value_cm
+                 for s in GradedSpec.objects.filter(grading_version__size_fitting=sf)}
+        self.assertEqual(specs, {'S': 37.0, 'M': 40.0, 'L': 43.0})

@@ -39,8 +39,11 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     model = sf.model
 
     # Pre-checks
-    if not model.grading_rule_set_id:
-        raise ValueError(f"El model {model.codi_intern} no té Grading Rule Set assignat.")
+    if not _te_regles(model):
+        raise ValueError(
+            f"El model {model.codi_intern} no té regles de grading: ni regles residents "
+            f"(ModelGradingRule) ni Grading Rule Set assignat."
+        )
     if not model.size_system_id:
         raise ValueError(f"El model {model.codi_intern} no té Size System assignat.")
     if not model.size_run_model:
@@ -151,7 +154,10 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     base_values: {pom_id (POMMaster): base_value_cm}
     Retorna: {pom_id: {size_label: graded_value}} (buit si manquen rule_set/run/base).
     """
-    if not (model.grading_rule_set_id and model.size_run_model and model.base_size_label):
+    # G6/0b — el mateix criteri que el gate dur de generate_graded_specs (via `_te_regles`), i no
+    # una còpia amb matisos: si el generador i el preview no coincideixen en "aquest model pot
+    # graduar?", el wizard ensenya una taula buida per a un model que després gradua igualment.
+    if not (_te_regles(model) and model.size_run_model and model.base_size_label):
         return {}
     size_run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
     base_size = model.base_size_label.strip()
@@ -421,6 +427,31 @@ def maybe_learn_customer_alias(customer, client_code, description, pom, origen='
 # ─────────────────────────────────────────────────────────────────────────────
 # PRIVATE HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _te_regles(model) -> bool:
+    """El model té regles de grading? Residents (ModelGradingRule) O de set.
+
+    G6/0b — LA PORTA D'ENTRADA DEL MOTOR, i ha de fer la MATEIXA pregunta que `_load_grading_rules`
+    respon. Abans preguntava una altra cosa: exigia `model.grading_rule_set_id`, o sigui **el
+    punter**, quan el motor fa temps que llegeix les regles del MODEL i només cau al set si el model
+    no en té cap. Un model equipat amb la branca guanyadora no podia graduar per falta d'un punter
+    que el motor ja no fa servir.
+
+    I no era teòric: el model 163 (BRW-FW26-0001) té 25 ModelGradingRule actives, `grading_rule_set`
+    NULL i **zero GradedSpec** — no ha pogut graduar mai.
+
+    Alineat amb la Sobirania de la Regla (DECISIONS.md:280-294): *«tot sembra el model però tot viu i
+    és modificable AL MODEL, inclosa la REGLA»*. Si la regla viu al model, tenir-ne una ha de bastar
+    per graduar.
+
+    El que NO canvia: un model sense regles enlloc continua sense poder graduar (ValueError al
+    generador, `{}` al preview). La porta s'alinea amb el motor; no s'obre.
+    """
+    from fhort.models_app.models import ModelGradingRule
+    if ModelGradingRule.objects.filter(model_id=model.id, actiu=True).exists():
+        return True
+    return bool(model.grading_rule_set_id)
+
 
 def _load_grading_rules(model) -> dict:
     """Return {pom_id: rule_obj} for the model's grading rules.
