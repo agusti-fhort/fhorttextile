@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Modal from '../ui/Modal'
+import FileDropCard from '../ui/FileDropCard'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -477,24 +478,17 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       {/* ═══════════════ PAS 1 — TALLES ═══════════════ */}
       {step === 1 && !cribratge && (
         <div>
-          <div
-            onDragOver={e => e.preventDefault()}
-            onDrop={e => { e.preventDefault(); setFile(e.dataTransfer.files[0]) }}
-            onClick={() => document.getElementById('import-wizard-file').click()}
-            style={{
-              border: `2px dashed ${BORDER}`, borderRadius: 12, padding: '3rem 2rem',
-              textAlign: 'center', cursor: 'pointer', marginBottom: 16,
-              background: file ? '#f0f9f0' : 'var(--bg-muted)',
-            }}>
-            <input id="import-wizard-file" type="file" accept=".pdf,.xlsx,.xls,image/*"
-              style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />
-            <i className="ti ti-upload" style={{ fontSize: 32, color: GOLD }} />
-            <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginTop: 8 }}>
-              {file ? file.name : t('import_wizard.drop_file')}
-            </div>
-            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 4 }}>
-              {t('import_wizard.file_hint')}
-            </div>
+          <div style={{ marginBottom: 16 }}>
+            <FileDropCard
+              accept={['.xlsx', '.xls', '.pdf', '.png', '.jpg', '.jpeg']}
+              icon="ti-file-spreadsheet"
+              title={t('import_wizard.drop_file')}
+              required
+              file={file}
+              onFile={setFile}
+              disabled={uploading}
+              hint={t('import_wizard.file_hint')}
+            />
           </div>
           {file && (
             <div style={{ textAlign: 'center' }}>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import FileDropCard from '../ui/FileDropCard'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { patterns } from '../../api/endpoints'
@@ -47,8 +48,11 @@ export default function PatternTab({ modelId }) {
 
   const [exportObert, setExportObert] = useState(false)
 
-  const dxfRef = useRef(null)
-  const rulRef = useRef(null)
+  // Els fitxers triats: estat CONTROLAT (les FileDropCard són controlades). Abans eren dos
+  // refs a <input type="file">, i el DOM era l'única font de veritat de què havia triat
+  // l'usuari: no es podia ni desactivar el botó de Pujar fins que hi hagués DXF.
+  const [dxf, setDxf] = useState(null)
+  const [rul, setRul] = useState(null)
   const objectUrlRef = useRef('')
 
   // ── càrrega ──────────────────────────────────────────────────────────────
@@ -132,14 +136,12 @@ export default function PatternTab({ modelId }) {
       setError(e.response?.data || { error: t('pattern.err_upload') })
     } finally {
       setPujant(false)
-      if (dxfRef.current) dxfRef.current.value = ''
-      if (rulRef.current) rulRef.current.value = ''
+      setDxf(null)
+      setRul(null)
     }
   }
 
   const onTriaFitxers = () => {
-    const dxf = dxfRef.current?.files?.[0]
-    const rul = rulRef.current?.files?.[0]
     if (!dxf) return
     if (dxf.size > MAX_MB * 1024 * 1024) {
       setError({ error: t('pattern.err_too_big', { mb: MAX_MB }) })
@@ -164,14 +166,14 @@ export default function PatternTab({ modelId }) {
       {!actual ? (
         <ZonaBuida
           t={t} pujant={pujant}
-          dxfRef={dxfRef} rulRef={rulRef} onTria={onTriaFitxers}
+          dxf={dxf} rul={rul} setDxf={setDxf} setRul={setRul} onTria={onTriaFitxers}
         />
       ) : (
         <>
           <Capcalera
             t={t} fp={actual} cadena={cadena}
             onCanviaVersio={id => { setPecaSel(''); carregar(id) }}
-            pujant={pujant} dxfRef={dxfRef} rulRef={rulRef} onTria={onTriaFitxers}
+            pujant={pujant} dxf={dxf} rul={rul} setDxf={setDxf} setRul={setRul} onTria={onTriaFitxers}
             onExporta={() => setExportObert(true)}
             onTaller={() => navigate(`/models/${modelId}/patro/taller?file=${actual.id}`)}
           />
@@ -219,9 +221,11 @@ export default function PatternTab({ modelId }) {
           confirmLabel={t('pattern.new_version_confirm')}
           cancelLabel={t('app.cancel')}
           onCancel={() => {
+            // Cancel·lar la versió nova buida les targetes: els fitxers que hi havia eren per a
+            // una pujada que l'usuari acaba de desdir.
             setConfirmarVersio(null)
-            if (dxfRef.current) dxfRef.current.value = ''
-            if (rulRef.current) rulRef.current.value = ''
+            setDxf(null)
+            setRul(null)
           }}
           onConfirm={() => {
             const { dxf, rul } = confirmarVersio
@@ -276,48 +280,60 @@ function ErrorParse({ error, onTanca }) {
   )
 }
 
-function CampsPujada({ t, pujant, dxfRef, rulRef, onTria, compacte = false }) {
+// Les dues targetes + UN botó de pujar. El DXF és la peça; el RUL, si hi és, l'acompanya —i
+// és per això que hi ha un sol botó i no dos: pujar-los per separat mai no ha estat una opció
+// (van a la mateixa petició), i dos inputs amb dos botons ho feien semblar.
+// El botó està DESACTIVAT sense DXF: abans es podia clicar sempre i no passava res (un `return`
+// mut), que és la manera més segura de fer creure a algú que l'aplicació s'ha penjat.
+function CampsPujada({ t, pujant, dxf, rul, setDxf, setRul, onTria, compacte = false }) {
   return (
-    <div style={{
-      display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap',
-      fontSize: 'var(--fs-body)',
-    }}>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 'var(--fs-label)', fontWeight: 600 }}>
-          {t('pattern.file_dxf')} <span style={{ color: 'var(--err)' }}>*</span>
-        </span>
-        <input ref={dxfRef} type="file" accept=".dxf,.DXF" disabled={pujant} />
-      </label>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 'var(--fs-label)', fontWeight: 600 }}>
-          {t('pattern.file_rul')} <span style={{ color: 'var(--text-muted)' }}>
-            ({t('pattern.optional')})
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <FileDropCard
+          accept={['.dxf']}
+          icon="ti-vector-triangle"
+          title={t('pattern.file_dxf')}
+          required
+          file={dxf}
+          onFile={setDxf}
+          disabled={pujant}
+          hint={compacte ? null : t('pattern.max_size', { mb: MAX_MB })}
+        />
+        <FileDropCard
+          accept={['.rul']}
+          icon="ti-table"
+          title={t('pattern.file_rul')}
+          file={rul}
+          onFile={setRul}
+          disabled={pujant}
+        />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          onClick={onTria}
+          disabled={pujant || !dxf}
+          style={{
+            background: 'var(--gold)', color: 'var(--white)', border: 'none',
+            borderRadius: 6, padding: '0.5rem 1.1rem',
+            cursor: pujant ? 'wait' : (!dxf ? 'not-allowed' : 'pointer'),
+            opacity: (!dxf && !pujant) ? 0.45 : 1,
+            fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: '0.35rem',
+          }}
+        >
+          <i className={pujant ? 'ti ti-loader' : 'ti ti-upload'} />
+          {pujant ? t('pattern.uploading') : t('pattern.upload')}
+        </button>
+        {!dxf && !pujant && (
+          <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-caption)' }}>
+            {t('pattern.need_dxf')}
           </span>
-        </span>
-        <input ref={rulRef} type="file" accept=".rul,.RUL" disabled={pujant} />
-      </label>
-      <button
-        onClick={onTria}
-        disabled={pujant}
-        style={{
-          background: 'var(--gold)', color: 'var(--white)', border: 'none',
-          borderRadius: 4, padding: '0.4rem 0.9rem', cursor: pujant ? 'wait' : 'pointer',
-          fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: '0.35rem',
-        }}
-      >
-        <i className={pujant ? 'ti ti-loader' : 'ti ti-upload'} />
-        {pujant ? t('pattern.uploading') : t('pattern.upload')}
-      </button>
-      {!compacte && (
-        <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-caption)' }}>
-          {t('pattern.max_size', { mb: MAX_MB })}
-        </span>
-      )}
+        )}
+      </div>
     </div>
   )
 }
 
-function ZonaBuida({ t, pujant, dxfRef, rulRef, onTria }) {
+function ZonaBuida({ t, pujant, dxf, rul, setDxf, setRul, onTria }) {
   return (
     <div style={{
       border: '1px dashed var(--border)', borderRadius: 8, padding: '2rem',
@@ -332,13 +348,14 @@ function ZonaBuida({ t, pujant, dxfRef, rulRef, onTria }) {
         {t('pattern.empty_hint')}
       </p>
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <CampsPujada t={t} pujant={pujant} dxfRef={dxfRef} rulRef={rulRef} onTria={onTria} />
+        <CampsPujada t={t} pujant={pujant} dxf={dxf} rul={rul}
+                     setDxf={setDxf} setRul={setRul} onTria={onTria} />
       </div>
     </div>
   )
 }
 
-function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxfRef, rulRef, onTria, onExporta, onTaller }) {
+function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxf, rul, setDxf, setRul, onTria, onExporta, onTaller }) {
   const g = fp.grade_table
   const avisos = fp.avisos_coherencia || []
   const capesDesconegudes = fp.empremta?.capes_desconegudes || []
@@ -446,12 +463,12 @@ function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxfRef, rulRef, onTr
         </button>
 
         {fp.download_url && (
-          <BotoDescarrega href={fp.download_url} icona="ti-file-download"
-                          text={t('pattern.download_dxf')} />
+          <BotoDescarrega fpId={fp.id} quin="dxf" icona="ti-file-download"
+                          text={t('pattern.download_dxf')} t={t} />
         )}
         {fp.te_rul && fp.download_rul_url && (
-          <BotoDescarrega href={fp.download_rul_url} icona="ti-table-export"
-                          text={t('pattern.download_rul')} />
+          <BotoDescarrega fpId={fp.id} quin="rul" icona="ti-table-export"
+                          text={t('pattern.download_rul')} t={t} />
         )}
 
         {/* Exportar la NIADA: no és descarregar el fitxer del client, és generar-ne un de
@@ -471,8 +488,8 @@ function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxfRef, rulRef, onTr
         </button>
 
         <span style={{ flex: 1 }} />
-        <CampsPujada t={t} pujant={pujant} dxfRef={dxfRef} rulRef={rulRef}
-                     onTria={onTria} compacte />
+        <CampsPujada t={t} pujant={pujant} dxf={dxf} rul={rul}
+                     setDxf={setDxf} setRul={setRul} onTria={onTria} compacte />
       </div>
     </div>
   )
@@ -508,20 +525,48 @@ function Avis({ tipus, text }) {
   )
 }
 
-function BotoDescarrega({ href, icona, text }) {
+// El token es demana AL CLIC, mai al render (W5 · fix D9).
+//
+// L'URL signada caduca als 15 minuts. Couvar-la amb la pàgina volia dir que qui obria el
+// patró i es posava a treballar —el cas normal al Taller, no l'excepció— es trobava, mitja
+// hora després, un botó que no descarregava res i cap explicació. El permís no és una
+// propietat del fitxer que es pugui pintar i oblidar: té data de caducitat, i es demana quan
+// es fa servir. Per això això ja no és un <a href>: és un botó que primer pregunta.
+function BotoDescarrega({ fpId, quin, icona, text, t }) {
+  const [demanant, setDemanant] = useState(false)
+  const [err, setErr] = useState(false)
+
+  const descarrega = async () => {
+    setDemanant(true)
+    setErr(false)
+    try {
+      const { data } = await patterns.downloadLinks(fpId)
+      const url = quin === 'rul' ? data.download_rul_url : data.download_url
+      if (!url) { setErr(true); return }
+      window.location.assign(url)   // token acabat de signar: la descàrrega surt al moment
+    } catch {
+      setErr(true)
+    } finally {
+      setDemanant(false)
+    }
+  }
+
   return (
-    <a
-      href={href}
+    <button
+      onClick={descarrega}
+      disabled={demanant}
+      title={err ? t('pattern.err_download_link') : undefined}
       style={{
         display: 'flex', alignItems: 'center', gap: '0.35rem',
-        fontSize: 'var(--fs-body)', color: 'var(--text-main)',
-        border: '1px solid var(--border)', borderRadius: 4,
-        padding: '0.3rem 0.7rem', textDecoration: 'none', background: 'var(--white)',
+        fontSize: 'var(--fs-body)', color: err ? 'var(--err)' : 'var(--text-main)',
+        border: `1px solid ${err ? 'var(--err)' : 'var(--border)'}`, borderRadius: 4,
+        padding: '0.3rem 0.7rem', background: 'var(--white)',
+        cursor: demanant ? 'wait' : 'pointer',
       }}
     >
-      <i className={`ti ${icona}`} />
+      <i className={`ti ${demanant ? 'ti-loader' : icona}`} />
       {text}
-    </a>
+    </button>
   )
 }
 
