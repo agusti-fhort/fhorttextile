@@ -193,12 +193,34 @@ class PropagarActionTest(TenantTestCase):
         self.assertEqual(
             ModelGradingRule.objects.filter(model=self.model, pom=self.pom).count(), 1)
 
-    def test_regim_sense_fallback_400(self):
+    def test_regim_sense_fallback_crea_regla_de_zero(self):
+        """Un POM SENSE regla de catàleg és editable igualment: se n'autora una de zero.
+
+        Aquest test afirmava el contrari (400) i portava temps en vermell. No era una
+        regressió: el guard del 400 es va treure **a consciència** al commit `407d8af`
+        (Sprint SOBIRANIA DE LA REGLA, P3), que va reescriure la view i no va tocar el test.
+
+        La llei vigent és `DECISIONS.md:280-294`: *«tot sembra el model però tot viu i és
+        modificable AL MODEL, inclosa la REGLA (deltes+breaks)»*. Amb el guard antic, un POM
+        sense regla al catàleg hauria quedat **ineditable per sempre** — exactament el que P3
+        volia desbloquejar: el consumidor real ja no és un desplegable de règim, sinó
+        `CheckMeasureEditor`, que autora la regla des de zero des de Mesures.
+
+        El que es prova, doncs, és el contracte viu: 200 i `ModelGradingRule` nova, MANUAL.
+        """
         from fhort.models_app.models import ModelGradingRule
         pom3 = POMMaster.objects.create(codi_client='P3', nom_client='POM 3')  # sense GradingRule
+
         resp = self._regim(self.model.id, pom3.id, 'STEP')
-        self.assertEqual(resp.status_code, 400)
-        self.assertFalse(ModelGradingRule.objects.filter(model=self.model, pom=pom3).exists())
+
+        self.assertEqual(resp.status_code, 200)
+        r = ModelGradingRule.objects.get(model=self.model, pom=pom3)
+        self.assertEqual(r.logica, 'STEP')
+        self.assertEqual(r.origen, 'MANUAL')       # autoria manual: no ve de cap catàleg
+        # Sense catàleg d'on heretar: increment 0 i CAP delta (no s'inventa cap graduació).
+        self.assertEqual(float(r.increment), 0)
+        self.assertIsNone(r.increment_base)
+        self.assertIsNone(r.increment_break)
 
     def test_grid_exposa_regim_per_pom(self):
         from fhort.fitting.serializers import PieceFittingGridSerializer
