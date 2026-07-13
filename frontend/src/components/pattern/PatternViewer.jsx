@@ -68,6 +68,15 @@ export default function PatternViewer({
   // — i dos punts de peces diferents no són una mesura d'una peça, són un PatternPOM
   // impossible (en penja d'UNA). La restricció no és estètica: és la llei del model.
   pecaIman = null,
+  // ── W4. La vora on l'imant pot caçar. Un tram és un tros d'UNA vora: posat el punt A, el
+  // B no pot sortir d'una altra —el motor ho rebutjaria—, i val més no deixar clicar el que
+  // no es pot fer que deixar-ho clicar i després dir que no.
+  voraIman = null,
+  // Els dos arcs que dos punts d'una vora tancada defineixen: es dibuixen tots dos i es tria.
+  arcs = [], arcTriat = 0, onTriaArc = null,
+  // Els trams DECLARATS, pintats sobre la geometria. `tramRessaltat` és el que la llista de
+  // cosir assenyala en passar-hi per sobre.
+  tramsDeclarats = [], tramRessaltat = null, onClicTram = null,
   // ── W2. Al Taller el canvas no té una alçada de maqueta: ocupa el que li deixa el
   // pare. Al tab (la porta) segueix valent ALCADA, que és el que sempre ha valgut.
   omplirAlcada = false,
