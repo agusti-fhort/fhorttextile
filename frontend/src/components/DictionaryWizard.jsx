@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { customerDictionary, poms } from '../api/endpoints'
 import Badge from './ui/Badge'
 import { primaryBtn, selS } from './ui/buttons'
+import { overlayBase } from './ui/overlay'
 
 // Wizard de revisió del diccionari de nomenclatura del client (setup, un sol cop).
 // Pas 1: descarregar plantilla + pujar l'Excel omplert → preview (proposta per fila).
@@ -109,7 +110,7 @@ export default function DictionaryWizard({ customer, t, onClose, onDone }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 60, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', overflowY: 'auto', padding: '3vh 0' }}
+    <div style={overlayBase({ alignItems: 'flex-start', overflowY: 'auto', padding: '3vh 0' })}
       onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ background: 'var(--white)', borderRadius: 12, width: 'min(1100px, 94vw)', boxShadow: '0 10px 40px rgba(0,0,0,0.18)', overflow: 'hidden' }}>
         {/* Capçalera */}
