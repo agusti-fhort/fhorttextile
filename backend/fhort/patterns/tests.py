@@ -65,7 +65,8 @@ from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
 from fhort.patterns.engine.segments import (SegmentError, fraccio_tram, longitud_tram,
                                             longitud_vora, segmentar_peca, segmentar_vora,
                                             tram_entre_punts)
-from fhort.patterns.engine.sew import (MENA_EXCES, MENA_SOLAPAMENT, TramCosit, validar,
+from fhort.patterns.engine.sew import (MENA_EXCES, MENA_SOLAPAMENT, CostatPinca, Descompte,
+                                       TramCosit, conte, descomptar_pinces, validar,
                                        validar_cobertura)
 from fhort.patterns.engine.rul_reader import RULReader, coherencia_dxf_rul
 from fhort.patterns.engine.rul_writer import RULWriter
@@ -2209,6 +2210,188 @@ class CoberturaVoraTest(unittest.TestCase):
 
     def test_una_vora_degenerada_no_genera_soroll(self):
         self.assertEqual(validar_cobertura(0, 0.0, [TramCosit(1, 10, 0.0, 1.0)]), [])
+
+
+class PincaTest(unittest.TestCase):
+    """La pinça, contra el TATE real (Taller de patró · W4b).
+
+    El cas que va obligar a construir això és aquest, i és per això que el test és aquest i
+    no un de xifres rodones: al TATE, la costura lateral uneix un tram del davanter que fa
+    **32.13 cm** de contorn amb un tram de l'esquena que en fa **29.80**. Es diferencien en
+    2.33 cm i el patró està BÉ: al mig del tram del davanter hi ha una pinça, i la tela dels
+    seus dos costats no arriba mai a la costura.
+
+    Sense el descompte, el motor deia "no casa per 2.3 cm" d'un patró correcte —que és la
+    manera més segura d'ensenyar-li al patronista que el vermell no vol dir res.
+    """
+
+    #: Els vèrtexs del TATE_FRONT (vora de cosit) que aquest cas fa servir. Surten de la
+    #: geometria, no d'un catàleg: 68→72 és el tram lateral que el patronista va declarar, i
+    #: 69→70→71 és la pinça que hi ha a dins (tres punts de GIR consecutius que fan una V).
+    TRAM_INICI, TRAM_FI = 68, 72
+    PINCA_A, PINCA_VERTEX, PINCA_B = 69, 70, 71
+
+    @classmethod
+    def setUpClass(cls):
+        doc = AAMAReader().read(TATE_DXF.read_bytes())
+
+        davant = doc.piece('TATE_FRONT')
+        cls.i_davant = next(i for i, b in enumerate(davant.boundaries)
+                            if b.role is LayerRole.SEW)
+        cls.davant = davant.boundaries[cls.i_davant]
+
+        esquena = doc.piece('TATE_BACK')
+        i_esquena = next(i for i, b in enumerate(esquena.boundaries)
+                         if b.role is LayerRole.SEW)
+        cls.esquena = esquena.boundaries[i_esquena]
+
+        # El tram lateral de cada peça, tal com es va declarar al taller.
+        cls.tram_davant = tram_entre_punts(
+            cls.davant, cls.i_davant, cls.TRAM_INICI, cls.TRAM_FI)
+        cls.tram_esquena = tram_entre_punts(cls.esquena, i_esquena, 165, 167)
+
+        # Els dos costats de la pinça, cadascun un tram declarat.
+        cls.costat_a = tram_entre_punts(
+            cls.davant, cls.i_davant, cls.PINCA_A, cls.PINCA_VERTEX)
+        cls.costat_b = tram_entre_punts(
+            cls.davant, cls.i_davant, cls.PINCA_VERTEX, cls.PINCA_B)
+
+    def _pinca(self, nom='Pinça 1', sew_id=99):
+        """Els dos costats de la pinça del TATE, com el motor els vol."""
+        return [
+            CostatPinca(sew_id=sew_id, segment_id=n, nom=nom,
+                        t_inici=tr.t_inici, t_fi=tr.t_fi,
+                        longitud_cm=tr.longitud_mm / 10.0)
+            for n, tr in ((1, self.costat_a), (2, self.costat_b))
+        ]
+
+    # ── El material: les xifres del cas real ────────────────────────────────
+    def test_les_xifres_del_tate_son_les_del_cas(self):
+        """Si el fitxer canviés, tot el que ve després deixaria de provar el que diu provar."""
+        self.assertAlmostEqual(self.tram_davant.longitud_mm / 10, 32.13, places=2)
+        self.assertAlmostEqual(self.tram_esquena.longitud_mm / 10, 29.80, places=2)
+        # El no-casa exacte: 2.33 cm.
+        self.assertAlmostEqual(
+            (self.tram_davant.longitud_mm - self.tram_esquena.longitud_mm) / 10,
+            2.33, places=2)
+
+    def test_els_dos_costats_de_la_pinca_sumen_el_que_falla(self):
+        """La hipòtesi sencera del sprint, en una línia: el que sobra al davanter ÉS la pinça.
+
+        2.34 (costats) vs 2.33 (no-casa): 0.1 mm de diferència, que és la boca de la pinça
+        contra la corda dels seus costats. Per sota de la tolerància, i per això casa."""
+        suma = (self.costat_a.longitud_mm + self.costat_b.longitud_mm) / 10
+        self.assertAlmostEqual(suma, 2.34, places=2)
+
+    def test_la_pinca_es_dins_del_tram_lateral(self):
+        """Si no hi fos a dins, no seria una pinça d'aquesta costura i no s'hi descomptaria."""
+        for costat in (self.costat_a, self.costat_b):
+            self.assertTrue(conte(
+                self.tram_davant.t_inici, self.tram_davant.t_fi,
+                costat.t_inici, costat.t_fi))
+
+    # ── La regla ────────────────────────────────────────────────────────────
+    def test_sense_descompte_el_tate_correcte_surt_vermell(self):
+        """El bug que això arregla, escrit com a test: un patró bo, denunciat."""
+        c = validar(self.tram_davant.longitud_mm, self.tram_esquena.longitud_mm, 'casat')
+
+        self.assertFalse(c.casa)
+        self.assertAlmostEqual(c.desviament_cm, 2.33, places=2)
+
+    def test_amb_la_pinca_declarada_la_costura_lateral_del_tate_CASA(self):
+        """El cas real, sencer. I l'aritmètica sencera al missatge: 32.1 − 2.3 = 29.8."""
+        tram = TramCosit(
+            sew_id=1, segment_id=10, nom='Lateral',
+            t_inici=self.tram_davant.t_inici, t_fi=self.tram_davant.t_fi)
+        descomptes = descomptar_pinces([tram], self._pinca())
+
+        c = validar(
+            self.tram_davant.longitud_mm, self.tram_esquena.longitud_mm, 'casat',
+            descomptes_a=descomptes,
+        )
+
+        self.assertTrue(c.casa)
+        # El BRUT es conserva: la vora continua fent 32.13, i això no és un secret.
+        self.assertAlmostEqual(c.brut_a_cm, 32.13, places=2)
+        self.assertAlmostEqual(c.longitud_a_cm, 29.79, places=2)   # el NET, que és el que es cus
+        self.assertLess(c.desviament_cm, 0.1)
+        self.assertEqual(len(c.descomptes_a), 1)
+        self.assertEqual(c.descomptes_a[0].nom, 'Pinça 1')
+        # L'operació, no el resultat: qui la llegeixi l'ha de poder anar a comprovar.
+        self.assertIn('32.1 − 2.3 (Pinça 1) = 29.8', c.missatge)
+
+    def test_una_pinca_es_reporta_sencera_i_no_pas_per_costats(self):
+        """El patronista reconeix LA PINÇA, no les seves meitats: un descompte, no dos."""
+        tram = TramCosit(1, 10, self.tram_davant.t_inici, self.tram_davant.t_fi)
+
+        descomptes = descomptar_pinces([tram], self._pinca())
+
+        self.assertEqual(len(descomptes), 1)
+        self.assertAlmostEqual(descomptes[0].cm, 2.34, places=2)
+
+    def test_una_pinca_de_fora_del_tram_no_es_descompta(self):
+        """Descomptar una pinça que la costura no conté seria inventar-se tela.
+
+        El tram és l'ALTRE costat de la vora; la pinça continua sent on era."""
+        altre = tram_entre_punts(self.davant, self.i_davant, self.TRAM_INICI, self.TRAM_FI,
+                                 arc_llarg=True)
+        tram = TramCosit(1, 10, altre.t_inici, altre.t_fi)
+
+        self.assertEqual(descomptar_pinces([tram], self._pinca()), [])
+
+    def test_una_pinca_a_mitges_no_es_descompta(self):
+        """Conteniment ESTRICTE: mig costat dins no és mitja pinça, és una declaració
+        dolenta. Val més una costura que no casa i es pot investigar que una que casa perquè
+        el motor s'ha inventat el que hi cabia."""
+        # Un tram que talla la pinça pel mig: comença al vèrtex i acaba al final del tram.
+        mig = tram_entre_punts(self.davant, self.i_davant, self.PINCA_VERTEX, self.TRAM_FI)
+        tram = TramCosit(1, 10, mig.t_inici, mig.t_fi)
+
+        descomptes = descomptar_pinces([tram], self._pinca())
+
+        # Només hi cau el costat B (vèrtex→final); el A queda fora i la pinça no és sencera.
+        self.assertEqual(len(descomptes), 1)
+        self.assertAlmostEqual(descomptes[0].cm, self.costat_b.longitud_mm / 10, places=3)
+
+    # ── La cobertura ────────────────────────────────────────────────────────
+    def test_la_pinca_continguda_no_es_un_conflicte_de_cobertura(self):
+        """Sense l'excepció, declarar la pinça del TATE encenia DOS avisos falsos —solapament
+        i excés— sobre una vora que està perfectament bé. La costura ja no cus aquella tela:
+        `validar` l'hi ha descomptada, i comptar-la aquí seria comptar-la dues vegades."""
+        pinca = self._pinca()
+        trams = [
+            TramCosit(sew_id=1, segment_id=10, nom='Lateral',
+                      t_inici=self.tram_davant.t_inici, t_fi=self.tram_davant.t_fi),
+            *[TramCosit(sew_id=c.sew_id, segment_id=c.segment_id, nom=c.nom,
+                        t_inici=c.t_inici, t_fi=c.t_fi, es_pinca=True) for c in pinca],
+        ]
+
+        avisos = validar_cobertura(
+            vora=self.i_davant, longitud_vora_mm=longitud_vora(self.davant), trams=trams)
+
+        self.assertEqual(avisos, [])
+
+    def test_una_pinca_que_no_cus_ningu_SI_que_compta(self):
+        """L'excepció és estreta: val per a la pinça que una costura conté, no per a
+        qualsevol tram etiquetat de pinça. Una pinça declarada al mig de res reclama tela de
+        debò, i si no hi cap s'ha de dir."""
+        trams = [
+            TramCosit(sew_id=1, segment_id=10, t_inici=0.0, t_fi=0.95),
+            TramCosit(sew_id=2, segment_id=11, t_inici=0.96, t_fi=0.99, es_pinca=True),
+            TramCosit(sew_id=2, segment_id=12, t_inici=0.99, t_fi=1.0, es_pinca=True),
+        ]
+
+        avisos = validar_cobertura(vora=0, longitud_vora_mm=1000.0, trams=trams)
+
+        # 0.95 + 0.03 + 0.01 = 0.99 de la vora: hi cap, i no es diu res. Però els costats de
+        # pinça HAN comptat — el que es prova és que no s'han neutralitzat.
+        self.assertEqual(avisos, [])
+        trams_massa = [*trams, TramCosit(sew_id=3, segment_id=13, t_inici=0.0, t_fi=0.05)]
+        exces = [a for a in validar_cobertura(0, 1000.0, trams_massa)
+                 if a.mena == MENA_EXCES]
+        self.assertEqual(len(exces), 1)
+        # Si els costats de pinça no comptessin, la suma seria 1.00 i no hi hauria excés.
+        self.assertAlmostEqual(exces[0].suma_cosida_cm, 104.0, places=2)
 
 
 class SegmentDeclaratAPITest(PatternsAPITestBase):
