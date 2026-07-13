@@ -2,16 +2,35 @@ import { create } from 'zustand'
 import client from '../api/client'
 import { me as meApi } from '../api/endpoints'
 
+/**
+ * L'estat de l'auth té TRES valors, no dos (D10).
+ *
+ * `isAuthenticated` sol no en té prou: un booleà no sap distingir «no hi ha sessió» de
+ * «encara no he mirat si n'hi ha». I com que arrenca a `false`, qui el llegís abans que
+ * `initAuth` hagués corregut entenia «no hi ha sessió» — i rebotava a /login algú que la
+ * tenia perfectament vàlida. Era el que passava a cada F5 sobre una ruta protegida.
+ *
+ * Amb tres valors, el moment de no-saber és un estat i es pot esperar, en comptes de ser un
+ * «no» disfressat.
+ */
+export const AUTH_DESCONEGUT = 'desconegut'   // encara no s'ha mirat el localStorage
+export const AUTH_VALID = 'valid'
+export const AUTH_INVALID = 'invalid'
+
 const useAuthStore = create((set, get) => ({
   token: null,
   user: null,            // { id, username, nom_complet, rol_nom, color_avatar, capabilities }
   isAuthenticated: false,
+  estatAuth: AUTH_DESCONEGUT,
 
   initAuth: () => {
     const token = localStorage.getItem('access_token')
     if (token) {
-      set({ token, isAuthenticated: true })
+      set({ token, isAuthenticated: true, estatAuth: AUTH_VALID })
       get().fetchMe()    // carrega user + capabilities en sessions ja autenticades
+    } else {
+      // Mirat, i no hi ha res: ara sí que és un «no».
+      set({ estatAuth: AUTH_INVALID })
     }
   },
 
@@ -20,7 +39,7 @@ const useAuthStore = create((set, get) => ({
     const { access, refresh } = res.data
     localStorage.setItem('access_token', access)
     localStorage.setItem('refresh_token', refresh)
-    set({ token: access, isAuthenticated: true })
+    set({ token: access, isAuthenticated: true, estatAuth: AUTH_VALID })
     await get().fetchMe()
     return res.data
   },
@@ -53,7 +72,7 @@ const useAuthStore = create((set, get) => ({
   logout: () => {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
-    set({ token: null, user: null, isAuthenticated: false })
+    set({ token: null, user: null, isAuthenticated: false, estatAuth: AUTH_INVALID })
     window.location.href = '/login'
   },
 }))
