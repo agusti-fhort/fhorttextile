@@ -20,7 +20,7 @@ from types import SimpleNamespace
 from django.core import signing
 from django.http import HttpResponse, HttpResponseForbidden
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import mixins, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -28,7 +28,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from fhort.fitting.models import GradingVersion
-from fhort.models_app.models import Model
+from fhort.models_app.models import BaseMeasurement, Model
 from fhort.models_app.services_fitxers import (DOWNLOAD_TTL, UploadRejected,
                                                serve_fitxer, validate_upload)
 from fhort.tasks.models import GarmentTypeItem
@@ -38,7 +38,7 @@ from .engine.aama_reader import AAMAReader
 from .engine.errors import PatternParseError
 from .engine.rul_reader import RULReader, coherencia_dxf_rul
 from .export import PERFILS_DISPONIBLES, ExportBlocked, build_export
-from .models import ExportAcknowledgement, PatternFile
+from .models import ExportAcknowledgement, PatternFile, PatternPOM
 from .serializers import (PatternFileLlistaSerializer, PatternFileSerializer,
                           PatternGeometrySerializer)
 from .services import delete_pattern_bytes, save_pattern_file
@@ -50,6 +50,19 @@ logger = logging.getLogger(__name__)
 #: només l'id: amb un salt compartit, un token de ModelFitxer id=5 validaria aquí.
 PATTERN_DOWNLOAD_SALT = 'pattern_file_download'
 PATTERN_RUL_DOWNLOAD_SALT = 'pattern_file_rul_download'
+
+#: L'últim recurs de la tolerància, quan ni la mesura ni el catàleg en diuen res. Mateixa
+#: xifra que `pom.s10_views.TOL_FALLBACK`: una mesura no pot tenir una tolerància aquí i
+#: una altra allà segons quina pantalla la miri.
+TOL_FALLBACK = 0.6
+
+
+def _tol(de_la_mesura, del_cataleg):
+    """La tolerància de la MESURA mana; la del catàleg és el pla B; 0.6 és l'últim recurs."""
+    for v in (de_la_mesura, del_cataleg):
+        if v is not None:
+            return float(v)
+    return TOL_FALLBACK
 
 #: ⚠️ TEXT PROVISIONAL — PENDENT D'ADVOCAT ABANS DE PRODUCCIÓ REAL.
 #: Viu aquí i no al frontend perquè és el text que es DESA a `ExportAcknowledgement`: el
@@ -324,6 +337,101 @@ class PatternFileViewSet(mixins.CreateModelMixin,
         doc = DjangoGeometryStore().load_from(fp)
         svg = render_document(doc, piece_name=request.query_params.get('piece', ''))
         return HttpResponse(svg, content_type='image/svg+xml')
+
+    # ── La llista de treball del taller ──────────────────────────────────────
+    @action(detail=True, methods=['get'], url_path='model-poms')
+    def model_poms(self, request, pk=None):
+        """Les Mesures del model creuades amb l'estat d'ancoratge en AQUEST patró.
+
+        La pregunta que el taller fa tota l'estona és una de sola: «d'això que la fitxa
+        diu que s'ha de mesurar, què he col·locat ja, i el que he col·locat quadra?».
+        Respondre-la des del client volia dir baixar-se dues llistes i creuar-les a mà; el
+        creuament és de domini (la frontissa és el POMMaster) i viu aquí.
+
+        Read-only. Cada fila porta el que la fitxa mana (codi de client, nomenclatura del
+        croquis, nom canònic, valor a talla base, tolerància) i, si el POM ja és al patró,
+        el que el patró mesura (peça, valor mesurat) i la DIFERÈNCIA — que és tot el que
+        això persegueix. La tolerància només qualifica la diferència quan n'hi ha: sense
+        tolerància es dona la xifra i no es jutja.
+        """
+        fp = self.get_object()
+        if fp.model_id is None:
+            # Un patró penjat d'un GarmentTypeItem (l'altra branca del XOR) no té fitxa de
+            # model: no hi ha res per creuar, i dir-ho és millor que tornar una llista buida
+            # que sembli «aquest model no té mesures».
+            return Response(
+                {'error': 'Aquest patró no penja de cap model: no té fitxa de mesures.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ancorats = {
+            p.pom_master_id: p
+            for p in PatternPOM.objects
+            .filter(pattern_piece__pattern_file=fp)
+            .select_related('pattern_piece', 'pom_master')
+        }
+
+        files = []
+        base = (
+            BaseMeasurement.objects
+            .filter(model_id=fp.model_id, is_active=True)
+            .select_related('pom', 'pom__pom_global')
+            .order_by('ordre', 'pom__codi_client')
+        )
+        for bm in base:
+            pom, glob = bm.pom, bm.pom.pom_global
+            anc = ancorats.get(bm.pom_id)
+
+            # La tolerància de la mesura mana sobre la del catàleg; el 0.6 de la casa és
+            # l'últim recurs (mateixa escala que `s10_views._tolerance_map`).
+            tol_minus = _tol(bm.tolerancia_minus, pom.tolerancia_default_minus)
+            tol_plus = _tol(bm.tolerancia_plus, pom.tolerancia_default_plus)
+
+            fila = {
+                'base_measurement': bm.id,
+                'pom_master': bm.pom_id,
+                'codi_client': pom.codi_client,
+                'nom_fitxa': bm.nom_fitxa,
+                'nom_client': pom.nom_client,
+                'nom_canonic': glob.nom_ca or glob.nom_en if glob else '',
+                'codi_global': glob.codi if glob else '',
+                'valor_fitxa_cm': bm.base_value_cm,
+                'tolerancia_minus_cm': tol_minus,
+                'tolerancia_plus_cm': tol_plus,
+                'is_key': bm.is_key,
+                'ancorat': anc is not None,
+                'pattern_pom': None,
+                'pattern_piece': None,
+                'peca': None,
+                'valor_mesurat_cm': None,
+                'delta_cm': None,
+                'dins_tolerancia': None,
+            }
+
+            if anc is not None:
+                fila.update({
+                    'pattern_pom': anc.id,
+                    'pattern_piece': anc.pattern_piece_id,
+                    'peca': anc.pattern_piece.nom_block,
+                    'valor_mesurat_cm': anc.valor_mesurat_cm,
+                })
+                # La Δ només existeix si hi ha les DUES xifres. Un POM col·locat sobre una
+                # mesura sense valor de fitxa (origen TEMPLATE) es pot mesurar igualment,
+                # però no hi ha res amb què comparar-lo: la Δ es queda a None i no s'inventa.
+                if anc.valor_mesurat_cm is not None and bm.base_value_cm is not None:
+                    delta = round(anc.valor_mesurat_cm - bm.base_value_cm, 2)
+                    fila['delta_cm'] = delta
+                    fila['dins_tolerancia'] = -tol_minus <= delta <= tol_plus
+
+            files.append(fila)
+
+        return Response({
+            'pattern_file': fp.id,
+            'model': fp.model_id,
+            'total': len(files),
+            'ancorats': sum(1 for f in files if f['ancorat']),
+            'results': files,
+        })
 
     # ── L'escalat: previsualitzar i exportar ─────────────────────────────────
     @action(detail=True, methods=['get'], url_path='grading-versions')

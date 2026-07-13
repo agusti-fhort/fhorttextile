@@ -72,6 +72,7 @@ from fhort.patterns.engine.rul_writer import RULWriter
 
 # ── el que només fa falta per als tests de S3 (adaptadors: SÍ que toquen Django) ──
 import datetime
+from decimal import Decimal
 import time
 from unittest import mock
 from xml.etree import ElementTree
@@ -86,7 +87,7 @@ from django_tenants.test.cases import TenantTestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from fhort.fitting.models import GradedSpec, GradingVersion, SizeFitting
-from fhort.models_app.models import Model
+from fhort.models_app.models import BaseMeasurement, Model
 from fhort.models_app.services_fitxers import DOWNLOAD_SALT as MODEL_FITXER_SALT
 from fhort.patterns.adapters import (DjangoGeometryStore, DjangoGradingSource,
                                      pom_specs, sew_specs)
@@ -2347,3 +2348,131 @@ class SegmentDeclaratAPITest(PatternsAPITestBase):
         estat = comprovar_costura(rel)
 
         self.assertGreater(estat['longitud_a_cm'], 0)
+
+
+class LlistaDeTreballAPITest(PatternsAPITestBase):
+    """`GET …/model-poms/`: les Mesures del model creuades amb el que el patró mesura.
+
+    És la pregunta del taller: d'això que la fitxa mana, què he col·locat i quadra?
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(TATE_DXF.read_bytes()).data['id'])
+        self.front = self.fp.pieces.get(nom_block='TATE_FRONT')
+        self.girs = list(
+            self.front.points.filter(mena='vertex', tipus='turn', boundary_index=0)
+            .order_by('ordre'))
+
+        self.pom_a = POMMaster.objects.create(codi_client='T.1', nom_client='Front rise')
+        self.pom_b = POMMaster.objects.create(codi_client='CH', nom_client='Chest width')
+        # Una mesura amb tolerància pròpia i una altra sense (que ha de caure al catàleg).
+        self.bm_a = BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom_a, base_value_cm=50.0, nom_fitxa='A',
+            tolerancia_minus=Decimal('1.00'), tolerancia_plus=Decimal('1.00'), ordre=1)
+        self.bm_b = BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom_b, base_value_cm=45.0, nom_fitxa='CH', ordre=2)
+
+    def _llista(self, pk=None):
+        request = self.factory.get(
+            f'/api/v1/patterns/pattern-files/{pk or self.fp.id}/model-poms/')
+        force_authenticate(request, user=self.user)
+        return PatternFileViewSet.as_view({'get': 'model_poms'})(
+            request, pk=pk or self.fp.id)
+
+    def _ancora(self, pom, a, b):
+        request = self.factory.post('/api/v1/patterns/pattern-poms/', {
+            'pattern_piece': self.front.id, 'pom_master': pom.id,
+            'definicio_mesura': {'mode': 'points', 'a': a.id, 'b': b.id},
+            'metode': 'recta',
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternPOMViewSet.as_view({'post': 'create'})(request)
+
+    def test_sense_cap_ancoratge_totes_les_mesures_surten_pendents(self):
+        resp = self._llista()
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['total'], 2)
+        self.assertEqual(resp.data['ancorats'], 0)
+        for fila in resp.data['results']:
+            self.assertFalse(fila['ancorat'])
+            self.assertIsNone(fila['valor_mesurat_cm'])
+            self.assertIsNone(fila['delta_cm'])
+            self.assertIsNone(fila['dins_tolerancia'])
+
+    def test_la_fila_porta_el_que_la_fitxa_mana(self):
+        fila = next(f for f in self._llista().data['results'] if f['codi_client'] == 'T.1')
+
+        self.assertEqual(fila['nom_fitxa'], 'A')
+        self.assertEqual(fila['nom_client'], 'Front rise')
+        self.assertEqual(fila['valor_fitxa_cm'], 50.0)
+        self.assertEqual(fila['pom_master'], self.pom_a.id)
+
+    def test_ancorar_un_pom_omple_la_seva_fila_amb_la_diferencia(self):
+        """La Δ és tot el que això persegueix: el patró mesura X, la fitxa en deia Y."""
+        anc = self._ancora(self.pom_a, self.girs[0], self.girs[3])
+        self.assertEqual(anc.status_code, 201)
+        mesurat = anc.data['valor_mesurat_cm']
+
+        resp = self._llista()
+        fila = next(f for f in resp.data['results'] if f['codi_client'] == 'T.1')
+
+        self.assertEqual(resp.data['ancorats'], 1)
+        self.assertTrue(fila['ancorat'])
+        self.assertEqual(fila['peca'], 'TATE_FRONT')
+        self.assertEqual(fila['pattern_pom'], anc.data['id'])
+        self.assertEqual(fila['valor_mesurat_cm'], mesurat)
+        self.assertEqual(fila['delta_cm'], round(mesurat - 50.0, 2))
+
+    def test_la_tolerancia_de_la_mesura_mana_sobre_la_del_cataleg(self):
+        files = {f['codi_client']: f for f in self._llista().data['results']}
+
+        # T.1 la porta pròpia (1.0); CH no en té i cau a la del catàleg (0.6 per defecte).
+        self.assertEqual(files['T.1']['tolerancia_minus_cm'], 1.0)
+        self.assertEqual(files['T.1']['tolerancia_plus_cm'], 1.0)
+        self.assertEqual(files['CH']['tolerancia_minus_cm'], 0.6)
+
+    def test_dins_tolerancia_jutja_la_diferencia_amb_la_tolerancia_de_la_fila(self):
+        anc = self._ancora(self.pom_a, self.girs[0], self.girs[3])
+        mesurat = anc.data['valor_mesurat_cm']
+
+        # La mesura de fitxa es mou fins a deixar la Δ JUST dins i JUST fora de ±1.0.
+        BaseMeasurement.objects.filter(pk=self.bm_a.pk).update(base_value_cm=mesurat - 0.9)
+        fila = next(f for f in self._llista().data['results'] if f['codi_client'] == 'T.1')
+        self.assertTrue(fila['dins_tolerancia'])
+
+        BaseMeasurement.objects.filter(pk=self.bm_a.pk).update(base_value_cm=mesurat - 1.4)
+        fila = next(f for f in self._llista().data['results'] if f['codi_client'] == 'T.1')
+        self.assertFalse(fila['dins_tolerancia'])
+
+    def test_una_mesura_sense_valor_de_fitxa_es_mesura_pero_no_te_delta(self):
+        """Un POM col·locat sobre una plantilla sense valor no s'inventa una comparació."""
+        BaseMeasurement.objects.filter(pk=self.bm_a.pk).update(base_value_cm=None)
+        self._ancora(self.pom_a, self.girs[0], self.girs[3])
+
+        fila = next(f for f in self._llista().data['results'] if f['codi_client'] == 'T.1')
+
+        self.assertTrue(fila['ancorat'])
+        self.assertIsNotNone(fila['valor_mesurat_cm'])
+        self.assertIsNone(fila['delta_cm'])
+        self.assertIsNone(fila['dins_tolerancia'])
+
+    def test_una_mesura_inactiva_no_es_feina(self):
+        BaseMeasurement.objects.filter(pk=self.bm_b.pk).update(is_active=False)
+
+        resp = self._llista()
+
+        self.assertEqual(resp.data['total'], 1)
+        self.assertNotIn('CH', [f['codi_client'] for f in resp.data['results']])
+
+    def test_un_patro_sense_model_no_te_fitxa_de_mesures(self):
+        """L'altra branca del XOR (patró d'un GarmentTypeItem): es diu, no es fingeix."""
+        fp_item = PatternFile.objects.get(pk=self._upload(
+            TATE_DXF.read_bytes(), model='', garment_type_item=self.item.id).data['id'])
+
+        resp = self._llista(pk=fp_item.id)
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('error', resp.data)
