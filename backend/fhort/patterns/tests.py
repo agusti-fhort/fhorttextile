@@ -62,6 +62,11 @@ from fhort.patterns.engine.grading_projection import (
 from fhort.patterns.engine.operations import POMSpec, PointRef, move_points
 from fhort.patterns.engine.measure import MeasureError, resoldre
 from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
+from fhort.patterns.engine.dart_detection import (
+    LLINDAR_PINCA,
+    clau_pinca,
+    detectar,
+)
 from fhort.patterns.engine.seam_matching import (
     Candidat,
     LLINDAR_PROPOSTA,
@@ -75,7 +80,8 @@ from fhort.patterns.engine.seam_matching import (
     senyal_longitud,
     senyal_noms,
 )
-from fhort.patterns.engine.segments import (SegmentError, fraccio_tram, longitud_tram,
+from fhort.patterns.engine.segments import (
+    acumulats_vora, SegmentError, fraccio_tram, longitud_tram,
                                             longitud_vora, segmentar_peca, segmentar_vora,
                                             tram_entre_punts)
 from fhort.patterns.engine.sew import (MENA_EXCES, MENA_SOLAPAMENT, CostatPinca, Descompte,
@@ -3525,3 +3531,116 @@ class PropostesAPITest(PatternsAPITestBase):
 
         claus = {tuple(x['clau']) for x in self._propostes().data['propostes']}
         self.assertNotIn(tuple(p['clau']), claus)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# A1 — DETECCIÓ DE PINCES: el detector (engine pur)
+# ═════════════════════════════════════════════════════════════════════════════
+
+def _vora(punts_xy, girs_idx):
+    """Una vora tancada de prova: coordenades i quins vèrtexs són GIRS."""
+    pts = tuple(
+        PointData(x=x, y=y, kind=(PointKind.TURN if i in girs_idx else PointKind.CURVE))
+        for i, (x, y) in enumerate(punts_xy)
+    )
+    return BoundaryData(role=LayerRole.CUT, layer='1', points=pts, closed=True)
+
+
+def _detecta(boundary, piquets_t=()):
+    """El detector sobre una vora de prova, amb tot el que necessita ja calculat."""
+    pts = list(boundary.points)
+    girs = [i for i, p in enumerate(pts) if p.kind is PointKind.TURN]
+    llarg = longitud_vora(boundary)
+    acumulats, _ = acumulats_vora(boundary)
+    return detectar(pts, girs, llarg, piquets_t, acumulats,
+                    piece_id=1, piece_nom='PROVA', vora=0)
+
+
+def _quadrat_amb_v(apex_dx=10.0, apex_dy=-6.0, boca=20.0):
+    """Un quadrat de 50×50 cm (200 cm de vora) amb una V a la vora de baix.
+
+    El quadrat va en sentit CCW i l'interior queda A DALT de la vora de baix: una V amb el
+    vèrtex a `y` NEGATIVA apunta cap a FORA, que és el que fa una pinça de vora (v. la
+    capçalera d'`engine.dart_detection`).
+    """
+    ax = 200.0
+    return _vora(
+        [(0, 0), (ax, 0), (ax + apex_dx, apex_dy), (ax + boca, 0),
+         (500, 0), (500, 500), (0, 500)],
+        girs_idx={0, 1, 2, 3, 4, 5, 6},
+    )
+
+
+class DeteccioPincaTest(unittest.TestCase):
+    """La signatura d'una pinça de vora. **Els tests que manen són els negatius.**"""
+
+    def test_una_V_petita_i_simetrica_cap_enfora_es_una_pinca(self):
+        candidats = _detecta(_quadrat_amb_v())
+
+        self.assertEqual(len(candidats), 1)
+        c = candidats[0]
+        self.assertEqual((c.index_a, c.index_vertex, c.index_b), (1, 2, 3))
+        self.assertAlmostEqual(c.boca_cm, 2.0, places=1)
+        self.assertGreaterEqual(c.confianca, LLINDAR_PINCA)
+
+    def test_la_tela_que_es_menja_es_la_suma_dels_dos_costats(self):
+        """És el número que després sortirà restat a la costura que la conté (W4b)."""
+        c = _detecta(_quadrat_amb_v())[0]
+
+        self.assertAlmostEqual(c.intake_cm, c.costat_a_cm + c.costat_b_cm, places=2)
+
+    # ── ELS NEGATIUS ────────────────────────────────────────────────────────
+    def test_una_CANTONADA_no_es_una_pinca(self):
+        """La mateixa FORMA que una pinça, però a l'escala de la peça.
+
+        Aquest és el test que justifica tot el disseny: una cantonada i una pinça tenen les
+        mateixes ràtios (boca/costats, fondària/boca) i cap criteri invariant d'escala les
+        distingeix. El que les separa és la boca CONTRA LA VORA.
+        """
+        # La V, ×10: costats i fondària proporcionals, boca del 10% de la vora.
+        candidats = _detecta(_quadrat_amb_v(apex_dx=100.0, apex_dy=-60.0, boca=200.0))
+
+        self.assertEqual(candidats, [])
+
+    def test_els_girs_dune_CORBA_no_son_una_pinca(self):
+        """Tres girs gairebé alineats (la curvatura d'una sisa): fondària zero, cap V."""
+        boundary = _vora(
+            [(0, 0), (200, 0), (210, -0.2), (220, 0), (500, 0), (500, 500), (0, 500)],
+            girs_idx={0, 1, 2, 3, 4, 5, 6},
+        )
+
+        self.assertEqual(_detecta(boundary), [])
+
+    def test_una_V_amb_els_costats_MOLT_desiguals_no_tanca_plana(self):
+        """Els dos costats es cusen l'un contra l'altre: si no fan el mateix, no és una pinça."""
+        candidats = _detecta(_quadrat_amb_v(apex_dx=4.0, apex_dy=-6.0, boca=20.0))
+
+        self.assertEqual(candidats, [])
+
+    def test_una_OSCA_cap_a_DINS_no_es_una_pinca(self):
+        """Una V cap a dins RETALLA tela: la vora es fa més curta i no hi ha res per cosir.
+
+        Una pinça de vora és tela que SOBRA —per això la vora fa una V cap enfora— i és el que
+        fa que el davanter del TATE tingui 2,34 cm més de contorn que l'esquena.
+        """
+        candidats = _detecta(_quadrat_amb_v(apex_dy=+6.0))
+
+        self.assertEqual(candidats, [])
+
+    # ── la confiança i la clau ──────────────────────────────────────────────
+    def test_els_piquets_a_la_boca_apugen_la_confianca(self):
+        """El piquet és la marca que el CAD posa perquè els dos extrems es TROBIN."""
+        boundary = _quadrat_amb_v()
+        acumulats, total = acumulats_vora(boundary)
+        t_boca = (acumulats[1] / total, acumulats[3] / total)
+
+        sense = _detecta(boundary)[0]
+        amb = _detecta(boundary, piquets_t=t_boca)[0]
+
+        self.assertEqual(sense.piquets_boca, 0)
+        self.assertEqual(amb.piquets_boca, 2)
+        self.assertGreater(amb.confianca, sense.confianca)
+
+    def test_la_clau_dune_pinca_es_canonica(self):
+        """Una V llegida a l'inrevés és la MATEIXA V: el rebuig no pot deixar-la tornar."""
+        self.assertEqual(clau_pinca(9, 5, 2), clau_pinca(2, 5, 9))
