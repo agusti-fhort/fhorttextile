@@ -348,7 +348,12 @@ class CustomerPOMAliasSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'customer', 'customer_codi', 'pom', 'pom_codi', 'pom_nom',
             'pom_code_global', 'pom_abbreviation', 'pom_nom_en', 'pom_nom_ca',
-            'client_code', 'client_description', 'origen', 'pendent_revisio',
+            # description_en/local + language són els camps VIUS de la descripció (models.py:262-264):
+            # els escriu el diccionari (dictionary_views.py:167-168). Sense exposar-los, la
+            # biblioteca no en podia pintar cap (QA-S8 · D4b). `client_description` es manté al
+            # contracte només com a LLEGAT (camp obsolet, models.py:255-258).
+            'client_code', 'client_description', 'description_en', 'description_local', 'language',
+            'origen', 'pendent_revisio',
             'creat_at', 'actualitzat_at',
         )
         read_only_fields = ('creat_at', 'actualitzat_at')

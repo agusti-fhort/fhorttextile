@@ -185,16 +185,35 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
       .catch(() => notify({ type: 'err', text: t('clients.error') }))
   }
 
-  // Regla NOMÉS de visualització (no toca dades): si la descripció duplica el codi del
-  // client, mostrem '—'. El diccionari (description_en/local) omplirà això de veritat.
-  const descDup = (r) => !r.client_description ||
-    r.client_description.trim().toLowerCase() === (r.client_code || '').trim().toLowerCase()
+  // Descripció LLEGAT: `client_description` és el camp obsolet (models.py:255-258) i només
+  // s'usa de reserva per als àlies antics. Mai si duplica el codi: la migració 0031 hi va
+  // copiar el codi del client, i pintar-ho seria repetir la columna del costat.
+  const legacyDesc = (r) => {
+    const cd = (r.client_description || '').trim()
+    return cd.toLowerCase() === (r.client_code || '').trim().toLowerCase() ? '' : cd
+  }
 
   const aliasCols = [
     { key: 'client_code', label: t('clients.alias_code'),
       render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.client_code}</span> },
-    { key: 'client_description', label: t('clients.alias_desc'),
-      render: r => descDup(r) ? <span style={{ color: 'var(--text-muted)' }}>—</span> : r.client_description },
+    // Descripció: EN a dalt (canònica), local a sota amb el codi d'idioma (mateixa convenció que
+    // el pas 2 del wizard, DictionaryWizard.jsx:177-182). Els escriu el diccionari; abans la
+    // columna llegia el camp obsolet i sortia '—' per a TOTS els àlies del wizard (QA-S8 · D4b).
+    { key: 'description_en', label: t('clients.alias_desc'), render: r => {
+      const en = r.description_en || legacyDesc(r)
+      const local = r.description_local
+      if (!en && !local) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+      return (
+        <div style={{ lineHeight: 1.2 }}>
+          {en && <div>{en}</div>}
+          {local && (
+            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+              {r.language && <span style={{ fontFamily: MONO, marginRight: 4 }}>[{r.language}]</span>}{local}
+            </div>
+          )}
+        </div>
+      )
+    } },
     // POM canònic: codi global (POM-XXX) com a element principal; a sota, abreviatura + nom EN.
     // Fallback per a POMs tenant-only (sense pom_global): el codi_client fa d'identificador i
     // no repetim l'abreviatura si coincideix amb el principal.
@@ -307,7 +326,9 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
 // Fila d'alta d'un àlies: codi + descripció + cercador de POM del catàleg.
 function AliasAddRow({ customer, t, onCreated, onError }) {
   const [code, setCode] = useState('')
-  const [desc, setDesc] = useState('')
+  const [descEn, setDescEn] = useState('')
+  const [descLocal, setDescLocal] = useState('')
+  const [lang, setLang] = useState('')
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [pom, setPom] = useState(null)   // {id, codi_client, nom_client}
@@ -324,11 +345,19 @@ function AliasAddRow({ customer, t, onCreated, onError }) {
     if (!code.trim()) { onError(t('clients.required')); return }
     if (!pom) { onError(t('clients.alias_pom_required')); return }
     setSaving(true)
+    // Escriu els camps VIUS (description_en/local + language), no `client_description`: el model
+    // el declara obsolet i prohibeix escriure-hi (models.py:255-258). Fins ara l'alta manual hi
+    // anava, i era l'únic camí que encara alimentava el camp mort (QA-S8 · D4b).
     customerAliases.create({
-      customer: customer.id, client_code: code.trim(), client_description: desc.trim(),
+      customer: customer.id, client_code: code.trim(),
+      description_en: descEn.trim(), description_local: descLocal.trim(),
+      language: lang.trim().toLowerCase(),
       pom: pom.id, origen: 'MANUAL',
     })
-      .then(() => { setCode(''); setDesc(''); setQ(''); setResults([]); setPom(null); onCreated() })
+      .then(() => {
+        setCode(''); setDescEn(''); setDescLocal(''); setLang('')
+        setQ(''); setResults([]); setPom(null); onCreated()
+      })
       .catch(e => onError(e?.response?.data?.non_field_errors?.[0] || e?.response?.data?.detail || t('clients.error')))
       .finally(() => setSaving(false))
   }
@@ -340,9 +369,17 @@ function AliasAddRow({ customer, t, onCreated, onError }) {
           <input value={code} onChange={e => setCode(e.target.value)} maxLength={60}
             style={{ ...selS, width: 120, display: 'block', marginTop: 4, fontFamily: MONO }} />
         </label>
-        <label style={miniLabel}>{t('clients.alias_desc')}
-          <input value={desc} onChange={e => setDesc(e.target.value)} maxLength={200}
+        <label style={miniLabel}>{t('clients.alias_desc_en')}
+          <input value={descEn} onChange={e => setDescEn(e.target.value)} maxLength={200}
             style={{ ...selS, width: 200, display: 'block', marginTop: 4 }} />
+        </label>
+        <label style={miniLabel}>{t('clients.alias_desc_local')}
+          <input value={descLocal} onChange={e => setDescLocal(e.target.value)} maxLength={200}
+            style={{ ...selS, width: 180, display: 'block', marginTop: 4 }} />
+        </label>
+        <label style={miniLabel}>{t('clients.alias_lang')}
+          <input value={lang} onChange={e => setLang(e.target.value)} maxLength={2} placeholder="es"
+            style={{ ...selS, width: 56, display: 'block', marginTop: 4, fontFamily: MONO }} />
         </label>
         <label style={miniLabel}>{t('clients.alias_pom')}
           <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
