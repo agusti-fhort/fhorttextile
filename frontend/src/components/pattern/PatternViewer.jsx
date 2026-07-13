@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Stage, Layer, Line, Rect, Group, Arrow, Circle, Text } from 'react-konva'
 import { useTranslation } from 'react-i18next'
 import {
-  bboxDePeces, capesPresents, escalaPerCabre, longitudVora,
-  puntMesProper, puntsDelSegment, puntsPerKonva, tramMesProper,
+  arcDirigit, bboxDePeces, capesPresents, escalaPerCabre, longitudVora,
+  puntMesProper, puntsDelSegment, puntsPerKonva, situaPunt, tramMesProper,
 } from './patternGeometry'
+import { formatLen, formatLenNum } from '../../utils/format'
 
 /**
  * Visor interactiu del patró (react-konva). READ-ONLY estricte: cap punt es pot arrossegar.
@@ -44,22 +45,34 @@ export const KONVA_COL = {
   sewB: '#8250df',     // costat B
   tram: '#0969da',     // tram DECLARAT (el que una costura pot triar)
   tramSel: '#fb8500',  // el tram assenyalat o triat
+  pinca: '#1b7c83',    // una PINÇA declarada: els seus dos costats i el seu vèrtex
 }
 
-const ZOOM_MIN = 0.02
-const ZOOM_MAX = 8
+// El rang de zoom no és una preferència estètica: és el que decideix si un vèrtex es pot
+// triar còmodament. Els punts de gir d'una pinça viuen a 6 mm l'un de l'altre, i amb el
+// sostre vell (×8) apuntar-hi era una pràctica de punteria. Per baix, un patró de niada fa
+// metres i ha de cabre sencer.
+const ZOOM_MIN = 0.005
+const ZOOM_MAX = 40
 const ZOOM_STEP = 1.15
 
-const GLIF = 3.2          // mida dels glifs de punt, en px de contingut
 const ALCADA = 560
 
 const clampZoom = (v) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v))
 
+/**
+ * La mida d'un glif, en px de CONTINGUT (es divideix pel zoom perquè a pantalla sigui la que
+ * es demana). Creix amb el zoom però amb sordina i amb sostre: els glifs han de ser més
+ * fàcils d'encertar quan t'hi apropes, no convertir-se en taques quan hi ets a sobre.
+ */
+const midaGlif = (base, max, zoom) =>
+  Math.min(max, base * Math.sqrt(Math.max(zoom, 0.05))) / zoom
+
 export default function PatternViewer({
   pieces, pecaSel, onTriaPeca,
   // ── mode d'anotació (S6). Sense aquestes props, el visor és el de S5: read-only.
-  mode = 'view',                 // 'view' | 'pom' | 'sew'
-  puntsPom = [],                 // punts ja clicats en mode POM (0, 1 o 2)
+  mode = 'view',                 // 'view' | 'pom' | 'seg' | 'pinca' | 'sew'
+  puntsPom = [],                 // punts ja clicats (2 per a POM i tram; 3 per a una pinça)
   onClicPunt = null,
   // Els trams que la costura en curs ja té a cada costat (per pintar-los del seu color).
   segmentsA = [], segmentsB = [],
@@ -72,11 +85,22 @@ export default function PatternViewer({
   // B no pot sortir d'una altra —el motor ho rebutjaria—, i val més no deixar clicar el que
   // no es pot fer que deixar-ho clicar i després dir que no.
   voraIman = null,
-  // Els dos arcs que dos punts d'una vora tancada defineixen: es dibuixen tots dos i es tria.
-  arcs = [], arcTriat = 0, onTriaArc = null,
+  // ── W4b/T3c. La PREVISUALITZACIÓ DIRECCIONAL substitueix la tria d'arcs com a pas a part:
+  // posat el punt A, l'arc segueix el cursor en temps real i el clic B el fixa. `arcInvertit`
+  // és el camí llarg (la tecla d'invertir), i `invertits` és el que es va triar a cada arc JA
+  // fixat — sense això, invertir el segon costat d'una pinça giraria també el primer.
+  arcInvertit = false, invertits = [],
+  // ── W4b/T5. L'OMBRA: el que s'està reobrint, dibuixat de fons. Recol·locar sense veure d'on
+  // véns és recol·locar a cegues — i el que es corregeix, gairebé sempre, és un punt sol.
+  ombra = null,
   // Els trams DECLARATS, pintats sobre la geometria. `tramRessaltat` és el que la llista de
   // cosir assenyala en passar-hi per sobre.
   tramsDeclarats = [], tramRessaltat = null, onClicTram = null,
+  // ── W4b/T1. Les pinces declarades: els seus dos costats i el seu vèrtex, amb glif propi.
+  // Una pinça no és una costura més: és el forat que explica per què la vora fa 32 i en cus 30.
+  pinces = [],
+  // La unitat del tenant (CM|INCH): el canvas també és taller, i hi val la mateixa llei.
+  unit = 'CM',
   // ── W2. Al Taller el canvas no té una alçada de maqueta: ocupa el que li deixa el
   // pare. Al tab (la porta) segueix valent ALCADA, que és el que sempre ha valgut.
   omplirAlcada = false,
@@ -218,9 +242,10 @@ export default function PatternViewer({
   // el patró sota el punt que s'està a punt de clicar. Llavors la mà es demana — espai o
   // botó del mig. La resta del temps (mirant, cosint, o abans del punt A) el drag paneja,
   // que és el que tothom espera d'un canvas.
-  // POM i SEGMENT es marquen igual: dos punts imantats sobre la geometria. El que canvia és
-  // què se'n fa (una mesura recta, o un tros de vora).
-  const imantant = mode === 'pom' || mode === 'seg'
+  // POM, TRAM i PINÇA es marquen igual: punts imantats sobre la geometria. El que canvia és
+  // quants (dos, dos, tres) i què se'n fa (una mesura recta, un tros de vora, o una pinça).
+  const imantant = mode === 'pom' || mode === 'seg' || mode === 'pinca'
+  const segueixVora = mode === 'seg' || mode === 'pinca'
   const colocant = imantant && puntsPom.length > 0
   const potPanejar = !colocant
   const maAlta = espai || !!panRef.current
@@ -282,6 +307,36 @@ export default function PatternViewer({
     if (imantant && hover?.iman && onClicPunt) onClicPunt(hover.iman)
   }
 
+  /** L'arc entre dos punts d'una vora, si de debò comparteixen vora. */
+  const arcEntre = useCallback((pa, pb, invertit) => {
+    const a = situaPunt(pieces, pa)
+    const b = situaPunt(pieces, pb)
+    if (!a || !b || a.index !== b.index || a.ordre === b.ordre) return null
+    return arcDirigit(a.vora, a.ordre, b.ordre, invertit)
+  }, [pieces])
+
+  // Els arcs JA FIXATS (el primer costat d'una pinça, un cop clicat el vèrtex). Cadascun es
+  // dibuixa amb el `invertit` que es va triar EN AQUELL clic, no amb el d'ara: si compartissin
+  // la bandera viva, invertir el segon costat giraria també el primer, que ja estava decidit.
+  const arcsFixats = useMemo(() => {
+    if (!segueixVora) return []
+    const out = []
+    for (let i = 0; i + 1 < puntsPom.length; i++) {
+      const arc = arcEntre(puntsPom[i], puntsPom[i + 1], !!invertits[i])
+      if (arc) out.push(arc)
+    }
+    return out
+  }, [segueixVora, puntsPom, invertits, arcEntre])
+
+  // La PRÈVIA: de l'últim punt fixat fins on és el cursor ara mateix. És el que substitueix
+  // la tria d'arcs com a pas separat — es veu abans de clicar, i la tecla d'invertir el gira.
+  const maxPunts = mode === 'pinca' ? 3 : 2
+  const previa = useMemo(() => {
+    if (!segueixVora || !hover?.iman) return null
+    if (puntsPom.length === 0 || puntsPom.length >= maxPunts) return null
+    return arcEntre(puntsPom[puntsPom.length - 1], hover.iman.punt, arcInvertit)
+  }, [segueixVora, hover, puntsPom, maxPunts, arcInvertit, arcEntre])
+
   const visible = (capa) => capes[capa] && presents.has(capa)
   const anotant = mode !== 'view'
   // Qui té el focus: col·locant, la peça de l'imant; mirant, la peça seleccionada. Cosint no
@@ -337,7 +392,7 @@ export default function PatternViewer({
                 // Els punts es dibuixen on es poden clicar. Ensenyar-los a una peça on
                 // l'imant no els caçarà seria oferir un clic que no farà res.
                 mostraPunts={capes.punts
-                  || (mode === 'pom' && (!pecaIman || piece.nom_block === pecaIman))}
+                  || (imantant && (!pecaIman || piece.nom_block === pecaIman))}
                 anotant={anotant}
                 onClick={() => !anotant && onTriaPeca(
                   piece.nom_block === pecaSel ? '' : piece.nom_block)}
@@ -346,7 +401,7 @@ export default function PatternViewer({
 
             {/* Els POMs ja ancorats: la mesura, dibuixada sobre la geometria que mesura. */}
             {pieces.flatMap(piece => (piece.poms || []).map(pom => (
-              <PomKonva key={`pom-${pom.id}`} piece={piece} pom={pom} zoom={zoom} />
+              <PomKonva key={`pom-${pom.id}`} piece={piece} pom={pom} zoom={zoom} unit={unit} />
             )))}
 
             {/* Els trams DECLARATS, sobre la geometria. Es pinten SEMPRE: són el vocabulari
@@ -379,41 +434,69 @@ export default function PatternViewer({
               )
             })}
 
-            {/* Mode SEGMENT: els DOS arcs que els dos punts defineixen. El triat, gruixut;
-                l'altre, discontinu i clicable — triar-lo és clicar-lo. */}
-            {mode === 'seg' && arcs.map((arc, i) => {
-              const triat = i === arcTriat
-              return (
+            {/* Les PINÇES declarades: els dos costats i el vèrtex, amb glif propi. Es pinten
+                sempre, com els trams: una pinça és el que explica per què una vora fa 32 cm i
+                només en cus 30, i qui cus l'ha de veure sense haver de canviar de mode. */}
+            {pinces.map(pinca => (
+              <PincaKonva key={`pinca-${pinca.id}`} pinca={pinca} zoom={zoom} unit={unit} />
+            ))}
+
+            {/* L'OMBRA del que s'està reobrint: on era, mentre es diu on ha d'anar. */}
+            {ombra && (ombra.punts || []).length >= 2 && (
+              <Group listening={false} opacity={0.45}>
                 <Line
-                  key={`arc-${i}`}
-                  points={arc.punts.flatMap(p => [p.x, -p.y])}
-                  stroke={triat ? KONVA_COL.tramSel : KONVA_COL.tram}
-                  strokeWidth={(triat ? 5 : 2.5) / zoom}
-                  dash={triat ? undefined : [8 / zoom, 5 / zoom]}
-                  opacity={triat ? 1 : 0.75}
-                  lineCap="round"
-                  listening={!!onTriaArc}
-                  hitStrokeWidth={Math.max(16 / zoom, 6)}
-                  onClick={() => onTriaArc && onTriaArc(i)}
-                  onTap={() => onTriaArc && onTriaArc(i)}
-                  perfectDrawEnabled={false}
+                  points={ombra.punts.flatMap(p => [p.x, -p.y])}
+                  stroke={KONVA_COL.tramSel}
+                  strokeWidth={3 / zoom}
+                  dash={[4 / zoom, 4 / zoom]}
+                  lineCap="round" perfectDrawEnabled={false}
                 />
-              )
-            })}
-            {mode === 'seg' && arcs.map((arc, i) => {
-              const mig = arc.punts[Math.floor(arc.punts.length / 2)]
-              if (!mig) return null
-              return (
-                <Text
-                  key={`arc-txt-${i}`}
-                  x={mig.x} y={-mig.y - 14 / zoom}
-                  text={`${(arc.longitud / 10).toFixed(1)} cm`}
-                  fontSize={12 / zoom}
-                  fill={i === arcTriat ? KONVA_COL.tramSel : KONVA_COL.tram}
-                  listening={false} perfectDrawEnabled={false}
+                {[ombra.punts[0], ombra.punts[ombra.punts.length - 1]].map((p, i) => (
+                  <Circle key={i} x={p.x} y={-p.y} r={midaGlif(5, 9, zoom)}
+                          stroke={KONVA_COL.tramSel} strokeWidth={1.6 / zoom}
+                          dash={[3 / zoom, 3 / zoom]} perfectDrawEnabled={false} />
+                ))}
+              </Group>
+            )}
+
+            {/* Els arcs JA FIXATS del gest en curs (el primer costat d'una pinça). */}
+            {arcsFixats.map((arc, i) => (
+              <Line
+                key={`fix-${i}`}
+                points={arc.punts.flatMap(p => [p.x, -p.y])}
+                stroke={mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.tramSel}
+                strokeWidth={5 / zoom}
+                lineCap="round" listening={false} perfectDrawEnabled={false}
+              />
+            ))}
+
+            {/* La PRÈVIA DIRECCIONAL: l'arc que el cursor està assenyalant ara mateix. Es veu
+                ABANS de clicar —amb la seva longitud— i la tecla d'invertir el gira. */}
+            {previa && (
+              <>
+                <Line
+                  points={previa.punts.flatMap(p => [p.x, -p.y])}
+                  stroke={mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.tramSel}
+                  strokeWidth={4 / zoom}
+                  opacity={0.85}
+                  dash={[9 / zoom, 5 / zoom]}
+                  lineCap="round" listening={false} perfectDrawEnabled={false}
                 />
-              )
-            })}
+                {(() => {
+                  const mig = previa.punts[Math.floor(previa.punts.length / 2)]
+                  if (!mig) return null
+                  return (
+                    <Text
+                      x={mig.x} y={-mig.y - 16 / zoom}
+                      text={formatLen(previa.longitud / 10, unit)}
+                      fontSize={13 / zoom}
+                      fill={mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.tramSel}
+                      listening={false} perfectDrawEnabled={false}
+                    />
+                  )
+                })()}
+              </>
+            )}
 
             {/* Mode POM: la mesura que s'està marcant, i l'imant sota el cursor. */}
             {mode === 'pom' && puntsPom.length >= 1 && (
@@ -430,24 +513,55 @@ export default function PatternViewer({
                 perfectDrawEnabled={false}
               />
             )}
-            {imantant && puntsPom.map((p, i) => (
-              <Circle
-                key={`sel-${i}`} x={p.x} y={-p.y} r={5 / zoom}
-                fill={KONVA_COL.pom} listening={false} perfectDrawEnabled={false}
-              />
-            ))}
+
+            {/* EL PUNT FIXAT (T3a): marcador gran, halo, i l'etiqueta que no marxa fins que
+                el gest s'acaba. Abans era un cercle de 5 px que es perdia entre els vèrtexs
+                del patró, i a mig gest ja no se sabia quin punt s'havia clicat. Un punt que
+                l'usuari ha decidit ha de ser el més visible de la pantalla. */}
+            {imantant && puntsPom.map((p, i) => {
+              const r = midaGlif(7, 13, zoom)
+              const col = mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.pom
+              return (
+                <Group key={`sel-${i}`} listening={false}>
+                  <Circle x={p.x} y={-p.y} r={r * 2.1} fill={col} opacity={0.16}
+                          perfectDrawEnabled={false} />
+                  <Circle x={p.x} y={-p.y} r={r} fill={col} stroke={KONVA_COL.bg}
+                          strokeWidth={1.6 / zoom} perfectDrawEnabled={false} />
+                  <Text
+                    x={p.x + r * 1.6} y={-p.y - r * 2.4}
+                    text={etiquetaPunt(t, mode, i, maxPunts)}
+                    fontSize={13 / zoom} fontStyle="bold" fill={col}
+                    perfectDrawEnabled={false}
+                  />
+                </Group>
+              )
+            })}
+
+            {/* L'imant sota el cursor: halo, perquè es vegi QUÈ es clicarà abans de clicar. */}
             {imantant && hover?.iman && (
-              <Circle
-                x={hover.iman.punt.x} y={-hover.iman.punt.y} r={6 / zoom}
-                stroke={KONVA_COL.pom} strokeWidth={1.5 / zoom}
-                listening={false} perfectDrawEnabled={false}
-              />
+              <Group listening={false}>
+                <Circle
+                  x={hover.iman.punt.x} y={-hover.iman.punt.y}
+                  r={midaGlif(8, 15, zoom)}
+                  fill={mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.pom}
+                  opacity={0.18} perfectDrawEnabled={false}
+                />
+                <Circle
+                  x={hover.iman.punt.x} y={-hover.iman.punt.y}
+                  r={midaGlif(6, 11, zoom)}
+                  stroke={mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.pom}
+                  strokeWidth={2 / zoom} perfectDrawEnabled={false}
+                />
+              </Group>
             )}
           </Layer>
         </Stage>
       </div>
 
-      <BarraEstat t={t} hover={hover} pieces={pieces} pecaSel={pecaSel} colocant={colocant} />
+      <BarraEstat
+        t={t} hover={hover} pieces={pieces} pecaSel={pecaSel} colocant={colocant}
+        unit={unit} potInvertir={!!previa && !previa.unic}
+      />
     </div>
   )
 }
@@ -460,7 +574,7 @@ export default function PatternViewer({
  * La línia de mesura és la MATEIXA cosa que la capa FTT-POM exportarà al DXF (S2): el que
  * el patronista veurà al seu CAD és això mateix. Aquí i allà, la mesura es dibuixa on és.
  */
-function PomKonva({ piece, pom, zoom }) {
+function PomKonva({ piece, pom, zoom, unit }) {
   const punts = puntsDeLaMesura(piece, pom)
   if (punts.length < 2) return null
   const mig = {
@@ -480,11 +594,68 @@ function PomKonva({ piece, pom, zoom }) {
       ))}
       <Text
         x={mig.x} y={-mig.y - 14 / zoom}
-        text={`${pom.pom_code}${pom.valor_mesurat_cm != null ? ` ${pom.valor_mesurat_cm} cm` : ''}`}
+        text={`${pom.pom_code}${pom.valor_mesurat_cm != null
+          ? ` ${formatLen(pom.valor_mesurat_cm, unit)}` : ''}`}
         fontSize={11 / zoom}
         fill={KONVA_COL.pom}
         perfectDrawEnabled={false}
       />
+    </Group>
+  )
+}
+
+/** L'etiqueta d'un punt fixat: A → B, o A → Vèrtex → B si s'està marcant una pinça. */
+function etiquetaPunt(t, mode, i, maxPunts) {
+  if (mode === 'pinca') {
+    return t(['pattern.taller.pt_a', 'pattern.taller.pt_vertex', 'pattern.taller.pt_b'][i]
+      || 'pattern.taller.pt_b')
+  }
+  return t(i === 0 ? 'pattern.taller.pt_a' : 'pattern.taller.pt_b')
+}
+
+/**
+ * Una PINÇA declarada, sobre la geometria.
+ *
+ * Els dos costats es pinten com el que són —dos trams de la mateixa vora— i el VÈRTEX porta
+ * glif propi: un triangle. No és decoració. Un vèrtex de pinça és el punt que explica per què
+ * la vora fa 32.1 cm i només n'aporta 29.8 a la costura, i qui miri la peça l'ha de poder
+ * trobar sense obrir cap panell.
+ */
+function PincaKonva({ pinca, zoom, unit }) {
+  const g = midaGlif(6, 12, zoom)
+  const apex = pinca.apex
+  return (
+    <Group listening={false}>
+      {pinca.costats.map((punts, i) => (
+        <Line
+          key={i}
+          points={punts.flatMap(p => [p.x, -p.y])}
+          stroke={KONVA_COL.pinca} strokeWidth={3.4 / zoom}
+          lineCap="round" perfectDrawEnabled={false}
+        />
+      ))}
+      {apex && (
+        <>
+          {/* El triangle del vèrtex, apuntant amunt. Tancat i ple: es veu de lluny. */}
+          <Line
+            points={[
+              apex.x, -apex.y - g * 1.25,
+              apex.x - g, -apex.y + g * 0.75,
+              apex.x + g, -apex.y + g * 0.75,
+            ]}
+            closed
+            fill={KONVA_COL.pinca}
+            stroke={KONVA_COL.bg} strokeWidth={1.2 / zoom}
+            perfectDrawEnabled={false}
+          />
+          <Text
+            x={apex.x + g * 1.5} y={-apex.y - g * 2}
+            text={`${pinca.nom} · ${formatLen(pinca.cm, unit)}`}
+            fontSize={12 / zoom} fill={KONVA_COL.pinca}
+            perfectDrawEnabled={false}
+          />
+        </>
+      )}
     </Group>
   )
 }
@@ -506,7 +677,14 @@ function PecaKonva({ piece, zoom, sel, atenuada, visible, mostraPunts, anotant, 
   // zoom, en allunyar-se el patró es convertiria en una taca negra i en apropar-se
   // desapareixeria.
   const gruix = (base) => base / zoom
-  const g = GLIF / zoom
+
+  // Els GIRS manen i les CORBES flueixen (W4b/T3b). La jerarquia no és estètica: un punt de
+  // gir és una cantonada que el patronista reconeix, que es grada, i que és l'únic que es pot
+  // triar com a extrem d'un tram o com a vèrtex d'una pinça. Un punt de corba no és frontera
+  // de res. Pintar-los igual —com es feia— era fer buscar l'agulla al paller cada cop que
+  // calia apuntar a un vèrtex. Ara el gir creix quan t'hi apropes i la corba es queda petita.
+  const g = midaGlif(4.6, 9, zoom)        // GIR: es pot encertar
+  const gc = midaGlif(2.4, 4, zoom)       // CORBA: hi és, i no fa nosa
 
   return (
     <Group opacity={atenuada ? 0.25 : 1} onClick={onClick} onTap={onClick}>
@@ -529,22 +707,26 @@ function PecaKonva({ piece, zoom, sel, atenuada, visible, mostraPunts, anotant, 
         )
       })}
 
-      {/* Glifs de punt: quadrat verd = GIR (es grada) · x groga = CORBA (flueix).
-          La distinció no és decorativa: és la llei que governa què es mou a l'escalat. */}
+      {/* Glifs de punt: quadrat verd = GIR (es grada, i és el que es pot triar) · x groga =
+          CORBA (flueix). La distinció no és decorativa: és la llei que governa què es mou a
+          l'escalat, i qui es pot clicar. El gir porta contorn blanc perquè no es fongui amb
+          la línia quan hi cau just a sobre. */}
       {mostraPunts && piece.boundaries.flatMap(b =>
         (visible(b.role) ? b.points : []).map((p, i) => (
           p.tipus === 'turn' ? (
             <Rect
               key={`t-${piece.id}-${b.index}-${i}`}
               x={p.x - g / 2} y={-p.y - g / 2} width={g} height={g}
-              fill={KONVA_COL.turn} listening={false} perfectDrawEnabled={false}
+              fill={KONVA_COL.turn}
+              stroke={KONVA_COL.bg} strokeWidth={1 / zoom}
+              listening={false} perfectDrawEnabled={false}
             />
           ) : p.tipus === 'curve' ? (
-            <Group key={`c-${piece.id}-${b.index}-${i}`} listening={false}>
-              <Line points={[p.x - g / 2, -p.y - g / 2, p.x + g / 2, -p.y + g / 2]}
-                    stroke={KONVA_COL.curve} strokeWidth={gruix(0.9)} perfectDrawEnabled={false} />
-              <Line points={[p.x - g / 2, -p.y + g / 2, p.x + g / 2, -p.y - g / 2]}
-                    stroke={KONVA_COL.curve} strokeWidth={gruix(0.9)} perfectDrawEnabled={false} />
+            <Group key={`c-${piece.id}-${b.index}-${i}`} listening={false} opacity={0.7}>
+              <Line points={[p.x - gc / 2, -p.y - gc / 2, p.x + gc / 2, -p.y + gc / 2]}
+                    stroke={KONVA_COL.curve} strokeWidth={gruix(0.8)} perfectDrawEnabled={false} />
+              <Line points={[p.x - gc / 2, -p.y + gc / 2, p.x + gc / 2, -p.y - gc / 2]}
+                    stroke={KONVA_COL.curve} strokeWidth={gruix(0.8)} perfectDrawEnabled={false} />
             </Group>
           ) : null
         ))
@@ -553,7 +735,7 @@ function PecaKonva({ piece, zoom, sel, atenuada, visible, mostraPunts, anotant, 
       {visible('notch') && piece.notches.map((n, i) => (
         <Rect
           key={`n-${piece.id}-${i}`}
-          x={n.x - g * 0.7} y={-n.y - g * 0.7} width={g * 1.4} height={g * 1.4}
+          x={n.x - g * 0.6} y={-n.y - g * 0.6} width={g * 1.2} height={g * 1.2}
           fill={KONVA_COL.notch} rotation={45} listening={false} perfectDrawEnabled={false}
         />
       ))}
@@ -639,8 +821,8 @@ function Controls({ t, zoom, capes, presents, onZoom, onEncaixa, onToggle }) {
   )
 }
 
-function BarraEstat({ t, hover, pieces, pecaSel, colocant }) {
-  const cm = (mm) => (mm / 10).toFixed(1)
+function BarraEstat({ t, hover, pieces, pecaSel, colocant, unit, potInvertir }) {
+  const cm = (mm) => formatLenNum(mm / 10, unit)
   const peca = pecaSel ? pieces.find(p => p.nom_block === pecaSel) : null
   const perimetre = peca
     ? longitudVora((peca.boundaries || []).find(b => b.role === 'cut') || { points: [] })
@@ -657,6 +839,12 @@ function BarraEstat({ t, hover, pieces, pecaSel, colocant }) {
       {colocant && (
         <span style={{ color: 'var(--gold)' }}>
           <i className="ti ti-hand-move" /> {t('pattern.taller.pan_hint')}
+        </span>
+      )}
+      {/* La tecla d'invertir es diu quan serveix, que és mentre l'arc es previsualitza. */}
+      {potInvertir && (
+        <span style={{ color: 'var(--gold)' }}>
+          <i className="ti ti-switch-horizontal" /> {t('pattern.taller.arc_flip_hint')}
         </span>
       )}
       {hover ? (

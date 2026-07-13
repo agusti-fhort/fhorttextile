@@ -421,6 +421,29 @@ class SewRelationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(creat_per=getattr(self.request.user, 'profile', None))
 
+    def destroy(self, request, *args, **kwargs):
+        """Esborrar una costura. Si és una PINÇA, se'n va amb els seus dos costats.
+
+        Els costats d'una pinça no existeixen sense ella: SÓN la pinça. Deixar-los enrere
+        ompliria el patró de trams declarats que ningú no cus i que ningú no sabria d'on
+        venen —i que continuarien sortint a la llista del que es pot cosir.
+
+        Un costat que, contra tot pronòstic, el cusi alguna altra costura, es queda: el
+        PROTECT dels trams val aquí igual que a `PatternSegmentViewSet.destroy`, i esborrar-lo
+        deixaria coixa una costura que ningú ha tocat.
+        """
+        rel = self.get_object()
+        if not es_pinca_de_vora(rel):
+            return super().destroy(request, *args, **kwargs)
+
+        costats = list(rel.segments_a.all()) + list(rel.segments_b.all())
+        with transaction.atomic():
+            rel.delete()
+            for seg in costats:
+                if not (seg.sew_relations_a.exists() or seg.sew_relations_b.exists()):
+                    seg.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=False, methods=['post'], url_path='pinca')
     def pinca(self, request):
         """Marcar una pinça: tres punts, i el taller en fa dos trams i una costura.

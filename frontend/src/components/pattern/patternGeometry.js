@@ -251,6 +251,49 @@ export function arcsEntrePunts(boundary, idxA, idxB) {
   ]
 }
 
+/**
+ * On és un punt: de quina peça, de quina vora, i quin lloc hi ocupa.
+ *
+ * Ho pregunten el taller (per saber on pot caçar l'imant) i el visor (per dibuixar la
+ * previsualització). Preguntat de dues maneres, acabaria responent dues coses.
+ */
+export function situaPunt(pieces, punt) {
+  if (!punt) return null
+  for (const piece of pieces || []) {
+    for (const b of piece.boundaries || []) {
+      const ordre = (b.points || []).findIndex(q => q.id === punt.id)
+      if (ordre >= 0) return { piece, vora: b, index: b.index, ordre }
+    }
+  }
+  return null
+}
+
+/**
+ * L'arc que el cursor està assenyalant — la PREVISUALITZACIÓ DIRECCIONAL (W4b · T3c).
+ *
+ * Dos punts d'una vora tancada defineixen dos arcs, i abans això es preguntava DESPRÉS
+ * («quin dels dos volies?»), amb els dos pintats i un pas més al mig. Preguntar-ho després
+ * és preguntar-ho quan la mà ja ha marxat: qui declara un tram ja sap, mentre mou el cursor,
+ * per quin costat el vol.
+ *
+ * Així que la regla és la del cursor: **l'arc que va de A fins on ets, pel camí més curt**.
+ * Mentre el cursor recorre la vora en un sentit, l'arc el segueix; passat l'antípoda, el
+ * camí curt és l'altre i l'arc salta —que és exactament quan cal poder dir «no, per l'altre
+ * costat», i per això hi ha la tecla d'invertir. Amb `invertit`, l'arc és el complementari,
+ * i es veu ABANS de confirmar.
+ *
+ * És la MATEIXA funció que fa servir el visor per pintar la prèvia i el taller per crear el
+ * tram: si cadascú triés l'arc pel seu compte, un dia pintaria un i crearia l'altre.
+ */
+export function arcDirigit(boundary, idxA, idxB, invertit = false) {
+  const arcs = arcsEntrePunts(boundary, idxA, idxB)
+  if (!arcs.length) return null
+  // Vora oberta: només hi ha un camí, i invertir-lo no és una preferència, és una
+  // contradicció (el motor la rebutja). Es torna l'únic que hi ha.
+  if (arcs[0].unic) return arcs[0]
+  return arcs[invertit ? 1 : 0]
+}
+
 /** Quines capes té de debò aquest patró (per no oferir toggles buits). */
 export function capesPresents(pieces) {
   const capes = new Set()

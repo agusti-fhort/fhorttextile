@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { formatDelta, formatLen, titleLen } from '../../utils/format'
 
 /**
  * POMS DEL MODEL — la LLISTA DE TREBALL del taller (W3).
@@ -15,7 +16,7 @@ import { useTranslation } from 'react-i18next'
  *
  * NOMENCLATURA (convenció de la casa): el codi de client mana i el nom va a sota, en gris.
  */
-export default function ModelPomList({ files, pomActiu, onColocar, onAfegirFora }) {
+export default function ModelPomList({ files, pomActiu, onColocar, onAfegirFora, unit = 'CM' }) {
   const { t } = useTranslation()
 
   return (
@@ -26,7 +27,7 @@ export default function ModelPomList({ files, pomActiu, onColocar, onAfegirFora 
         </p>
       ) : files.map(f => (
         <Fila
-          key={f.base_measurement} t={t} f={f}
+          key={f.base_measurement} t={t} f={f} unit={unit}
           actiu={pomActiu?.base_measurement === f.base_measurement}
           onColocar={() => onColocar(f)}
         />
@@ -52,7 +53,7 @@ export default function ModelPomList({ files, pomActiu, onColocar, onAfegirFora 
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Fila({ t, f, actiu, onColocar }) {
+function Fila({ t, f, actiu, onColocar, unit }) {
   const colocat = f.ancorat
 
   // L'estat de la Δ: només es jutja si es POT jutjar. `dins_tolerancia` ve a null quan la
@@ -109,31 +110,63 @@ function Fila({ t, f, actiu, onColocar }) {
         </div>
       </div>
 
-      <div style={{
-        textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 'var(--fs-caption)',
-        flexShrink: 0, lineHeight: 1.35,
-      }}>
-        <div style={{ color: 'var(--text-muted)' }}>
-          {f.valor_fitxa_cm != null
-            ? t('pattern.taller.value_sheet', { cm: f.valor_fitxa_cm })
-            : t('pattern.taller.value_sheet_none')}
-        </div>
-        {colocat && (
-          <div style={{ color: colorDelta, fontWeight: 600 }}>
-            {f.valor_mesurat_cm == null
-              ? t('pattern.pom_unmeasured')
-              : f.delta_cm == null
-                ? t('pattern.taller.value_pattern', { cm: f.valor_mesurat_cm })
-                : t('pattern.taller.value_delta', {
-                    cm: f.valor_mesurat_cm, delta: signe(f.delta_cm),
-                  })}
-          </div>
+      {/* LA JERARQUIA (W4b/T7b): primer el VEREDICTE —el color ja fa la feina—, després el
+          valor, i la Δ segons què valgui. Una Δ dins de tolerància és soroll: es diu, però en
+          gris i petit. Una Δ fora és el motiu pel qual algú està mirant aquesta fila, i es
+          pinta com a tal. Pintar-les igual obliga a llegir-les totes per trobar la que importa.
+
+          El `title` porta els valors COMPLETS: la dada no s'arrodoneix mai, només la seva
+          imatge. */}
+      <div
+        title={[
+          f.valor_mesurat_cm != null ? `${t('pattern.taller.value_pattern_t')}: ${titleLen(f.valor_mesurat_cm)}` : null,
+          f.valor_fitxa_cm != null ? `${t('pattern.taller.value_sheet_t')}: ${titleLen(f.valor_fitxa_cm)}` : null,
+        ].filter(Boolean).join(' · ') || undefined}
+        style={{
+          textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 'var(--fs-caption)',
+          flexShrink: 0, lineHeight: 1.35,
+        }}
+      >
+        {colocat && f.valor_mesurat_cm != null ? (
+          <>
+            <div style={{
+              display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end',
+              gap: '0.35rem',
+            }}>
+              <span style={{ color: colorDelta, fontWeight: 600, fontSize: 'var(--fs-body)' }}>
+                {formatLen(f.valor_mesurat_cm, unit)}
+              </span>
+              {f.delta_cm != null && (
+                <span style={{
+                  color: estat === false ? 'var(--err)' : 'var(--text-muted)',
+                  fontWeight: estat === false ? 700 : 400,
+                  fontSize: estat === false ? 'var(--fs-body)' : 'var(--fs-caption)',
+                }}>
+                  Δ {formatDelta(f.delta_cm, unit)}
+                </span>
+              )}
+            </div>
+            <div style={{ color: 'var(--text-muted)' }}>
+              {f.valor_fitxa_cm != null
+                ? t('pattern.taller.value_sheet', { cm: formatLen(f.valor_fitxa_cm, unit) })
+                : t('pattern.taller.value_sheet_none')}
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ color: 'var(--text-muted)' }}>
+              {f.valor_fitxa_cm != null
+                ? t('pattern.taller.value_sheet', { cm: formatLen(f.valor_fitxa_cm, unit) })
+                : t('pattern.taller.value_sheet_none')}
+            </div>
+            {colocat && (
+              <div style={{ color: 'var(--err)', fontWeight: 600 }}>
+                {t('pattern.pom_unmeasured')}
+              </div>
+            )}
+          </>
         )}
       </div>
     </button>
   )
 }
-
-// La Δ es llegeix amb el signe SEMPRE: «+0.4» i «−0.4» diuen coses oposades al patronista,
-// i un «0.4» a seques no diu cap de les dues.
-const signe = (d) => (d > 0 ? `+${d}` : `${d}`)

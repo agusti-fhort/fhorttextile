@@ -650,6 +650,9 @@ export const patterns = {
     list: (patternFileId) => client.get('/api/v1/patterns/pattern-poms/',
       { params: { pattern_piece__pattern_file: patternFileId } }),
     create: (data) => client.post('/api/v1/patterns/pattern-poms/', data),
+    // REOBRIR (W4b/T5a): la recepta nova sobre el MATEIX PatternPOM, i el servidor RECALCULA
+    // el valor. Mai esborrar-i-crear: corregir on és una mesura no és tornar-la a ancorar.
+    update: (id, data) => client.patch(`/api/v1/patterns/pattern-poms/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/patterns/pattern-poms/${id}/`),
   },
 
@@ -660,6 +663,17 @@ export const patterns = {
     list: (modelId) => client.get('/api/v1/patterns/sew-relations/',
       { params: { model: modelId } }),
     create: (data) => client.post('/api/v1/patterns/sew-relations/', data),
+    // REOBRIR (W4b/T5c): tipus, diferencial, composició de costats i bateig, sobre la MATEIXA
+    // costura. Encunyar-ne una altra li perdria la data i l'autor per un canvi de tipus.
+    update: (id, data) => client.patch(`/api/v1/patterns/sew-relations/${id}/`, data),
+
+    // MARCAR PINÇA (W4b/T1): tres punts, i el servidor en fa els dos costats (trams
+    // declarats) i la costura de pinça que els uneix — en UNA transacció. Fer-ho amb tres
+    // crides des d'aquí podia fallar a la tercera i deixar dos trams orfes al patró, amb nom
+    // de pinça i sense pinça.
+    pinca: (data) => client.post('/api/v1/patterns/sew-relations/pinca/', data),
+
+    // Esborrar una pinça se n'emporta els seus dos costats: no existeixen sense ella.
     remove: (id) => client.delete(`/api/v1/patterns/sew-relations/${id}/`),
   },
 
@@ -677,6 +691,11 @@ export const patterns = {
   segments: {
     create: (data) => client.post('/api/v1/patterns/pattern-segments/', data),
     rename: (id, nom) => client.patch(`/api/v1/patterns/pattern-segments/${id}/`, { nom }),
+    // RECOL·LOCAR (W4b/T5b): els extrems nous, sobre la MATEIXA fila. Les costures la
+    // referencien: esborrar-la i crear-ne una altra els buidaria el costat en silenci. El
+    // PROTECT queda només per a ESBORRAR — corregir un tram mal posat no ha d'obligar a
+    // desmuntar la costura que el fa servir.
+    update: (id, data) => client.patch(`/api/v1/patterns/pattern-segments/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/patterns/pattern-segments/${id}/`),
   },
 

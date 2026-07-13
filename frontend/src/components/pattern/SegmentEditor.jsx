@@ -1,28 +1,29 @@
 import { useTranslation } from 'react-i18next'
+import { formatLen } from '../../utils/format'
 
 /**
- * Definir un tram: quin dels dos arcs, i com se'n diu.
+ * La barra de CONFIRMAR un gest de vora: un tram declarat, o una pinça.
  *
- * **Dos punts d'una vora tancada no defineixen un tram: en defineixen DOS** — l'arc que va
- * de A a B i el que hi torna per l'altre costat. Cap dels dos és «el bo» en abstracte:
- * depèn de quina costura s'estigui declarant. Per això es veuen tots dos, amb la seva
- * longitud, i es tria. En una vora oberta només n'hi ha un, i llavors no es pregunta res.
+ * **Ja no es tria l'arc aquí** (W4b/T3c). Abans, amb els dos punts posats, es dibuixaven els
+ * dos arcs possibles i es preguntava quin dels dos es volia dir; i preguntar-ho aleshores és
+ * preguntar-ho quan la mà ja ha marxat. Qui declara un tram ja sap, mentre mou el cursor, per
+ * quin costat el vol —i ara l'arc el segueix en temps real i el clic el fixa. Aquí només
+ * queda el que encara no s'ha dit: com se'n diu, i el vistiplau.
  *
  * El nom no és decoració: un tram és el vocabulari amb què després es cus, i «Tram 3» és
- * pitjor que «costura lateral» el dia que algú hagi de triar-lo d'una llista.
+ * pitjor que «costura lateral» el dia que algú l'hagi de triar d'una llista.
  */
 export default function SegmentEditor({
-  arcs, arcTriat, onTriaArc, nom, onNom, onCrea, onCancela, creant,
+  llargMm, nom, onNom, onCrea, onCancela, creant, pinca = false, unit = 'CM',
 }) {
   const { t } = useTranslation()
-  const cm = (mm) => (mm / 10).toFixed(1)
 
   const chip = (actiu) => ({
     background: actiu ? 'var(--gold)' : 'var(--white)',
     color: actiu ? 'var(--white)' : 'var(--text-main)',
     border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
     borderRadius: 4, padding: '0.25rem 0.6rem', cursor: 'pointer',
-    fontSize: 'var(--fs-caption)', fontFamily: 'var(--mono)',
+    fontSize: 'var(--fs-caption)',
   })
 
   return (
@@ -31,13 +32,24 @@ export default function SegmentEditor({
       background: 'var(--bg-muted)', borderRadius: 4, padding: '0.4rem 0.6rem',
       fontSize: 'var(--fs-caption)', flexShrink: 0,
     }}>
-      {arcs.map((arc, i) => (
-        <button key={i} onClick={() => onTriaArc(i)} style={chip(i === arcTriat)}>
-          {t(arc.unic ? 'pattern.taller.arc_only'
-            : arc.arcLlarg ? 'pattern.taller.arc_long' : 'pattern.taller.arc_short',
-            { cm: cm(arc.longitud) })}
-        </button>
-      ))}
+      <span style={{
+        display: 'flex', alignItems: 'center', gap: '0.3rem',
+        fontWeight: 600, color: 'var(--text-main)',
+      }}>
+        <i className={`ti ${pinca ? 'ti-triangle' : 'ti-line'}`} />
+        {t(pinca ? 'pattern.taller.pinca_confirm' : 'pattern.taller.segment_confirm')}
+      </span>
+
+      {/* La longitud del que s'està a punt de declarar. En una PINÇA, la suma dels dos costats
+          — que és, exactament, la tela que la costura deixarà de cosir. Dir-la aquí és dir el
+          descompte abans de fer-lo. */}
+      {llargMm != null && (
+        <span style={{
+          fontFamily: 'var(--mono)', color: 'var(--gold)', fontWeight: 600,
+        }}>
+          {formatLen(llargMm / 10, unit)}
+        </span>
+      )}
 
       <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flex: 1 }}>
         {t('pattern.taller.segment_name')}
@@ -64,10 +76,10 @@ export default function SegmentEditor({
           ...chip(!creant && !!nom.trim()),
           opacity: creant || !nom.trim() ? 0.5 : 1,
           cursor: creant || !nom.trim() ? 'not-allowed' : 'pointer',
-          fontFamily: 'inherit',
         }}
       >
-        <i className="ti ti-check" /> {t('pattern.taller.segment_create')}
+        <i className="ti ti-check" />{' '}
+        {t(pinca ? 'pattern.taller.pinca_create' : 'pattern.taller.segment_create')}
       </button>
     </div>
   )

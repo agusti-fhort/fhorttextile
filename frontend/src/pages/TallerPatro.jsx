@@ -3,7 +3,9 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { patterns, models, modelTasks } from '../api/endpoints'
 import PatternViewer from '../components/pattern/PatternViewer'
-import { arcsEntrePunts, longitudTram } from '../components/pattern/patternGeometry'
+import {
+  arcDirigit, longitudTram, puntsDelSegment, situaPunt,
+} from '../components/pattern/patternGeometry'
 import PieceList from '../components/pattern/PieceList'
 import ModelPomList from '../components/pattern/ModelPomList'
 import RelationsPanel from '../components/pattern/RelationsPanel'
@@ -11,6 +13,7 @@ import POMPicker from '../components/pattern/POMPicker'
 import SewEditor from '../components/pattern/SewEditor'
 import SegmentEditor from '../components/pattern/SegmentEditor'
 import { textCobertura, textEstat } from '../components/pattern/sewText'
+import { useUnit } from './fittingShared'
 
 /**
  * TALLER DE PATRÓ (W2) — el mòdul dedicat, a pantalla completa.
@@ -46,9 +49,10 @@ export default function TallerPatro() {
   const [pecaSel, setPecaSel] = useState('')
 
   // ── eines d'anotació (venen del tab: es TRASLLADEN, no es reescriuen) ─────
-  const [mode, setMode] = useState('view')          // 'view' | 'pom' | 'sew' | 'seg'
-  // Els punts clicats (imantats). El fan servir els DOS modes de dos punts: marcar un POM i
-  // definir un tram. El gest és el mateix; el que canvia és què se'n fa.
+  const [mode, setMode] = useState('view')     // 'view' | 'pom' | 'seg' | 'pinca' | 'sew'
+  // Els punts clicats (imantats). El fan servir els TRES modes de punts: marcar un POM (2),
+  // definir un tram (2) i marcar una pinça (3). El gest és el mateix; el que canvia és quants
+  // punts són i què se'n fa.
   const [puntsPom, setPuntsPom] = useState([])
   const [pickerObert, setPickerObert] = useState(false)
   const [segmentsA, setSegmentsA] = useState([])
@@ -56,20 +60,34 @@ export default function TallerPatro() {
   const [costatActiu, setCostatActiu] = useState('a')
   const [tipusSew, setTipusSew] = useState('casat')
   const [diferencial, setDiferencial] = useState(0)
+  const [nomSew, setNomSew] = useState('')
   // El POM que s'està col·locant. Amb pomActiu, el canvas SAP quin POM marca i no cal cap
   // cercador: A → B → ancorat. Sense pomActiu, el mode POM és la via secundària (el POM
   // que no és a la fitxa) i llavors sí que cal preguntar quin és — el picker.
   const [pomActiu, setPomActiu] = useState(null)
-  // Definir un tram: quin dels dos arcs, i com se'n diu.
-  const [arcTriat, setArcTriat] = useState(0)
   const [nomTram, setNomTram] = useState('')
   const [creantTram, setCreantTram] = useState(false)
   const [tramRessaltat, setTramRessaltat] = useState(null)
+  // ── W4b/T3c. La previsualització direccional. `arcInvertit` és la bandera VIVA (l'arc que
+  // el cursor està assenyalant ara); `invertits` és el que es va triar a cada arc ja fixat.
+  // Van separades perquè invertir el segon costat d'una pinça no pot girar el primer, que ja
+  // estava decidit.
+  const [arcInvertit, setArcInvertit] = useState(false)
+  const [invertits, setInvertits] = useState([])
+  // ── W4b/T5. REOBRIR per editar. Amb un id posat, el gest no crea res nou: RECALCULA sobre
+  // la mateixa fila. Mai esborrar-i-crear — les costures referencien els trams, i els POMs
+  // porten la seva història.
+  const [pomEditId, setPomEditId] = useState(null)
+  const [tramEditId, setTramEditId] = useState(null)
+  const [sewEditId, setSewEditId] = useState(null)
+  // La recepta que s'està reobrint, dibuixada de fons: es veu D'ON es ve mentre es recol·loca.
+  const [ombra, setOmbra] = useState(null)
   // El veredicte de l'última costura declarada. Surt IMMEDIAT: si la costura no casa, o si
   // trepitja la vora, saber-ho d'aquí a tres clics és saber-ho tard.
   const [veredicte, setVeredicte] = useState(null)
   const [tascaId, setTascaId] = useState(null)      // per al render: hi ha rellotge?
   const [errTasca, setErrTasca] = useState(null)
+  const unit = useUnit()                            // CM | INCH — la llei d'unitat del tenant
   // L'error d'una EINA (no s'ha pogut ancorar, no s'ha pogut cosir) no és l'error de
   // càrrega: aquell deixa la pàgina sense patró, aquest només ha fet fallar una acció.
   const [errEina, setErrEina] = useState(null)
@@ -168,8 +186,14 @@ export default function TallerPatro() {
     setSegmentsA([])
     setSegmentsB([])
     setCostatActiu('a')
-    setArcTriat(0)
     setNomTram('')
+    setNomSew('')
+    setArcInvertit(false)
+    setInvertits([])
+    setPomEditId(null)
+    setTramEditId(null)
+    setSewEditId(null)
+    setOmbra(null)
   }, [])
 
   const triarMode = (nou) => {
@@ -178,7 +202,12 @@ export default function TallerPatro() {
       const seguent = m === nou ? 'view' : nou
       // «Tram 3» és un nom pobre, però un camp buit és pitjor: el suggeriment es pot
       // esborrar, i qui té pressa no es queda sense poder desar.
-      if (seguent === 'seg') setNomTram(t('pattern.taller.segment_default', { n: trams.length + 1 }))
+      if (seguent === 'seg') {
+        setNomTram(t('pattern.taller.segment_default', { n: trams.length + 1 }))
+      }
+      if (seguent === 'pinca') {
+        setNomTram(t('pattern.taller.pinca_default', { n: pinces.length + 1 }))
+      }
       return seguent
     })
   }
@@ -209,46 +238,78 @@ export default function TallerPatro() {
 
   const veredicteVist = () => setVeredicte(null)
 
+  // Esc surt. I la tecla d'INVERTIR (←/→/F) gira l'arc que s'està previsualitzant, abans de
+  // fixar-lo: dos punts d'una vora tancada defineixen dos camins, i el que el cursor no digui
+  // ho ha de poder dir el teclat. Només mentre hi ha un arc viu — una tecla que no fa res quan
+  // no toca ensenya a no fer-ne cas.
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') cancelar() }
+    const onKey = (e) => {
+      if (e.key === 'Escape') { cancelar(); return }
+      const potInvertir = (mode === 'seg' || mode === 'pinca') && puntsPom.length > 0
+      if (!potInvertir) return
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setArcInvertit(v => !v)
+      }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [cancelar])
+  }, [cancelar, mode, puntsPom])
 
   const onClicPunt = (iman) => {
     const punt = iman.punt
+    const maxPunts = mode === 'pinca' ? 3 : 2
     // Forma FUNCIONAL a posta: llegir `puntsPom` del closure el faria servir el valor
     // d'abans del clic anterior si dos events arriben junts, i la mesura acabaria unint
     // un punt amb ell mateix.
     setPuntsPom(prev => {
       // Clicar dues vegades el MATEIX punt no és una mesura: és un zero. El segon clic
       // sobre el punt ja triat el DESTRIA, que és el que espera qui s'ha equivocat.
-      if (prev.length && prev[prev.length - 1].id === punt.id) return prev.slice(0, -1)
-      const nous = [...prev, punt].slice(-2)
+      if (prev.length && prev[prev.length - 1].id === punt.id) {
+        setInvertits(inv => inv.slice(0, prev.length - 1))
+        return prev.slice(0, -1)
+      }
+      if (prev.length >= maxPunts) return prev
+
+      // L'arc que acaba en aquest punt queda fixat amb la bandera d'ARA. La següent comença
+      // neta: invertir un costat no és una preferència que s'arrossegui a la resta del gest.
+      if (prev.length >= 1) setInvertits(inv => [...inv.slice(0, prev.length - 1), arcInvertit])
+      setArcInvertit(false)
+
+      const nous = [...prev, punt]
       if (nous.length === 2 && mode === 'pom') {
-        // Dos punts. Si sabem quin POM s'està col·locant, s'ancora i s'acaba; si no (via
-        // secundària), llavors sí que s'ha de preguntar quin és.
-        if (pomActiu) ancorar(pomActiu.pom_master, nous[0], nous[1])
+        // Dos punts. Si sabem de quin POM es tracta —perquè s'està col·locant de la llista de
+        // treball, o perquè s'està REOBRINT un d'ancorat— s'ancora i s'acaba. Si no (via
+        // secundària: un POM que no és a la fitxa), llavors sí que cal preguntar quin és.
+        const master = pomActiu?.pom_master ?? ombra?.pomMaster
+        if (master) ancorar(master, nous[0], nous[1])
         else setPickerObert(true)
       }
-      // En mode SEGMENT no es crea res encara: amb dos punts hi ha DOS arcs possibles, i
-      // quin és el bo el diu qui declara, no nosaltres.
+      // En mode TRAM i PINÇA no es crea res encara: falta el nom, i el vistiplau.
       return nous
     })
   }
 
-  /** L'ancoratge, un de sol per als dos camins: el guiat i el del picker. */
+  /** L'ancoratge, un de sol per a tots els camins: el guiat, el del picker, i el de REOBRIR. */
   const ancorar = async (pomMasterId, a, b) => {
     const peca = pecaDelPunt(a)
     setPickerObert(false)
     try {
       // S'envia la RECEPTA, mai el valor: el valor el llegeix el servidor de la geometria.
-      await patterns.poms.create({
-        pattern_piece: peca.id,
-        pom_master: pomMasterId,
-        definicio_mesura: { mode: 'points', a: a.id, b: b.id },
-        metode: 'recta',
-      })
+      const recepta = { mode: 'points', a: a.id, b: b.id }
+      if (pomEditId) {
+        // REOBERT (T5a): es RECALCULA sobre el MATEIX PatternPOM. Esborrar-lo i crear-ne un
+        // altre li canviaria l'id i li esborraria la data —i qualsevol cosa que un dia hi
+        // pengi—, per una feina que és una correcció, no un ancoratge nou.
+        await patterns.poms.update(pomEditId, { definicio_mesura: recepta })
+      } else {
+        await patterns.poms.create({
+          pattern_piece: peca.id,
+          pom_master: pomMasterId,
+          definicio_mesura: recepta,
+          metode: 'recta',
+        })
+      }
       // Feina feta: la fila passa a col·locada i el canvas deixa de guiar. Qui vulgui
       // col·locar-ne un altre, el clica a la llista — que és d'on surt la feina.
       netejarSeleccio()
@@ -273,13 +334,19 @@ export default function TallerPatro() {
 
   const declararCostura = async () => {
     try {
-      const { data } = await patterns.sew.create({
+      const cos = {
         model: modelId,
         segments_a: segmentsA,
         segments_b: segmentsB,
         tipus: tipusSew,
         diferencial_cm: parseFloat(diferencial) || 0,
-      })
+        nom: nomSew.trim(),
+      }
+      // REOBERTA (T5c): la mateixa costura, amb la composició nova. No se n'encunya una altra
+      // —perdria la data i l'autor per un canvi de tipus.
+      const { data } = sewEditId
+        ? await patterns.sew.update(sewEditId, cos)
+        : await patterns.sew.create(cos)
       // La resposta ja porta l'estat calculat sobre la geometria viva (casa/no casa) i els
       // avisos de cobertura de la vora. La costura es crea IGUALMENT —l'avís informa, no
       // bloqueja: el patronista mana— però es diu de seguida i amb les xifres. Un avís que
@@ -287,13 +354,14 @@ export default function TallerPatro() {
       const e = data.estat || {}
       setVeredicte({
         casa: !!e.casa,
-        estat: textEstat(t, e),
+        estat: textEstat(t, e, unit),
         missatge: e.missatge || '',
         cobertura: (e.cobertura || []).map(a => ({
-          text: textCobertura(t, a), missatge: a.missatge || '',
+          text: textCobertura(t, a, unit), missatge: a.missatge || '',
         })),
       })
       netejarSeleccio()
+      setMode('view')
       await recarregarRelacions()
     } catch {
       setErrEina(t('pattern.err_sew'))
@@ -327,6 +395,79 @@ export default function TallerPatro() {
 
   const reanomenarTram = async (tramId, nom) => {
     await patterns.segments.rename(tramId, nom)
+    await recarregarRelacions()
+  }
+
+  const reanomenarSew = async (sewId, nom) => {
+    await patterns.sew.update(sewId, { nom })
+    await recarregarRelacions()
+  }
+
+  // ── REOBRIR (T5) ─────────────────────────────────────────────────────────
+  // Les tres entitats es reobren des de RELACIONS i s'editen amb EL MATEIX GEST amb què es van
+  // crear. No hi ha un segon editor: hi ha el taller, i el taller sap tornar-hi.
+
+  /** Un punt de la geometria, pel seu id. */
+  const puntPerId = useCallback((id) => {
+    for (const p of geometria?.pieces || []) {
+      for (const b of p.boundaries || []) {
+        const q = (b.points || []).find(x => x.id === id)
+        if (q) return q
+      }
+    }
+    return null
+  }, [geometria])
+
+  /** Reobrir un POM ancorat: la recepta torna al canvas i es torna a marcar A i B. */
+  const reobrirPOM = (pom) => {
+    const def = pom.definicio_mesura || {}
+    netejarSeleccio()
+    setPomEditId(pom.id)
+    setOmbra({
+      mena: 'pom',
+      pomMaster: pom.pom_master,
+      codi: pom.pom_code,
+      punts: [def.a, def.b].map(id => puntPerId(id)).filter(Boolean),
+    })
+    setMode('pom')
+  }
+
+  /** Reobrir un tram: es recol·loquen els extrems, sobre la MATEIXA fila. */
+  const reobrirTram = (tram) => {
+    netejarSeleccio()
+    setTramEditId(tram.id)
+    setNomTram(tram.nom || '')
+    const peca = (geometria?.pieces || []).find(p => p.id === tram.piece_id)
+    setOmbra({
+      mena: 'seg',
+      nom: tram.nom,
+      punts: peca ? puntsDelSegment(peca, tram) : [],
+    })
+    setMode('seg')
+  }
+
+  /** Reobrir una costura: tipus, diferencial i composició de costats, a l'editor de cosir. */
+  const reobrirSew = (sew) => {
+    netejarSeleccio()
+    setSewEditId(sew.id)
+    setSegmentsA([...(sew.segments_a || [])])
+    setSegmentsB([...(sew.segments_b || [])])
+    setTipusSew(sew.tipus)
+    setDiferencial(sew.diferencial_cm ?? 0)
+    setNomSew(sew.nom || '')
+    setMode('sew')
+  }
+
+  /**
+   * Esborrar una pinça: la costura I els seus dos costats.
+   *
+   * Els costats d'una pinça no existeixen sense ella —són la pinça—, i deixar-los enrere
+   * ompliria el patró de trams que ningú no cus i que ningú no sabria d'on venen. Ho fa el
+   * servidor en una transacció (v. `SewRelationViewSet.destroy`): des d'aquí seria tres
+   * crides que poden fallar per la meitat.
+   */
+  const esborrarPinca = async (sewId) => {
+    await patterns.sew.remove(sewId)
     await recarregarRelacions()
   }
 
@@ -365,16 +506,14 @@ export default function TallerPatro() {
     return pecaSel || null
   }, [mode, puntsPom, pecaSel, pecaDelPunt])
 
-  /** La vora (índex) i la posició d'un punt dins d'ella. */
-  const voraDelPunt = useCallback((punt) => {
-    const peca = pecaDelPunt(punt)
-    if (!peca) return null
-    for (const v of peca.boundaries || []) {
-      const i = (v.points || []).findIndex(q => q.id === punt.id)
-      if (i >= 0) return { peca, vora: v, index: v.index, ordre: i }
-    }
-    return null
-  }, [pecaDelPunt])
+  /** La vora (índex) i la posició d'un punt dins d'ella.
+   *
+   * El MATEIX `situaPunt` que el canvas fa servir per a la previsualització: si cadascú
+   * situés els punts pel seu compte, un dia el canvas pintaria un arc i el taller en crearia
+   * un altre. */
+  const voraDelPunt = useCallback(
+    (punt) => situaPunt(geometria?.pieces || [], punt),
+    [geometria])
 
   // Definint un tram, l'imant queda tancat a la VORA del punt A. Un tram és un tros d'UNA
   // vora: si el punt B pogués sortir d'una altra, el motor ho rebutjaria — i és millor no
@@ -384,27 +523,89 @@ export default function TallerPatro() {
     return voraDelPunt(puntsPom[0])?.index ?? null
   }, [mode, puntsPom, voraDelPunt])
 
-  // Els dos arcs que els dos punts defineixen (o l'únic, si la vora és oberta).
-  const arcs = useMemo(() => {
-    if (mode !== 'seg' || puntsPom.length < 2) return []
-    const a = voraDelPunt(puntsPom[0])
-    const b = voraDelPunt(puntsPom[1])
-    if (!a || !b || a.index !== b.index) return []
-    return arcsEntrePunts(a.vora, a.ordre, b.ordre)
-  }, [mode, puntsPom, voraDelPunt])
+  /** L'arc entre dos punts ja clicats, amb la direcció que es va triar en fixar-lo. */
+  const arcFixat = useCallback((i, j) => {
+    const a = voraDelPunt(puntsPom[i])
+    const b = voraDelPunt(puntsPom[j])
+    if (!a || !b || a.index !== b.index) return null
+    // El MATEIX `arcDirigit` que el canvas fa servir per pintar la prèvia: si cadascú triés
+    // l'arc pel seu compte, un dia es pintaria un i es crearia l'altre.
+    return arcDirigit(a.vora, a.ordre, b.ordre, !!invertits[i])
+  }, [puntsPom, invertits, voraDelPunt])
+
+  // El tram que s'està a punt de declarar (dos punts fixats).
+  const arcTram = useMemo(
+    () => (mode === 'seg' && puntsPom.length === 2 ? arcFixat(0, 1) : null),
+    [mode, puntsPom, arcFixat])
+
+  // Els dos costats de la pinça que s'està a punt de marcar (tres punts fixats).
+  const costatsPinca = useMemo(() => {
+    if (mode !== 'pinca' || puntsPom.length !== 3) return null
+    const a = arcFixat(0, 1)
+    const b = arcFixat(1, 2)
+    return a && b ? [a, b] : null
+  }, [mode, puntsPom, arcFixat])
 
   const crearTram = async () => {
-    const arc = arcs[arcTriat]
-    if (!arc || !nomTram.trim()) return
+    if (!arcTram || !nomTram.trim()) return
     setCreantTram(true)
     try {
       // Dos PUNTS i quin arc; ni t ni longituds. El tram el resol el servidor sobre la
       // geometria — igual que el valor d'un POM.
-      await patterns.segments.create({
+      const cos = {
         point_a: puntsPom[0].id,
         point_b: puntsPom[1].id,
         nom: nomTram.trim(),
-        arc_llarg: arc.arcLlarg,
+        arc_llarg: arcTram.arcLlarg,
+      }
+      // RECOL·LOCAT (T5b): la MATEIXA fila. Esborrar-la i crear-ne una altra buidaria el
+      // costat de les costures que la cusen, en silenci.
+      if (tramEditId) await patterns.segments.update(tramEditId, cos)
+      else await patterns.segments.create(cos)
+      netejarSeleccio()
+      setMode('view')
+      await recarregarRelacions()
+    } catch (e) {
+      setErrEina(e.response?.data?.tram
+        || e.response?.data?.point_a
+        || e.response?.data?.detail
+        || t('pattern.taller.err_segment'))
+      setPuntsPom([])
+    } finally {
+      setCreantTram(false)
+    }
+  }
+
+  /**
+   * Marcar una pinça: tres punts, i el servidor en fa dos trams i una costura de pinça.
+   *
+   * UNA sola crida. Fer-ho amb tres (dos trams i la costura) podia fallar a la tercera i
+   * deixar dos trams orfes al patró, amb nom de pinça i sense pinça.
+   */
+  const crearPinca = async () => {
+    if (!costatsPinca || !nomTram.trim()) return
+    setCreantTram(true)
+    try {
+      const nom = nomTram.trim()
+      const { data } = await patterns.sew.pinca({
+        model: modelId,
+        point_a: puntsPom[0].id,
+        point_vertex: puntsPom[1].id,
+        point_b: puntsPom[2].id,
+        nom,
+        nom_a: t('pattern.taller.pinca_side_a', { nom }),
+        nom_b: t('pattern.taller.pinca_side_b', { nom }),
+      })
+      // La pinça diu de seguida què ha fet: quanta tela es menja. És el número que després
+      // apareixerà restat a la costura que la conté, i val més veure'l néixer.
+      const e = data.estat || {}
+      setVeredicte({
+        casa: !!e.casa,
+        estat: textEstat(t, e, unit),
+        missatge: e.missatge || '',
+        cobertura: (e.cobertura || []).map(a => ({
+          text: textCobertura(t, a, unit), missatge: a.missatge || '',
+        })),
       })
       netejarSeleccio()
       setMode('view')
@@ -412,7 +613,7 @@ export default function TallerPatro() {
     } catch (e) {
       setErrEina(e.response?.data?.tram
         || e.response?.data?.detail
-        || t('pattern.taller.err_segment'))
+        || t('pattern.taller.err_pinca'))
       setPuntsPom([])
     } finally {
       setCreantTram(false)
@@ -426,7 +627,16 @@ export default function TallerPatro() {
   // La longitud i l'«en ús» es calculen aquí perquè ja tenim tot el que fa falta: la vora
   // (per a la longitud) i les costures (per saber qui el reté). Demanar-los al servidor seria
   // una tercera crida per a dades que ja són a la pantalla.
-  const trams = useMemo(() => {
+  // Els costats de les PINCES són trams declarats, però NO són vocabulari de costura: un
+  // costat de pinça es cus contra el seu germà, mai contra una altra peça. Oferir-los per
+  // cosir seria oferir un disbarat, i llistar-los amb els altres ompliria la llista de
+  // treball de files que ningú ha de tocar. Viuen a la seva pinça, i és allà que s'editen.
+  const idsCostatPinca = useMemo(() => new Set(
+    sews.filter(s => s.es_pinca)
+      .flatMap(s => [...(s.segments_a || []), ...(s.segments_b || [])])
+  ), [sews])
+
+  const totsElsTrams = useMemo(() => {
     const enUs = new Set(sews.flatMap(s => [...(s.segments_a || []), ...(s.segments_b || [])]))
     return (geometria?.pieces || []).flatMap(p =>
       (p.segments || [])
@@ -442,6 +652,50 @@ export default function TallerPatro() {
           }
         }))
   }, [geometria, sews])
+
+  const trams = useMemo(
+    () => totsElsTrams.filter(tr => !idsCostatPinca.has(tr.id)),
+    [totsElsTrams, idsCostatPinca])
+
+  /** Tots els trams per id — el diccionari amb què es genera el nom d'una costura (T6). */
+  const tramsPerId = useMemo(
+    () => new Map(totsElsTrams.map(tr => [tr.id, tr])), [totsElsTrams])
+
+  /**
+   * Les PINÇES, amb la geometria que el canvas necessita per pintar-les.
+   *
+   * El VÈRTEX és el punt on els dos costats es toquen: l'últim punt del primer costat. No cal
+   * desar-lo enlloc —surt de la geometria— i desar-lo seria tenir-ne dues versions el dia que
+   * algú recol·loqués un costat.
+   */
+  const pinces = useMemo(() => {
+    const peces = geometria?.pieces || []
+    return sews.filter(s => s.es_pinca).map(s => {
+      const ids = [...(s.segments_a || []), ...(s.segments_b || [])]
+      const costats = ids.map(id => {
+        const tr = tramsPerId.get(id)
+        const peca = tr && peces.find(p => p.id === tr.piece_id)
+        return peca ? puntsDelSegment(peca, tr) : []
+      }).filter(pts => pts.length >= 2)
+      const primer = costats[0] || []
+      const e = s.estat || {}
+      return {
+        id: s.id,
+        nom: s.nom || t('pattern.taller.pinca_unnamed', { id: s.id }),
+        costats,
+        apex: primer.length ? primer[primer.length - 1] : null,
+        // La tela que aquesta pinça es menja: la suma dels seus dos costats. És, exactament,
+        // el número que es veurà restat a la costura que la conté.
+        cm: round2((e.longitud_a_cm || 0) + (e.longitud_b_cm || 0)),
+        legs: ids.map(id => tramsPerId.get(id)).filter(Boolean),
+        estat: e,
+        sew: s,
+      }
+    })
+  }, [sews, geometria, tramsPerId, t])
+
+  /** Les costures de debò: les que no són pinces. Una pinça no és una costura més. */
+  const costures = useMemo(() => sews.filter(s => !s.es_pinca), [sews])
 
   const tornar = () => navigate(`/models/${modelId}?tab=Patró`)
 
@@ -477,15 +731,19 @@ export default function TallerPatro() {
               pomActiu={pomActiu}
               onColocar={colocarPOM}
               onAfegirFora={afegirPOMForaDeFitxa}
+              unit={unit}
             />
           </Contenidor>
 
           <Contenidor titol={t('pattern.taller.relations')} icona="ti-link" pes={1}>
             <RelationsPanel
-              poms={pomsAncorats} sews={sews} segments={trams}
-              onEsborraPom={esborrarPOM}
-              onEsborraSew={esborrarSew}
-              onReanomenaTram={reanomenarTram}
+              poms={pomsAncorats} sews={costures} pinces={pinces} segments={trams}
+              tramsPerId={tramsPerId} unit={unit}
+              onEsborraPom={esborrarPOM} onReobrePom={reobrirPOM}
+              onEsborraSew={esborrarSew} onReobreSew={reobrirSew}
+              onReanomenaSew={reanomenarSew}
+              onEsborraPinca={esborrarPinca} onReanomenaPinca={reanomenarSew}
+              onReanomenaTram={reanomenarTram} onReobreTram={reobrirTram}
               onEsborraTram={esborrarTram}
             />
           </Contenidor>
@@ -510,33 +768,58 @@ export default function TallerPatro() {
           )}
           {mode === 'pom' && (
             <Avis
-              text={pomActiu
-                ? t(puntsPom.length === 0
-                    ? 'pattern.taller.place_a' : 'pattern.taller.place_b',
-                    { codi: pomActiu.codi_client,
-                      nom: pomActiu.nom_client || pomActiu.nom_canonic })
-                : t(puntsPom.length === 0
-                    ? 'pattern.pom_hint_first' : 'pattern.pom_hint_second')}
+              text={ombra?.mena === 'pom'
+                ? t('pattern.taller.pom_reopen_hint', { codi: ombra.codi })
+                : pomActiu
+                  ? t(puntsPom.length === 0
+                      ? 'pattern.taller.place_a' : 'pattern.taller.place_b',
+                      { codi: pomActiu.codi_client,
+                        nom: pomActiu.nom_client || pomActiu.nom_canonic })
+                  : t(puntsPom.length === 0
+                      ? 'pattern.pom_hint_first' : 'pattern.pom_hint_second')}
               onTanca={cancelar}
               tancaEtiqueta={t('pattern.taller.cancel_place')}
             />
           )}
           {mode === 'seg' && (
             <Avis
-              text={puntsPom.length === 0
-                ? t('pattern.taller.seg_a')
-                : puntsPom.length === 1
-                  ? t('pattern.taller.seg_b')
-                  : t('pattern.taller.seg_arc')}
+              text={tramEditId && puntsPom.length === 0
+                ? t('pattern.taller.seg_reopen_hint', { nom: ombra?.nom || '' })
+                : puntsPom.length === 0
+                  ? t('pattern.taller.seg_a')
+                  : puntsPom.length === 1
+                    ? t('pattern.taller.seg_b')
+                    : t('pattern.taller.seg_ready')}
               onTanca={cancelar}
               tancaEtiqueta={t('pattern.taller.cancel_place')}
             />
           )}
-          {mode === 'seg' && arcs.length > 0 && (
+          {/* MARCAR PINÇA (T1): tres clics — inici, vèrtex, final. La guia diu SEMPRE quin
+              toca, perquè un gest de tres passos sense guia és un gest que s'endevina. */}
+          {mode === 'pinca' && (
+            <Avis
+              text={t(['pattern.taller.pinca_a', 'pattern.taller.pinca_vertex',
+                       'pattern.taller.pinca_b'][puntsPom.length]
+                      || 'pattern.taller.pinca_ready')}
+              onTanca={cancelar}
+              tancaEtiqueta={t('pattern.taller.cancel_place')}
+            />
+          )}
+          {mode === 'seg' && arcTram && (
             <SegmentEditor
-              arcs={arcs} arcTriat={arcTriat} onTriaArc={setArcTriat}
+              llargMm={arcTram.longitud}
               nom={nomTram} onNom={setNomTram}
               onCrea={crearTram} onCancela={cancelar} creant={creantTram}
+              unit={unit}
+            />
+          )}
+          {mode === 'pinca' && costatsPinca && (
+            <SegmentEditor
+              pinca
+              llargMm={costatsPinca[0].longitud + costatsPinca[1].longitud}
+              nom={nomTram} onNom={setNomTram}
+              onCrea={crearPinca} onCancela={cancelar} creant={creantTram}
+              unit={unit}
             />
           )}
           {mode === 'sew' && (
@@ -545,12 +828,15 @@ export default function TallerPatro() {
               costatActiu={costatActiu} onCostat={setCostatActiu}
               tipus={tipusSew} onTipus={setTipusSew}
               diferencial={diferencial} onDiferencial={setDiferencial}
+              nom={nomSew} onNom={setNomSew}
+              editant={!!sewEditId}
               onDeclara={declararCostura}
-              onNeteja={netejarSeleccio}
+              onNeteja={cancelar}
               trams={trams}
               onTriaTram={triarTram}
               onRessalta={setTramRessaltat}
               onDefinirTram={() => triarMode('seg')}
+              unit={unit}
             />
           )}
 
@@ -573,10 +859,14 @@ export default function TallerPatro() {
               costatActiu={costatActiu}
               pecaIman={pecaIman}
               voraIman={voraIman}
-              arcs={arcs} arcTriat={arcTriat} onTriaArc={setArcTriat}
+              arcInvertit={arcInvertit}
+              invertits={invertits}
+              ombra={ombra}
               tramsDeclarats={trams}
               tramRessaltat={tramRessaltat}
               onClicTram={triarTram}
+              pinces={pinces}
+              unit={unit}
               omplirAlcada
             />
           )}
@@ -679,6 +969,16 @@ function BarraEines({ t, mode, onMode, tascaId, errTasca }) {
       >
         <i className="ti ti-line" />
         {t('pattern.taller.mode_seg')}
+      </button>
+      {/* MARCAR PINÇA, al costat de Cosir: una pinça és el que explica per què una vora fa 32
+          cm i només en cus 30. Sense poder-la declarar, aquella costura no casa mai i el patró
+          està bé. */}
+      <button
+        onClick={() => onMode('pinca')} disabled={!tascaId}
+        aria-pressed={mode === 'pinca'} style={boto(mode === 'pinca')}
+      >
+        <i className="ti ti-triangle" />
+        {t('pattern.taller.mode_pinca')}
       </button>
       <button
         onClick={() => onMode('sew')} disabled={!tascaId}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import client from '../api/client'
+import { toUnit, unitDecimals } from '../utils/format'
 
 // Unitat de mesura del tenant (CM | INCH). Lectura única + subscripció a l'event 'unit-changed'
 // (mateixa font que UnitToggle). Hook compartit perquè els editors no rellegeixin la config a mà.
@@ -20,11 +21,16 @@ export function useUnit() {
 // i, en inch, converteix des del canònic cm (÷2.54). NO toca emmagatzematge: els valors es desen en
 // cm amb precisió completa; això només FORMATA per a mostrar → cap round-trip drift cap a
 // MeasurementChangeLog (append-only). Retorna null per a buit (el cridant posa el placeholder '—').
+//
+// La LLEI (quins decimals, i que la conversió surt del valor complet i mai del ja arrodonit) viu a
+// `utils/format`, que és d'on beu també el Taller de patró (W4b/T7). Aquí es conserva el format
+// SENSE separador d'idioma —una graella de mesures editables ensenya el mateix que s'hi escriu, i
+// el que s'hi escriu té punt— i per això no es fa servir `formatLenNum`.
 export function fmtMeasure(value, unit = 'CM') {
   if (value === '' || value == null) return null
   const n = Number(value)
   if (Number.isNaN(n)) return String(value)
-  return unit === 'INCH' ? (n / 2.54).toFixed(2) : n.toFixed(1)
+  return toUnit(n, unit).toFixed(unitDecimals(unit))
 }
 
 // Estil base de capçalera de taula (compartit entre la graella editable <MeasureTable>,

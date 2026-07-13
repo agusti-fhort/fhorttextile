@@ -2839,6 +2839,35 @@ class PincaAPITest(PatternsAPITestBase):
 
         self.assertFalse(resp.data['es_pinca'])
 
+    def test_esborrar_una_pinca_se_nemporta_els_seus_dos_costats(self):
+        """Els costats d'una pinça SÓN la pinça: no existeixen sense ella. Deixar-los enrere
+        ompliria el patró de trams que ningú no cus i que ningú no sabria d'on venen."""
+        resp = self._marca_pinca()
+        rel_id = resp.data['id']
+        self.assertEqual(
+            PatternSegment.objects.filter(origen=PatternSegment.ORIGEN_DECLARAT).count(), 2)
+
+        request = self.factory.delete(f'/api/v1/patterns/sew-relations/{rel_id}/')
+        force_authenticate(request, user=self.user)
+        r = SewRelationViewSet.as_view({'delete': 'destroy'})(request, pk=rel_id)
+
+        self.assertEqual(r.status_code, 204)
+        self.assertFalse(SewRelation.objects.filter(pk=rel_id).exists())
+        self.assertFalse(
+            PatternSegment.objects.filter(origen=PatternSegment.ORIGEN_DECLARAT).exists())
+
+    def test_esborrar_una_costura_normal_NO_toca_els_seus_trams(self):
+        """La cascada és de la PINÇA, no de qualsevol costura: un tram declarat és vocabulari
+        del patró i sobreviu a la costura que el feia servir."""
+        sew = self._cus_el_lateral()
+        request = self.factory.delete(f'/api/v1/patterns/sew-relations/{sew.data["id"]}/')
+        force_authenticate(request, user=self.user)
+
+        SewRelationViewSet.as_view({'delete': 'destroy'})(request, pk=sew.data['id'])
+
+        self.assertEqual(
+            PatternSegment.objects.filter(origen=PatternSegment.ORIGEN_DECLARAT).count(), 2)
+
     # ── T5b: recol·locar ────────────────────────────────────────────────────
     def test_recol_locar_un_tram_EN_US_el_mou_sobre_la_mateixa_fila(self):
         """El PROTECT és per a ESBORRAR. Un tram mal posat s'ha de poder arreglar sense

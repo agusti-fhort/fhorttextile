@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { KONVA_COL } from './PatternViewer'
+import { formatLen, unitLabel } from '../../utils/format'
 
 /**
  * Cosir: quins trams van a cada costat, de quin tipus és la costura, i declarar-la.
@@ -9,13 +10,22 @@ import { KONVA_COL } from './PatternViewer'
  * afirmació amb una hipòtesi. Si la peça no té cap tram declarat, el buit-estat no és un
  * mur: porta a l'eina de declarar-ne un. El pas previ és el flux, no un obstacle.
  *
+ * Els costats de PINÇA no s'ofereixen (W4b): un costat de pinça es cus contra el seu germà,
+ * mai contra una altra peça, i oferir-lo aquí seria oferir un disbarat. La llista ja arriba
+ * filtrada del taller.
+ *
+ * **La mateixa superfície serveix per REOBRIR** (T5c): amb `editant`, això no declara una
+ * costura nova, desa la que hi ha —tipus, diferencial, composició de costats i bateig— sobre
+ * la mateixa fila. Un segon editor per a la mateixa cosa acabaria divergint del primer.
+ *
  * Les costures que ja existien sobre trams 'auto' (les d'abans d'aquesta llei) es veuen i
  * s'esborren igual que sempre, a RELACIONS: compatibilitat, no migració.
  */
 export default function SewEditor({
   segmentsA, segmentsB, costatActiu, onCostat, tipus, onTipus,
-  diferencial, onDiferencial, onDeclara, onNeteja,
-  trams, onTriaTram, onRessalta, onDefinirTram,
+  diferencial, onDiferencial, nom, onNom, editant = false,
+  onDeclara, onNeteja,
+  trams, onTriaTram, onRessalta, onDefinirTram, unit = 'CM',
 }) {
   const { t } = useTranslation()
   const llest = segmentsA.length > 0 && segmentsB.length > 0
@@ -74,9 +84,23 @@ export default function SewEditor({
               style={{ width: 62, fontSize: 'var(--fs-caption)', padding: '0.15rem 0.3rem',
                        border: '1px solid var(--border)', borderRadius: 4 }}
             />
-            cm
+            {unitLabel(unit)}
           </label>
         )}
+
+        {/* EL BATEIG (T6). Buit = el nom se'l genera dels dos trams («Lateral ⛓ Esquena»), i
+            es refà sol si algú els reanomena. Escrit, mana: un nom que una persona ha triat no
+            el pot trepitjar un generador. El placeholder ho diu sense haver-ho d'explicar. */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', minWidth: 0 }}>
+          {t('pattern.taller.sew_name')}
+          <input
+            value={nom || ''}
+            onChange={e => onNom(e.target.value)}
+            placeholder={t('pattern.taller.sew_name_auto')}
+            style={{ width: 150, fontSize: 'var(--fs-caption)', padding: '0.15rem 0.3rem',
+                     border: '1px solid var(--border)', borderRadius: 4 }}
+          />
+        </label>
 
         <span style={{ flex: 1 }} />
         <button onClick={onNeteja} style={chip(false)}>{t('app.cancel')}</button>
@@ -85,7 +109,8 @@ export default function SewEditor({
           style={{ ...chip(llest, 'var(--gold)'), opacity: llest ? 1 : 0.5,
                    cursor: llest ? 'pointer' : 'not-allowed' }}
         >
-          <i className="ti ti-check" /> {t('pattern.sew_declare')}
+          <i className="ti ti-check" />{' '}
+          {t(editant ? 'pattern.taller.sew_save' : 'pattern.sew_declare')}
         </button>
       </div>
 
@@ -137,7 +162,7 @@ export default function SewEditor({
                   >
                     <span>{tr.nom || t('pattern.taller.segment_unnamed')}</span>
                     <span style={{ fontFamily: 'var(--mono)', opacity: 0.85 }}>
-                      {tr.longitud_cm != null ? `${tr.longitud_cm} cm` : '—'}
+                      {formatLen(tr.longitud_cm, unit)}
                     </span>
                   </button>
                 )
