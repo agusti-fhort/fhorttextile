@@ -1055,6 +1055,27 @@ No afegeixis cap text fora del JSON.""",
         return default
 
 
+def _avis_files_perdudes(n_document, n_extretes):
+    """FIX D (DIAGNOSI_QA_S8_IMPORT §D1e): el document té més files de POM que les extretes.
+
+    La fitxa del Tate té 26 POMs i la IA en va retornar 25. La que va deixar caure —`JJ`,
+    '1/2 Elbow width'— era l'única fila SENSE valor a la talla base, i **cap avís ho va dir**:
+    una fila del document desapareixia en silenci. Un POM sense mesura base és legítim
+    (`BaseMeasurement.base_value_cm` és `null=True`), així que la fila no s'havia de perdre;
+    i si es perd, s'ha de dir.
+
+    El recompte del document el dona el parser determinista (`meta['n_files_amb_codi']`), que
+    sap comptar les files encara que abdiqui de llegir-ne els valors. Només s'avisa en el sentit
+    que fa mal —el document en té MÉS que les extretes—, mai al revés.
+    """
+    if n_document and n_extretes < n_document:
+        perdudes = n_document - n_extretes
+        return [f"El document té {n_document} files amb codi de POM i se n'han extret "
+                f"{n_extretes}: {perdudes} fila(es) no s'han llegit. Revisa-les a mà (sovint "
+                f"són files sense valor a la talla base, que són POMs igualment vàlids)."]
+    return []
+
+
 def _extraccio_via_excel(session, api_key):
     """Via ràpida d'extracció per a fitxes Excel: parse determinista + revisió Sonnet,
     SENSE la crida Opus.
@@ -1283,6 +1304,11 @@ def import_session_extraccio_view(request, token):
         avisos.append(grading_status['detail'])
 
     measurements = extracted.get('measurements', []) or []
+
+    # FIX D — la fila que la IA deixa caure en silenci. Si el document és un Excel, el parser
+    # determinista n'ha comptat les files de POM encara que hagi abdicat de llegir-lo; si la IA
+    # en torna menys, es diu. (Amb el Tate: 26 al document, 25 d'Opus, `JJ` perduda i cap avís.)
+    avisos += _avis_files_perdudes(excel_meta.get('n_files_amb_codi') or 0, len(measurements))
 
     # Matching POM per fila.
     # N3 (DIAGNOSI_NOMENCLATURA_ALIES): customer del model → el matcher resol els àlies de
