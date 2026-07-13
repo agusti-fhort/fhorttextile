@@ -697,6 +697,19 @@ export const patterns = {
     // seus trams queden lliures per a la proposta bona.
     rebutjarProposta: (data) =>
       client.post('/api/v1/patterns/sew-relations/rebutjar-proposta/', data),
+
+    // ── ASSISTIT (A1): les PINCES que el motor veu a la vora ────────────────
+    //
+    // Mateix patró que les costures proposades. **No hi ha cap endpoint de confirmació**: una
+    // pinça proposada es confirma cridant `pinca()` (aquí sobre) amb els tres punts que el
+    // candidat ja porta — el MATEIX camí de codi que els tres clics del taller. Un segon camí per
+    // a la mateixa cosa hauria estat un lloc més on la llei de la pinça podria divergir.
+    pincesProposades: (modelId, fileId = null) =>
+      client.get('/api/v1/patterns/sew-relations/pinces-proposades/',
+        { params: fileId ? { model: modelId, file: fileId } : { model: modelId } }),
+
+    rebutjarPinca: (data) =>
+      client.post('/api/v1/patterns/sew-relations/rebutjar-pinca/', data),
   },
 
   // Trams DECLARATS (W1/T4). La segmentació gir→gir és una proposta del motor (origen

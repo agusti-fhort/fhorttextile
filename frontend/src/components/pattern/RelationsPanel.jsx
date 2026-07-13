@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import DartProposalsPanel from './DartProposalsPanel'
 import ProposalsPanel from './ProposalsPanel'
 import { nomCostura, textAritmetica, textCobertura, textEstat } from './sewText'
 import { formatLen, titleLen } from '../../utils/format'
@@ -21,6 +22,8 @@ export default function RelationsPanel({
   poms, sews, pinces, segments, tramsPerId, unit = 'CM',
   propostes = [], descartatsProp = null,
   onConfirmaProposta, onRebutjaProposta, onRessaltaProposta,
+  pincesProposades = [], descartatsPinca = null,
+  onConfirmaPinca, onRebutjaPinca, onRessaltaPinca,
   onEsborraPom, onReobrePom,
   onEsborraSew, onReobreSew, onReanomenaSew,
   onEsborraPinca, onReanomenaPinca,
@@ -40,6 +43,18 @@ export default function RelationsPanel({
           onConfirma={onConfirmaProposta}
           onRebutja={onRebutjaProposta}
           onRessalta={onRessaltaProposta}
+        />
+      </Seccio>
+
+      {/* LES PINCES PROPOSADES (A1), just sota les costures proposades: les dues llistes són la
+          mateixa feina —el que el motor veu i encara ningú no ha decidit— i separar-les en dos
+          llocs hauria fet que l'assistència visqués a mitges. */}
+      <Seccio titol={t('pattern.taller.darts_proposed', { n: pincesProposades.length })}>
+        <DartProposalsPanel
+          candidats={pincesProposades} descartats={descartatsPinca} unit={unit}
+          onConfirma={onConfirmaPinca}
+          onRebutja={onRebutjaPinca}
+          onRessalta={onRessaltaPinca}
         />
       </Seccio>
 

@@ -3243,7 +3243,17 @@
       "sig_name_llunyanes": "{{a}} i {{b}} no són peces veïnes",
       "sig_name_none": "Els noms de les peces no diuen res",
       "err_proposal_confirm": "No s'ha pogut confirmar la proposta.",
-      "err_proposal_reject": "No s'ha pogut rebutjar la proposta."
+      "err_proposal_reject": "No s'ha pogut rebutjar la proposta.",
+      "darts_proposed": "Pinces proposades ({{n}})",
+      "darts_empty": "Cap pinça proposada: el motor no veu cap V prou local a les vores.",
+      "darts_dropped": "{{declarades}} ja declarades · {{rebutjades}} rebutjades",
+      "dart_proposed": "Pinça proposada · {{peca}}",
+      "dart_legs": "costats {{a}} + {{b}}",
+      "dart_intake_title": "La tela que la pinça es menja: és el número que sortirà restat a la costura que la conté.",
+      "dart_sig_mouth": "La boca fa {{boca}}: només el {{pct}}% de la vora (és un accident local, no una cantonada)",
+      "dart_sig_depth": "Fondària del vèrtex: {{prof}}",
+      "dart_sig_notches": "{{n}} dels 2 extrems de la boca porten piquet",
+      "dart_sig_no_notches": "Cap extrem de la boca no porta piquet"
     },
     "loading": "Carregant el patró…",
     "empty_title": "Encara no hi ha cap patró",

@@ -3243,7 +3243,17 @@
       "sig_name_llunyanes": "{{a}} and {{b}} are not neighbouring pieces",
       "sig_name_none": "The piece names say nothing",
       "err_proposal_confirm": "The proposal could not be confirmed.",
-      "err_proposal_reject": "The proposal could not be rejected."
+      "err_proposal_reject": "The proposal could not be rejected.",
+      "darts_proposed": "Proposed darts ({{n}})",
+      "darts_empty": "No darts proposed: the engine sees no V local enough on the edges.",
+      "darts_dropped": "{{declarades}} already declared · {{rebutjades}} rejected",
+      "dart_proposed": "Proposed dart · {{peca}}",
+      "dart_legs": "legs {{a}} + {{b}}",
+      "dart_intake_title": "The fabric the dart takes up: it is the figure that will show subtracted from the seam containing it.",
+      "dart_sig_mouth": "The mouth is {{boca}}: only {{pct}}% of the edge (a local feature, not a corner)",
+      "dart_sig_depth": "Depth of the apex: {{prof}}",
+      "dart_sig_notches": "{{n}} of the 2 mouth ends carry a notch",
+      "dart_sig_no_notches": "Neither end of the mouth carries a notch"
     },
     "loading": "Loading pattern…",
     "empty_title": "No pattern yet",

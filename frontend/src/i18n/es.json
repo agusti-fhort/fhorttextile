@@ -3243,7 +3243,17 @@
       "sig_name_llunyanes": "{{a}} y {{b}} no son piezas vecinas",
       "sig_name_none": "Los nombres de las piezas no dicen nada",
       "err_proposal_confirm": "No se ha podido confirmar la propuesta.",
-      "err_proposal_reject": "No se ha podido rechazar la propuesta."
+      "err_proposal_reject": "No se ha podido rechazar la propuesta.",
+      "darts_proposed": "Pinzas propuestas ({{n}})",
+      "darts_empty": "Ninguna pinza propuesta: el motor no ve ninguna V lo bastante local en los bordes.",
+      "darts_dropped": "{{declarades}} ya declaradas · {{rebutjades}} rechazadas",
+      "dart_proposed": "Pinza propuesta · {{peca}}",
+      "dart_legs": "lados {{a}} + {{b}}",
+      "dart_intake_title": "La tela que la pinza se come: es el número que aparecerá restado en la costura que la contiene.",
+      "dart_sig_mouth": "La boca mide {{boca}}: solo el {{pct}}% del borde (es un accidente local, no una esquina)",
+      "dart_sig_depth": "Profundidad del vértice: {{prof}}",
+      "dart_sig_notches": "{{n}} de los 2 extremos de la boca llevan piquete",
+      "dart_sig_no_notches": "Ningún extremo de la boca lleva piquete"
     },
     "loading": "Cargando el patrón…",
     "empty_title": "Todavía no hay ningún patrón",

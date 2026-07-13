@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { patterns, models, modelTasks } from '../api/endpoints'
 import PatternViewer from '../components/pattern/PatternViewer'
 import {
-  arcDirigit, longitudTram, puntsDelSegment, situaPunt,
+  arcDirigit, longitudTram, puntsDelSegment, puntsEntreIndexs, situaPunt,
 } from '../components/pattern/patternGeometry'
 import PieceList from '../components/pattern/PieceList'
 import ModelPomList from '../components/pattern/ModelPomList'
@@ -54,6 +54,11 @@ export default function TallerPatro() {
   const [propostes, setPropostes] = useState([])
   const [descartatsProp, setDescartatsProp] = useState(null)
   const [propostaRessaltada, setPropostaRessaltada] = useState(null)
+  // ── A1. Les PINCES que el motor veu. Mateixa vida que les costures proposades: no es desen,
+  // es recalculen, i marcar-ne una (o rebutjar-la) les refà.
+  const [pincesProp, setPincesProp] = useState([])
+  const [descartatsPinca, setDescartatsPinca] = useState(null)
+  const [pincaPropRessaltada, setPincaPropRessaltada] = useState(null)
 
   // ── eines d'anotació (venen del tab: es TRASLLADEN, no es reescriuen) ─────
   const [mode, setMode] = useState('view')     // 'view' | 'pom' | 'seg' | 'pinca' | 'sew'
@@ -129,13 +134,15 @@ export default function TallerPatro() {
         || files[0]
       if (!triat) { setActual(null); return }
 
-      const [{ data: detall }, { data: geo }, { data: sw }, { data: fn }, { data: pr }] =
+      const [{ data: detall }, { data: geo }, { data: sw }, { data: fn }, { data: pr },
+             { data: pp }] =
         await Promise.all([
           patterns.get(triat.id),
           patterns.geometry(triat.id),
           patterns.sew.list(modelId),
           patterns.modelPoms(triat.id),
           patterns.sew.propostes(modelId, triat.id),
+          patterns.sew.pincesProposades(modelId, triat.id),
         ])
       setActual(detall)
       setGeometria(geo)
@@ -143,6 +150,8 @@ export default function TallerPatro() {
       setFeina(fn)
       setPropostes(pr.propostes || [])
       setDescartatsProp(pr.descartats || null)
+      setPincesProp(pp.candidats || [])
+      setDescartatsPinca(pp.descartats || null)
     } catch {
       setError(t('pattern.err_load'))
     } finally {
@@ -387,18 +396,71 @@ export default function TallerPatro() {
     // o marcar una pinça canvia la COBERTURA, i amb ella el que encara es pot proposar. Rellegir
     // les relacions i deixar les propostes velles a la pantalla seria ensenyar una llista que ja
     // no és certa —i oferir per cosir un tram que acaba de quedar cosit.
-    const [{ data: geo }, { data: sw }, { data: fn }, { data: pr }] = await Promise.all([
-      patterns.geometry(actual.id),
-      patterns.sew.list(modelId),
-      patterns.modelPoms(actual.id),
-      patterns.sew.propostes(modelId, actual.id),
-    ])
+    const [{ data: geo }, { data: sw }, { data: fn }, { data: pr }, { data: pp }] =
+      await Promise.all([
+        patterns.geometry(actual.id),
+        patterns.sew.list(modelId),
+        patterns.modelPoms(actual.id),
+        patterns.sew.propostes(modelId, actual.id),
+        patterns.sew.pincesProposades(modelId, actual.id),
+      ])
     setGeometria(geo)
     setSews(sw.results || sw || [])
     setFeina(fn)
     setPropostes(pr.propostes || [])
     setDescartatsProp(pr.descartats || null)
+    setPincesProp(pp.candidats || [])
+    setDescartatsPinca(pp.descartats || null)
   }, [actual, modelId])
+
+  // ── A1: confirmar i rebutjar una PINÇA proposada ─────────────────────────
+
+  /**
+   * Confirmar una pinça proposada: **el gest de W4b, pel mateix camí de codi.**
+   *
+   * No hi ha cap endpoint de confirmació: es crida `pinca()` amb els tres punts que el candidat
+   * ja porta, exactament com si algú els hagués clicat al canvas. Un segon camí per a la mateixa
+   * cosa hauria estat un lloc més on la llei de la pinça podria divergir — i el dia que W4b
+   * canviés, l'assistit es quedaria enrere sense que cap test ho digués.
+   */
+  const confirmarPinca = async (c) => {
+    setPincaPropRessaltada(null)
+    const nom = t('pattern.taller.pinca_default', { n: pinces.length + 1 })
+    try {
+      const { data } = await patterns.sew.pinca({
+        model: modelId,
+        point_a: c.point_a, point_vertex: c.point_vertex, point_b: c.point_b,
+        nom,
+        nom_a: t('pattern.taller.pinca_side_a', { nom }),
+        nom_b: t('pattern.taller.pinca_side_b', { nom }),
+      })
+      const e = data.estat || {}
+      setVeredicte({
+        casa: !!e.casa,
+        estat: textEstat(t, e, unit),
+        missatge: e.missatge || '',
+        cobertura: (e.cobertura || []).map(a => ({
+          text: textCobertura(t, a, unit), missatge: a.missatge || '',
+        })),
+      })
+      await recarregarRelacions()
+    } catch {
+      setErrEina(t('pattern.taller.err_pinca'))
+    }
+  }
+
+  const rebutjarPinca = async (c) => {
+    setPincaPropRessaltada(null)
+    try {
+      await patterns.sew.rebutjarPinca({
+        model: modelId,
+        point_a: c.point_a, point_vertex: c.point_vertex, point_b: c.point_b,
+      })
+      await recarregarRelacions()
+    } catch {
+      setErrEina(t('pattern.taller.err_proposal_reject'))
+    }
+  }
 
   // ── A2: confirmar i rebutjar ─────────────────────────────────────────────
 
@@ -462,6 +524,31 @@ export default function TallerPatro() {
    * necessita per pintar-los. Els trams proposats són DERIVATS ('auto') i per tant NO són a la
    * llista de trams declarats: el canvas no els té, i se li han de donar.
    */
+  /**
+   * Les pinces proposades, amb la geometria que el canvas necessita: el vèrtex (on va el glif) i
+   * els dos costats (per encendre'ls al hover).
+   *
+   * Els tres punts arriben com a IDS —són els mateixos que el gest de W4b farà servir—, i el
+   * costat de la pinça és el RECORREGUT de la vora entre ells, no la recta: entre dos girs hi pot
+   * haver punts de corba, i dibuixar la corda ensenyaria una pinça que no és la que es marcarà.
+   */
+  const pincesAlCanvas = useMemo(() => {
+    const peces = geometria?.pieces || []
+    return pincesProp.map(c => {
+      const peca = peces.find(p => p.id === c.piece_id)
+      const vora = peca && (peca.boundaries || []).find(b => b.index === c.vora)
+      if (!vora) return null
+      const idx = (id) => (vora.points || []).findIndex(q => q.id === id)
+      const ia = idx(c.point_a), iv = idx(c.point_vertex), ib = idx(c.point_b)
+      if (ia < 0 || iv < 0 || ib < 0) return null
+      return {
+        clau: c.clau.join('-'),
+        apex: vora.points[iv],
+        costats: [puntsEntreIndexs(vora, ia, iv), puntsEntreIndexs(vora, iv, ib)],
+      }
+    }).filter(Boolean)
+  }, [pincesProp, geometria])
+
   const propostaAlCanvas = useMemo(() => {
     if (!propostaRessaltada) return null
     const tram = (c) => {
@@ -834,6 +921,10 @@ export default function TallerPatro() {
               onConfirmaProposta={confirmarProposta}
               onRebutjaProposta={rebutjarProposta}
               onRessaltaProposta={setPropostaRessaltada}
+              pincesProposades={pincesProp} descartatsPinca={descartatsPinca}
+              onConfirmaPinca={confirmarPinca}
+              onRebutjaPinca={rebutjarPinca}
+              onRessaltaPinca={c => setPincaPropRessaltada(c ? c.clau.join('-') : null)}
               onEsborraPom={esborrarPOM} onReobrePom={reobrirPOM}
               onEsborraSew={esborrarSew} onReobreSew={reobrirSew}
               onReanomenaSew={reanomenarSew}
@@ -962,6 +1053,8 @@ export default function TallerPatro() {
               onClicTram={triarTram}
               pinces={pinces}
               propostaRessaltada={propostaAlCanvas}
+              pincesProposades={pincesAlCanvas}
+              pincaProposadaRessaltada={pincaPropRessaltada}
               unit={unit}
               omplirAlcada
             />

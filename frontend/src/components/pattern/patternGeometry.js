@@ -304,3 +304,19 @@ export function capesPresents(pieces) {
   }
   return capes
 }
+
+/**
+ * Els punts de la vora entre dos VÈRTEXS, seguint el recorregut (A1).
+ *
+ * Els tres punts d'una pinça proposada són girs consecutius, però entre dos girs hi pot haver
+ * punts de corba: el costat de la pinça és el recorregut de la vora, no la recta. Es dona la
+ * volta si cal (vora tancada), amb la mateixa convenció que la resta del motor.
+ */
+export function puntsEntreIndexs(boundary, i, j) {
+  const pts = boundary?.points || []
+  const n = pts.length
+  if (n < 2 || i < 0 || j < 0 || i >= n || j >= n) return []
+  if (i === j) return []
+  if (i < j) return pts.slice(i, j + 1)
+  return boundary.closed ? [...pts.slice(i), ...pts.slice(0, j + 1)] : pts.slice(j, i + 1)
+}

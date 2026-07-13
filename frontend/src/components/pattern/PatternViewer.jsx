@@ -103,6 +103,11 @@ export default function PatternViewer({
   // cusen. Es pinten a ratlles i només mentre s'hi passa per sobre — una proposta no forma part
   // del patró fins que algú la confirma, i dibuixar-la fixa la faria passar per una decisió.
   propostaRessaltada = null,
+  // ── A1. Les pinces que el motor veu: un glif DISCRET al vèrtex, sempre visible (és el mapa del
+  // que hi ha per decidir), i els dos costats encesos només quan el cursor és a la seva fila. El
+  // glif és petit i buit a posta: una pinça proposada no és una pinça, i si es pintés com la
+  // declarada ningú sabria quines ha marcat ell.
+  pincesProposades = [], pincaProposadaRessaltada = null,
   // La unitat del tenant (CM|INCH): el canvas també és taller, i hi val la mateixa llei.
   unit = 'CM',
   // ── W2. Al Taller el canvas no té una alçada de maqueta: ocupa el que li deixa el
@@ -444,6 +449,40 @@ export default function PatternViewer({
             {pinces.map(pinca => (
               <PincaKonva key={`pinca-${pinca.id}`} pinca={pinca} zoom={zoom} unit={unit} />
             ))}
+
+            {/* A1 — LES PINCES PROPOSADES: un glif discret al vèrtex.
+                Un cercle buit, petit, del color de la pinça: assenyala sense afirmar. Quan el
+                cursor és a la seva fila, els dos costats s'encenen a ratlles — la mateixa gramàtica
+                que les costures proposades (A2): ratlles = encara no és del patró. */}
+            {pincesProposades.map(p => {
+              const marcat = pincaProposadaRessaltada === p.clau
+              return (
+                <Group key={`pinca-prop-${p.clau}`} listening={false}>
+                  {marcat && p.costats.map((pts, i) => (
+                    pts.length >= 2 && (
+                      <Line
+                        key={i}
+                        points={pts.flatMap(q => [q.x, -q.y])}
+                        stroke={KONVA_COL.pinca}
+                        strokeWidth={4.5 / zoom}
+                        dash={[9 / zoom, 5 / zoom]}
+                        lineCap="round"
+                        perfectDrawEnabled={false}
+                      />
+                    )
+                  ))}
+                  {p.apex && (
+                    <Circle
+                      x={p.apex.x} y={-p.apex.y}
+                      radius={(marcat ? 6 : 4) / zoom}
+                      stroke={KONVA_COL.pinca}
+                      strokeWidth={1.6 / zoom}
+                      perfectDrawEnabled={false}
+                    />
+                  )}
+                </Group>
+              )
+            })}
 
             {/* A2 — LA PROPOSTA SOTA EL CURSOR: els dos trams, encesos alhora.
                 Amb els colors dels DOS COSTATS d'una costura (A i B), que és exactament el que
