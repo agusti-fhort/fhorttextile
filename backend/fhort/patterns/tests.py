@@ -2662,6 +2662,240 @@ class LlistaDeTreballAPITest(PatternsAPITestBase):
         self.assertIn('error', resp.data)
 
 
+class PincaAPITest(PatternsAPITestBase):
+    """El gest de marcar una pinça, i el que en surt — amb el TATE real (W4b).
+
+    El cas del banc, sencer i pel camí de l'API: la costura lateral del TATE uneix un tram
+    del davanter de 32.13 cm amb un de l'esquena de 29.80. NO casa per 2.33 cm i el patró és
+    correcte: al mig del davanter hi ha una pinça. Es marca (tres clics), i la costura casa.
+    """
+
+    # Els vèrtexs del TATE, sobre la vora de cosit. Els mateixos que PincaTest.
+    TRAM_INICI, TRAM_FI = 68, 72
+    PINCA_A, PINCA_VERTEX, PINCA_B = 69, 70, 71
+    BACK_INICI, BACK_FI = 165, 167
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(TATE_DXF.read_bytes()).data['id'])
+
+        self.front = self.fp.pieces.get(nom_block='TATE_FRONT')
+        self.vora_front = (self.front.segments
+                           .filter(origen=PatternSegment.ORIGEN_AUTO).first().vora)
+        self.pf = list(self.front.points
+                       .filter(mena='vertex', boundary_index=self.vora_front).order_by('ordre'))
+
+        self.back = self.fp.pieces.get(nom_block='TATE_BACK')
+        self.vora_back = (self.back.segments
+                          .filter(origen=PatternSegment.ORIGEN_AUTO).first().vora)
+        self.pb = list(self.back.points
+                       .filter(mena='vertex', boundary_index=self.vora_back).order_by('ordre'))
+
+    # ── els gestos, per l'API ───────────────────────────────────────────────
+    def _tram(self, a, b, nom):
+        request = self.factory.post(
+            '/api/v1/patterns/pattern-segments/',
+            {'point_a': a.id, 'point_b': b.id, 'nom': nom}, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternSegmentViewSet.as_view({'post': 'create'})(request)
+
+    def _marca_pinca(self, **extra):
+        dades = {
+            'model': self.model.id,
+            'point_a': self.pf[self.PINCA_A].id,
+            'point_vertex': self.pf[self.PINCA_VERTEX].id,
+            'point_b': self.pf[self.PINCA_B].id,
+            'nom': 'Pinça 1', 'nom_a': 'Pinça 1 · costat A', 'nom_b': 'Pinça 1 · costat B',
+        }
+        dades.update(extra)
+        request = self.factory.post('/api/v1/patterns/sew-relations/pinca/', dades,
+                                    format='json')
+        force_authenticate(request, user=self.user)
+        return SewRelationViewSet.as_view({'post': 'pinca'})(request)
+
+    def _cus_el_lateral(self):
+        """La costura lateral del banc: davanter (amb la pinça a dins) contra esquena."""
+        a = self._tram(self.pf[self.TRAM_INICI], self.pf[self.TRAM_FI], 'Lateral davanter')
+        b = self._tram(self.pb[self.BACK_INICI], self.pb[self.BACK_FI], 'Lateral esquena')
+        request = self.factory.post(
+            '/api/v1/patterns/sew-relations/',
+            {'model': self.model.id, 'segments_a': [a.data['id']],
+             'segments_b': [b.data['id']], 'tipus': 'casat', 'diferencial_cm': 0},
+            format='json')
+        force_authenticate(request, user=self.user)
+        return SewRelationViewSet.as_view({'post': 'create'})(request)
+
+    # ── T1: el gest ─────────────────────────────────────────────────────────
+    def test_tres_clics_fan_dos_trams_i_una_costura_de_pinca(self):
+        """Cap model nou: una pinça ÉS dos trams declarats i una SewRelation que els cus."""
+        resp = self._marca_pinca()
+
+        self.assertEqual(resp.status_code, 201, resp.data)
+        rel = SewRelation.objects.get(pk=resp.data['id'])
+        self.assertEqual(rel.tipus, SewRelation.TIPUS_PINCA)
+        self.assertEqual(rel.nom, 'Pinça 1')
+        self.assertTrue(resp.data['es_pinca'])
+
+        costats = list(rel.segments_a.all()) + list(rel.segments_b.all())
+        self.assertEqual(len(costats), 2)
+        for c in costats:
+            self.assertEqual(c.origen, PatternSegment.ORIGEN_DECLARAT)
+            self.assertEqual(c.piece_id, self.front.id)
+            self.assertEqual(c.vora, self.vora_front)
+        self.assertEqual([c.nom for c in costats],
+                         ['Pinça 1 · costat A', 'Pinça 1 · costat B'])
+
+    def test_els_dos_costats_de_la_pinca_del_tate_sumen_2_34(self):
+        self._marca_pinca()
+        rel = SewRelation.objects.get(tipus=SewRelation.TIPUS_PINCA)
+
+        estat = comprovar_costura(rel)
+
+        # Els costats reals del TATE: 1.33 i 1.01. La pinça no és simètrica, i el motor no ho
+        # amaga — és el patró qui ho diu.
+        suma = estat['longitud_a_cm'] + estat['longitud_b_cm']
+        self.assertAlmostEqual(suma, 2.34, places=2)
+
+    def test_un_gest_que_falla_no_deixa_trams_orfes(self):
+        """Un gest que l'usuari viu com un de sol no pot deixar mitja cosa feta.
+
+        I falla amb un 400, no amb una avaria: si el model es deixés comprovar a la FK de la
+        BD, això seria un IntegrityError (un 500) a mig gest. La transacció faria igualment el
+        seu paper —cap tram orfe—, però l'usuari rebria una avaria en comptes d'un motiu.
+        """
+        resp = self._marca_pinca(model=999999)   # el model no existeix
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(
+            PatternSegment.objects.filter(origen=PatternSegment.ORIGEN_DECLARAT).exists())
+
+    def test_una_pinca_amb_un_punt_repetit_no_es_cap_pinca(self):
+        resp = self._marca_pinca(point_b=self.pf[self.PINCA_A].id)
+
+        self.assertEqual(resp.status_code, 400)
+
+    # ── T2: el descompte, pel camí de l'API ─────────────────────────────────
+    def test_sense_la_pinca_declarada_el_lateral_del_tate_NO_casa(self):
+        """El punt de partida: el patró és bo i el motor el suspèn."""
+        resp = self._cus_el_lateral()
+
+        estat = resp.data['estat']
+        self.assertFalse(estat['casa'])
+        self.assertAlmostEqual(estat['desviament_cm'], 2.33, places=2)
+
+    def test_marcada_la_pinca_el_lateral_del_tate_CASA_i_diu_laritmetica(self):
+        """El cas del banc, sencer. I l'operació a la vista: 32.13 − 2.34 = 29.79."""
+        sew = self._cus_el_lateral()
+        self._marca_pinca()
+
+        rel = SewRelation.objects.get(pk=sew.data['id'])
+        estat = comprovar_costura(rel)
+
+        self.assertTrue(estat['casa'])
+        self.assertAlmostEqual(estat['brut_a_cm'], 32.13, places=2)     # el contorn
+        self.assertAlmostEqual(estat['longitud_a_cm'], 29.79, places=2)  # el que es cus
+        self.assertAlmostEqual(estat['longitud_b_cm'], 29.80, places=2)
+        self.assertEqual(len(estat['descomptes_a']), 1)
+        self.assertEqual(estat['descomptes_a'][0]['nom'], 'Pinça 1')
+        self.assertAlmostEqual(estat['descomptes_a'][0]['cm'], 2.34, places=2)
+        # L'esquena no té pinça: no se li descompta res.
+        self.assertEqual(estat['descomptes_b'], [])
+
+    def test_la_pinca_no_encen_cap_avis_de_cobertura_fals(self):
+        """Els costats de la pinça viuen DINS del tram lateral. Sense l'excepció, la vora
+        sortia amb solapament i amb excés — i està perfectament bé."""
+        sew = self._cus_el_lateral()
+        self._marca_pinca()
+
+        rel = SewRelation.objects.get(pk=sew.data['id'])
+
+        self.assertEqual(comprovar_costura(rel)['cobertura'], [])
+
+    def test_una_pinca_no_es_descompta_a_ella_mateixa(self):
+        """Els seus dos costats SÓN la costura: restar-los-hi deixaria una pinça de longitud
+        zero, que casaria sempre. Un validador que sempre diu que sí no valida res."""
+        self._marca_pinca()
+        rel = SewRelation.objects.get(tipus=SewRelation.TIPUS_PINCA)
+
+        estat = comprovar_costura(rel)
+
+        self.assertEqual(estat['descomptes_a'], [])
+        self.assertEqual(estat['descomptes_b'], [])
+        self.assertGreater(estat['longitud_a_cm'], 0)
+
+    def test_una_pinca_entre_dues_peces_no_es_una_pinca_de_vora(self):
+        """`es_pinca_de_vora` es constata de la geometria, no d'un flag: una 'pinca' amb un
+        costat a cada peça és una instrucció de muntatge, i no descompta tela de ningú."""
+        a = self._tram(self.pf[self.TRAM_INICI], self.pf[self.TRAM_FI], 'davant')
+        b = self._tram(self.pb[self.BACK_INICI], self.pb[self.BACK_FI], 'esquena')
+        request = self.factory.post(
+            '/api/v1/patterns/sew-relations/',
+            {'model': self.model.id, 'segments_a': [a.data['id']],
+             'segments_b': [b.data['id']], 'tipus': 'pinca', 'diferencial_cm': 2.33},
+            format='json')
+        force_authenticate(request, user=self.user)
+        resp = SewRelationViewSet.as_view({'post': 'create'})(request)
+
+        self.assertFalse(resp.data['es_pinca'])
+
+    # ── T5b: recol·locar ────────────────────────────────────────────────────
+    def test_recol_locar_un_tram_EN_US_el_mou_sobre_la_mateixa_fila(self):
+        """El PROTECT és per a ESBORRAR. Un tram mal posat s'ha de poder arreglar sense
+        desmuntar la costura que el fa servir — i la costura es revalida sola."""
+        sew = self._cus_el_lateral()
+        rel = SewRelation.objects.get(pk=sew.data['id'])
+        tram = rel.segments_a.first()
+        abans = (tram.t_inici, tram.t_fi)
+
+        request = self.factory.patch(
+            f'/api/v1/patterns/pattern-segments/{tram.id}/',
+            {'point_a': self.pf[self.TRAM_INICI].id, 'point_b': self.pf[self.PINCA_B].id},
+            format='json')
+        force_authenticate(request, user=self.user)
+        resp = PatternSegmentViewSet.as_view({'patch': 'update'})(request, pk=tram.id)
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        tram.refresh_from_db()
+        # MATEIXA fila (mai esborrar-i-crear: les costures la referencien).
+        self.assertEqual(tram.id, rel.segments_a.first().id)
+        self.assertNotEqual((tram.t_inici, tram.t_fi), abans)
+        # I la costura ho ha notat: el costat A ara és més curt.
+        self.assertLess(comprovar_costura(rel)['longitud_a_cm'], 32.13)
+
+    def test_un_tram_no_pot_saltar_de_peca(self):
+        """Canviar-lo de peça el faria un altre tram, i les costures que el cusen es
+        trobarien cosint una altra peça sense que ningú els ho hagués dit."""
+        a = self._tram(self.pf[self.TRAM_INICI], self.pf[self.TRAM_FI], 'lateral')
+
+        request = self.factory.patch(
+            f'/api/v1/patterns/pattern-segments/{a.data["id"]}/',
+            {'point_a': self.pb[self.BACK_INICI].id, 'point_b': self.pb[self.BACK_FI].id},
+            format='json')
+        force_authenticate(request, user=self.user)
+        resp = PatternSegmentViewSet.as_view({'patch': 'update'})(request, pk=a.data['id'])
+
+        self.assertEqual(resp.status_code, 400)
+
+    # ── T6: el bateig ───────────────────────────────────────────────────────
+    def test_el_bateig_de_la_costura_es_conserva(self):
+        """El nom generat NO es desa (seria un string congelat): només el que algú tria."""
+        sew = self._cus_el_lateral()
+        rel = SewRelation.objects.get(pk=sew.data['id'])
+
+        self.assertEqual(rel.nom, '')            # sense bateig: el nom se'l genera el client
+
+        request = self.factory.patch(
+            f'/api/v1/patterns/sew-relations/{rel.id}/', {'nom': 'Costura lateral dreta'},
+            format='json')
+        force_authenticate(request, user=self.user)
+        resp = SewRelationViewSet.as_view({'patch': 'partial_update'})(request, pk=rel.id)
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        rel.refresh_from_db()
+        self.assertEqual(rel.nom, 'Costura lateral dreta')
+
+
 class GeometriaPortaElsTramsDeclaratsTest(PatternsAPITestBase):
     """La geometria ha de dir, d'un tram, si és una PROPOSTA del motor o una DECLARACIÓ.
 

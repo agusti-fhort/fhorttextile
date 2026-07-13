@@ -8,12 +8,14 @@ patró.
 el servidor la resol sobre la geometria. Si el valor vingués del navegador, un POM deixaria
 de ser una mesura del patró per ser una xifra que algú hi ha escrit a sobre.
 """
+from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from fhort.models_app.models import Model
 from fhort.pom.models import POMMaster
 
 from .adapters import DjangoGeometryStore
@@ -21,7 +23,9 @@ from .engine.measure import MeasureError, resoldre
 from .engine.segments import (
     SegmentError, longitud_tram, longitud_vora, tram_entre_punts,
 )
-from .engine.sew import TramCosit, validar, validar_cobertura
+from .engine.sew import (
+    CostatPinca, TramCosit, descomptar_pinces, validar, validar_cobertura,
+)
 from .models import PatternPiece, PatternPOM, PatternPoint, PatternSegment, SewRelation
 
 
@@ -71,17 +75,24 @@ class PatternPOMSerializer(serializers.ModelSerializer):
 
 class SewRelationSerializer(serializers.ModelSerializer):
     estat = serializers.SerializerMethodField()
+    #: És una pinça de vora? Ho decideix la geometria (v. `es_pinca_de_vora`), i el client ho
+    #: necessita per pintar-la amb el seu glif i llistar-la com el que és — no com una costura
+    #: qualsevol que casualment es diu 'pinca'.
+    es_pinca = serializers.SerializerMethodField()
 
     class Meta:
         model = SewRelation
         fields = [
             'id', 'model', 'segments_a', 'segments_b', 'tipus', 'diferencial_cm',
-            'notes', 'estat', 'data_creacio',
+            'nom', 'notes', 'estat', 'es_pinca', 'data_creacio',
         ]
-        read_only_fields = ['estat', 'data_creacio']
+        read_only_fields = ['estat', 'es_pinca', 'data_creacio']
 
     def get_estat(self, obj):
         return comprovar_costura(obj)
+
+    def get_es_pinca(self, obj):
+        return es_pinca_de_vora(obj)
 
 
 def _mesurar(pom: PatternPOM) -> float | None:
@@ -103,28 +114,159 @@ def _mesurar(pom: PatternPOM) -> float | None:
     return round(resultat.valor_cm, 2)
 
 
+def es_pinca_de_vora(rel: SewRelation) -> bool:
+    """Aquesta costura és una PINÇA sobre una sola vora?
+
+    És la pregunta que decideix si una relació descompta tela d'una altra, i la resposta surt
+    de la geometria, no d'un flag: una pinça de vora és una `pinca` els DOS costats de la qual
+    viuen a la mateixa vora de la mateixa peça. Això és el que la fa una pinça de debò —dos
+    trossos de la mateixa vora que es cusen l'un contra l'altre— i és el que la distingeix
+    d'una `pinca` declarada entre dues peces, que és una instrucció de muntatge i no es
+    descompta de res.
+
+    Per això no calia cap model nou (ni cap flag que algú hagués de recordar de marcar): la
+    condició és una propietat de com està feta, i es constata.
+    """
+    if rel.tipus != SewRelation.TIPUS_PINCA:
+        return False
+    segments = list(rel.segments_a.all()) + list(rel.segments_b.all())
+    if len(segments) < 2:
+        return False
+    vores = {(s.piece_id, s.vora) for s in segments}
+    return len(vores) == 1
+
+
+def _mapa_pinces(model_id: int, excloent: int | None = None) -> dict:
+    """(peça, vora) → els costats de pinça que hi viuen, amb la seva longitud real.
+
+    `excloent` és la costura que s'està validant: una pinça no es descompta a ella mateixa.
+    Els seus dos costats SÓN la costura, i restar-los-hi deixaria una pinça de longitud zero
+    que casaria sempre — un validador que sempre diu que sí.
+    """
+    boundaries = _BoundaryCache()
+    per_vora: dict[tuple[int, int], list[CostatPinca]] = {}
+    relacions = (SewRelation.objects
+                 .filter(model_id=model_id, tipus=SewRelation.TIPUS_PINCA)
+                 .prefetch_related('segments_a__piece', 'segments_b__piece'))
+    for rel in relacions:
+        if rel.id == excloent or not es_pinca_de_vora(rel):
+            continue
+        nom = rel.nom or f'pinça #{rel.id}'
+        for seg in list(rel.segments_a.all()) + list(rel.segments_b.all()):
+            boundary = boundaries.get(seg.piece, seg.vora)
+            if boundary is None:
+                continue
+            per_vora.setdefault((seg.piece_id, seg.vora), []).append(CostatPinca(
+                sew_id=rel.id, segment_id=seg.id, nom=nom,
+                t_inici=seg.t_inici, t_fi=seg.t_fi,
+                longitud_cm=longitud_tram(boundary, seg.t_inici, seg.t_fi) / 10.0,
+            ))
+    return per_vora
+
+
+def _costat_net(segments, boundaries: _BoundaryCache, pinces: dict):
+    """Un costat de costura: el contorn (mm) i les pinces que se'n mengen un tros.
+
+    El brut i els descomptes viatgen JUNTS perquè el net sol no és auditable: qui llegeixi
+    «29.8» ha de poder veure d'on surt («32.1 − 2.3 (Pinça 1)»), o el motor li demana un acte
+    de fe.
+    """
+    brut_mm = 0.0
+    trams_per_vora: dict[tuple[int, int], list[TramCosit]] = {}
+    for seg in segments:
+        boundary = boundaries.get(seg.piece, seg.vora)
+        if boundary is None:
+            continue
+        brut_mm += longitud_tram(boundary, seg.t_inici, seg.t_fi)
+        trams_per_vora.setdefault((seg.piece_id, seg.vora), []).append(TramCosit(
+            sew_id=0, segment_id=seg.id, t_inici=seg.t_inici, t_fi=seg.t_fi,
+        ))
+
+    descomptes = []
+    for clau, trams in trams_per_vora.items():
+        descomptes.extend(descomptar_pinces(trams, pinces.get(clau, [])))
+    return brut_mm, descomptes
+
+
 def comprovar_costura(rel: SewRelation) -> dict:
     """L'estat d'una costura, calculat ara mateix sobre la geometria.
 
-    Dues preguntes, no una:
-      · **casa?** — els dos costats fan el que el TIPUS promet (`validar`).
+    Tres preguntes, no una:
+      · **què hi entra?** — el contorn dels seus trams, MENYS les pinces que s'hi tanquen a
+        dins (W4b). Una vora amb pinça aporta a la costura menys tela de la que fa: els dos
+        costats de la pinça es cusen entre ells i no arriben mai a la costura.
+      · **casa?** — els dos costats (nets) fan el que el TIPUS promet (`validar`).
       · **hi cap?** — el que aquesta costura reclama, sumat al que reclamen les ALTRES
         costures del mateix model sobre les mateixes vores, no es trepitja ni passa de la
         vora (`validar_cobertura`). Una costura pot casar perfectament i ser impossible.
     """
     boundaries = _BoundaryCache()
-    llarg_a = _longitud_segments(rel.segments_a.all(), boundaries)
-    llarg_b = _longitud_segments(rel.segments_b.all(), boundaries)
-    check = validar(llarg_a, llarg_b, tipus=rel.tipus, diferencial_cm=rel.diferencial_cm)
+    pinces = _mapa_pinces(rel.model_id, excloent=rel.id)
+    brut_a, desc_a = _costat_net(rel.segments_a.all(), boundaries, pinces)
+    brut_b, desc_b = _costat_net(rel.segments_b.all(), boundaries, pinces)
+
+    check = validar(
+        brut_a, brut_b, tipus=rel.tipus, diferencial_cm=rel.diferencial_cm,
+        descomptes_a=desc_a, descomptes_b=desc_b,
+    )
     return {
         'casa': check.casa,
+        # La longitud és la NETA: és la que es cus, i per tant la que es compara.
         'longitud_a_cm': round(check.longitud_a_cm, 2),
         'longitud_b_cm': round(check.longitud_b_cm, 2),
+        # El BRUT no s'amaga: la vora continua fent el que fa, i el descompte s'ha de veure.
+        'brut_a_cm': round(check.brut_a_cm, 2),
+        'brut_b_cm': round(check.brut_b_cm, 2),
+        'descomptes_a': [
+            {'sew_id': d.sew_id, 'nom': d.nom, 'cm': round(d.cm, 2)} for d in check.descomptes_a
+        ],
+        'descomptes_b': [
+            {'sew_id': d.sew_id, 'nom': d.nom, 'cm': round(d.cm, 2)} for d in check.descomptes_b
+        ],
         'diferencia_cm': round(check.diferencia_cm, 2),
         'desviament_cm': round(check.desviament_cm, 2),
         'missatge': check.missatge,
         'cobertura': _cobertura_de(rel, boundaries),
     }
+
+
+def punts_de_la_mateixa_vora(data, camps: list[str]) -> list[PatternPoint]:
+    """Els punts d'un gest del taller, validats abans de tocar cap geometria.
+
+    Un gest en pot demanar dos (definir un tram) o tres (marcar una pinça), però la llei és
+    la mateixa i per això viu en un sol lloc: existeixen, són de la MATEIXA peça, són vèrtexs
+    d'una vora (no piquets), són de la MATEIXA vora, i no es repeteixen. Escrita dues vegades,
+    acabaria dient dues coses.
+    """
+    ids = [data.get(camp) for camp in camps]
+    if not all(ids):
+        raise serializers.ValidationError(
+            f'Aquest gest es defineix amb {len(camps)} punts: {", ".join(camps)}.')
+
+    punts = []
+    for camp, pk in zip(camps, ids):
+        try:
+            punts.append(PatternPoint.objects.select_related('piece').get(pk=pk))
+        except PatternPoint.DoesNotExist:
+            raise serializers.ValidationError({camp: 'Aquest punt no existeix.'})
+
+    if len({p.piece_id for p in punts}) > 1:
+        raise serializers.ValidationError(
+            'Els punts han de ser de la MATEIXA peça: un tram és un tros d\'una vora, i una '
+            'vora no travessa dues peces.')
+    if any(p.boundary_index is None for p in punts):
+        raise serializers.ValidationError(
+            'Un tram es declara sobre vèrtexs d\'una vora. Un piquet no pertany a cap vora i '
+            'no en pot ser l\'extrem.')
+    vores = {p.boundary_index for p in punts}
+    if len(vores) > 1:
+        raise serializers.ValidationError(
+            f'Els punts són de vores diferents ({", ".join(str(v) for v in sorted(vores))}): '
+            f'un tram no salta d\'una vora a una altra.')
+    if len({p.id for p in punts}) < len(punts):
+        raise serializers.ValidationError(
+            'Hi ha un punt repetit: dos extrems que són el mateix punt no delimiten res.')
+    return punts
 
 
 class _BoundaryCache:
@@ -191,6 +333,10 @@ def _cobertura_de(rel: SewRelation, boundaries: _BoundaryCache) -> list[dict]:
     per_vora: dict[tuple[int, int], list[TramCosit]] = {}
     peces: dict[int, PatternPiece] = {}
     for altra in germanes:
+        # Un costat de pinça no és un tram que competeixi per la vora: és la pinça. La
+        # cobertura ho ha de saber, o denunciarà com a solapament (i com a excés) la tela que
+        # la costura ja NO cus, perquè `validar` l'hi ha descomptada.
+        pinca = es_pinca_de_vora(altra)
         for seg in list(altra.segments_a.all()) + list(altra.segments_b.all()):
             clau = (seg.piece_id, seg.vora)
             if clau not in vores:
@@ -200,6 +346,7 @@ def _cobertura_de(rel: SewRelation, boundaries: _BoundaryCache) -> list[dict]:
                 sew_id=altra.id, segment_id=seg.id,
                 t_inici=seg.t_inici, t_fi=seg.t_fi,
                 nom=seg.nom or f'tram {seg.id}',
+                es_pinca=pinca,
             ))
 
     avisos: list[dict] = []
@@ -274,10 +421,87 @@ class SewRelationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(creat_per=getattr(self.request.user, 'profile', None))
 
+    @action(detail=False, methods=['post'], url_path='pinca')
+    def pinca(self, request):
+        """Marcar una pinça: tres punts, i el taller en fa dos trams i una costura.
+
+        `{model, point_a, point_vertex, point_b, nom, nom_a, nom_b}`.
+
+        **Cap model nou.** Una pinça ÉS el que ja hi havia: dos trams declarats (els seus dos
+        costats) i una `SewRelation` de tipus pinça que els cus l'un contra l'altre. Inventar
+        una taula `Pinca` hauria dit que és una cosa diferent d'una costura, i llavors hi
+        hauria dos llocs on mirar què es cus amb què.
+
+        **Un sol gest, una sola transacció.** Tres crides des del client (dos trams i una
+        costura) podien fallar a la tercera i deixar dos trams orfes al patró, amb nom de
+        pinça i sense pinça. Un gest que l'usuari viu com un de sol no pot deixar mitja cosa
+        feta.
+
+        Els noms arriben del client perquè és qui té els tres idiomes (i18n-gate); el servidor
+        hi posa un recanvi per si vinguessin buits, però la frase és de qui la sap dir.
+        """
+        pa, vertex, pb = punts_de_la_mateixa_vora(
+            request.data, ['point_a', 'point_vertex', 'point_b'])
+
+        # El model es comprova ABANS d'obrir la transacció. Si es deixés a la FK de la BD, un
+        # model inexistent petaria amb un IntegrityError (un 500) a mig gest: la transacció
+        # faria el seu paper i no quedarien trams orfes, però l'usuari rebria una avaria en
+        # comptes d'un «aquest model no existeix». Una petició que no es pot resoldre és un
+        # 400, no una avaria.
+        model_id = request.data.get('model')
+        if not model_id:
+            raise serializers.ValidationError({'model': 'Una costura penja d\'un model.'})
+        if not Model.objects.filter(pk=model_id).exists():
+            raise serializers.ValidationError({'model': 'Aquest model no existeix.'})
+
+        boundary = _BoundaryCache().get(pa.piece, pa.boundary_index)
+        if boundary is None:
+            raise serializers.ValidationError(
+                {'point_a': 'No s\'ha pogut carregar la vora d\'aquests punts.'})
+
+        # Els dos costats: de l'inici al vèrtex, i del vèrtex al final. Sempre l'arc CURT —
+        # una pinça és una V local a la vora, no un tram que dona la volta a la peça.
+        try:
+            tram_a = tram_entre_punts(boundary, pa.boundary_index, pa.ordre, vertex.ordre)
+            tram_b = tram_entre_punts(boundary, pa.boundary_index, vertex.ordre, pb.ordre)
+        except SegmentError as e:
+            raise serializers.ValidationError({'tram': str(e)})
+
+        nom = (request.data.get('nom') or '').strip() or 'Pinça'
+        nom_a = (request.data.get('nom_a') or '').strip() or f'{nom} · A'
+        nom_b = (request.data.get('nom_b') or '').strip() or f'{nom} · B'
+
+        with transaction.atomic():
+            costats = [
+                PatternSegment.objects.create(
+                    piece=pa.piece, vora=tram.vora, t_inici=tram.t_inici, t_fi=tram.t_fi,
+                    tipus_vora=tram.tipus_vora.value,
+                    origen=PatternSegment.ORIGEN_DECLARAT, nom=nom_costat,
+                )
+                for tram, nom_costat in ((tram_a, nom_a), (tram_b, nom_b))
+            ]
+            rel = SewRelation.objects.create(
+                model_id=model_id, tipus=SewRelation.TIPUS_PINCA,
+                # Els dos costats d'una pinça han de fer el mateix: si no, no es poden cosir
+                # l'un contra l'altre. El diferencial és zero, i el que en digui el motor és el
+                # que la geometria digui — no es maquilla declarant com a promès el que passa.
+                diferencial_cm=0.0, nom=nom,
+                creat_per=getattr(request.user, 'profile', None),
+            )
+            rel.segments_a.set([costats[0]])
+            rel.segments_b.set([costats[1]])
+
+        return Response(self.get_serializer(rel).data, status=status.HTTP_201_CREATED)
+
 
 class PatternSegmentSerializer(serializers.ModelSerializer):
-    """Un tram, derivat o declarat. La geometria és de només lectura: un tram no es
-    'mou' editant-li la t, es torna a declarar."""
+    """Un tram, derivat o declarat.
+
+    La geometria no s'escriu per `t`: es RECOL·LOCA amb el mateix gest amb què es va declarar
+    (dos punts, i el servidor resol la vora). Per això `t_inici`/`t_fi` continuen sent de
+    només lectura —una `t` teclejada no seria una referència a la vora, seria una xifra que
+    algú hi ha escrit a sobre— i qui les mou és el PATCH amb `point_a`/`point_b`.
+    """
 
     peca = serializers.CharField(source='piece.nom_block', read_only=True)
     longitud_cm = serializers.SerializerMethodField()
@@ -352,30 +576,51 @@ class PatternSegmentViewSet(viewsets.ModelViewSet):
         dades = self.get_serializer(seg).data
         return Response(dades, status=status.HTTP_201_CREATED)
 
+    def update(self, request, *args, **kwargs):
+        """Reanomenar i/o RECOL·LOCAR (W4b/T5b).
+
+        Recol·locar és moure els extrems del tram, **sobre la mateixa fila**. No és esborrar
+        i tornar a crear: la fila la referencien les costures (M2M), i esborrar-la per
+        refer-la les deixaria coixes o obligaria a recompondre-les a mà. El PROTECT que hi ha
+        a `destroy` és per a ESBORRAR, no per a corregir: un tram mal posat s'ha de poder
+        arreglar sense desmuntar la costura que el fa servir.
+
+        Que la costura estigui en ús no bloqueja res: es revalida sola (l'`estat` es calcula
+        a cada lectura sobre la geometria viva) i la cobertura es recalcula amb ella.
+        """
+        seg = self.get_object()
+        recolloca = 'point_a' in request.data or 'point_b' in request.data
+        if recolloca:
+            pa, pb = punts_de_la_mateixa_vora(request.data, ['point_a', 'point_b'])
+            if pa.piece_id != seg.piece_id:
+                # Un tram que canviés de peça deixaria de ser el mateix tram: les costures que
+                # el cusen es trobarien cosint una altra peça sense que ningú els ho hagués dit.
+                raise serializers.ValidationError(
+                    {'point_a': 'Un tram no pot canviar de peça: recol·locar-lo és moure\'n '
+                                'els extrems, no traslladar-lo a una altra peça.'})
+            boundary = _BoundaryCache().get(pa.piece, pa.boundary_index)
+            if boundary is None:
+                raise serializers.ValidationError(
+                    {'point_a': 'No s\'ha pogut carregar la vora d\'aquests punts.'})
+            try:
+                tram = tram_entre_punts(
+                    boundary, pa.boundary_index, pa.ordre, pb.ordre,
+                    arc_llarg=bool(request.data.get('arc_llarg', False)),
+                )
+            except SegmentError as e:
+                raise serializers.ValidationError({'tram': str(e)})
+
+            seg.vora = tram.vora
+            seg.t_inici = tram.t_inici
+            seg.t_fi = tram.t_fi
+            seg.tipus_vora = tram.tipus_vora.value
+            seg.save(update_fields=['vora', 't_inici', 't_fi', 'tipus_vora'])
+
+        return super().update(request, *args, **kwargs)
+
     def _punts(self, data) -> tuple[PatternPoint, PatternPoint]:
         """Els dos extrems, validats abans de tocar cap geometria."""
-        ids = [data.get('point_a'), data.get('point_b')]
-        if not all(ids):
-            raise serializers.ValidationError(
-                'Un tram declarat es defineix amb dos punts: point_a i point_b.')
-        try:
-            pa = PatternPoint.objects.select_related('piece').get(pk=ids[0])
-            pb = PatternPoint.objects.select_related('piece').get(pk=ids[1])
-        except PatternPoint.DoesNotExist:
-            raise serializers.ValidationError('Algun dels dos punts no existeix.')
-
-        if pa.piece_id != pb.piece_id:
-            raise serializers.ValidationError(
-                'Els dos punts han de ser de la MATEIXA peça: un tram és un tros d\'una vora, '
-                'i una vora no travessa dues peces.')
-        if pa.boundary_index is None or pb.boundary_index is None:
-            raise serializers.ValidationError(
-                'Un tram es declara sobre vèrtexs d\'una vora. Un piquet no pertany a cap '
-                'vora i no en pot ser l\'extrem.')
-        if pa.boundary_index != pb.boundary_index:
-            raise serializers.ValidationError(
-                f'Els dos punts són de vores diferents ({pa.boundary_index} i '
-                f'{pb.boundary_index}): un tram no salta d\'una vora a una altra.')
+        pa, pb = punts_de_la_mateixa_vora(data, ['point_a', 'point_b'])
         return pa, pb
 
     def destroy(self, request, *args, **kwargs):

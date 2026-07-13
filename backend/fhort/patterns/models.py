@@ -448,6 +448,19 @@ class SewRelation(models.Model):
     )
     tipus = models.CharField(max_length=10, choices=TIPUS_CHOICES, default=TIPUS_CASAT)
 
+    #: El BATEIG. Buit vol dir «el nom te'l generes tu», i es genera dels dos trams que uneix
+    #: («Lateral davanter ⛓ Costura lateral darrera»). Per això aquí NO s'hi desa mai el nom
+    #: generat: si s'hi desés, seria un string congelat, i el dia que algú reanomenés un tram
+    #: la costura continuaria dient el nom vell. Els noms es REFERENCIEN (via els M2M), no es
+    #: copien.
+    #:
+    #: I quan algú la bateja a mà, el bateig mana i es conserva: un nom que una persona ha
+    #: triat no el pot trepitjar un generador.
+    nom = models.CharField(
+        max_length=160, blank=True,
+        help_text='Nom triat a mà. Buit: es genera dels trams que uneix.',
+    )
+
     #: Diferència de longitud ESPERADA entre els dos costats.
     #: En un CASAT ha de ser 0: si els dos costats no fan el mateix, és un error del
     #: patró. En un FRUNZIT o una PINÇA, el diferencial és la instrucció de muntatge
