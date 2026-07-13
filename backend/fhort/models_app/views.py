@@ -1955,10 +1955,16 @@ def grading_status_view(request, model_id):
     sf = _resolve_working_size_fitting(model)
     gv = vigent_grading_version(sf) if sf else None
     te_dades = bool(gv and GradedSpec.objects.filter(grading_version=gv).exists())
+    # G6-B2: si la versió vigent està SEGELLADA, aquí es diu també si encara diu la veritat. És la
+    # superfície on es decideix propagar, i propagar sobre un segell que ja ha quedat enrere no és
+    # el mateix acte que propagar sobre un de fresc — qui ho decideix ho ha de saber abans, no
+    # després.
+    from fhort.fitting.staleness import com_a_dict, estalitud
     return Response({
         'te_dades_propagades': te_dades,
         'segellada': bool(gv and gv.aprovada),
         'version_number': gv.version_number if gv else None,
+        'estalitud': com_a_dict(estalitud(gv)) if gv else None,
     })
 
 

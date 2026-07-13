@@ -554,8 +554,17 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         {propStatus && propStep === 1 && (
           <Modal
             title={t('grading_propagate.warn_title')}
+            /* G6-B2: si la versió segellada ja ha quedat ENRERE (la base ha canviat sota el
+               segell), l'avís ho diu aquí — que és on es decideix propagar. Superar un segell que
+               ja no diu la veritat no és el mateix acte que superar-ne un de fresc, i qui ho
+               decideix ho ha de saber ABANS. No canvia què es pot fer: canvia què se sap. */
             subtitle={propStatus.segellada
-              ? t('grading_propagate.warn_sealed', { version: propStatus.version_number })
+              ? (propStatus.estalitud?.avisa
+                ? t('grading_propagate.warn_sealed_stale', {
+                  version: propStatus.version_number,
+                  n: propStatus.estalitud.canvis_base,
+                })
+                : t('grading_propagate.warn_sealed', { version: propStatus.version_number }))
               : t('grading_propagate.warn_substitute')}
             confirmLabel={t('grading_propagate.continue')}
             cancelLabel={t('app.cancel')}

@@ -86,7 +86,8 @@
     "continue": "Continue",
     "confirm_title": "Confirm propagation",
     "confirm_sure": "Are you sure? This action starts from a clean slate and cannot be undone.",
-    "confirm_supersede": "Confirm propagation"
+    "confirm_supersede": "Confirm propagation",
+    "warn_sealed_stale": "Version v{{version}} is SEALED for production — and has already fallen behind: the base has changed {{n}} time(s) since the seal. Propagating will supersede it."
   },
   "size_map_title": "Size systems",
   "size_map_subtitle": "Derived customer runs and canonical systems",
@@ -3370,7 +3371,12 @@
     "exp_err_preview": "Could not project the grading.",
     "exp_err_download": "Could not download the nest.",
     "need_dxf": "A DXF file is required to upload.",
-    "err_download_link": "Could not prepare the download. Please try again."
+    "err_download_link": "Could not prepare the download. Please try again.",
+    "exp_stale_title": "Approved, but the base has changed since it was sealed",
+    "exp_stale_body": "Since this version was signed, {{n}} base-measurement change(s) have been recorded ({{poms}}), the last on {{data}}. The graded values you are about to export derive from a base that is no longer the model's.",
+    "exp_unknown_title": "It cannot be established whether this version has fallen behind",
+    "exp_unknown_body": "This version's seal has no date and its values do not say which measurement version they came from: it cannot be checked whether the base has changed since it was signed.",
+    "exp_stale_note": "Not blocked: you can still export it. But the warning will be recorded in the acknowledgement."
   },
   "filedrop": {
     "hint": "Drag it here or click",

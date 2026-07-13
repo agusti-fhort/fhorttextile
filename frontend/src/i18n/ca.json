@@ -86,7 +86,8 @@
     "continue": "Continua",
     "confirm_title": "Confirma la propagació",
     "confirm_sure": "N'estàs segur? Aquesta acció parteix de llenç net i no es pot desfer.",
-    "confirm_supersede": "Confirma propagació"
+    "confirm_supersede": "Confirma propagació",
+    "warn_sealed_stale": "La versió v{{version}} està SEGELLADA a producció — i ja ha quedat enrere: la base ha canviat {{n}} vegada/es des del segell. Propagar la superarà."
   },
   "size_map_title": "Sistemes de talles",
   "size_map_subtitle": "Runs de client derivats i sistemes canònics",
@@ -3370,7 +3371,12 @@
     "exp_err_preview": "No s'ha pogut projectar el grading.",
     "exp_err_download": "No s'ha pogut descarregar la niada.",
     "need_dxf": "Cal un fitxer DXF per poder pujar.",
-    "err_download_link": "No s'ha pogut preparar la descàrrega. Torna-ho a provar."
+    "err_download_link": "No s'ha pogut preparar la descàrrega. Torna-ho a provar.",
+    "exp_stale_title": "Aprovada, però la base ha canviat des del segell",
+    "exp_stale_body": "Des que es va signar aquesta versió s'han registrat {{n}} canvi(s) de mesura base ({{poms}}), l'últim el {{data}}. Els valors graduats que exportaràs deriven d'una base que ja no és la del model.",
+    "exp_unknown_title": "No es pot saber si aquesta versió ha quedat enrere",
+    "exp_unknown_body": "El segell d'aquesta versió no té data i els seus valors no diuen de quina versió de mesures venen: no es pot comprovar si la base ha canviat des que es va signar.",
+    "exp_stale_note": "No es bloqueja: pots exportar-la igualment. Però l'avís quedarà escrit al reconeixement."
   },
   "filedrop": {
     "hint": "Arrossega'l aquí o fes clic",

@@ -86,7 +86,8 @@
     "continue": "Continuar",
     "confirm_title": "Confirma la propagación",
     "confirm_sure": "¿Estás seguro? Esta acción parte de lienzo limpio y no se puede deshacer.",
-    "confirm_supersede": "Confirmar propagación"
+    "confirm_supersede": "Confirmar propagación",
+    "warn_sealed_stale": "La versión v{{version}} está SELLADA en producción — y ya se ha quedado atrás: la base ha cambiado {{n}} vez/veces desde el sellado. Propagar la superará."
   },
   "size_map_title": "Sistemas de tallas",
   "size_map_subtitle": "Runs de cliente derivados y sistemas canónicos",
@@ -3370,7 +3371,12 @@
     "exp_err_preview": "No se ha podido proyectar el grading.",
     "exp_err_download": "No se ha podido descargar el escalado.",
     "need_dxf": "Se necesita un archivo DXF para poder subir.",
-    "err_download_link": "No se ha podido preparar la descarga. Inténtalo de nuevo."
+    "err_download_link": "No se ha podido preparar la descarga. Inténtalo de nuevo.",
+    "exp_stale_title": "Aprobada, pero la base ha cambiado desde el sellado",
+    "exp_stale_body": "Desde que se firmó esta versión se han registrado {{n}} cambio(s) de medida base ({{poms}}), el último el {{data}}. Los valores graduados que vas a exportar derivan de una base que ya no es la del modelo.",
+    "exp_unknown_title": "No se puede saber si esta versión se ha quedado atrás",
+    "exp_unknown_body": "El sellado de esta versión no tiene fecha y sus valores no dicen de qué versión de medidas vienen: no se puede comprobar si la base ha cambiado desde que se firmó.",
+    "exp_stale_note": "No se bloquea: puedes exportarla igualmente. Pero el aviso quedará escrito en el reconocimiento."
   },
   "filedrop": {
     "hint": "Arrástralo aquí o haz clic",

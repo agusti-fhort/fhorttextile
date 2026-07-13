@@ -42,6 +42,10 @@ export default function ExportModal({ patternFile, onCancel }) {
     return () => { cancelat = true }
   }, [patternFile.id, t])
 
+  // L'estalitud de la versió TRIADA. Es llegeix de la mateixa llista que el servidor ja ha
+  // enviat: preguntar-ho a part seria una segona crida per a una dada que ja és a la pantalla.
+  const estala = versions.find(v => String(v.id) === String(versioSel))?.estalitud || null
+
   // ── La previsualització. Es refà a cada canvi de versió o de perfil, i **reseteja el
   //    reconeixement**: el que l'usuari va acceptar era l'altra taula, no aquesta.
   const calcular = useCallback(async () => {
@@ -117,6 +121,32 @@ export default function ExportModal({ patternFile, onCancel }) {
 
         {!carregant && versions.length > 0 && (
           <>
+            {/* ── L'ESTALITUD (G6-B2). Aprovada NO vol dir certa: la base pot haver canviat
+                després del segell (la mesura és sobirana i el segell és honest, i el preu de no
+                mentir per cap dels dos costats és que una versió pot quedar enrere).
+                NO es bloqueja l'exportació —el patronista mana—, però es diu ABANS del clic, amb
+                les xifres. I el que es diu queda escrit: el servidor enganxa aquest mateix avís al
+                `texts_shown` del reconeixement, i el client no el pot ometre. */}
+            {estala?.avisa && (
+              <Avis to="warn">
+                <strong>{t(estala.estat === 'estala'
+                  ? 'pattern.exp_stale_title' : 'pattern.exp_unknown_title')}</strong>
+                <div style={{ marginTop: 4, fontSize: 'var(--fs-caption)' }}>
+                  {estala.estat === 'estala'
+                    ? t('pattern.exp_stale_body', {
+                      n: estala.canvis_base,
+                      poms: (estala.poms_afectats || []).join(', '),
+                      data: estala.ultim_canvi
+                        ? new Date(estala.ultim_canvi).toLocaleDateString() : '',
+                    })
+                    : t('pattern.exp_unknown_body')}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 'var(--fs-caption)' }}>
+                  {t('pattern.exp_stale_note')}
+                </div>
+              </Avis>
+            )}
+
             {/* ── Els dos selectors ─────────────────────────────────────── */}
             <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
               <Camp etiqueta={t('pattern.exp_grading_version')}>
@@ -125,8 +155,12 @@ export default function ExportModal({ patternFile, onCancel }) {
                   onChange={e => setVersioSel(e.target.value)}
                   style={inputStyle}
                 >
+                  {/* G6-B2: la versió ESTALA es marca a la mateixa opció. No es treu de la
+                      llista —el patronista mana i pot tenir raons per exportar-la— però triar-la
+                      sense saber-ho no seria triar. */}
                   {versions.map(v => (
                     <option key={v.id} value={v.id}>
+                      {v.estalitud?.avisa ? '⚠ ' : ''}
                       {v.nom} · {new Date(v.data).toLocaleDateString()} · {v.specs} specs
                     </option>
                   ))}

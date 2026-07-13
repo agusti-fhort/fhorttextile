@@ -28,6 +28,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from fhort.fitting.models import GradingVersion
+from fhort.fitting.staleness import com_a_dict, estalitud
 from fhort.models_app.models import BaseMeasurement, Model
 from fhort.models_app.services_fitxers import (DOWNLOAD_TTL, UploadRejected,
                                                serve_fitxer, validate_upload)
@@ -73,6 +74,30 @@ GATE_TEXT_CA = (
     'Aquest fitxer ha estat generat automàticament. Cal obrir-lo al teu CAD i verificar '
     'geometria, costures i grading abans de tallar.'
 )
+
+
+def _texts_del_gate(texts_client, grading_version_id: int) -> str:
+    """El text LITERAL que es registra al reconeixement. **L'avís d'estalitud l'hi posa el servidor.**
+
+    `texts_shown` existeix per poder reconstruir, mesos després, què va acceptar exactament qui va
+    exportar (v. `ExportAcknowledgement`). Si el text vingués sencer del client, el client podria
+    ometre'n l'avís que més importa — i el registre diria que aquella persona va acceptar una cosa
+    que no se li va dir. Un reconeixement que es pot buidar des del navegador no és cap
+    reconeixement.
+
+    Per això l'avís d'ESTALITUD (G6-B2) s'HI AFEGEIX AQUÍ, al servidor, a partir de la mateixa
+    versió que s'està exportant. No bloqueja res —la mesura és sobirana i el patronista mana—, però
+    queda escrit que es va dir.
+    """
+    base = (texts_client or GATE_TEXT_CA).strip()
+    gv = GradingVersion.objects.filter(pk=grading_version_id).select_related(
+        'size_fitting__model').first()
+    if gv is None:
+        return base
+    est = estalitud(gv)
+    if not est.avisa:
+        return base
+    return f'{base}\n\n⚠ {est.motiu}'
 
 
 def _preview_payload(resultat) -> dict:
@@ -452,6 +477,9 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             .select_related('size_fitting')
             .order_by('-data', '-id')
         )
+        # G6-B2: cada versió diu si ha quedat ENRERE. Aprovada i vigent són ortogonals, i ara n'hi
+        # ha una tercera: aprovada i CERTA. Una versió estala s'ofereix igualment —el patronista
+        # mana— però amb l'avís al davant, perquè triar-la sense saber-ho no és triar.
         return Response([
             {
                 'id': gv.id,
@@ -460,6 +488,7 @@ class PatternFileViewSet(mixins.CreateModelMixin,
                 'version_number': gv.version_number,
                 'is_active': gv.is_active,
                 'specs': gv.graded_specs.filter(is_active=True).count(),
+                'estalitud': com_a_dict(estalitud(gv)),
             }
             for gv in versions
         ])
@@ -529,7 +558,7 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             grading_version_id=grading_version_id,
             destination_profile=perfil,
             usuari=getattr(request.user, 'profile', None),
-            texts_shown=request.data.get('texts_shown') or GATE_TEXT_CA,
+            texts_shown=_texts_del_gate(request.data.get('texts_shown'), grading_version_id),
         )
 
         resposta = HttpResponse(resultat.dxf, content_type='application/dxf')
