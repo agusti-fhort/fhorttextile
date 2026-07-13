@@ -3158,8 +3158,6 @@
       "open": "Abrir en el taller",
       "model_poms": "Poms del modelo · {{ancorats}} de {{total}} colocados",
       "model_poms_empty": "Este modelo aún no tiene medidas en la ficha.",
-      "pom_anchored": "Anclado al patrón",
-      "pom_pending": "Pendiente de anclar",
       "value_sheet": "ficha {{cm}} cm",
       "value_pattern": "patrón {{cm}} cm",
       "relations": "Relaciones",

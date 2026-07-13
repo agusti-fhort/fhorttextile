@@ -3158,8 +3158,6 @@
       "open": "Obrir al taller",
       "model_poms": "Poms del model · {{ancorats}} de {{total}} col·locats",
       "model_poms_empty": "Aquest model encara no té mesures a la fitxa.",
-      "pom_anchored": "Ancorat al patró",
-      "pom_pending": "Pendent d'ancorar",
       "value_sheet": "fitxa {{cm}} cm",
       "value_pattern": "patró {{cm}} cm",
       "relations": "Relacions",
