@@ -525,6 +525,10 @@ export default function TallerPatro() {
               diferencial={diferencial} onDiferencial={setDiferencial}
               onDeclara={declararCostura}
               onNeteja={netejarSeleccio}
+              trams={trams}
+              onTriaTram={triarTram}
+              onRessalta={setTramRessaltat}
+              onDefinirTram={() => triarMode('seg')}
             />
           )}
 
