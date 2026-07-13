@@ -317,9 +317,11 @@ export default function TallerPatro() {
           </Contenidor>
         </aside>
 
+        {/* `position: relative` NO és decoració: el POMPicker s'ancora en absolut i sense
+            un pare posicionat aniria a raure al racó de la finestra, sobre la columna. */}
         <section style={{
           flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
-          minHeight: 0, padding: '0.6rem 0.8rem', gap: '0.5rem',
+          minHeight: 0, padding: '0.6rem 0.8rem', gap: '0.5rem', position: 'relative',
         }}>
           <BarraEines
             t={t} mode={mode} onMode={triarMode}
