@@ -85,6 +85,10 @@ export const models = {
 
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).
 export const baseMeasurements = {
+  // Les mesures del MODEL (les aprovades a la fitxa, no el catàleg global): codi de
+  // client, nom i valor de fitxa. Al taller és la llista de treball — els POMs no es
+  // busquen, es col·loquen.
+  list: (modelId) => client.get(`/api/v1/models/${modelId}/base-measurements/`),
   update: (id, body) => client.patch(`/api/v1/base-measurements/${id}/`, body),
   // Reordena els POM del model en bloc (ordre ÚNIC i global; es materialitza a Grading en propagar).
   reorder: (modelId, ids) => client.post(`/api/v1/models/${modelId}/base-measurements/reorder/`, { ids }),
@@ -644,11 +648,24 @@ export const patterns = {
 
   // Costures. L'estat (casa / no casa) el calcula el servidor cada cop sobre la
   // geometria viva: no es desa, perquè una costura que casava i ja no casa ho ha de dir.
+  // Des de W1, `estat.cobertura` hi porta els avisos de solapament i excés de la vora.
   sew: {
     list: (modelId) => client.get('/api/v1/patterns/sew-relations/',
       { params: { model: modelId } }),
     create: (data) => client.post('/api/v1/patterns/sew-relations/', data),
     remove: (id) => client.delete(`/api/v1/patterns/sew-relations/${id}/`),
+  },
+
+  // Trams DECLARATS (W1/T4). La segmentació gir→gir és una proposta del motor (origen
+  // 'auto'); un tram DECLARAT és una afirmació humana: "aquest tros de vora existeix i es
+  // diu així". Per això té nom i es pot reanomenar. Esborrar-ne un que una costura fa
+  // servir rebota amb 409 + les costures que el retenen: deixar-la coixa en silenci seria
+  // pitjor que el rebuig.
+  segments: {
+    list: (patternFileId) => client.get('/api/v1/patterns/pattern-segments/',
+      { params: { piece__pattern_file: patternFileId } }),
+    rename: (id, nom) => client.patch(`/api/v1/patterns/pattern-segments/${id}/`, { nom }),
+    remove: (id) => client.delete(`/api/v1/patterns/pattern-segments/${id}/`),
   },
 
   // El render està gated per Authorization, i un <img src> no pot portar capçaleres: es
