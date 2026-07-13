@@ -99,6 +99,10 @@ export default function PatternViewer({
   // ── W4b/T1. Les pinces declarades: els seus dos costats i el seu vèrtex, amb glif propi.
   // Una pinça no és una costura més: és el forat que explica per què la vora fa 32 i en cus 30.
   pinces = [],
+  // ── A2. La proposta que el cursor assenyala: `{a, b}`, els dos trams que el motor diu que es
+  // cusen. Es pinten a ratlles i només mentre s'hi passa per sobre — una proposta no forma part
+  // del patró fins que algú la confirma, i dibuixar-la fixa la faria passar per una decisió.
+  propostaRessaltada = null,
   // La unitat del tenant (CM|INCH): el canvas també és taller, i hi val la mateixa llei.
   unit = 'CM',
   // ── W2. Al Taller el canvas no té una alçada de maqueta: ocupa el que li deixa el
@@ -440,6 +444,35 @@ export default function PatternViewer({
             {pinces.map(pinca => (
               <PincaKonva key={`pinca-${pinca.id}`} pinca={pinca} zoom={zoom} unit={unit} />
             ))}
+
+            {/* A2 — LA PROPOSTA SOTA EL CURSOR: els dos trams, encesos alhora.
+                Amb els colors dels DOS COSTATS d'una costura (A i B), que és exactament el que
+                la proposta diu que són. Es pinta només mentre el cursor és a la fila: una
+                proposta no és res del patró —no s'ha decidit—, i deixar-la pintada l'ensenyaria
+                com si ho fos. Es dibuixa a sobre de tot i no escolta el ratolí: és una resposta a
+                la pregunta «quins dos trams?», no un objecte del taller. */}
+            {propostaRessaltada && (
+              <Group listening={false}>
+                {['a', 'b'].map(costat => {
+                  const tr = propostaRessaltada[costat]
+                  const piece = tr && pieces.find(p => p.id === tr.piece_id)
+                  if (!piece) return null
+                  const pts = puntsDelSegment(piece, tr)
+                  if (pts.length < 2) return null
+                  return (
+                    <Line
+                      key={`prop-${costat}`}
+                      points={pts.flatMap(p => [p.x, -p.y])}
+                      stroke={costat === 'a' ? KONVA_COL.sewA : KONVA_COL.sewB}
+                      strokeWidth={5 / zoom}
+                      lineCap="round"
+                      dash={[9 / zoom, 5 / zoom]}
+                      perfectDrawEnabled={false}
+                    />
+                  )
+                })}
+              </Group>
+            )}
 
             {/* L'OMBRA del que s'està reobrint: on era, mentre es diu on ha d'anar. */}
             {ombra && (ombra.punts || []).length >= 2 && (

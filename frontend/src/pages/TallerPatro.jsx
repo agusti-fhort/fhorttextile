@@ -13,6 +13,7 @@ import POMPicker from '../components/pattern/POMPicker'
 import SewEditor from '../components/pattern/SewEditor'
 import SegmentEditor from '../components/pattern/SegmentEditor'
 import { textCobertura, textEstat } from '../components/pattern/sewText'
+import { formatLen } from '../utils/format'
 import { useUnit } from './fittingShared'
 
 /**
@@ -47,6 +48,12 @@ export default function TallerPatro() {
   const [sews, setSews] = useState([])
   const [feina, setFeina] = useState(null)        // la llista de treball (W3/T1)
   const [pecaSel, setPecaSel] = useState('')
+  // ── A2. Les costures PROPOSADES. No es desen enlloc: es recalculen senceres a cada canvi de
+  // la geometria (confirmar-ne una, esborrar una costura, marcar una pinça), perquè la cobertura
+  // canvia i amb ella el que encara es pot proposar.
+  const [propostes, setPropostes] = useState([])
+  const [descartatsProp, setDescartatsProp] = useState(null)
+  const [propostaRessaltada, setPropostaRessaltada] = useState(null)
 
   // ── eines d'anotació (venen del tab: es TRASLLADEN, no es reescriuen) ─────
   const [mode, setMode] = useState('view')     // 'view' | 'pom' | 'seg' | 'pinca' | 'sew'
@@ -122,17 +129,20 @@ export default function TallerPatro() {
         || files[0]
       if (!triat) { setActual(null); return }
 
-      const [{ data: detall }, { data: geo }, { data: sw }, { data: fn }] =
+      const [{ data: detall }, { data: geo }, { data: sw }, { data: fn }, { data: pr }] =
         await Promise.all([
           patterns.get(triat.id),
           patterns.geometry(triat.id),
           patterns.sew.list(modelId),
           patterns.modelPoms(triat.id),
+          patterns.sew.propostes(modelId, triat.id),
         ])
       setActual(detall)
       setGeometria(geo)
       setSews(sw.results || sw || [])
       setFeina(fn)
+      setPropostes(pr.propostes || [])
+      setDescartatsProp(pr.descartats || null)
     } catch {
       setError(t('pattern.err_load'))
     } finally {
@@ -373,15 +383,96 @@ export default function TallerPatro() {
   // s'ha tocat deixaria la resta mentint a la pantalla.
   const recarregarRelacions = useCallback(async () => {
     if (!actual) return
-    const [{ data: geo }, { data: sw }, { data: fn }] = await Promise.all([
+    // Les PROPOSTES entren aquí i no en una crida a part: confirmar-ne una, esborrar una costura
+    // o marcar una pinça canvia la COBERTURA, i amb ella el que encara es pot proposar. Rellegir
+    // les relacions i deixar les propostes velles a la pantalla seria ensenyar una llista que ja
+    // no és certa —i oferir per cosir un tram que acaba de quedar cosit.
+    const [{ data: geo }, { data: sw }, { data: fn }, { data: pr }] = await Promise.all([
       patterns.geometry(actual.id),
       patterns.sew.list(modelId),
       patterns.modelPoms(actual.id),
+      patterns.sew.propostes(modelId, actual.id),
     ])
     setGeometria(geo)
     setSews(sw.results || sw || [])
     setFeina(fn)
+    setPropostes(pr.propostes || [])
+    setDescartatsProp(pr.descartats || null)
   }, [actual, modelId])
+
+  // ── A2: confirmar i rebutjar ─────────────────────────────────────────────
+
+  /**
+   * Confirmar una proposta: el gest manual, fet en un clic.
+   *
+   * Els NOMS dels dos trams surten d'aquí i no del servidor perquè aquí és on hi ha els tres
+   * idiomes (i18n-gate). El nom de la COSTURA es deixa buit a posta: buit vol dir «genera'l dels
+   * trams que uneix» (`nomCostura`), i un nom generat es refà sol el dia que algú reanomeni un
+   * tram — un de congelat, no.
+   */
+  const confirmarProposta = async (p) => {
+    setPropostaRessaltada(null)
+    try {
+      const { data } = await patterns.sew.confirmarProposta({
+        model: modelId,
+        segment_a: p.a.segment_id,
+        segment_b: p.b.segment_id,
+        tipus: p.tipus,
+        diferencial_cm: p.diferencial_cm,
+        nom_a: nomTramProposat(p.a),
+        nom_b: nomTramProposat(p.b),
+      })
+      // La costura acabada de néixer diu de seguida com ha quedat, igual que quan es declara a
+      // mà: el veredicte que la proposta PREDEIA, ara constatat sobre la costura de veritat.
+      const e = data.estat || {}
+      setVeredicte({
+        casa: !!e.casa,
+        estat: textEstat(t, e, unit),
+        missatge: e.missatge || '',
+        cobertura: (e.cobertura || []).map(a => ({
+          text: textCobertura(t, a, unit), missatge: a.missatge || '',
+        })),
+      })
+      await recarregarRelacions()
+    } catch {
+      setErrEina(t('pattern.taller.err_proposal_confirm'))
+    }
+  }
+
+  /** Rebutjar-ne una: que no torni a sortir. El «no» es desa; si no, no seria un «no». */
+  const rebutjarProposta = async (p) => {
+    setPropostaRessaltada(null)
+    try {
+      await patterns.sew.rebutjarProposta({
+        model: modelId, segment_a: p.a.segment_id, segment_b: p.b.segment_id,
+      })
+      await recarregarRelacions()
+    } catch {
+      setErrEina(t('pattern.taller.err_proposal_reject'))
+    }
+  }
+
+  /** El nom que un tram proposat tindrà quan la proposta es confirmi. */
+  const nomTramProposat = (costat) => t('pattern.taller.proposal_seg', {
+    peca: costat.peca, llarg: formatLen(costat.longitud_cm, unit),
+  })
+
+  /**
+   * Els dos trams de la proposta que el cursor assenyala, amb la geometria que el canvas
+   * necessita per pintar-los. Els trams proposats són DERIVATS ('auto') i per tant NO són a la
+   * llista de trams declarats: el canvas no els té, i se li han de donar.
+   */
+  const propostaAlCanvas = useMemo(() => {
+    if (!propostaRessaltada) return null
+    const tram = (c) => {
+      const peca = (geometria?.pieces || []).find(p => p.id === c.piece_id)
+      const sg = peca && (peca.segments || []).find(s => s.id === c.segment_id)
+      return sg ? { ...sg, piece_id: c.piece_id } : null
+    }
+    const a = tram(propostaRessaltada.a)
+    const b = tram(propostaRessaltada.b)
+    return a && b ? { a, b } : null
+  }, [propostaRessaltada, geometria])
 
   const esborrarPOM = async (pomId) => {
     await patterns.poms.remove(pomId)
@@ -739,6 +830,10 @@ export default function TallerPatro() {
             <RelationsPanel
               poms={pomsAncorats} sews={costures} pinces={pinces} segments={trams}
               tramsPerId={tramsPerId} unit={unit}
+              propostes={propostes} descartatsProp={descartatsProp}
+              onConfirmaProposta={confirmarProposta}
+              onRebutjaProposta={rebutjarProposta}
+              onRessaltaProposta={setPropostaRessaltada}
               onEsborraPom={esborrarPOM} onReobrePom={reobrirPOM}
               onEsborraSew={esborrarSew} onReobreSew={reobrirSew}
               onReanomenaSew={reanomenarSew}
@@ -866,6 +961,7 @@ export default function TallerPatro() {
               tramRessaltat={tramRessaltat}
               onClicTram={triarTram}
               pinces={pinces}
+              propostaRessaltada={propostaAlCanvas}
               unit={unit}
               omplirAlcada
             />

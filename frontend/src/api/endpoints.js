@@ -675,6 +675,28 @@ export const patterns = {
 
     // Esborrar una pinça se n'emporta els seus dos costats: no existeixen sense ella.
     remove: (id) => client.delete(`/api/v1/patterns/sew-relations/${id}/`),
+
+    // ── ASSISTIT (A2): el motor PROPOSA, la persona decideix ────────────────
+    //
+    // Les propostes NO es desen enlloc: es recalculen senceres a cada crida sobre la geometria
+    // viva. Per això no hi ha cap `id` de proposta —una proposta no és una fila— i el que la
+    // identifica és la `clau`: els dos trams que uneix. Confirmar-ne una o esborrar una costura
+    // canvia la cobertura, i per tant canvia la llista: es torna a demanar, no es pedaça.
+    propostes: (modelId, fileId = null) =>
+      client.get('/api/v1/patterns/sew-relations/propostes/',
+        { params: fileId ? { model: modelId, file: fileId } : { model: modelId } }),
+
+    // Confirmar = el gest manual, fet en un clic. En surt exactament el mateix que si el
+    // patronista hagués declarat els dos trams i els hagués cosit: dos trams DECLARATS i una
+    // costura. Una costura confirmada no és una entitat de segona categoria.
+    confirmarProposta: (data) =>
+      client.post('/api/v1/patterns/sew-relations/confirmar-proposta/', data),
+
+    // El rebuig és PERSISTENT: el que es diu que no, no torna a sortir. Una eina que reproposa
+    // el que ja li han dit que no ensenya a no mirar-la. El que es rebutja és la PARELLA —els
+    // seus trams queden lliures per a la proposta bona.
+    rebutjarProposta: (data) =>
+      client.post('/api/v1/patterns/sew-relations/rebutjar-proposta/', data),
   },
 
   // Trams DECLARATS (W1/T4). La segmentació gir→gir és una proposta del motor (origen

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import ProposalsPanel from './ProposalsPanel'
 import { nomCostura, textAritmetica, textCobertura, textEstat } from './sewText'
 import { formatLen, titleLen } from '../../utils/format'
 
@@ -18,6 +19,8 @@ import { formatLen, titleLen } from '../../utils/format'
  */
 export default function RelationsPanel({
   poms, sews, pinces, segments, tramsPerId, unit = 'CM',
+  propostes = [], descartatsProp = null,
+  onConfirmaProposta, onRebutjaProposta, onRessaltaProposta,
   onEsborraPom, onReobrePom,
   onEsborraSew, onReobreSew, onReanomenaSew,
   onEsborraPinca, onReanomenaPinca,
@@ -27,6 +30,19 @@ export default function RelationsPanel({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+      {/* LES PROPOSTES, a dalt de tot (A2). Van les primeres perquè són la feina que QUEDA per
+          decidir; el que hi ha a sota ja està decidit. I van DINS de Relacions, no en un tab
+          a part: proposar i declarar són el mateix ofici, i separar-los faria que la llista
+          d'assistència fos una pantalla on s'ha d'anar en comptes d'una que ja s'està mirant. */}
+      <Seccio titol={t('pattern.taller.proposals', { n: propostes.length })}>
+        <ProposalsPanel
+          propostes={propostes} descartats={descartatsProp} unit={unit}
+          onConfirma={onConfirmaProposta}
+          onRebutja={onRebutjaProposta}
+          onRessalta={onRessaltaProposta}
+        />
+      </Seccio>
+
       <Seccio titol={t('pattern.poms_anchored', { n: poms.length })}>
         {poms.length === 0 ? (
           <Buit text={t('pattern.poms_empty')} />
