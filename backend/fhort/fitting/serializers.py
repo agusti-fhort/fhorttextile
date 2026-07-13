@@ -32,7 +32,11 @@ class GradingVersionSerializer(serializers.ModelSerializer):
     class Meta:
         model = GradingVersion
         fields = '__all__'
-        read_only_fields = ('data',)
+        # G6-B/T2 — el segell NO és un camp editable. El viewset ja és ReadOnly, però el pany de
+        # dalt és el que es descuida: el dia que algú hi torni a posar un ModelViewSet (era el que
+        # hi havia), aquests camps han de seguir sense poder-se flipar per REST. `aprovada` només
+        # l'escriu `seal_grading_version`, via l'acció `approve` (capability CLOSE_GATES).
+        read_only_fields = ('data', 'aprovada', 'aprovada_per', 'data_aprovacio', 'is_active')
 
 
 class POMAlertSerializer(serializers.ModelSerializer):

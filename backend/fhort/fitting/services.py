@@ -577,27 +577,45 @@ def vigent_grading_version(sf):
     return gv
 
 
+def seal_grading_version(version, *, user_profile_id=None, now=None):
+    """L'ÚNIC escriptor del segell (G6-B/T2). Segella UNA GradingVersion concreta.
+
+    Els tres camps van SEMPRE junts: `aprovada` sense `aprovada_per`/`data_aprovacio` és una
+    versió aprovada per ningú i quan sigui — i n'hi ha DUES a staging (gv 30 i gv 53), d'un camí
+    de codi que ja no existeix, que és com sabem que això havia passat de debò.
+
+    Idempotent: re-segellar una versió ja aprovada NO reescriu qui la va aprovar ni quan. El
+    primer que la va segellar és el que la va segellar.
+
+    Des-segellar NO existeix, ni aquí ni per API: una versió aprovada se supera creant-ne una de
+    nova (el bump), no desdient-se de l'aprovació.
+    """
+    from django.utils import timezone
+    if version.aprovada:
+        return version
+    version.aprovada = True
+    version.aprovada_per_id = user_profile_id
+    version.data_aprovacio = now or timezone.now()
+    version.save(update_fields=['aprovada', 'aprovada_per', 'data_aprovacio'])
+    return version
+
+
 def seal_model_grading(model, *, user_profile_id=None, now=None):
     """Segella (aprovada=True) la GradingVersion activa del SizeFitting de treball del model.
 
     D-3: el segellat és CONSEQÜÈNCIA de l'avanç de gate (decisió humana de maduresa),
     no de tancar una sessió de fitting. Retorna el pk de la versió segellada, o None si
     el model no té SizeFitting de treball ni versió activa.
+
+    El segell l'escriu `seal_grading_version` (font única); aquí només es tria QUINA versió.
     """
-    from django.utils import timezone
-    if now is None:
-        now = timezone.now()
     sf = _resolve_working_size_fitting(model)
     if sf is None:
         return None
     version = _active_grading_version(sf)
     if version is None:
         return None
-    version.aprovada = True
-    version.aprovada_per_id = user_profile_id
-    version.data_aprovacio = now
-    version.save(update_fields=['aprovada', 'aprovada_per', 'data_aprovacio'])
-    return version.pk
+    return seal_grading_version(version, user_profile_id=user_profile_id, now=now).pk
 
 
 # ═════════════════════════════════════════════════════════════════════════════
