@@ -89,6 +89,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from fhort.fitting.models import GradedSpec, GradingVersion, SizeFitting
 from fhort.models_app.models import BaseMeasurement, Model
 from fhort.models_app.services_fitxers import DOWNLOAD_SALT as MODEL_FITXER_SALT
+from fhort.models_app.services_fitxers import DOWNLOAD_TTL
 from fhort.patterns.adapters import (DjangoGeometryStore, DjangoGradingSource,
                                      pom_specs, sew_specs)
 from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentViewSet,
@@ -2517,3 +2518,84 @@ class GeometriaPortaElsTramsDeclaratsTest(PatternsAPITestBase):
 
         self.assertEqual(seg['origen'], PatternSegment.ORIGEN_DECLARAT)
         self.assertEqual(seg['nom'], 'costura lateral')
+
+
+class TokenFrescAlClicTest(PatternsAPITestBase):
+    """El token es demana al CLIC, no es couva amb la pàgina (Taller W5 · fix D9).
+
+    L'URL signada caduca als DOWNLOAD_TTL (900 s). Pintar-la al render vol dir que qui obre el
+    patró i es posa a treballar —el cas NORMAL al Taller— es troba, mitja hora després, un botó
+    que no descarrega res. El fix no és allargar el TTL (això és regalar el permís): és tornar a
+    demanar-lo quan es fa servir.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(pk=self._upload(
+            AMELIA_DXF.read_bytes(), AMELIA_RUL.read_bytes()).data['id'])
+
+    def _links(self, pk):
+        request = self.factory.get(f'/api/v1/patterns/pattern-files/{pk}/download-links/')
+        force_authenticate(request, user=self.user)
+        return PatternFileViewSet.as_view({'get': 'download_links'})(request, pk=pk)
+
+    def _baixa(self, pk, token, accio='download_signed', url='download-signed'):
+        request = self.factory.get(
+            f'/api/v1/patterns/pattern-files/{pk}/{url}/', {'token': token})
+        return PatternFileViewSet.as_view({'get': accio})(request, pk=pk)
+
+    @staticmethod
+    def _token_de(url):
+        return url.split('token=')[1]
+
+    def test_el_token_couvat_al_render_es_mor_i_el_fresc_no(self):
+        """EL CAS DE D9, sencer. Es pinta la pàgina, passen 16 minuts, i:
+          · el token que es va signar al render → CADUCAT (és el botó mort que veia el QA)
+          · el que es demana AL CLIC, en aquell mateix instant → viu.
+        """
+        # t=0: la pàgina es pinta i el detall porta la seva URL signada.
+        couvat = self._token_de(self._links(self.fp.id).data['download_url'])
+
+        # t = +16 min: l'usuari ha estat treballant amb el tab obert.
+        setze_min = time.time() + 960          # 960 s > DOWNLOAD_TTL (900)
+        with mock.patch('django.core.signing.time.time', return_value=setze_min):
+            self.assertEqual(
+                self._baixa(self.fp.id, couvat).status_code, 403,
+                'El token couvat al render hauria d\'haver caducat: si no, el TTL no serveix.')
+
+            # …i ara clica. El token es demana ARA, i ARA val.
+            fresc = self._token_de(self._links(self.fp.id).data['download_url'])
+            self.assertNotEqual(fresc, couvat)
+            self.assertEqual(
+                self._baixa(self.fp.id, fresc).status_code, 200,
+                'El token demanat al clic ha de servir el fitxer al moment.')
+
+    def test_el_rul_tambe_es_refresca(self):
+        couvat = self._token_de(self._links(self.fp.id).data['download_rul_url'])
+        setze_min = time.time() + 960
+        with mock.patch('django.core.signing.time.time', return_value=setze_min):
+            self.assertEqual(
+                self._baixa(self.fp.id, couvat, 'download_rul_signed', 'download-rul-signed')
+                .status_code, 403)
+            fresc = self._token_de(self._links(self.fp.id).data['download_rul_url'])
+            self.assertEqual(
+                self._baixa(self.fp.id, fresc, 'download_rul_signed', 'download-rul-signed')
+                .status_code, 200)
+
+    def test_demanar_token_NO_serveix_bytes(self):
+        """L'acció és read-only: torna URLs, no el fitxer. Si servís bytes seria una segona
+        porta de descàrrega, i n'hi ha prou amb una."""
+        resp = self._links(self.fp.id)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(set(resp.data), {'download_url', 'download_rul_url', 'ttl_segons'})
+        self.assertEqual(resp.data['ttl_segons'], DOWNLOAD_TTL)
+
+    def test_qui_no_esta_autenticat_no_en_treu_cap_token(self):
+        """La porta de tokens està gated com la resta de lectures: si no, seria la manera més
+        senzilla de saltar-se l'autenticació que els tokens protegeixen."""
+        request = self.factory.get(
+            f'/api/v1/patterns/pattern-files/{self.fp.id}/download-links/')
+        resp = PatternFileViewSet.as_view({'get': 'download_links'})(request, pk=self.fp.id)
+
+        self.assertIn(resp.status_code, (401, 403))

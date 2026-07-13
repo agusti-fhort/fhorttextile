@@ -627,6 +627,11 @@ export const patterns = {
     { headers: { 'Content-Type': undefined } }),
   remove: (id) => client.delete(`/api/v1/patterns/pattern-files/${id}/`),
 
+  // URLs signades FRESQUES, al moment del clic (W5 · D9). Les del detall es couven amb la
+  // pàgina i caduquen als 15 min: al Taller, on el tab es queda obert mentre es treballa,
+  // això vol dir botons de descàrrega morts sense que res hagi canviat a la pantalla.
+  downloadLinks: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/download-links/`),
+
   // La geometria SENCERA amb coordenades: el que dibuixa el visor Konva. El detall
   // (get) només porta recomptes — un llistat no ha d'arrossegar milers de punts.
   // Porta també els segments (el que una costura pot triar) i els POMs ja ancorats.

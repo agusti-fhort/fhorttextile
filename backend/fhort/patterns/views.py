@@ -576,6 +576,28 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             return Response({'error': 'Aquest patró no porta RUL.'}, status=404)
         return serve_fitxer(_rul_servable(fp))
 
+    @action(detail=True, methods=['get'], url_path='download-links')
+    def download_links(self, request, pk=None):
+        """URLs signades FRESQUES, demanades al moment del clic (Taller W5 · fix D9).
+
+        Les del serialitzador es couven: es signen quan es pinta la pàgina i caduquen als
+        `DOWNLOAD_TTL` (15 min). Qui deixa el tab obert mentre treballa —que al Taller és el
+        cas NORMAL, no l'excepció— es troba que el botó de descarregar ha deixat de funcionar
+        sense que res hagi canviat a la pantalla. El token no és una propietat del patró: és
+        un permís amb data de caducitat, i es demana quan es fa servir.
+
+        Read-only i gated com la resta de lectures: no serveix bytes, només torna les URLs
+        (amb els MATEIXOS salts que `download-signed` / `download-rul-signed`). Qui no pot
+        llegir aquesta fila, no en rep cap.
+        """
+        fp = self.get_object()
+        dades = PatternFileSerializer(fp, context={'request': request}).data
+        return Response({
+            'download_url': dades.get('download_url'),
+            'download_rul_url': dades.get('download_rul_url'),
+            'ttl_segons': DOWNLOAD_TTL,
+        })
+
     @action(detail=True, methods=['get'], url_path='download-signed',
             authentication_classes=[])
     def download_signed(self, request, pk=None):
