@@ -313,8 +313,11 @@ class ItemBaseMeasurementSerializer(serializers.ModelSerializer):
 class CustomerPOMAliasSerializer(serializers.ModelSerializer):
     """Biblioteca de nomenclatura del client: (client_code, client_description) → POM canònic.
     Font de sembra per-client del matcher (find_pom_master, estratègia (a))."""
-    pom_codi = serializers.CharField(source='pom.codi_client', read_only=True)
-    pom_nom = serializers.CharField(source='pom.nom_client', read_only=True)
+    # SerializerMethodField (no `source='pom.codi_client'`): el pom és NULLABLE — un àlies pot
+    # ser vocabulari del client pendent de mapar (QA-S8-R1) — i la travessia de `source` sobre
+    # un FK nul no és de fiar. Aquí el None és explícit i el frontend hi pinta "pendent de mapar".
+    pom_codi = serializers.SerializerMethodField()
+    pom_nom = serializers.SerializerMethodField()
     customer_codi = serializers.CharField(source='customer.codi', read_only=True)
     # Identificació canònica del POM (mateix patró que GradingRuleSerializer): codi global
     # (POM-XXX) com a element principal + abreviatura + nom EN/CA per al display de la fitxa.
@@ -322,6 +325,12 @@ class CustomerPOMAliasSerializer(serializers.ModelSerializer):
     pom_abbreviation = serializers.SerializerMethodField()
     pom_nom_en = serializers.SerializerMethodField()
     pom_nom_ca = serializers.SerializerMethodField()
+
+    def get_pom_codi(self, obj):
+        return obj.pom.codi_client if obj.pom_id else None
+
+    def get_pom_nom(self, obj):
+        return obj.pom.nom_client if obj.pom_id else None
 
     def get_pom_code_global(self, obj):
         if obj.pom and obj.pom.pom_global:

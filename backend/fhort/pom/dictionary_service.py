@@ -151,7 +151,9 @@ def build_preview(customer, raw_rows):
         diff = False
         preserve_manual = False
         if ex is not None:
-            ex_payload = {**_pom_payload(ex.pom), 'origen': ex.origen}
+            # `or {}`: un àlies existent pot no tenir POM (vocabulari pendent de mapar,
+            # QA-S8-R1) i _pom_payload en torna None → {**None} petaria.
+            ex_payload = {**(_pom_payload(ex.pom) or {}), 'origen': ex.origen}
             diff = (pm is None) or (ex.pom_id != pm.id)
             preserve_manual = (ex.origen == 'MANUAL')
 
