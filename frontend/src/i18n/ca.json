@@ -3145,6 +3145,7 @@
   },
   "pattern": {
     "taller": {
+      "pan_hint": "Espai + arrossegar (o botó del mig) per moure el patró · roda per fer zoom · Esc per cancel·lar",
       "value_sheet_none": "fitxa —",
       "value_delta": "patró {{cm}} · Δ {{delta}}",
       "pom_place_hint": "Col·locar {{codi}} al patró",

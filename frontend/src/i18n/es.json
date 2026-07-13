@@ -3145,6 +3145,7 @@
   },
   "pattern": {
     "taller": {
+      "pan_hint": "Espacio + arrastrar (o botón central) para mover el patrón · rueda para zoom · Esc para cancelar",
       "value_sheet_none": "ficha —",
       "value_delta": "patrón {{cm}} · Δ {{delta}}",
       "pom_place_hint": "Colocar {{codi}} en el patrón",

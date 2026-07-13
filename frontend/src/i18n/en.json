@@ -3145,6 +3145,7 @@
   },
   "pattern": {
     "taller": {
+      "pan_hint": "Space + drag (or middle button) to move the pattern · wheel to zoom · Esc to cancel",
       "value_sheet_none": "sheet —",
       "value_delta": "pattern {{cm}} · Δ {{delta}}",
       "pom_place_hint": "Place {{codi}} on the pattern",

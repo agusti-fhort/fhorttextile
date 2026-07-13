@@ -79,6 +79,15 @@ export default function PatternViewer({
   const [zoom, setZoom] = useState(1)
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const [hover, setHover] = useState(null)      // { xMm, yMm, tram }
+  // La MÀ (D7). El pan no el fa el `draggable` de Konva sinó nosaltres, perquè la regla no
+  // és «es pot arrossegar o no»: és «es pot arrossegar SEGONS què s'estigui fent». Amb el
+  // draggable de Konva no hi ha manera de dir «arrossega només amb l'espai o el botó del
+  // mig», i mentre es col·loca un POM un drag lliure mouria el patró sota el punt que
+  // s'està mirant.
+  const panRef = useRef(null)          // { x0, y0, px, py, mogut }
+  const [espai, setEspai] = useState(false)
+  const espaiRef = useRef(false)
+  const arrossegatRef = useRef(false)  // el clic que tanca un pan NO és un clic
   const [capes, setCapes] = useState({
     cut: true, sew: true, internal: true, mirror: true,
     notch: true, grain: true, punts: true,
@@ -129,6 +138,30 @@ export default function PatternViewer({
     return () => ro.disconnect()
   }, [omplirAlcada, encaixar])
 
+  // L'espai és la mà de tota la vida. Es mira el target: en un camp de text, un espai és un
+  // espai — que escriure el nom d'un tram et paneges el patró seria absurd.
+  useEffect(() => {
+    const esCamp = (el) => !!el && (
+      /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable)
+    const down = (e) => {
+      if (e.code !== 'Space' || esCamp(e.target)) return
+      e.preventDefault()               // l'espai, si no, fa scroll de pàgina
+      espaiRef.current = true
+      setEspai(true)
+    }
+    const up = (e) => {
+      if (e.code !== 'Space') return
+      espaiRef.current = false
+      setEspai(false)
+    }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+    }
+  }, [])
+
   // ── zoom amb la roda, ancorat al cursor ──────────────────────────────────
   const onWheel = (e) => {
     e.evt.preventDefault()
@@ -155,12 +188,57 @@ export default function PatternViewer({
     setPos({ x: centre.x - mon.x * zNou, y: centre.y - mon.y * zNou })
   }
 
+  // Col·locant de debò (ja hi ha un punt A a la pantalla), el drag lliure no paneja: mouria
+  // el patró sota el punt que s'està a punt de clicar. Llavors la mà es demana — espai o
+  // botó del mig. La resta del temps (mirant, cosint, o abans del punt A) el drag paneja,
+  // que és el que tothom espera d'un canvas.
+  const colocant = mode === 'pom' && puntsPom.length > 0
+  const potPanejar = !colocant
+  const maAlta = espai || !!panRef.current
+
+  // ── la mà: pan manual ────────────────────────────────────────────────────
+  const onMouseDown = (e) => {
+    const evt = e.evt
+    const forcat = evt.button === 1 || espaiRef.current    // botó del mig o espai
+    if (evt.button !== 0 && evt.button !== 1) return
+    if (!forcat && !potPanejar) return
+
+    evt.preventDefault()               // el botó del mig, si no, obre l'autoscroll
+    const p = stageRef.current?.getPointerPosition()
+    if (!p) return
+    panRef.current = { x0: p.x, y0: p.y, px: pos.x, py: pos.y, mogut: false }
+  }
+
+  const acabarPan = useCallback(() => {
+    if (!panRef.current) return
+    // Si el punter s'ha mogut, això ha estat un PAN i el clic que ve al darrere no és un
+    // clic de l'usuari: és el final de l'arrossegament. Marcar-lo i menjar-se'l.
+    if (panRef.current.mogut) arrossegatRef.current = true
+    panRef.current = null
+  }, [])
+
+  // El botó es pot deixar anar FORA del canvas: sense això, el pan es quedaria enganxat al
+  // cursor i el patró seguiria el ratolí sense cap botó premut.
+  useEffect(() => {
+    window.addEventListener('mouseup', acabarPan)
+    return () => window.removeEventListener('mouseup', acabarPan)
+  }, [acabarPan])
+
   // ── hover: on és el cursor i quin tram de vora hi ha a sota ──────────────
   const onMouseMove = () => {
     const stage = stageRef.current
     if (!stage) return
     const p = stage.getPointerPosition()
     if (!p) { setHover(null); return }
+
+    if (panRef.current) {
+      const dx = p.x - panRef.current.x0
+      const dy = p.y - panRef.current.y0
+      if (Math.abs(dx) + Math.abs(dy) > 3) panRef.current.mogut = true
+      setPos({ x: panRef.current.px + dx, y: panRef.current.py + dy })
+      return                           // panejant no s'imanta res
+    }
+
     const xMm = (p.x - pos.x) / zoom
     const yMm = -(p.y - pos.y) / zoom      // desfem el capgirat de l'eix Y
     const tram = tramMesProper(pieces, xMm, yMm, 12 / zoom)
@@ -171,6 +249,7 @@ export default function PatternViewer({
   }
 
   const onClicStage = () => {
+    if (arrossegatRef.current) { arrossegatRef.current = false; return }
     if (mode === 'pom' && hover?.iman && onClicPunt) onClicPunt(hover.iman)
   }
 
@@ -179,6 +258,7 @@ export default function PatternViewer({
   // Qui té el focus: col·locant, la peça de l'imant; mirant, la peça seleccionada. Cosint no
   // s'atenua res — una costura uneix DUES peces i amagar-ne una seria amagar la meitat.
   const pecaFocus = mode === 'pom' ? pecaIman : (anotant ? null : pecaSel)
+
 
   return (
     <div style={{
@@ -196,7 +276,7 @@ export default function PatternViewer({
         style={{
           border: '1px solid var(--border)', borderRadius: 8,
           background: 'var(--white)', overflow: 'hidden',
-          cursor: anotant ? 'crosshair' : 'grab',
+          cursor: maAlta ? 'grabbing' : anotant ? 'crosshair' : 'grab',
           ...(omplirAlcada ? { flex: 1, minHeight: 0 } : null),
         }}
       >
@@ -208,13 +288,13 @@ export default function PatternViewer({
           scaleY={zoom}
           x={pos.x}
           y={pos.y}
-          draggable={!anotant}
           onWheel={onWheel}
+          onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
+          onMouseUp={acabarPan}
           onMouseLeave={() => setHover(null)}
           onClick={onClicStage}
           onTap={onClicStage}
-          onDragEnd={(e) => setPos({ x: e.target.x(), y: e.target.y() })}
         >
           <Layer>
             {pieces.map(piece => (
@@ -316,7 +396,7 @@ export default function PatternViewer({
         </Stage>
       </div>
 
-      <BarraEstat t={t} hover={hover} pieces={pieces} pecaSel={pecaSel} />
+      <BarraEstat t={t} hover={hover} pieces={pieces} pecaSel={pecaSel} colocant={colocant} />
     </div>
   )
 }
@@ -508,7 +588,7 @@ function Controls({ t, zoom, capes, presents, onZoom, onEncaixa, onToggle }) {
   )
 }
 
-function BarraEstat({ t, hover, pieces, pecaSel }) {
+function BarraEstat({ t, hover, pieces, pecaSel, colocant }) {
   const cm = (mm) => (mm / 10).toFixed(1)
   const peca = pecaSel ? pieces.find(p => p.nom_block === pecaSel) : null
   const perimetre = peca
@@ -521,7 +601,11 @@ function BarraEstat({ t, hover, pieces, pecaSel }) {
       fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
       fontFamily: 'var(--mono)', minHeight: 18, flexShrink: 0,
     }}>
-      {hover ? (
+      {colocant ? (
+        <span style={{ color: 'var(--gold)' }}>
+          <i className="ti ti-hand-move" /> {t('pattern.taller.pan_hint')}
+        </span>
+      ) : hover ? (
         <>
           <span>{t('pattern.cursor', { x: cm(hover.xMm), y: cm(hover.yMm) })}</span>
           {hover.tram && (
