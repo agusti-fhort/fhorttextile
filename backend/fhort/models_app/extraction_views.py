@@ -620,6 +620,160 @@ def find_pom_master(code, description, customer=None):
     return None, 'no_match', 'NO_MATCH'
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PORTES DE VINCULACIÓ (QA-S8, DIAGNOSI_QA_S8_IMPORT)
+#
+# Bessones de les de `pom/size_map_views.py:29,53` (importador de la Size Library), que
+# ja les tenia i que l'importador de MODELS no. La diagnosi va trobar el forat: el mateix
+# mode de fallada estava protegit en un importador i despullat a l'altre. No s'extreu un
+# helper compartit entre les dues apps (seria refactor fora d'abast); s'adapten aquí a les
+# claus de `poms_extrets` (`pom_master_id`/`pom_codi`/`pom_nom`) i el docstring diu d'on
+# vénen, perquè el dia que una de les dues canviï se sàpiga que hi ha una germana.
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: Un match per sota d'això NO auto-vincula. Un LOW (codi legacy, arrel del codi) és el
+#: darrer recurs del matcher, no una certesa: la fila cau a pendents amb el suggeriment
+#: visible i la persona decideix. Vincular en silenci amb confiança baixa és el que va
+#: fer que 'U2' i 'U3' (First/Last button) acabessin tots dos sobre el POM 'U'
+#: (Width sequins piece) — un disbarat que ningú no va veure perquè no es va dir.
+_POM_AUTOLINK_CONF = ('HIGH', 'MEDIUM')
+
+
+def _apply_match_threshold(pom, conf):
+    """El llindar: (pom, conf) → (pom_efectiu, weak_suggestion).
+
+    Per sota del llindar es desvincula i es torna el nom suggerit, perquè la UI el mostri
+    com a pendent. Mai una vinculació dubtosa en silenci.
+    """
+    if pom is not None and conf not in _POM_AUTOLINK_CONF:
+        return None, pom
+    return pom, None
+
+
+def _apply_many_to_one_guard(rows):
+    """Si DUES files del document resolen al MATEIX POM, **cap de les dues auto-vincula**.
+
+    `BaseMeasurement` és únic per `(model, pom)`: dues files que hi cauen col·lapsen, i la
+    segona sobreescriu la primera **en silenci** (W5, `update_or_create`). El símptoma que
+    va veure QA —una mesura del document que desapareix— surt exactament d'aquí.
+
+    ⚠️ **AQUÍ L'ÀLIES NO QUEDA EXEMPT, i la germana de `size_map_views.py:53` SÍ.** La
+    divergència és deliberada i és el moll de l'os:
+
+      · A `size_map` el destí és `GradingRule`, i que dos codis del client comparteixin un
+        POM hi és tolerable (Losan H.11 sleeve opening / H.16 cuff opening).
+      · Aquí el destí és `BaseMeasurement`, **únic per (model, pom)**. Dues files NO hi
+        caben. Per legítim que sigui l'àlies, la segona esborra la primera. L'exempció
+        importaria una premissa que en aquest destí no es compleix.
+
+    I no és teòric: al catàleg viu, el client BRW té els àlies `F` i `FF` (Centre FRONT
+    length i Centre BACK length — dues mesures distintes) tots dos cap al POM 389
+    'TOTAL LENGTH', i `U2`/`U3` (First/Last button) tots dos cap al 439 'Width sequins
+    piece'. Amb l'exempció posada, aquestes quatre files travessaven les dues portes amb
+    confiança HIGH i dues mesures del document s'esborraven a W5 sense dir res.
+
+    Un àlies dolent és un problema del catàleg i es resol al catàleg; el que aquesta porta
+    ha de garantir és que **no acabi sent una pèrdua de dades silenciosa**.
+
+    Muta `rows` in situ.
+    """
+    counts = {}
+    for r in rows:
+        if r.get('pom_master_id'):
+            counts[r['pom_master_id']] = counts.get(r['pom_master_id'], 0) + 1
+    dup_ids = {pid for pid, n in counts.items() if n >= 2}
+    if not dup_ids:
+        return rows
+
+    for r in rows:
+        if r.get('pom_master_id') in dup_ids:
+            # El suggeriment queda VISIBLE: la persona ha de poder veure a què s'assemblava.
+            r['weak_suggestion'] = r.get('pom_nom')
+            r['weak_suggestion_codi'] = r.get('pom_codi')
+            r['pom_master_id'] = None
+            r['pom_codi'] = None
+            r['pom_nom'] = None
+            r['many_to_one'] = True
+            r['actiu'] = False
+    return rows
+
+
+def _match_rows(files, customer):
+    """Files llegides del document → `poms_extrets`, amb les portes aplicades.
+
+    **Font ÚNICA de matching per als DOS camins d'extracció** (parser ràpid d'Excel i visió
+    Opus). Abans cadascun es muntava la seva llista i divergien: la via ràpida marcava
+    `actiu=True` per a tothom i la via Opus `actiu=bool(pm)`. Ara el criteri és un i és
+    aquest:
+
+        **actiu ⇔ vincle FERM** (match per sobre del llindar i no compartit amb cap altra fila).
+
+    `files`: [{codi_fitxa, descripcio, values, tol_minus, tol_plus}].
+    Retorna (poms_extrets, stats) amb stats = {n_nomatch, n_low, n_many_to_one}.
+    """
+    rows = []
+    n_nomatch = n_low = 0
+
+    for i, f in enumerate(files):
+        codi = (f.get('codi_fitxa') or '').strip()
+        descripcio = (f.get('descripcio') or '').strip()
+        pm, match_type, confidence = find_pom_master(codi, descripcio, customer=customer)
+
+        # Els comptadors es prenen del match CRU (abans del llindar): així l'avís continua
+        # distingint "no s'ha trobat res" de "s'ha trobat però no és de fiar".
+        if pm is None:
+            n_nomatch += 1
+        elif confidence == 'LOW':
+            n_low += 1
+
+        pm_efectiu, suggeriment = _apply_match_threshold(pm, confidence)
+
+        rows.append({
+            'codi_fitxa': codi,
+            'descripcio': descripcio,
+            'pom_master_id': pm_efectiu.id if pm_efectiu else None,
+            'pom_codi': pm_efectiu.codi_client if pm_efectiu else None,
+            'pom_nom': pm_efectiu.nom_client if pm_efectiu else None,
+            'match_type': match_type,
+            'confidence': confidence,
+            'values': f.get('values') or {},
+            'tol_minus': f.get('tol_minus'),
+            'tol_plus': f.get('tol_plus'),
+            'actiu': bool(pm_efectiu),
+            'ordre': i,
+            'weak_suggestion': suggeriment.nom_client if suggeriment else None,
+            'weak_suggestion_codi': suggeriment.codi_client if suggeriment else None,
+            'many_to_one': False,
+        })
+
+    _apply_many_to_one_guard(rows)
+    n_many = sum(1 for r in rows if r.get('many_to_one'))
+
+    return rows, {'n_nomatch': n_nomatch, 'n_low': n_low, 'n_many_to_one': n_many}
+
+
+def _avisos_de_matching(stats):
+    """Els avisos del matching. Un per motiu, i cadascun diu QUÈ ha de fer la persona."""
+    avisos = []
+    if stats['n_nomatch']:
+        avisos.append(
+            f"{stats['n_nomatch']} POM(s) sense match al catàleg — cal revisar o "
+            f"afegir manualment."
+        )
+    if stats['n_low']:
+        avisos.append(
+            f"{stats['n_low']} POM(s) amb confiança baixa: NO s'han vinculat "
+            f"automàticament. Revisa'ls al pas de POMs — hi tens el suggeriment."
+        )
+    if stats['n_many_to_one']:
+        avisos.append(
+            f"{stats['n_many_to_one']} POM(s) de la fitxa apuntaven al MATEIX POM del "
+            f"catàleg: cap no s'ha vinculat automàticament (dues mesures no poden compartir "
+            f"un POM: la segona esborraria la primera). Resol-los un per un."
+        )
+    return avisos
+
+
 # ═══════════════════════════ W2 — Extracció POMs ═══════════════════════════
 EXTRACCIO_MODEL = 'claude-opus-4-7'
 EXTRACCIO_MAX_TOKENS = 16000
@@ -710,26 +864,16 @@ def _extraccio_via_excel(session, api_key):
             except (ValueError, TypeError):
                 pass
 
-    # 7-8. Matching POM + format IDÈNTIC al de la via Opus.
-    # N3: customer del model per resoldre els àlies de nomenclatura del client (paritat amb Opus).
+    # 7-8. Matching POM + format IDÈNTIC al de la via Opus: la MATEIXA funció (`_match_rows`),
+    # amb les mateixes portes. Abans aquesta via marcava `actiu=True` per a totes les files,
+    # inclosos els sense match; ara el criteri és únic (actiu ⇔ vincle ferm) perquè el
+    # matching és literalment el mateix codi.
+    # N3: customer del model per resoldre els àlies de nomenclatura del client.
     import_customer = session.model.customer if session.model_id else None
-    poms_extrets = []
-    for i, p in enumerate(raw_poms):
-        pm, match_type, confidence = find_pom_master(p['codi_fitxa'], p['descripcio'], customer=import_customer)
-        poms_extrets.append({
-            'codi_fitxa': p['codi_fitxa'],
-            'descripcio': p['descripcio'],
-            'pom_master_id': pm.id if pm else None,
-            'pom_codi': pm.codi_client if pm else None,
-            'pom_nom': (pm.nom_client if pm else None),
-            'match_type': match_type,
-            'confidence': confidence,
-            'values': p['values'],
-            'tol_minus': p.get('tol_minus'),   # B2: tolerància del document (None si no en porta)
-            'tol_plus': p.get('tol_plus'),
-            'actiu': True,
-            'ordre': i,
-        })
+    poms_extrets, stats = _match_rows(raw_poms, import_customer)
+
+    avisos_extraccio = list(revision.get('warnings', []))
+    avisos_extraccio += _avisos_de_matching(stats)
 
     # 9. Talles.
     sizes = [str(t) for t in talles_detectades]
@@ -740,8 +884,10 @@ def _extraccio_via_excel(session, api_key):
                         'extraccio': {'via': 'excel', 'header': {}, 'sizes': sizes},
                         'grading_status': 'ok'}
     session.poms_extrets = poms_extrets
+    session.avisos = list(session.avisos or []) + avisos_extraccio
     session.estat = 'POMS'
-    session.save(update_fields=['resultat', 'poms_extrets', 'estat', 'actualitzat_at'])
+    session.save(update_fields=['resultat', 'poms_extrets', 'avisos', 'estat',
+                                'actualitzat_at'])
 
     # 11. Resposta amb EXACTAMENT el mateix format que la via PDF/imatge (:1180-1188).
     return Response({
@@ -751,7 +897,7 @@ def _extraccio_via_excel(session, api_key):
         'base_size': sizes[0] if sizes else None,
         'sizes': sizes,
         'grading_status': {'status': 'ok', 'detail': ''},
-        'avisos': revision.get('warnings', []),
+        'avisos': avisos_extraccio,
     }, status=200)
 
 
@@ -861,35 +1007,21 @@ def import_session_extraccio_view(request, token):
     # nomenclatura d'AQUEST client abans que per descripció. Si el model no en té, customer=None
     # (comportament previ: resol per descripció).
     import_customer = session.model.customer if session.model_id else None
-    poms_extrets = []
-    n_low, n_nomatch = 0, 0
-    for i, msr in enumerate(measurements):
-        codi_fitxa = (msr.get('client_code') or msr.get('code') or '').strip()
-        descripcio = (msr.get('description') or '').strip()
-        pm, match_type, confidence = find_pom_master(codi_fitxa, descripcio, customer=import_customer)
-        if confidence == 'LOW':
-            n_low += 1
-        if pm is None:
-            n_nomatch += 1
-        poms_extrets.append({
-            'codi_fitxa': codi_fitxa,
-            'descripcio': descripcio,
-            'pom_master_id': pm.id if pm else None,
-            'pom_codi': pm.codi_client if pm else None,
-            'pom_nom': (pm.nom_client if pm else None),
-            'match_type': match_type,
-            'confidence': confidence,
-            'values': msr.get('values') or {},
-            'tol_minus': msr.get('tol_minus'),   # B2: tolerància del document (None si absent)
-            'tol_plus': msr.get('tol_plus'),
-            'actiu': bool(pm),  # per defecte només actius els que tenen match
-            'ordre': i,
-        })
-
-    if n_nomatch:
-        avisos.append(f'{n_nomatch} POM(s) sense match al catàleg — cal revisar o afegir manualment.')
-    if n_low:
-        avisos.append(f'{n_low} POM(s) amb confiança baixa — recomanada revisió.')
+    poms_extrets, stats = _match_rows(
+        [
+            {
+                'codi_fitxa': msr.get('client_code') or msr.get('code') or '',
+                'descripcio': msr.get('description') or '',
+                'values': msr.get('values') or {},
+                # B2: tolerància del document (None si absent).
+                'tol_minus': msr.get('tol_minus'),
+                'tol_plus': msr.get('tol_plus'),
+            }
+            for msr in measurements
+        ],
+        import_customer,
+    )
+    avisos += _avisos_de_matching(stats)
 
     session.resultat = {**(session.resultat or {}), 'extraccio': extracted,
                         'grading_status': grading_status}
