@@ -353,18 +353,28 @@ def update_client_profile(
 # CUSTOMER POM ALIAS — biblioteca de nomenclatura del client (sembra reutilitzable)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def maybe_learn_customer_alias(customer, client_code, description, pom, origen='IMPORT'):
+def maybe_learn_customer_alias(customer, client_code, description, pom, origen='IMPORT',
+                               nomes_si_manual=True):
     """Sembra (idempotent) un CustomerPOMAlias reutilitzable quan un HUMÀ ha resolt la
-    vinculació codi-de-document → POM i el matcher automàtic NO la produeix sol.
+    vinculació codi-de-document → POM.
 
     Llei (DIAGNOSI_BIBLIOTECA_CLIENT_2026-07-08): CAP àlies viu retroactiu — escriure un
     àlies NO modifica cap model existent; només sembra les FUTURES importacions d'aquest
     customer. Aquesta funció només toca CustomerPOMAlias.
 
-    Discriminador manual vs automàtic: si find_pom_master (encara sense aquest àlies)
-    ja resol el codi al MATEIX POM amb confiança d'auto-vinculació (HIGH/MEDIUM), la
-    vinculació és automàtica → NO se sembra (evita retroalimentar el matcher amb els
-    seus propis encerts / falsos positius). Retorna l'àlies creat/actualitzat o None.
+    `nomes_si_manual` (per defecte True — el comportament de sempre):
+      · True  → discriminador manual vs automàtic: si find_pom_master (encara sense aquest
+                àlies) ja resol el codi al MATEIX POM amb confiança d'auto-vinculació
+                (HIGH/MEDIUM), la vinculació és automàtica → NO se sembra. Evita
+                retroalimentar el matcher amb els seus propis encerts.
+      · False → s'aprèn de TOT vincle ferm, també dels que el matcher encerta sol
+                (QA-S8-R1). El crida així la confirmació de l'import (W5), on el vincle
+                **l'ha confirmat una persona**: allà l'objectiu no és protegir el matcher
+                de si mateix, és que el REGISTRE DE NOMENCLATURA del client es completi sol
+                a cada importació. Un codi que el tècnic ha donat per bo és nomenclatura
+                d'aquell client, l'hagi encertat el matcher o no.
+
+    Retorna l'àlies creat/actualitzat o None.
     """
     from fhort.pom.models import CustomerPOMAlias
     from fhort.models_app.extraction_views import find_pom_master
@@ -373,9 +383,10 @@ def maybe_learn_customer_alias(customer, client_code, description, pom, origen='
     if customer is None or not code or pom is None:
         return None
 
-    pm, _mtype, conf = find_pom_master(code, description or '', customer=customer)
-    if pm is not None and pm.id == pom.id and conf in ('HIGH', 'MEDIUM'):
-        return None  # el matcher ja ho encerta sol → automàtic, no sembrem
+    if nomes_si_manual:
+        pm, _mtype, conf = find_pom_master(code, description or '', customer=customer)
+        if pm is not None and pm.id == pom.id and conf in ('HIGH', 'MEDIUM'):
+            return None  # el matcher ja ho encerta sol → automàtic, no sembrem
 
     # GUARD ANTI-COL·LISIÓ (QA-S8 · D4a). Un POM que aquest client JA reclama amb un ALTRE codi
     # no es pot aprendre com a bo: o el codi nou és un sinònim del vell (i sobra), o són DUES
