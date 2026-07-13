@@ -668,6 +668,11 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                   const med = conf === 'MEDIUM'
                   const noMatch = !p.pom_master_id
                   const tenantOnly = noMatch && !!p.tenant_only
+                  // QA-S8 · PENDENT: el backend ha trobat alguna cosa però NO l'ha vinculada
+                  // (confiança baixa, o dues files de la fitxa apuntant al mateix POM). No és
+                  // un "sense match": és un suggeriment que espera una decisió humana, i s'ha
+                  // de veure com a tal — si no, la persona no sap què li estan proposant.
+                  const pendent = noMatch && !!p.weak_suggestion && !tenantOnly
                   return (
                     <div key={idx} style={{
                       display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
@@ -690,8 +695,18 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                                     {t('import_wizard.will_add_tenant')}
                                   </span>
                                 </span>
-                              : <span style={{ color: '#a32d2d' }}>
-                                  {t('import_wizard.no_match')} — {p.descripcio || t('import_wizard.no_description')}
+                              : <span style={{ color: pendent ? 'var(--gold)' : '#a32d2d' }}>
+                                  {pendent
+                                    ? t('import_wizard.pending_review')
+                                    : t('import_wizard.no_match')} — {p.descripcio || t('import_wizard.no_description')}
+                                  {pendent && (
+                                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
+                                      {p.many_to_one
+                                        ? t('import_wizard.many_to_one_hint', { codi: p.weak_suggestion_codi })
+                                        : t('import_wizard.weak_hint')}
+                                      {' '}<b>{p.weak_suggestion_codi}</b> · {p.weak_suggestion}
+                                    </div>
+                                  )}
                                   <span onClick={() => toggleTenantOnly(idx)}
                                     style={{ marginLeft: 8, fontSize: 'var(--fs-body)', color: GOLD,
                                              cursor: 'pointer', textDecoration: 'underline' }}>
@@ -702,9 +717,11 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                       </div>
                       <span style={{
                         fontSize: 'var(--fs-body)', fontWeight: 600, padding: '2px 8px', borderRadius: 10,
-                        background: tenantOnly ? '#ede7fb' : noMatch ? '#fff0f0' : (low || med) ? '#fdf6ee' : '#f0f9f0',
-                        color: tenantOnly ? '#5b3fa3' : noMatch ? '#a32d2d' : (low || med) ? 'var(--gold)' : '#3b6d11',
-                      }}>{tenantOnly ? 'tenant-only' : noMatch ? t('import_wizard.no_match_badge') : conf.toLowerCase()}</span>
+                        background: tenantOnly ? '#ede7fb' : pendent ? '#fdf6ee' : noMatch ? '#fff0f0' : (low || med) ? '#fdf6ee' : '#f0f9f0',
+                        color: tenantOnly ? '#5b3fa3' : pendent ? 'var(--gold)' : noMatch ? '#a32d2d' : (low || med) ? 'var(--gold)' : '#3b6d11',
+                      }}>{tenantOnly ? 'tenant-only'
+                          : pendent ? t('import_wizard.pending_badge')
+                          : noMatch ? t('import_wizard.no_match_badge') : conf.toLowerCase()}</span>
                     </div>
                   )
                 })}
@@ -809,7 +826,15 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                 {pomsTaula.map(p => (
                   <tr key={p.pom_master_id} style={{ borderTop: `1px solid ${BORDER}` }}>
                     <td style={{ padding: '6px 10px', position: 'sticky', left: 0, background: 'var(--white)' }}>
-                      <b>{p.pom_codi || p.codi_fitxa}</b>
+                      {/* QA-S8 · El codi del DOCUMENT mana: és el que la persona té al paper
+                          davant. El del catàleg queda com a secundari i atenuat, i només si
+                          difereix. Abans manava el del catàleg i la fitxa deia 'A' mentre la
+                          pantalla deia 'CH': no hi havia manera de relacionar-les.
+                          Coherent amb el pas 2 (:681) i amb MeasureGrid (nom_fitxa || pom_code). */}
+                      <b>{p.codi_fitxa || p.pom_codi}</b>
+                      {p.pom_codi && p.codi_fitxa && p.pom_codi !== p.codi_fitxa && (
+                        <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> → {p.pom_codi}</span>
+                      )}
                       <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{p.pom_nom || p.descripcio}</div>
                     </td>
                     {tallesSel.map(talla => (

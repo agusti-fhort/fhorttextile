@@ -3029,7 +3029,11 @@
     "grading_keep_inherited": "Mantenir la del model",
     "configure_run_title": "Configurar el run a la Size Library",
     "go_to_library": "Anar a la Library",
-    "modal_body": "Sortiràs cap a la Size Library per generar aquesta graduació. Quan l'hagis creada, hauràs de tornar a aquest model manualment per continuar la importació."
+    "modal_body": "Sortiràs cap a la Size Library per generar aquesta graduació. Quan l'hagis creada, hauràs de tornar a aquest model manualment per continuar la importació.",
+    "pending_review": "Pendent de revisió",
+    "pending_badge": "pendent",
+    "weak_hint": "Confiança baixa, no vinculat automàticament. Suggeriment:",
+    "many_to_one_hint": "Dues files de la fitxa apuntaven a aquest mateix POM: cap no s'ha vinculat (la segona n'esborraria la primera). Suggeriment:"
   },
   "dependency": {
     "title": "Dependència",

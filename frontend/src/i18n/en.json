@@ -3029,7 +3029,11 @@
     "grading_keep_inherited": "Keep the model's",
     "configure_run_title": "Configure the run in the Size Library",
     "go_to_library": "Go to the Library",
-    "modal_body": "You will leave for the Size Library to generate this grading. Once created, you will have to return to this model manually to continue the import."
+    "modal_body": "You will leave for the Size Library to generate this grading. Once created, you will have to return to this model manually to continue the import.",
+    "pending_review": "Pending review",
+    "pending_badge": "pending",
+    "weak_hint": "Low confidence, not linked automatically. Suggestion:",
+    "many_to_one_hint": "Two rows of the sheet pointed to this same POM: neither was linked (the second would erase the first). Suggestion:"
   },
   "dependency": {
     "title": "Dependency",
