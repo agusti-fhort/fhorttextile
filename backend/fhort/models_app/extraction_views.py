@@ -527,8 +527,10 @@ def find_pom_master(code, description, customer=None):
           (context sense client) se salta. El `client_code` d'un àlies pot ser un codi posicional
           (LOS 'H.6') O el text de la descripció del client (BRW 'front armhole curve') → es prova
           contra `code` I contra `description`.
+          ⚠️ Un àlies amb `pendent_revisio=True` **NO auto-vincula** (v. sota, QA-S8-R1).
       (b) descripció + sinònims canònics → HIGH/MEDIUM (nom_client, POMGlobal.nom_en).
       (c) codi numèric + 'lining' → MEDIUM.
+      (c-bis) l'àlies PENDENT DE REVISIÓ, com a darrer suggeriment → LOW (mai auto-vincle).
       (d) FALLBACK TRANSITORI (deprecació — objectiu de la diagnosi: treure `codi_client` del
           matcher): `codi_client` exacte i root-prefix → LOW. Amb el llindar d'auto-vinculació
           (c2b19bd) un LOW NO auto-vincula: cau a pendents amb el suggeriment visible. Abans
@@ -541,12 +543,31 @@ def find_pom_master(code, description, customer=None):
 
     # (a) Àlies de nomenclatura del client. Va PRIMER: un codi/descripció reclamat explícitament
     # per un àlies d'AQUEST customer mana sobre qualsevol heurística de descripció.
+    #
+    # ⚠️ QA-S8-R1 · LA PORTA DEL MATCHER. Un àlies marcat `pendent_revisio` és un àlies del qual
+    # el sistema DESCONFIA: el guard d'aprenentatge (pom/services.py) el marca així quan el POM
+    # que reclama ja el reclamava un ALTRE codi del mateix client — o sigui, quan o bé sobra, o
+    # bé una de les dues mesures acabarà sobre el POM equivocat. Un àlies del qual desconfiem no
+    # pot ser alhora la font de màxima confiança del matcher: seria marcar-lo per revisar i
+    # continuar creient-l'hi. Aquí es DEGRADA a suggeriment (c-bis), mai a auto-vincle.
+    #
+    # I no s'atura la cerca: es prova la resta d'estratègies, que poden trobar-hi un vincle bo
+    # de debò. L'àlies pendent només parla si no parla ningú altre.
+    #
+    # `pom__isnull=False` (QA-S8-R1): un àlies SENSE POM no és matchable — és vocabulari del
+    # client pendent de mapar (CustomerPOMAlias.pom és nullable, migració 0037). No té destí,
+    # així que no pot vincular res, i sense el filtre `alias.pom.actiu` petaria amb AttributeError.
+    alias_pendent = None
     if customer is not None:
         for key in (k for k in (code, desc_clean) if k):
             alias = (CustomerPOMAlias.objects
-                     .filter(customer=customer, client_code__iexact=key)
+                     .filter(customer=customer, client_code__iexact=key, pom__isnull=False)
                      .select_related('pom').first())
             if alias and alias.pom.actiu:
+                if alias.pendent_revisio:
+                    if alias_pendent is None:
+                        alias_pendent = alias.pom
+                    continue
                 return alias.pom, 'alias_match', 'HIGH'
 
     if desc_clean:
@@ -596,6 +617,14 @@ def find_pom_master(code, description, customer=None):
                 nom = (pm.nom_client or '').lower()
                 if 'lining' in nom:
                     return pm, 'numeric_lining_match', 'MEDIUM'
+
+    # (c-bis) L'ÀLIES PENDENT DE REVISIÓ (QA-S8-R1). Cap altra estratègia no ha trobat res ferm,
+    # així que ara sí que val la pena dir què reclamava aquell àlies del qual desconfiem — però
+    # com el que és: un SUGGERIMENT (LOW). El llindar (`_apply_match_threshold`) el deixarà a
+    # pendents amb el nom visible, i una persona decidirà. Va per damunt dels fallbacks de codi
+    # (d) perquè un àlies el va declarar algú d'aquest client; un root-prefix no l'ha declarat ningú.
+    if alias_pendent is not None:
+        return alias_pendent, 'alias_pendent_revisio', 'LOW'
 
     # (d) FALLBACK TRANSITORI — `codi_client` exacte. Abans era la 1a estratègia amb HIGH; ara és
     # penúltim recurs amb LOW (deprecació): l'àlies i la descripció manen. Un exacte que arriba
@@ -1474,12 +1503,24 @@ def import_session_confirmar_view(request, token):
             confirmed_pom_ids.append(pid)
             n_bm += 1
 
-            # Biblioteca del client: si el tècnic ha resolt aquest codi de document
-            # manualment (el matcher no l'encerta sol), sembra un CustomerPOMAlias
-            # reutilitzable per a futures importacions. NO toca cap model existent.
+            # Biblioteca del client (QA-S8-R1). S'aprèn de TOT vincle ferm que arriba aquí,
+            # no només de les resolucions manuals (`nomes_si_manual=False`).
+            #
+            # El que arriba aquí ja ha passat DUES portes (llindar + guard many-to-one: només
+            # són `actiu` els vincles ferms) i una PERSONA l'ha confirmat al pas 2. Per tant
+            # no és una endevinalla del matcher: és nomenclatura d'aquest client, donada per
+            # bona. Aprendre-la fa que el registre del client es completi sol a cada
+            # importació, i que la propera resolgui per àlies —determinista— en comptes de
+            # tornar a jugar-se-la a l'heurística de descripcions.
+            #
+            # El guard d'aprenentatge de pom/services.py hi continua aplicant: si el POM ja el
+            # reclama un ALTRE codi d'aquest client, l'àlies neix `pendent_revisio=True` i el
+            # matcher (find_pom_master) NO l'auto-vincularà.
+            #
+            # Idempotent: re-confirmar la mateixa sessió no duplica ni reescriu res.
             maybe_learn_customer_alias(
                 model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
-                origen='IMPORT')
+                origen='IMPORT', nomes_si_manual=False)
 
         # ── 2. Identificador del contenidor SF (NO es crea encara: si hi ha conflicte de grading
         # sense decisió, retornem 409 + rollback i NO volem deixar cap SizeFitting orfe).

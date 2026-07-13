@@ -12,11 +12,13 @@ import datetime
 from django_tenants.test.cases import TenantTestCase
 
 from fhort.models_app.extraction_views import (
+    find_pom_master,
     _apply_many_to_one_guard,
     _apply_match_threshold,
     _match_rows,
 )
 from fhort.pom.models import CustomerPOMAlias, POMMaster
+from fhort.pom.services import maybe_learn_customer_alias
 from fhort.tasks.models import Customer
 
 
@@ -204,3 +206,137 @@ class PortesUnitariesTest(_TenantBase):
         # La fila que no col·lidia no s'ha tocat.
         self.assertEqual(rows[2]['pom_master_id'], 9)
         self.assertTrue(rows[2]['actiu'])
+
+
+class PortaDelMatcherTest(_TenantBase):
+    """QA-S8-R1 · T1. Un àlies `pendent_revisio` NO auto-vincula.
+
+    El guard d'aprenentatge (pom/services.py) marca així els àlies dels quals el sistema
+    desconfia: reclamen un POM que un ALTRE codi del mateix client ja reclamava. Marcar-lo
+    per revisar i continuar creient-l'hi seria no haver-lo marcat.
+    """
+
+    def setUp(self):
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
+        self.pom = POMMaster.objects.create(codi_client='M-M79', nom_client='TOTAL LENGTH')
+
+    def _fila(self, codi, descripcio=''):
+        return {'codi_fitxa': codi, 'descripcio': descripcio, 'values': {'S': 10.0}}
+
+    def test_un_alies_pendent_de_revisio_no_auto_vincula(self):
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, pom=self.pom, client_code='FF',
+            pendent_revisio=True)
+
+        rows, _ = _match_rows([self._fila('FF', 'Centre back length')], self.customer)
+
+        self.assertIsNone(rows[0]['pom_master_id'])
+        self.assertFalse(rows[0]['actiu'])
+        self.assertEqual(rows[0]['match_type'], 'alias_pendent_revisio')
+        self.assertEqual(rows[0]['confidence'], 'LOW')
+
+    def test_pero_el_suggeriment_queda_VISIBLE(self):
+        """Degradar no és amagar: la persona ha de poder veure què reclamava aquell àlies."""
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, pom=self.pom, client_code='FF',
+            pendent_revisio=True)
+
+        rows, _ = _match_rows([self._fila('FF', 'Centre back length')], self.customer)
+
+        self.assertEqual(rows[0]['weak_suggestion_codi'], 'M-M79')
+        self.assertEqual(rows[0]['weak_suggestion'], 'TOTAL LENGTH')
+
+    def test_un_alies_pendent_no_tapa_un_vincle_bo_trobat_per_una_altra_via(self):
+        """L'àlies pendent no atura la cerca: només parla si no parla ningú altre.
+        Aquí la descripció resol a un POM DIFERENT, i aquell mana."""
+        bo = POMMaster.objects.create(
+            codi_client='CB', nom_client='Centre back length')
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, pom=self.pom, client_code='FF',
+            pendent_revisio=True)
+
+        rows, _ = _match_rows([self._fila('FF', 'Centre back length')], self.customer)
+
+        self.assertEqual(rows[0]['pom_master_id'], bo.id)
+        self.assertEqual(rows[0]['match_type'], 'exact_description')
+        self.assertTrue(rows[0]['actiu'])
+
+    def test_un_alies_SA_continua_auto_vinculant(self):
+        """La porta només mossega els marcats: la resta de la biblioteca no es toca."""
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, pom=self.pom, client_code='F',
+            pendent_revisio=False)
+
+        rows, _ = _match_rows([self._fila('F', 'qualsevol cosa')], self.customer)
+
+        self.assertEqual(rows[0]['pom_master_id'], self.pom.id)
+        self.assertEqual(rows[0]['match_type'], 'alias_match')
+        self.assertEqual(rows[0]['confidence'], 'HIGH')
+        self.assertTrue(rows[0]['actiu'])
+
+
+class AprenentatgeAlaConfirmacioTest(_TenantBase):
+    """QA-S8-R1 · T2. A W5 s'aprèn de TOT vincle ferm confirmat, no només dels manuals."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
+        self.pom = POMMaster.objects.create(
+            codi_client='CH', nom_client='Chest width')
+
+    def test_saprèn_dun_vincle_que_el_matcher_ja_encertava_sol(self):
+        """El cas que abans NO s'aprenia. El matcher resol 'A' per descripció (MEDIUM); el
+        tècnic ho confirma. Això és nomenclatura del client i ha d'entrar al seu registre."""
+        pm, mtype, conf = find_pom_master('A', 'Chest width', customer=self.customer)
+        self.assertEqual(pm.id, self.pom.id)
+        self.assertIn(conf, ('HIGH', 'MEDIUM'))   # el matcher ho encerta sol
+
+        # Comportament VELL: no s'aprèn.
+        self.assertIsNone(maybe_learn_customer_alias(
+            self.customer, 'A', 'Chest width', self.pom, nomes_si_manual=True))
+        self.assertFalse(CustomerPOMAlias.objects.filter(
+            customer=self.customer, client_code='A').exists())
+
+        # Comportament NOU (el de W5): s'aprèn.
+        alias = maybe_learn_customer_alias(
+            self.customer, 'A', 'Chest width', self.pom, nomes_si_manual=False)
+        self.assertIsNotNone(alias)
+        self.assertEqual(alias.pom_id, self.pom.id)
+        self.assertEqual(alias.client_code, 'A')
+        self.assertFalse(alias.pendent_revisio)
+
+    def test_es_idempotent_re_confirmar_no_duplica(self):
+        for _ in range(3):
+            maybe_learn_customer_alias(
+                self.customer, 'A', 'Chest width', self.pom, nomes_si_manual=False)
+
+        self.assertEqual(
+            CustomerPOMAlias.objects.filter(customer=self.customer, client_code='A').count(),
+            1,
+        )
+
+    def test_el_guard_de_la_sessio_2_hi_continua_aplicant(self):
+        """Aprendre més agressivament NO pot saltar-se el guard anti-col·lisió: un POM que el
+        client ja reclama amb un altre codi neix `pendent_revisio` — i llavors la porta del
+        matcher (T1) fa que no auto-vinculi."""
+        maybe_learn_customer_alias(
+            self.customer, 'A', 'Chest width', self.pom, nomes_si_manual=False)
+
+        # Un SEGON codi cap al MATEIX POM.
+        alias2 = maybe_learn_customer_alias(
+            self.customer, 'A2', 'Chest width bis', self.pom, nomes_si_manual=False)
+
+        self.assertIsNotNone(alias2)
+        self.assertTrue(alias2.pendent_revisio, 'el guard hauria d\'haver-lo marcat')
+
+        # I el matcher no se'l creu.
+        rows, _ = _match_rows(
+            [{'codi_fitxa': 'A2', 'descripcio': 'quelcom', 'values': {}}], self.customer)
+        self.assertIsNone(rows[0]['pom_master_id'])
+        self.assertEqual(rows[0]['match_type'], 'alias_pendent_revisio')
+
+    def test_un_codi_buit_no_sembra_res(self):
+        self.assertIsNone(maybe_learn_customer_alias(
+            self.customer, '', 'Chest width', self.pom, nomes_si_manual=False))
+        self.assertIsNone(maybe_learn_customer_alias(
+            self.customer, '   ', 'Chest width', self.pom, nomes_si_manual=False))
+        self.assertEqual(CustomerPOMAlias.objects.count(), 0)
