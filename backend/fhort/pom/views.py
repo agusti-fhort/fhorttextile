@@ -205,7 +205,7 @@ class GradingRuleSetViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             if n_prof:
                 SizingProfile.objects.filter(grading_rule_set=instance).delete()
-            instance.delete()  # CASCADE: GradingRule + GradingException; Model → SET_NULL
+            instance.delete()  # CASCADE: GradingRule; Model → SET_NULL
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

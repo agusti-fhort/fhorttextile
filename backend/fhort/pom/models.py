@@ -646,22 +646,18 @@ class GradingRule(models.Model):
 # BaseMeasurement lives in models_app (FK Model), GradedSpec lives in fitting (FK GradingVersion).
 # ─────────────────────────────────────────────────────────────────────────────
 
-class GradingException(models.Model):
-    """Specific override per (POM, size) within a GradingRuleSet."""
-    rule_set = models.ForeignKey(GradingRuleSet, on_delete=models.CASCADE, related_name='exceptions')
-    pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='grading_exceptions')
-    size_label = models.CharField(max_length=20)
-    value_cm = models.FloatField()
-    is_active = models.BooleanField(default=True)
-    notes = models.TextField(null=True, blank=True)
-
-    class Meta:
-        verbose_name = 'Excepció de grading'
-        verbose_name_plural = 'Excepcions de grading'
-        unique_together = [('rule_set', 'pom', 'size_label')]
-
-    def __str__(self):
-        return f'{self.rule_set.nom} · {self.pom.codi_client} @ {self.size_label}'
+# G6/1a — `GradingException` JUBILADA (2026-07-13, DIAGNOSI_G6_DUAL_PATH §B2.1).
+#
+# Era una excepció per (POM, talla) penjada del GradingRuleSet — o sigui, d'una PLANTILLA
+# COMPARTIDA: qualsevol model que fes servir aquell set l'heretava. El seu substitut viu és
+# `models_app.ModelGradingOverride`, que neix acotat a UN model, i el docstring d'aquell ja
+# declarava per escrit que existia per rellevar-la ("UNLIKE pom.GradingException, which lives
+# on the shared GradingRuleSet (a template) and would leak to every model using that set").
+#
+# La substitució estava feta; el mort no s'havia enterrat. En jubilar-la: 0 files a la BD (als
+# DOS schemes), cap escriptor a l'aplicació (cap viewset, cap serializer, cap URL, zero hits als
+# dos frontends) — només seeds i l'importador legacy. El que es mata de debò és una BRANCA del
+# fork de precedència del motor (`pom/services.py`), que tenia dues de les tres branques mortes.
 
 
 class ClientMesuraPerfil(models.Model):

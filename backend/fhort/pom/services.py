@@ -21,10 +21,13 @@ def generate_graded_specs(size_fitting_id: int) -> int:
 
     Flow:
       1. Read BaseMeasurement of the model's base size
-      2. Read GradingRules of the assigned RuleSet
+      2. Read the model's grading rules (resident ModelGradingRule; else the RuleSet's)
       3. For each POM × size, apply the rule (LINEAR/STEP/FIXED/ZERO/EXCEPTION)
       4. Create or update GradedSpec
       5. Mark SF as "Talles generades"
+
+    'EXCEPTION' now has a single source: ModelGradingOverride (per-model). The old second
+    source, pom.GradingException (per shared rule set), was retired in G6/1a.
 
     Returns the number of created/updated GradedSpec.
     """
@@ -64,7 +67,6 @@ def generate_graded_specs(size_fitting_id: int) -> int:
 
     # Load the RuleSet rules
     rules = _load_grading_rules(model)
-    exceptions = _load_grading_exceptions(model.grading_rule_set_id)
     # Sprint 5B.3: per-model overrides from validated fittings (highest priority).
     model_overrides = _load_model_overrides(model.pk)
 
@@ -93,13 +95,12 @@ def generate_graded_specs(size_fitting_id: int) -> int:
             steps = i - base_idx  # negative = smaller size, positive = larger
 
             override = model_overrides.get((pom_id, size_label))
-            exc = exceptions.get((pom_id, size_label))
             if override is not None:
                 # Per-model validated-fitting override wins over everything.
+                # G6/1a: aquí hi havia una segona branca, `elif exc:` (GradingException), que
+                # deixava EXACTAMENT la mateixa petja ('EXCEPTION') que l'override — la fila
+                # ni tan sols distingia quin dels dos forks havia guanyat. Jubilada.
                 graded_val = override
-                gt_applied = 'EXCEPTION'
-            elif exc:
-                graded_val = exc['value_cm']
                 gt_applied = 'EXCEPTION'
             elif rule is None:
                 graded_val = base_val  # no rule = FIXED
@@ -146,13 +147,13 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     """
     Càlcul de grading SENSE persistència (preview per al wizard d'importació, W3).
 
-    Reutilitza EXACTAMENT la mateixa lògica que generate_graded_specs (regles, excepcions,
-    overrides per-model, _apply_rule) però sobre valors base en memòria, sense crear cap
+    Reutilitza EXACTAMENT la mateixa lògica que generate_graded_specs (regles, overrides
+    per-model, _apply_rule) però sobre valors base en memòria, sense crear cap
     SizeFitting/GradingVersion/GradedSpec. Pensat per omplir talles buides a la taula del
     wizard abans del desament definitiu (W5).
 
     base_values: {pom_id (POMMaster): base_value_cm}
-    Retorna: {pom_id: {size_label: graded_value}} (buit si manquen rule_set/run/base).
+    Retorna: {pom_id: {size_label: graded_value}} (buit si manquen regles/run/base).
     """
     # G6/0b — el mateix criteri que el gate dur de generate_graded_specs (via `_te_regles`), i no
     # una còpia amb matisos: si el generador i el preview no coincideixen en "aquest model pot
@@ -166,7 +167,6 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     base_idx = size_run.index(base_size)
 
     rules = _load_grading_rules(model)
-    exceptions = _load_grading_exceptions(model.grading_rule_set_id)
     model_overrides = _load_model_overrides(model.pk)
 
     out = {}
@@ -179,11 +179,8 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
         for i, size_label in enumerate(size_run):
             steps = i - base_idx
             override = model_overrides.get((pom_id, size_label))
-            exc = exceptions.get((pom_id, size_label))
             if override is not None:
                 graded_val = float(override)
-            elif exc:
-                graded_val = float(exc['value_cm'])
             elif rule is None:
                 graded_val = base_val  # sense regla = FIXED
             else:
@@ -477,21 +474,6 @@ def _load_grading_rules(model) -> dict:
         return {}
     except Exception as e:
         logger.warning(f"Could not load grading rules: {e}")
-        return {}
-
-
-def _load_grading_exceptions(rule_set_id: int) -> dict:
-    """Return {(pom_id, size_label): exc_obj}."""
-    try:
-        from fhort.pom.models import GradingException
-        return {
-            (e.pom_id, e.size_label): {'value_cm': e.value_cm}
-            for e in GradingException.objects.filter(
-                rule_set_id=rule_set_id, is_active=True
-            )
-        }
-    except Exception as e:
-        logger.warning(f"Could not load GradingExceptions: {e}")
         return {}
 
 

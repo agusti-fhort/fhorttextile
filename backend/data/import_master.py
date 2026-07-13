@@ -36,11 +36,6 @@ try:
 except ImportError:
     FitType = None  # noqa: N816
 
-try:
-    from fhort.pom.models import GradingException  # type: ignore
-except ImportError:
-    GradingException = None  # noqa: N816
-
 
 BASE = Path('/var/www/fhort-textile/backend/data/import')
 
@@ -297,27 +292,10 @@ def _imp_grading_rule(r):
     return created
 
 
-# ──────────────────────────────────────────────────────────────
-# j. Grading_Exception → GradingException (només si existeix)
-# ──────────────────────────────────────────────────────────────
-def _imp_grading_exception(r):
-    if GradingException is None:
-        raise RuntimeError('model GradingException no definit')
-    rs = GradingRuleSet.objects.filter(nom=r.get('rule_set')).first()
-    pom = POMMaster.objects.filter(codi_client=r.get('pom')).first()
-    if not (rs and pom):
-        raise LookupError('rule_set o pom no trobat')
-    _, created = GradingException.objects.get_or_create(
-        rule_set=rs,
-        pom=pom,
-        size_label=r.get('size_label'),
-        defaults={
-            'value_cm': _dec(r.get('value_cm')),
-            'motiu': _str(r.get('exception_reason')),
-            'actiu': _bool(r.get('is_active')),
-        },
-    )
-    return created
+# j. Grading_Exception — JUBILAT (G6/1a, 2026-07-13). El model `pom.GradingException` ja no
+# existeix: era una excepció penjada de la plantilla compartida i la va rellevar
+# `models_app.ModelGradingOverride` (acotat a un sol model). Si un `Grading_Exception.json`
+# legacy encara existeix, aquest importador ja no el llegeix — a propòsit.
 
 
 # ──────────────────────────────────────────────────────────────
@@ -367,10 +345,7 @@ _section('f. SizeDefinition',  'Size_Definition.json',  _imp_size_definition)
 _section('g. POMMaster',       'POM_Master.json',       _imp_pom_master)
 _section('h. GradingRuleSet',  'Grading_Rule_Set.json', _imp_grading_rule_set)
 _section('i. GradingRule',     'Grading_Rule.json',     _imp_grading_rule)
-if GradingException is not None:
-    _section('j. GradingException', 'Grading_Exception.json', _imp_grading_exception)
-else:
-    print('[j. GradingException   ]  SKIP — model no definit')
+# j. GradingException — jubilada (G6/1a); cap secció.
 _section('k. TipologiaModel',  'Tipologia_model.json',  _imp_tipologia_model)
 
 

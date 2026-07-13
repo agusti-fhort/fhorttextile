@@ -52,7 +52,7 @@ def _spec():
     from fhort.pom.models import (
         BodyMeasurementISO, POMCategory, GarmentGroup, Target, FitType, ConstructionType,
         SizeSystem, SizeDefinition, POMGlobal, GarmentTypeGlobal, GarmentType, POMMaster,
-        GradingRuleSet, GarmentPOMMap, GradingRule, GradingException, SizingProfile,
+        GradingRuleSet, GarmentPOMMap, GradingRule, SizingProfile,
     )
     from fhort.tasks.models import GarmentTypeItem, TaskTimeEstimate, TimeSeed, TaskType
 
@@ -76,7 +76,7 @@ def _spec():
         (GarmentTypeItem,    ('garment_type', 'code'), {}, (), None),
         (GarmentPOMMap,      ('garment_type_item', 'pom'), {}, (), None),
         (GradingRule,        ('rule_set', 'pom'), {}, (), None),
-        (GradingException,   ('rule_set', 'pom', 'size_label'), {}, (), None),
+        # (GradingException) — jubilada G6/1a: model retirat, 0 files. No hi ha res a copiar.
         (SizingProfile,      ('target', 'garment_type', 'construction', 'fit_type',
                               'size_system', 'version'),
                              {'customer': NULL, 'modified_by_id': NULL, 'parent_profile': DEFER},
