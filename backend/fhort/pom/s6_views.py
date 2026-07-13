@@ -130,13 +130,20 @@ def graded_specs_with_units_view(request, sf_id):
     unit = get_unit(request)
     try:
         from fhort.fitting.models import SizeFitting
-        from fhort.fitting.models import GradedSpec, GradingVersion
+        from fhort.fitting.models import GradedSpec
+        from fhort.fitting.services import vigent_grading_version
 
         sf = SizeFitting.objects.get(pk=sf_id)
 
-        gv = GradingVersion.objects.filter(
-            size_fitting=sf
-        ).order_by('-data', '-id').first()
+        # G6/0a — Aquest lector ordenava per ('-data','-id') IGNORANT `is_active`, i era l'únic
+        # del sistema que ho feia. Sobre el SizeFitting 52 (model 162) servia la v5, DESACTIVADA,
+        # mentre tota la resta servia la v3, l'activa: dues superfícies de la UI ensenyaven talles
+        # diferents del mateix model, avui.
+        #
+        # No s'estrena aquí cap criteri nou —seria un vuitè fork—: es crida el que ja comparteixen
+        # els altres lectors (`vigent_grading_version`: activa, desempatant per -version_number;
+        # i només si no n'hi ha cap d'activa, la més recent). El defecte era tenir-ne un de propi.
+        gv = vigent_grading_version(sf)
 
         if not gv:
             return Response({
