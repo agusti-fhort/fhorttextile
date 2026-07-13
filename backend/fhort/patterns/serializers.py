@@ -143,12 +143,17 @@ class PatternGeometrySerializer(serializers.ModelSerializer):
             'has_fold': piece.has_fold,
             'unknown_layers': piece.unknown_layers,
             'bbox': bbox,
-            # Els trams de gir a gir: el que una costura pot triar (S6).
+            # Els trams. `origen` distingeix la PROPOSTA del motor (gir→gir, 'auto') del que
+            # algú ha DECLARAT ('declarat'), i el nom és com se'n diu al taller. Van aquí i
+            # no en una crida a part perquè qui dibuixa el patró els ha de poder pintar amb
+            # el que ja té: demanar-los per separat era fer dues peticions per a una sola
+            # pregunta ("què hi ha en aquesta peça?").
             'segments': [
                 {
                     'id': s.id, 'vora': s.vora,
                     't_inici': s.t_inici, 't_fi': s.t_fi,
                     'tipus_vora': s.tipus_vora,
+                    'origen': s.origen, 'nom': s.nom,
                 }
                 for s in piece.segments.all()
             ],

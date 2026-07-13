@@ -3,6 +3,7 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { patterns, models, modelTasks } from '../api/endpoints'
 import PatternViewer from '../components/pattern/PatternViewer'
+import { longitudTram } from '../components/pattern/patternGeometry'
 import PieceList from '../components/pattern/PieceList'
 import ModelPomList from '../components/pattern/ModelPomList'
 import RelationsPanel from '../components/pattern/RelationsPanel'
@@ -39,7 +40,6 @@ export default function TallerPatro() {
   const [actual, setActual] = useState(null)       // el PatternFile obert
   const [geometria, setGeometria] = useState(null)
   const [sews, setSews] = useState([])
-  const [trams, setTrams] = useState([])           // segments DECLARATS
   const [feina, setFeina] = useState(null)        // la llista de treball (W3/T1)
   const [pecaSel, setPecaSel] = useState('')
 
@@ -92,18 +92,16 @@ export default function TallerPatro() {
         || files[0]
       if (!triat) { setActual(null); return }
 
-      const [{ data: detall }, { data: geo }, { data: sw }, { data: sg }, { data: fn }] =
+      const [{ data: detall }, { data: geo }, { data: sw }, { data: fn }] =
         await Promise.all([
           patterns.get(triat.id),
           patterns.geometry(triat.id),
           patterns.sew.list(modelId),
-          patterns.segments.list(triat.id),
           patterns.modelPoms(triat.id),
         ])
       setActual(detall)
       setGeometria(geo)
       setSews(sw.results || sw || [])
-      setTrams(tramsDeclarats(sg))
       setFeina(fn)
     } catch {
       setError(t('pattern.err_load'))
@@ -267,15 +265,13 @@ export default function TallerPatro() {
   // s'ha tocat deixaria la resta mentint a la pantalla.
   const recarregarRelacions = useCallback(async () => {
     if (!actual) return
-    const [{ data: geo }, { data: sw }, { data: sg }, { data: fn }] = await Promise.all([
+    const [{ data: geo }, { data: sw }, { data: fn }] = await Promise.all([
       patterns.geometry(actual.id),
       patterns.sew.list(modelId),
-      patterns.segments.list(actual.id),
       patterns.modelPoms(actual.id),
     ])
     setGeometria(geo)
     setSews(sw.results || sw || [])
-    setTrams(tramsDeclarats(sg))
     setFeina(fn)
   }, [actual, modelId])
 
@@ -328,6 +324,30 @@ export default function TallerPatro() {
     if (puntsPom.length > 0) return pecaDelPunt(puntsPom[0])?.nom_block || null
     return pecaSel || null
   }, [mode, puntsPom, pecaSel, pecaDelPunt])
+
+  // Els trams DECLARATS. De la geometria en surten TOTS —els que el motor proposa (gir→gir,
+  // origen 'auto') i els que algú ha declarat—, però al taller només manen els declarats: la
+  // proposta del motor és una hipòtesi de lectura, no una vora que ningú hagi dit que existeixi.
+  //
+  // La longitud i l'«en ús» es calculen aquí perquè ja tenim tot el que fa falta: la vora
+  // (per a la longitud) i les costures (per saber qui el reté). Demanar-los al servidor seria
+  // una tercera crida per a dades que ja són a la pantalla.
+  const trams = useMemo(() => {
+    const enUs = new Set(sews.flatMap(s => [...(s.segments_a || []), ...(s.segments_b || [])]))
+    return (geometria?.pieces || []).flatMap(p =>
+      (p.segments || [])
+        .filter(sg => sg.origen === 'declarat')
+        .map(sg => {
+          const vora = (p.boundaries || []).find(b => b.index === sg.vora)
+          return {
+            ...sg,
+            peca: p.nom_block,
+            piece_id: p.id,
+            longitud_cm: vora ? round2(longitudTram(vora, sg.t_inici, sg.t_fi) / 10) : null,
+            en_us: enUs.has(sg.id),
+          }
+        }))
+  }, [geometria, sews])
 
   const tornar = () => navigate(`/models/${modelId}?tab=Patró`)
 
@@ -450,11 +470,7 @@ export default function TallerPatro() {
   )
 }
 
-// Del fitxer en surten TOTS els trams: els que el motor proposa (gir→gir, origen 'auto')
-// i els que algú ha declarat. Al taller només manen els DECLARATS — la proposta del motor
-// és una hipòtesi de lectura, no una vora que ningú hagi dit que existeixi.
-const tramsDeclarats = (data) =>
-  (data.results || data || []).filter(s => s.origen === 'declarat')
+const round2 = (v) => Math.round(v * 100) / 100
 
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -109,6 +109,16 @@ export function longitudVora(boundary) {
   return total
 }
 
+/**
+ * La longitud d'un tram, en mm. Mateixa llei que `engine.segments.fraccio_tram`: si el tram
+ * travessa l'origen de la polilínia (t_fi < t_inici) la fracció NO és una resta, és el que
+ * queda fins al tancament més el que hi ha des del començament.
+ */
+export function longitudTram(boundary, tInici, tFi) {
+  const fraccio = tFi >= tInici ? tFi - tInici : (1 - tInici) + tFi
+  return fraccio * longitudVora(boundary)
+}
+
 /** Punts d'una vora aplanats per a Konva: [x0,y0,x1,y1,…] amb l'eix Y capgirat. */
 export function puntsPerKonva(boundary) {
   const flat = []
@@ -165,19 +175,80 @@ export function puntsDelSegment(piece, segment) {
   }
   if (total === 0) return []
 
+  const envolta = segment.t_fi < segment.t_inici
   const out = []
   let acumulat = 0
   for (let i = 0; i < trams; i++) {
     const t0 = acumulat / total
     const t1 = (acumulat + llargs[i]) / total
-    // Un tram entra si se solapa amb [t_inici, t_fi] del segment.
-    if (t1 > segment.t_inici - 1e-9 && t0 < segment.t_fi + 1e-9) {
+    // Un tram entra si se solapa amb [t_inici, t_fi] del segment. Si el segment TRAVESSA
+    // l'origen de la polilínia (t_fi < t_inici, vegeu `fraccio_tram` al motor), el rang és
+    // la UNIÓ [t_inici, 1] ∪ [0, t_fi] — no un rang buit. Sense això, el tram curt que passa
+    // per on tanca la vora simplement no es dibuixava.
+    const dins = envolta
+      ? (t1 > segment.t_inici - 1e-9 || t0 < segment.t_fi + 1e-9)
+      : (t1 > segment.t_inici - 1e-9 && t0 < segment.t_fi + 1e-9)
+    if (dins) {
       if (!out.length) out.push(pts[i])
       out.push(pts[(i + 1) % n])
     }
     acumulat += llargs[i]
   }
   return out
+}
+
+/**
+ * Els DOS arcs entre dos vèrtexs d'una vora — la previsualització de «Definir segment».
+ *
+ * Dos punts d'una vora TANCADA no defineixen un tram: en defineixen dos, l'arc que va de A
+ * a B i el que hi torna per l'altre costat. Cap dels dos és «el bo» en abstracte: depèn de
+ * quina costura s'estigui declarant. Per això es dibuixen tots dos i es tria.
+ *
+ * En una vora OBERTA només hi ha un camí, i demanar-hi l'arc llarg és una contradicció (el
+ * motor la rebutja). Aquí es retorna un sol arc, i prou.
+ *
+ * `arcLlarg` és el que el servidor espera a `POST /pattern-segments/`: el curt és el
+ * defecte (arc_llarg=false), calcat de `engine.segments.tram_entre_punts`.
+ */
+export function arcsEntrePunts(boundary, idxA, idxB) {
+  const pts = boundary.points || []
+  const n = pts.length
+  if (n < 2 || idxA === idxB) return []
+  if (idxA < 0 || idxB < 0 || idxA >= n || idxB >= n) return []
+
+  const cami = (desde, fins) => {
+    const punts = [pts[desde]]
+    let i = desde
+    let llarg = 0
+    // El pas és SEMPRE endavant amb mòdul: així «de B a A» és l'arc complementari, no el
+    // mateix arc llegit al revés.
+    while (i !== fins) {
+      const seg = (i + 1) % n
+      llarg += distancia(pts[i].x, pts[i].y, pts[seg].x, pts[seg].y)
+      punts.push(pts[seg])
+      i = seg
+    }
+    return { punts, longitud: llarg }
+  }
+
+  if (!boundary.closed) {
+    const [d, f] = idxA <= idxB ? [idxA, idxB] : [idxB, idxA]
+    const punts = pts.slice(d, f + 1)
+    let llarg = 0
+    for (let i = d; i < f; i++) llarg += distancia(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y)
+    return [{ ...{ punts, longitud: llarg }, arcLlarg: false, unic: true }]
+  }
+
+  const endavant = cami(idxA, idxB)
+  const enrere = cami(idxB, idxA)
+  // Empat exacte (antípodes): l'endavant és el curt, per determinisme — com fa el motor.
+  const endavantEsCurt = endavant.longitud <= enrere.longitud
+  const curt = endavantEsCurt ? endavant : enrere
+  const llarg = endavantEsCurt ? enrere : endavant
+  return [
+    { ...curt, arcLlarg: false, unic: false },
+    { ...llarg, arcLlarg: true, unic: false },
+  ]
 }
 
 /** Quines capes té de debò aquest patró (per no oferir toggles buits). */

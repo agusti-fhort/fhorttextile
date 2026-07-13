@@ -2476,3 +2476,44 @@ class LlistaDeTreballAPITest(PatternsAPITestBase):
 
         self.assertEqual(resp.status_code, 400)
         self.assertIn('error', resp.data)
+
+
+class GeometriaPortaElsTramsDeclaratsTest(PatternsAPITestBase):
+    """La geometria ha de dir, d'un tram, si és una PROPOSTA del motor o una DECLARACIÓ.
+
+    Sense `origen`/`nom` a la geometria, el taller havia de fer una segona crida per saber
+    què podia cosir: dues peticions per a una sola pregunta.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(TATE_DXF.read_bytes()).data['id'])
+        self.front = self.fp.pieces.get(nom_block='TATE_FRONT')
+
+    def _geometria(self):
+        request = self.factory.get(
+            f'/api/v1/patterns/pattern-files/{self.fp.id}/geometry/')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view({'get': 'geometry'})(request, pk=self.fp.id)
+        return next(p for p in resp.data['pieces'] if p['nom_block'] == 'TATE_FRONT')
+
+    def test_els_trams_del_motor_surten_com_a_auto_i_sense_nom(self):
+        for seg in self._geometria()['segments']:
+            self.assertEqual(seg['origen'], PatternSegment.ORIGEN_AUTO)
+            self.assertIsNone(seg['nom'])
+
+    def test_un_tram_declarat_surt_amb_el_seu_origen_i_el_seu_nom(self):
+        punts = list(self.front.points.filter(mena='vertex', boundary_index=0)
+                     .order_by('ordre'))
+        request = self.factory.post('/api/v1/patterns/pattern-segments/', {
+            'point_a': punts[0].id, 'point_b': punts[4].id, 'nom': 'costura lateral',
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        creat = PatternSegmentViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(creat.status_code, 201)
+
+        seg = next(s for s in self._geometria()['segments'] if s['id'] == creat.data['id'])
+
+        self.assertEqual(seg['origen'], PatternSegment.ORIGEN_DECLARAT)
+        self.assertEqual(seg['nom'], 'costura lateral')

@@ -663,9 +663,14 @@ export const patterns = {
   // diu així". Per això té nom i es pot reanomenar. Esborrar-ne un que una costura fa
   // servir rebota amb 409 + les costures que el retenen: deixar-la coixa en silenci seria
   // pitjor que el rebuig.
+  // No hi ha `list`: els trams viuen a la geometria (amb origen i nom des de W4), i
+  // demanar-los a part era fer dues peticions per a una sola pregunta.
+  //
+  // Al crear NO s'envien t ni longituds: s'envien dos PUNTS i el servidor resol el tram
+  // sobre la geometria — el mateix principi que amb el valor d'un POM. `arc_llarg` tria
+  // quin dels dos arcs (dos punts d'una vora tancada en defineixen DOS, no un).
   segments: {
-    list: (patternFileId) => client.get('/api/v1/patterns/pattern-segments/',
-      { params: { piece__pattern_file: patternFileId } }),
+    create: (data) => client.post('/api/v1/patterns/pattern-segments/', data),
     rename: (id, nom) => client.patch(`/api/v1/patterns/pattern-segments/${id}/`, { nom }),
     remove: (id) => client.delete(`/api/v1/patterns/pattern-segments/${id}/`),
   },
