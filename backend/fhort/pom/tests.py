@@ -11,7 +11,9 @@ import datetime
 
 from django_tenants.test.cases import TenantTestCase
 
+from fhort.models_app.extraction_views import find_pom_master
 from fhort.pom.models import CustomerPOMAlias, POMMaster
+from fhort.pom.serializers import CustomerPOMAliasSerializer
 from fhort.pom.services import maybe_learn_customer_alias
 from fhort.tasks.models import Customer
 
@@ -105,3 +107,56 @@ class GuardAprenentatgeAliasTest(_TenantBase):
                 customer=self.customer, client_code='U2').count(), 1)
         if alias is not None:  # si el matcher ja l'encerta sol, retorna None i no re-sembra
             self.assertFalse(alias.pendent_revisio)
+
+
+class AliasSensePomTest(_TenantBase):
+    """Un àlies SENSE pom és vocabulari del client PENDENT DE MAPAR (QA-S8-R1, migració 0037).
+
+    La invariant que aquests tests defensen: **un àlies sense destí no pot vincular res.** Si el
+    matcher el mirés, `alias.pom.actiu` petaria amb AttributeError i, pitjor, un àlies que hem
+    desvinculat precisament perquè el seu vincle era FALS tornaria a parlar."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie')
+        self.pom = POMMaster.objects.create(
+            codi_client='M-M79', nom_client='Width sequins piece')
+
+    def test_alias_sense_pom_no_vincula_ni_peta(self):
+        """El cas real: 'FF' desvinculat del POM 389. El matcher no l'ha de mirar."""
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, client_code='FF', pom=None,
+            description_en='BACK TOTAL LENGTH', pendent_revisio=True, origen='DICCIONARI')
+
+        pm, match_type, _conf = find_pom_master('FF', 'BACK TOTAL LENGTH', customer=self.customer)
+
+        self.assertNotEqual(
+            match_type, 'alias_match',
+            "Un àlies sense POM no té destí: no pot auto-vincular res. Si torna alias_match, "
+            "el filtre pom__isnull=False del matcher ha desaparegut.")
+
+    def test_alias_sense_pom_no_trenca_el_serialitzador(self):
+        """La biblioteca ha de poder llistar-lo (hi pinta 'pendent de mapar')."""
+        a = CustomerPOMAlias.objects.create(
+            customer=self.customer, client_code='F3', pom=None,
+            description_en='FRONT CENTER TOTAL LENGTH', origen='DICCIONARI')
+
+        d = CustomerPOMAliasSerializer(a).data
+
+        self.assertIsNone(d['pom'])
+        self.assertIsNone(d['pom_codi'])
+        self.assertIsNone(d['pom_code_global'])
+        # La nomenclatura del client es conserva: és tot el sentit de desvincular en comptes
+        # d'esborrar.
+        self.assertEqual(d['client_code'], 'F3')
+        self.assertEqual(d['description_en'], 'FRONT CENTER TOTAL LENGTH')
+
+    def test_un_alies_mapat_segueix_vinculant(self):
+        """La porta nova no pot haver trencat el camí normal."""
+        CustomerPOMAlias.objects.create(
+            customer=self.customer, client_code='U2', pom=self.pom, origen='DICCIONARI')
+
+        pm, match_type, conf = find_pom_master('U2', '1st BUTTON', customer=self.customer)
+
+        self.assertEqual(match_type, 'alias_match')
+        self.assertEqual(conf, 'HIGH')
+        self.assertEqual(pm.id, self.pom.id)
