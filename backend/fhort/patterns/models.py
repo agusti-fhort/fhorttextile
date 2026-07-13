@@ -539,3 +539,55 @@ class SewProposalRejection(models.Model):
 
     def __str__(self):
         return f'{self.segment_a_id} ⛓ {self.segment_b_id}: NO (model {self.model_id})'
+
+
+class DartProposalRejection(models.Model):
+    """Una pinça que el motor va proposar i una persona va dir que NO.
+
+    Germà de `SewProposalRejection`, i deliberadament un GERMÀ i no una fila més d'aquella taula:
+    el que identifica una pinça rebutjada són TRES punts (la boca i el vèrtex), i el que
+    identifica una costura rebutjada són DOS trams. Encabir-ho tot en una taula obligaria a deixar
+    columnes buides segons la mena, i a preguntar-se sempre quina mena de rebuig s'està llegint.
+
+    La resta de la llei és idèntica, perquè el problema és idèntic: un motor que proposa i no
+    escolta el «no» torna a proposar el mateix a cada recàrrega, i el patronista aprèn a no mirar
+    la llista. La clau és CANÒNICA (els dos extrems de la boca ordenats: una V llegida a l'inrevés
+    és la mateixa V), i el rebuig val per a la geometria sobre la qual es va emetre — una versió
+    nova del patró refà els punts i torna a preguntar, que és el que ha de passar.
+    """
+
+    model = models.ForeignKey(
+        'models_app.Model', on_delete=models.CASCADE, related_name='dart_proposal_rejections',
+    )
+    #: Els TRES punts del gest de W4b: inici de la boca, vèrtex, final de la boca.
+    punt_a = models.ForeignKey(
+        PatternPoint, on_delete=models.CASCADE, related_name='rebuigs_pinca_com_a',
+    )
+    punt_vertex = models.ForeignKey(
+        PatternPoint, on_delete=models.CASCADE, related_name='rebuigs_pinca_com_vertex',
+    )
+    punt_b = models.ForeignKey(
+        PatternPoint, on_delete=models.CASCADE, related_name='rebuigs_pinca_com_b',
+    )
+
+    motiu = models.TextField(blank=True)
+    rebutjat_per = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='dart_proposals_rebutjades',
+    )
+    data = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Proposta de pinça rebutjada'
+        verbose_name_plural = 'Propostes de pinça rebutjades'
+        ordering = ['-data']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['punt_a', 'punt_vertex', 'punt_b'],
+                name='dartproposalrejection_una_per_pinca',
+            ),
+        ]
+
+    def __str__(self):
+        return (f'{self.punt_a_id}→{self.punt_vertex_id}→{self.punt_b_id}: NO '
+                f'(model {self.model_id})')

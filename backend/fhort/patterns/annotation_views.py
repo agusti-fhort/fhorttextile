@@ -20,6 +20,7 @@ from fhort.pom.models import POMMaster
 
 from .adapters import DjangoGeometryStore
 from .engine.measure import MeasureError, resoldre
+from .engine.dart_detection import clau_pinca
 from .engine.seam_matching import clau_parella
 from .engine.segments import (
     SegmentError, longitud_tram, longitud_vora, tram_entre_punts,
@@ -27,9 +28,10 @@ from .engine.segments import (
 from .engine.sew import (
     CostatPinca, TramCosit, descomptar_pinces, validar, validar_cobertura,
 )
+from .dart_proposals import candidats_del_patro
 from .models import (
-    PatternFile, PatternPiece, PatternPOM, PatternPoint, PatternSegment, SewProposalRejection,
-    SewRelation,
+    DartProposalRejection, PatternFile, PatternPiece, PatternPOM, PatternPoint, PatternSegment,
+    SewProposalRejection, SewRelation,
 )
 from .seam_proposals import propostes_del_model
 
@@ -635,6 +637,49 @@ class SewRelationViewSet(viewsets.ModelViewSet):
         )
         return Response(
             {'id': rebuig.id, 'clau': [a, b], 'ja_hi_era': not creat},
+            status=status.HTTP_201_CREATED if creat else status.HTTP_200_OK,
+        )
+
+    # ── ASSISTIT (A1): les pinces que el motor veu ──────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='pinces-proposades')
+    def pinces_proposades(self, request):
+        """Les pinces que el motor detecta a la vora. **NOMÉS LECTURA.**
+
+        Mateix patró que les propostes de costura (A2): no es desa res, es recalculen a cada
+        crida, i el que les identifica és la clau canònica dels seus tres punts —no cap id, perquè
+        una proposta no és cap fila.
+
+        **No hi ha endpoint de confirmació.** Confirmar-ne una és cridar `pinca/` amb els tres
+        punts que el candidat ja porta: el MATEIX camí de codi que el gest manual de W4b. Un segon
+        camí per a la mateixa cosa hauria estat un lloc més on la llei de la pinça podria divergir.
+        """
+        return Response(candidats_del_patro(self._patro(request)))
+
+    @action(detail=False, methods=['post'], url_path='rebutjar-pinca')
+    def rebutjar_pinca(self, request):
+        """Dir que no a una pinça: `{model, point_a, point_vertex, point_b, motiu?}`.
+
+        El rebuig és persistent, per la mateixa raó que a A2: si no ho fos, no seria un rebuig.
+        """
+        fp = self._patro(request)
+        punts = punts_de_la_mateixa_vora(
+            request.data, ['point_a', 'point_vertex', 'point_b'])
+        if punts[0].piece.pattern_file_id != fp.id:
+            raise serializers.ValidationError(
+                {'point_a': 'Aquests punts no són d\'aquest patró.'})
+
+        a, v, b = clau_pinca(punts[0].id, punts[1].id, punts[2].id)
+        rebuig, creat = DartProposalRejection.objects.get_or_create(
+            punt_a_id=a, punt_vertex_id=v, punt_b_id=b,
+            defaults={
+                'model_id': fp.model_id,
+                'motiu': (request.data.get('motiu') or '').strip(),
+                'rebutjat_per': getattr(request.user, 'profile', None),
+            },
+        )
+        return Response(
+            {'id': rebuig.id, 'clau': [a, v, b], 'ja_hi_era': not creat},
             status=status.HTTP_201_CREATED if creat else status.HTTP_200_OK,
         )
 

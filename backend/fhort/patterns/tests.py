@@ -115,9 +115,9 @@ from fhort.patterns.adapters import (DjangoGeometryStore, DjangoGradingSource,
 from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentViewSet,
                                              SewRelationViewSet, comprovar_costura)
 from fhort.patterns.export import ExportBlocked, build_export
-from fhort.patterns.models import (ExportAcknowledgement, PatternFile, PatternPOM,
-                                   PatternPoint, PatternSegment, SewProposalRejection,
-                                   SewRelation)
+from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
+                                   PatternPOM, PatternPoint, PatternSegment,
+                                   SewProposalRejection, SewRelation)
 from fhort.patterns.services import save_pattern_file
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
                                   PatternFileViewSet)
@@ -3644,3 +3644,136 @@ class DeteccioPincaTest(unittest.TestCase):
     def test_la_clau_dune_pinca_es_canonica(self):
         """Una V llegida a l'inrevés és la MATEIXA V: el rebuig no pot deixar-la tornar."""
         self.assertEqual(clau_pinca(9, 5, 2), clau_pinca(2, 5, 9))
+
+
+class PincesProposadesAPITest(PatternsAPITestBase):
+    """A1 pel camí de l'API, amb el TATE real: detectar, confirmar (gest de W4b), rebutjar."""
+
+    #: Els vèrtexs de la pinça del banc de W4b, sobre la vora de cosit del davanter.
+    PINCA_A, PINCA_VERTEX, PINCA_B = 69, 70, 71
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(TATE_DXF.read_bytes()).data['id'])
+        self.front = self.fp.pieces.get(nom_block='TATE_FRONT')
+        self.vora = (self.front.segments
+                     .filter(origen=PatternSegment.ORIGEN_AUTO).first().vora)
+        self.pf = list(self.front.points
+                       .filter(mena='vertex', boundary_index=self.vora).order_by('ordre'))
+
+    def _candidats(self):
+        request = self.factory.get(
+            '/api/v1/patterns/sew-relations/pinces-proposades/', {'model': self.model.id})
+        force_authenticate(request, user=self.user)
+        return SewRelationViewSet.as_view({'get': 'pinces_proposades'})(request)
+
+    def _confirma(self, c):
+        """Confirmar = el gest de W4b. **El mateix endpoint**, no un de nou."""
+        request = self.factory.post(
+            '/api/v1/patterns/sew-relations/pinca/',
+            {'model': self.model.id, 'point_a': c['point_a'],
+             'point_vertex': c['point_vertex'], 'point_b': c['point_b'],
+             'nom': 'Pinça 1', 'nom_a': 'Pinça 1 · A', 'nom_b': 'Pinça 1 · B'},
+            format='json')
+        force_authenticate(request, user=self.user)
+        return SewRelationViewSet.as_view({'post': 'pinca'})(request)
+
+    def _rebutja(self, c):
+        request = self.factory.post(
+            '/api/v1/patterns/sew-relations/rebutjar-pinca/',
+            {'model': self.model.id, 'point_a': c['point_a'],
+             'point_vertex': c['point_vertex'], 'point_b': c['point_b']},
+            format='json')
+        force_authenticate(request, user=self.user)
+        return SewRelationViewSet.as_view({'post': 'rebutjar_pinca'})(request)
+
+    def _la_del_banc(self, candidats):
+        esperats = {self.pf[self.PINCA_A].id, self.pf[self.PINCA_B].id}
+        for c in candidats:
+            if ({c['point_a'], c['point_b']} == esperats
+                    and c['point_vertex'] == self.pf[self.PINCA_VERTEX].id):
+                return c
+        return None
+
+    # ── T1/T2: el detector, sobre el material ───────────────────────────────
+    def test_el_motor_troba_la_pinca_REAL_del_TATE(self):
+        """La del banc de W4b: costats 1,33 i 1,01 — les xifres exactes, no aproximades."""
+        resp = self._candidats()
+
+        self.assertEqual(resp.status_code, 200)
+        c = self._la_del_banc(resp.data['candidats'])
+        self.assertIsNotNone(c, 'la pinça real del TATE no s\'ha detectat')
+        self.assertAlmostEqual(c['costat_a_cm'], 1.33, places=2)
+        self.assertAlmostEqual(c['costat_b_cm'], 1.01, places=2)
+        self.assertAlmostEqual(c['intake_cm'], 2.34, places=2)
+
+    def test_el_motor_no_es_menja_les_cantonades_del_TATE(self):
+        """10 peces, 130 girs, i NOMÉS les pinces de debò. El fals positiu és el vertader
+        enemic: una llista plena de cantonades ensenya a no mirar-la."""
+        resp = self._candidats()
+
+        self.assertEqual(len(resp.data['candidats']), 2)   # les dues del davanter, simètriques
+        self.assertEqual(resp.data['peces'], 10)
+        self.assertTrue(all(c['peca'] == 'TATE_FRONT' for c in resp.data['candidats']))
+
+    def test_detectar_NO_escriu_res(self):
+        abans = (SewRelation.objects.count(), PatternSegment.objects.count())
+
+        self._candidats()
+
+        self.assertEqual(abans, (SewRelation.objects.count(), PatternSegment.objects.count()))
+
+    # ── T3: confirmar = el gest de W4b, pel MATEIX camí ─────────────────────
+    def test_confirmar_una_pinca_proposada_deixa_el_MATEIX_que_el_gest_manual(self):
+        c = self._la_del_banc(self._candidats().data['candidats'])
+
+        resp = self._confirma(c)
+
+        self.assertEqual(resp.status_code, 201, resp.data)
+        rel = SewRelation.objects.get(pk=resp.data['id'])
+        self.assertEqual(rel.tipus, SewRelation.TIPUS_PINCA)
+        self.assertTrue(resp.data['es_pinca'])
+        costats = list(rel.segments_a.all()) + list(rel.segments_b.all())
+        self.assertEqual(len(costats), 2)
+        for seg in costats:
+            self.assertEqual(seg.origen, PatternSegment.ORIGEN_DECLARAT)
+
+    def test_el_descompte_es_IDENTIC_al_de_la_pinca_marcada_a_ma(self):
+        """El banc de W4b, sencer: 1,33 + 1,01 = 2,34 cm de tela que la costura ja no cus."""
+        c = self._la_del_banc(self._candidats().data['candidats'])
+        self._confirma(c)
+
+        estat = comprovar_costura(SewRelation.objects.get(tipus=SewRelation.TIPUS_PINCA))
+
+        self.assertAlmostEqual(
+            estat['longitud_a_cm'] + estat['longitud_b_cm'], 2.34, places=2)
+
+    def test_una_pinca_JA_DECLARADA_no_es_torna_a_proposar(self):
+        c = self._la_del_banc(self._candidats().data['candidats'])
+        self._confirma(c)
+
+        resp = self._candidats()
+
+        self.assertIsNone(self._la_del_banc(resp.data['candidats']))
+        self.assertEqual(resp.data['descartats']['ja_declarades'], 1)
+
+    # ── T3: el rebuig ───────────────────────────────────────────────────────
+    def test_un_rebuig_de_pinca_es_PERSISTENT(self):
+        c = self._la_del_banc(self._candidats().data['candidats'])
+
+        resp = self._rebutja(c)
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertIsNone(self._la_del_banc(self._candidats().data['candidats']))
+        self.assertEqual(self._candidats().data['descartats']['rebutjades'], 1)
+
+    def test_rebutjar_dues_vegades_no_duplica_el_rebuig(self):
+        c = self._la_del_banc(self._candidats().data['candidats'])
+        self._rebutja(c)
+
+        resp = self._rebutja(c)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['ja_hi_era'])
+        self.assertEqual(DartProposalRejection.objects.count(), 1)
