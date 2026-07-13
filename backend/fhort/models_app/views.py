@@ -12,6 +12,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
 from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
+from fhort.pom.services import SealedGradingVersionError
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
 from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
 from .serializers import (
@@ -1611,6 +1612,10 @@ def generate_grading_view(request, model_id):
     else:
         try:
             graded_count = generate_graded_specs(sf.id)
+        except SealedGradingVersionError as e:
+            # G6-B/T1 · camí 1/6. Regenerar in-place sobre una versió segellada: refusat. La
+            # sortida és el `new_version=True` d'aquest mateix endpoint (el bump), no forçar.
+            return Response(e.payload, status=409)
         except ValueError as e:
             return Response({'error': str(e)}, status=400)
         except Exception as e:
@@ -1758,7 +1763,15 @@ def set_size_override_view(request, model_id):
             )
         try:
             generate_graded_specs(sf.id)
+        except SealedGradingVersionError as e:
+            # G6-B/T1 · camí 2/6. `set_rollback` NO és decoratiu: som DINS del `transaction.atomic`
+            # que acaba d'escriure el ModelGradingOverride, i un `return` des de dins d'un bloc
+            # atòmic **fa commit** (no propaga cap excepció). Sense això, el 409 deixaria l'override
+            # desat alimentant una versió segellada — exactament el que aquest guard ha d'impedir.
+            transaction.set_rollback(True)
+            return Response(e.payload, status=409)
         except ValueError as e:
+            transaction.set_rollback(True)
             return Response({'error': str(e)}, status=400)
 
     # 9. Retorna el GradedSpec resultant de la talla editada (reflecteix l'override).
@@ -1886,7 +1899,13 @@ def escalat_ajustar_talla_view(request, model_id):
 
             try:
                 generate_graded_specs(sf.id)
+            except SealedGradingVersionError as e:
+                # G6-B/T1 · camí 3/6. Igual que el 2: dins de l'atòmic que ha escrit l'override
+                # (i el MeasurementChangeLog). Rollback explícit o el 409 mentiria.
+                transaction.set_rollback(True)
+                return Response(e.payload, status=409)
             except ValueError as e:
+                transaction.set_rollback(True)
                 return Response({'error': str(e)}, status=400)
 
     # Files actualitzades del POM (mirall de 'linies' de /propagar): {id, valor_real} per talla.

@@ -8,6 +8,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 
+from fhort.pom.services import SealedGradingVersionError
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DESIGN FREEZE
@@ -269,6 +271,12 @@ def confirm_base_size_view(request, model_id):
                 grading_generated = generate_graded_specs(sf.id)
                 sf.estat = 'TallesGenerades'
                 sf.save(update_fields=['estat'])
+            except SealedGradingVersionError as e:
+                # G6-B/T1 · camí 6/6. Aquest `except Exception` de sota es limitava a fer un
+                # WARNING i retornar 200: sobre una versió segellada, el rebuig del guard hauria
+                # passat per un "no s'ha pogut graduar" al log i l'usuari hauria vist un OK. El
+                # segell ha de ser visible a qui l'ha trobat, no només al fitxer de logs.
+                return Response(e.payload, status=409)
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).warning(f"Grading not generated: {e}")

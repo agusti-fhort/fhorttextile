@@ -11,6 +11,92 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# G6-B · LA INTEGRITAT DEL SEGELL (DIAGNOSI_G6_DUAL_PATH, Fase 2 · R1)
+#
+# El segell MENTIA. El guard que hi havia (a `bump_grading_version_and_generate`) protegia
+# **crear v+1** sobre una versió aprovada, però NO protegia **escriure dins** la versió activa:
+# `_get_or_create_grading_version` filtrava `is_active=True` i prou —no mirava `aprovada`— i
+# SIS endpoints hi entraven a reescriure `GradedSpec` in-place conservant `aprovada=True`.
+#
+# Això és el que feia perillós despinçar el motor de patrons: el motor confia en `gv.aprovada`
+# (`patterns/engine/grading_projection.py`), i el flag podia ser cert **mentre el contingut havia
+# canviat després del segell**. Una projecció "aprovada" podia projectar unes talles que ningú
+# no havia aprovat mai.
+#
+# El guard viu AQUÍ, en UN sol lloc (mateix patró que `_te_regles`): a la porta per on tots els
+# camins han de passar per obtenir la versió on escriuran. Cap guard local per endpoint —els
+# endpoints només TRADUEIXEN l'error a 409, no decideixen res.
+# ═════════════════════════════════════════════════════════════════════════════
+
+class SealedGradingVersionError(Exception):
+    """Escriptura rebutjada: la GradingVersion vigent està SEGELLADA (`aprovada=True`).
+
+    El que s'ha aprovat no es reescriu. La sortida legítima NO és forçar l'escriptura: és
+    **crear una versió nova** (v+1) que superi la segellada — el bump que ja existeix
+    (`bump_grading_version_and_generate`), que deixa rastre i demana confirmació humana.
+    Per això NO hi ha auto-bump aquí: qui escriu ha de decidir-ho, no descobrir-ho.
+    """
+
+    def __init__(self, version):
+        self.version = version
+        # ⚠️ Les dades del 409 es capturen AQUÍ, no a `payload`. Dos dels sis camins refusen des de
+        # DINS d'un `transaction.atomic` i han de fer `set_rollback(True)` (si no, el `return` des
+        # de dins del bloc atòmic faria COMMIT de l'override que acaben d'escriure). Després d'un
+        # `set_rollback`, Django prohibeix qualsevol consulta més: si `payload` toqués la BD per
+        # resoldre `version.size_fitting`, petaria amb TransactionManagementError i el 409 es
+        # convertiria en un 500. El payload ha de ser PUR.
+        sf = version.size_fitting      # (els guards fan select_related: no costa cap consulta)
+        self._version_number = version.version_number
+        self._version_id = version.pk
+        self._sf_id = sf.pk
+        self._model_id = sf.model_id
+        super().__init__(
+            f"GradingVersion v{version.version_number} està aprovada (segellada a producció): "
+            f"no s'hi pot escriure. Cal crear una versió nova per superar-la."
+        )
+
+    @property
+    def payload(self) -> dict:
+        """Cos del 409. Viu a l'excepció perquè els sis camins diguin EXACTAMENT el mateix.
+
+        PUR: no toca la BD (v. __init__).
+        """
+        return {
+            'error': 'sealed',   # mateixa clau que el 409 ja existent de generar-grading
+            'codi': 'GRADING_VERSION_SEALED',
+            'grading_version_id': self._version_id,
+            'version_number': self._version_number,
+            'size_fitting_id': self._sf_id,
+            'model_id': self._model_id,
+            'message': (
+                f'La versió vigent v{self._version_number} està aprovada (segellada a '
+                f"producció). No s'hi pot escriure: el que ja s'ha aprovat no canvia."
+            ),
+            'sortida': {
+                'accio': 'crear_nova_versio',
+                'endpoint': f'/api/v1/models/{self._model_id}/generar-grading/',
+                'body': {'new_version': True, 'allow_reopen_sealed': True},
+                'descripcio': ('Crear una versió nova (v+1) que superi la segellada. '
+                               'Queda rastre (Watchpoint) de qui la supera.'),
+            },
+        }
+
+
+def sealed_active_version(sf_id):
+    """La versió ACTIVA i SEGELLADA d'un SizeFitting, si n'hi ha. El predicat, en UN lloc.
+
+    El feien servir per separat el guard del bump i la còpia PRE-guard de `generar-grading`.
+    Ara tots dos —i el guard d'escriptura— pregunten el mateix a la mateixa funció: si el
+    predicat del segell ha de canviar mai, que canviï en un sol lloc.
+    """
+    from fhort.fitting.models import GradingVersion
+    return (GradingVersion.objects
+            .select_related('size_fitting')     # SealedGradingVersionError el necessita, i sense
+            .filter(size_fitting_id=sf_id, is_active=True, aprovada=True)   # consultar després
+            .order_by('-version_number').first())
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GRADING
 # ─────────────────────────────────────────────────────────────────────────────
@@ -507,37 +593,41 @@ def _load_base_measurements(model_id: int) -> dict:
 
 
 def _get_or_create_grading_version(sf):
-    """Get or create the active GradingVersion for the SizeFitting."""
-    try:
-        from fhort.fitting.models import GradingVersion
-        version = GradingVersion.objects.filter(
-            size_fitting=sf, is_active=True
-        ).last()
-        if not version:
-            num = GradingVersion.objects.filter(size_fitting=sf).count() + 1
-            version = GradingVersion.objects.create(
-                size_fitting=sf,
-                version_number=num,
-                is_active=True,
-            )
-        return version
-    except Exception:
-        # Fallback if GradingVersion has a different structure
-        try:
-            from fhort.fitting.models import GradingVersion
-            version = GradingVersion.objects.filter(
-                size_fitting=sf, is_active=True
-            ).last()
-            if not version:
-                num = GradingVersion.objects.filter(size_fitting=sf).count() + 1
-                version = GradingVersion.objects.create(
-                    size_fitting=sf,
-                    version_number=num,
-                    is_active=True,
-                )
-            return version
-        except Exception as e:
-            raise RuntimeError(f"Could not get/create GradingVersion: {e}")
+    """La versió ACTIVA on s'escriurà — o una de nova si no n'hi ha cap.
+
+    ⚠️ **LA PORTA D'ESCRIPTURA DEL GRADING (G6-B/T1).** Tots els camins que persisteixen
+    `GradedSpec` passen per aquí per saber ON escriuen. Per tant és aquí —i només aquí— que es
+    comprova que la destinació no estigui SEGELLADA. Si ho està, es refusa: `SealedGradingVersionError`.
+
+    **Cap auto-bump.** Seria còmode crear la v+1 tot sol i escriure-hi... i seria un desastre: qui
+    ha demanat "regenera les talles" es trobaria una versió nova que no ha demanat, i el segell
+    hauria deixat de voler dir res (sempre se superaria sol). Superar un segell és un acte
+    conscient: es refusa, es diu com fer-ho, i decideix una persona.
+
+    El `try/except Exception` que embolcallava això s'ha retirat: repetia el mateix codi dues
+    vegades com a "fallback" i **s'empassava qualsevol excepció** del cos — inclosa, ara, la del
+    guard. Un guard dins d'un `except Exception:` que reintenta no és un guard.
+    """
+    from fhort.fitting.models import GradingVersion
+
+    sealed = sealed_active_version(sf.pk)
+    if sealed is not None:
+        raise SealedGradingVersionError(sealed)
+
+    # `-version_number` (no `.last()`): el Meta.ordering de GradingVersion és
+    # ['size_fitting', '-data'], i per tant `.last()` retornava la MÉS ANTIGA de les actives
+    # (fork 3 de la diagnosi, §B3). Avui és latent —cap SizeFitting té 2+ actives— però aquest
+    # és el selector de la porta d'escriptura: no hi pot haver un criteri que ja sabem que és el
+    # revés del de tothom (`_active_grading_version` desempata per -version_number).
+    version = (GradingVersion.objects
+               .filter(size_fitting=sf, is_active=True)
+               .order_by('-version_number').first())
+    if version is None:
+        num = GradingVersion.objects.filter(size_fitting=sf).count() + 1
+        version = GradingVersion.objects.create(
+            size_fitting=sf, version_number=num, is_active=True,
+        )
+    return version
 
 
 def bump_grading_version_and_generate(sf_id, *, base_changed, profile_id=None,
@@ -571,10 +661,8 @@ def bump_grading_version_and_generate(sf_id, *, base_changed, profile_id=None,
         from fhort.accounts.models import UserProfile
         profile = UserProfile.objects.filter(pk=profile_id).first()
 
-    # 1. GUARD D-1.
-    sealed_active = (GradingVersion.objects
-                     .filter(size_fitting_id=sf_id, is_active=True, aprovada=True)
-                     .order_by('-version_number').first())
+    # 1. GUARD D-1. Mateix predicat que el guard d'escriptura (G6-B): `sealed_active_version`.
+    sealed_active = sealed_active_version(sf_id)
     if sealed_active is not None and not allow_reopen_sealed:
         raise ValueError(
             f"GradingVersion v{sealed_active.version_number} està aprovada "
@@ -729,9 +817,23 @@ def _upsert_graded_spec(
     increment_applied_cm: float,
     generated_from_version: int | None = None,
 ):
-    """Create or update a GradedSpec."""
+    """Create or update a GradedSpec.
+
+    G6-B/T1 — segona porta, i no és redundant. Avui l'ÚNIC cridador és `generate_graded_specs`,
+    que ja ha passat pel guard de `_get_or_create_grading_version`; això protegeix el cridador
+    de DEMÀ, que rebrà un `grading_version_id` d'on sigui i podria apuntar a una versió
+    segellada sense passar per la porta. Cap `GradedSpec` no pot aterrar sobre un segell.
+    """
+    from fhort.fitting.models import GradedSpec, GradingVersion
+
+    segellada = (GradingVersion.objects
+                 .select_related('size_fitting')
+                 .filter(pk=grading_version_id, aprovada=True)
+                 .first())
+    if segellada is not None:
+        raise SealedGradingVersionError(segellada)
+
     try:
-        from fhort.fitting.models import GradedSpec
         GradedSpec.objects.update_or_create(
             grading_version_id=grading_version_id,
             pom_id=pom_id,
