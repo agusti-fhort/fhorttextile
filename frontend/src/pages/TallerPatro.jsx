@@ -345,7 +345,7 @@ export default function TallerPatro() {
         }}>
           <Contenidor
             titol={t('pattern.pieces', { n: geometria?.pieces?.length || 0 })}
-            icona="ti-vector-triangle"
+            icona="ti-vector-triangle" pes={1}
           >
             {actual && (
               <PieceList pieces={actual.pieces} pecaSel={pecaSel} onTria={setPecaSel} />
@@ -356,7 +356,7 @@ export default function TallerPatro() {
             titol={t('pattern.taller.model_poms', {
               ancorats: feina?.ancorats || 0, total: feina?.total || 0,
             })}
-            icona="ti-ruler-measure"
+            icona="ti-ruler-measure" pes={1.5}
           >
             <ModelPomList
               files={feina?.results || []}
@@ -366,7 +366,7 @@ export default function TallerPatro() {
             />
           </Contenidor>
 
-          <Contenidor titol={t('pattern.taller.relations')} icona="ti-link">
+          <Contenidor titol={t('pattern.taller.relations')} icona="ti-link" pes={1}>
             <RelationsPanel
               poms={pomsAncorats} sews={sews} segments={trams}
               onEsborraPom={esborrarPOM}
@@ -459,28 +459,48 @@ const tramsDeclarats = (data) =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Contenidor de la columna: capçalera fixa i cos amb scroll PROPI. Els tres es reparteixen
- * l'alçada i cadascun desborda per dins — mai la pàgina.
+ * Contenidor de la columna: capçalera fixa i cos amb scroll PROPI. Els tres desborden per
+ * dins — mai la pàgina.
+ *
+ * El repartiment és amb PES, no a parts iguals: la llista de treball és on es passa l'estona
+ * i necessita ensenyar files, no dues i mitja. I la capçalera es plega: qui està col·locant
+ * POMs pot tancar Peces i Relacions i quedar-se la columna sencera per a la feina.
  */
-function Contenidor({ titol, icona, children }) {
+function Contenidor({ titol, icona, pes = 1, children }) {
+  const { t } = useTranslation()
+  const [plegat, setPlegat] = useState(false)
+
   return (
     <div style={{
-      flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column',
+      // Plegat NO creix: deixa tota la seva alçada als altres, que és per això que es plega.
+      flex: plegat ? '0 0 auto' : `${pes} 1 0`,
+      minHeight: 0, display: 'flex', flexDirection: 'column',
       borderBottom: '1px solid var(--border)',
     }}>
-      <div style={{
-        flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.4rem',
-        padding: '0.45rem 0.7rem', background: 'var(--bg-card)',
-        borderBottom: '1px solid var(--border)',
-        fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
-        letterSpacing: '0.03em', color: 'var(--text-muted)',
-      }}>
+      <button
+        onClick={() => setPlegat(p => !p)}
+        aria-expanded={!plegat}
+        style={{
+          flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.4rem',
+          padding: '0.45rem 0.7rem', background: 'var(--bg-card)',
+          border: 'none', borderBottom: '1px solid var(--border)',
+          cursor: 'pointer', textAlign: 'left', width: '100%',
+          fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
+          letterSpacing: '0.03em', color: 'var(--text-muted)',
+        }}
+      >
         <i className={`ti ${icona}`} />
-        {titol}
-      </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0.5rem 0.6rem' }}>
-        {children}
-      </div>
+        <span style={{ flex: 1 }}>{titol}</span>
+        <i
+          className={`ti ${plegat ? 'ti-chevron-down' : 'ti-chevron-up'}`}
+          title={plegat ? t('pattern.taller.expand') : t('pattern.taller.collapse')}
+        />
+      </button>
+      {!plegat && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0.5rem 0.6rem' }}>
+          {children}
+        </div>
+      )}
     </div>
   )
 }
