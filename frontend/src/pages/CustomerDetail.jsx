@@ -161,24 +161,36 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
   const [busy, setBusy] = useState(true)
   const [showDict, setShowDict] = useState(false)
 
-  const loadAliases = useCallback(() => customerAliases.list({ customer: customer.id })
-    .then(res => setAliases(res.data?.results ?? (Array.isArray(res.data) ? res.data : []))), [customer.id])
+  // La biblioteca ha de mostrar TOTA la nomenclatura del client, no la primera pàgina: la llista
+  // ve paginada (PAGE_SIZE=25, max_page_size=200) i el client 7 en té 95 -> se'n pintaven 25
+  // (QA-S8 · D5). Recorrem les pàgines fins que `next` s'esgota.
+  const fetchAllAliases = useCallback(async () => {
+    const out = []
+    for (let page = 1; ; page += 1) {
+      const res = await customerAliases.list({ customer: customer.id, page, page_size: 200 })
+      const d = res.data
+      out.push(...(d?.results ?? (Array.isArray(d) ? d : [])))
+      if (!d?.next) return out
+    }
+  }, [customer.id])
+
+  const loadAliases = useCallback(() => fetchAllAliases().then(setAliases), [fetchAllAliases])
 
   useEffect(() => {
     let alive = true
     Promise.all([
-      customerAliases.list({ customer: customer.id }),
+      fetchAllAliases(),
       gradingRuleSets.list({ customer: customer.id }),
       sizingProfiles.list({ customer_codi: customer.codi }),
     ]).then(([a, g, p]) => {
       if (!alive) return
-      setAliases(a.data?.results ?? (Array.isArray(a.data) ? a.data : []))
+      setAliases(a)
       setRulesets(g.data?.results ?? (Array.isArray(g.data) ? g.data : []))
       const prows = p.data?.results ?? (Array.isArray(p.data) ? p.data : [])
       setProfiles(prows.filter(r => r.customer_codi === customer.codi))
     }).finally(() => { if (alive) setBusy(false) })
     return () => { alive = false }
-  }, [customer.id, customer.codi])
+  }, [customer.id, customer.codi, fetchAllAliases])
 
   const removeAlias = (a) => {
     if (!window.confirm(t('clients.alias_confirm_delete', { code: a.client_code }))) return
