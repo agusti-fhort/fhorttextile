@@ -298,6 +298,7 @@ class DjangoGeometryStore:
                 t_inici=s.t_inici,
                 t_fi=s.t_fi,
                 tipus_vora=s.tipus_vora.value,
+                origen=PatternSegment.ORIGEN_AUTO,
             )
             for s in segmentar_peca(piece)
         ]

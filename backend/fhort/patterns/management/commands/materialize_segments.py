@@ -37,10 +37,15 @@ class Command(BaseCommand):
                 self.stdout.write(f'PatternFile {fp.id} (v{fp.versio}, model {fp.model_id}):')
 
                 for row in fp.pieces.all():
-                    if row.segments.exists():
+                    # Només compten els AUTO: una peça que ja té trams DECLARATS però cap de
+                    # derivat encara els necessita. Mirar `segments.exists()` a seques la
+                    # saltaria per culpa de la feina del patronista, que és justament el que
+                    # no s'ha de perdre.
+                    auto = row.segments.filter(origen=PatternSegment.ORIGEN_AUTO)
+                    if auto.exists():
                         total_saltades += 1
                         self.stdout.write(
-                            f'  · {row.nom_block}: ja té {row.segments.count()} segments, es salta.'
+                            f'  · {row.nom_block}: ja té {auto.count()} segments auto, es salta.'
                         )
                         continue
 
@@ -57,6 +62,7 @@ class Command(BaseCommand):
                             PatternSegment(
                                 piece=row, vora=s.vora, t_inici=s.t_inici, t_fi=s.t_fi,
                                 tipus_vora=s.tipus_vora.value,
+                                origen=PatternSegment.ORIGEN_AUTO,
                             )
                             for s in segments
                         ])

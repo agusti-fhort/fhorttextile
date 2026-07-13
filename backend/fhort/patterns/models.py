@@ -245,17 +245,43 @@ class PatternSegment(models.Model):
     És la manera d'ancorar coses (costures, POMs) a una vora sense clavar-les a un índex
     de vèrtex: si la geometria es mou, el tram continua sent el mateix tram.
 
-    Els segments es deriven **de gir a gir** sobre el contorn de tall (S6): els punts de
-    gir són les cantonades que el patronista reconeix com a fronteres —sisa, costat,
+    Els segments AUTO es deriven **de gir a gir** sobre el contorn de tall (S6): els punts
+    de gir són les cantonades que el patronista reconeix com a fronteres —sisa, costat,
     escot—, i entre dos girs hi ha una vora amb sentit. Els punts de corba no en són
     frontera: flueixen per dins del tram.
+
+    **Però la segmentació gir→gir és una PROPOSTA, no la veritat de la costura** (Taller de
+    patró, W1). El CAD marca les cantonades que li convenen, no les que el patronista cus:
+    una costura lateral pot acabar a mig tram auto, i dos trams auto poden ser una sola
+    costura. Per això un segment pot ser DECLARAT: el patronista tria dos punts qualssevol
+    de la mateixa vora i diu "això és la costura lateral".
+
+    Un segment declarat és una REFERÈNCIA a la vora que ja hi és, mai geometria nova: no
+    dibuixa res, delimita. Els seus extrems són punts existents i la seva longitud és el
+    recorregut de la vora entre ells.
     """
+
+    ORIGEN_AUTO = 'auto'
+    ORIGEN_DECLARAT = 'declarat'
+    ORIGEN_CHOICES = [
+        (ORIGEN_AUTO, 'Derivat (gir a gir)'),
+        (ORIGEN_DECLARAT, 'Declarat pel patronista'),
+    ]
 
     piece = models.ForeignKey(PatternPiece, on_delete=models.CASCADE, related_name='segments')
     vora = models.IntegerField(help_text='Índex de la vora dins la peça (boundary_index).')
+    #: 0.0–1.0 sobre la longitud de la vora. **`t_fi` < `t_inici` vol dir que el tram passa
+    #: per l'origen de la vora** (només possible en una vora tancada): és el cas d'un tram
+    #: declarat que travessa el punt on la polilínia tanca. Qui en calculi la longitud ha de
+    #: fer servir `engine.segments.fraccio_tram`, no una resta.
     t_inici = models.FloatField(help_text='0.0–1.0 sobre la longitud de la vora.')
     t_fi = models.FloatField()
     tipus_vora = models.CharField(max_length=15, blank=True)
+
+    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default=ORIGEN_AUTO)
+    #: Nom lliure del patronista ("costura lateral", "sisa davant"). Només té sentit als
+    #: declarats: un tram derivat no l'ha batejat ningú.
+    nom = models.CharField(max_length=120, null=True, blank=True)
 
     class Meta:
         verbose_name = 'Segment de patró'
@@ -263,7 +289,8 @@ class PatternSegment(models.Model):
         ordering = ['piece', 'vora', 't_inici']
 
     def __str__(self):
-        return f'vora {self.vora} [{self.t_inici:.2f}–{self.t_fi:.2f}]'
+        etiqueta = self.nom or f'vora {self.vora}'
+        return f'{etiqueta} [{self.t_inici:.2f}–{self.t_fi:.2f}] ({self.origen})'
 
 
 class PatternPOM(models.Model):
