@@ -41,6 +41,7 @@ const BulkImportWizard = lazy(() => import('./pages/BulkImportWizard'))
 const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
+const TallerPatro = lazy(() => import('./pages/TallerPatro'))
 const TechSheetEntry = lazy(() => import('./pages/TechSheetEntry'))
 const DissenyPlaceholder = lazy(() => import('./pages/DissenyPlaceholder'))
 const ItemAuthoring = lazy(() => import('./pages/ItemAuthoring'))
@@ -227,6 +228,14 @@ export default function App() {
         <Route path="/models/:id/ftt/:fitxerId" element={
           <ProtectedRoute>
             <TechSheetEditor />
+          </ProtectedRoute>
+        } />
+        {/* W2 — Taller de patró: FORA del Shell, com l'editor .ftt. És una eina a pantalla
+            completa (el canvas mana), no una pàgina del menú. `?file=` tria el PatternFile;
+            sense param, s'obre el vigent del model. */}
+        <Route path="/models/:id/patro/taller" element={
+          <ProtectedRoute>
+            <TallerPatro />
           </ProtectedRoute>
         } />
         <Route path="/" element={

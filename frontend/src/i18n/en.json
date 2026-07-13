@@ -3144,6 +3144,11 @@
     "no_item": "This model has no garment type item assigned."
   },
   "pattern": {
+    "taller": {
+      "title": "Pattern workshop",
+      "back": "Back to the model sheet",
+      "no_file": "This model has no pattern loaded."
+    },
     "loading": "Loading pattern…",
     "empty_title": "No pattern yet",
     "empty_hint": "Upload the pattern DXF (and the grading RUL, if you have one) to see it here.",

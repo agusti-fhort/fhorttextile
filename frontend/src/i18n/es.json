@@ -3144,6 +3144,11 @@
     "no_item": "Este modelo no tiene ningún tipo de prenda asignado."
   },
   "pattern": {
+    "taller": {
+      "title": "Taller de patrón",
+      "back": "Volver a la ficha",
+      "no_file": "Este modelo no tiene ningún patrón cargado."
+    },
     "loading": "Cargando el patrón…",
     "empty_title": "Todavía no hay ningún patrón",
     "empty_hint": "Sube el DXF del patrón (y el RUL de escalado, si lo tienes) para verlo aquí.",

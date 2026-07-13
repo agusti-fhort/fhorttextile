@@ -3144,6 +3144,11 @@
     "no_item": "Aquest model no té cap tipus de peça assignat."
   },
   "pattern": {
+    "taller": {
+      "title": "Taller de patró",
+      "back": "Tornar a la fitxa",
+      "no_file": "Aquest model no té cap patró carregat."
+    },
     "loading": "Carregant el patró…",
     "empty_title": "Encara no hi ha cap patró",
     "empty_hint": "Puja el DXF del patró (i el RUL de grading, si en tens) per veure'l aquí.",

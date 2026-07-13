@@ -62,6 +62,9 @@ export default function PatternViewer({
   segmentsA = [], segmentsB = [],
   costatActiu = 'a',
   onClicSegment = null,
+  // ── W2. Al Taller el canvas no té una alçada de maqueta: ocupa el que li deixa el
+  // pare. Al tab (la porta) segueix valent ALCADA, que és el que sempre ha valgut.
+  omplirAlcada = false,
 }) {
   const { t } = useTranslation()
   const viewportRef = useRef(null)
@@ -84,7 +87,8 @@ export default function PatternViewer({
     const el = viewportRef.current
     if (!el) return
     const w = el.clientWidth
-    const h = ALCADA
+    const h = omplirAlcada ? el.clientHeight : ALCADA
+    if (!w || !h) return
     const z = clampZoom(escalaPerCabre(bbox, w, h))
     setZoom(z)
     // El contingut es dibuixa en mm amb l'eix Y capgirat: el centrem al viewport.
@@ -93,7 +97,7 @@ export default function PatternViewer({
       y: h / 2 + ((bbox.minY + bbox.maxY) / 2) * z,
     })
     setMida({ w, h })
-  }, [bbox])
+  }, [bbox, omplirAlcada])
 
   useEffect(() => { encaixar() }, [encaixar])
 
@@ -102,6 +106,17 @@ export default function PatternViewer({
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [encaixar])
+
+  // Omplint l'alçada, la mida del canvas la mana el PARE (una columna que s'obre, un
+  // contenidor que creix), i això la finestra no ho veu: cal observar el viewport.
+  useEffect(() => {
+    if (!omplirAlcada) return
+    const el = viewportRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => encaixar())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [omplirAlcada, encaixar])
 
   // ── zoom amb la roda, ancorat al cursor ──────────────────────────────────
   const onWheel = (e) => {
@@ -152,7 +167,10 @@ export default function PatternViewer({
   const anotant = mode !== 'view'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: '0.5rem',
+      ...(omplirAlcada ? { height: '100%', minHeight: 0 } : null),
+    }}>
       <Controls
         t={t} zoom={zoom} capes={capes} presents={presents}
         onZoom={zoomBoto} onEncaixa={encaixar}
@@ -165,6 +183,7 @@ export default function PatternViewer({
           border: '1px solid var(--border)', borderRadius: 8,
           background: 'var(--white)', overflow: 'hidden',
           cursor: anotant ? 'crosshair' : 'grab',
+          ...(omplirAlcada ? { flex: 1, minHeight: 0 } : null),
         }}
       >
         <Stage
@@ -419,7 +438,9 @@ function Controls({ t, zoom, capes, presents, onZoom, onEncaixa, onToggle }) {
   }
 
   return (
-    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+    <div style={{
+      display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0,
+    }}>
       <button onClick={() => onZoom(1 / ZOOM_STEP)} style={boto} aria-label={t('pattern.zoom_out')}>
         <i className="ti ti-zoom-out" />
       </button>
@@ -483,7 +504,7 @@ function BarraEstat({ t, hover, pieces, pecaSel }) {
     <div style={{
       display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center',
       fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
-      fontFamily: 'var(--mono)', minHeight: 18,
+      fontFamily: 'var(--mono)', minHeight: 18, flexShrink: 0,
     }}>
       {hover ? (
         <>
