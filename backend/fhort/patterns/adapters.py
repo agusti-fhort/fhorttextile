@@ -11,6 +11,8 @@ comparador ho canta.
 """
 from django.db import transaction
 
+from fhort.fitting.staleness import estalitud
+
 from .engine.geometry import (
     BoundaryData,
     Confidence,
@@ -470,9 +472,16 @@ class DjangoGradingSource:
             .order_by('pom_id', 'size_label')
         )
 
+        # G6-B2: el snapshot porta l'ESTALITUD. `aprovada` diu que algú la va signar; això diu si
+        # el que va signar encara és cert. El motor no bloqueja per estalitud —el guard dur segueix
+        # sent `approved`— però l'avís viatja amb la niada fins al gate d'exportació.
+        est = estalitud(gv)
+
         return GradingSnapshot(
             grading_version_id=gv.pk,
             approved=bool(gv.aprovada),
+            estala=est.avisa,
+            avis_estalitud=(est.motiu if est.avisa else ''),
             base_size_label=base,
             size_run=tuple(size_run),
             deltas=tuple(

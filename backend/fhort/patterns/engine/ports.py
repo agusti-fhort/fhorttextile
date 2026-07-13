@@ -81,6 +81,16 @@ class GradingSnapshot:
     base_size_label: str     # Model.base_size_label
     size_run: tuple[str, ...]  # Model.size_run_model, ORDENAT
 
+    # ── ESTALITUD (G6-B2). `approved` diu que algú la va SIGNAR; això diu si el que va signar
+    #    encara és cert. Són dues preguntes diferents i el motor les ha de poder fer totes dues:
+    #    una versió pot ser aprovada i, alhora, derivar d'una base que ja no existeix.
+    #
+    #    **No bloqueja.** El guard dur continua sent `approved` (sense grading signat no hi ha
+    #    niada); l'estalitud VIATJA amb el snapshot perquè qui exporti se'n pugui fer responsable
+    #    sabent-ho. El patronista mana; el que no pot passar és que no ho sàpiga.
+    estala: bool = False
+    avis_estalitud: str = ''
+
     # ── La matriu. Pot tenir FORATS: una cel·la STEP invàlida no genera fila.
     deltas: tuple[GradedPOMDelta, ...] = ()
 
