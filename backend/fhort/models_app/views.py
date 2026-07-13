@@ -12,7 +12,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
 from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
-from fhort.pom.services import SealedGradingVersionError
+from fhort.pom.services import SealedGradingVersionError, _te_regles
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
 from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
 from .serializers import (
@@ -1509,8 +1509,13 @@ def generate_grading_view(request, model_id):
     except Model.DoesNotExist:
         return Response({'error': 'Model no trobat'}, status=404)
 
-    if not model.grading_rule_set_id:
-        return Response({'error': 'El model no té GradingRuleSet configurat'}, status=400)
+    # G6-A/T2 (forat que va quedar obert): el gate del MOTOR ja pregunta "té regles?" —residents o
+    # de set—, però aquest CALLER encara preguntava pel PUNTER pel seu compte. Efecte: el model 163
+    # (25 regles residents, `grading_rule_set` NULL) graduava si cridaves el servei, i rebia un 400
+    # si ho demanaves per l'endpoint. El predicat és un i és `_te_regles`.
+    if not _te_regles(model):
+        return Response({'error': 'El model no té regles de grading (ni residents ni de rule set)'},
+                        status=400)
     if not model.size_run_model or not model.base_size_label:
         return Response({'error': 'Cal configurar talles i talla base'}, status=400)
 

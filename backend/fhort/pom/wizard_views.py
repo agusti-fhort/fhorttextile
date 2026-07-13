@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 
-from fhort.pom.services import SealedGradingVersionError
+from fhort.pom.services import SealedGradingVersionError, _te_regles
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -265,7 +265,9 @@ def confirm_base_size_view(request, model_id):
 
         # Generate sizes if there is a grading_rule_set and size_run_model
         grading_generated = 0
-        if model.grading_rule_set_id and model.size_run_model and model.base_size_label:
+        # G6-A/T2: `_te_regles` (residents O set), no el punter. Aquest caller es va quedar amb la
+        # còpia vella del gate i saltava la graduació als models de regla resident, en silenci.
+        if _te_regles(model) and model.size_run_model and model.base_size_label:
             try:
                 from fhort.pom.services import generate_graded_specs
                 grading_generated = generate_graded_specs(sf.id)
