@@ -122,21 +122,33 @@ export default function PatternViewer({
   useEffect(() => { encaixar() }, [encaixar])
 
   useEffect(() => {
+    if (omplirAlcada) return          // omplint l'alçada mana el ResizeObserver, aquí sota
     const onResize = () => encaixar()
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
-  }, [encaixar])
+  }, [encaixar, omplirAlcada])
 
-  // Omplint l'alçada, la mida del canvas la mana el PARE (una columna que s'obre, un
-  // contenidor que creix), i això la finestra no ho veu: cal observar el viewport.
+  // Omplint l'alçada, la mida del canvas la mana el PARE (un contenidor que creix, una barra
+  // de guia que apareix), i això la finestra no ho veu: cal observar el viewport.
+  //
+  // Re-MESURAR no és re-ENQUADRAR. Al principi això cridava encaixar(), i llavors qualsevol
+  // canvi d'alçada del canvas —com la barra de guia que surt en començar a col·locar un
+  // POM— reenquadrava el patró i li prenia el zoom i la posició a qui estava treballant.
+  // Justament al pitjor moment: quan s'acaba d'apuntar a un punt. Aquí només s'actualitza
+  // la mida de l'escenari; el zoom i la posició NO es toquen. Reenquadrar és una ordre
+  // explícita (el botó Encaixar), no un efecte secundari de canviar de mida.
   useEffect(() => {
     if (!omplirAlcada) return
     const el = viewportRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(() => encaixar())
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth
+      const h = el.clientHeight
+      if (w && h) setMida({ w, h })
+    })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [omplirAlcada, encaixar])
+  }, [omplirAlcada])
 
   // L'espai és la mà de tota la vida. Es mira el target: en un camp de text, un espai és un
   // espai — que escriure el nom d'un tram et paneges el patró seria absurd.
@@ -601,11 +613,14 @@ function BarraEstat({ t, hover, pieces, pecaSel, colocant }) {
       fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
       fontFamily: 'var(--mono)', minHeight: 18, flexShrink: 0,
     }}>
-      {colocant ? (
+      {/* Col·locant, la pista de la mà NO substitueix les coordenades: mentre es marca un
+          punt és quan més falta fan. Van juntes. */}
+      {colocant && (
         <span style={{ color: 'var(--gold)' }}>
           <i className="ti ti-hand-move" /> {t('pattern.taller.pan_hint')}
         </span>
-      ) : hover ? (
+      )}
+      {hover ? (
         <>
           <span>{t('pattern.cursor', { x: cm(hover.xMm), y: cm(hover.yMm) })}</span>
           {hover.tram && (
