@@ -134,7 +134,6 @@ const FIELD_CATALOG = [
   { key: 'data_avui', tk: 'field_data_avui' },
 ]
 
-const EMPTY_FLAT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 120"><path d="M34 94 C42 32 72 18 91 28 C114 16 145 33 150 94 C119 103 67 103 34 94 Z" fill="none" stroke="#1d1d1b" stroke-width="3" stroke-linejoin="round"/></svg>'
 
 function svgDataUrl(svg) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg || '')}`
@@ -1320,14 +1319,14 @@ export default function TechSheetEditor() {
   const [lockState, setLockState] = useState((isEditMode || fttMode) ? 'loading' : 'readonly')
   const [conflict, setConflict] = useState(null)
   const [saveState, setSaveState] = useState(null)  // null|'saving'|'saved'|'error'
-  const [fitxers, setFitxers] = useState([])
+  const [, setFitxers] = useState([])
   const [filePicker, setFilePicker] = useState(false)   // S03b · P7
   const [sizeFittings, setSizeFittings] = useState([])
   const [tableData, setTableData] = useState({})    // {objId: jsonData|null} fora del JSON
   const [notice, setNotice] = useState(null)        // toast efímer (p.ex. "ja hi ha capçalera")
   const [thumbnails, setThumbnails] = useState([])
   const [exporting, setExporting] = useState(false)
-  const [addingTable, setAddingTable] = useState(false)
+  const [, setAddingTable] = useState(false)
   const [pickFitting, setPickFitting] = useState(false)
   // S3: picker de variant de taula (T1a/T1b/T2/custom) — null | { variant?: 't1a'|'t1b'|'t2'|'custom' }.
   // Obert des del ribbon (botó "Taula", commit 4).
@@ -2831,12 +2830,6 @@ export default function TechSheetEditor() {
   }
   // LEGACY: substituïts pel picker de taules snapshot S3; el RENDER de graded_table
   // es conserva per a docs existents; candidats a poda futura.
-  const onAddTableClick = () => {
-    if (!sizeFittings.length) return
-    if (sizeFittings.length === 1) insertGradedTable(sizeFittings[0].id)
-    else setPickFitting(true)
-  }
-
   // ── S3: taules snapshot (T1a/T1b) — valors CONGELATS a la inserció (llei de disseny:
   // cap binding viu; obj.snapshot només serveix per traçabilitat). Auto-fit igual que
   // insertGradedTable: es construeix un cop amb buildTableCellPrimitives per obtenir
@@ -3102,7 +3095,6 @@ export default function TechSheetEditor() {
   // Barra contextual (C4): mateixa pell que la resta de la closca (tokens globals, T1), discreta,
   // separada de la topbar i del viewport per un filet molt fi (1px COL.border) — com el peu d'estat.
   const CTX_BG = COL.sidebar, CTX_BORDER = COL.border, CTX_TEXT = COL.textMain
-  const ctxBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 26, height: 24, padding: '0 6px', border: `1px solid ${CTX_BORDER}`, borderRadius: 5, background: COL.field, color: CTX_TEXT, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' }
   const curObjs = objectsOf(currentPage)
   const curGuides = pages[currentPage]?.guides || []   // S2: guies de la pàgina activa
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))

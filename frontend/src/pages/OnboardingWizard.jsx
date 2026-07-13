@@ -5,7 +5,6 @@ import useAuthStore from "../store/auth"
 
 const API = import.meta.env.VITE_API_URL || ""
 
-const STEPS = ["Benvinguda", "Configuració", "Dades", "Verificació"]
 
 export default function OnboardingWizard() {
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')

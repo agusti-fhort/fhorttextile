@@ -1,16 +1,13 @@
 
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import useAuthStore from "../store/auth"
 
-const API = import.meta.env.VITE_API_URL || ""
 
 export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false }) {
   const { t } = useTranslation()
   const [cloning, setCloning] = useState(false)
 
   const sysName = profile?.size_system?.nom || "—"
-  const sysUnit = profile?.size_system?.base_unit || ""
   const sizes = profile?.size_definitions || []
   const baseSize = sizes.find((_, i) => i === Math.floor(sizes.length / 2))?.size_label
   const rules = profile?.grading_rules_preview || []
@@ -18,7 +15,6 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
   // FIX 2 — el badge "Estàndard ISO" només per a rulesets canònics de debò (is_system_default).
   // is_custom (= parent_profile) no captura els derivats de client (p.ex. run LOSAN).
   const isCanonicalISO = profile?.grading_rule_set?.is_system_default === true
-  const isDefault = profile?.is_default
   const name = profile?.grading_rule_set?.nom || sysName
 
   const handleClone = async () => {

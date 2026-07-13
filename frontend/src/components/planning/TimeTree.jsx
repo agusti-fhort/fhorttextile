@@ -22,11 +22,10 @@ function fmtMins(m) {
 
 // Mètriques de node a partir de les fulles (mirall del rollup ponderat del backend: pes n|1).
 function nodeMetrics(items) {
-  let wsum = 0, w = 0, emp = 0, seed = 0, none = 0
+  let wsum = 0, w = 0, emp = 0, seed = 0
   for (const it of items) {
     if (it.maturity === 'empiric') emp++
     else if (it.maturity === 'seed') seed++
-    else none++
     if (it.effective_minutes != null) {
       const ww = it.maturity === 'empiric' ? (it.n || 1) : 1
       wsum += it.effective_minutes * ww; w += ww

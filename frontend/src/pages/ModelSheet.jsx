@@ -112,7 +112,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [taulaRows, setTaulaRows] = useState([])
   const [modelTaskRows, setModelTaskRows] = useState([])
   const [sizesAmbDades, setSizesAmbDades] = useState(null)
-  const [deltes, setDeltes] = useState(null)
+  const [, setDeltes] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState(null)
@@ -180,15 +180,6 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // Porta-menú: obre (crea-si-falta + auto-assign + En curs) la tasca `code` i navega a l'eina amb el
   // task_id. Reusa el servei open-task; el botó funciona encara que el model no tingui la tasca creada.
   const [openingTask, setOpeningTask] = useState(false)
-  const openTaskAndGo = (code, toRoute) => {
-    if (openingTask) return
-    setOpeningTask(true)
-    models.openTask(parseInt(id), code)
-      .then(res => navigate(toRoute(res.data.task_id)))
-      .catch(() => setFeedback({ type: 'err', text: t('model_sheet.open_task_err') }))
-      .finally(() => setOpeningTask(false))
-  }
-
   // FASE A — edició INLINE: la tab commuta consulta↔edició mantenint el context (sidebar+tabs+
   // capçalera+watchpoint), en comptes de navegar a /mesures·/escalat. openTask posa la tasca
   // InProgress (compta-temps); en sortir de mode edició es pausa. El lifecycle del timer es mou de
@@ -1512,7 +1503,7 @@ function TabFiles({ modelId }) {
 
 // Una fila de la llista (esquerra). Columnes: icona · nom · tipus · data · versió.
 function FileRow({ fitxer, selected, onSelect }) {
-  const { t, i18n } = useTranslation()
+  const { i18n } = useTranslation()
   const ext = fileExt(fitxer.nom_fitxer)
   const date = fitxer.data_pujada
     ? new Date(fitxer.data_pujada).toLocaleDateString(i18n.language || 'ca', { day: '2-digit', month: '2-digit', year: '2-digit' })

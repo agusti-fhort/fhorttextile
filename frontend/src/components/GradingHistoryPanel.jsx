@@ -7,7 +7,7 @@ const API = import.meta.env.VITE_API_URL || ""
 
 export function GradingHistoryPanel({ ruleSetId, onClose }) {
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
-  const { unit, format } = useUnit()
+  const { format } = useUnit()
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
 

@@ -109,19 +109,6 @@ function ModelCard({ model, onClick, t }) {
 }
 
 // Mini-chip de comptador per fase.
-function FaseChip({ label, n }) {
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)',
-      padding: '3px 9px', borderRadius: 10, background: 'var(--white)', border: '0.5px solid var(--gray-l)',
-    }}>
-      <span>{label}</span>
-      <span style={{ fontWeight: 600, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>{n}</span>
-    </span>
-  )
-}
-
 function ModelBoard({ scope }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
@@ -140,7 +127,7 @@ function ModelBoard({ scope }) {
   const [page, setPage] = useState(1)
   const [hasNext, setHasNext] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [faseCounts, setFaseCounts] = useState({ counts: {}, total: 0 })
+  const [, setFaseCounts] = useState({ counts: {}, total: 0 })
   const [customerOpts, setCustomerOpts] = useState([])
 
   // Paràmetres de campanya compartits per by-model i fase-counts (mateix contracte de filtres).
@@ -323,28 +310,6 @@ const ph = { fontSize: 'var(--fs-body)', color: 'var(--gray)', textAlign: 'cente
 
 // Selector d'abast del dashboard del tècnic: [Els meus · Tots]. Default per ROL (es deriva del
 // rol/capabilities a Dashboard, NO de localStorage). Sempre visible i commutable.
-const SCOPES = [["me", "scope_mine"], ["all", "scope_all"]]
-function ScopeSelector({ scope, onChange, t }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-      <span style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: ".06em" }}>
-        {t("dashboard.scope.label")}
-      </span>
-      <div style={{ display: "flex", border: "0.5px solid var(--gray-l)", borderRadius: 8, overflow: "hidden" }}>
-        {SCOPES.map(([val, key]) => {
-          const active = scope === val
-          return (
-            <button key={val} onClick={() => onChange(val)} style={{
-              fontFamily: MONO, fontSize: 'var(--fs-body)', padding: "7px 16px", border: "none", cursor: "pointer",
-              background: active ? "var(--gold-pale)" : "var(--white)",
-              color: active ? "var(--gold)" : "var(--gray)", fontWeight: active ? 600 : 400,
-            }}>{t(`dashboard.scope.${key}`)}</button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
 
 export default function Dashboard() {
   const navigate = useNavigate()

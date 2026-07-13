@@ -215,7 +215,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
           }
         }
       }
-      let estat = null
+      let estat
       try {
         const res = await fittingSessions.seal(session.id)   // D4: segellat independent (no toca fase)
         estat = res.data?.estat
@@ -297,11 +297,6 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
       .finally(() => { setUploading(false); e.target.value = '' })
   }
 
-  const sectionTitle = (icon, label) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500, marginBottom: 10 }}>
-      <i className={`ti ${icon}`} style={{ fontSize: 14, color: 'var(--gold)' }} />{label}
-    </div>
-  )
   const muted = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }
 
   return (
@@ -435,9 +430,6 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
           </Card>
 
           {/* d) ENVIAR A (stub de mail) — AMAGAT (Peça 3 · D1): PDF/mail ajornat. */}
-          {false && (
-            <Card title={t('fitting.save.send_to')} style={{ marginBottom: '1.25rem' }} />
-          )}
 
           {error && (
             <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 12 }}>{error}</div>
@@ -502,7 +494,7 @@ export default function FittingDetail() {
   const [loading, setLoading] = useState(true)
   const [activePieceId, setActivePieceId] = useState(null)
   const [grid, setGrid] = useState(null)
-  const [gridLoading, setGridLoading] = useState(false)
+  const [, setGridLoading] = useState(false)
   const [creatingPiece, setCreatingPiece] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   // P2 — la graella base és la pantalla de TREBALL i el landing per defecte. La revisió deixa de
@@ -513,7 +505,7 @@ export default function FittingDetail() {
   // P5: l'editor és MeasureGrid, que OWNS el seu buffer d'edició (reals/ancoratge/focus interns).
   // El remuntatge net per peça es fa via key={activePieceId} a MeasureGrid. Aquí ja no cal estat de cel·la.
   // Avís discret si setPomRegim falla (p.ex. 400 sense fallback); no trenca la graella.
-  const [regimErr, setRegimErr] = useState(null)
+  const [, setRegimErr] = useState(null)
 
   const loadSession = useCallback((selectFirst = false) => {
     return fittingSessions.get(id).then(res => {

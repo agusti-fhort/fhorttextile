@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { commerce, customers as customersApi } from '../api/endpoints'
@@ -46,11 +46,6 @@ export default function Orders() {
 
   const rows = (res) => res.data?.results ?? (Array.isArray(res.data) ? res.data : [])
   const fetchList = () => commerce.orders.list({ ordering: '-created_at', page_size: 500 }).then(rows)
-
-  const load = useCallback(() => {
-    setError(false)
-    return fetchList().then(setItems).catch(() => setError(true))
-  }, [])
 
   useEffect(() => {
     let alive = true

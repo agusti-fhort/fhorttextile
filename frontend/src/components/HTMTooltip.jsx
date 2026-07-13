@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import useAuthStore from "../store/auth"
 
 const API = import.meta.env.VITE_API_URL || ""
