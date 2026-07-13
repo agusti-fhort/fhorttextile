@@ -324,9 +324,9 @@ HAVING count(*) > 1 ORDER BY count(*) DESC;
 | **461** | Sleeve slit | `0`[SLIT] · `I3`[CUFF SLIT] | 🔴 **BROSSA** — `client_code = '0'` (id 110) **no és un codi**; `I3` és correcte |
 | **341** | Zipper length | `body zip length`[∅] *(MIGRACIO)* · `CR2`[ZIPPER] | 🟢 **LEGÍTIM** — mateixa mesura, dos noms. (El `MIGRACIO` és un dels 5 contaminats de §D4a·2.) |
 
-**Total a reparar: 13 àlies dolents + 1 brossa** (`0`), sobre 6 POMs. Confirmat el que deia el
-brief, i **ampliat**: els 4 POMs multi-codi no auditats resulten ser **3 dolents més** (441, 437,
-275) **i 1 legítim** (341).
+**Total a reparar: 12 àlies amb el POM equivocat + 1 brossa** (`0`) = **13**, sobre 6 POMs.
+Confirmat el que deia el brief, i **ampliat**: els 4 POMs multi-codi no auditats resulten ser
+**3 dolents més** (441, 437, 275) **i 1 legítim** (341).
 
 **⚠️ Per què el wizard va sembrar això:** `dictionary_service.py:147` crida `find_pom_master` per
 fila i **no comprova que el POM ja estigui reclamat** per una altra fila del mateix full. Amb
@@ -355,7 +355,7 @@ salta** (no hi ha col·lisió dins d'aquell document) i **s'auto-vincula al POM 
 
 > **Veredicte D4a:** dues famílies de defecte, totes dues **contingudes** i **censades**:
 > **(1)** 5 àlies amb prosa al camp codi (0031) — dany **de presentació**, POMs correctes;
-> **(2)** 13 àlies + 1 brossa amb el codi bo i el **POM equivocat** (wizard del diccionari) —
+> **(2)** 12 àlies + 1 brossa amb el codi bo i el **POM equivocat** (wizard del diccionari) —
 > dany **de matching**, mitigat per `eb880fd` però no tancat.
 > La reparació és **acotada però NO trivial** — vegeu §REPARACIÓ.
 
@@ -524,7 +524,7 @@ matching). Acció: **`REPARA_DESC`** — conservadora, sense pèrdua.
 3. `client_code` **intacte** (preserva el match per descripció, que funciona **per disseny**:
    `extraction_views.py:527-529`) · `pom` **intacte** (els 5 destins són correctes, §D4a·2).
 
-**FAMÍLIA 2 · els 13 àlies amb el POM equivocat** (wizard del diccionari). Acció: **`DESVINCULA`**.
+**FAMÍLIA 2 · els 12 àlies amb el POM equivocat** (wizard del diccionari). Acció: **`DESVINCULA`**.
 Com que `pom=None` és impossible (Mur 2) i `pendent_revisio` és inert (Mur 3), **l'única acció
 que de debò treu el verí avui és ESBORRAR l'àlies**. És **reversible**: la nomenclatura viu al
 full Excel del client i es torna a carregar amb el wizard (aquest cop, cap al POM correcte).
@@ -560,8 +560,67 @@ FAMÍLIA 3 — BROSSA (1)
   id 110  client_code='0'  → esborrat
 ```
 
-**Entrega:** management command **idempotent, `--dry-run` per defecte** (cal `--apply` explícit).
-**NO S'HA EXECUTAT EN MODE ESCRIPTURA.** L'executa l'Agus amb confirmació explícita.
+### DRY-RUN EXECUTAT (cap escriptura · BD verificada intacta després)
+
+`backend/fhort/pom/management/commands/repair_customer_aliases.py`
+— **idempotent**, **`--dry-run` per defecte** (cal `--apply` explícit; tot corre dins d'una
+`transaction.atomic()` amb `set_rollback(True)` si no s'aplica).
+
+```
+$ manage.py repair_customer_aliases
+repair_customer_aliases · tenant=fhort · DRY-RUN (cap escriptura) · família 2 = flag
+
+FAMÍLIA 1 — prosa al camp codi (migració 0031)
+  [BRW] id=2  description_en: ∅ → "collar width"                   · pendent_revisio: False → True  (codi i pom S1-M76 intactes)
+  [BRW] id=3  description_en: ∅ → "body zip length"                · pendent_revisio: False → True  (codi i pom ZIP L  intactes)
+  [BRW] id=4  description_en: ∅ → "lining length at center front"  · pendent_revisio: False → True  (codi i pom LF-M76 intactes)
+  [BRW] id=5  description_en: ∅ → "lining length at center back"   · pendent_revisio: False → True  (codi i pom 1-M76  intactes)
+  [BRW] id=6  description_en: ∅ → "lining bottom width along hem"  · pendent_revisio: False → True  (codi i pom F1-M76 intactes)
+
+FAMÍLIA 2 — POM equivocat (wizard del diccionari) · acció=flag
+  [BRW] id=52  F   → POM 389 · FRONT TOTAL LENGTH sobre un POM genèric TOTAL LENGTH (4 codis hi cauen)
+  [BRW] id=53  FF  → POM 389 · BACK TOTAL LENGTH — mesura distinta de F
+  [BRW] id=56  F3  → POM 389 · FRONT CENTER TOTAL LENGTH — mesura distinta
+  [BRW] id=57  F4  → POM 389 · BACK CENTER TOTAL LENGTH — mesura distinta
+  [BRW] id=103 U   → POM 439 · FRONT OVERLAP sobre POM "Width sequins piece" — no hi correspon
+  [BRW] id=85  U2  → POM 439 · 1st BUTTON — mesura distinta (la que D2 va veure col·lapsar amb U3)
+  [BRW] id=86  U3  → POM 439 · LAST BUTTON — mesura distinta
+  [BRW] id=92  P   → POM 441 · CENTER BACK YOKE HEIGHT sobre POM "Chest piece height at side seam"
+  [BRW] id=90  P2  → POM 441 · CENTER FRONT YOKE HEIGHT — mesura distinta de P
+  [BRW] id=54  F1  → POM 437 · TOTAL SIDE LENGTH sobre POM "Centre front length at CF"
+  [BRW] id=55  F2  → POM 437 · TOTAL SIDE LENGTH — descripció idèntica a F1, i el POM no hi correspon
+  [BRW] id=59  B1  → POM 275 · STRETCHED WAIST WIDTH sobre el POM de waist width (B, que SÍ és correcte)
+
+BROSSA — client_code que no és un codi
+  [BRW] id=110 client_code="0" · ESBORRAT · artefacte, no és cap codi
+
+RESUM
+  família 1 (prosa al codi → description_en) : 5
+  família 2 (POM equivocat → flag  )         : 12
+  brossa    (esborrats)                      : 1
+
+DRY-RUN: 18 àlies afectats. CAP escriptura. Torna-hi amb --apply.
+```
+
+**BD verificada DESPRÉS del dry-run** (res escrit — el rollback funciona):
+```sql
+SELECT count(*) total, count(*) FILTER (WHERE origen='MIGRACIO' AND description_en='') desc_buida,
+       count(*) FILTER (WHERE pendent_revisio) pendents, count(*) FILTER (WHERE client_code='0') brossa
+FROM fhort.pom_customerpomalias;
+-- total=97 · desc_buida=5 · pendents=0 · brossa=1   ← idèntic a abans
+```
+
+**Les dues opcions per a la família 2** (l'Agus tria):
+- `--unlink=flag` *(per defecte)* — marca `pendent_revisio`, **conserva** el vincle. **No treu
+  el vincle fals del matcher** (Mur 3): és una anotació per a humans.
+- `--unlink=delete` — **esborra** l'àlies. **És l'única acció que avui treu el vincle fals.**
+  Reversible: la nomenclatura viu al full Excel i es torna a carregar amb el wizard.
+
+🛑 **NO S'HA EXECUTAT EN MODE ESCRIPTURA.** L'executa l'Agus amb confirmació explícita:
+```
+manage.py repair_customer_aliases --apply                    # família 2 = flag
+manage.py repair_customer_aliases --apply --unlink=delete    # família 2 = esborrat
+```
 
 ---
 
