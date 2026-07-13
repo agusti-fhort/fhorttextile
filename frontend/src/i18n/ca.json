@@ -3145,8 +3145,15 @@
   },
   "pattern": {
     "taller": {
+      "value_sheet_none": "fitxa —",
+      "value_delta": "patró {{cm}} · Δ {{delta}}",
+      "pom_place_hint": "Col·locar {{codi}} al patró",
+      "pom_outside": "Afegir un POM fora de fitxa",
+      "place_a": "Col·locant {{codi}} ({{nom}}) — clica el punt A",
+      "place_b": "Col·locant {{codi}} ({{nom}}) — ara el punt B",
+      "cancel_place": "Cancel·lar la col·locació (Esc)",
       "open": "Obrir al taller",
-      "model_poms": "Poms del model · {{ancorats}}/{{total}} ancorats",
+      "model_poms": "Poms del model · {{ancorats}} de {{total}} col·locats",
       "model_poms_empty": "Aquest model encara no té mesures a la fitxa.",
       "pom_anchored": "Ancorat al patró",
       "pom_pending": "Pendent d'ancorar",

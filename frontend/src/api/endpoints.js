@@ -85,10 +85,6 @@ export const models = {
 
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).
 export const baseMeasurements = {
-  // Les mesures del MODEL (les aprovades a la fitxa, no el catàleg global): codi de
-  // client, nom i valor de fitxa. Al taller és la llista de treball — els POMs no es
-  // busquen, es col·loquen.
-  list: (modelId) => client.get(`/api/v1/models/${modelId}/base-measurements/`),
   update: (id, body) => client.patch(`/api/v1/base-measurements/${id}/`, body),
   // Reordena els POM del model en bloc (ordre ÚNIC i global; es materialitza a Grading en propagar).
   reorder: (modelId, ids) => client.post(`/api/v1/models/${modelId}/base-measurements/reorder/`, { ids }),
@@ -635,6 +631,12 @@ export const patterns = {
   // (get) només porta recomptes — un llistat no ha d'arrossegar milers de punts.
   // Porta també els segments (el que una costura pot triar) i els POMs ja ancorats.
   geometry: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/geometry/`),
+
+  // La LLISTA DE TREBALL del taller (W3): les Mesures del model creuades amb el que
+  // AQUEST patró mesura — valor de fitxa, valor mesurat i la Δ. El creuament és de domini
+  // (la frontissa és el POMMaster) i el fa el servidor: baixar-se dues llistes i creuar-les
+  // al client seria refer-lo a mà, i a mà cada pantalla el refaria una mica diferent.
+  modelPoms: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/model-poms/`),
 
   // POMs ancorats (S6). El VALOR no s'envia mai: s'envia la recepta (quins punts) i el
   // servidor la resol sobre la geometria. Un valor teclejat no seria una mesura del

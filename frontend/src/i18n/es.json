@@ -3145,8 +3145,15 @@
   },
   "pattern": {
     "taller": {
+      "value_sheet_none": "ficha —",
+      "value_delta": "patrón {{cm}} · Δ {{delta}}",
+      "pom_place_hint": "Colocar {{codi}} en el patrón",
+      "pom_outside": "Añadir un POM fuera de ficha",
+      "place_a": "Colocando {{codi}} ({{nom}}) — clica el punto A",
+      "place_b": "Colocando {{codi}} ({{nom}}) — ahora el punto B",
+      "cancel_place": "Cancelar la colocación (Esc)",
       "open": "Abrir en el taller",
-      "model_poms": "Poms del modelo · {{ancorats}}/{{total}} anclados",
+      "model_poms": "Poms del modelo · {{ancorats}} de {{total}} colocados",
       "model_poms_empty": "Este modelo aún no tiene medidas en la ficha.",
       "pom_anchored": "Anclado al patrón",
       "pom_pending": "Pendiente de anclar",

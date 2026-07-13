@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { patterns, models, modelTasks, baseMeasurements } from '../api/endpoints'
+import { patterns, models, modelTasks } from '../api/endpoints'
 import PatternViewer from '../components/pattern/PatternViewer'
 import PieceList from '../components/pattern/PieceList'
 import ModelPomList from '../components/pattern/ModelPomList'
@@ -40,7 +40,7 @@ export default function TallerPatro() {
   const [geometria, setGeometria] = useState(null)
   const [sews, setSews] = useState([])
   const [trams, setTrams] = useState([])           // segments DECLARATS
-  const [mesures, setMesures] = useState([])       // BaseMeasurement del model
+  const [feina, setFeina] = useState(null)        // la llista de treball (W3/T1)
   const [pecaSel, setPecaSel] = useState('')
 
   // ── eines d'anotació (venen del tab: es TRASLLADEN, no es reescriuen) ─────
@@ -52,6 +52,10 @@ export default function TallerPatro() {
   const [costatActiu, setCostatActiu] = useState('a')
   const [tipusSew, setTipusSew] = useState('casat')
   const [diferencial, setDiferencial] = useState(0)
+  // El POM que s'està col·locant. Amb pomActiu, el canvas SAP quin POM marca i no cal cap
+  // cercador: A → B → ancorat. Sense pomActiu, el mode POM és la via secundària (el POM
+  // que no és a la fitxa) i llavors sí que cal preguntar quin és — el picker.
+  const [pomActiu, setPomActiu] = useState(null)
   const [tascaId, setTascaId] = useState(null)      // per al render: hi ha rellotge?
   const [errTasca, setErrTasca] = useState(null)
   // L'error d'una EINA (no s'ha pogut ancorar, no s'ha pogut cosir) no és l'error de
@@ -76,13 +80,11 @@ export default function TallerPatro() {
   const carregar = useCallback(async () => {
     setCarregant(true)
     try {
-      const [{ data: m }, { data: llista }, { data: bm }] = await Promise.all([
+      const [{ data: m }, { data: llista }] = await Promise.all([
         models.get(modelId),
         patterns.list(modelId),
-        baseMeasurements.list(modelId),
       ])
       setModel(m)
-      setMesures(bm.results || bm || [])
 
       const files = llista.results || llista || []
       const triat = (fileParam && files.find(f => f.id === parseInt(fileParam)))
@@ -90,16 +92,19 @@ export default function TallerPatro() {
         || files[0]
       if (!triat) { setActual(null); return }
 
-      const [{ data: detall }, { data: geo }, { data: sw }, { data: sg }] = await Promise.all([
-        patterns.get(triat.id),
-        patterns.geometry(triat.id),
-        patterns.sew.list(modelId),
-        patterns.segments.list(triat.id),
-      ])
+      const [{ data: detall }, { data: geo }, { data: sw }, { data: sg }, { data: fn }] =
+        await Promise.all([
+          patterns.get(triat.id),
+          patterns.geometry(triat.id),
+          patterns.sew.list(modelId),
+          patterns.segments.list(triat.id),
+          patterns.modelPoms(triat.id),
+        ])
       setActual(detall)
       setGeometria(geo)
       setSews(sw.results || sw || [])
       setTrams(tramsDeclarats(sg))
+      setFeina(fn)
     } catch {
       setError(t('pattern.err_load'))
     } finally {
@@ -149,6 +154,7 @@ export default function TallerPatro() {
   const netejarSeleccio = useCallback(() => {
     setPuntsPom([])
     setPickerObert(false)
+    setPomActiu(null)
     setSegmentsA([])
     setSegmentsB([])
     setCostatActiu('a')
@@ -158,6 +164,36 @@ export default function TallerPatro() {
     setMode(m => (m === nou ? 'view' : nou))
     netejarSeleccio()
   }
+
+  // Clicar una fila PENDENT de la llista de treball ÉS l'ordre de col·locar aquell POM:
+  // no obre cap cercador, perquè ja se sap quin POM és. El canvas passa a guiar.
+  const colocarPOM = (fila) => {
+    setPomActiu(fila)
+    setPuntsPom([])
+    setPickerObert(false)
+    setMode('pom')
+  }
+
+  // La via secundària: un POM que NO és a la fitxa. Aquí sí que cal preguntar quin és, i
+  // per això aquest camí (i només aquest) acaba al picker del catàleg.
+  const afegirPOMForaDeFitxa = () => {
+    setPomActiu(null)
+    setPuntsPom([])
+    setMode('pom')
+  }
+
+  // Esc surt de la col·locació sense deixar res penjat: ni punts a mig clicar, ni un POM
+  // actiu que ja no s'està col·locant, ni el picker obert. (D7)
+  const cancelar = useCallback(() => {
+    netejarSeleccio()
+    setMode('view')
+  }, [netejarSeleccio])
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') cancelar() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [cancelar])
 
   const onClicPunt = (iman) => {
     const punt = iman.punt
@@ -169,13 +205,18 @@ export default function TallerPatro() {
       // sobre el punt ja triat el DESTRIA, que és el que espera qui s'ha equivocat.
       if (prev.length && prev[prev.length - 1].id === punt.id) return prev.slice(0, -1)
       const nous = [...prev, punt].slice(-2)
-      if (nous.length === 2) setPickerObert(true)   // dos punts → quin POM és?
+      if (nous.length === 2) {
+        // Dos punts. Si sabem quin POM s'està col·locant, s'ancora i s'acaba; si no (via
+        // secundària), llavors sí que s'ha de preguntar quin és.
+        if (pomActiu) ancorar(pomActiu.pom_master, nous[0], nous[1])
+        else setPickerObert(true)
+      }
       return nous
     })
   }
 
-  const ancorarPOM = async (pomMaster) => {
-    const [a, b] = puntsPom
+  /** L'ancoratge, un de sol per als dos camins: el guiat i el del picker. */
+  const ancorar = async (pomMasterId, a, b) => {
     const peca = geometria.pieces.find(p =>
       (p.boundaries || []).some(v => (v.points || []).some(q => q.id === a.id)))
     setPickerObert(false)
@@ -183,11 +224,14 @@ export default function TallerPatro() {
       // S'envia la RECEPTA, mai el valor: el valor el llegeix el servidor de la geometria.
       await patterns.poms.create({
         pattern_piece: peca.id,
-        pom_master: pomMaster.id,
+        pom_master: pomMasterId,
         definicio_mesura: { mode: 'points', a: a.id, b: b.id },
         metode: 'recta',
       })
-      setPuntsPom([])
+      // Feina feta: la fila passa a col·locada i el canvas deixa de guiar. Qui vulgui
+      // col·locar-ne un altre, el clica a la llista — que és d'on surt la feina.
+      netejarSeleccio()
+      setMode('view')
       await recarregarRelacions()
     } catch (e) {
       setErrEina(e.response?.data?.non_field_errors?.[0]
@@ -224,14 +268,16 @@ export default function TallerPatro() {
   // s'ha tocat deixaria la resta mentint a la pantalla.
   const recarregarRelacions = useCallback(async () => {
     if (!actual) return
-    const [{ data: geo }, { data: sw }, { data: sg }] = await Promise.all([
+    const [{ data: geo }, { data: sw }, { data: sg }, { data: fn }] = await Promise.all([
       patterns.geometry(actual.id),
       patterns.sew.list(modelId),
       patterns.segments.list(actual.id),
+      patterns.modelPoms(actual.id),
     ])
     setGeometria(geo)
     setSews(sw.results || sw || [])
     setTrams(tramsDeclarats(sg))
+    setFeina(fn)
   }, [actual, modelId])
 
   const esborrarPOM = async (pomId) => {
@@ -263,16 +309,11 @@ export default function TallerPatro() {
     }
   }
 
-  // Els POMs ancorats viuen a la geometria (penjats de la peça que mesuren); la llista de
-  // Mesures del model viu al model. La frontissa entre els dos mons és el POMMaster.
+  // Els POMs ancorats, per al panell de RELACIONS: viuen a la geometria, penjats de la peça
+  // que mesuren. (El creuament amb la fitxa ja no es fa aquí: el fa el servidor, a
+  // `model-poms`. Fer-lo dues vegades i de dues maneres seria demanar que divergissin.)
   const pomsAncorats = useMemo(() => (geometria?.pieces || []).flatMap(p =>
     (p.poms || []).map(x => ({ ...x, peca: p.nom_block }))), [geometria])
-
-  const ancoratsPerPom = useMemo(() => {
-    const m = new Map()
-    pomsAncorats.forEach(p => m.set(p.pom_master, p))
-    return m
-  }, [pomsAncorats])
 
   const tornar = () => navigate(`/models/${modelId}?tab=Patró`)
 
@@ -299,11 +340,16 @@ export default function TallerPatro() {
 
           <Contenidor
             titol={t('pattern.taller.model_poms', {
-              ancorats: ancoratsPerPom.size, total: mesures.length,
+              ancorats: feina?.ancorats || 0, total: feina?.total || 0,
             })}
             icona="ti-ruler-measure"
           >
-            <ModelPomList mesures={mesures} ancorats={ancoratsPerPom} />
+            <ModelPomList
+              files={feina?.results || []}
+              pomActiu={pomActiu}
+              onColocar={colocarPOM}
+              onAfegirFora={afegirPOMForaDeFitxa}
+            />
           </Contenidor>
 
           <Contenidor titol={t('pattern.taller.relations')} icona="ti-link">
@@ -332,8 +378,17 @@ export default function TallerPatro() {
             <Avis text={errEina} err onTanca={() => setErrEina(null)} />
           )}
           {mode === 'pom' && (
-            <Avis text={puntsPom.length === 0
-              ? t('pattern.pom_hint_first') : t('pattern.pom_hint_second')} />
+            <Avis
+              text={pomActiu
+                ? t(puntsPom.length === 0
+                    ? 'pattern.taller.place_a' : 'pattern.taller.place_b',
+                    { codi: pomActiu.codi_client,
+                      nom: pomActiu.nom_client || pomActiu.nom_canonic })
+                : t(puntsPom.length === 0
+                    ? 'pattern.pom_hint_first' : 'pattern.pom_hint_second')}
+              onTanca={cancelar}
+              tancaEtiqueta={t('pattern.taller.cancel_place')}
+            />
           )}
           {mode === 'sew' && (
             <SewEditor
@@ -370,7 +425,7 @@ export default function TallerPatro() {
 
           {pickerObert && (
             <POMPicker
-              onTria={ancorarPOM}
+              onTria={pom => ancorar(pom.id, puntsPom[0], puntsPom[1])}
               onCancel={() => { setPickerObert(false); setPuntsPom([]) }}
             />
           )}
@@ -475,7 +530,7 @@ function BarraEines({ t, mode, onMode, tascaId, errTasca }) {
   )
 }
 
-function Avis({ text, err = false, onTanca = null }) {
+function Avis({ text, err = false, onTanca = null, tancaEtiqueta = null }) {
   const { t } = useTranslation()
   return (
     <div style={{
@@ -491,7 +546,7 @@ function Avis({ text, err = false, onTanca = null }) {
       {onTanca && (
         <button
           onClick={onTanca}
-          aria-label={t('app.close')}
+          aria-label={tancaEtiqueta || t('app.close')}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
         >
           <i className="ti ti-x" />

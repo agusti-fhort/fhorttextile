@@ -3145,8 +3145,15 @@
   },
   "pattern": {
     "taller": {
+      "value_sheet_none": "sheet —",
+      "value_delta": "pattern {{cm}} · Δ {{delta}}",
+      "pom_place_hint": "Place {{codi}} on the pattern",
+      "pom_outside": "Add a POM outside the sheet",
+      "place_a": "Placing {{codi}} ({{nom}}) — click point A",
+      "place_b": "Placing {{codi}} ({{nom}}) — now point B",
+      "cancel_place": "Cancel the placement (Esc)",
       "open": "Open in the workshop",
-      "model_poms": "Model POMs · {{ancorats}}/{{total}} anchored",
+      "model_poms": "Model POMs · {{ancorats}} of {{total}} placed",
       "model_poms_empty": "This model has no measurements on its sheet yet.",
       "pom_anchored": "Anchored to the pattern",
       "pom_pending": "Not anchored yet",
