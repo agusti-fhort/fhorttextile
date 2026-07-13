@@ -42,6 +42,8 @@ export const KONVA_COL = {
   pom: '#bf3989',      // la mesura d'un POM ancorat
   sewA: '#1f6feb',     // costat A d'una costura
   sewB: '#8250df',     // costat B
+  tram: '#0969da',     // tram DECLARAT (el que una costura pot triar)
+  tramSel: '#fb8500',  // el tram assenyalat o triat
 }
 
 const ZOOM_MIN = 0.02
@@ -59,9 +61,8 @@ export default function PatternViewer({
   mode = 'view',                 // 'view' | 'pom' | 'sew'
   puntsPom = [],                 // punts ja clicats en mode POM (0, 1 o 2)
   onClicPunt = null,
+  // Els trams que la costura en curs ja té a cada costat (per pintar-los del seu color).
   segmentsA = [], segmentsB = [],
-  costatActiu = 'a',
-  onClicSegment = null,
   // ── W3/D8. La peça on es COL·LOCA: l'imant només s'ofereix sobre els seus punts i la
   // resta del patró s'atenua. Sense això, l'imant caça el punt més proper del patró SENCER
   // — i dos punts de peces diferents no són una mesura d'una peça, són un PatternPOM
@@ -96,11 +97,15 @@ export default function PatternViewer({
   const bbox = useMemo(() => bboxDePeces(pieces), [pieces])
   const presents = useMemo(() => capesPresents(pieces), [pieces])
 
-  // Els punts que l'imant pot caçar: els de la peça activa, o els de tot el patró si encara
-  // no n'hi ha cap (el primer clic pot ser a qualsevol peça).
-  const pecesIman = useMemo(
-    () => (pecaIman ? pieces.filter(p => p.nom_block === pecaIman) : pieces),
-    [pieces, pecaIman])
+  // Els punts que l'imant pot caçar: els de la peça activa (i, definint un tram, els de la
+  // seva VORA), o els de tot el patró si encara no s'ha clicat res.
+  const pecesIman = useMemo(() => {
+    if (!pecaIman) return pieces
+    const p = pieces.find(x => x.nom_block === pecaIman)
+    if (!p) return []
+    if (voraIman == null) return [p]
+    return [{ ...p, boundaries: (p.boundaries || []).filter(b => b.index === voraIman) }]
+  }, [pieces, pecaIman, voraIman])
 
   // ── enquadrar ────────────────────────────────────────────────────────────
   const encaixar = useCallback(() => {
@@ -204,7 +209,10 @@ export default function PatternViewer({
   // el patró sota el punt que s'està a punt de clicar. Llavors la mà es demana — espai o
   // botó del mig. La resta del temps (mirant, cosint, o abans del punt A) el drag paneja,
   // que és el que tothom espera d'un canvas.
-  const colocant = mode === 'pom' && puntsPom.length > 0
+  // POM i SEGMENT es marquen igual: dos punts imantats sobre la geometria. El que canvia és
+  // què se'n fa (una mesura recta, o un tros de vora).
+  const imantant = mode === 'pom' || mode === 'seg'
+  const colocant = imantant && puntsPom.length > 0
   const potPanejar = !colocant
   const maAlta = espai || !!panRef.current
 
@@ -256,20 +264,20 @@ export default function PatternViewer({
     const tram = tramMesProper(pieces, xMm, yMm, 12 / zoom)
     // En mode POM, el cursor s'imanta al punt més proper: marcar una mesura "a ull" no
     // seria una mesura del patró, seria un dibuix a sobre del patró.
-    const iman = mode === 'pom' ? puntMesProper(pecesIman, xMm, yMm, 14 / zoom) : null
+    const iman = imantant ? puntMesProper(pecesIman, xMm, yMm, 14 / zoom) : null
     setHover({ xMm, yMm, tram, iman })
   }
 
   const onClicStage = () => {
     if (arrossegatRef.current) { arrossegatRef.current = false; return }
-    if (mode === 'pom' && hover?.iman && onClicPunt) onClicPunt(hover.iman)
+    if (imantant && hover?.iman && onClicPunt) onClicPunt(hover.iman)
   }
 
   const visible = (capa) => capes[capa] && presents.has(capa)
   const anotant = mode !== 'view'
   // Qui té el focus: col·locant, la peça de l'imant; mirant, la peça seleccionada. Cosint no
   // s'atenua res — una costura uneix DUES peces i amagar-ne una seria amagar la meitat.
-  const pecaFocus = mode === 'pom' ? pecaIman : (anotant ? null : pecaSel)
+  const pecaFocus = imantant ? pecaIman : (anotant ? null : pecaSel)
 
 
   return (
@@ -332,49 +340,71 @@ export default function PatternViewer({
               <PomKonva key={`pom-${pom.id}`} piece={piece} pom={pom} zoom={zoom} />
             )))}
 
-            {/* Mode SEW: els segments triats, ressaltats. */}
-            {mode === 'sew' && pieces.flatMap(piece =>
-              (piece.segments || []).map(seg => {
-                const enA = segmentsA.includes(seg.id)
-                const enB = segmentsB.includes(seg.id)
-                if (!enA && !enB) return null
-                const pts = puntsDelSegment(piece, seg)
-                if (pts.length < 2) return null
-                return (
-                  <Line
-                    key={`seg-${seg.id}`}
-                    points={pts.flatMap(p => [p.x, -p.y])}
-                    stroke={enA ? KONVA_COL.sewA : KONVA_COL.sewB}
-                    strokeWidth={4 / zoom}
-                    lineCap="round"
-                    listening={false}
-                    perfectDrawEnabled={false}
-                  />
-                )
-              })
-            )}
+            {/* Els trams DECLARATS, sobre la geometria. Es pinten SEMPRE: són el vocabulari
+                de costura del patró, i qui cus ha de veure què hi ha declarat sense canviar
+                de mode. Els 'auto' del motor NO es pinten — són una proposta de lectura, i
+                dibuixar-los seria dir que existeixen. */}
+            {tramsDeclarats.map(tr => {
+              const piece = pieces.find(p => p.id === tr.piece_id)
+              if (!piece) return null
+              const pts = puntsDelSegment(piece, tr)
+              if (pts.length < 2) return null
+              const marcat = tramRessaltat === tr.id
+              const enA = segmentsA.includes(tr.id)
+              const enB = segmentsB.includes(tr.id)
+              const color = enA ? KONVA_COL.sewA : enB ? KONVA_COL.sewB
+                : marcat ? KONVA_COL.tramSel : KONVA_COL.tram
+              return (
+                <Line
+                  key={`tram-${tr.id}`}
+                  points={pts.flatMap(p => [p.x, -p.y])}
+                  stroke={color}
+                  strokeWidth={(marcat || enA || enB ? 4.5 : 2.5) / zoom}
+                  lineCap="round"
+                  listening={mode === 'sew' && !!onClicTram}
+                  hitStrokeWidth={Math.max(14 / zoom, 5)}
+                  onClick={() => onClicTram && onClicTram(tr)}
+                  onTap={() => onClicTram && onClicTram(tr)}
+                  perfectDrawEnabled={false}
+                />
+              )
+            })}
 
-            {/* Mode SEW: zones clicables sobre CADA segment (invisibles, però amb hit). */}
-            {mode === 'sew' && onClicSegment && pieces.flatMap(piece =>
-              (piece.segments || []).map(seg => {
-                const pts = puntsDelSegment(piece, seg)
-                if (pts.length < 2) return null
-                return (
-                  <Line
-                    key={`hit-${seg.id}`}
-                    points={pts.flatMap(p => [p.x, -p.y])}
-                    stroke="transparent"
-                    strokeWidth={2 / zoom}
-                    hitStrokeWidth={Math.max(14 / zoom, 5)}
-                    onClick={() => onClicSegment(seg, piece)}
-                    onTap={() => onClicSegment(seg, piece)}
-                    onMouseEnter={(e) => { e.target.getStage().container().style.cursor = 'pointer' }}
-                    onMouseLeave={(e) => { e.target.getStage().container().style.cursor = 'grab' }}
-                    perfectDrawEnabled={false}
-                  />
-                )
-              })
-            )}
+            {/* Mode SEGMENT: els DOS arcs que els dos punts defineixen. El triat, gruixut;
+                l'altre, discontinu i clicable — triar-lo és clicar-lo. */}
+            {mode === 'seg' && arcs.map((arc, i) => {
+              const triat = i === arcTriat
+              return (
+                <Line
+                  key={`arc-${i}`}
+                  points={arc.punts.flatMap(p => [p.x, -p.y])}
+                  stroke={triat ? KONVA_COL.tramSel : KONVA_COL.tram}
+                  strokeWidth={(triat ? 5 : 2.5) / zoom}
+                  dash={triat ? undefined : [8 / zoom, 5 / zoom]}
+                  opacity={triat ? 1 : 0.75}
+                  lineCap="round"
+                  listening={!!onTriaArc}
+                  hitStrokeWidth={Math.max(16 / zoom, 6)}
+                  onClick={() => onTriaArc && onTriaArc(i)}
+                  onTap={() => onTriaArc && onTriaArc(i)}
+                  perfectDrawEnabled={false}
+                />
+              )
+            })}
+            {mode === 'seg' && arcs.map((arc, i) => {
+              const mig = arc.punts[Math.floor(arc.punts.length / 2)]
+              if (!mig) return null
+              return (
+                <Text
+                  key={`arc-txt-${i}`}
+                  x={mig.x} y={-mig.y - 14 / zoom}
+                  text={`${(arc.longitud / 10).toFixed(1)} cm`}
+                  fontSize={12 / zoom}
+                  fill={i === arcTriat ? KONVA_COL.tramSel : KONVA_COL.tram}
+                  listening={false} perfectDrawEnabled={false}
+                />
+              )
+            })}
 
             {/* Mode POM: la mesura que s'està marcant, i l'imant sota el cursor. */}
             {mode === 'pom' && puntsPom.length >= 1 && (
@@ -391,13 +421,13 @@ export default function PatternViewer({
                 perfectDrawEnabled={false}
               />
             )}
-            {mode === 'pom' && puntsPom.map((p, i) => (
+            {imantant && puntsPom.map((p, i) => (
               <Circle
                 key={`sel-${i}`} x={p.x} y={-p.y} r={5 / zoom}
                 fill={KONVA_COL.pom} listening={false} perfectDrawEnabled={false}
               />
             ))}
-            {mode === 'pom' && hover?.iman && (
+            {imantant && hover?.iman && (
               <Circle
                 x={hover.iman.punt.x} y={-hover.iman.punt.y} r={6 / zoom}
                 stroke={KONVA_COL.pom} strokeWidth={1.5 / zoom}

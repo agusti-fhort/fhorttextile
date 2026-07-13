@@ -3145,6 +3145,17 @@
   },
   "pattern": {
     "taller": {
+      "mode_seg": "Definir tram",
+      "seg_a": "Definint un tram — clica el punt A sobre una vora",
+      "seg_b": "Definint un tram — ara el punt B, sobre la MATEIXA vora",
+      "seg_arc": "Dos punts, dos arcs: tria quin és el tram (clica'l al patró o al botó) i posa-li nom",
+      "arc_short": "Arc curt · {{cm}} cm",
+      "arc_long": "Arc llarg · {{cm}} cm",
+      "arc_only": "Tram · {{cm}} cm",
+      "segment_name": "Nom",
+      "segment_default": "Tram {{n}}",
+      "segment_create": "Declarar el tram",
+      "err_segment": "No s'ha pogut declarar el tram.",
       "collapse": "Plegar",
       "expand": "Desplegar",
       "pan_hint": "Espai + arrossegar (o botó del mig) per moure el patró · roda per fer zoom · Esc per cancel·lar",

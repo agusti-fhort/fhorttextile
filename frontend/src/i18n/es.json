@@ -3145,6 +3145,17 @@
   },
   "pattern": {
     "taller": {
+      "mode_seg": "Definir tramo",
+      "seg_a": "Definiendo un tramo — clica el punto A sobre un borde",
+      "seg_b": "Definiendo un tramo — ahora el punto B, sobre el MISMO borde",
+      "seg_arc": "Dos puntos, dos arcos: elige cuál es el tramo (clícalo en el patrón o en el botón) y ponle nombre",
+      "arc_short": "Arco corto · {{cm}} cm",
+      "arc_long": "Arco largo · {{cm}} cm",
+      "arc_only": "Tramo · {{cm}} cm",
+      "segment_name": "Nombre",
+      "segment_default": "Tramo {{n}}",
+      "segment_create": "Declarar el tramo",
+      "err_segment": "No se ha podido declarar el tramo.",
       "collapse": "Plegar",
       "expand": "Desplegar",
       "pan_hint": "Espacio + arrastrar (o botón central) para mover el patrón · rueda para zoom · Esc para cancelar",

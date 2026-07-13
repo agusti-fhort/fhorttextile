@@ -3145,6 +3145,17 @@
   },
   "pattern": {
     "taller": {
+      "mode_seg": "Define span",
+      "seg_a": "Defining a span — click point A on an edge",
+      "seg_b": "Defining a span — now point B, on the SAME edge",
+      "seg_arc": "Two points, two arcs: pick which one is the span (click it on the pattern or on the button) and name it",
+      "arc_short": "Short arc · {{cm}} cm",
+      "arc_long": "Long arc · {{cm}} cm",
+      "arc_only": "Span · {{cm}} cm",
+      "segment_name": "Name",
+      "segment_default": "Span {{n}}",
+      "segment_create": "Declare the span",
+      "err_segment": "The span could not be declared.",
       "collapse": "Collapse",
       "expand": "Expand",
       "pan_hint": "Space + drag (or middle button) to move the pattern · wheel to zoom · Esc to cancel",

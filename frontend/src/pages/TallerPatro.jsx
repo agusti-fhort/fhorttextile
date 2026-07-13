@@ -3,12 +3,13 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { patterns, models, modelTasks } from '../api/endpoints'
 import PatternViewer from '../components/pattern/PatternViewer'
-import { longitudTram } from '../components/pattern/patternGeometry'
+import { arcsEntrePunts, longitudTram } from '../components/pattern/patternGeometry'
 import PieceList from '../components/pattern/PieceList'
 import ModelPomList from '../components/pattern/ModelPomList'
 import RelationsPanel from '../components/pattern/RelationsPanel'
 import POMPicker from '../components/pattern/POMPicker'
 import SewEditor from '../components/pattern/SewEditor'
+import SegmentEditor from '../components/pattern/SegmentEditor'
 
 /**
  * TALLER DE PATRÓ (W2) — el mòdul dedicat, a pantalla completa.
@@ -44,8 +45,10 @@ export default function TallerPatro() {
   const [pecaSel, setPecaSel] = useState('')
 
   // ── eines d'anotació (venen del tab: es TRASLLADEN, no es reescriuen) ─────
-  const [mode, setMode] = useState('view')          // 'view' | 'pom' | 'sew'
-  const [puntsPom, setPuntsPom] = useState([])      // punts clicats (imantats)
+  const [mode, setMode] = useState('view')          // 'view' | 'pom' | 'sew' | 'seg'
+  // Els punts clicats (imantats). El fan servir els DOS modes de dos punts: marcar un POM i
+  // definir un tram. El gest és el mateix; el que canvia és què se'n fa.
+  const [puntsPom, setPuntsPom] = useState([])
   const [pickerObert, setPickerObert] = useState(false)
   const [segmentsA, setSegmentsA] = useState([])
   const [segmentsB, setSegmentsB] = useState([])
@@ -56,6 +59,11 @@ export default function TallerPatro() {
   // cercador: A → B → ancorat. Sense pomActiu, el mode POM és la via secundària (el POM
   // que no és a la fitxa) i llavors sí que cal preguntar quin és — el picker.
   const [pomActiu, setPomActiu] = useState(null)
+  // Definir un tram: quin dels dos arcs, i com se'n diu.
+  const [arcTriat, setArcTriat] = useState(0)
+  const [nomTram, setNomTram] = useState('')
+  const [creantTram, setCreantTram] = useState(false)
+  const [tramRessaltat, setTramRessaltat] = useState(null)
   const [tascaId, setTascaId] = useState(null)      // per al render: hi ha rellotge?
   const [errTasca, setErrTasca] = useState(null)
   // L'error d'una EINA (no s'ha pogut ancorar, no s'ha pogut cosir) no és l'error de
@@ -156,11 +164,19 @@ export default function TallerPatro() {
     setSegmentsA([])
     setSegmentsB([])
     setCostatActiu('a')
+    setArcTriat(0)
+    setNomTram('')
   }, [])
 
   const triarMode = (nou) => {
-    setMode(m => (m === nou ? 'view' : nou))
     netejarSeleccio()
+    setMode(m => {
+      const seguent = m === nou ? 'view' : nou
+      // «Tram 3» és un nom pobre, però un camp buit és pitjor: el suggeriment es pot
+      // esborrar, i qui té pressa no es queda sense poder desar.
+      if (seguent === 'seg') setNomTram(t('pattern.taller.segment_default', { n: trams.length + 1 }))
+      return seguent
+    })
   }
 
   // Clicar una fila PENDENT de la llista de treball ÉS l'ordre de col·locar aquell POM:
@@ -203,12 +219,14 @@ export default function TallerPatro() {
       // sobre el punt ja triat el DESTRIA, que és el que espera qui s'ha equivocat.
       if (prev.length && prev[prev.length - 1].id === punt.id) return prev.slice(0, -1)
       const nous = [...prev, punt].slice(-2)
-      if (nous.length === 2) {
+      if (nous.length === 2 && mode === 'pom') {
         // Dos punts. Si sabem quin POM s'està col·locant, s'ancora i s'acaba; si no (via
         // secundària), llavors sí que s'ha de preguntar quin és.
         if (pomActiu) ancorar(pomActiu.pom_master, nous[0], nous[1])
         else setPickerObert(true)
       }
+      // En mode SEGMENT no es crea res encara: amb dos punts hi ha DOS arcs possibles, i
+      // quin és el bo el diu qui declara, no nosaltres.
       return nous
     })
   }
@@ -238,10 +256,13 @@ export default function TallerPatro() {
     }
   }
 
-  const onClicSegment = (seg) => {
+  // Cosir tria NOMÉS trams DECLARATS: ni del canvas ni de la llista es pot agafar una
+  // proposta del motor. Un tram 'auto' és una hipòtesi de lectura del CAD; una costura és
+  // una afirmació sobre la peça, i no es fa una afirmació amb una hipòtesi.
+  const triarTram = (tram) => {
     const llista = costatActiu === 'a' ? segmentsA : segmentsB
     const set = costatActiu === 'a' ? setSegmentsA : setSegmentsB
-    set(llista.includes(seg.id) ? llista.filter(x => x !== seg.id) : [...llista, seg.id])
+    set(llista.includes(tram.id) ? llista.filter(x => x !== tram.id) : [...llista, tram.id])
   }
 
   const declararCostura = async () => {
@@ -320,10 +341,64 @@ export default function TallerPatro() {
   // seria una mesura d'aquesta peça — seria una recepta que el servidor no pot resoldre.
   // Abans del primer clic mana la peça seleccionada, si n'hi ha; si no, tot el patró.
   const pecaIman = useMemo(() => {
-    if (mode !== 'pom') return null
+    if (mode !== 'pom' && mode !== 'seg') return null
     if (puntsPom.length > 0) return pecaDelPunt(puntsPom[0])?.nom_block || null
     return pecaSel || null
   }, [mode, puntsPom, pecaSel, pecaDelPunt])
+
+  /** La vora (índex) i la posició d'un punt dins d'ella. */
+  const voraDelPunt = useCallback((punt) => {
+    const peca = pecaDelPunt(punt)
+    if (!peca) return null
+    for (const v of peca.boundaries || []) {
+      const i = (v.points || []).findIndex(q => q.id === punt.id)
+      if (i >= 0) return { peca, vora: v, index: v.index, ordre: i }
+    }
+    return null
+  }, [pecaDelPunt])
+
+  // Definint un tram, l'imant queda tancat a la VORA del punt A. Un tram és un tros d'UNA
+  // vora: si el punt B pogués sortir d'una altra, el motor ho rebutjaria — i és millor no
+  // deixar clicar el que no es pot fer que deixar-ho clicar i després dir que no.
+  const voraIman = useMemo(() => {
+    if (mode !== 'seg' || puntsPom.length === 0) return null
+    return voraDelPunt(puntsPom[0])?.index ?? null
+  }, [mode, puntsPom, voraDelPunt])
+
+  // Els dos arcs que els dos punts defineixen (o l'únic, si la vora és oberta).
+  const arcs = useMemo(() => {
+    if (mode !== 'seg' || puntsPom.length < 2) return []
+    const a = voraDelPunt(puntsPom[0])
+    const b = voraDelPunt(puntsPom[1])
+    if (!a || !b || a.index !== b.index) return []
+    return arcsEntrePunts(a.vora, a.ordre, b.ordre)
+  }, [mode, puntsPom, voraDelPunt])
+
+  const crearTram = async () => {
+    const arc = arcs[arcTriat]
+    if (!arc || !nomTram.trim()) return
+    setCreantTram(true)
+    try {
+      // Dos PUNTS i quin arc; ni t ni longituds. El tram el resol el servidor sobre la
+      // geometria — igual que el valor d'un POM.
+      await patterns.segments.create({
+        point_a: puntsPom[0].id,
+        point_b: puntsPom[1].id,
+        nom: nomTram.trim(),
+        arc_llarg: arc.arcLlarg,
+      })
+      netejarSeleccio()
+      setMode('view')
+      await recarregarRelacions()
+    } catch (e) {
+      setErrEina(e.response?.data?.tram
+        || e.response?.data?.detail
+        || t('pattern.taller.err_segment'))
+      setPuntsPom([])
+    } finally {
+      setCreantTram(false)
+    }
+  }
 
   // Els trams DECLARATS. De la geometria en surten TOTS —els que el motor proposa (gir→gir,
   // origen 'auto') i els que algú ha declarat—, però al taller només manen els declarats: la
@@ -424,6 +499,24 @@ export default function TallerPatro() {
               tancaEtiqueta={t('pattern.taller.cancel_place')}
             />
           )}
+          {mode === 'seg' && (
+            <Avis
+              text={puntsPom.length === 0
+                ? t('pattern.taller.seg_a')
+                : puntsPom.length === 1
+                  ? t('pattern.taller.seg_b')
+                  : t('pattern.taller.seg_arc')}
+              onTanca={cancelar}
+              tancaEtiqueta={t('pattern.taller.cancel_place')}
+            />
+          )}
+          {mode === 'seg' && arcs.length > 0 && (
+            <SegmentEditor
+              arcs={arcs} arcTriat={arcTriat} onTriaArc={setArcTriat}
+              nom={nomTram} onNom={setNomTram}
+              onCrea={crearTram} onCancela={cancelar} creant={creantTram}
+            />
+          )}
           {mode === 'sew' && (
             <SewEditor
               segmentsA={segmentsA} segmentsB={segmentsB}
@@ -452,8 +545,12 @@ export default function TallerPatro() {
               segmentsA={segmentsA}
               segmentsB={segmentsB}
               costatActiu={costatActiu}
-              onClicSegment={onClicSegment}
               pecaIman={pecaIman}
+              voraIman={voraIman}
+              arcs={arcs} arcTriat={arcTriat} onTriaArc={setArcTriat}
+              tramsDeclarats={trams}
+              tramRessaltat={tramRessaltat}
+              onClicTram={triarTram}
               omplirAlcada
             />
           )}
@@ -548,6 +645,14 @@ function BarraEines({ t, mode, onMode, tascaId, errTasca }) {
       >
         <i className="ti ti-ruler-measure" />
         {t('pattern.mode_pom')}
+      </button>
+      {/* PRIMER DECLARAR, DESPRÉS COSIR: l'ordre dels botons és l'ordre del flux. */}
+      <button
+        onClick={() => onMode('seg')} disabled={!tascaId}
+        aria-pressed={mode === 'seg'} style={boto(mode === 'seg')}
+      >
+        <i className="ti ti-line" />
+        {t('pattern.taller.mode_seg')}
       </button>
       <button
         onClick={() => onMode('sew')} disabled={!tascaId}
