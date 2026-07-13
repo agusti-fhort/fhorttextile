@@ -2204,7 +2204,11 @@
     "gravar_confirm_ok": "Grabar POM",
     "gravar_confirm_cancel": "Cancelar",
     "save_pom_err": "No se ha podido grabar POM.",
-    "unsaved_pom_hint": "Graba POM para cerrar la tarea y activar Medidas."
+    "unsaved_pom_hint": "Graba POM para cerrar la tarea y activar Medidas.",
+    "sealed_title": "La versión v{{v}} del escalado está aprobada (sellada en producción).",
+    "sealed_hint": "Lo que ya se ha aprobado no cambia: para editarlo, crea una versión nueva.",
+    "sealed_new_version": "Crear versión nueva",
+    "sealed_bump_err": "No se ha podido crear la versión nueva."
   },
   "model_fabric": {
     "err_close_table": "No se ha podido cerrar la tabla.",

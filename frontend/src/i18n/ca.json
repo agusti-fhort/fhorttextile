@@ -2204,7 +2204,11 @@
     "gravar_confirm_ok": "Gravar POM",
     "gravar_confirm_cancel": "Cancel·lar",
     "save_pom_err": "No s'ha pogut gravar POM.",
-    "unsaved_pom_hint": "Grava POM per tancar la tasca i activar Mesures."
+    "unsaved_pom_hint": "Grava POM per tancar la tasca i activar Mesures.",
+    "sealed_title": "La versió v{{v}} de l'escalat està aprovada (segellada a producció).",
+    "sealed_hint": "El que ja s'ha aprovat no canvia: per editar-lo, crea'n una versió nova.",
+    "sealed_new_version": "Crear nova versió",
+    "sealed_bump_err": "No s'ha pogut crear la versió nova."
   },
   "model_fabric": {
     "err_close_table": "No s'ha pogut tancar la taula.",
