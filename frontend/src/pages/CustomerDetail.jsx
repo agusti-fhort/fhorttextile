@@ -200,6 +200,14 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
       .catch(() => notify({ type: 'err', text: t('clients.error') }))
   }
 
+  // Mapa un àlies pendent (pom=null) al POM canònic que el tècnic tria a la mateixa fila.
+  const mapAlias = (a, pm) => {
+    customerAliases.update(a.id, { pom: pm.id, pendent_revisio: false })
+      .then(() => loadAliases())
+      .then(() => notify({ type: 'ok', text: t('clients.alias_mapped', { code: a.client_code, pom: pm.codi_client }) }))
+      .catch(() => notify({ type: 'err', text: t('clients.error') }))
+  }
+
   // Descripció LLEGAT: `client_description` és el camp obsolet (models.py:255-258) i només
   // s'usa de reserva per als àlies antics. Mai si duplica el codi: la migració 0031 hi va
   // copiar el codi del client, i pintar-ho seria repetir la columna del costat.
@@ -232,7 +240,14 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
     // POM canònic: codi global (POM-XXX) com a element principal; a sota, abreviatura + nom EN.
     // Fallback per a POMs tenant-only (sense pom_global): el codi_client fa d'identificador i
     // no repetim l'abreviatura si coincideix amb el principal.
+    // Sense POM (pom=null): és vocabulari del client PENDENT DE MAPAR (QA-S8-R1) — es pot mapar
+    // des de la mateixa fila amb el cercador de POM.
     { key: 'pom', label: t('clients.alias_pom'), render: r => {
+      if (!r.pom) {
+        return canEdit
+          ? <PomPicker t={t} onPick={pm => mapAlias(r, pm)} label={t('clients.alias_pendent_map')} />
+          : <Badge variant="warn">{t('clients.alias_pendent_map')}</Badge>
+      }
       const primary = r.pom_code_global || r.pom_codi
       const abbr = r.pom_abbreviation && r.pom_abbreviation !== primary ? r.pom_abbreviation : null
       const nomEn = r.pom_nom_en || r.pom_nom
@@ -334,6 +349,59 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
           </ul>
         )}
       </section>
+    </div>
+  )
+}
+
+// Cercador de POM del catàleg. Únic per a tot el tab tècnic: el fan servir l'alta d'àlies
+// (AliasAddRow) i el mapatge en línia d'un àlies pendent (QA-S8-R1). `label` és el text del
+// botó quan el desplegable està tancat; `onPick` rep el POMMaster triat.
+function PomPicker({ t, onPick, label }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState([])
+
+  const search = (value) => {
+    setQ(value)
+    if (!value.trim()) { setResults([]); return }
+    poms.list({ search: value.trim(), page_size: 15 })
+      .then(res => setResults(res.data?.results ?? (Array.isArray(res.data) ? res.data : [])))
+      .catch(() => setResults([]))
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} style={{
+        ...miniBtn, borderColor: 'var(--warn)', color: 'var(--warn)', cursor: 'pointer',
+      }}>
+        <i className="ti ti-map-pin-plus" style={{ fontSize: 13, marginRight: 4 }} />{label}
+      </button>
+    )
+  }
+  return (
+    <div>
+      <input autoFocus value={q} onChange={e => search(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQ(''); setResults([]) } }}
+        placeholder={t('clients.alias_search_pom')} style={{ ...selS, width: 220 }} />
+      {results.length > 0 && (
+        <ul style={{
+          listStyle: 'none', padding: 0, margin: '4px 0 0', maxHeight: 160, overflowY: 'auto',
+          border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)',
+        }}>
+          {results.map(pm => (
+            <li key={pm.id}>
+              <button onClick={() => { setOpen(false); setQ(''); setResults([]); onPick(pm) }}
+                style={{
+                  width: '100%', textAlign: 'left', background: 'none', border: 'none',
+                  cursor: 'pointer', padding: '5px 8px', fontSize: 'var(--fs-body)',
+                  borderBottom: '0.5px solid var(--border)',
+                }}>
+                <span style={{ fontFamily: MONO, fontWeight: 600 }}>{pm.codi_client}</span> · {pm.nom_client}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

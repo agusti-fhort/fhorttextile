@@ -261,6 +261,8 @@
     "alias_desc_en": "Description (EN)",
     "alias_desc_local": "Description (local)",
     "alias_lang": "Language",
+    "alias_pendent_map": "Pending mapping",
+    "alias_mapped": "Alias {{code}} mapped to {{pom}}",
     "alias_pom": "Canonical POM",
     "alias_origen": "Origin",
     "alias_search_pom": "Search POM…",

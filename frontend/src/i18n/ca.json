@@ -261,6 +261,8 @@
     "alias_desc_en": "Descripció (EN)",
     "alias_desc_local": "Descripció (local)",
     "alias_lang": "Idioma",
+    "alias_pendent_map": "Pendent de mapar",
+    "alias_mapped": "Àlies {{code}} mapat a {{pom}}",
     "alias_pom": "POM canònic",
     "alias_origen": "Origen",
     "alias_search_pom": "Cercar POM…",
