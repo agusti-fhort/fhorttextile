@@ -217,8 +217,7 @@ export default function TallerPatro() {
 
   /** L'ancoratge, un de sol per als dos camins: el guiat i el del picker. */
   const ancorar = async (pomMasterId, a, b) => {
-    const peca = geometria.pieces.find(p =>
-      (p.boundaries || []).some(v => (v.points || []).some(q => q.id === a.id)))
+    const peca = pecaDelPunt(a)
     setPickerObert(false)
     try {
       // S'envia la RECEPTA, mai el valor: el valor el llegeix el servidor de la geometria.
@@ -314,6 +313,21 @@ export default function TallerPatro() {
   // `model-poms`. Fer-lo dues vegades i de dues maneres seria demanar que divergissin.)
   const pomsAncorats = useMemo(() => (geometria?.pieces || []).flatMap(p =>
     (p.poms || []).map(x => ({ ...x, peca: p.nom_block }))), [geometria])
+
+  /** La peça que conté un punt de la geometria. */
+  const pecaDelPunt = useCallback((punt) => (geometria?.pieces || []).find(p =>
+    (p.boundaries || []).some(v => (v.points || []).some(q => q.id === punt.id))),
+  [geometria])
+
+  // La peça on l'imant pot caçar (D8). Un cop clicat el punt A, el B ha de sortir de la
+  // MATEIXA peça: un PatternPOM penja d'UNA peça, i una mesura amb un extrem a cada peça no
+  // seria una mesura d'aquesta peça — seria una recepta que el servidor no pot resoldre.
+  // Abans del primer clic mana la peça seleccionada, si n'hi ha; si no, tot el patró.
+  const pecaIman = useMemo(() => {
+    if (mode !== 'pom') return null
+    if (puntsPom.length > 0) return pecaDelPunt(puntsPom[0])?.nom_block || null
+    return pecaSel || null
+  }, [mode, puntsPom, pecaSel, pecaDelPunt])
 
   const tornar = () => navigate(`/models/${modelId}?tab=Patró`)
 
@@ -419,6 +433,7 @@ export default function TallerPatro() {
               segmentsB={segmentsB}
               costatActiu={costatActiu}
               onClicSegment={onClicSegment}
+              pecaIman={pecaIman}
               omplirAlcada
             />
           )}

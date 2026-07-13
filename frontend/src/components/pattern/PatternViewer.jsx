@@ -62,6 +62,11 @@ export default function PatternViewer({
   segmentsA = [], segmentsB = [],
   costatActiu = 'a',
   onClicSegment = null,
+  // ── W3/D8. La peça on es COL·LOCA: l'imant només s'ofereix sobre els seus punts i la
+  // resta del patró s'atenua. Sense això, l'imant caça el punt més proper del patró SENCER
+  // — i dos punts de peces diferents no són una mesura d'una peça, són un PatternPOM
+  // impossible (en penja d'UNA). La restricció no és estètica: és la llei del model.
+  pecaIman = null,
   // ── W2. Al Taller el canvas no té una alçada de maqueta: ocupa el que li deixa el
   // pare. Al tab (la porta) segueix valent ALCADA, que és el que sempre ha valgut.
   omplirAlcada = false,
@@ -81,6 +86,12 @@ export default function PatternViewer({
 
   const bbox = useMemo(() => bboxDePeces(pieces), [pieces])
   const presents = useMemo(() => capesPresents(pieces), [pieces])
+
+  // Els punts que l'imant pot caçar: els de la peça activa, o els de tot el patró si encara
+  // no n'hi ha cap (el primer clic pot ser a qualsevol peça).
+  const pecesIman = useMemo(
+    () => (pecaIman ? pieces.filter(p => p.nom_block === pecaIman) : pieces),
+    [pieces, pecaIman])
 
   // ── enquadrar ────────────────────────────────────────────────────────────
   const encaixar = useCallback(() => {
@@ -155,7 +166,7 @@ export default function PatternViewer({
     const tram = tramMesProper(pieces, xMm, yMm, 12 / zoom)
     // En mode POM, el cursor s'imanta al punt més proper: marcar una mesura "a ull" no
     // seria una mesura del patró, seria un dibuix a sobre del patró.
-    const iman = mode === 'pom' ? puntMesProper(pieces, xMm, yMm, 14 / zoom) : null
+    const iman = mode === 'pom' ? puntMesProper(pecesIman, xMm, yMm, 14 / zoom) : null
     setHover({ xMm, yMm, tram, iman })
   }
 
@@ -165,6 +176,9 @@ export default function PatternViewer({
 
   const visible = (capa) => capes[capa] && presents.has(capa)
   const anotant = mode !== 'view'
+  // Qui té el focus: col·locant, la peça de l'imant; mirant, la peça seleccionada. Cosint no
+  // s'atenua res — una costura uneix DUES peces i amagar-ne una seria amagar la meitat.
+  const pecaFocus = mode === 'pom' ? pecaIman : (anotant ? null : pecaSel)
 
   return (
     <div style={{
@@ -209,9 +223,12 @@ export default function PatternViewer({
                 piece={piece}
                 zoom={zoom}
                 sel={piece.nom_block === pecaSel}
-                hiHaSeleccio={!!pecaSel && !anotant}
+                atenuada={!!pecaFocus && piece.nom_block !== pecaFocus}
                 visible={visible}
-                mostraPunts={capes.punts || mode === 'pom'}
+                // Els punts es dibuixen on es poden clicar. Ensenyar-los a una peça on
+                // l'imant no els caçarà seria oferir un clic que no farà res.
+                mostraPunts={capes.punts
+                  || (mode === 'pom' && (!pecaIman || piece.nom_block === pecaIman))}
                 anotant={anotant}
                 onClick={() => !anotant && onTriaPeca(
                   piece.nom_block === pecaSel ? '' : piece.nom_block)}
@@ -353,14 +370,12 @@ function puntsDeLaMesura(piece, pom) {
   return a && b ? [a, b] : []
 }
 
-function PecaKonva({ piece, zoom, sel, hiHaSeleccio, visible, mostraPunts, anotant, onClick }) {
+function PecaKonva({ piece, zoom, sel, atenuada, visible, mostraPunts, anotant, onClick }) {
   // Els traços es dibuixen amb gruix CONSTANT a pantalla: si el gruix escalés amb el
   // zoom, en allunyar-se el patró es convertiria en una taca negra i en apropar-se
   // desapareixeria.
   const gruix = (base) => base / zoom
   const g = GLIF / zoom
-
-  const atenuada = hiHaSeleccio && !sel
 
   return (
     <Group opacity={atenuada ? 0.25 : 1} onClick={onClick} onTap={onClick}>
