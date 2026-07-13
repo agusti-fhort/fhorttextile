@@ -90,6 +90,24 @@ class GradingVersion(models.Model):
         verbose_name = 'Versió de grading'
         verbose_name_plural = 'Versions de grading'
         ordering = ['size_fitting', '-data']
+        constraints = [
+            # R7 (G6-B2). UNA sola versió VIGENT per SizeFitting, i que ho digui la BD.
+            #
+            # El codi ja ho respectava (`bump_grading_version_and_generate` desactiva totes les
+            # actives abans de crear la nova), però era una invariant de cortesia: viva només
+            # mentre tothom hi passés. El motor de patrons en depèn per saber quina versió mana, i
+            # una segona activa faria que dues superfícies llegissin talles diferents del mateix
+            # model — el bug que G6/T1 acaba de tancar.
+            #
+            # CAP constraint sobre `aprovada`: l'historial d'aprovades és LEGÍTIM. Un segell vell
+            # ha de poder continuar dient què es va signar aquell dia. `aprovada` i `is_active` són
+            # ortogonals, i només la segona és una invariant d'unicitat.
+            models.UniqueConstraint(
+                fields=['size_fitting'],
+                condition=models.Q(is_active=True),
+                name='gradingversion_una_sola_activa_per_sf',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.size_fitting.codi} · {self.nom}'
