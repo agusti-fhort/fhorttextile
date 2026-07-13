@@ -582,7 +582,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             onConfirm={() => execPropagar(propStatus.segellada)}
           />
         )}
-        {activeTab === 'Patró' && <PatternTab modelId={parseInt(id)} taskId={taskParam ? parseInt(taskParam) : null} />}
+        {activeTab === 'Patró' && <PatternTab modelId={parseInt(id)} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
         {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}

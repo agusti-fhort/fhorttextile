@@ -3145,6 +3145,7 @@
   },
   "pattern": {
     "taller": {
+      "open": "Open in the workshop",
       "model_poms": "Model POMs · {{ancorats}}/{{total}} anchored",
       "model_poms_empty": "This model has no measurements on its sheet yet.",
       "pom_anchored": "Anchored to the pattern",

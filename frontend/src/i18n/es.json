@@ -3145,6 +3145,7 @@
   },
   "pattern": {
     "taller": {
+      "open": "Abrir en el taller",
       "model_poms": "Poms del modelo · {{ancorats}}/{{total}} anclados",
       "model_poms_empty": "Este modelo aún no tiene medidas en la ficha.",
       "pom_anchored": "Anclado al patrón",

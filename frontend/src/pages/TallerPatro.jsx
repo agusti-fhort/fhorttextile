@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { patterns, models, baseMeasurements } from '../api/endpoints'
+import { patterns, models, modelTasks, baseMeasurements } from '../api/endpoints'
 import PatternViewer from '../components/pattern/PatternViewer'
 import PieceList from '../components/pattern/PieceList'
 import ModelPomList from '../components/pattern/ModelPomList'
 import RelationsPanel from '../components/pattern/RelationsPanel'
+import POMPicker from '../components/pattern/POMPicker'
+import SewEditor from '../components/pattern/SewEditor'
 
 /**
  * TALLER DE PATRÓ (W2) — el mòdul dedicat, a pantalla completa.
@@ -27,6 +29,7 @@ export default function TallerPatro() {
   const modelId = parseInt(id)
   const [sp] = useSearchParams()
   const fileParam = sp.get('file')
+  const taskParam = sp.get('task_id')
   const navigate = useNavigate()
   const { t } = useTranslation()
 
@@ -39,6 +42,33 @@ export default function TallerPatro() {
   const [trams, setTrams] = useState([])           // segments DECLARATS
   const [mesures, setMesures] = useState([])       // BaseMeasurement del model
   const [pecaSel, setPecaSel] = useState('')
+
+  // ── eines d'anotació (venen del tab: es TRASLLADEN, no es reescriuen) ─────
+  const [mode, setMode] = useState('view')          // 'view' | 'pom' | 'sew'
+  const [puntsPom, setPuntsPom] = useState([])      // punts clicats (imantats)
+  const [pickerObert, setPickerObert] = useState(false)
+  const [segmentsA, setSegmentsA] = useState([])
+  const [segmentsB, setSegmentsB] = useState([])
+  const [costatActiu, setCostatActiu] = useState('a')
+  const [tipusSew, setTipusSew] = useState('casat')
+  const [diferencial, setDiferencial] = useState(0)
+  const [tascaId, setTascaId] = useState(null)      // per al render: hi ha rellotge?
+  const [errTasca, setErrTasca] = useState(null)
+  // L'error d'una EINA (no s'ha pogut ancorar, no s'ha pogut cosir) no és l'error de
+  // càrrega: aquell deixa la pàgina sense patró, aquest només ha fet fallar una acció.
+  const [errEina, setErrEina] = useState(null)
+
+  // El patró de tasca EXACTE del tab (PatternTab:54-64), traslladat. El ref és d'UN SOL
+  // ÚS perquè un segon Paused→Paused rebotaria amb un 400 (ALLOWED no el contempla).
+  // La diferència amb el tab: la tasca ja no s'obre en entrar al MODE d'anotació, sinó en
+  // entrar al TALLER, i es pausa en sortir-ne. Obrir el taller ÉS posar-se a treballar.
+  const activeTaskRef = useRef(null)
+  const pauseActiveTask = useCallback(() => {
+    const tid = activeTaskRef.current
+    if (tid == null) return
+    activeTaskRef.current = null
+    modelTasks.transition(tid, { to_status: 'Paused' }).catch(() => {})
+  }, [])
 
   // El taller s'obre SEMPRE sobre un fitxer concret. Si no ve per `?file=`, s'agafa el
   // vigent del model: entrar-hi sense fitxer és un accident de navegació, no una
@@ -78,6 +108,116 @@ export default function TallerPatro() {
   }, [modelId, fileParam, t])
 
   useEffect(() => { carregar() }, [carregar])
+
+  // ── el rellotge ──────────────────────────────────────────────────────────
+  // Entrar al taller obre la tasca; sortir-ne la pausa. Arribar amb `?task_id=` (des del
+  // pla de treball o de l'arbre de tasques) REPRÈN aquella tasca en lloc d'encunyar-ne una
+  // de nova: qui hi navega ja l'ha deixada En curs, i tornar-la a obrir seria demanar una
+  // transició que no cal.
+  const tascaEncetada = useRef(false)
+  useEffect(() => {
+    if (tascaEncetada.current) return
+    tascaEncetada.current = true
+
+    if (taskParam) {
+      const tid = parseInt(taskParam)
+      activeTaskRef.current = tid
+      setTascaId(tid)
+      return
+    }
+    models.openTask(modelId, 'pattern_digit')
+      .then(res => {
+        activeTaskRef.current = res.data.task_id
+        setTascaId(res.data.task_id)
+      })
+      .catch(e => {
+        // 403 task_type_not_allowed: l'allow-list del perfil (UserProfile.permisos.tasks)
+        // no inclou pattern_digit. És DADA, no codi, i el missatge ho ha de dir clar: qui
+        // ho llegeixi ha de saber què demanar i a qui. El patró es pot MIRAR igualment;
+        // el que no es pot és anotar-lo sense rellotge.
+        setErrTasca(e.response?.data?.code === 'task_type_not_allowed'
+          ? t('pattern.err_task_not_allowed')
+          : t('pattern.err_task'))
+      })
+  }, [modelId, taskParam, t])
+
+  // Sortir del taller pausa la tasca, per la porta que sigui: el botó de tornar, el botó
+  // enrere del navegador o tancar-ho tot. El rellotge no es queda corrent sol.
+  useEffect(() => () => { pauseActiveTask() }, [pauseActiveTask])
+
+  // ── eines ────────────────────────────────────────────────────────────────
+  const netejarSeleccio = useCallback(() => {
+    setPuntsPom([])
+    setPickerObert(false)
+    setSegmentsA([])
+    setSegmentsB([])
+    setCostatActiu('a')
+  }, [])
+
+  const triarMode = (nou) => {
+    setMode(m => (m === nou ? 'view' : nou))
+    netejarSeleccio()
+  }
+
+  const onClicPunt = (iman) => {
+    const punt = iman.punt
+    // Forma FUNCIONAL a posta: llegir `puntsPom` del closure el faria servir el valor
+    // d'abans del clic anterior si dos events arriben junts, i la mesura acabaria unint
+    // un punt amb ell mateix.
+    setPuntsPom(prev => {
+      // Clicar dues vegades el MATEIX punt no és una mesura: és un zero. El segon clic
+      // sobre el punt ja triat el DESTRIA, que és el que espera qui s'ha equivocat.
+      if (prev.length && prev[prev.length - 1].id === punt.id) return prev.slice(0, -1)
+      const nous = [...prev, punt].slice(-2)
+      if (nous.length === 2) setPickerObert(true)   // dos punts → quin POM és?
+      return nous
+    })
+  }
+
+  const ancorarPOM = async (pomMaster) => {
+    const [a, b] = puntsPom
+    const peca = geometria.pieces.find(p =>
+      (p.boundaries || []).some(v => (v.points || []).some(q => q.id === a.id)))
+    setPickerObert(false)
+    try {
+      // S'envia la RECEPTA, mai el valor: el valor el llegeix el servidor de la geometria.
+      await patterns.poms.create({
+        pattern_piece: peca.id,
+        pom_master: pomMaster.id,
+        definicio_mesura: { mode: 'points', a: a.id, b: b.id },
+        metode: 'recta',
+      })
+      setPuntsPom([])
+      await recarregarRelacions()
+    } catch (e) {
+      setErrEina(e.response?.data?.non_field_errors?.[0]
+        ? t('pattern.err_pom_duplicate')
+        : t('pattern.err_pom'))
+      setPuntsPom([])
+    }
+  }
+
+  const onClicSegment = (seg) => {
+    const llista = costatActiu === 'a' ? segmentsA : segmentsB
+    const set = costatActiu === 'a' ? setSegmentsA : setSegmentsB
+    set(llista.includes(seg.id) ? llista.filter(x => x !== seg.id) : [...llista, seg.id])
+  }
+
+  const declararCostura = async () => {
+    try {
+      await patterns.sew.create({
+        model: modelId,
+        segments_a: segmentsA,
+        segments_b: segmentsB,
+        tipus: tipusSew,
+        diferencial_cm: parseFloat(diferencial) || 0,
+      })
+      netejarSeleccio()
+      await recarregarRelacions()
+    } catch {
+      setErrEina(t('pattern.err_sew'))
+    }
+  }
 
   // Després de tocar una relació es rellegeix TOT el que en depèn: esborrar una costura
   // canvia la cobertura de les altres i allibera els seus trams. Rellegir només el que
@@ -179,8 +319,31 @@ export default function TallerPatro() {
 
         <section style={{
           flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
-          minHeight: 0, padding: '0.6rem 0.8rem',
+          minHeight: 0, padding: '0.6rem 0.8rem', gap: '0.5rem',
         }}>
+          <BarraEines
+            t={t} mode={mode} onMode={triarMode}
+            tascaId={tascaId} errTasca={errTasca}
+          />
+
+          {errEina && (
+            <Avis text={errEina} err onTanca={() => setErrEina(null)} />
+          )}
+          {mode === 'pom' && (
+            <Avis text={puntsPom.length === 0
+              ? t('pattern.pom_hint_first') : t('pattern.pom_hint_second')} />
+          )}
+          {mode === 'sew' && (
+            <SewEditor
+              segmentsA={segmentsA} segmentsB={segmentsB}
+              costatActiu={costatActiu} onCostat={setCostatActiu}
+              tipus={tipusSew} onTipus={setTipusSew}
+              diferencial={diferencial} onDiferencial={setDiferencial}
+              onDeclara={declararCostura}
+              onNeteja={netejarSeleccio}
+            />
+          )}
+
           {carregant ? (
             <Centrat text={t('pattern.viewer_loading')} />
           ) : error ? (
@@ -192,7 +355,21 @@ export default function TallerPatro() {
               pieces={geometria.pieces}
               pecaSel={pecaSel}
               onTriaPeca={setPecaSel}
+              mode={mode}
+              puntsPom={puntsPom}
+              onClicPunt={onClicPunt}
+              segmentsA={segmentsA}
+              segmentsB={segmentsB}
+              costatActiu={costatActiu}
+              onClicSegment={onClicSegment}
               omplirAlcada
+            />
+          )}
+
+          {pickerObert && (
+            <POMPicker
+              onTria={ancorarPOM}
+              onCancel={() => { setPickerObert(false); setPuntsPom([]) }}
             />
           )}
         </section>
@@ -232,6 +409,92 @@ function Contenidor({ titol, icona, children }) {
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0.5rem 0.6rem' }}>
         {children}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Barra d'eines. Els botons NO obren ni pausen la tasca: això ho fa entrar i sortir del
+ * taller. Aquí només es tria QUÈ s'està fent — i si no hi ha rellotge (403 de perfil),
+ * les eines no s'ofereixen: el patró es pot mirar, però no anotar sense comptar el temps.
+ */
+function BarraEines({ t, mode, onMode, tascaId, errTasca }) {
+  const boto = (actiu) => ({
+    background: actiu ? 'var(--gold)' : 'var(--white)',
+    color: actiu ? 'var(--white)' : 'var(--text-main)',
+    border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
+    borderRadius: 4, padding: '0.35rem 0.8rem',
+    cursor: tascaId ? 'pointer' : 'not-allowed',
+    opacity: tascaId ? 1 : 0.5,
+    fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: '0.35rem',
+  })
+
+  return (
+    <div style={{
+      display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap',
+      flexShrink: 0,
+    }}>
+      <button
+        onClick={() => onMode('pom')} disabled={!tascaId}
+        aria-pressed={mode === 'pom'} style={boto(mode === 'pom')}
+      >
+        <i className="ti ti-ruler-measure" />
+        {t('pattern.mode_pom')}
+      </button>
+      <button
+        onClick={() => onMode('sew')} disabled={!tascaId}
+        aria-pressed={mode === 'sew'} style={boto(mode === 'sew')}
+      >
+        <i className="ti ti-needle-thread" />
+        {t('pattern.mode_sew')}
+      </button>
+
+      <span style={{ flex: 1 }} />
+
+      {errTasca ? (
+        <span style={{
+          display: 'flex', alignItems: 'center', gap: '0.35rem',
+          fontSize: 'var(--fs-caption)', color: 'var(--err)',
+          background: 'var(--err-bg)', borderRadius: 4, padding: '3px 8px',
+        }}>
+          <i className="ti ti-alert-triangle" />
+          {errTasca}
+        </span>
+      ) : tascaId && (
+        <span style={{
+          display: 'flex', alignItems: 'center', gap: '0.35rem',
+          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+        }}>
+          <i className="ti ti-clock-play" />
+          {t('pattern.task_running')}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function Avis({ text, err = false, onTanca = null }) {
+  const { t } = useTranslation()
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0,
+      fontSize: 'var(--fs-caption)',
+      color: err ? 'var(--err)' : 'var(--text-muted)',
+      background: err ? 'var(--err-bg)' : 'var(--bg-muted)',
+      border: err ? '1px solid var(--err)' : '1px solid transparent',
+      borderRadius: 4, padding: '0.3rem 0.6rem',
+    }}>
+      <i className={`ti ${err ? 'ti-alert-triangle' : 'ti-info-circle'}`} />
+      <span style={{ flex: 1 }}>{text}</span>
+      {onTanca && (
+        <button
+          onClick={onTanca}
+          aria-label={t('app.close')}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
+        >
+          <i className="ti ti-x" />
+        </button>
+      )}
     </div>
   )
 }

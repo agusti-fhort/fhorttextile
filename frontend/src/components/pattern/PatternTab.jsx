@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { patterns, models, modelTasks } from '../../api/endpoints'
+import { patterns } from '../../api/endpoints'
 import Modal from '../ui/Modal'
-import PatternViewer, { KONVA_COL } from './PatternViewer'
-import POMPicker from './POMPicker'
-import AnnotationPanel from './AnnotationPanel'
+import PatternViewer from './PatternViewer'
+import PieceList from './PieceList'
 import ExportModal from './ExportModal'
 
 // Sostre real de pujada: 20 MiB al backend (services_fitxers.MAX_UPLOAD_BYTES), per sota
@@ -16,8 +16,19 @@ const MAX_MB = 20
 // re-tinta: un patró tècnic ha de sortir igual a la pantalla, al paper i d'aquí a cinc
 // anys. Els tokens són per a la UI, que canvia de tema; això no.
 
-export default function PatternTab({ modelId, taskId = null }) {
+/**
+ * Tab Patró — la PORTA (W2).
+ *
+ * Metadades, avisos, versions, upload, descàrregues i exportació de la niada. El VISOR hi
+ * queda en mode consulta (zoom/pan/capes): es pot mirar el patró, no anotar-lo.
+ *
+ * Les EINES (marcar POM, cosir) i el rellotge de la tasca pattern_digit viuen al TALLER
+ * (/models/:id/patro/taller). Una porta no és un banc de treball: qui ve a consultar el
+ * fitxer no ha d'obrir cap tasca, i qui ve a treballar entra al taller i el rellotge corre.
+ */
+export default function PatternTab({ modelId }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
 
   const [carregant, setCarregant] = useState(true)
   const [cadena, setCadena] = useState([])        // totes les versions del model
@@ -34,34 +45,11 @@ export default function PatternTab({ modelId, taskId = null }) {
   // render de DOCUMENT (paleta fixa, per imprimir i arxivar) i es pot demanar a part.
   const [vista, setVista] = useState('konva')   // 'konva' | 'svg'
 
-  // ── anotació (S6) ────────────────────────────────────────────────────────
-  const [mode, setMode] = useState('view')          // 'view' | 'pom' | 'sew'
-  const [puntsPom, setPuntsPom] = useState([])      // punts clicats (imantats)
-  const [pickerObert, setPickerObert] = useState(false)
-  const [segmentsA, setSegmentsA] = useState([])
-  const [segmentsB, setSegmentsB] = useState([])
-  const [costatActiu, setCostatActiu] = useState('a')
-  const [tipusSew, setTipusSew] = useState('casat')
-  const [diferencial, setDiferencial] = useState(0)
-  const [sews, setSews] = useState([])
-  const [obrintTasca, setObrintTasca] = useState(false)
   const [exportObert, setExportObert] = useState(false)
 
   const dxfRef = useRef(null)
   const rulRef = useRef(null)
   const objectUrlRef = useRef('')
-
-  // El patró de tasca EXACTE de ModelSheet.jsx:203-221. Cap mecanisme nou: la tasca
-  // s'obre amb open-task (que la crea si cal i la deixa En curs) i es pausa amb una
-  // transició. El ref és d'UN SOL ÚS perquè un segon Paused→Paused rebotaria amb un 400
-  // (ALLOWED no el contempla) — la mateixa cicatriu que ModelSheet ja portava.
-  const activeTaskRef = useRef(null)
-  const pauseActiveTask = useCallback(() => {
-    const tid = activeTaskRef.current
-    if (tid == null) return
-    activeTaskRef.current = null
-    modelTasks.transition(tid, { to_status: 'Paused' }).catch(() => {})
-  }, [])
 
   // ── càrrega ──────────────────────────────────────────────────────────────
   const carregar = useCallback(async (seleccionarId = null) => {
@@ -125,157 +113,6 @@ export default function PatternTab({ modelId, taskId = null }) {
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
   }, [])
 
-  // ── entrar i sortir del mode anotació ────────────────────────────────────
-  const entrarAnotacio = (nouMode) => {
-    if (obrintTasca) return
-    // Ja hi som: només canviem de mode, sense tornar a obrir la tasca.
-    if (mode !== 'view') { setMode(nouMode); netejarSeleccio(); return }
-
-    setObrintTasca(true)
-    models.openTask(modelId, 'pattern_digit')
-      .then(res => {
-        activeTaskRef.current = res.data.task_id
-        setMode(nouMode)
-        netejarSeleccio()
-      })
-      .catch(e => {
-        // 403 task_type_not_allowed: l'allow-list del perfil (UserProfile.permisos.tasks)
-        // no inclou pattern_digit. És DADA, no codi, i el missatge ho ha de dir clar:
-        // qui ho llegeixi ha de saber què demanar i a qui.
-        const codi = e.response?.data?.code
-        setError({
-          error: codi === 'task_type_not_allowed'
-            ? t('pattern.err_task_not_allowed')
-            : t('pattern.err_task'),
-        })
-      })
-      .finally(() => setObrintTasca(false))
-  }
-
-  const sortirAnotacio = useCallback(() => {
-    pauseActiveTask()
-    setMode('view')
-    netejarSeleccio()
-  }, [pauseActiveTask])
-
-  const netejarSeleccio = () => {
-    setPuntsPom([])
-    setPickerObert(false)
-    setSegmentsA([])
-    setSegmentsB([])
-    setCostatActiu('a')
-  }
-
-  // Si es marxa del tab amb la tasca oberta, es pausa igualment: el rellotge no es queda
-  // corrent perquè algú hagi canviat de pestanya.
-  useEffect(() => () => { pauseActiveTask() }, [pauseActiveTask])
-
-  // Arribar per `?tab=Patró&task_id=<id>` (des del pla de treball o de l'arbre de tasques)
-  // REPRÈN aquella tasca, no n'encunya una de nova. És el mateix patró que Mesures
-  // (ModelSheet.jsx:265-275): open-task ja l'ha deixada En curs abans de navegar aquí, i
-  // tornar-la a obrir seria demanar una transició que no cal.
-  const tascaReprep = useRef(false)
-  useEffect(() => {
-    if (!taskId || tascaReprep.current) return
-    tascaReprep.current = true
-    activeTaskRef.current = taskId
-    setMode('pom')
-  }, [taskId])
-
-  // ── POMs ─────────────────────────────────────────────────────────────────
-  const recarregarAnotacions = useCallback(async () => {
-    if (!actual) return
-    const [g, s] = await Promise.all([
-      patterns.geometry(actual.id),
-      patterns.sew.list(modelId),
-    ])
-    setGeometria(g.data)
-    setSews(s.data.results || s.data || [])
-  }, [actual, modelId])
-
-  useEffect(() => {
-    if (actual) patterns.sew.list(modelId)
-      .then(({ data }) => setSews(data.results || data || []))
-      .catch(() => setSews([]))
-  }, [actual, modelId])
-
-  const onClicPunt = (iman) => {
-    const punt = iman.punt
-    // Forma FUNCIONAL a posta: llegir `puntsPom` del closure el faria servir el valor
-    // d'abans del clic anterior si dos events arriben junts, i la mesura acabaria unint
-    // un punt amb ell mateix.
-    setPuntsPom(prev => {
-      // Clicar dues vegades el MATEIX punt no és una mesura: és un zero. El segon clic
-      // sobre el punt ja triat el DESTRIA, que és el que espera qui s'ha equivocat.
-      if (prev.length && prev[prev.length - 1].id === punt.id) return prev.slice(0, -1)
-      const nous = [...prev, punt].slice(-2)
-      if (nous.length === 2) setPickerObert(true)   // dos punts → quin POM és?
-      return nous
-    })
-  }
-
-  const ancorarPOM = async (pomMaster) => {
-    const [a, b] = puntsPom
-    const peca = geometria.pieces.find(p =>
-      (p.boundaries || []).some(v => (v.points || []).some(q => q.id === a.id)))
-    setPickerObert(false)
-    try {
-      // S'envia la RECEPTA, mai el valor: el valor el llegeix el servidor de la geometria.
-      await patterns.poms.create({
-        pattern_piece: peca.id,
-        pom_master: pomMaster.id,
-        definicio_mesura: { mode: 'points', a: a.id, b: b.id },
-        metode: 'recta',
-      })
-      setPuntsPom([])
-      await recarregarAnotacions()
-    } catch (e) {
-      const detall = e.response?.data
-      setError({
-        error: detall?.non_field_errors?.[0]
-          ? t('pattern.err_pom_duplicate')
-          : t('pattern.err_pom'),
-      })
-      setPuntsPom([])
-    }
-  }
-
-  const esborrarPOM = async (id) => {
-    await patterns.poms.remove(id)
-    await recarregarAnotacions()
-  }
-
-  // ── Costures ─────────────────────────────────────────────────────────────
-  const onClicSegment = (seg) => {
-    const llista = costatActiu === 'a' ? segmentsA : segmentsB
-    const set = costatActiu === 'a' ? setSegmentsA : setSegmentsB
-    set(llista.includes(seg.id) ? llista.filter(x => x !== seg.id) : [...llista, seg.id])
-  }
-
-  const declararCostura = async () => {
-    try {
-      await patterns.sew.create({
-        model: modelId,
-        segments_a: segmentsA,
-        segments_b: segmentsB,
-        tipus: tipusSew,
-        diferencial_cm: parseFloat(diferencial) || 0,
-      })
-      netejarSeleccio()
-      await recarregarAnotacions()
-    } catch {
-      setError({ error: t('pattern.err_sew') })
-    }
-  }
-
-  const esborrarSew = async (id) => {
-    await patterns.sew.remove(id)
-    await recarregarAnotacions()
-  }
-
-  const pomsAncorats = (geometria?.pieces || []).flatMap(p =>
-    (p.poms || []).map(x => ({ ...x, peca: p.nom_block })))
-
   // ── pujada ───────────────────────────────────────────────────────────────
   const pujar = async (dxf, rul, versioAnteriorId = null) => {
     setPujant(true)
@@ -336,52 +173,22 @@ export default function PatternTab({ modelId, taskId = null }) {
             onCanviaVersio={id => { setPecaSel(''); carregar(id) }}
             pujant={pujant} dxfRef={dxfRef} rulRef={rulRef} onTria={onTriaFitxers}
             onExporta={() => setExportObert(true)}
+            onTaller={() => navigate(`/models/${modelId}/patro/taller?file=${actual.id}`)}
           />
-          <BarraAnotacio
-            t={t} mode={mode} obrint={obrintTasca}
-            onEntra={entrarAnotacio} onSurt={sortirAnotacio}
-          />
-
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
             <div style={{ flex: '1 1 320px', minWidth: 300,
                           display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <LlistaPeces
-                t={t} pieces={actual.pieces} pecaSel={pecaSel} onTria={setPecaSel}
-              />
-              <AnnotationPanel
-                poms={pomsAncorats} sews={sews} pieces={geometria?.pieces || []}
-                mode={mode}
-                onEsborraPom={esborrarPOM} onEsborraSew={esborrarSew}
-              />
+              <h3 style={{ fontSize: 'var(--fs-h3)', margin: 0 }}>
+                {t('pattern.pieces', { n: actual.pieces.length })}
+              </h3>
+              <PieceList pieces={actual.pieces} pecaSel={pecaSel} onTria={setPecaSel} />
             </div>
 
             <div style={{ flex: '2 1 460px', minWidth: 340, position: 'relative' }}>
               <CapcaleraVisor
                 t={t} vista={vista} onCanviaVista={setVista}
-                pecaSel={pecaSel} onTot={() => setPecaSel('')} mode={mode}
+                pecaSel={pecaSel} onTot={() => setPecaSel('')}
               />
-
-              {mode === 'pom' && (
-                <Ajuda t={t} text={puntsPom.length === 0
-                  ? t('pattern.pom_hint_first') : t('pattern.pom_hint_second')} />
-              )}
-              {mode === 'sew' && (
-                <EditorCostura
-                  t={t}
-                  segmentsA={segmentsA} segmentsB={segmentsB}
-                  costatActiu={costatActiu} onCostat={setCostatActiu}
-                  tipus={tipusSew} onTipus={setTipusSew}
-                  diferencial={diferencial} onDiferencial={setDiferencial}
-                  onDeclara={declararCostura}
-                  onNeteja={netejarSeleccio}
-                />
-              )}
-              {pickerObert && (
-                <POMPicker
-                  onTria={ancorarPOM}
-                  onCancel={() => { setPickerObert(false); setPuntsPom([]) }}
-                />
-              )}
 
               {vista === 'konva' ? (
                 geoCarregant || !geometria ? (
@@ -391,13 +198,6 @@ export default function PatternTab({ modelId, taskId = null }) {
                     pieces={geometria.pieces}
                     pecaSel={pecaSel}
                     onTriaPeca={setPecaSel}
-                    mode={mode}
-                    puntsPom={puntsPom}
-                    onClicPunt={onClicPunt}
-                    segmentsA={segmentsA}
-                    segmentsB={segmentsB}
-                    costatActiu={costatActiu}
-                    onClicSegment={onClicSegment}
                   />
                 )
               ) : (
@@ -538,7 +338,7 @@ function ZonaBuida({ t, pujant, dxfRef, rulRef, onTria }) {
   )
 }
 
-function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxfRef, rulRef, onTria, onExporta }) {
+function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxfRef, rulRef, onTria, onExporta, onTaller }) {
   const g = fp.grade_table
   const avisos = fp.avisos_coherencia || []
   const capesDesconegudes = fp.empremta?.capes_desconegudes || []
@@ -630,6 +430,21 @@ function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxfRef, rulRef, onTr
         display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center',
         borderTop: '1px solid var(--border)', paddingTop: '0.6rem',
       }}>
+        {/* L'acció primària de la porta: obrir el patró al TALLER, que és on hi ha les
+            eines i on el rellotge de la tasca corre. Aquí només es consulta. */}
+        <button
+          onClick={onTaller}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.35rem',
+            fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--white)',
+            border: 'none', borderRadius: 4, background: 'var(--gold)',
+            padding: '0.35rem 0.9rem', cursor: 'pointer',
+          }}
+        >
+          <i className="ti ti-tools" />
+          {t('pattern.taller.open')}
+        </button>
+
         {fp.download_url && (
           <BotoDescarrega href={fp.download_url} icona="ti-file-download"
                           text={t('pattern.download_dxf')} />
@@ -710,200 +525,7 @@ function BotoDescarrega({ href, icona, text }) {
   )
 }
 
-function LlistaPeces({ t, pieces, pecaSel, onTria }) {
-  const cm = mm => (mm / 10).toFixed(1)
-  return (
-    <div style={{ flex: '1 1 320px', minWidth: 300 }}>
-      <h3 style={{ fontSize: 'var(--fs-h3)', margin: '0 0 0.5rem' }}>
-        {t('pattern.pieces', { n: pieces.length })}
-      </h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-        {pieces.map(p => {
-          const sel = p.nom_block === pecaSel
-          const bb = p.bounding_box_mm
-          const c = p.punts_per_capa || {}
-          return (
-            <button
-              key={p.id}
-              onClick={() => onTria(sel ? '' : p.nom_block)}
-              aria-pressed={sel}
-              style={{
-                textAlign: 'left', cursor: 'pointer',
-                background: sel ? 'var(--gold-pale)' : 'var(--bg-card)',
-                border: `1px solid ${sel ? 'var(--gold)' : 'var(--border)'}`,
-                borderRadius: 6, padding: '0.5rem 0.7rem',
-                display: 'flex', flexDirection: 'column', gap: 3,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <i className="ti ti-vector-triangle" style={{ color: 'var(--gold)' }} />
-                <strong style={{ fontSize: 'var(--fs-body)' }}>{p.nom_block}</strong>
-                {p.metadata?.material && (
-                  <span style={{
-                    fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
-                    border: '1px solid var(--border)', borderRadius: 8, padding: '0 6px',
-                  }}>
-                    {p.metadata.material}
-                  </span>
-                )}
-                {!p.has_sew && (
-                  <span title={t('pattern.no_sew_layer')}
-                        style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-caption)' }}>
-                    <i className="ti ti-scissors-off" />
-                  </span>
-                )}
-              </div>
-              <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
-                {t('pattern.piece_points', {
-                  total: p.total_punts, turn: c.turn || 0, curve: c.curve || 0,
-                  notch: c.notch || 0,
-                })}
-              </span>
-              {bb && (
-                <span style={{
-                  fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
-                  fontFamily: 'var(--mono)',
-                }}>
-                  {cm(bb.ample)} × {cm(bb.alt)} cm
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-/**
- * Barra d'anotació. Entrar-hi OBRE una tasca (pattern_digit) i sortir-ne la PAUSA: el
- * temps d'anotar és temps de feina i es compta com qualsevol altre. No hi ha cap
- * mecanisme nou de tasques — és el mateix open-task que fan servir Mesures i Escalat.
- */
-function BarraAnotacio({ t, mode, obrint, onEntra, onSurt }) {
-  const boto = (actiu) => ({
-    background: actiu ? 'var(--gold)' : 'var(--white)',
-    color: actiu ? 'var(--white)' : 'var(--text-main)',
-    border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
-    borderRadius: 4, padding: '0.35rem 0.8rem', cursor: 'pointer',
-    fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: '0.35rem',
-  })
-
-  return (
-    <div style={{
-      display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap',
-      background: mode !== 'view' ? 'var(--gold-pale)' : 'transparent',
-      border: mode !== 'view' ? '1px solid var(--gold)' : '1px solid transparent',
-      borderRadius: 6, padding: '0.5rem 0.6rem',
-    }}>
-      <button onClick={() => onEntra('pom')} disabled={obrint} style={boto(mode === 'pom')}>
-        <i className="ti ti-ruler-measure" />
-        {t('pattern.mode_pom')}
-      </button>
-      <button onClick={() => onEntra('sew')} disabled={obrint} style={boto(mode === 'sew')}>
-        <i className="ti ti-needle-thread" />
-        {t('pattern.mode_sew')}
-      </button>
-      {mode !== 'view' && (
-        <>
-          <span style={{ flex: 1 }} />
-          <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
-            <i className="ti ti-clock-play" /> {t('pattern.task_running')}
-          </span>
-          <button onClick={onSurt} style={boto(false)}>
-            <i className="ti ti-player-pause" />
-            {t('pattern.mode_exit')}
-          </button>
-        </>
-      )}
-    </div>
-  )
-}
-
-function Ajuda({ t, text }) {
-  return (
-    <div style={{
-      fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
-      background: 'var(--bg-muted)', borderRadius: 4, padding: '0.3rem 0.6rem',
-      marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem',
-    }}>
-      <i className="ti ti-info-circle" />
-      {text}
-    </div>
-  )
-}
-
-function EditorCostura({
-  t, segmentsA, segmentsB, costatActiu, onCostat, tipus, onTipus,
-  diferencial, onDiferencial, onDeclara, onNeteja,
-}) {
-  const llest = segmentsA.length > 0 && segmentsB.length > 0
-  const chip = (actiu, color) => ({
-    background: actiu ? color : 'var(--white)',
-    color: actiu ? 'var(--white)' : 'var(--text-main)',
-    border: `1px solid ${actiu ? color : 'var(--border)'}`,
-    borderRadius: 4, padding: '0.25rem 0.6rem', cursor: 'pointer',
-    fontSize: 'var(--fs-caption)',
-  })
-
-  return (
-    <div style={{
-      display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap',
-      background: 'var(--bg-muted)', borderRadius: 4, padding: '0.4rem 0.6rem',
-      marginBottom: '0.5rem', fontSize: 'var(--fs-caption)',
-    }}>
-      {/* Els chips duen EL MATEIX color que els segments al canvas. No són tokens perquè
-          no n'hi ha cap per a aquests dos colors, i inventar-ne dos al design system per a
-          un editor de costures seria pitjor que compartir la paleta del canvas: el que
-          importa és que el que es clica i el que s'il·lumina siguin del mateix color. */}
-      <button onClick={() => onCostat('a')} style={chip(costatActiu === 'a', KONVA_COL.sewA)}>
-        {t('pattern.sew_side_a', { n: segmentsA.length })}
-      </button>
-      <button onClick={() => onCostat('b')} style={chip(costatActiu === 'b', KONVA_COL.sewB)}>
-        {t('pattern.sew_side_b', { n: segmentsB.length })}
-      </button>
-
-      <select
-        value={tipus} onChange={e => onTipus(e.target.value)}
-        style={{ fontSize: 'var(--fs-caption)', padding: '0.2rem',
-                 border: '1px solid var(--border)', borderRadius: 4 }}
-      >
-        <option value="casat">{t('pattern.sew_type.casat')}</option>
-        <option value="frunzit">{t('pattern.sew_type.frunzit')}</option>
-        <option value="pinca">{t('pattern.sew_type.pinca')}</option>
-      </select>
-
-      {/* El diferencial només té sentit si un costat ha de sobrar: en un CASAT, la seva
-          existència ja és l'error. Per això el camp desapareix. */}
-      {tipus !== 'casat' && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-          {t('pattern.sew_differential')}
-          <input
-            type="number" step="0.1" value={diferencial}
-            onChange={e => onDiferencial(e.target.value)}
-            style={{ width: 62, fontSize: 'var(--fs-caption)', padding: '0.15rem 0.3rem',
-                     border: '1px solid var(--border)', borderRadius: 4 }}
-          />
-          cm
-        </label>
-      )}
-
-      <span style={{ flex: 1 }} />
-      <button onClick={onNeteja} style={chip(false)}>
-        {t('app.cancel')}
-      </button>
-      <button
-        onClick={onDeclara} disabled={!llest}
-        style={{ ...chip(llest, 'var(--gold)'), opacity: llest ? 1 : 0.5,
-                 cursor: llest ? 'pointer' : 'not-allowed' }}
-      >
-        <i className="ti ti-check" /> {t('pattern.sew_declare')}
-      </button>
-    </div>
-  )
-}
-
-function CapcaleraVisor({ t, vista, onCanviaVista, pecaSel, onTot, mode }) {
+function CapcaleraVisor({ t, vista, onCanviaVista, pecaSel, onTot }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem',

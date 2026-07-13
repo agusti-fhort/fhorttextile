@@ -3145,6 +3145,7 @@
   },
   "pattern": {
     "taller": {
+      "open": "Obrir al taller",
       "model_poms": "Poms del model · {{ancorats}}/{{total}} ancorats",
       "model_poms_empty": "Aquest model encara no té mesures a la fitxa.",
       "pom_anchored": "Ancorat al patró",
