@@ -3194,7 +3194,6 @@
     "empty_hint": "Sube el DXF del patrón (y el RUL de escalado, si lo tienes) para verlo aquí.",
     "file_dxf": "Archivo DXF",
     "file_rul": "Archivo RUL",
-    "optional": "opcional",
     "upload": "Subir",
     "uploading": "Subiendo…",
     "max_size": "Máximo {{mb}} MB por archivo.",
@@ -3225,7 +3224,6 @@
     "pieces": "Piezas ({{n}})",
     "piece_points": "{{total}} puntos · {{turn}} de giro · {{curve}} de curva · {{notch}} piquetes",
     "viewer_all": "Patrón completo",
-    "viewer_piece": "Pieza: {{peca}}",
     "viewer_show_all": "Ver completo",
     "viewer_loading": "Dibujando el patrón…",
     "viewer_error": "No se ha podido dibujar el patrón.",
@@ -3255,11 +3253,8 @@
     "viewer_document": "Render de documento (SVG)",
     "viewer_switch_svg": "Ver el render SVG",
     "viewer_switch_konva": "Volver al visor interactivo",
-    "legend_turn": "Punto de giro (se escala)",
-    "legend_curve": "Punto de curva (fluye)",
     "mode_pom": "Marcar POM",
     "mode_sew": "Coser",
-    "mode_exit": "Salir de la anotación",
     "task_running": "Tarea «Patrón digitalización» en curso",
     "pom_hint_first": "Clica el primer punto de la medida (el cursor se imanta a los puntos del patrón).",
     "pom_hint_second": "Clica el segundo punto y elige qué POM es.",
@@ -3307,6 +3302,16 @@
     "exp_downloading": "Generando…",
     "exp_err_versions": "No se han podido cargar las versiones de grading.",
     "exp_err_preview": "No se ha podido proyectar el grading.",
-    "exp_err_download": "No se ha podido descargar el escalado."
+    "exp_err_download": "No se ha podido descargar el escalado.",
+    "need_dxf": "Se necesita un archivo DXF para poder subir.",
+    "err_download_link": "No se ha podido preparar la descarga. Inténtalo de nuevo."
+  },
+  "filedrop": {
+    "hint": "Arrástralo aquí o haz clic",
+    "required": "obligatorio",
+    "optional": "opcional",
+    "remove": "Quitar el archivo",
+    "no_ext": "sin extensión",
+    "bad_ext": "Este archivo no es un {{esperat}} (has elegido un {{rebut}})."
   }
 }

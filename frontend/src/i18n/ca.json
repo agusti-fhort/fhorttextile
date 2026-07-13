@@ -3194,7 +3194,6 @@
     "empty_hint": "Puja el DXF del patró (i el RUL de grading, si en tens) per veure'l aquí.",
     "file_dxf": "Fitxer DXF",
     "file_rul": "Fitxer RUL",
-    "optional": "opcional",
     "upload": "Pujar",
     "uploading": "Pujant…",
     "max_size": "Màxim {{mb}} MB per fitxer.",
@@ -3225,7 +3224,6 @@
     "pieces": "Peces ({{n}})",
     "piece_points": "{{total}} punts · {{turn}} de gir · {{curve}} de corba · {{notch}} piquets",
     "viewer_all": "Patró sencer",
-    "viewer_piece": "Peça: {{peca}}",
     "viewer_show_all": "Veure'l sencer",
     "viewer_loading": "Dibuixant el patró…",
     "viewer_error": "No s'ha pogut dibuixar el patró.",
@@ -3255,11 +3253,8 @@
     "viewer_document": "Render de document (SVG)",
     "viewer_switch_svg": "Veure el render SVG",
     "viewer_switch_konva": "Tornar al visor interactiu",
-    "legend_turn": "Punt de gir (es grada)",
-    "legend_curve": "Punt de corba (flueix)",
     "mode_pom": "Marcar POM",
     "mode_sew": "Cosir",
-    "mode_exit": "Sortir de l'anotació",
     "task_running": "Tasca «Patró digitalització» en curs",
     "pom_hint_first": "Clica el primer punt de la mesura (el cursor s'imanta als punts del patró).",
     "pom_hint_second": "Clica el segon punt i tria quin POM és.",
@@ -3307,6 +3302,16 @@
     "exp_downloading": "Generant…",
     "exp_err_versions": "No s'han pogut carregar les versions de grading.",
     "exp_err_preview": "No s'ha pogut projectar el grading.",
-    "exp_err_download": "No s'ha pogut descarregar la niada."
+    "exp_err_download": "No s'ha pogut descarregar la niada.",
+    "need_dxf": "Cal un fitxer DXF per poder pujar.",
+    "err_download_link": "No s'ha pogut preparar la descàrrega. Torna-ho a provar."
+  },
+  "filedrop": {
+    "hint": "Arrossega'l aquí o fes clic",
+    "required": "obligatori",
+    "optional": "opcional",
+    "remove": "Treure el fitxer",
+    "no_ext": "sense extensió",
+    "bad_ext": "Aquest fitxer no és un {{esperat}} (has triat un {{rebut}})."
   }
 }
