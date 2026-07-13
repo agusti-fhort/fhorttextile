@@ -62,6 +62,19 @@ from fhort.patterns.engine.grading_projection import (
 from fhort.patterns.engine.operations import POMSpec, PointRef, move_points
 from fhort.patterns.engine.measure import MeasureError, resoldre
 from fhort.patterns.engine.roundtrip import compare, compare_grade_tables
+from fhort.patterns.engine.seam_matching import (
+    Candidat,
+    LLINDAR_PROPOSTA,
+    TOL_PIQUET_S,
+    casen_piquets,
+    clau_parella,
+    piquets_de_la_vora,
+    piquets_del_tram,
+    projectar,
+    proposar,
+    senyal_longitud,
+    senyal_noms,
+)
 from fhort.patterns.engine.segments import (SegmentError, fraccio_tram, longitud_tram,
                                             longitud_vora, segmentar_peca, segmentar_vora,
                                             tram_entre_punts)
@@ -3045,3 +3058,276 @@ class TokenFrescAlClicTest(PatternsAPITestBase):
         resp = PatternFileViewSet.as_view({'get': 'download_links'})(request, pk=self.fp.id)
 
         self.assertIn(resp.status_code, (401, 403))
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# A2 — PROPOSTA DE COSITS: el matcher (engine pur)
+# ═════════════════════════════════════════════════════════════════════════════
+
+class _P:
+    """Un punt qualsevol, que és tot el que `projectar` necessita."""
+
+    def __init__(self, x, y):
+        self.x, self.y = float(x), float(y)
+
+
+def _cand(seg_id, peca_id, nom, llarg_cm, piquets=(), vora=0):
+    return Candidat(
+        segment_id=seg_id, piece_id=peca_id, piece_nom=nom, vora=vora,
+        t_inici=0.0, t_fi=0.5, longitud_mm=llarg_cm * 10.0, piquets=tuple(piquets),
+    )
+
+
+class PiquetsSobreLaVoraTest(unittest.TestCase):
+    """Situar un piquet: la projecció, i la deduplicació de les DUES còpies del CAD."""
+
+    #: Un quadrat de 100×100 mm, obert (5 punts, l'últim tanca).
+    QUADRAT = [_P(0, 0), _P(100, 0), _P(100, 100), _P(0, 100), _P(0, 0)]
+
+    def test_un_piquet_sobre_la_vora_cau_a_la_seva_t(self):
+        dist, t = projectar(self.QUADRAT, False, 50, 0)
+
+        self.assertAlmostEqual(dist, 0.0, places=6)
+        self.assertAlmostEqual(t, 50 / 400, places=4)   # 50 mm dels 400 del perímetre
+
+    def test_un_piquet_apartat_de_la_vora_hi_projecta_perpendicular(self):
+        """El bessó del piquet, el que seu sobre l'ALTRA línia: cau a la mateixa `t`."""
+        dist, t = projectar(self.QUADRAT, False, 50, 7.5)
+
+        self.assertAlmostEqual(dist, 7.5, places=6)
+        self.assertAlmostEqual(t, 50 / 400, places=4)
+
+    def test_les_dues_copies_del_mateix_piquet_es_dedupliquen(self):
+        """El CAD escriu cada piquet DUES vegades (línia de tall i línia de cosit).
+
+        Comptar-les dues vegades duplicaria el nombre de marques —que és justament el número
+        que el senyal fort compara— i cap parella no casaria mai.
+        """
+        notches = [_P(50, 0), _P(50, 7.5)]   # el mateix piquet, les seves dues còpies
+
+        piquets = piquets_de_la_vora(self.QUADRAT, False, notches, 400.0)
+
+        self.assertEqual(len(piquets), 1)
+
+    def test_dos_piquets_de_debo_NO_es_dedupliquen(self):
+        notches = [_P(20, 0), _P(60, 0)]     # 40 mm de separació: són dos
+
+        piquets = piquets_de_la_vora(self.QUADRAT, False, notches, 400.0)
+
+        self.assertEqual(len(piquets), 2)
+
+    def test_una_marca_interna_no_es_un_piquet_de_vora(self):
+        """Una marca al mig de la peça (una butxaca, un plec) no és una marca de costura."""
+        piquets = piquets_de_la_vora(self.QUADRAT, False, [_P(50, 50)], 400.0)
+
+        self.assertEqual(piquets, ())
+
+
+class PiquetsDelTramTest(unittest.TestCase):
+    """Quins piquets són d'un tram, i on hi cauen (posició RELATIVA)."""
+
+    def test_els_extrems_compten(self):
+        """Al material real TOTS els piquets seuen sobre girs, i els girs delimiten els trams.
+
+        Mirant només l'interior, cap tram no tindria mai cap piquet: el senyal fort no
+        existiria.
+        """
+        s = piquets_del_tram((0.2, 0.5), t_inici=0.2, t_fi=0.5)
+
+        self.assertEqual(s, (0.0, 1.0))
+
+    def test_un_piquet_al_mig_cau_a_la_seva_fraccio(self):
+        s = piquets_del_tram((0.35,), t_inici=0.2, t_fi=0.6)
+
+        self.assertEqual(len(s), 1)
+        self.assertAlmostEqual(s[0], 0.375, places=6)
+
+    def test_un_piquet_de_fora_no_hi_es(self):
+        self.assertEqual(piquets_del_tram((0.9,), t_inici=0.2, t_fi=0.5), ())
+
+    def test_un_tram_que_passa_per_lorigen_es_mesura_donant_la_volta(self):
+        """`t_fi` < `t_inici`: el tram travessa el punt on la polilínia tanca."""
+        s = piquets_del_tram((0.95, 0.05), t_inici=0.9, t_fi=0.1)
+
+        self.assertEqual(len(s), 2)
+        self.assertAlmostEqual(s[0], 0.25, places=6)   # 0.95 dins de [0.9, 1.1]
+        self.assertAlmostEqual(s[1], 0.75, places=6)
+
+
+class CasenPiquetsTest(unittest.TestCase):
+    """El senyal FORT, i el sentit."""
+
+    def test_casen_en_el_mateix_sentit(self):
+        casen, invertit, desv = casen_piquets((0.0, 0.5, 1.0), (0.0, 0.5, 1.0))
+
+        self.assertTrue(casen)
+        self.assertFalse(invertit)
+        self.assertAlmostEqual(desv, 0.0)
+
+    def test_casen_INVERTITS_perque_les_vores_es_cusen_encarades(self):
+        """El que en un costat va del 0 a l'1, en l'altre va de l'1 al 0. És el cas NORMAL."""
+        casen, invertit, desv = casen_piquets((0.0, 0.3, 1.0), (0.0, 0.7, 1.0))
+
+        self.assertTrue(casen)
+        self.assertTrue(invertit)
+        self.assertAlmostEqual(desv, 0.0)
+
+    def test_un_nombre_diferent_de_piquets_no_casa(self):
+        casen, _, _ = casen_piquets((0.0, 0.5), (0.0, 0.4, 0.9))
+
+        self.assertFalse(casen)
+
+    def test_els_mateixos_piquets_massa_lluny_no_casen(self):
+        casen, _, desv = casen_piquets((0.0, 0.2), (0.0, 0.4))
+
+        self.assertFalse(casen)
+        self.assertGreater(desv, TOL_PIQUET_S)
+
+
+class SenyalLongitudTest(unittest.TestCase):
+    """Casat, frunzit, o ni una cosa ni l'altra. I l'ORDRE en què es pregunta."""
+
+    def test_iguals_dins_tolerancia_es_un_casat(self):
+        senyal, tipus, dif = senyal_longitud(_cand(1, 1, 'A', 25.30), _cand(2, 2, 'B', 25.25))
+
+        self.assertEqual(tipus, 'casat')
+        self.assertEqual(dif, 0.0)
+        self.assertGreater(senyal.punts, 0)
+
+    def test_un_exces_sistematic_es_un_frunzit_i_el_diferencial_es_el_que_sha_mesurat(self):
+        senyal, tipus, dif = senyal_longitud(_cand(1, 1, 'A', 30.0), _cand(2, 2, 'B', 27.0))
+
+        self.assertEqual(tipus, 'frunzit')
+        self.assertEqual(dif, 3.0)                       # 10%: dins del rang
+        self.assertEqual(senyal.dades['sobra'], 'a')     # i diu QUIN costat sobra
+
+    def test_dos_mil_limetres_sobre_deu_centimetres_NO_son_un_frunzit(self):
+        """La tolerància ABSOLUTA es pregunta PRIMER, i per això aquest cas és un casat.
+
+        2 mm sobre 10 cm són un 2% —dins del rang relatiu d'un frunzit— i no són cap frunzit:
+        són el gruix del llapis. Declarar-los ensenyaria la cosidora a no fer cas dels
+        diferencials, que és el pitjor que li pot passar a un.
+        """
+        senyal, tipus, dif = senyal_longitud(_cand(1, 1, 'A', 10.0), _cand(2, 2, 'B', 10.2))
+
+        self.assertEqual(tipus, 'casat')
+        self.assertEqual(dif, 0.0)
+
+    def test_massa_diferents_es_evidencia_en_contra(self):
+        senyal, _, _ = senyal_longitud(_cand(1, 1, 'A', 30.0), _cand(2, 2, 'B', 10.0))
+
+        self.assertLess(senyal.punts, 0)
+
+
+class SenyalNomsTest(unittest.TestCase):
+    """El senyal feble: mai proposa sol, però sap dir que NO."""
+
+    def test_front_amb_back_son_peces_veines(self):
+        senyal = senyal_noms(_cand(1, 1, 'TATE_FRONT', 25), _cand(2, 2, 'TATE_BACK', 25))
+
+        self.assertGreater(senyal.punts, 0)
+        self.assertEqual(senyal.dades['motiu'], 'veines')
+
+    def test_una_vista_es_cus_a_la_seva_peca(self):
+        senyal = senyal_noms(
+            _cand(1, 1, 'TATE_FACING_YOKE', 4), _cand(2, 2, 'TATE_FRONT_YOKE', 4))
+
+        self.assertGreater(senyal.punts, 0)
+        self.assertEqual(senyal.dades['motiu'], 'vista')
+
+    def test_dues_peces_bessones_NO_es_cusen_luna_contra_laltra(self):
+        """Una niada porta la màniga repetida. Per longitud casarien perfectament."""
+        senyal = senyal_noms(_cand(1, 1, 'TATE_SLEEVE', 48), _cand(2, 2, '1rst_sleeve', 48))
+
+        self.assertLess(senyal.punts, 0)
+        self.assertEqual(senyal.dades['motiu'], 'bessones')
+
+    def test_una_entretela_no_es_cus_es_termofixa(self):
+        senyal = senyal_noms(
+            _cand(1, 1, 'TATE_NECK_BAND', 9.9), _cand(2, 2, 'TATE_NECK_BAND_INTERLINING', 9.9))
+
+        self.assertLess(senyal.punts, 0)
+        self.assertEqual(senyal.dades['motiu'], 'entretela')
+
+    def test_un_coll_i_una_maniga_es_coneixen_i_no_es_toquen(self):
+        senyal = senyal_noms(_cand(1, 1, 'TATE_NECK_BAND', 11.5), _cand(2, 2, 'TATE_SLEEVE', 11.4))
+
+        self.assertLess(senyal.punts, 0)
+        self.assertEqual(senyal.dades['motiu'], 'llunyanes')
+
+    def test_uns_noms_que_no_diem_res_no_pesen_ni_a_favor_ni_en_contra(self):
+        """Un CAD que bateja les peces `PIEZA_1` no ha de deixar el motor mut: decideix la
+        geometria. **No saber** i **saber que no** són coses diferents."""
+        senyal = senyal_noms(_cand(1, 1, 'PIEZA_1', 25), _cand(2, 2, 'PIEZA_2', 25))
+
+        self.assertEqual(senyal.punts, 0.0)
+
+
+class ProposarTest(unittest.TestCase):
+    """El repartiment: la llei de «cap tram a dues costures», i el rebuig."""
+
+    def test_el_nom_MAI_proposa_sol(self):
+        """Longituds incompatibles i noms perfectes: no hi ha proposta. La geometria mana."""
+        a = _cand(1, 1, 'TATE_FRONT', 60.0)
+        b = _cand(2, 2, 'TATE_BACK', 10.0)
+
+        propostes, _ = proposar([a, b])
+
+        self.assertEqual(propostes, [])
+
+    def test_una_parella_amb_geometria_i_nom_es_proposa(self):
+        a = _cand(1, 1, 'TATE_FRONT', 25.2, piquets=(0.0, 1.0))
+        b = _cand(2, 2, 'TATE_BACK', 25.3, piquets=(0.0, 1.0))
+
+        propostes, _ = proposar([a, b])
+
+        self.assertEqual(len(propostes), 1)
+        self.assertEqual(propostes[0].tipus, 'casat')
+        self.assertGreaterEqual(propostes[0].confianca, LLINDAR_PROPOSTA)
+
+    def test_cap_tram_no_va_a_dues_costures(self):
+        """Dos pretendents per al mateix tram: se l'endú el de més confiança, i l'altre cau.
+
+        Els dos pretendents han de ser propostes VÀLIDES (per sobre del llindar), o el que es
+        provaria no seria el repartiment sinó el llindar: `fluix` casa en piquets i longitud, i
+        només perd perquè el seu nom no diu res i el de `bo` sí.
+        """
+        a = _cand(1, 1, 'TATE_FRONT', 25.0, piquets=(0.0, 0.5, 1.0))
+        bo = _cand(2, 2, 'TATE_BACK', 25.0, piquets=(0.0, 0.5, 1.0))     # + el nom hi juga
+        fluix = _cand(3, 3, 'PIEZA_9', 25.0, piquets=(0.0, 0.5, 1.0))    # el nom calla
+
+        propostes, desc = proposar([a, bo, fluix])
+
+        self.assertEqual(len(propostes), 1)
+        self.assertEqual(propostes[0].b.segment_id, bo.segment_id)
+        # `fluix` no surt en cap proposta: els seus dos possibles companys (`a` i `bo`) han quedat
+        # tots dos presos per la parella guanyadora, i per tant cauen les DUES parelles que en
+        # depenien. La llei és «cap tram a dues costures», i es compleix a les dues bandes.
+        vius = {s for p in propostes for s in (p.a.segment_id, p.b.segment_id)}
+        self.assertNotIn(fluix.segment_id, vius)
+        self.assertEqual(desc.en_conflicte, 2)
+
+    def test_un_rebuig_treu_la_parella_pero_NO_bloqueja_els_seus_trams(self):
+        """Dir que no a «màniga ⛓ màniga» ha de deixar la màniga lliure per a la parella bona."""
+        a = _cand(1, 1, 'TATE_FRONT', 25.0, piquets=(0.0, 1.0))
+        b = _cand(2, 2, 'TATE_BACK', 25.0, piquets=(0.0, 1.0))
+
+        propostes, desc = proposar([a, b], exclosos=frozenset({clau_parella(1, 2)}))
+
+        self.assertEqual(propostes, [])
+        self.assertEqual(desc.rebutjades, 1)
+
+    def test_la_clau_dune_parella_es_canonica(self):
+        """Una costura no té costat A i costat B «de veritat»: la mateixa parella mirada de
+        l'altra banda no pot tornar a sortir com si ningú no l'hagués rebutjada."""
+        self.assertEqual(clau_parella(9, 4), clau_parella(4, 9))
+
+    def test_dos_trams_de_la_MATEIXA_peca_no_es_proposen(self):
+        """Els dos laterals de l'esquena fan exactament el mateix i NO es cusen l'un amb
+        l'altre. Proposar-los seria omplir la llista de disbarats amb la màxima confiança."""
+        a = _cand(1, 1, 'TATE_BACK', 25.3, piquets=(0.0, 1.0))
+        b = _cand(2, 1, 'TATE_BACK', 25.3, piquets=(0.0, 1.0))
+
+        propostes, _ = proposar([a, b])
+
+        self.assertEqual(propostes, [])

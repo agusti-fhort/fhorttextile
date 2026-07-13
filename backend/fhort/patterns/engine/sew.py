@@ -251,13 +251,25 @@ def _subtrams(tram: TramCosit) -> list[tuple[float, float]]:
     return _intervals(tram.t_inici, tram.t_fi)
 
 
-def _solapament(a: TramCosit, b: TramCosit) -> float:
-    """Fracció de vora que dos trams comparteixen."""
+def solapament_t(
+    a_inici: float, a_fi: float, b_inici: float, b_fi: float,
+) -> float:
+    """Fracció de vora que dos rangs `t` comparteixen (donant la volta si cal).
+
+    Viu aquí, i no repetida a qui la necessiti, perquè la volta per l'origen (`t_fi` < `t_inici`)
+    és exactament el detall que una segona implementació es deixaria: una resta pelada donaria
+    un solapament de zero i dues costures que es trepitgen passarien per bones.
+    """
     total = 0.0
-    for ai, af in _subtrams(a):
-        for bi, bf in _subtrams(b):
+    for ai, af in _intervals(a_inici, a_fi):
+        for bi, bf in _intervals(b_inici, b_fi):
             total += max(0.0, min(af, bf) - max(ai, bi))
     return total
+
+
+def _solapament(a: TramCosit, b: TramCosit) -> float:
+    """Fracció de vora que dos trams comparteixen."""
+    return solapament_t(a.t_inici, a.t_fi, b.t_inici, b.t_fi)
 
 
 def conte(
