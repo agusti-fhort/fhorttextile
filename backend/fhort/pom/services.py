@@ -377,19 +377,33 @@ def maybe_learn_customer_alias(customer, client_code, description, pom, origen='
     if pm is not None and pm.id == pom.id and conf in ('HIGH', 'MEDIUM'):
         return None  # el matcher ja ho encerta sol → automàtic, no sembrem
 
+    # GUARD ANTI-COL·LISIÓ (QA-S8 · D4a). Un POM que aquest client JA reclama amb un ALTRE codi
+    # no es pot aprendre com a bo: o el codi nou és un sinònim del vell (i sobra), o són DUES
+    # mesures distintes i una de les dues quedarà sobre el POM equivocat. No és teòric — al
+    # catàleg viu de BRW hi ha 'F' (FRONT total length) i 'FF' (BACK total length) tots dos cap
+    # al POM 389 'TOTAL LENGTH', i 'U'/'U2'/'U3' tots tres cap al 439. En comptes d'aprendre'l
+    # en silenci, es crea PENDENT DE REVISIÓ perquè una persona el miri.
+    ja_reclamat = (CustomerPOMAlias.objects
+                   .filter(customer=customer, pom=pom)
+                   .exclude(client_code__iexact=code)
+                   .exists())
+
     alias, created = CustomerPOMAlias.objects.get_or_create(
         customer=customer, client_code=code[:60],
         defaults={
             'pom': pom,
             'client_description': (description or '')[:200],
             'origen': origen,
+            'pendent_revisio': ja_reclamat,
         },
     )
     if not created and alias.pom_id != pom.id:
         alias.pom = pom
         alias.client_description = (description or '')[:200]
         alias.origen = origen
-        alias.save(update_fields=['pom', 'client_description', 'origen', 'actualitzat_at'])
+        alias.pendent_revisio = ja_reclamat
+        alias.save(update_fields=['pom', 'client_description', 'origen',
+                                  'pendent_revisio', 'actualitzat_at'])
     return alias
 
 
