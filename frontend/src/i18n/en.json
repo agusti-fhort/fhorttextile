@@ -3145,6 +3145,7 @@
   },
   "pattern": {
     "taller": {
+      "sew_done": "Seam declared.",
       "sew_no_segments": "No declared spans yet. A seam is made of declared spans, not of the engine's proposal: declare one first.",
       "mode_seg": "Define span",
       "seg_a": "Defining a span — click point A on an edge",

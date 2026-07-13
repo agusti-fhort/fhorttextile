@@ -10,6 +10,7 @@ import RelationsPanel from '../components/pattern/RelationsPanel'
 import POMPicker from '../components/pattern/POMPicker'
 import SewEditor from '../components/pattern/SewEditor'
 import SegmentEditor from '../components/pattern/SegmentEditor'
+import { textCobertura, textEstat } from '../components/pattern/sewText'
 
 /**
  * TALLER DE PATRÓ (W2) — el mòdul dedicat, a pantalla completa.
@@ -64,6 +65,9 @@ export default function TallerPatro() {
   const [nomTram, setNomTram] = useState('')
   const [creantTram, setCreantTram] = useState(false)
   const [tramRessaltat, setTramRessaltat] = useState(null)
+  // El veredicte de l'última costura declarada. Surt IMMEDIAT: si la costura no casa, o si
+  // trepitja la vora, saber-ho d'aquí a tres clics és saber-ho tard.
+  const [veredicte, setVeredicte] = useState(null)
   const [tascaId, setTascaId] = useState(null)      // per al render: hi ha rellotge?
   const [errTasca, setErrTasca] = useState(null)
   // L'error d'una EINA (no s'ha pogut ancorar, no s'ha pogut cosir) no és l'error de
@@ -203,6 +207,8 @@ export default function TallerPatro() {
     setMode('view')
   }, [netejarSeleccio])
 
+  const veredicteVist = () => setVeredicte(null)
+
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') cancelar() }
     window.addEventListener('keydown', onKey)
@@ -267,12 +273,25 @@ export default function TallerPatro() {
 
   const declararCostura = async () => {
     try {
-      await patterns.sew.create({
+      const { data } = await patterns.sew.create({
         model: modelId,
         segments_a: segmentsA,
         segments_b: segmentsB,
         tipus: tipusSew,
         diferencial_cm: parseFloat(diferencial) || 0,
+      })
+      // La resposta ja porta l'estat calculat sobre la geometria viva (casa/no casa) i els
+      // avisos de cobertura de la vora. La costura es crea IGUALMENT —l'avís informa, no
+      // bloqueja: el patronista mana— però es diu de seguida i amb les xifres. Un avís que
+      // s'ha d'anar a buscar és un avís que no s'ha donat.
+      const e = data.estat || {}
+      setVeredicte({
+        casa: !!e.casa,
+        estat: textEstat(t, e),
+        missatge: e.missatge || '',
+        cobertura: (e.cobertura || []).map(a => ({
+          text: textCobertura(t, a), missatge: a.missatge || '',
+        })),
       })
       netejarSeleccio()
       await recarregarRelacions()
@@ -486,6 +505,9 @@ export default function TallerPatro() {
           {errEina && (
             <Avis text={errEina} err onTanca={() => setErrEina(null)} />
           )}
+          {veredicte && (
+            <Veredicte t={t} v={veredicte} onTanca={veredicteVist} />
+          )}
           {mode === 'pom' && (
             <Avis
               text={pomActiu
@@ -686,6 +708,55 @@ function BarraEines({ t, mode, onMode, tascaId, errTasca }) {
           {t('pattern.task_running')}
         </span>
       )}
+    </div>
+  )
+}
+
+/**
+ * El veredicte d'una costura acabada de declarar: casa o no casa (amb les xifres) i, si la
+ * vora ha quedat malament, els avisos de cobertura amb els cm exactes.
+ *
+ * NO bloqueja: la costura ja està feta. El patronista mana, i pot tenir raons per declarar
+ * una costura que no casa. El que no pot passar és que no ho sàpiga.
+ */
+function Veredicte({ t, v, onTanca }) {
+  return (
+    <div style={{
+      flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4,
+      border: `1px solid ${v.casa ? 'var(--ok)' : 'var(--err)'}`,
+      background: v.casa ? 'var(--ok-bg)' : 'var(--err-bg)',
+      borderRadius: 4, padding: '0.4rem 0.6rem', fontSize: 'var(--fs-caption)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <i className={`ti ${v.casa ? 'ti-check' : 'ti-alert-triangle'}`}
+           style={{ color: v.casa ? 'var(--ok)' : 'var(--err)' }} />
+        <strong>{t('pattern.taller.sew_done')}</strong>
+        <span title={v.missatge || undefined} style={{ fontFamily: 'var(--mono)' }}>
+          {v.estat}
+        </span>
+        <span style={{ flex: 1 }} />
+        <button
+          onClick={onTanca}
+          aria-label={t('app.close')}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
+        >
+          <i className="ti ti-x" />
+        </button>
+      </div>
+      {v.cobertura.map((a, i) => (
+        <div
+          key={i}
+          title={a.missatge || undefined}
+          style={{
+            display: 'flex', alignItems: 'flex-start', gap: '0.35rem',
+            color: 'var(--warn)', background: 'var(--warn-bg)',
+            borderRadius: 4, padding: '3px 6px',
+          }}
+        >
+          <i className="ti ti-alert-triangle" style={{ marginTop: 2 }} />
+          <span>{a.text}</span>
+        </div>
+      ))}
     </div>
   )
 }

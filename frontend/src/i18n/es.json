@@ -3145,6 +3145,7 @@
   },
   "pattern": {
     "taller": {
+      "sew_done": "Costura declarada.",
       "sew_no_segments": "Ningún tramo declarado todavía. Una costura se hace con tramos declarados, no con la propuesta del motor: declara uno primero.",
       "mode_seg": "Definir tramo",
       "seg_a": "Definiendo un tramo — clica el punto A sobre un borde",

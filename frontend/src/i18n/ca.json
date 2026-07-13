@@ -3145,6 +3145,7 @@
   },
   "pattern": {
     "taller": {
+      "sew_done": "Costura declarada.",
       "sew_no_segments": "Cap tram declarat encara. Una costura es fa amb trams declarats, no amb la proposta del motor: declara'n un primer.",
       "mode_seg": "Definir tram",
       "seg_a": "Definint un tram — clica el punt A sobre una vora",

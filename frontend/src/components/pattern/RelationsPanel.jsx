@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { textCobertura, textEstat } from './sewText'
 
 /**
  * RELACIONS — el que s'ha declarat sobre el patró, editable.
@@ -103,11 +104,7 @@ function Costura({ t, sew, onEsborra }) {
             style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-main)',
                      fontFamily: 'var(--mono)' }}
           >
-            {e.casa
-              ? t('pattern.taller.sew_ok', { a: e.longitud_a_cm, b: e.longitud_b_cm })
-              : t('pattern.taller.sew_off', {
-                  desv: e.desviament_cm, a: e.longitud_a_cm, b: e.longitud_b_cm,
-                })}
+            {textEstat(t, e)}
           </div>
         </div>
         <BotoEsborra onClick={onEsborra} etiqueta={t('app.delete')} />
@@ -126,17 +123,7 @@ function Costura({ t, sew, onEsborra }) {
           }}
         >
           <i className="ti ti-alert-triangle" style={{ marginTop: 2 }} />
-          <span>
-            {a.mena === 'solapament'
-              ? t('pattern.taller.cov_overlap', {
-                  cm: a.solapament_cm, peca: a.peca, vora: a.vora,
-                  vora_cm: a.longitud_vora_cm,
-                })
-              : t('pattern.taller.cov_excess', {
-                  cm: a.exces_cm, suma: a.suma_cosida_cm, peca: a.peca, vora: a.vora,
-                  vora_cm: a.longitud_vora_cm,
-                })}
-          </span>
+          <span>{textCobertura(t, a)}</span>
         </div>
       ))}
     </div>
