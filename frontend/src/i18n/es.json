@@ -272,6 +272,7 @@
     "origen_IMPORT": "Importación",
     "origen_MANUAL": "Manual",
     "origen_MIGRACIO": "Migración",
+    "origen_DICCIONARI": "Diccionario",
     "grading_title": "Graduaciones del cliente",
     "grading_empty": "Ninguna graduación propia de este cliente.",
     "rules": "reglas",

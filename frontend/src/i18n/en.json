@@ -272,6 +272,7 @@
     "origen_IMPORT": "Import",
     "origen_MANUAL": "Manual",
     "origen_MIGRACIO": "Migration",
+    "origen_DICCIONARI": "Dictionary",
     "grading_title": "Client grading sets",
     "grading_empty": "No grading sets owned by this client.",
     "rules": "rules",

@@ -272,6 +272,7 @@
     "origen_IMPORT": "Import",
     "origen_MANUAL": "Manual",
     "origen_MIGRACIO": "Migració",
+    "origen_DICCIONARI": "Diccionari",
     "grading_title": "Graduacions del client",
     "grading_empty": "Cap graduació pròpia d'aquest client.",
     "rules": "regles",

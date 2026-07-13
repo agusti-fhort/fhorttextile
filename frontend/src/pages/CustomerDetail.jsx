@@ -25,7 +25,10 @@ const dayOf = (r) => (r.issued_at || r.created_at || '').slice(0, 10)
 // (ofertes/comandes del client). L'edició d'àlies està gated CONFIGURE al backend.
 const MONO = 'IBM Plex Mono, monospace'
 const TABS = ['dades', 'tecnic', 'comercial']
-const ORIGEN_VARIANT = { IMPORT: 'gold', MANUAL: 'ok', MIGRACIO: 'gray' }
+// Els QUATRE choices d'origen del model (pom/models.py:243-246). Han d'estar tots aquí i tots
+// als tres i18n (clients.origen_*): la clau es construeix per interpolació (`origen_${r.origen}`)
+// i, si falta, i18next pinta la clau crua a la cel·la (QA-S8 · D4c).
+const ORIGEN_VARIANT = { IMPORT: 'gold', MANUAL: 'ok', MIGRACIO: 'gray', DICCIONARI: 'gate' }
 
 export default function CustomerDetail() {
   const { id } = useParams()
