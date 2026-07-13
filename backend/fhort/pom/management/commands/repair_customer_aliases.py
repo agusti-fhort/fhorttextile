@@ -19,13 +19,15 @@ Repara DUES famílies de defecte, censades a docs/diagnosis/DIAGNOSI_QA_S8_D3_D4
     que el mateix client ja reclama amb un ALTRE codi, essent mesures DISTINTES: 4 codis
     (F/FF/F3/F4 = front/back/center front/center back) sobre el POM 389 'TOTAL LENGTH',
     3 (U/U2/U3 = front overlap/1st button/last button) sobre el 439, etc.
-    ACCIÓ segons --unlink: 'flag' (pendent_revisio=True, conserva el vincle) o 'delete'.
+    ACCIÓ segons --unlink:
+      · 'null' (PER DEFECTE, recomanat) — DESVINCULA: pom=NULL + pendent_revisio=True. El vincle
+        era fals, però el codi i la descripció són nomenclatura BONA del client: es conserven com
+        a VOCABULARI PENDENT DE MAPAR (migració 0037) i es mapen des de la biblioteca. El matcher
+        no els mira: find_pom_master filtra `pom__isnull=False`.
+      · 'flag' — només marca `pendent_revisio` i CONSERVA el vincle fals.
+      · 'delete' — esborra l'àlies i PERD la nomenclatura del client.
 
-  BROSSA · client_code='0' (no és un codi). SEMPRE s'esborra.
-
-⚠️ 'flag' NO impedeix que l'àlies segueixi auto-vinculant: find_pom_master (extraction_views.py
-:545-550) torna alias_match/HIGH sense mirar `pendent_revisio`. Avui l'única acció que treu el
-vincle fals de debò és 'delete'. Vegeu el BLOCADOR de la diagnosi.
+  BROSSA · client_code='0' (no és un codi). SEMPRE s'esborra: no hi ha cap nomenclatura a salvar.
 """
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -63,9 +65,11 @@ class Command(BaseCommand):
             '--apply', action='store_true',
             help='Escriu de veritat. Sense això NOMÉS ensenya què faria (dry-run).')
         parser.add_argument(
-            '--unlink', choices=['flag', 'delete'], default='flag',
-            help="Família 2 (POM equivocat): 'flag' marca pendent_revisio i conserva el vincle; "
-                 "'delete' esborra l'àlies. Només 'delete' treu el vincle fals del matcher.")
+            '--unlink', choices=['null', 'flag', 'delete'], default='null',
+            help="Família 2 (POM equivocat): 'null' (recomanat) DESVINCULA — pom=NULL + "
+                 "pendent_revisio, conservant la nomenclatura del client com a vocabulari "
+                 "pendent de mapar; 'flag' només marca (conserva el vincle FALS); 'delete' "
+                 "esborra l'àlies i perd la nomenclatura.")
         parser.add_argument(
             '--tenant', default='fhort',
             help='Schema del tenant on viuen els àlies (per defecte: fhort).')
@@ -121,7 +125,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 f'  [{a.customer.codi}] id={a.id}  description_en: ∅ → "{code}"  '
                 f'· pendent_revisio: {a.pendent_revisio} → True  '
-                f'(codi i pom {a.pom.codi_client} intactes)')
+                f'(codi i pom {a.pom.codi_client if a.pom_id else "—"} intactes)')
             if apply_:
                 a.description_en = code[:200]
                 a.pendent_revisio = True
@@ -144,11 +148,21 @@ class Command(BaseCommand):
                  .select_related('customer', 'pom').first())
             if a is None:
                 continue  # ja reparat, o el vincle ja no existeix
-            if unlink == 'flag':
+            if unlink == 'null':
+                # DESVINCULA: el vincle era FALS, però el codi i la descripció són nomenclatura
+                # BONA del client. Es conserven com a vocabulari pendent de mapar (pom=NULL);
+                # el matcher no els mira (find_pom_master filtra pom__isnull=False).
+                self.stdout.write(f'  [{cust_codi}] id={a.id} {code:4} · pom {pom_id} → NULL '
+                                  f'· pendent_revisio → True · {motiu}')
+                if apply_:
+                    a.pom = None
+                    a.pendent_revisio = True
+                    a.save(update_fields=['pom', 'pendent_revisio', 'actualitzat_at'])
+            elif unlink == 'flag':
                 if a.pendent_revisio:
                     continue  # ja marcat
                 self.stdout.write(f'  [{cust_codi}] id={a.id} {code:4} → POM {pom_id} '
-                                  f'· pendent_revisio → True · {motiu}')
+                                  f'· pendent_revisio → True (vincle FALS conservat) · {motiu}')
                 if apply_:
                     a.pendent_revisio = True
                     a.save(update_fields=['pendent_revisio', 'actualitzat_at'])
