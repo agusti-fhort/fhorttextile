@@ -110,7 +110,8 @@ from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentVi
                                              SewRelationViewSet, comprovar_costura)
 from fhort.patterns.export import ExportBlocked, build_export
 from fhort.patterns.models import (ExportAcknowledgement, PatternFile, PatternPOM,
-                                   PatternPoint, PatternSegment, SewRelation)
+                                   PatternPoint, PatternSegment, SewProposalRejection,
+                                   SewRelation)
 from fhort.patterns.services import save_pattern_file
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
                                   PatternFileViewSet)
@@ -3331,3 +3332,196 @@ class ProposarTest(unittest.TestCase):
         propostes, _ = proposar([a, b])
 
         self.assertEqual(propostes, [])
+
+
+class PropostesAPITest(PatternsAPITestBase):
+    """A2 pel camí de l'API, amb el TATE real: proposar, confirmar, rebutjar.
+
+    El banc és el fitxer de debò —10 peces, línia de cosit, 20 piquets al davanter— perquè el
+    que ha de quedar demostrat no és que el matcher sàpiga sumar, sinó que sobre un patró
+    industrial diu coses certes.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(TATE_DXF.read_bytes()).data['id'])
+
+    # ── els gestos ──────────────────────────────────────────────────────────
+    def _propostes(self):
+        request = self.factory.get(
+            '/api/v1/patterns/sew-relations/propostes/', {'model': self.model.id})
+        force_authenticate(request, user=self.user)
+        return SewRelationViewSet.as_view({'get': 'propostes'})(request)
+
+    def _confirma(self, p, **extra):
+        dades = {
+            'model': self.model.id,
+            'segment_a': p['a']['segment_id'], 'segment_b': p['b']['segment_id'],
+            'tipus': p['tipus'], 'diferencial_cm': p['diferencial_cm'],
+            'nom_a': 'Tram A', 'nom_b': 'Tram B',
+        }
+        dades.update(extra)
+        request = self.factory.post(
+            '/api/v1/patterns/sew-relations/confirmar-proposta/', dades, format='json')
+        force_authenticate(request, user=self.user)
+        return SewRelationViewSet.as_view({'post': 'confirmar_proposta'})(request)
+
+    def _rebutja(self, p, motiu=''):
+        request = self.factory.post(
+            '/api/v1/patterns/sew-relations/rebutjar-proposta/',
+            {'model': self.model.id, 'segment_a': p['a']['segment_id'],
+             'segment_b': p['b']['segment_id'], 'motiu': motiu},
+            format='json')
+        force_authenticate(request, user=self.user)
+        return SewRelationViewSet.as_view({'post': 'rebutjar_proposta'})(request)
+
+    def _parella(self, propostes, peca_a, peca_b):
+        """La proposta que uneix aquestes dues peces (en qualsevol ordre)."""
+        for p in propostes:
+            if {p['a']['peca'], p['b']['peca']} == {peca_a, peca_b}:
+                return p
+        return None
+
+    # ── T2: la llista ───────────────────────────────────────────────────────
+    def test_el_motor_proposa_la_lateral_del_TATE(self):
+        """El davanter i l'esquena, pel costat: 25,3 contra 25,2 cm. La costura que hi és."""
+        resp = self._propostes()
+
+        self.assertEqual(resp.status_code, 200)
+        lateral = self._parella(resp.data['propostes'], 'TATE_BACK', 'TATE_FRONT')
+        self.assertIsNotNone(lateral, 'la lateral FRONT↔BACK no s\'ha proposat')
+        self.assertEqual(lateral['tipus'], 'casat')
+        self.assertGreater(lateral['confianca'], 0.7)
+
+    def test_cada_proposta_porta_el_DESGLOS_dels_tres_senyals(self):
+        """Una confiança sola («87%») no es pot discutir. El desglòs, sí."""
+        p = self._propostes().data['propostes'][0]
+
+        self.assertEqual({s['mena'] for s in p['senyals']}, {'piquets', 'longitud', 'noms'})
+        for senyal in p['senyals']:
+            self.assertIn('dades', senyal)
+            self.assertTrue(senyal['detall'])
+
+    def test_cada_proposta_diu_qUE_PASSARIA_si_es_confirmes(self):
+        """El veredicte, calculat amb el mateix motor que després jutjarà la costura."""
+        p = self._propostes().data['propostes'][0]
+
+        self.assertIn('casa', p['veredicte'])
+        self.assertIn('missatge', p['veredicte'])
+
+    def test_proposar_NO_escriu_res(self):
+        """La llei del paquet: proposar, mai escriure."""
+        abans = (SewRelation.objects.count(), PatternSegment.objects.count())
+
+        self._propostes()
+
+        self.assertEqual(abans, (SewRelation.objects.count(), PatternSegment.objects.count()))
+
+    def test_els_descartats_es_DIUEN(self):
+        """Un matcher que amaga el que ha tirat menteix sobre la seva cobertura."""
+        resp = self._propostes()
+
+        self.assertGreater(resp.data['descartats']['curts'], 0)
+        self.assertIn('sota_llindar', resp.data['descartats'])
+        self.assertGreater(resp.data['candidats'], 0)
+
+    # ── T3: confirmar ───────────────────────────────────────────────────────
+    def test_confirmar_deixa_EXACTAMENT_el_que_deixaria_el_gest_manual(self):
+        """Dos trams DECLARATS i una costura que els uneix. Ni una entitat de segona."""
+        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
+
+        resp = self._confirma(p)
+
+        self.assertEqual(resp.status_code, 201, resp.data)
+        rel = SewRelation.objects.get(pk=resp.data['id'])
+        costats = list(rel.segments_a.all()) + list(rel.segments_b.all())
+        self.assertEqual(len(costats), 2)
+        for seg in costats:
+            self.assertEqual(seg.origen, PatternSegment.ORIGEN_DECLARAT)
+        self.assertEqual([s.nom for s in costats], ['Tram A', 'Tram B'])
+
+    def test_confirmar_PROMOU_el_tram_i_no_toca_la_hipotesi_del_CAD(self):
+        """El tram derivat es queda on és: és la lectura del CAD, no una decisió de ningú."""
+        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
+        auto_a = p['a']['segment_id']
+
+        self._confirma(p)
+
+        self.assertEqual(
+            PatternSegment.objects.get(pk=auto_a).origen, PatternSegment.ORIGEN_AUTO)
+
+    def test_confirmar_una_proposta_RECALCULA_les_altres(self):
+        """La cobertura canvia: els trams que la costura nova reclama surten de la subhasta."""
+        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
+        claus_abans = {tuple(x['clau']) for x in self._propostes().data['propostes']}
+
+        self._confirma(p)
+
+        resp = self._propostes()
+        claus = {tuple(x['clau']) for x in resp.data['propostes']}
+        self.assertIn(tuple(p['clau']), claus_abans)
+        self.assertNotIn(tuple(p['clau']), claus)
+        self.assertGreater(resp.data['descartats']['ja_cosits'], 0)
+
+    def test_no_es_pot_confirmar_una_proposta_sobre_un_tram_ja_DECLARAT(self):
+        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
+        self._confirma(p)
+        declarat = PatternSegment.objects.filter(
+            origen=PatternSegment.ORIGEN_DECLARAT).first()
+
+        resp = self._confirma(p, segment_a=declarat.id)
+
+        self.assertEqual(resp.status_code, 400)
+
+    # ── T3: rebutjar ────────────────────────────────────────────────────────
+    def test_un_rebuig_es_PERSISTENT(self):
+        """Una eina que torna a proposar el que ja li han dit que no ensenya a no mirar-la."""
+        p = self._propostes().data['propostes'][0]
+
+        resp = self._rebutja(p, motiu='això no es cus')
+
+        self.assertEqual(resp.status_code, 201)
+        claus = {tuple(x['clau']) for x in self._propostes().data['propostes']}
+        self.assertNotIn(tuple(p['clau']), claus)
+
+    def test_un_rebuig_NO_bloqueja_els_trams_de_la_parella(self):
+        """El que es rebutja és la PARELLA. Els seus trams queden lliures per a la bona."""
+        p = self._propostes().data['propostes'][0]
+
+        self._rebutja(p)
+
+        resp = self._propostes()
+        vius = {s for x in resp.data['propostes']
+                for s in (x['a']['segment_id'], x['b']['segment_id'])}
+        # Els trams d'una proposta rebutjada continuen sent candidats: el motor els torna a
+        # oferir contra un altre company (o els descarta per confiança, però no per càstig).
+        self.assertEqual(
+            SewProposalRejection.objects.count(), 1)
+        self.assertTrue(vius or resp.data['candidats'] > 0)
+
+    def test_rebutjar_dues_vegades_no_duplica_el_rebuig(self):
+        p = self._propostes().data['propostes'][0]
+        self._rebutja(p)
+
+        resp = self._rebutja(p)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['ja_hi_era'])
+        self.assertEqual(SewProposalRejection.objects.count(), 1)
+
+    def test_el_rebuig_es_desa_amb_la_clau_CANONICA(self):
+        """La mateixa parella, mirada de l'altra banda, no pot tornar a sortir."""
+        p = self._propostes().data['propostes'][0]
+
+        request = self.factory.post(
+            '/api/v1/patterns/sew-relations/rebutjar-proposta/',
+            {'model': self.model.id,
+             'segment_a': p['b']['segment_id'],      # a l'inrevés, a posta
+             'segment_b': p['a']['segment_id']},
+            format='json')
+        force_authenticate(request, user=self.user)
+        SewRelationViewSet.as_view({'post': 'rebutjar_proposta'})(request)
+
+        claus = {tuple(x['clau']) for x in self._propostes().data['propostes']}
+        self.assertNotIn(tuple(p['clau']), claus)

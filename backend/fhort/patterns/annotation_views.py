@@ -20,13 +20,18 @@ from fhort.pom.models import POMMaster
 
 from .adapters import DjangoGeometryStore
 from .engine.measure import MeasureError, resoldre
+from .engine.seam_matching import clau_parella
 from .engine.segments import (
     SegmentError, longitud_tram, longitud_vora, tram_entre_punts,
 )
 from .engine.sew import (
     CostatPinca, TramCosit, descomptar_pinces, validar, validar_cobertura,
 )
-from .models import PatternPiece, PatternPOM, PatternPoint, PatternSegment, SewRelation
+from .models import (
+    PatternFile, PatternPiece, PatternPOM, PatternPoint, PatternSegment, SewProposalRejection,
+    SewRelation,
+)
+from .seam_proposals import propostes_del_model
 
 
 class PatternPOMSerializer(serializers.ModelSerializer):
@@ -515,6 +520,152 @@ class SewRelationViewSet(viewsets.ModelViewSet):
             rel.segments_b.set([costats[1]])
 
         return Response(self.get_serializer(rel).data, status=status.HTTP_201_CREATED)
+
+
+    # ── ASSISTIT (A2): proposar, mai escriure ───────────────────────────────
+
+    def _patro(self, request) -> PatternFile:
+        """El patró sobre el qual es proposa: el que demani `?file=`, o el vigent del model.
+
+        Les propostes es calculen sobre UNA versió del patró, i s'ha de dir quina: els trams
+        derivats es refan a cada versió, i una proposta que barregés els d'una amb els d'una
+        altra no seria una costura, seria un disbarat amb dues geometries.
+        """
+        model_id = request.query_params.get('model') or request.data.get('model')
+        if not model_id:
+            raise serializers.ValidationError({'model': 'De quin model es proposen costures?'})
+
+        file_id = request.query_params.get('file') or request.data.get('file')
+        qs = PatternFile.objects.filter(model_id=model_id)
+        fp = qs.filter(pk=file_id).first() if file_id else qs.filter(is_current=True).first()
+        if fp is None:
+            raise serializers.ValidationError(
+                {'file': 'Aquest model no té cap patró vigent sobre el qual proposar res.'})
+        return fp
+
+    @action(detail=False, methods=['get'], url_path='propostes')
+    def propostes(self, request):
+        """Les costures que el motor proposa. **NOMÉS LECTURA.**
+
+        No desa res, no marca res, no reserva res: es recalculen senceres a cada crida. És el que
+        les fa fiables quan la geometria canvia sota els peus —confirmar-ne una, esborrar una
+        costura, marcar una pinça— i és el que fa que no calgui cap taula de propostes vives que
+        algú hauria de mantenir sincronitzada amb la realitat.
+        """
+        return Response(propostes_del_model(self._patro(request)))
+
+    @action(detail=False, methods=['post'], url_path='confirmar-proposta')
+    def confirmar_proposta(self, request):
+        """Confirmar-ne una: `{model, segment_a, segment_b, tipus?, diferencial_cm?, nom?…}`.
+
+        **Confirmar és el gest manual, fet en un clic.** No hi ha cap camí curt: en surt
+        exactament el mateix que si el patronista hagués declarat els dos trams a mà i els hagués
+        cosit —dos `PatternSegment` DECLARATS i una `SewRelation` que els uneix—, perquè una
+        costura confirmada no pot ser una entitat de segona categoria que després ningú sàpiga
+        editar. Un cop confirmada, ja no es distingeix d'una feta a mà, i això és la prova que el
+        motor no s'ha inventat cap drecera.
+
+        **Els trams es PROMOUEN, no es reciclen.** El tram derivat (`auto`) és la hipòtesi de
+        lectura del CAD i es queda on és; el que entra a la costura és un tram DECLARAT amb el
+        mateix recorregut. Cosir directament l'`auto` trencaria la llei de W4 (una costura és una
+        afirmació, i no es fa una afirmació amb una hipòtesi) i, pitjor, deixaria la costura
+        penjada d'una fila que la propera importació pot refer.
+
+        **Una transacció.** Tres crides des del client (dos trams i la costura) podien fallar a la
+        tercera i deixar dos trams orfes amb nom de costura i sense costura — el mateix motiu pel
+        qual `pinca` és una sola crida.
+        """
+        fp = self._patro(request)
+        seg_a, seg_b = self._trams_de_la_proposta(request.data, fp)
+
+        tipus = request.data.get('tipus') or SewRelation.TIPUS_CASAT
+        if tipus not in dict(SewRelation.TIPUS_CHOICES):
+            raise serializers.ValidationError({'tipus': f"Tipus de costura desconegut: '{tipus}'."})
+
+        # Els noms arriben del client, que és qui té els tres idiomes (i18n-gate). El servidor hi
+        # posa un recanvi perquè un tram sense nom és un tram que després ningú sabrà què és.
+        nom_a = (request.data.get('nom_a') or '').strip() or f'{seg_a.piece.nom_block} · tram'
+        nom_b = (request.data.get('nom_b') or '').strip() or f'{seg_b.piece.nom_block} · tram'
+
+        with transaction.atomic():
+            declarats = [
+                PatternSegment.objects.create(
+                    piece=seg.piece, vora=seg.vora, t_inici=seg.t_inici, t_fi=seg.t_fi,
+                    tipus_vora=seg.tipus_vora,
+                    origen=PatternSegment.ORIGEN_DECLARAT, nom=nom,
+                )
+                for seg, nom in ((seg_a, nom_a), (seg_b, nom_b))
+            ]
+            rel = SewRelation.objects.create(
+                model_id=fp.model_id, tipus=tipus,
+                diferencial_cm=float(request.data.get('diferencial_cm') or 0),
+                # El bateig és de qui el sap dir. Buit vol dir «genera'l dels dos trams», i és el
+                # que la UI fa servir: el nom d'una costura es REFERENCIA, no es congela.
+                nom=(request.data.get('nom') or '').strip(),
+                creat_per=getattr(request.user, 'profile', None),
+            )
+            rel.segments_a.set([declarats[0]])
+            rel.segments_b.set([declarats[1]])
+
+        return Response(self.get_serializer(rel).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], url_path='rebutjar-proposta')
+    def rebutjar_proposta(self, request):
+        """Dir que no: `{model, segment_a, segment_b, motiu?}`. I que no torni a sortir.
+
+        **El rebuig és persistent perquè si no ho fos no seria un rebuig**, seria un «amaga-ho
+        fins que recarregui». Una eina que torna a proposar el que ja li han dit que no ensenya a
+        no mirar-la, i llavors tant li fa què proposi.
+
+        El que es rebutja és la PARELLA, no els seus trams: dir que no a «màniga ⛓ màniga» ha de
+        deixar la màniga lliure perquè el motor la pugui proposar contra la sisa, que és la
+        parella bona. Per això aquí no es marca res sobre els segments.
+        """
+        fp = self._patro(request)
+        seg_a, seg_b = self._trams_de_la_proposta(request.data, fp)
+        a, b = clau_parella(seg_a.id, seg_b.id)
+
+        rebuig, creat = SewProposalRejection.objects.get_or_create(
+            segment_a_id=a, segment_b_id=b,
+            defaults={
+                'model_id': fp.model_id,
+                'motiu': (request.data.get('motiu') or '').strip(),
+                'rebutjat_per': getattr(request.user, 'profile', None),
+            },
+        )
+        return Response(
+            {'id': rebuig.id, 'clau': [a, b], 'ja_hi_era': not creat},
+            status=status.HTTP_201_CREATED if creat else status.HTTP_200_OK,
+        )
+
+    def _trams_de_la_proposta(self, data, fp: PatternFile):
+        """Els dos trams d'una proposta, validats abans de tocar res.
+
+        Han d'existir, han de ser d'aquest patró i han de ser DERIVATS: una proposta és sempre
+        sobre la hipòtesi del CAD. Si arribés un tram declarat, algú estaria fent passar per
+        proposta una cosa que ja s'havia decidit.
+        """
+        ids = [data.get('segment_a'), data.get('segment_b')]
+        if not all(ids):
+            raise serializers.ValidationError(
+                'Una proposta són DOS trams: segment_a i segment_b.')
+        if ids[0] == ids[1]:
+            raise serializers.ValidationError(
+                'Els dos costats de la proposta són el mateix tram: això no cus res.')
+
+        trams = []
+        for camp, pk in zip(['segment_a', 'segment_b'], ids):
+            seg = (PatternSegment.objects
+                   .select_related('piece')
+                   .filter(pk=pk, piece__pattern_file=fp).first())
+            if seg is None:
+                raise serializers.ValidationError(
+                    {camp: 'Aquest tram no existeix en aquest patró.'})
+            if seg.origen != PatternSegment.ORIGEN_AUTO:
+                raise serializers.ValidationError(
+                    {camp: 'Això no és una proposta: aquest tram ja és un tram declarat.'})
+            trams.append(seg)
+        return trams[0], trams[1]
 
 
 class PatternSegmentSerializer(serializers.ModelSerializer):

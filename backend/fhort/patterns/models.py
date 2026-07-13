@@ -482,3 +482,60 @@ class SewRelation(models.Model):
 
     def __str__(self):
         return f'{self.get_tipus_display()} (model {self.model_id})'
+
+
+class SewProposalRejection(models.Model):
+    """Una costura que el motor va proposar i una persona va dir que NO.
+
+    **El rebuig és l'altra meitat de la proposta.** Un motor que proposa i no escolta el «no»
+    torna a proposar el mateix a cada recàrrega, i el patronista aprèn a no mirar la llista —que
+    és la manera més segura de matar una eina d'assistència. Per això el rebuig es DESA.
+
+    Es desa la PARELLA DE TRAMS, no la proposta: una proposta no és una fila de cap taula, és el
+    resultat d'un càlcul que es refà cada cop que la geometria canvia. El que persisteix és el
+    judici humà sobre dos trams concrets («aquests dos no es cusen»), i això sí que és un fet
+    estable. La clau és canònica (el segment d'id més petit sempre a `segment_a`): una costura no
+    té un costat A i un costat B de veritat, i desar-la en l'ordre en què va arribar faria que la
+    mateixa parella, mirada de l'altra banda, tornés a sortir com si ningú no l'hagués rebutjada.
+
+    **Un rebuig no bloqueja els trams.** Dir que no a «màniga ⛓ màniga» ha de deixar la màniga
+    lliure per a la proposta bona: el que es rebutja és la PARELLA, no els seus trams.
+
+    Els trams són `PatternSegment` derivats (origen `auto`), que es refan en pujar una versió
+    nova del patró: un rebuig, doncs, val per a la geometria sobre la qual es va emetre, i una
+    versió nova torna a preguntar. És el que ha de passar —la geometria nova pot fer certa la
+    parella que a l'anterior era absurda—, i el CASCADE de les FK ho executa tot sol.
+    """
+
+    model = models.ForeignKey(
+        'models_app.Model', on_delete=models.CASCADE, related_name='sew_proposal_rejections',
+    )
+    segment_a = models.ForeignKey(
+        PatternSegment, on_delete=models.CASCADE, related_name='rebuigs_com_a',
+    )
+    segment_b = models.ForeignKey(
+        PatternSegment, on_delete=models.CASCADE, related_name='rebuigs_com_b',
+    )
+
+    #: Per què no. Opcional: obligar a justificar un rebuig faria que la gent no rebutgés, i el
+    #: silenci d'una llista plena de propostes mortes és pitjor que un rebuig sense motiu.
+    motiu = models.TextField(blank=True)
+    rebutjat_per = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='sew_proposals_rebutjades',
+    )
+    data = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Proposta de costura rebutjada'
+        verbose_name_plural = 'Propostes de costura rebutjades'
+        ordering = ['-data']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['segment_a', 'segment_b'],
+                name='sewproposalrejection_una_per_parella',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.segment_a_id} ⛓ {self.segment_b_id}: NO (model {self.model_id})'
