@@ -65,12 +65,18 @@ export default function TenantsPage() {
       setTenants(list)
       setMock(false)
     } catch {
-      // Fallback de desenvolupament: el backend pot no estar migrat encara.
-      const filtered = estatKey && estatKey !== 'tots'
-        ? MOCK_TENANTS.filter((t) => normalitzaEstat(t.estat) === estatKey)
-        : MOCK_TENANTS
-      setTenants(filtered)
-      setMock(true)
+      if (import.meta.env.DEV) {
+        // Fallback NOMÉS en dev local: el backend pot no estar migrat encara.
+        const filtered = estatKey && estatKey !== 'tots'
+          ? MOCK_TENANTS.filter((t) => normalitzaEstat(t.estat) === estatKey)
+          : MOCK_TENANTS
+        setTenants(filtered)
+        setMock(true)
+      } else {
+        // Staging/PROD: error real, mai dades inventades.
+        setTenants([])
+        setError('No s’ha pogut carregar la llista de tenants. Torna-ho a provar.')
+      }
     } finally {
       setLoading(false)
     }

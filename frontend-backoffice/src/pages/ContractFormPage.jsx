@@ -44,11 +44,12 @@ export default function ContractFormPage() {
     setForm((f) => ({ ...f, [k]: val }))
   }
 
-  // Selector de clients (tenants). getTenants ja retorna data; fallback a MOCK.
+  // Selector de clients (tenants). Fallback a MOCK NOMÉS en dev local (F2-B Troballa 2:
+  // a staging/PROD, mai dades inventades — millor un selector buit que tenants falsos).
   useEffect(() => {
     getTenants({})
       .then((d) => setTenants(Array.isArray(d) ? d : (d?.results ?? [])))
-      .catch(() => setTenants(MOCK_TENANTS))
+      .catch(() => setTenants(import.meta.env.DEV ? MOCK_TENANTS : []))
   }, [])
 
   // Selector de serveis. getServeis retorna la resposta axios → cal .data.

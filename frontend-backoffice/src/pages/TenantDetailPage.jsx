@@ -97,20 +97,28 @@ export default function TenantDetailPage() {
   const [tab, setTab] = useState('dades')
   const [tenant, setTenant] = useState(null)
   const [contactes, setContactes] = useState([])
-  const [plans, setPlans] = useState(MOCK_PLANS)
+  const [plans, setPlans] = useState(import.meta.env.DEV ? MOCK_PLANS : [])
   const [loading, setLoading] = useState(true)
   const [mock, setMock] = useState(false)
+  const [error, setError] = useState('')
 
   const loadTenant = useCallback(async () => {
     setLoading(true)
+    setError('')
     try {
       const t = await getTenant(codi)
       setTenant(t)
       setMock(false)
     } catch {
-      const m = MOCK_TENANTS.find((x) => x.codi_tenant === codi) || MOCK_TENANTS[0]
-      setTenant(m)
-      setMock(true)
+      if (import.meta.env.DEV) {
+        const m = MOCK_TENANTS.find((x) => x.codi_tenant === codi) || MOCK_TENANTS[0]
+        setTenant(m)
+        setMock(true)
+      } else {
+        // Staging/PROD: un error d'API NO pot pintar dades inventades (Stripe fals).
+        setTenant(null)
+        setError(`No s’ha pogut carregar el tenant «${codi}». Potser no existeix o l’API no respon.`)
+      }
     } finally {
       setLoading(false)
     }
@@ -121,19 +129,36 @@ export default function TenantDetailPage() {
       const c = await getContactes(codi)
       setContactes(Array.isArray(c) ? c : (c?.results ?? []))
     } catch {
-      setContactes(MOCK_CONTACTES)
+      setContactes(import.meta.env.DEV ? MOCK_CONTACTES : [])
     }
   }, [codi])
 
   useEffect(() => {
     loadTenant()
     loadContactes()
-    getPlans().then((d) => setPlans(Array.isArray(d) ? d : (d?.results ?? MOCK_PLANS))).catch(() => setPlans(MOCK_PLANS))
+    getPlans()
+      .then((d) => setPlans(Array.isArray(d) ? d : (d?.results ?? [])))
+      .catch(() => setPlans(import.meta.env.DEV ? MOCK_PLANS : []))
   }, [loadTenant, loadContactes])
 
-  if (loading || !tenant) {
+  if (loading) {
     return <div style={{ padding: '28px 32px', fontFamily: MONO, color: 'var(--text-muted)', fontSize: 13 }}>Carregant…</div>
   }
+
+  if (error && !tenant) {
+    return (
+      <div style={{ padding: '28px 32px', fontFamily: MONO }}>
+        <button type="button" onClick={() => navigate('/tenants')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 16 }}>
+          ← Tenants
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--err-bg, var(--warn-bg))', color: 'var(--err, var(--warn))', border: '1px solid var(--err, var(--warn))', borderRadius: 8, padding: '12px 15px', fontSize: 13 }}>
+          <i className="ti ti-alert-triangle" style={{ fontSize: 16 }} /> {error}
+        </div>
+      </div>
+    )
+  }
+
+  if (!tenant) return null
 
   const planObj = plans.find((p) => p.nom === (tenant.plan_nom || tenant.plan) || String(p.id) === String(tenant.plan_id))
   const stripeOk = tenant.stripe_configurat ?? !!tenant.stripe_customer_id

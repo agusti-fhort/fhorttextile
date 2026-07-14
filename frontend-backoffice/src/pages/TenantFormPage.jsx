@@ -49,7 +49,7 @@ export default function TenantFormPage() {
 
   const isEdit = !!codi
   const [form, setForm] = useState(EMPTY)
-  const [plans, setPlans] = useState(MOCK_PLANS)
+  const [plans, setPlans] = useState(import.meta.env.DEV ? MOCK_PLANS : [])
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState({})   // errors per camp (del backend)
@@ -63,8 +63,8 @@ export default function TenantFormPage() {
   // Carrega plans disponibles per al selector.
   useEffect(() => {
     getPlans()
-      .then((d) => setPlans(Array.isArray(d) ? d : (d?.results ?? MOCK_PLANS)))
-      .catch(() => setPlans(MOCK_PLANS))
+      .then((d) => setPlans(Array.isArray(d) ? d : (d?.results ?? [])))
+      .catch(() => setPlans(import.meta.env.DEV ? MOCK_PLANS : []))
   }, [])
 
   // Mode edició: carrega el tenant i omple el formulari.
@@ -74,8 +74,13 @@ export default function TenantFormPage() {
       const t = await getTenant(codi)
       hydrate(t)
     } catch {
-      const m = MOCK_TENANTS.find((x) => x.codi_tenant === codi)
-      if (m) hydrate(m)
+      if (import.meta.env.DEV) {
+        const m = MOCK_TENANTS.find((x) => x.codi_tenant === codi)
+        if (m) hydrate(m)
+      } else {
+        // Staging/PROD: mai omplir el formulari amb dades inventades.
+        setGlobalError(`No s’ha pogut carregar el tenant «${codi}» per editar-lo.`)
+      }
     } finally {
       setLoading(false)
     }
