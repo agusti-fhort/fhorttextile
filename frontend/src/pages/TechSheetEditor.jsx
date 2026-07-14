@@ -85,6 +85,12 @@ export const COL = {
 // no COL (que és per al DOM, on var() sí resol). Valors = mateixos hex que els tokens de :root.
 const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685' }
 
+// F1 — la caixa on entra una peça de patró. Una peça és MOLT més gran que la pàgina (el
+// TATE_FRONT fa 588×502 mm i un A4 apaïsat en fa 297×210): entra encaixada a aquesta caixa,
+// mai a mida real, i des d'aquí es redimensiona a mà com qualsevol imatge.
+const PIECE_BOX_W = 110
+const PIECE_BOX_H = 78
+
 const LAYER_ORDER = { template: 0, data: 1, free: 2 }
 const ZOOM_MIN = 0.25
 const ZOOM_MAX = 4
@@ -1380,6 +1386,9 @@ export default function TechSheetEditor() {
   const [saveState, setSaveState] = useState(null)  // null|'saving'|'saved'|'error'
   const [, setFitxers] = useState([])
   const [filePicker, setFilePicker] = useState(false)   // S03b · P7
+  // F1 — el patró VIGENT del model (o null si no en té) i el selector de peces.
+  const [patternFile, setPatternFile] = useState(null)
+  const [piecePicker, setPiecePicker] = useState(null)  // null | {loading} | {pieces} | {error}
   const [sizeFittings, setSizeFittings] = useState([])
   const [tableData, setTableData] = useState({})    // {objId: jsonData|null} fora del JSON
   const [notice, setNotice] = useState(null)        // toast efímer (p.ex. "ja hi ha capçalera")
@@ -1915,6 +1924,16 @@ export default function TechSheetEditor() {
     fetch(`${API}/api/v1/size-fittings/?model=${id}`, { headers: authHeaders })
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (!cancelled && d) setSizeFittings(d.results || d || []) }).catch(() => {})
+
+    // F1: el patró vigent. Es demana en carregar (no al clic) perquè l'eina ha de poder dir
+    // que no n'hi ha ABANS que ningú l'obri: una opció que s'obre buida no explica res.
+    fetch(`${API}/api/v1/patterns/pattern-files/?model=${id}`, { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (cancelled || !d) return
+        const list = d.results || d || []
+        setPatternFile(list.find(f => f.is_current) || null)
+      }).catch(() => {})
 
     if (fttMode) {
       // Mode .ftt (F1): carrega el document des de ftt-documents/<fitxerId>/ i el porta a v2.
@@ -3422,6 +3441,50 @@ export default function TechSheetEditor() {
       flash(t('tech_sheet.flat_import_error'))
     }
   }
+  // ── F1 — Peces del patró vigent ────────────────────────────────────────────
+  // El llistat no porta les peces (el serializer de llista les treu a posta: un llistat no ha
+  // d'arrossegar milers de punts), o sigui que el detall es demana en obrir el selector.
+  const obrirPeces = async () => {
+    if (!locked || !patternFile) return
+    setPiecePicker({ loading: true })
+    try {
+      const r = await fetch(`${API}/api/v1/patterns/pattern-files/${patternFile.id}/`, { headers: authHeaders })
+      if (!r.ok) throw new Error('http')
+      const d = await r.json()
+      setPiecePicker({ pieces: d.pieces || [] })
+    } catch { setPiecePicker({ error: true }) }
+  }
+
+  // El render del motor NO es pot clavar a `src`: l'endpoint va gated per Authorization i un
+  // <img> no pot portar capçaleres (el mateix mur que els assets del .ftt). Es baixa amb
+  // capçalera i s'encasta com a dataURL — exactament el que ja fa importarDelTenant.
+  //
+  // L'aspecte surt de l'SVG, no del bounding box de la peça: el render hi posa marges, i fer
+  // servir el bbox deformaria el dibuix just per l'amplada d'aquest marge.
+  const inserirPeca = async (peca) => {
+    if (!locked || !patternFile) return
+    try {
+      const url = `${API}/api/v1/patterns/pattern-files/${patternFile.id}/render.svg/?piece=${encodeURIComponent(peca.nom_block)}`
+      const r = await fetch(url, { headers: uploadHeaders })
+      if (!r.ok) throw new Error('http')
+      const svgText = await r.text()
+      const ratio = svgAspectRatio(svgText)
+      if (!ratio) throw new Error('svg')
+      const width = ratio >= PIECE_BOX_W / PIECE_BOX_H ? PIECE_BOX_W : PIECE_BOX_H * ratio
+      // Blob → readAsDataURL dona un dataURL BASE64, que és el que el backend sap extreure a
+      // asset (un dataURL amb `charset=utf-8` no li casa el patró i es quedaria inline).
+      const src = await blobToDataURL(new Blob([svgText], { type: 'image/svg+xml' }))
+      addObject({
+        id: uid(), type: 'pattern_piece', layer: 'free',
+        x: 20, y: 20, width, height: width / ratio,
+        src, piece_name: peca.nom_block, pattern_file_id: patternFile.id, caption: true,
+      })
+      setPiecePicker(null)
+    } catch {
+      flash(t('tech_sheet.piece_insert_error'))
+    }
+  }
+
   const ribbonTabs = [
     { id: 'file', label: t('tech_sheet.ribbon_file') },
     { id: 'page', label: t('tech_sheet.ribbon_page') },
@@ -3515,6 +3578,12 @@ export default function TechSheetEditor() {
         ribbonTool({ key: 'logo', icon: 'ti-photo', label: t('tech_sheet.client_logo'), onClick: insertLogo, title: customerLogoUrl ? t('tech_sheet.insert_logo_title') : t('tech_sheet.no_logo_title') }),
         ribbonTool({ key: 'table', icon: 'ti-table', label: t('tech_sheet.ribbon_table'), onClick: () => setTablePicker({}), disabled: !locked }),
         ribbonTool({ key: 'flat', icon: 'ti-vector', label: t('tech_sheet.flat_insert'), onClick: insertFlatSketch }),
+        // F1: si el model no té patró, l'eina es veu però no s'obre — i diu per què.
+        ribbonTool({
+          key: 'pattern-piece', icon: 'ti-shirt', label: t('tech_sheet.piece_insert'),
+          onClick: obrirPeces, disabled: !locked || !patternFile,
+          title: patternFile ? t('tech_sheet.piece_insert_title') : t('tech_sheet.piece_no_pattern'),
+        }),
         ribbonTool({ key: 'import-flat', icon: 'ti-file-import', label: t('tech_sheet.flat_import'), onClick: () => openImport('garment') }),
         // R1: placeholder — el flux d'import de mesures es dissenyarà més endavant (sense handler).
         ribbonTool({ key: 'import-measures', icon: 'ti-ruler', label: t('tech_sheet.import_measurements'), disabled: true, title: `${t('tech_sheet.import_measurements')} · ${t('tech_sheet.coming_soon')}` }),
@@ -4425,6 +4494,34 @@ export default function TechSheetEditor() {
           fitting (T1a/T1b) o de mida (personalitzada). Mateix look que el modal pickFitting
           de dalt. Obert des del ribbon (botó "Taula", commit 4); T1a/T1b es deshabiliten
           sense size-fittings, T2/Custom sempre disponibles. */}
+      {/* F1 — selector de peces del patró vigent. La peça hi entra encaixada; el nom del
+          block és el que en dirà el peu i el panell de capes. */}
+      {piecePicker && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setPiecePicker(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 380, width: '90%', maxHeight: '70vh', overflowY: 'auto', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 4 }}>{t('tech_sheet.piece_picker_title')}</h2>
+            <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 12 }}>{patternFile?.nom_fitxer}</p>
+            {piecePicker.loading && <p style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('app.loading')}</p>}
+            {piecePicker.error && <p style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.piece_insert_error')}</p>}
+            {piecePicker.pieces && !piecePicker.pieces.length && (
+              <p style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.piece_none')}</p>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(piecePicker.pieces || []).map(p => (
+                <button key={p.id} type="button" onClick={() => inserirPeca(p)}
+                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                  {p.nom_block}
+                  {p.bounding_box_mm && (
+                    <div style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>
+                      {Math.round(p.bounding_box_mm.ample)} × {Math.round(p.bounding_box_mm.alt)} mm
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {tablePicker && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setTablePicker(null)}>
           <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
