@@ -10,11 +10,15 @@ PAISOS_UE = frozenset({
 
 
 class Plan(models.Model):
+    NOM_FREE = 'Free'
     NOM_SOLO = 'Solo'
     NOM_STUDIO = 'Studio'
     NOM_BRAND = 'Brand'
     NOM_ENTERPRISE = 'Enterprise'
     NOM_CHOICES = [
+        # F3-B1: 'Free' absorbit des de F1 (preu 0, sense lookup_keys a Stripe;
+        # la fila Plan Free la sembra F3). Enterprise queda fora del catàleg públic.
+        (NOM_FREE, 'Free'),
         (NOM_SOLO, 'Solo'),
         (NOM_STUDIO, 'Studio'),
         (NOM_BRAND, 'Brand'),
