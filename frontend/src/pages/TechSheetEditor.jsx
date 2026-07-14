@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+// Els builders de prims són funcions de mòdul (les comparteixen el canvas i el generador de
+// PDF): no hi arriba el hook. `i18n.t` fora d'un component ja és patró de la casa
+// (POMBrowser.jsx:642, RegistreActivitat.jsx:15) i respecta l'idioma actiu igualment.
+import i18n from '../i18n'
 import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group, Path, Circle } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
@@ -605,9 +609,14 @@ function GradedTableNode({ tableData, groupProps, isSelected }) {
 // Taula genèrica (S3) — mateix patró que GradedTableNode, columns/rows lliures (sense fetch).
 function TableNode({ obj, groupProps, isSelected }) {
   const { prims, totalW, totalH } = useMemo(() => buildTableCellPrimitives(obj), [obj])
+  // El rètol «per vincular» va amb els MATEIXOS prims que el PDF (addObjectToLayer).
+  const pending = useMemo(
+    () => (isPendentVincle(obj) ? buildPendingRibbonPrims(totalW, totalH) : []),
+    [obj, totalW, totalH])
   return (
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
+      {pending.map((p, i) => <PrimNode key={`pv${i}`} p={p} />)}
       {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={TBL.OUTER} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
   )
@@ -823,6 +832,50 @@ function dataBlockPlaceholderProps(obj) {
   return { width: toPx(obj.width || 120), height: toPx(obj.height || 40), fill: COL.goldPale, stroke: KONVA_COL.border, dash: [4, 4] }
 }
 
+// ── «Per vincular al model» (BIB S0) ───────────────────────────────────────────────────────
+// Quan un document canvia de host, el descongelat (services_ftt_document.unfreeze_document)
+// buida les taules que portaven les dades del model origen i les marca `pendent_vincle`. No
+// és un error: és feina pendent, i la fa el tècnic amb un clic. El sistema no re-vincula sol.
+//
+// La regla dura és que ES VEGI, i que es vegi IGUAL als dos switches. Si el canvas mostrés el
+// rètol i el generador de PDF s'ho callés, el document sortiria per la impressora amb un forat
+// silenciós al lloc on hi havia les mesures — i un forat silenciós en un document que viatja al
+// taller és pitjor que un error. Per això el rètol es construeix amb PRIMS, el llenguatge que
+// ObjectNode i addObjectToLayer ja comparteixen: pintar-lo en un i no en l'altre és, per
+// construcció, impossible.
+const PENDING_RIBBON_H = 5 * MM_TO_PX
+
+// Mirall de PENDING_MARK (services_ftt_document.py). El backend és qui posa la marca; el
+// canvas no la dedueix mai d'un id a null, perquè un `graded_table` acabat d'inserir també
+// en té un durant un instant i no és el mateix cas.
+function isPendentVincle(obj) {
+  return obj?.pendent_vincle === true
+}
+
+function pendingLabel() {
+  return i18n.t('tech_sheet.pending_link')
+}
+
+// Bloc sense graella (graded_table desvinculada): la caixa sencera ÉS el rètol.
+function buildPendingBoxPrims(obj) {
+  const w = toPx(obj.width || 120)
+  const h = toPx(obj.height || 40)
+  return [
+    { t: 'r', x: 0, y: 0, w, h, fill: KONVA_COL.goldPale, stroke: KONVA_COL.gold, sw: 1, dash: [4, 3] },
+    { t: 't', x: T_PAD, y: 0, w: w - 2 * T_PAD, h, text: pendingLabel(), fill: KONVA_COL.textMain, size: Math.round(3.2 * MM_TO_PX), align: 'center', mid: true },
+  ]
+}
+
+// Taula snapshot buidada: la graella es conserva (és del tècnic, no del host) i el rètol va
+// SOTA, per no tapar-la. El tècnic veu l'esquelet del que hi havia i què li falta.
+function buildPendingRibbonPrims(totalW, totalH) {
+  const y = totalH + Math.round(1 * MM_TO_PX)
+  return [
+    { t: 'r', x: 0, y, w: totalW, h: PENDING_RIBBON_H, fill: KONVA_COL.goldPale, stroke: KONVA_COL.gold, sw: 1, dash: [4, 3] },
+    { t: 't', x: T_PAD, y, w: totalW - 2 * T_PAD, h: PENDING_RIBBON_H, text: pendingLabel(), fill: KONVA_COL.textMain, size: Math.round(3 * MM_TO_PX), mid: true },
+  ]
+}
+
 function blocksTransform(obj) {
   return obj && (obj.type === 'line' || obj.type === 'arrow' || obj.type === 'field' || (obj.type === 'text' && obj.bgFill))
 }
@@ -901,7 +954,11 @@ async function addObjectToLayer(layer, obj, ctx) {
       built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl)
     } else if (obj.kind === 'graded_table') {
       const data = ctx?.tableData?.[obj.id]
-      if (data) built = buildTablePrimitives(data)
+      // Desvinculada (BIB S0): no hi ha dades ni n'hi haurà fins que el tècnic la torni a
+      // lligar. Abans, `built` es quedava a null i el bloc NO s'afegia a la capa: el PDF
+      // sortia amb un forat mut on hi havia la taula. Ara el rètol hi va.
+      if (isPendentVincle(obj)) built = { prims: buildPendingBoxPrims(obj) }
+      else if (data) built = buildTablePrimitives(data)
     }
     if (built) {
       const g = new Konva.Group(dataBlockGroupProps(obj))
@@ -913,7 +970,9 @@ async function addObjectToLayer(layer, obj, ctx) {
   }
   if (obj.type === 'table') {
     const g = new Konva.Group(dataBlockGroupProps(obj))
-    addPrimsToGroup(g, buildTableCellPrimitives(obj).prims)
+    const { prims, totalW, totalH } = buildTableCellPrimitives(obj)
+    addPrimsToGroup(g, prims)
+    if (isPendentVincle(obj)) addPrimsToGroup(g, buildPendingRibbonPrims(totalW, totalH))
     layer.add(g)
     return
   }
@@ -1091,6 +1150,15 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     const dataCommon = { ...common, ...dataBlockGroupProps(obj) }
     if (obj.kind === 'header') {
       return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} groupProps={dataCommon} isSelected={selected} />
+    }
+    // Desvinculada (BIB S0): mateixos prims que el PDF. Sense això queia al «Carregant
+    // taula…» de sota i s'hi quedava per sempre — una taula desvinculada no carrega mai.
+    if (isPendentVincle(obj)) {
+      return (
+        <Group {...dataCommon}>
+          {buildPendingBoxPrims(obj).map((p, i) => <PrimNode key={i} p={p} />)}
+        </Group>
+      )
     }
     const data = tableData?.[obj.id]
     if (!data) {

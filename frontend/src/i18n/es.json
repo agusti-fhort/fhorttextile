@@ -2434,6 +2434,7 @@
     "flash_empty_table": "Tabla vacía.",
     "flash_table_fetch_error": "No se han podido cargar los datos de la tabla.",
     "table_picker_title": "Inserta una tabla",
+    "pending_link": "Tabla por vincular al modelo",
     "table_picker_cancel": "Cancelar",
     "table_variant_t1a": "T1a — Fitting (POM base)",
     "table_variant_t1b": "T1b — Grading final",

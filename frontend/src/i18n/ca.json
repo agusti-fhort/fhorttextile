@@ -2434,6 +2434,7 @@
     "flash_empty_table": "Taula buida.",
     "flash_table_fetch_error": "No s'han pogut carregar les dades de la taula.",
     "table_picker_title": "Insereix una taula",
+    "pending_link": "Taula per vincular al model",
     "table_picker_cancel": "Cancel·lar",
     "table_variant_t1a": "T1a — Fitting (POM base)",
     "table_variant_t1b": "T1b — Grading final",
