@@ -3474,9 +3474,12 @@ export default function TechSheetEditor() {
       // Blob → readAsDataURL dona un dataURL BASE64, que és el que el backend sap extreure a
       // asset (un dataURL amb `charset=utf-8` no li casa el patró i es quedaria inline).
       const src = await blobToDataURL(new Blob([svgText], { type: 'image/svg+xml' }))
+      // En cascada: dues peces seguides a la mateixa cantonada es tapen l'una a l'altra, i qui
+      // n'insereix dues creu que n'hi ha una. Cada peça nova entra una mica més avall.
+      const n = objectsOf(currentPage).filter(o => o.type === 'pattern_piece').length
       addObject({
         id: uid(), type: 'pattern_piece', layer: 'free',
-        x: 20, y: 20, width, height: width / ratio,
+        x: 20 + (n % 5) * 10, y: 20 + (n % 5) * 10, width, height: width / ratio,
         src, piece_name: peca.nom_block, pattern_file_id: patternFile.id, caption: true,
       })
       setPiecePicker(null)
