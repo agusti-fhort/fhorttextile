@@ -5,6 +5,7 @@ import {
   getTenant, getContactes, createContacte, deleteContacte,
   getPlans, updateTenant, MOCK_TENANTS, MOCK_CONTACTES, MOCK_PLANS,
 } from '../api/tenants'
+import { getContractes, getContracte } from '../api/contracts'
 import { estatConfig } from '../config/estats'
 import { countryName, regimVat, regimVatLabel } from '../config/fiscal'
 
@@ -15,6 +16,7 @@ const TABS = [
   { key: 'condicions', label: 'CONDICIONS COMERCIALS' },
   { key: 'facturacio', label: 'FACTURACIÓ I PAGAMENTS' },
   { key: 'pagament', label: 'MÈTODE DE PAGAMENT' },
+  { key: 'legal', label: 'LEGAL' },
   { key: 'activitat', label: 'ACTIVITAT' },
   { key: 'tiquets', label: 'TIQUETS' },
 ]
@@ -81,6 +83,24 @@ function Placeholder({ children }) {
   return (
     <div style={{ ...cardStyle, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: '48px 24px' }}>
       {children}
+    </div>
+  )
+}
+
+// ── Tab Legal (placeholder estructurat per a F4) ──────────────────────────
+// El backend legal de F4 ja existeix (legal/acceptances). F4-bis (1 commit de la seva
+// sessió) cablejarà l'historial real sota AQUESTA capçalera. De moment, estat buit.
+function LegalTab() {
+  return (
+    <div style={cardStyle}>
+      <SectionTitle>Historial d'acceptacions</SectionTitle>
+      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: '32px 16px' }}>
+        <i className="ti ti-file-certificate" style={{ fontSize: 26, display: 'block', marginBottom: 10, opacity: 0.6 }} />
+        Cap document legal encara.
+        <div style={{ fontSize: 11.5, marginTop: 6 }}>
+          L'historial d'acceptacions apareixerà aquí quan el mòdul legal (F4) hi cablegi les dades.
+        </div>
+      </div>
     </div>
   )
 }
@@ -250,6 +270,8 @@ export default function TenantDetailPage() {
           <Placeholder>Gestió Stripe — Sprint 7.</Placeholder>
         </div>
       )}
+
+      {tab === 'legal' && <LegalTab />}
 
       {tab === 'activitat' && <Placeholder>Log d'activitat — Sprint 10.</Placeholder>}
       {tab === 'tiquets' && <Placeholder>Tiquets de suport — Sprint 9.</Placeholder>}
@@ -465,7 +487,93 @@ function CondicionsTab({ tenant, planObj, plans, isAdmin, codi, onChanged }) {
         )}
       </div>
 
+      {/* F2-B P3: contracte vigent + tarifa negociada (read-only, enllaça l'editor). */}
+      <ContracteVigent codi={codi} />
+
       <Placeholder>Historial de canvis de condicions — pròximament.</Placeholder>
+    </div>
+  )
+}
+
+// ── Contracte vigent del tenant (Sprint 5) mostrat des de la fitxa ──────────
+// Read-only: llegeix el TenantContract actiu + les seves línies (tarifa/inclosos) i
+// enllaça a l'editor existent (/contractes/:id). NO duplica l'editor.
+function ContracteVigent({ codi }) {
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(true)
+  const [contract, setContract] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    setError('')
+    const avui = new Date().toISOString().slice(0, 10)
+    getContractes({ client: codi, actiu: true })
+      .then((r) => {
+        const d = r.data
+        const list = Array.isArray(d) ? d : (d?.results ?? [])
+        const vigent = list.find((c) => !c.data_fi || c.data_fi >= avui) || list[0]
+        if (!vigent) { if (alive) { setContract(null); setLoading(false) } return null }
+        return getContracte(vigent.id).then((r2) => { if (alive) { setContract(r2.data); setLoading(false) } })
+      })
+      .catch(() => { if (alive) { setError('No s’ha pogut carregar el contracte vigent.'); setLoading(false) } })
+    return () => { alive = false }
+  }, [codi])
+
+  const lines = contract?.lines ?? []
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 16 }}>
+      <SectionTitle action={contract ? (
+        <button type="button" onClick={() => navigate(`/contractes/${contract.id}`)} style={ghostBtn}>
+          <i className="ti ti-external-link" style={{ fontSize: 15 }} /> Editar contracte
+        </button>
+      ) : null}>Contracte vigent</SectionTitle>
+
+      {loading ? (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Carregant contracte…</div>
+      ) : error ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--warn)' }}>
+          <i className="ti ti-alert-triangle" style={{ fontSize: 15 }} /> {error}
+        </div>
+      ) : !contract ? (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Cap contracte vigent per a aquest tenant.</div>
+      ) : (
+        <>
+          <Grid>
+            <Field label="Vigència" value={`${contract.data_inici} → ${contract.data_fi || 'indefinit'}`} />
+            <Field label="Estat" value={contract.actiu ? 'Actiu' : 'Inactiu'} />
+          </Grid>
+          <div style={{ marginTop: 6 }}>
+            <div style={{ ...labelStyle, marginBottom: 8 }}>Línies · tarifa negociada</div>
+            {lines.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>El contracte no té línies de servei.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 12.5 }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ padding: '6px 10px 6px 0', fontWeight: 600 }}>Servei</th>
+                      <th style={{ padding: '6px 10px', fontWeight: 600 }}>Tarifa</th>
+                      <th style={{ padding: '6px 0', fontWeight: 600 }}>Inclosos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((l) => (
+                      <tr key={l.id} style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-main)' }}>
+                        <td style={{ padding: '7px 10px 7px 0' }}>{l.service_nom || l.service_code || l.service}</td>
+                        <td style={{ padding: '7px 10px' }}>{l.preu} {l.moneda}</td>
+                        <td style={{ padding: '7px 0' }}>{l.inclosos != null ? l.inclosos : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
