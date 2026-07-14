@@ -323,6 +323,17 @@ export function v2ToDocument(v2Pages, pageFormat, metadata = {}, urlToName = {})
 // Konva natius (vegeu buildTablePrimitives / GradedTableNode). Es mantenen només els
 // helpers d'imatge (loadImageEl/useImage) per a croquis i fitxers del model. ───
 
+// blob → dataURL. Els dos consumidors (assets del .ftt en carregar, bytes importats del
+// tenant) necessiten el MATEIX gest, i fer-lo dos cops seria dues maneres de fallar.
+function blobToDataURL(blob) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader()
+    fr.onload = () => res(fr.result)
+    fr.onerror = () => rej(new Error('fr'))
+    fr.readAsDataURL(blob)
+  })
+}
+
 // Carrega un HTMLImageElement (promesa) — per a l'export offscreen.
 function loadImageEl(src) {
   return new Promise((res, rej) => {
@@ -1398,8 +1409,8 @@ export default function TechSheetEditor() {
   const saveTimer = useRef(null)
   const skipSave = useRef(true)        // salta l'autosave del primer load
   // Mode .ftt: estat del document (assets carregats + metadata + cap de cadena actual).
-  const fttAssets = useRef({})         // {nom: URL} dels assets servits pel backend
-  const fttUrlToName = useRef({})      // {URL: nom} per desar (URL → 'assets/<nom>')
+  const fttAssets = useRef({})         // {nom: dataURL} dels assets, ja baixats (vegeu carregarAssets)
+  const fttUrlToName = useRef({})      // {dataURL: nom} per desar (dataURL → 'assets/<nom>')
   const fttMeta = useRef({})           // metadata del document.json (es conserva en desar)
   const fttHeadId = useRef(fitxerId || null)  // cap de cadena vigent (canvia en desar: nova versió)
   const didInitialFit = useRef(false)
@@ -1822,6 +1833,24 @@ export default function TechSheetEditor() {
     resizeObjectTo(obj, nextW, nextH)
   }
 
+  // Els assets del .ftt es publiquen com a URL AUTENTICADA (ftt-documents/<id>/asset/<nom>/,
+  // IsAuthenticated). Cap dels dos carregadors d'imatge —useImage al canvas viu i loadImageEl
+  // a l'export— pot enviar-hi el Bearer: tots dos van amb `new Image()`, i un <img> no porta
+  // capçaleres. El 401 acabava a l'`onerror`, que aquí és SILENCI: la imatge desapareixia del
+  // canvas i del PDF sense dir-ho. Per això els assets es baixen AMB capçalera i entren al
+  // document ja com a dataURL. La inversa (dataURL → 'assets/<nom>') la fa fttUrlToName en
+  // desar, de manera que els bytes no es reescriuen mai: el .ftt no engreixa.
+  const carregarAssets = async (assets) => {
+    const parells = await Promise.all(Object.entries(assets).map(async ([nom, url]) => {
+      try {
+        const r = await fetch(url, { headers: uploadHeaders })
+        if (!r.ok) return null
+        return [nom, await blobToDataURL(await r.blob())]
+      } catch { return null }
+    }))
+    return Object.fromEntries(parells.filter(Boolean))
+  }
+
   // ── Càrrega inicial: model, sheet, fitxers, size fittings, lock ────────────
   useEffect(() => {
     if (!id) return
@@ -1844,9 +1873,10 @@ export default function TechSheetEditor() {
       // El lock i el desat els afegeix F2; F1 obre en consulta.
       fetch(`${API}/api/v1/ftt-documents/${fitxerId}/`, { headers: authHeaders })
         .then(r => (r.ok ? r.json() : null))
-        .then(data => {
+        .then(async data => {
           if (cancelled || !data) return
-          const assets = data.assets || {}
+          const assets = await carregarAssets(data.assets || {})
+          if (cancelled) return
           fttAssets.current = assets
           fttUrlToName.current = Object.fromEntries(Object.entries(assets).map(([n, u]) => [u, n]))
           fttMeta.current = data.document_json?.metadata || {}
@@ -3337,13 +3367,7 @@ export default function TechSheetEditor() {
       } else if (nom.endsWith('.dxf')) {
         flash(t('tech_sheet.import_dxf_soon'))      // el motor DXF segueix pendent
       } else {
-        const blob = await r.blob()
-        const dataURL = await new Promise((res, rej) => {
-          const fr = new FileReader()
-          fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('fr'))
-          fr.readAsDataURL(blob)
-        })
-        addImageFromDataURL(dataURL)
+        addImageFromDataURL(await blobToDataURL(await r.blob()))
       }
       closeImport()
     } catch {
