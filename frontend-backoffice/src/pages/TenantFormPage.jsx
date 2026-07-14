@@ -132,15 +132,17 @@ export default function TenantFormPage() {
 
   function validateLocal() {
     const e = {}
+    if (!form.nom.trim()) e.nom = 'El nom és obligatori.'
+    // Obligatoris comercials NOMÉS a l'alta (D1). En EDICIÓ no es bloquegen: tenants
+    // preexistents (SYS/FTT) no els compleixen (plan=None, email buit) i s'han de poder
+    // editar. El backend fa el mateix (ClientCreateSerializer exigeix; l'update no).
     if (!isEdit) {
       if (!/^[A-Z0-9]{3}$/.test(form.codi_tenant)) e.codi_tenant = 'Han de ser 3 caràcters alfanumèrics en majúscules.'
+      if (!form.plan) e.plan = 'Selecciona un pla.'
+      if (!form.pais) e.pais = 'El país és obligatori.'
+      if (!form.email_facturacio.trim()) e.email_facturacio = 'L’email de facturació és obligatori.'
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email_facturacio)) e.email_facturacio = 'Introdueix un email vàlid.'
     }
-    if (!form.nom.trim()) e.nom = 'El nom és obligatori.'
-    if (!form.plan) e.plan = 'Selecciona un pla.'
-    // D1 (F2-B): alta mínima comercial — pais i email_facturacio obligatoris.
-    if (!form.pais) e.pais = 'El país és obligatori.'
-    if (!form.email_facturacio.trim()) e.email_facturacio = 'L’email de facturació és obligatori.'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email_facturacio)) e.email_facturacio = 'Introdueix un email vàlid.'
     try {
       JSON.parse(form.feature_flags || '{}')
     } catch {
@@ -225,6 +227,10 @@ export default function TenantFormPage() {
     return <div style={{ padding: '28px 32px', fontFamily: MONO, color: 'var(--text-muted)', fontSize: 13 }}>Carregant…</div>
   }
 
+  // Nom del pla seleccionat (per a l'avís de provisió automàtica del tier Free).
+  const selectedPlan = plans.find((p) => String(p.id) === String(form.plan) || p.nom === form.plan)
+  const selectedPlanNom = selectedPlan?.nom
+
   return (
     <div style={{ padding: '28px 32px', fontFamily: MONO, maxWidth: 860 }}>
       <div style={{ marginBottom: 4 }}>
@@ -264,11 +270,17 @@ export default function TenantFormPage() {
               {TIPOLOGIES.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
             </select>
           </Field>
-          <Field label="Pla" required error={errors.plan}>
+          <Field label="Pla" required={!isEdit} error={errors.plan}>
             <select value={form.plan} onChange={set('plan')} style={baseInput}>
               <option value="">— Selecciona —</option>
               {plans.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
             </select>
+            {!isEdit && selectedPlanNom === 'Free' && (
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                <i className="ti ti-seeding" style={{ fontSize: 13, marginRight: 4 }} />
+                En crear-se, aquest tenant es provisionarà automàticament amb el perfil de sembra Free.
+              </p>
+            )}
           </Field>
           <Field label="Moneda" required error={errors.moneda}>
             <select value={form.moneda} onChange={set('moneda')} style={baseInput}>
@@ -296,7 +308,7 @@ export default function TenantFormPage() {
               {TIPUS_CLIENT.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
             </select>
           </Field>
-          <Field label="Email facturació" required error={errors.email_facturacio}>
+          <Field label="Email facturació" required={!isEdit} error={errors.email_facturacio}>
             <input type="email" value={form.email_facturacio} onChange={set('email_facturacio')} style={baseInput} />
           </Field>
         </Grid>
@@ -319,7 +331,7 @@ export default function TenantFormPage() {
           <Field label="Codi postal" error={errors.codi_postal}>
             <input value={form.codi_postal} onChange={set('codi_postal')} style={baseInput} />
           </Field>
-          <Field label="País" required error={errors.pais}>
+          <Field label="País" required={!isEdit} error={errors.pais}>
             <select value={form.pais} onChange={set('pais')} style={baseInput}>
               {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name} ({c.code})</option>)}
             </select>
