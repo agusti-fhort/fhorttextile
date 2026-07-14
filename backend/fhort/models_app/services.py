@@ -46,9 +46,16 @@ def reserve_sequence_range(customer, year, season, n):
     comptador durant la transacció perquè pujades concurrents no col·lisionin. select_for_update
     funciona per-schema sota django-tenants. El camí manual (signal) NO usa això; segueix amb
     el scan MAX(sequencial). Només el bulk reserva rang.
+
+    El comptador NO és l'única font de números: el camí manual (signal generate_model_code) i
+    el wizard (models_app/views.py) creen models escrivint `sequencial` sense tocar-lo mai. Un
+    comptador que només es mirés a si mateix començaria per 1 en un client que ja té models i
+    xocaria contra codi_intern (unique) → IntegrityError. Per això el terra de la reserva és
+    max(comptador, MAX(sequencial) real): monòton respecte del terreny, mai el contradiu.
     """
     from django.db import transaction
-    from fhort.models_app.models import ModelSequence
+    from django.db.models import Max
+    from fhort.models_app.models import Model, ModelSequence
 
     if n <= 0:
         return (0, -1)  # rang buit (cap fila a importar)
@@ -57,8 +64,13 @@ def reserve_sequence_range(customer, year, season, n):
         seq, _ = ModelSequence.objects.select_for_update().get_or_create(
             customer=customer, year=year, season=season,
         )
-        first = seq.last_seq + 1
-        seq.last_seq = seq.last_seq + n
+        real_max = Model.objects.filter(
+            customer=customer, any=year, temporada=season,
+        ).aggregate(m=Max('sequencial'))['m'] or 0
+
+        floor = max(seq.last_seq, real_max)
+        first = floor + 1
+        seq.last_seq = floor + n
         seq.save(update_fields=['last_seq'])
         last = seq.last_seq
     return (first, last)
