@@ -274,6 +274,7 @@ export const bulkImport = {
   upload: (formData) => client.post('/api/v1/bulk-import/upload/', formData, {
     headers: { 'Content-Type': undefined },
   }),
+  reconciliation: (id) => client.get(`/api/v1/bulk-import/${id}/reconciliation/`),
   commit: (id) => client.post(`/api/v1/bulk-import/${id}/commit/`),
   errorsReport: (id) => client.get(`/api/v1/bulk-import/${id}/errors-report/`, {
     responseType: 'blob',

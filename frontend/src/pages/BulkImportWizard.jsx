@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import CustomerSelector from '../components/CustomerSelector'
+import BulkImportReconciliation from '../components/BulkImportReconciliation'
 import { bulkImport } from '../api/endpoints'
 
 // Import massiu de models per Excel — modal stepper de 4 passos.
@@ -42,7 +43,6 @@ async function blobErrorMessage(err, fallback) {
 }
 
 const STEP_KEYS = ['step1', 'step2', 'step3', 'step4']
-const STATES = ['OK', 'ERROR', 'AVIS', 'DUPLICAT']
 
 export default function BulkImportWizard() {
   const { t } = useTranslation()
@@ -59,9 +59,8 @@ export default function BulkImportWizard() {
   // Resultat d'upload
   const [importId, setImportId] = useState(null)
   const [resum, setResum] = useState(null)
-  const [rows, setRows] = useState([])
-  // Pas 2
-  const [filterEstat, setFilterEstat] = useState('all')
+  // Pas 2 — conciliació (què ha entès el sistema de cada cel·la + quins codis ocuparà)
+  const [rec, setRec] = useState(null)
   // Pas 3/4
   const [committing, setCommitting] = useState(false)
   const [commitStats, setCommitStats] = useState(null)
@@ -79,6 +78,8 @@ export default function BulkImportWizard() {
     }
   }
 
+  // Pujar → CONCILIAR. El pas 2 no s'obre fins que el sistema pot dir què ha entès de cada
+  // cel·la: mai s'ensenya un "20 files OK" que només ha mirat el format.
   const handleUpload = async () => {
     if (!customerId) { setError(t('bulk_import.err_no_customer')); return }
     if (!file) { setError(t('bulk_import.err_select_file')); return }
@@ -90,7 +91,9 @@ export default function BulkImportWizard() {
       const res = await bulkImport.upload(fd)
       setImportId(res.data.import_id)
       setResum(res.data.resum)
-      setRows(res.data.rows || [])
+
+      const rec = await bulkImport.reconciliation(res.data.import_id)
+      setRec(rec.data)
       setStep(2)
     } catch (err) {
       setError(err?.response?.data?.error || t('bulk_import.err_upload'))
@@ -122,9 +125,9 @@ export default function BulkImportWizard() {
     }
   }
 
-  const okCount = resum?.ok ?? 0
   const errCount = resum?.errors ?? 0
-  const shownRows = filterEstat === 'all' ? rows : rows.filter(r => r.estat === filterEstat)
+  // El número que entrarà de debò surt de la CONCILIACIÓ, no del recompte de format.
+  const importables = rec?.resum?.importables ?? 0
 
   return (
     <div style={{ maxWidth: 920, margin: '0 auto', padding: '2rem 1rem' }}>
@@ -180,52 +183,10 @@ export default function BulkImportWizard() {
           </div>
         )}
 
-        {/* ───── PAS 2 — Preview ───── */}
+        {/* ───── PAS 2 — Conciliació (què ha entès el sistema, abans que res s'escrigui) ───── */}
         {step === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <Counter n={okCount} label={t('bulk_import.counter_ok')} color="var(--ok)" />
-              <Counter n={errCount} label={t('bulk_import.counter_errors')} color="var(--err)" />
-              <Counter n={resum?.avisos ?? 0} label={t('bulk_import.counter_avisos')} color={GOLD} />
-              <Counter n={resum?.duplicats ?? 0} label={t('bulk_import.counter_duplicats')} color="var(--gray)" />
-              <Counter n={resum?.conjunts ?? 0} label={t('bulk_import.counter_conjunts')} color="var(--text-main)" />
-            </div>
-
-            {/* Filtre per estat */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {['all', ...STATES].map(s => (
-                <button key={s} type="button" onClick={() => setFilterEstat(s)} style={chip(filterEstat === s)}>
-                  {s === 'all' ? t('bulk_import.filter_all') : t(`bulk_import.estat_${s}`)}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ border: `0.5px solid ${BORDER}`, borderRadius: 10, maxHeight: 360, overflowY: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
-                <thead>
-                  <tr>
-                    <th style={th}>{t('bulk_import.col_row')}</th>
-                    <th style={th}>{t('bulk_import.col_estat')}</th>
-                    <th style={th}>{t('bulk_import.col_nom')}</th>
-                    <th style={th}>{t('bulk_import.col_errors')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shownRows.length === 0 ? (
-                    <tr><td colSpan={4} style={{ ...td, textAlign: 'center', color: 'var(--gray)' }}>{t('bulk_import.no_rows')}</td></tr>
-                  ) : shownRows.map(r => (
-                    <tr key={r.row_num}>
-                      <td style={td}>{r.row_num}</td>
-                      <td style={td}><EstatBadge estat={r.estat} t={t} /></td>
-                      <td style={td}>{r.raw_data?.nom_prenda || '—'}</td>
-                      <td style={{ ...td, color: r.estat === 'ERROR' || r.estat === 'DUPLICAT' ? 'var(--err)' : 'var(--gray)' }}>
-                        {(r.errors || []).map(e => e.missatge_client).join(' · ') || '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <BulkImportReconciliation rec={rec} />
 
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
               {errCount > 0 ? (
@@ -242,12 +203,13 @@ export default function BulkImportWizard() {
         {step === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <p style={{ fontFamily: MONO, fontSize: 'var(--fs-h3)' }}>
-              {t('bulk_import.confirm_text', { ok: okCount, conjunts: resum?.conjunts ?? 0, errors: errCount })}
+              {t('bulk_import.confirm_text', { ok: importables, conjunts: resum?.conjunts ?? 0, errors: errCount })}
             </p>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <button type="button" onClick={() => setStep(2)} style={ghostBtn(false)}>← {t('bulk_import.back')}</button>
-              <button type="button" onClick={handleCommit} disabled={okCount === 0 || committing} style={primaryBtn(okCount === 0 || committing)}>
-                {committing ? t('bulk_import.importing') : t('bulk_import.import_btn')}
+              {/* El botó diu el número REAL que entrarà: el de la conciliació que el tècnic ha vist. */}
+              <button type="button" onClick={handleCommit} disabled={importables === 0 || committing} style={primaryBtn(importables === 0 || committing)}>
+                {committing ? t('bulk_import.importing') : t('bulk_import.import_n_btn', { n: importables })}
               </button>
             </div>
           </div>
@@ -313,28 +275,6 @@ function Stepper({ step, t }) {
   )
 }
 
-function Counter({ n, label, color }) {
-  return (
-    <div style={{ border: `0.5px solid ${BORDER}`, borderRadius: 10, padding: '8px 16px', minWidth: 90, textAlign: 'center' }}>
-      <div style={{ fontFamily: MONO, fontSize: 'var(--fs-h1)', fontWeight: 600, color }}>{n}</div>
-      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', textTransform: 'uppercase' }}>{label}</div>
-    </div>
-  )
-}
-
-function EstatBadge({ estat, t }) {
-  const colors = {
-    OK: ['var(--ok-bg)', 'var(--ok)'], ERROR: ['#fee', 'var(--err)'],
-    AVIS: ['#fdf3ee', GOLD], DUPLICAT: ['var(--gray-l)', 'var(--gray)'],
-  }
-  const [bg, fg] = colors[estat] || ['var(--gray-l)', 'var(--gray)']
-  return (
-    <span style={{ fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: bg, color: fg }}>
-      {t(`bulk_import.estat_${estat}`)}
-    </span>
-  )
-}
-
 function Field({ label, children }) {
   return (
     <div>
@@ -347,8 +287,5 @@ function Field({ label, children }) {
 const card = { border: `0.5px solid ${BORDER}`, borderRadius: 12, background: 'var(--white)', padding: 22 }
 const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, padding: '0.6rem 1rem', margin: '0 0 12px', fontSize: 'var(--fs-body)', color: '#c00', fontFamily: MONO }
 const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
-const th = { textAlign: 'left', padding: '8px 10px', borderBottom: `0.5px solid ${BORDER}`, position: 'sticky', top: 0, background: 'var(--white)', fontSize: 'var(--fs-body)', color: 'var(--gray)' }
-const td = { padding: '7px 10px', borderBottom: `0.5px solid ${BORDER}`, verticalAlign: 'top' }
 const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : GOLD, color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-h3)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
 const ghostBtn = (disabled) => ({ background: 'var(--white)', color: GOLD, border: `0.5px solid ${GOLD}`, borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, fontFamily: MONO })
-const chip = (active) => ({ padding: '5px 12px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)', cursor: 'pointer', border: active ? `1.5px solid ${GOLD}` : `0.5px solid ${BORDER}`, background: active ? GOLD : 'transparent', color: active ? 'var(--white)' : 'var(--text-main)' })

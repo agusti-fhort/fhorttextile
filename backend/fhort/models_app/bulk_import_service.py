@@ -33,6 +33,17 @@ def _key(s):
     return _norm(s).lower()
 
 
+# Falsos textuals: el que el client escriu a una columna de sí/no quan vol dir NO.
+# `bool('NO')` és True — una cel·la amb 'NO' es llegia com un sí i la fila petava demanant
+# 'referencia_conjunt'. Tot el que no sigui un fals explícit (ni buit) compta com a sí.
+FALSOS = {'', 'no', 'false', 'fals', '0', 'n', 'f', 'nan', 'none'}
+
+
+def _as_bool(raw):
+    """Booleà d'una cel·la d'Excel escrita per un humà: 'NO'/'FALSE'/'0'/buit → False."""
+    return _norm(raw).lower() not in FALSOS
+
+
 def _split_sizes(raw):
     """Separa un string de run de talles per comes/;/·/espais → llista neta."""
     parts = re.split(r'[,;·\n\t]+|\s{2,}', _norm(raw))
@@ -90,6 +101,10 @@ def build_catalog():
         'item_by_key': item_by_key, 'item_labels': item_labels,
         'target_by_key': target_by_key, 'target_labels': target_labels,
         'constr_by_key': constr_by_key, 'constr_labels': constr_labels,
+        # Codi → nom real del tenant: la conciliació ha d'ensenyar contra QUÈ ha casat una
+        # cel·la ("Woman"), no el codi intern amb què es guarda ("WOMAN").
+        'target_nom_by_codi': {t.codi: t.nom_en for t in targets},
+        'constr_nom_by_codi': {c.codi: c.nom_en for c in constrs},
     }
 
 
@@ -283,12 +298,15 @@ def resolve_row(cat, cells):
         mr = match_size_system(target_codi, labels, base_size)
         size_system = mr.size_system
         if mr.error:
-            errors.append({'camp': 'run_talles', 'missatge_client': mr.error})
+            # El motiu ha d'anar a la cel·la que el causa: match_size_system només emet
+            # l'error de base quan el run SÍ que ha casat (score>=0.5) i la base no hi és.
+            camp = 'talla_base' if (mr.score >= 0.5 and not mr.base_ok) else 'run_talles'
+            errors.append({'camp': camp, 'missatge_client': mr.error})
         elif mr.warning:
             warnings.append({'camp': 'run_talles', 'missatge_client': mr.warning})
 
     # conjunts
-    es_conjunt = bool(g('es_conjunt'))
+    es_conjunt = _as_bool(g('es_conjunt'))
     ref_conjunt = g('referencia_conjunt')
     piece_number = None
     if es_conjunt and not ref_conjunt:
@@ -378,6 +396,71 @@ def validate_rows(customer, raw_rows):
     return results, resum
 
 
+# ───────────────────── Pla de codis (compartit: conciliació ↔ commit) ─────────────────────
+#
+# El que el tècnic VEU a la conciliació ha de ser exactament el que s'escriurà al commit.
+# Això només es garanteix si les dues bandes calculen el pla amb LA MATEIXA llei; per això
+# la classificació i l'assignació de codis viuen aquí i les criden totes dues. L'única cosa
+# que canvia és qui reparteix els números: el commit RESERVA (escriu), la conciliació només
+# fa una ULLADA (no escriu). Un segon rellotge de codis seria repetir el bug que vam matar.
+
+def _classify(cat, customer, rows):
+    """Re-resol cada fila amb el catàleg actual i la classifica:
+    complement (el model ja existeix) / peça de conjunt / simple. Les files amb errors cauen."""
+    from fhort.models_app.models import Model
+
+    simples, set_groups, complements = [], {}, []   # set_groups: ref → [(row, resolved), ...]
+    for row in rows:
+        resolved, errors, _w = resolve_row(cat, row.raw_data)
+        if errors:
+            continue   # el catàleg ha canviat des del preview → saltar (no peta el commit)
+        existing = Model.objects.filter(
+            customer=customer, nom_prenda=resolved['nom_prenda'],
+            any=resolved['any'], temporada=resolved['temporada']).first()
+        if existing and not resolved['ref_conjunt']:
+            complements.append((row, resolved, existing))
+        elif resolved['ref_conjunt']:
+            set_groups.setdefault(resolved['ref_conjunt'], []).append((row, resolved))
+        else:
+            simples.append((row, resolved))
+    return simples, set_groups, complements
+
+
+def _group_by_season(simples, set_groups):
+    """(year, season) → {simples, sets}. Ordre determinista: el codi d'una fila no pot
+    dependre de l'atzar d'un diccionari."""
+    groups = {}
+    for row, r in simples:
+        groups.setdefault((r['any'], r['temporada']), {'simples': [], 'sets': []})['simples'].append((row, r))
+    for ref, pieces in set_groups.items():
+        r0 = pieces[0][1]
+        groups.setdefault((r0['any'], r0['temporada']), {'simples': [], 'sets': []})['sets'].append((ref, pieces))
+    return groups
+
+
+def _plan_codes(customer, groups, allocate):
+    """Assigna els codi_intern que ocuparà aquest import.
+
+    `allocate(year, season, n) -> primer seqüencial`. El commit li passa la reserva atòmica;
+    la conciliació, una ullada al comptador que no escriu res.
+    Retorna (plan_simples, plan_sets): [(row, resolved, codi, seq)] i [(ref, pieces, codi_base)].
+    """
+    plan_simples, plan_sets = [], []
+    for (year, season), grp in groups.items():
+        n = len(grp['simples']) + len(grp['sets'])
+        if n <= 0:
+            continue
+        seq = allocate(year, season, n)
+        yy = str(year)[-2:].zfill(2)
+        for row, r in grp['simples']:
+            plan_simples.append((row, r, f"{customer.codi}-{season}{yy}-{str(seq).zfill(4)}", seq))
+            seq += 1
+        for ref, pieces in grp['sets']:
+            plan_sets.append((ref, pieces, f"{customer.codi}-{season}{yy}-{str(seq).zfill(4)}"))
+            seq += 1
+    return plan_simples, plan_sets
+
+
 # ───────────────────────────── Commit parcial ─────────────────────────────
 
 def commit_import(imp, creat_per_profile):
@@ -394,53 +477,25 @@ def commit_import(imp, creat_per_profile):
     rows = list(BulkCollectionRow.objects.filter(importacio=imp, estat__in=['OK', 'AVIS'])
                 .order_by('row_num'))
 
-    # Re-resoldre cada fila (catàleg actual). Classificar: complement (ja existeix) /
-    # conjunt (té referencia_conjunt) / simple.
-    simples, set_groups, complements = [], {}, []   # set_groups: ref → [(row, resolved), ...]
-    for row in rows:
-        resolved, errors, _w = resolve_row(cat, row.raw_data)
-        if errors:
-            continue   # el catàleg ha canviat des del preview → saltar (no peta el commit)
-        existing = Model.objects.filter(
-            customer=customer, nom_prenda=resolved['nom_prenda'],
-            any=resolved['any'], temporada=resolved['temporada']).first()
-        if existing and not resolved['ref_conjunt']:
-            complements.append((row, resolved, existing))
-        elif resolved['ref_conjunt']:
-            set_groups.setdefault(resolved['ref_conjunt'], []).append((row, resolved))
-        else:
-            simples.append((row, resolved))
-
-    # Agrupar per (year, season) en ordre determinista. n = simples + nombre de sets del grup.
-    groups = {}   # (year, season) → {'simples': [...], 'sets': [(ref, pieces), ...]}
-    for row, r in simples:
-        groups.setdefault((r['any'], r['temporada']), {'simples': [], 'sets': []})['simples'].append((row, r))
-    for ref, pieces in set_groups.items():
-        r0 = pieces[0][1]
-        groups.setdefault((r0['any'], r0['temporada']), {'simples': [], 'sets': []})['sets'].append((ref, pieces))
+    simples, set_groups, complements = _classify(cat, customer, rows)
+    groups = _group_by_season(simples, set_groups)
 
     simple_models = []          # (row, Model)
     set_plan = []               # (GarmentSet, [(row, resolved), ...])
 
     with transaction.atomic():
-        # 1) Reservar seqüència per grup i assignar codis (simples + codi_base dels sets).
-        for (year, season), grp in groups.items():
-            n = len(grp['simples']) + len(grp['sets'])
-            if n <= 0:
-                continue
+        # 1) Assignar codis amb la MATEIXA llei que la conciliació, però reservant de debò.
+        def reserva(year, season, n):
             first, _last = reserve_sequence_range(customer, year, season, n)
-            seq = first
-            yy = str(year)[-2:].zfill(2)
-            for row, r in grp['simples']:
-                codi = f"{customer.codi}-{season}{yy}-{str(seq).zfill(4)}"
-                simple_models.append((row, _build_model(customer, codi, seq, r, creat_per_profile)))
-                seq += 1
-            for ref, pieces in grp['sets']:
-                codi_base = f"{customer.codi}-{season}{yy}-{str(seq).zfill(4)}"
-                gset = GarmentSet(codi_base=codi_base,
-                                  nom_comercial=pieces[0][1]['nom_prenda'] or '', num_pieces=len(pieces))
-                set_plan.append((gset, pieces))
-                seq += 1
+            return first
+
+        plan_simples, plan_sets = _plan_codes(customer, groups, reserva)
+        for row, r, codi, seq in plan_simples:
+            simple_models.append((row, _build_model(customer, codi, seq, r, creat_per_profile)))
+        for _ref, pieces, codi_base in plan_sets:
+            set_plan.append((GarmentSet(codi_base=codi_base,
+                                        nom_comercial=pieces[0][1]['nom_prenda'] or '',
+                                        num_pieces=len(pieces)), pieces))
 
         # 2) Crear GarmentSets (per tenir pk abans de les peces).
         if set_plan:
@@ -547,6 +602,150 @@ def _complement_existing(existing, r):
         existing.garment_type_item = r['garment_type_item']
         changed.append('garment_type_item')
     return changed
+
+
+# ───────────────────────────── Conciliació (dry-run enriquit) ─────────────────────────────
+#
+# La llei de la casa: el sistema ENSENYA el que ha entès i espera confirmació — mai endevina
+# en silenci. El preview antic validava FORMAT ("20 files OK") i callava l'ENCAIX; el commit
+# petava després. Aquí, per cada fila i cada camp mapat, es diu: què deia el fitxer, contra
+# què ha casat al catàleg del tenant, i si això ha calgut transformar-ho.
+#
+# Read-only i idempotent: ni escriu, ni reserva números, ni canvia l'estat de la importació.
+
+# Camps que es concilien (els que es resolen contra el catàleg o es normalitzen).
+RECONCILED_FIELDS = ['familia', 'tipus', 'target', 'construccio', 'temporada', 'any',
+                     'run_talles', 'talla_base', 'es_conjunt']
+
+
+def _resolved_display(cat, camp, r):
+    """(valor_resolt, candidat) d'un camp ja resolt. El candidat porta l'id i el NOM REAL del
+    tenant: el tècnic ha de veure contra QUÈ ha casat la cel·la, no un codi intern."""
+    if camp == 'familia':
+        f = r.get('garment_type')
+        return (f.nom_client, {'id': f.id, 'nom': f.nom_client}) if f else ('', None)
+    if camp == 'tipus':
+        it = r.get('garment_type_item')
+        if not it:
+            return ('', None)
+        nom = f"{it.garment_type.nom_client} / {it.name}"
+        return (nom, {'id': it.id, 'nom': nom})
+    if camp == 'target':
+        codi = r.get('target')
+        if not codi:
+            return ('', None)
+        nom = cat['target_nom_by_codi'].get(codi, codi)
+        return (nom, {'id': codi, 'nom': nom})
+    if camp == 'construccio':
+        codi = r.get('construction')
+        if not codi:
+            return ('', None)
+        nom = cat['constr_nom_by_codi'].get(codi, codi)
+        return (nom, {'id': codi, 'nom': nom})
+    if camp == 'temporada':
+        return (r.get('temporada') or '', None)
+    if camp == 'any':
+        return (str(r['any']) if r.get('any') else '', None)
+    if camp == 'run_talles':
+        labels = r.get('run_labels') or []
+        ss = r.get('size_system')
+        return ('·'.join(labels), {'id': ss.id, 'nom': ss.codi} if ss else None)
+    if camp == 'talla_base':
+        return (r.get('base_size') or '', None)
+    if camp == 'es_conjunt':
+        return ('SI' if r.get('es_conjunt') else 'NO', None)
+    return ('', None)
+
+
+def _reconcile_fields(cat, cells, resolved, errors):
+    """Per cada camp mapat: valor del fitxer, valor resolt, i en quin dels quatre estats cau.
+
+    MATCH        — el fitxer ja deia exactament el que el catàleg diu.
+    NORMALITZAT  — s'ha transformat de manera determinista (trim, 'Woman'→Woman, comes→·).
+                   Es fa I ES MOSTRA: el tècnic no ho ha de descobrir després.
+    NO_MATCH     — no casa amb res del catàleg. Bloqueja LA FILA, mai tot l'import.
+    BUIT         — la cel·la és buida i el camp és opcional. Ni encert ni error: no s'ha dit res.
+    """
+    err_by_camp = {}
+    for e in errors:
+        err_by_camp.setdefault(e['camp'], e['missatge_client'])
+
+    camps = []
+    for camp in RECONCILED_FIELDS:
+        raw = _norm(cells.get(camp, ''))
+        val, candidat = _resolved_display(cat, camp, resolved)
+        motiu = err_by_camp.get(camp)
+        if motiu:
+            estat = 'NO_MATCH'
+        elif not raw:
+            estat = 'BUIT'
+        elif val and val != raw:
+            estat = 'NORMALITZAT'
+        else:
+            estat = 'MATCH'
+        camps.append({'camp': camp, 'valor_fitxer': raw, 'valor_resolt': val,
+                      'estat': estat, 'candidat': candidat, 'motiu': motiu})
+    return camps
+
+
+def reconcile(imp):
+    """Conciliació completa d'una importació previsada: files × camps + els codis que ocuparà.
+
+    Els codis previstos surten del MATEIX pla que farà servir el commit (_plan_codes), però amb
+    una ullada al comptador en comptes d'una reserva. Es verifiquen un a un contra la BD: el
+    "20 files OK" passa a ser "20 files OK i 20 codis lliures".
+    """
+    from fhort.models_app.models import BulkCollectionRow, Model
+    from fhort.models_app.services import sequence_floor
+
+    cat = build_catalog()
+    customer = imp.customer
+    rows = list(BulkCollectionRow.objects.filter(importacio=imp).order_by('row_num'))
+    importables = [r for r in rows if r.estat in ('OK', 'AVIS')]
+
+    # Pla de codis — ullada, no reserva (idempotent: cridar-ho dos cops dona el mateix).
+    simples, set_groups, complements = _classify(cat, customer, importables)
+    groups = _group_by_season(simples, set_groups)
+    plan_simples, plan_sets = _plan_codes(
+        customer, groups, lambda year, season, _n: sequence_floor(customer, year, season) + 1)
+
+    codi_by_row = {row.row_num: codi for row, _r, codi, _seq in plan_simples}
+    for _ref, pieces, codi_base in plan_sets:
+        for row, r in pieces:
+            codi_by_row[row.row_num] = f"{codi_base}-{str(r['piece_number'] or 1).zfill(2)}"
+    compl_by_row = {row.row_num: ex.codi_intern for row, _r, ex in complements}
+
+    # Anti-col·lisió VISIBLE: cap codi previst pot ser ja a la BD.
+    previstos = list(codi_by_row.values())
+    ocupats = set(Model.objects.filter(codi_intern__in=previstos)
+                  .values_list('codi_intern', flat=True)) if previstos else set()
+
+    files = []
+    for row in rows:
+        resolved, errors, warnings = resolve_row(cat, row.raw_data or {})
+        codi = codi_by_row.get(row.row_num)
+        files.append({
+            'row_num': row.row_num,
+            'estat': row.estat,
+            'nom': _norm((row.raw_data or {}).get('nom_prenda')),
+            'camps': _reconcile_fields(cat, row.raw_data or {}, resolved, errors),
+            'codi_previst': codi,
+            'codi_lliure': (codi not in ocupats) if codi else None,
+            'complementa': compl_by_row.get(row.row_num),
+            'motius': [e['missatge_client'] for e in errors + warnings],
+        })
+
+    resum = {
+        'total': len(files),
+        'netes': sum(1 for f in files if f['estat'] == 'OK'),
+        'avisos': sum(1 for f in files if f['estat'] == 'AVIS'),
+        'bloquejades': sum(1 for f in files if f['estat'] in ('ERROR', 'DUPLICAT')),
+        'importables': len(importables),
+        'codis_previstos': len(previstos),
+        'codis_ocupats': len(ocupats),
+        'complements': len(compl_by_row),
+    }
+    return {'import_id': imp.id, 'estat': imp.estat, 'resum': resum, 'files': files}
 
 
 # ───────────────────────────── Informe d'errors (xlsx) ─────────────────────────────

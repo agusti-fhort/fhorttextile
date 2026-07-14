@@ -133,13 +133,17 @@ class ItemFitxerViewSet(mixins.CreateModelMixin,
         """POST /api/v1/item-fitxers/<id>/usar-al-model/  Body: {model_id}   [S03b · P5]
 
         Cicle ① catàleg→model: **importació, no edició in-place**. Crea un ModelFitxer NOU al
-        model amb els MATEIXOS bytes i el mateix `tipus`, amb `derivat_de_item` apuntant a
-        l'origen. L'ItemFitxer NO es toca mai: no és una edició compartida, és una còpia amb
-        procedència.
+        model amb el mateix `tipus`, amb `derivat_de_item` apuntant a l'origen. L'ItemFitxer NO
+        es toca mai: no és una edició compartida, és una còpia amb procedència.
 
-        Un `.ftt` es copia tal qual: el ZIP és auto-contingut des de S03a · P3 (els `src` són
-        noms interns `assets/<sha16>.<ext>`), per tant no cal reescriure cap referència. La
-        resta de tipus (DXF, SVG, PDF, imatges) són còpia directa de bytes.
+        Un `.ftt` NO es copia tal qual: passa pel mateix descongelat que el germà model→model
+        (`ftt_svc.font_per_al_model`). Aquí hi havia escrit el contrari —«el ZIP és
+        auto-contingut, no cal reescriure cap referència»—, i era fals: l'única via d'entrada
+        d'un `.ftt` al catàleg és pujar-hi un fitxer, típicament baixat d'un model, i aquell ZIP
+        porta a dins les dades d'aquell model (taules snapshot amb les mesures, `graded_table`
+        amb binding viu, text congelat, logo del client). Un ItemFitxer no és una font neta per
+        definició: ho és pel que porta a dins, i això s'ha de mirar. La resta de tipus (DXF,
+        SVG, PDF, imatges) són còpia directa de bytes.
 
         NO existeix la promoció inversa (② model→catàleg): forat amb nom, diferit.
 
@@ -147,6 +151,7 @@ class ItemFitxerViewSet(mixins.CreateModelMixin,
         L'escriptura va al MODEL, no al catàleg: qui pot pujar un fitxer al model pot
         importar-n'hi un. Exigir CONFIGURE aquí impediria al tècnic fer la seva feina.
         """
+        from . import services_ftt_document as ftt_svc
         from .serializers import ModelFitxerSerializer
         from .services_fitxers import save_model_file
 
@@ -159,18 +164,25 @@ class ItemFitxerViewSet(mixins.CreateModelMixin,
             return Response({'error': 'model_id és obligatori.'}, status=400)
         model = get_object_or_404(Model, pk=model_id)
 
-        # Còpia de bytes: es reobre l'origen i es passa a save_model_file, que recalcula
-        # checksum/mida/mimetype sobre el contingut real (no els copia a cegues) i manté la
-        # invariant de cadena del ModelFitxer nou (cadena pròpia: versio=1, is_current=True).
+        # Es reobre l'origen i es passa a save_model_file, que recalcula checksum/mida/mimetype
+        # sobre el contingut real (no els copia a cegues) i manté la invariant de cadena del
+        # ModelFitxer nou (cadena pròpia: versio=1, is_current=True).
         origen.fitxer.open('rb')
         try:
-            nou = save_model_file(model, origen.fitxer, tipus=origen.tipus,
+            font, report = ftt_svc.font_per_al_model(origen, model)
+            nou = save_model_file(model, font, tipus=origen.tipus,
                                   origen='upload', nom=origen.nom_fitxer)
+        except ValueError as e:
+            # unpack() llança ValueError amb missatge clar si el .ftt està corromput.
+            return Response({'error': f'.ftt origen il·legible: {e}'}, status=400)
         finally:
             origen.fitxer.close()
 
         # Mateix helper que el germà model→model (views.ModelFitxerViewSet.usar_al_model).
         marcar_procedencia(nou, request.user, derivat_de_item=origen)
 
-        return Response(ModelFitxerSerializer(nou, context={'request': request}).data,
-                        status=201)
+        dades = ModelFitxerSerializer(nou, context={'request': request}).data
+        avis = ftt_svc.avis_de_copia(report)
+        if avis:
+            dades['avis'] = avis
+        return Response(dades, status=201)

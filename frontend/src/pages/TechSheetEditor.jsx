@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+// Els builders de prims són funcions de mòdul (les comparteixen el canvas i el generador de
+// PDF): no hi arriba el hook. `i18n.t` fora d'un component ja és patró de la casa
+// (POMBrowser.jsx:642, RegistreActivitat.jsx:15) i respecta l'idioma actiu igualment.
+import i18n from '../i18n'
 import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group, Path, Circle } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
@@ -84,6 +88,12 @@ export const COL = {
 // build*Primitives, Rects de fons/selecció, text_box, previews) DEUEN usar aquests literals,
 // no COL (que és per al DOM, on var() sí resol). Valors = mateixos hex que els tokens de :root.
 const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685' }
+
+// F1 — la caixa on entra una peça de patró. Una peça és MOLT més gran que la pàgina (el
+// TATE_FRONT fa 588×502 mm i un A4 apaïsat en fa 297×210): entra encaixada a aquesta caixa,
+// mai a mida real, i des d'aquí es redimensiona a mà com qualsevol imatge.
+const PIECE_BOX_W = 110
+const PIECE_BOX_H = 78
 
 const LAYER_ORDER = { template: 0, data: 1, free: 2 }
 const ZOOM_MIN = 0.25
@@ -322,6 +332,17 @@ export function v2ToDocument(v2Pages, pageFormat, metadata = {}, urlToName = {})
 // ─── (TS-2) El pipeline SVG→PNG de taules s'ha retirat: les taules ara són blocs
 // Konva natius (vegeu buildTablePrimitives / GradedTableNode). Es mantenen només els
 // helpers d'imatge (loadImageEl/useImage) per a croquis i fitxers del model. ───
+
+// blob → dataURL. Els dos consumidors (assets del .ftt en carregar, bytes importats del
+// tenant) necessiten el MATEIX gest, i fer-lo dos cops seria dues maneres de fallar.
+function blobToDataURL(blob) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader()
+    fr.onload = () => res(fr.result)
+    fr.onerror = () => rej(new Error('fr'))
+    fr.readAsDataURL(blob)
+  })
+}
 
 // Carrega un HTMLImageElement (promesa) — per a l'export offscreen.
 function loadImageEl(src) {
@@ -588,9 +609,14 @@ function GradedTableNode({ tableData, groupProps, isSelected }) {
 // Taula genèrica (S3) — mateix patró que GradedTableNode, columns/rows lliures (sense fetch).
 function TableNode({ obj, groupProps, isSelected }) {
   const { prims, totalW, totalH } = useMemo(() => buildTableCellPrimitives(obj), [obj])
+  // El rètol «per vincular» va amb els MATEIXOS prims que el PDF (addObjectToLayer).
+  const pending = useMemo(
+    () => (isPendentVincle(obj) ? buildPendingRibbonPrims(totalW, totalH) : []),
+    [obj, totalW, totalH])
   return (
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
+      {pending.map((p, i) => <PrimNode key={`pv${i}`} p={p} />)}
       {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={TBL.OUTER} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
   )
@@ -784,6 +810,19 @@ function imageProps(obj) {
   }
 }
 
+// El peu d'una peça de patró: el nom del block, sota la imatge. Es dibuixa DINS del Group de
+// la peça, i per això el Group porta width/height explícits (imageProps ja els hi posa): un
+// Konva.Group sense width torna 0, i el camí genèric de transformEnd —que redimensiona amb
+// node.width() × escala— li hauria clavat el mínim de 2 mm a la primera nansa que s'arrossegués.
+function pieceCaptionProps(obj) {
+  return {
+    x: 0, y: toPx((obj.height || obj.width) + 1.2), width: toPx(obj.width),
+    text: obj.piece_name || '',
+    fontSize: Math.round(2.6 * MM_TO_PX), fontFamily: FONT,
+    fill: KONVA_COL.textMuted, align: 'center',
+  }
+}
+
 function dataBlockGroupProps(obj) {
   const scale = obj.scale || 1
   return { x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: scale * (obj.scaleX || 1), scaleY: scale * (obj.scaleY || 1) }
@@ -791,6 +830,50 @@ function dataBlockGroupProps(obj) {
 
 function dataBlockPlaceholderProps(obj) {
   return { width: toPx(obj.width || 120), height: toPx(obj.height || 40), fill: COL.goldPale, stroke: KONVA_COL.border, dash: [4, 4] }
+}
+
+// ── «Per vincular al model» (BIB S0) ───────────────────────────────────────────────────────
+// Quan un document canvia de host, el descongelat (services_ftt_document.unfreeze_document)
+// buida les taules que portaven les dades del model origen i les marca `pendent_vincle`. No
+// és un error: és feina pendent, i la fa el tècnic amb un clic. El sistema no re-vincula sol.
+//
+// La regla dura és que ES VEGI, i que es vegi IGUAL als dos switches. Si el canvas mostrés el
+// rètol i el generador de PDF s'ho callés, el document sortiria per la impressora amb un forat
+// silenciós al lloc on hi havia les mesures — i un forat silenciós en un document que viatja al
+// taller és pitjor que un error. Per això el rètol es construeix amb PRIMS, el llenguatge que
+// ObjectNode i addObjectToLayer ja comparteixen: pintar-lo en un i no en l'altre és, per
+// construcció, impossible.
+const PENDING_RIBBON_H = 5 * MM_TO_PX
+
+// Mirall de PENDING_MARK (services_ftt_document.py). El backend és qui posa la marca; el
+// canvas no la dedueix mai d'un id a null, perquè un `graded_table` acabat d'inserir també
+// en té un durant un instant i no és el mateix cas.
+function isPendentVincle(obj) {
+  return obj?.pendent_vincle === true
+}
+
+function pendingLabel() {
+  return i18n.t('tech_sheet.pending_link')
+}
+
+// Bloc sense graella (graded_table desvinculada): la caixa sencera ÉS el rètol.
+function buildPendingBoxPrims(obj) {
+  const w = toPx(obj.width || 120)
+  const h = toPx(obj.height || 40)
+  return [
+    { t: 'r', x: 0, y: 0, w, h, fill: KONVA_COL.goldPale, stroke: KONVA_COL.gold, sw: 1, dash: [4, 3] },
+    { t: 't', x: T_PAD, y: 0, w: w - 2 * T_PAD, h, text: pendingLabel(), fill: KONVA_COL.textMain, size: Math.round(3.2 * MM_TO_PX), align: 'center', mid: true },
+  ]
+}
+
+// Taula snapshot buidada: la graella es conserva (és del tècnic, no del host) i el rètol va
+// SOTA, per no tapar-la. El tècnic veu l'esquelet del que hi havia i què li falta.
+function buildPendingRibbonPrims(totalW, totalH) {
+  const y = totalH + Math.round(1 * MM_TO_PX)
+  return [
+    { t: 'r', x: 0, y, w: totalW, h: PENDING_RIBBON_H, fill: KONVA_COL.goldPale, stroke: KONVA_COL.gold, sw: 1, dash: [4, 3] },
+    { t: 't', x: T_PAD, y, w: totalW - 2 * T_PAD, h: PENDING_RIBBON_H, text: pendingLabel(), fill: KONVA_COL.textMain, size: Math.round(3 * MM_TO_PX), mid: true },
+  ]
 }
 
 function blocksTransform(obj) {
@@ -871,7 +954,11 @@ async function addObjectToLayer(layer, obj, ctx) {
       built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl)
     } else if (obj.kind === 'graded_table') {
       const data = ctx?.tableData?.[obj.id]
-      if (data) built = buildTablePrimitives(data)
+      // Desvinculada (BIB S0): no hi ha dades ni n'hi haurà fins que el tècnic la torni a
+      // lligar. Abans, `built` es quedava a null i el bloc NO s'afegia a la capa: el PDF
+      // sortia amb un forat mut on hi havia la taula. Ara el rètol hi va.
+      if (isPendentVincle(obj)) built = { prims: buildPendingBoxPrims(obj) }
+      else if (data) built = buildTablePrimitives(data)
     }
     if (built) {
       const g = new Konva.Group(dataBlockGroupProps(obj))
@@ -883,7 +970,9 @@ async function addObjectToLayer(layer, obj, ctx) {
   }
   if (obj.type === 'table') {
     const g = new Konva.Group(dataBlockGroupProps(obj))
-    addPrimsToGroup(g, buildTableCellPrimitives(obj).prims)
+    const { prims, totalW, totalH } = buildTableCellPrimitives(obj)
+    addPrimsToGroup(g, prims)
+    if (isPendentVincle(obj)) addPrimsToGroup(g, buildPendingRibbonPrims(totalW, totalH))
     layer.add(g)
     return
   }
@@ -900,6 +989,18 @@ async function addObjectToLayer(layer, obj, ctx) {
       const el = await loadImageEl(src)
       layer.add(new Konva.Image({ ...imageProps(obj), image: el }))
     } catch { /* imatge no carregada → s'omet */ }
+  }
+  if (obj.type === 'pattern_piece') {
+    if (!obj.src) return
+    try {
+      const el = await loadImageEl(obj.src)
+      const p = imageProps(obj)
+      const g = new Konva.Group(p)
+      g.add(new Konva.Image({ image: el, x: 0, y: 0, width: p.width, height: p.height }))
+      if (obj.caption !== false) g.add(new Konva.Text(pieceCaptionProps(obj)))
+      layer.add(g)
+    } catch { /* peça no carregada → s'omet */ }
+    return
   }
   if (obj.type === 'sketch_svg') {
     try {
@@ -954,6 +1055,26 @@ function ImageObj({ obj, src, common }) {
   }
   return <KonvaImage {...common} image={img} width={props.width} height={props.height}
     scaleX={props.scaleX} scaleY={props.scaleY} />
+}
+
+// La peça de patró (F1): el render del motor, encaixat. Mateix mecanisme que una imatge
+// —dataURL a `src`, per tant el backend l'extreu a asset com qualsevol altra— però amb el
+// nom del block a sota i les proporcions bloquejades: una peça estirada de través ja no
+// és la peça, és una mentida sobre la peça.
+function PatternPieceObj({ obj, src, common }) {
+  const img = useImage(src)
+  const props = imageProps(obj)
+  if (!img) {
+    return <Rect {...common} width={props.width} height={props.height}
+      scaleX={props.scaleX} scaleY={props.scaleY}
+      fill={COL.goldPale} stroke={KONVA_COL.border} dash={[4, 4]} />
+  }
+  return (
+    <Group {...common} width={props.width} height={props.height}>
+      <KonvaImage image={img} x={0} y={0} width={props.width} height={props.height} />
+      {obj.caption !== false && <Text {...pieceCaptionProps(obj)} />}
+    </Group>
+  )
 }
 
 function SketchSvgObj({ obj, common }) {
@@ -1030,6 +1151,15 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     if (obj.kind === 'header') {
       return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} groupProps={dataCommon} isSelected={selected} />
     }
+    // Desvinculada (BIB S0): mateixos prims que el PDF. Sense això queia al «Carregant
+    // taula…» de sota i s'hi quedava per sempre — una taula desvinculada no carrega mai.
+    if (isPendentVincle(obj)) {
+      return (
+        <Group {...dataCommon}>
+          {buildPendingBoxPrims(obj).map((p, i) => <PrimNode key={i} p={p} />)}
+        </Group>
+      )
+    }
     const data = tableData?.[obj.id]
     if (!data) {
       return (
@@ -1084,6 +1214,9 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   }
   if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
+  }
+  if (obj.type === 'pattern_piece') {
+    return <PatternPieceObj obj={obj} src={src} common={common} />
   }
   if (obj.type === 'sketch_svg') {
     return <SketchSvgObj obj={obj} common={common} />
@@ -1321,6 +1454,9 @@ export default function TechSheetEditor() {
   const [saveState, setSaveState] = useState(null)  // null|'saving'|'saved'|'error'
   const [, setFitxers] = useState([])
   const [filePicker, setFilePicker] = useState(false)   // S03b · P7
+  // F1 — el patró VIGENT del model (o null si no en té) i el selector de peces.
+  const [patternFile, setPatternFile] = useState(null)
+  const [piecePicker, setPiecePicker] = useState(null)  // null | {loading} | {pieces} | {error}
   const [sizeFittings, setSizeFittings] = useState([])
   const [tableData, setTableData] = useState({})    // {objId: jsonData|null} fora del JSON
   const [notice, setNotice] = useState(null)        // toast efímer (p.ex. "ja hi ha capçalera")
@@ -1397,9 +1533,15 @@ export default function TechSheetEditor() {
   const panDrag = useRef(null)          // PEÇA P: estat de l'arrossegament de pan
   const saveTimer = useRef(null)
   const skipSave = useRef(true)        // salta l'autosave del primer load
+  // Mentre el document no és a la pantalla, NO es desa. `skipSave` no n'hi ha prou: només salta
+  // la PRIMERA passada de l'efecte, i el lock (que arriba de seguida) el torna a disparar amb
+  // `pages` encara al full en blanc del muntatge. Si la càrrega del document tarda més que el
+  // debounce de 2 s, aquell full en blanc es desa A SOBRE del document bo. No saber què hi ha
+  // encara i desar-hi un full buit són coses diferents.
+  const docCarregat = useRef(!fttMode)
   // Mode .ftt: estat del document (assets carregats + metadata + cap de cadena actual).
-  const fttAssets = useRef({})         // {nom: URL} dels assets servits pel backend
-  const fttUrlToName = useRef({})      // {URL: nom} per desar (URL → 'assets/<nom>')
+  const fttAssets = useRef({})         // {nom: dataURL} dels assets, ja baixats (vegeu carregarAssets)
+  const fttUrlToName = useRef({})      // {dataURL: nom} per desar (dataURL → 'assets/<nom>')
   const fttMeta = useRef({})           // metadata del document.json (es conserva en desar)
   const fttHeadId = useRef(fitxerId || null)  // cap de cadena vigent (canvia en desar: nova versió)
   const didInitialFit = useRef(false)
@@ -1778,7 +1920,7 @@ export default function TechSheetEditor() {
     if (!current || !current.canResize || current.width <= 0 || current.height <= 0) return
     const sx = nextW / current.width
     const sy = nextH / current.height
-    if (obj.type === 'rect' || obj.type === 'image' || obj.type === 'sketch_svg' || obj.type === 'text') {
+    if (obj.type === 'rect' || obj.type === 'image' || obj.type === 'sketch_svg' || obj.type === 'pattern_piece' || obj.type === 'text') {
       updateObject(obj.id, { width: nextW, ...(obj.type !== 'text' ? { height: nextH } : {}) })
       return
     }
@@ -1822,6 +1964,24 @@ export default function TechSheetEditor() {
     resizeObjectTo(obj, nextW, nextH)
   }
 
+  // Els assets del .ftt es publiquen com a URL AUTENTICADA (ftt-documents/<id>/asset/<nom>/,
+  // IsAuthenticated). Cap dels dos carregadors d'imatge —useImage al canvas viu i loadImageEl
+  // a l'export— pot enviar-hi el Bearer: tots dos van amb `new Image()`, i un <img> no porta
+  // capçaleres. El 401 acabava a l'`onerror`, que aquí és SILENCI: la imatge desapareixia del
+  // canvas i del PDF sense dir-ho. Per això els assets es baixen AMB capçalera i entren al
+  // document ja com a dataURL. La inversa (dataURL → 'assets/<nom>') la fa fttUrlToName en
+  // desar, de manera que els bytes no es reescriuen mai: el .ftt no engreixa.
+  const carregarAssets = async (assets) => {
+    const parells = await Promise.all(Object.entries(assets).map(async ([nom, url]) => {
+      try {
+        const r = await fetch(url, { headers: uploadHeaders })
+        if (!r.ok) return null
+        return [nom, await blobToDataURL(await r.blob())]
+      } catch { return null }
+    }))
+    return Object.fromEntries(parells.filter(Boolean))
+  }
+
   // ── Càrrega inicial: model, sheet, fitxers, size fittings, lock ────────────
   useEffect(() => {
     if (!id) return
@@ -1839,20 +1999,32 @@ export default function TechSheetEditor() {
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (!cancelled && d) setSizeFittings(d.results || d || []) }).catch(() => {})
 
+    // F1: el patró vigent. Es demana en carregar (no al clic) perquè l'eina ha de poder dir
+    // que no n'hi ha ABANS que ningú l'obri: una opció que s'obre buida no explica res.
+    fetch(`${API}/api/v1/patterns/pattern-files/?model=${id}`, { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (cancelled || !d) return
+        const list = d.results || d || []
+        setPatternFile(list.find(f => f.is_current) || null)
+      }).catch(() => {})
+
     if (fttMode) {
       // Mode .ftt (F1): carrega el document des de ftt-documents/<fitxerId>/ i el porta a v2.
       // El lock i el desat els afegeix F2; F1 obre en consulta.
       fetch(`${API}/api/v1/ftt-documents/${fitxerId}/`, { headers: authHeaders })
         .then(r => (r.ok ? r.json() : null))
-        .then(data => {
+        .then(async data => {
           if (cancelled || !data) return
-          const assets = data.assets || {}
+          const assets = await carregarAssets(data.assets || {})
+          if (cancelled) return
           fttAssets.current = assets
           fttUrlToName.current = Object.fromEntries(Object.entries(assets).map(([n, u]) => [u, n]))
           fttMeta.current = data.document_json?.metadata || {}
           fttHeadId.current = data.fitxer?.id || fitxerId
           setSheet(data.fitxer)   // versio ve de ModelFitxer.versio
           hydrate({ template_json: documentToV2(data.document_json, assets) })
+          docCarregat.current = true   // a partir d'ara, i no abans, es pot desar
         }).catch(() => {})
 
       // F2: adquireix el lock del document lògic (TTL+force-if-stale al backend; el timer-gap
@@ -1952,6 +2124,7 @@ export default function TechSheetEditor() {
 
   // ── Autosave (debounce 2s; només amb lock; salta el primer load) ───────────
   useEffect(() => {
+    if (!docCarregat.current) return   // el document encara no hi és: desar ara seria desar un full en blanc
     if (skipSave.current) { skipSave.current = false; return }
     if (!locked) return
     setSaveState('saving')
@@ -3337,19 +3510,60 @@ export default function TechSheetEditor() {
       } else if (nom.endsWith('.dxf')) {
         flash(t('tech_sheet.import_dxf_soon'))      // el motor DXF segueix pendent
       } else {
-        const blob = await r.blob()
-        const dataURL = await new Promise((res, rej) => {
-          const fr = new FileReader()
-          fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('fr'))
-          fr.readAsDataURL(blob)
-        })
-        addImageFromDataURL(dataURL)
+        addImageFromDataURL(await blobToDataURL(await r.blob()))
       }
       closeImport()
     } catch {
       flash(t('tech_sheet.flat_import_error'))
     }
   }
+  // ── F1 — Peces del patró vigent ────────────────────────────────────────────
+  // El llistat no porta les peces (el serializer de llista les treu a posta: un llistat no ha
+  // d'arrossegar milers de punts), o sigui que el detall es demana en obrir el selector.
+  const obrirPeces = async () => {
+    if (!locked || !patternFile) return
+    setPiecePicker({ loading: true })
+    try {
+      const r = await fetch(`${API}/api/v1/patterns/pattern-files/${patternFile.id}/`, { headers: authHeaders })
+      if (!r.ok) throw new Error('http')
+      const d = await r.json()
+      setPiecePicker({ pieces: d.pieces || [] })
+    } catch { setPiecePicker({ error: true }) }
+  }
+
+  // El render del motor NO es pot clavar a `src`: l'endpoint va gated per Authorization i un
+  // <img> no pot portar capçaleres (el mateix mur que els assets del .ftt). Es baixa amb
+  // capçalera i s'encasta com a dataURL — exactament el que ja fa importarDelTenant.
+  //
+  // L'aspecte surt de l'SVG, no del bounding box de la peça: el render hi posa marges, i fer
+  // servir el bbox deformaria el dibuix just per l'amplada d'aquest marge.
+  const inserirPeca = async (peca) => {
+    if (!locked || !patternFile) return
+    try {
+      const url = `${API}/api/v1/patterns/pattern-files/${patternFile.id}/render.svg/?piece=${encodeURIComponent(peca.nom_block)}`
+      const r = await fetch(url, { headers: uploadHeaders })
+      if (!r.ok) throw new Error('http')
+      const svgText = await r.text()
+      const ratio = svgAspectRatio(svgText)
+      if (!ratio) throw new Error('svg')
+      const width = ratio >= PIECE_BOX_W / PIECE_BOX_H ? PIECE_BOX_W : PIECE_BOX_H * ratio
+      // Blob → readAsDataURL dona un dataURL BASE64, que és el que el backend sap extreure a
+      // asset (un dataURL amb `charset=utf-8` no li casa el patró i es quedaria inline).
+      const src = await blobToDataURL(new Blob([svgText], { type: 'image/svg+xml' }))
+      // En cascada: dues peces seguides a la mateixa cantonada es tapen l'una a l'altra, i qui
+      // n'insereix dues creu que n'hi ha una. Cada peça nova entra una mica més avall.
+      const n = objectsOf(currentPage).filter(o => o.type === 'pattern_piece').length
+      addObject({
+        id: uid(), type: 'pattern_piece', layer: 'free',
+        x: 20 + (n % 5) * 10, y: 20 + (n % 5) * 10, width, height: width / ratio,
+        src, piece_name: peca.nom_block, pattern_file_id: patternFile.id, caption: true,
+      })
+      setPiecePicker(null)
+    } catch {
+      flash(t('tech_sheet.piece_insert_error'))
+    }
+  }
+
   const ribbonTabs = [
     { id: 'file', label: t('tech_sheet.ribbon_file') },
     { id: 'page', label: t('tech_sheet.ribbon_page') },
@@ -3443,6 +3657,12 @@ export default function TechSheetEditor() {
         ribbonTool({ key: 'logo', icon: 'ti-photo', label: t('tech_sheet.client_logo'), onClick: insertLogo, title: customerLogoUrl ? t('tech_sheet.insert_logo_title') : t('tech_sheet.no_logo_title') }),
         ribbonTool({ key: 'table', icon: 'ti-table', label: t('tech_sheet.ribbon_table'), onClick: () => setTablePicker({}), disabled: !locked }),
         ribbonTool({ key: 'flat', icon: 'ti-vector', label: t('tech_sheet.flat_insert'), onClick: insertFlatSketch }),
+        // F1: si el model no té patró, l'eina es veu però no s'obre — i diu per què.
+        ribbonTool({
+          key: 'pattern-piece', icon: 'ti-shirt', label: t('tech_sheet.piece_insert'),
+          onClick: obrirPeces, disabled: !locked || !patternFile,
+          title: patternFile ? t('tech_sheet.piece_insert_title') : t('tech_sheet.piece_no_pattern'),
+        }),
         ribbonTool({ key: 'import-flat', icon: 'ti-file-import', label: t('tech_sheet.flat_import'), onClick: () => openImport('garment') }),
         // R1: placeholder — el flux d'import de mesures es dissenyarà més endavant (sense handler).
         ribbonTool({ key: 'import-measures', icon: 'ti-ruler', label: t('tech_sheet.import_measurements'), disabled: true, title: `${t('tech_sheet.import_measurements')} · ${t('tech_sheet.coming_soon')}` }),
@@ -3811,7 +4031,7 @@ export default function TechSheetEditor() {
                     ? <Line x={toPx(creatingGuide.pos)} y={0} points={[0, 0, 0, pageH]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
                     : <Line x={0} y={toPx(creatingGuide.pos)} points={[0, 0, pageW, 0]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
                 )}
-                <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && (selObj?.type === 'data_block' || selObj?.type === 'table'))}
+                <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && (selObj?.type === 'data_block' || selObj?.type === 'table' || selObj?.type === 'pattern_piece'))}
                   padding={5}
                   borderStroke={KONVA_COL.textMuted} borderStrokeWidth={0.5} borderDash={[4, 4]}
                   anchorSize={6} anchorStroke={KONVA_COL.textMuted} anchorStrokeWidth={1} anchorFill={KONVA_COL.white} anchorCornerRadius={2}
@@ -3947,8 +4167,8 @@ export default function TechSheetEditor() {
               <div style={{ marginBottom: 8, border: `1px solid ${COL.border}`, borderRadius: 5, overflow: 'hidden' }}>
                 {[...ordered].reverse().map(o => {
                   const on = selectedIds.includes(o.id)
-                  const icon = { text: 'ti-cursor-text', rect: 'ti-square', ellipse: 'ti-circle', line: 'ti-minus', arrow: 'ti-arrow-right', image: 'ti-photo', path: 'ti-vector', sketch_svg: 'ti-vector', data_block: 'ti-table', group: 'ti-box-multiple', field: 'ti-forms' }[o.type] || 'ti-shape'
-                  const label = o.type === 'text' ? (o.text || t('tech_sheet.tool_text')) : o.type === 'field' ? (o.label || o.type) : o.type
+                  const icon = { text: 'ti-cursor-text', rect: 'ti-square', ellipse: 'ti-circle', line: 'ti-minus', arrow: 'ti-arrow-right', image: 'ti-photo', path: 'ti-vector', sketch_svg: 'ti-vector', pattern_piece: 'ti-shirt', data_block: 'ti-table', group: 'ti-box-multiple', field: 'ti-forms' }[o.type] || 'ti-shape'
+                  const label = o.type === 'text' ? (o.text || t('tech_sheet.tool_text')) : o.type === 'field' ? (o.label || o.type) : o.type === 'pattern_piece' ? (o.piece_name || o.type) : o.type
                   return (
                     <div key={o.id} onClick={() => selectOnly(o.id)}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', cursor: 'pointer', background: on ? COL.goldPale : 'transparent', color: on ? COL.gold : COL.textMain, borderBottom: `1px solid ${COL.border}`, opacity: o.visible === false ? 0.45 : 1 }}>
@@ -4353,6 +4573,34 @@ export default function TechSheetEditor() {
           fitting (T1a/T1b) o de mida (personalitzada). Mateix look que el modal pickFitting
           de dalt. Obert des del ribbon (botó "Taula", commit 4); T1a/T1b es deshabiliten
           sense size-fittings, T2/Custom sempre disponibles. */}
+      {/* F1 — selector de peces del patró vigent. La peça hi entra encaixada; el nom del
+          block és el que en dirà el peu i el panell de capes. */}
+      {piecePicker && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setPiecePicker(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 380, width: '90%', maxHeight: '70vh', overflowY: 'auto', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 4 }}>{t('tech_sheet.piece_picker_title')}</h2>
+            <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 12 }}>{patternFile?.nom_fitxer}</p>
+            {piecePicker.loading && <p style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('app.loading')}</p>}
+            {piecePicker.error && <p style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.piece_insert_error')}</p>}
+            {piecePicker.pieces && !piecePicker.pieces.length && (
+              <p style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.piece_none')}</p>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(piecePicker.pieces || []).map(p => (
+                <button key={p.id} type="button" onClick={() => inserirPeca(p)}
+                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
+                  {p.nom_block}
+                  {p.bounding_box_mm && (
+                    <div style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>
+                      {Math.round(p.bounding_box_mm.ample)} × {Math.round(p.bounding_box_mm.alt)} mm
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {tablePicker && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setTablePicker(null)}>
           <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT, border: `1px solid ${COL.border}` }}>

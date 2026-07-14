@@ -7,12 +7,16 @@
 """
 import datetime
 import io
+import logging
 
+from django.db import IntegrityError
 from django.http import HttpResponse
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
+
+logger = logging.getLogger(__name__)
 
 XLSX_CT = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
@@ -113,8 +117,38 @@ def commit_view(request, import_id):
     if profile is None:
         return Response({'error': 'El teu usuari no té perfil; no pots importar.'}, status=400)
 
-    stats = commit_import(imp, profile)
+    # Xarxa de seguretat: el commit crea Models amb codi_intern (unique). Si un codi ja és
+    # ocupat (cursa amb una creació manual concurrent, comptador tocat a mà), la transacció
+    # de commit_import ja fa rollback net — cap dada a mitges. El que no pot passar és que
+    # el client se'n quedi amb un 500 pelat: 409 llegible i pot tornar a provar.
+    try:
+        stats = commit_import(imp, profile)
+    except IntegrityError:
+        logger.exception('Bulk import %s: col·lisió de codi al commit', imp.pk)
+        return Response({'error': (
+            'Ja existeix un model amb algun dels codis a assignar (algú n\'ha creat un '
+            'mentre validaves). No s\'ha importat res: torna-ho a provar.')}, status=409)
+
     return Response({'import_id': imp.id, 'estat': imp.estat, **stats}, status=200)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def reconciliation_view(request, import_id):
+    """Conciliació d'una importació previsada: files × camps + els codis que ocuparà.
+
+    Dry-run pur: read-only i idempotent (ni escriu, ni reserva números, ni canvia l'estat).
+    És la pantalla que el tècnic ha de VEURE abans que res s'escrigui.
+    """
+    from fhort.models_app.models import BulkCollectionImport
+    from fhort.models_app.bulk_import_service import reconcile
+
+    try:
+        imp = BulkCollectionImport.objects.get(pk=import_id)
+    except BulkCollectionImport.DoesNotExist:
+        return Response({'error': 'Importació no trobada.'}, status=404)
+
+    return Response(reconcile(imp), status=200)
 
 
 @api_view(['GET'])

@@ -46,6 +46,12 @@ def reserve_sequence_range(customer, year, season, n):
     comptador durant la transacció perquè pujades concurrents no col·lisionin. select_for_update
     funciona per-schema sota django-tenants. El camí manual (signal) NO usa això; segueix amb
     el scan MAX(sequencial). Només el bulk reserva rang.
+
+    El comptador NO és l'única font de números: el camí manual (signal generate_model_code) i
+    el wizard (models_app/views.py) creen models escrivint `sequencial` sense tocar-lo mai. Un
+    comptador que només es mirés a si mateix començaria per 1 en un client que ja té models i
+    xocaria contra codi_intern (unique) → IntegrityError. Per això el terra de la reserva és
+    max(comptador, MAX(sequencial) real): monòton respecte del terreny, mai el contradiu.
     """
     from django.db import transaction
     from fhort.models_app.models import ModelSequence
@@ -57,11 +63,38 @@ def reserve_sequence_range(customer, year, season, n):
         seq, _ = ModelSequence.objects.select_for_update().get_or_create(
             customer=customer, year=year, season=season,
         )
-        first = seq.last_seq + 1
-        seq.last_seq = seq.last_seq + n
+        # El terra es recalcula SOTA el lock (seq.last_seq ja és el valor bloquejat).
+        floor = max(seq.last_seq, _real_max_seq(customer, year, season))
+        first = floor + 1
+        seq.last_seq = floor + n
         seq.save(update_fields=['last_seq'])
         last = seq.last_seq
     return (first, last)
+
+
+def _real_max_seq(customer, year, season):
+    """L'últim seqüencial que hi ha AL TERRENY (el que sigui que l'hagi escrit)."""
+    from django.db.models import Max
+    from fhort.models_app.models import Model
+    return Model.objects.filter(
+        customer=customer, any=year, temporada=season,
+    ).aggregate(m=Max('sequencial'))['m'] or 0
+
+
+def sequence_floor(customer, year, season):
+    """L'últim seqüencial ocupat per (customer, year, season), sense reservar res.
+
+    Mateixa llei que `reserve_sequence_range` —max(comptador, terreny)— però en lectura pura.
+    La conciliació de l'import la fa servir per ENSENYAR quins codis s'ocuparan: el codi que
+    el tècnic veu a la pantalla ha de ser exactament el que després s'escriurà, i això només
+    es garanteix si les dues bandes comparteixen aquesta definició (una sola llei, un sol
+    rellotge). Sense lock: és una ullada, no una reserva.
+    """
+    from fhort.models_app.models import ModelSequence
+    counter = (ModelSequence.objects
+               .filter(customer=customer, year=year, season=season)
+               .values_list('last_seq', flat=True).first()) or 0
+    return max(counter, _real_max_seq(customer, year, season))
 
 
 # Claus estables dels 4 camps de configuració d'un Model. Ordre = ordre lògic
