@@ -118,6 +118,20 @@ FIELD_MARK = 'field_key'
 # Nom de l'asset del logo del client, empaquetat per `_resolve_logo_obj`. L'extensió varia.
 LOGO_ASSET_STEM = 'field_customer_logo'
 
+# D16-bis — les claus que lliguen un objecte del canvas al seu HOST (el model on es va crear).
+# `unfreeze_document` les posa TOTES a None: un document que canvia de host no pot arrossegar
+# els ids del host vell (apuntarien a dades d'un altre model, i el `graded_table` fins i tot les
+# re-llegiria en viu). Qualsevol tipus NOU del canvas que porti una referència de host ha
+# d'afegir la seva clau aquí: el test `test_cap_referencia_de_host_sobreviu` escaneja el JSON
+# sencer recursivament i peta si n'apareix una que no passi per aquí.
+HOST_REF_KEYS = ('model_id', 'size_fitting_id', 'pattern_file_id')
+
+# Estat d'un objecte que portava dades del host i n'ha quedat òrfe. NO és un error: és una
+# feina pendent, i té representació explícita al canvas i al PDF («Taula per vincular al
+# model»). Re-vincular és un clic del TÈCNIC — el sistema no ho fa mai sol (decisió Agus:
+# res en silenci, i re-vincular sol seria endevinar quin fitting del host nou toca).
+PENDING_MARK = 'pendent_vincle'
+
 
 def _resolve_logo_obj(o, model):
     """Resol el placeholder customer_logo: 'image' amb el logo del client com a asset,
@@ -198,10 +212,75 @@ def _is_logo_image_obj(o):
     return src.startswith('http://') or src.startswith('https://')
 
 
+def _buida_cel_la(c):
+    """Buida el VALOR conservant la FORMA de la cel·la (string | {text, sub, bold}).
+
+    La forma és estructura (la sap el renderer: `buildTableCellPrimitives`); el valor és del
+    model origen. Buidar-la a `''` sec convertiria una cel·la bilingüe en una de plana.
+    """
+    if isinstance(c, dict):
+        return {k: ('' if k in ('text', 'sub') else v) for k, v in c.items()}
+    return ''
+
+
+def _unfreeze_table(o, report):
+    """Taula snapshot S3 (`pom_fitting`/`bom`/`custom`): valors del host → buits.
+
+    Els valors (POMs, mesures base, materials) es van CONGELAR del model origen a la inserció
+    (llei S3: cap binding viu). L'estructura —columnes, nombre de files, geometria, estil— NO és
+    del host: és el que el tècnic va compondre. Per això la graella es conserva sencera i
+    només se'n buiden les cel·les, amb els ids del host a None i la marca «per vincular».
+    """
+    snapshot = {
+        k: (None if k in HOST_REF_KEYS else v)
+        for k, v in (o.get('snapshot') or {}).items()
+    }
+    net = {**o, 'snapshot': snapshot, PENDING_MARK: True}
+    if o.get('rows'):
+        net['rows'] = [[_buida_cel_la(c) for c in fila] for fila in o['rows']]
+    report['taules_desvinculades'] += 1
+    return net
+
+
+def _unfreeze_data_block(o, report):
+    """`graded_table` → desvinculada. `header` → intacte (no desa cap valor: es reconstrueix
+    a cada render des del `modelData` del host, per això D16 en pren la simetria).
+
+    El `graded_table` és l'únic objecte amb un binding VIU: l'editor re-llegeix
+    `/api/v1/fitting/<size_fitting_id>/graded-table/` en obrir. Amb l'id del host vell, al host
+    nou serviria la niada d'un ALTRE model sense dir-ho. A None, i que es vegi.
+    """
+    if o.get('kind') != 'graded_table' or o.get('size_fitting_id') is None:
+        return o
+    report['taules_desvinculades'] += 1
+    return {**o, 'size_fitting_id': None, PENDING_MARK: True}
+
+
+def _unfreeze_pattern_piece(o, report):
+    """Peça de patró (F1): cau l'ID del `PatternFile` del host; el DIBUIX es queda.
+
+    El `src` és un dataURL (o `assets/<sha16>.svg`) que viatja dins el ZIP: el render de la
+    peça és estructura auto-continguda —exactament el que una biblioteca de sketches vol
+    conservar—. L'únic que era del host és el punter de traçabilitat, i marxa. No queda
+    «per vincular»: no falta res a la vista, i inventar-hi una feina pendent seria soroll.
+    """
+    if o.get('pattern_file_id') is None:
+        return o
+    report['peces_despenjades'] += 1
+    return {**o, 'pattern_file_id': None}
+
+
 def _unfreeze_mapper(o, report):
-    """'text'/'image' amb marca → 'field' (geometria intacta). Sense marca, es deixa tal qual."""
+    """'text'/'image' amb marca → 'field' (geometria intacta). Sense marca, per tipus."""
     key = o.get(FIELD_MARK)
     if not key:
+        tipus = o.get('type')
+        if tipus == 'table':
+            return _unfreeze_table(o, report)
+        if tipus == 'data_block':
+            return _unfreeze_data_block(o, report)
+        if tipus == 'pattern_piece':
+            return _unfreeze_pattern_piece(o, report)
         return o
     report['camps_descongelats'] += 1
     style = dict(o.get('style') or {})
@@ -233,17 +312,28 @@ def _unfreeze_objects(objects, report):
 def unfreeze_document(document_json, assets):
     """Invers de `resolve_placeholders` (D16). Retorna (document_json, assets, report).
 
-    Un `.ftt` d'un model A porta QUATRE coses materialitzades de A (Q4.4 de
-    DIAGNOSI_S03C_NAVEGACIO); aquesta funció les desfà totes:
+    Un `.ftt` d'un model A porta coses materialitzades de A; aquesta funció les desfà TOTES:
 
       1. Text congelat dels `field` de plantilla → torna a `type:'field'` per la marca
          `field_key`. Geometria (id/layer/x/y) i estil intactes.
       2. Asset `assets/field_customer_logo.<ext>` (bytes del logo del client de A) → purgat.
       3. Objecte `image kind:'logo'` amb URL absoluta al logo de A → eliminat.
       4. `metadata{}` → buidada.
+      5. Taules snapshot S3 (`type:'table'`) → cel·les buidades conservant la graella, ids del
+         host a None, marca «per vincular» (`_unfreeze_table`).
+      6. `data_block kind:'graded_table'` → `size_fitting_id` a None + «per vincular»
+         (`_unfreeze_data_block`). És l'únic binding VIU del document.
+      7. `pattern_piece` (F1) → cau `pattern_file_id`; el dibuix es queda
+         (`_unfreeze_pattern_piece`).
 
-    La capçalera `data_block kind:'header'` NO es toca: no desa cap valor, es reconstrueix a
-    cada render des de `modelData` (per això D16 en pren la simetria).
+    Els punts 5-7 són D16-bis: 1-4 es van escriure quan el document encara no tenia ni taules
+    snapshot ni peces de patró, i la funció s'havia quedat enrere —deia que descongelava i
+    deixava passar les mesures del model origen—. La capçalera `data_block kind:'header'` NO es
+    toca: no desa cap valor, es reconstrueix a cada render des de `modelData` del host.
+
+    El que NO fa, i és deliberat: **re-vincular**. Les taules queden buides i marcades, i és el
+    tècnic qui les torna a lligar amb un clic. Endevinar quin fitting del host nou correspon a
+    la taula del host vell seria escriure dades que ningú ha demanat (decisió Agus).
 
     DEGRADACIÓ CONEGUDA I ACCEPTADA: els `.ftt` creats abans que `resolve_placeholders` posés
     la marca no en tenen cap. Per a aquests, els texts congelats es deixen TAL QUAL (mostraran
@@ -252,7 +342,8 @@ def unfreeze_document(document_json, assets):
     text editat a mà) i podria corrompre documents. L'usuari els edita a mà.
     """
     report = {'camps_descongelats': 0, 'imatges_logo_eliminades': 0,
-              'assets_logo_purgats': 0, 'te_marques': False}
+              'assets_logo_purgats': 0, 'te_marques': False,
+              'taules_desvinculades': 0, 'peces_despenjades': 0}
 
     pages = [
         {**p, 'objects': _unfreeze_objects(p.get('objects'), report)}
