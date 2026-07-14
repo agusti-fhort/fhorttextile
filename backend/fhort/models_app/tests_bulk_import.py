@@ -13,11 +13,13 @@ import datetime
 
 from django.contrib.auth import get_user_model
 from django_tenants.test.cases import TenantTestCase
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from fhort.accounts.models import UserProfile
 from fhort.models_app.models import (
     BulkCollectionImport, BulkCollectionRow, Model, ModelSequence)
 from fhort.models_app.bulk_import_service import commit_import
+from fhort.models_app.bulk_import_views import commit_view
 from fhort.models_app.services import reserve_sequence_range
 from fhort.tasks.models import Customer
 
@@ -130,3 +132,43 @@ class ImportSenseColisioTest(_BulkBase):
         self.assertIn('BRW-FW26-0018', codis)
         self.assertIn('BRW-FW26-0019', codis)
         self.assertEqual(len(codis), 19)
+
+
+class ColisioRetorna409Test(_BulkBase):
+    """T2 — si tot i el comptador monòton un codi ja és ocupat, el client rep un 409
+    llegible, no un 500 pelat. La transacció de commit_import fa rollback: res a mitges."""
+
+    def _commit(self, imp):
+        request = APIRequestFactory().post(f'/api/v1/bulk-import/{imp.pk}/commit/')
+        force_authenticate(request, user=self.profile.user)
+        return commit_view(request, imp.pk)
+
+    def test_colisio_real_de_codi_retorna_409_i_no_importa_res(self):
+        # Terreny desalineat REAL: el codi 0016 ja és ocupat però el sequencial del seu
+        # model no ho diu (passa perquè conviuen dos formats de codi_intern). El comptador
+        # monòton reserva el 16 → el codi xoca.
+        self._manual_models(15)
+        Model.objects.create(
+            codi_intern='BRW-FW26-0016', customer=self.customer, codi_tenant='BRW',
+            any=2026, temporada='FW', sequencial=3, nom_prenda='Desalineat', estat='Nou')
+        imp = self._previsat(['Tate', 'Rosalia'])
+        abans = Model.objects.count()
+
+        resp = self._commit(imp)
+
+        self.assertEqual(resp.status_code, 409)
+        self.assertIn('torna-ho a provar', resp.data['error'])
+        # Rollback net: cap model creat, la importació segueix previsada (es pot reintentar).
+        self.assertEqual(Model.objects.count(), abans)
+        imp.refresh_from_db()
+        self.assertEqual(imp.estat, 'PREVISAT')
+
+    def test_commit_correcte_segueix_retornant_200(self):
+        self._manual_models(15)
+        imp = self._previsat(['Tate', 'Rosalia'])
+
+        resp = self._commit(imp)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['models'], 2)
+        self.assertEqual(resp.data['estat'], 'IMPORTAT')
