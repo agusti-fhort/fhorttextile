@@ -137,6 +137,10 @@ export default function TenantFormPage() {
     }
     if (!form.nom.trim()) e.nom = 'El nom és obligatori.'
     if (!form.plan) e.plan = 'Selecciona un pla.'
+    // D1 (F2-B): alta mínima comercial — pais i email_facturacio obligatoris.
+    if (!form.pais) e.pais = 'El país és obligatori.'
+    if (!form.email_facturacio.trim()) e.email_facturacio = 'L’email de facturació és obligatori.'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email_facturacio)) e.email_facturacio = 'Introdueix un email vàlid.'
     try {
       JSON.parse(form.feature_flags || '{}')
     } catch {
@@ -292,7 +296,7 @@ export default function TenantFormPage() {
               {TIPUS_CLIENT.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
             </select>
           </Field>
-          <Field label="Email facturació" error={errors.email_facturacio}>
+          <Field label="Email facturació" required error={errors.email_facturacio}>
             <input type="email" value={form.email_facturacio} onChange={set('email_facturacio')} style={baseInput} />
           </Field>
         </Grid>
@@ -315,7 +319,7 @@ export default function TenantFormPage() {
           <Field label="Codi postal" error={errors.codi_postal}>
             <input value={form.codi_postal} onChange={set('codi_postal')} style={baseInput} />
           </Field>
-          <Field label="País" error={errors.pais}>
+          <Field label="País" required error={errors.pais}>
             <select value={form.pais} onChange={set('pais')} style={baseInput}>
               {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name} ({c.code})</option>)}
             </select>
