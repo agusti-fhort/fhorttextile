@@ -362,7 +362,10 @@ def _parse_grading_excel(file_bytes):
     """Parser Excel propi de la Size Library (format simple de graduació):
     capçalera a la fila 1, A=codi, B=descripció, C endavant=talles. Retorna
     (poms, talles): poms=[{'codi_fitxa','descripcio','values':{talla:float}}].
-    Distint de _parse_excel_poms (fitxa de model: A=codi, C=descr, D=dim, E+=talles)."""
+    Distint de _parse_excel_poms (fitxa de model, models_app/extraction_views.py), que des del
+    FIX C de QA-S8 ancora la capçalera pel CONTINGUT i mapa les columnes per ETIQUETA, i que
+    abdica —cau a la IA— si no pot demostrar que ha entès la taula. Aquest d'aquí és el format
+    simple i tancat de la Library: si canvia, no arrossega l'altre."""
     import openpyxl, io
     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
     ws = wb.active

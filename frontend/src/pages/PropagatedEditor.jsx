@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { IconLock } from '@tabler/icons-react'
 import client from '../api/client'
 import { models } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
@@ -19,6 +20,8 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [reloadKey, setReloadKey] = useState(0)   // remunta MeasureGrid en canvi de règim (re-sembra)
+  const [sealed, setSealed] = useState(null)      // payload del 409 {version_number, sortida, ...}
+  const [bumping, setBumping] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -45,7 +48,26 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
     const pomId = Number(lineId.slice(0, i))
     const talla = lineId.slice(i + 1)
     return models.escalatAjustarTalla(modelId, pomId, talla, value)
+      .catch(e => {
+        // G6-B/T3 — la versió vigent està SEGELLADA: el backend refusa l'escriptura (409). Sense
+        // això, el rebuig arribaria com un error mut i el tècnic no sabria ni per què no es desa
+        // ni què pot fer. El 409 ja porta la sortida; aquí només es fa visible.
+        if (e?.response?.status === 409 && e.response.data?.error === 'sealed') {
+          setSealed(e.response.data)
+        }
+        throw e   // MeasureGrid ha de saber igualment que la cel·la NO s'ha desat.
+      })
   }, [modelId])
+
+  // La sortida legítima: crear una versió nova (v+1) que superi la segellada. No hi ha auto-bump
+  // al backend a propòsit — superar un segell és un acte conscient, i aquest botó és aquest acte.
+  const onCrearNovaVersio = () => {
+    setBumping(true)
+    models.generarGrading(modelId, { new_version: true, allow_reopen_sealed: true })
+      .then(() => { setSealed(null); return load().then(() => setReloadKey(k => k + 1)) })
+      .catch(() => setErr(t('model_measurements.sealed_bump_err')))
+      .finally(() => setBumping(false))
+  }
 
   // Canvi de règim del POM (endpoint independent de la sessió) → rellegeix i remunta la graella.
   const onRegimChange = (row, nova) => {
@@ -90,6 +112,35 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
           }
         />
         {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 8 }}>{err}</div>}
+        {/* G6-B/T3 — La versió vigent està segellada i el backend ha refusat l'escriptura. El
+            rebuig ha de tenir CARA i SORTIDA: què passa, i què pots fer-hi. */}
+        {sealed && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                        marginBottom: 8, padding: '10px 12px', borderRadius: 6,
+                        border: '0.5px solid var(--border)', background: 'var(--bg-subtle)' }}>
+            <IconLock size={18} stroke={1.5} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <span style={{ fontSize: 'var(--fs-body)', flex: 1, minWidth: 220 }}>
+              {t('model_measurements.sealed_title', { v: sealed.version_number })}
+              {' '}
+              <span style={{ color: 'var(--text-muted)' }}>
+                {t('model_measurements.sealed_hint')}
+              </span>
+            </span>
+            {!readOnly && (
+              <button type="button" onClick={onCrearNovaVersio} disabled={bumping}
+                style={{ padding: '6px 14px', borderRadius: 6, border: '0.5px solid var(--border)',
+                         background: 'var(--white)', cursor: bumping ? 'default' : 'pointer',
+                         fontSize: 'var(--fs-body)', whiteSpace: 'nowrap' }}>
+                {bumping ? t('app.loading') : t('model_measurements.sealed_new_version')}
+              </button>
+            )}
+            <button type="button" onClick={() => setSealed(null)}
+              style={{ padding: '6px 10px', borderRadius: 6, border: 0, background: 'transparent',
+                       cursor: 'pointer', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+              {t('app.close')}
+            </button>
+          </div>
+        )}
         {loading && !data ? (
           <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('app.loading')}</div>
         ) : gridRows.length === 0 ? (

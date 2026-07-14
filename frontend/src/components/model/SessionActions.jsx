@@ -36,7 +36,7 @@ export default function SessionActions({ session, pieceFittingId, taskId, onSave
       // XC — missatge REAL del servidor, fallback genèric.
       setErr(data.error || data.detail || t('fitting.save.save_error_generic')); setBusy(false); return
     }
-    let estat = null
+    let estat
     try { const r = await fittingSessions.seal(session.id); estat = r.data?.estat }
     catch { setErr(t('fitting.save.seal_error')); setBusy(false); return }
     if (estat !== 'Tancada') { setErr(t('fitting.save.not_sealed')); setBusy(false); return }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import useAuthStore from '../store/auth'
+import useAuthStore, { AUTH_VALID } from '../store/auth'
 import { SUPPORTED_LANGUAGES } from '../i18n'
 
 // Logotip vectorial Fhort Textile Tech. Sobre fons clar: "Fhort" en or (#c27a2a),
@@ -49,6 +49,14 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const login = useAuthStore(s => s.login)   // flux JWT existent — NO es toca
+  const estatAuth = useAuthStore(s => s.estatAuth)
+
+  // D'ON venia (el guard hi deixa el `from` en rebotar). Tornar-hi és el que fa que un F5 sobre
+  // una ruta fonda no acabi al taulell: qui anava al taller de patró vol el taller de patró,
+  // no la pàgina d'inici amb la feina a mig fer a l'altra banda de tres clics.
+  const desti = location.state?.from
+    ? `${location.state.from.pathname}${location.state.from.search || ''}`
+    : '/'
 
   const resetOk = !!location.state?.resetOk   // ve de ResetPassword en èxit
   const [view, setView] = useState('login')  // 'login' | 'forgot'
@@ -69,7 +77,7 @@ export default function Login() {
     setLoading(true)
     try {
       await login(username, password)   // mateixa crida que abans
-      navigate('/')
+      navigate(desti, { replace: true })
     } catch (err) {
       // Resposta del servidor (400/401) → credencials; sense resposta → xarxa.
       setError(err?.response ? t('login.error_invalid') : t('login.error_generic'))
@@ -83,6 +91,11 @@ export default function Login() {
     // No hi ha SMTP: la recuperació és mediada per admin (genera un enllaç a Usuaris i rols).
     setForgotMsg(t('login.forgot_admin_msg'))
   }
+
+  // Amb sessió VÀLIDA, el login no es pinta: se surt cap on s'anava (D10). Sense això, qualsevol
+  // rebot cap aquí era un carreró sense sortida —la sessió es carregava un frame després i la
+  // pantalla es quedava demanant una contrasenya que ja no calia.
+  if (estatAuth === AUTH_VALID) return <Navigate to={desti} replace />
 
   return (
     <div className="login-screen">

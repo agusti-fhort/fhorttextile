@@ -11,6 +11,92 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# G6-B · LA INTEGRITAT DEL SEGELL (DIAGNOSI_G6_DUAL_PATH, Fase 2 · R1)
+#
+# El segell MENTIA. El guard que hi havia (a `bump_grading_version_and_generate`) protegia
+# **crear v+1** sobre una versió aprovada, però NO protegia **escriure dins** la versió activa:
+# `_get_or_create_grading_version` filtrava `is_active=True` i prou —no mirava `aprovada`— i
+# SIS endpoints hi entraven a reescriure `GradedSpec` in-place conservant `aprovada=True`.
+#
+# Això és el que feia perillós despinçar el motor de patrons: el motor confia en `gv.aprovada`
+# (`patterns/engine/grading_projection.py`), i el flag podia ser cert **mentre el contingut havia
+# canviat després del segell**. Una projecció "aprovada" podia projectar unes talles que ningú
+# no havia aprovat mai.
+#
+# El guard viu AQUÍ, en UN sol lloc (mateix patró que `_te_regles`): a la porta per on tots els
+# camins han de passar per obtenir la versió on escriuran. Cap guard local per endpoint —els
+# endpoints només TRADUEIXEN l'error a 409, no decideixen res.
+# ═════════════════════════════════════════════════════════════════════════════
+
+class SealedGradingVersionError(Exception):
+    """Escriptura rebutjada: la GradingVersion vigent està SEGELLADA (`aprovada=True`).
+
+    El que s'ha aprovat no es reescriu. La sortida legítima NO és forçar l'escriptura: és
+    **crear una versió nova** (v+1) que superi la segellada — el bump que ja existeix
+    (`bump_grading_version_and_generate`), que deixa rastre i demana confirmació humana.
+    Per això NO hi ha auto-bump aquí: qui escriu ha de decidir-ho, no descobrir-ho.
+    """
+
+    def __init__(self, version):
+        self.version = version
+        # ⚠️ Les dades del 409 es capturen AQUÍ, no a `payload`. Dos dels sis camins refusen des de
+        # DINS d'un `transaction.atomic` i han de fer `set_rollback(True)` (si no, el `return` des
+        # de dins del bloc atòmic faria COMMIT de l'override que acaben d'escriure). Després d'un
+        # `set_rollback`, Django prohibeix qualsevol consulta més: si `payload` toqués la BD per
+        # resoldre `version.size_fitting`, petaria amb TransactionManagementError i el 409 es
+        # convertiria en un 500. El payload ha de ser PUR.
+        sf = version.size_fitting      # (els guards fan select_related: no costa cap consulta)
+        self._version_number = version.version_number
+        self._version_id = version.pk
+        self._sf_id = sf.pk
+        self._model_id = sf.model_id
+        super().__init__(
+            f"GradingVersion v{version.version_number} està aprovada (segellada a producció): "
+            f"no s'hi pot escriure. Cal crear una versió nova per superar-la."
+        )
+
+    @property
+    def payload(self) -> dict:
+        """Cos del 409. Viu a l'excepció perquè els sis camins diguin EXACTAMENT el mateix.
+
+        PUR: no toca la BD (v. __init__).
+        """
+        return {
+            'error': 'sealed',   # mateixa clau que el 409 ja existent de generar-grading
+            'codi': 'GRADING_VERSION_SEALED',
+            'grading_version_id': self._version_id,
+            'version_number': self._version_number,
+            'size_fitting_id': self._sf_id,
+            'model_id': self._model_id,
+            'message': (
+                f'La versió vigent v{self._version_number} està aprovada (segellada a '
+                f"producció). No s'hi pot escriure: el que ja s'ha aprovat no canvia."
+            ),
+            'sortida': {
+                'accio': 'crear_nova_versio',
+                'endpoint': f'/api/v1/models/{self._model_id}/generar-grading/',
+                'body': {'new_version': True, 'allow_reopen_sealed': True},
+                'descripcio': ('Crear una versió nova (v+1) que superi la segellada. '
+                               'Queda rastre (Watchpoint) de qui la supera.'),
+            },
+        }
+
+
+def sealed_active_version(sf_id):
+    """La versió ACTIVA i SEGELLADA d'un SizeFitting, si n'hi ha. El predicat, en UN lloc.
+
+    El feien servir per separat el guard del bump i la còpia PRE-guard de `generar-grading`.
+    Ara tots dos —i el guard d'escriptura— pregunten el mateix a la mateixa funció: si el
+    predicat del segell ha de canviar mai, que canviï en un sol lloc.
+    """
+    from fhort.fitting.models import GradingVersion
+    return (GradingVersion.objects
+            .select_related('size_fitting')     # SealedGradingVersionError el necessita, i sense
+            .filter(size_fitting_id=sf_id, is_active=True, aprovada=True)   # consultar després
+            .order_by('-version_number').first())
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GRADING
 # ─────────────────────────────────────────────────────────────────────────────
@@ -21,10 +107,13 @@ def generate_graded_specs(size_fitting_id: int) -> int:
 
     Flow:
       1. Read BaseMeasurement of the model's base size
-      2. Read GradingRules of the assigned RuleSet
+      2. Read the model's grading rules (resident ModelGradingRule; else the RuleSet's)
       3. For each POM × size, apply the rule (LINEAR/STEP/FIXED/ZERO/EXCEPTION)
       4. Create or update GradedSpec
       5. Mark SF as "Talles generades"
+
+    'EXCEPTION' now has a single source: ModelGradingOverride (per-model). The old second
+    source, pom.GradingException (per shared rule set), was retired in G6/1a.
 
     Returns the number of created/updated GradedSpec.
     """
@@ -39,8 +128,11 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     model = sf.model
 
     # Pre-checks
-    if not model.grading_rule_set_id:
-        raise ValueError(f"El model {model.codi_intern} no té Grading Rule Set assignat.")
+    if not _te_regles(model):
+        raise ValueError(
+            f"El model {model.codi_intern} no té regles de grading: ni regles residents "
+            f"(ModelGradingRule) ni Grading Rule Set assignat."
+        )
     if not model.size_system_id:
         raise ValueError(f"El model {model.codi_intern} no té Size System assignat.")
     if not model.size_run_model:
@@ -61,7 +153,6 @@ def generate_graded_specs(size_fitting_id: int) -> int:
 
     # Load the RuleSet rules
     rules = _load_grading_rules(model)
-    exceptions = _load_grading_exceptions(model.grading_rule_set_id)
     # Sprint 5B.3: per-model overrides from validated fittings (highest priority).
     model_overrides = _load_model_overrides(model.pk)
 
@@ -90,13 +181,12 @@ def generate_graded_specs(size_fitting_id: int) -> int:
             steps = i - base_idx  # negative = smaller size, positive = larger
 
             override = model_overrides.get((pom_id, size_label))
-            exc = exceptions.get((pom_id, size_label))
             if override is not None:
                 # Per-model validated-fitting override wins over everything.
+                # G6/1a: aquí hi havia una segona branca, `elif exc:` (GradingException), que
+                # deixava EXACTAMENT la mateixa petja ('EXCEPTION') que l'override — la fila
+                # ni tan sols distingia quin dels dos forks havia guanyat. Jubilada.
                 graded_val = override
-                gt_applied = 'EXCEPTION'
-            elif exc:
-                graded_val = exc['value_cm']
                 gt_applied = 'EXCEPTION'
             elif rule is None:
                 graded_val = base_val  # no rule = FIXED
@@ -143,15 +233,18 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     """
     Càlcul de grading SENSE persistència (preview per al wizard d'importació, W3).
 
-    Reutilitza EXACTAMENT la mateixa lògica que generate_graded_specs (regles, excepcions,
-    overrides per-model, _apply_rule) però sobre valors base en memòria, sense crear cap
+    Reutilitza EXACTAMENT la mateixa lògica que generate_graded_specs (regles, overrides
+    per-model, _apply_rule) però sobre valors base en memòria, sense crear cap
     SizeFitting/GradingVersion/GradedSpec. Pensat per omplir talles buides a la taula del
     wizard abans del desament definitiu (W5).
 
     base_values: {pom_id (POMMaster): base_value_cm}
-    Retorna: {pom_id: {size_label: graded_value}} (buit si manquen rule_set/run/base).
+    Retorna: {pom_id: {size_label: graded_value}} (buit si manquen regles/run/base).
     """
-    if not (model.grading_rule_set_id and model.size_run_model and model.base_size_label):
+    # G6/0b — el mateix criteri que el gate dur de generate_graded_specs (via `_te_regles`), i no
+    # una còpia amb matisos: si el generador i el preview no coincideixen en "aquest model pot
+    # graduar?", el wizard ensenya una taula buida per a un model que després gradua igualment.
+    if not (_te_regles(model) and model.size_run_model and model.base_size_label):
         return {}
     size_run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
     base_size = model.base_size_label.strip()
@@ -160,7 +253,6 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     base_idx = size_run.index(base_size)
 
     rules = _load_grading_rules(model)
-    exceptions = _load_grading_exceptions(model.grading_rule_set_id)
     model_overrides = _load_model_overrides(model.pk)
 
     out = {}
@@ -173,11 +265,8 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
         for i, size_label in enumerate(size_run):
             steps = i - base_idx
             override = model_overrides.get((pom_id, size_label))
-            exc = exceptions.get((pom_id, size_label))
             if override is not None:
                 graded_val = float(override)
-            elif exc:
-                graded_val = float(exc['value_cm'])
             elif rule is None:
                 graded_val = base_val  # sense regla = FIXED
             else:
@@ -353,18 +442,28 @@ def update_client_profile(
 # CUSTOMER POM ALIAS — biblioteca de nomenclatura del client (sembra reutilitzable)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def maybe_learn_customer_alias(customer, client_code, description, pom, origen='IMPORT'):
+def maybe_learn_customer_alias(customer, client_code, description, pom, origen='IMPORT',
+                               nomes_si_manual=True):
     """Sembra (idempotent) un CustomerPOMAlias reutilitzable quan un HUMÀ ha resolt la
-    vinculació codi-de-document → POM i el matcher automàtic NO la produeix sol.
+    vinculació codi-de-document → POM.
 
     Llei (DIAGNOSI_BIBLIOTECA_CLIENT_2026-07-08): CAP àlies viu retroactiu — escriure un
     àlies NO modifica cap model existent; només sembra les FUTURES importacions d'aquest
     customer. Aquesta funció només toca CustomerPOMAlias.
 
-    Discriminador manual vs automàtic: si find_pom_master (encara sense aquest àlies)
-    ja resol el codi al MATEIX POM amb confiança d'auto-vinculació (HIGH/MEDIUM), la
-    vinculació és automàtica → NO se sembra (evita retroalimentar el matcher amb els
-    seus propis encerts / falsos positius). Retorna l'àlies creat/actualitzat o None.
+    `nomes_si_manual` (per defecte True — el comportament de sempre):
+      · True  → discriminador manual vs automàtic: si find_pom_master (encara sense aquest
+                àlies) ja resol el codi al MATEIX POM amb confiança d'auto-vinculació
+                (HIGH/MEDIUM), la vinculació és automàtica → NO se sembra. Evita
+                retroalimentar el matcher amb els seus propis encerts.
+      · False → s'aprèn de TOT vincle ferm, també dels que el matcher encerta sol
+                (QA-S8-R1). El crida així la confirmació de l'import (W5), on el vincle
+                **l'ha confirmat una persona**: allà l'objectiu no és protegir el matcher
+                de si mateix, és que el REGISTRE DE NOMENCLATURA del client es completi sol
+                a cada importació. Un codi que el tècnic ha donat per bo és nomenclatura
+                d'aquell client, l'hagi encertat el matcher o no.
+
+    Retorna l'àlies creat/actualitzat o None.
     """
     from fhort.pom.models import CustomerPOMAlias
     from fhort.models_app.extraction_views import find_pom_master
@@ -373,9 +472,21 @@ def maybe_learn_customer_alias(customer, client_code, description, pom, origen='
     if customer is None or not code or pom is None:
         return None
 
-    pm, _mtype, conf = find_pom_master(code, description or '', customer=customer)
-    if pm is not None and pm.id == pom.id and conf in ('HIGH', 'MEDIUM'):
-        return None  # el matcher ja ho encerta sol → automàtic, no sembrem
+    if nomes_si_manual:
+        pm, _mtype, conf = find_pom_master(code, description or '', customer=customer)
+        if pm is not None and pm.id == pom.id and conf in ('HIGH', 'MEDIUM'):
+            return None  # el matcher ja ho encerta sol → automàtic, no sembrem
+
+    # GUARD ANTI-COL·LISIÓ (QA-S8 · D4a). Un POM que aquest client JA reclama amb un ALTRE codi
+    # no es pot aprendre com a bo: o el codi nou és un sinònim del vell (i sobra), o són DUES
+    # mesures distintes i una de les dues quedarà sobre el POM equivocat. No és teòric — al
+    # catàleg viu de BRW hi ha 'F' (FRONT total length) i 'FF' (BACK total length) tots dos cap
+    # al POM 389 'TOTAL LENGTH', i 'U'/'U2'/'U3' tots tres cap al 439. En comptes d'aprendre'l
+    # en silenci, es crea PENDENT DE REVISIÓ perquè una persona el miri.
+    ja_reclamat = (CustomerPOMAlias.objects
+                   .filter(customer=customer, pom=pom)
+                   .exclude(client_code__iexact=code)
+                   .exists())
 
     alias, created = CustomerPOMAlias.objects.get_or_create(
         customer=customer, client_code=code[:60],
@@ -383,19 +494,47 @@ def maybe_learn_customer_alias(customer, client_code, description, pom, origen='
             'pom': pom,
             'client_description': (description or '')[:200],
             'origen': origen,
+            'pendent_revisio': ja_reclamat,
         },
     )
     if not created and alias.pom_id != pom.id:
         alias.pom = pom
         alias.client_description = (description or '')[:200]
         alias.origen = origen
-        alias.save(update_fields=['pom', 'client_description', 'origen', 'actualitzat_at'])
+        alias.pendent_revisio = ja_reclamat
+        alias.save(update_fields=['pom', 'client_description', 'origen',
+                                  'pendent_revisio', 'actualitzat_at'])
     return alias
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PRIVATE HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _te_regles(model) -> bool:
+    """El model té regles de grading? Residents (ModelGradingRule) O de set.
+
+    G6/0b — LA PORTA D'ENTRADA DEL MOTOR, i ha de fer la MATEIXA pregunta que `_load_grading_rules`
+    respon. Abans preguntava una altra cosa: exigia `model.grading_rule_set_id`, o sigui **el
+    punter**, quan el motor fa temps que llegeix les regles del MODEL i només cau al set si el model
+    no en té cap. Un model equipat amb la branca guanyadora no podia graduar per falta d'un punter
+    que el motor ja no fa servir.
+
+    I no era teòric: el model 163 (BRW-FW26-0001) té 25 ModelGradingRule actives, `grading_rule_set`
+    NULL i **zero GradedSpec** — no ha pogut graduar mai.
+
+    Alineat amb la Sobirania de la Regla (DECISIONS.md:280-294): *«tot sembra el model però tot viu i
+    és modificable AL MODEL, inclosa la REGLA»*. Si la regla viu al model, tenir-ne una ha de bastar
+    per graduar.
+
+    El que NO canvia: un model sense regles enlloc continua sense poder graduar (ValueError al
+    generador, `{}` al preview). La porta s'alinea amb el motor; no s'obre.
+    """
+    from fhort.models_app.models import ModelGradingRule
+    if ModelGradingRule.objects.filter(model_id=model.id, actiu=True).exists():
+        return True
+    return bool(model.grading_rule_set_id)
+
 
 def _load_grading_rules(model) -> dict:
     """Return {pom_id: rule_obj} for the model's grading rules.
@@ -421,21 +560,6 @@ def _load_grading_rules(model) -> dict:
         return {}
     except Exception as e:
         logger.warning(f"Could not load grading rules: {e}")
-        return {}
-
-
-def _load_grading_exceptions(rule_set_id: int) -> dict:
-    """Return {(pom_id, size_label): exc_obj}."""
-    try:
-        from fhort.pom.models import GradingException
-        return {
-            (e.pom_id, e.size_label): {'value_cm': e.value_cm}
-            for e in GradingException.objects.filter(
-                rule_set_id=rule_set_id, is_active=True
-            )
-        }
-    except Exception as e:
-        logger.warning(f"Could not load GradingExceptions: {e}")
         return {}
 
 
@@ -469,37 +593,41 @@ def _load_base_measurements(model_id: int) -> dict:
 
 
 def _get_or_create_grading_version(sf):
-    """Get or create the active GradingVersion for the SizeFitting."""
-    try:
-        from fhort.fitting.models import GradingVersion
-        version = GradingVersion.objects.filter(
-            size_fitting=sf, is_active=True
-        ).last()
-        if not version:
-            num = GradingVersion.objects.filter(size_fitting=sf).count() + 1
-            version = GradingVersion.objects.create(
-                size_fitting=sf,
-                version_number=num,
-                is_active=True,
-            )
-        return version
-    except Exception:
-        # Fallback if GradingVersion has a different structure
-        try:
-            from fhort.fitting.models import GradingVersion
-            version = GradingVersion.objects.filter(
-                size_fitting=sf, is_active=True
-            ).last()
-            if not version:
-                num = GradingVersion.objects.filter(size_fitting=sf).count() + 1
-                version = GradingVersion.objects.create(
-                    size_fitting=sf,
-                    version_number=num,
-                    is_active=True,
-                )
-            return version
-        except Exception as e:
-            raise RuntimeError(f"Could not get/create GradingVersion: {e}")
+    """La versió ACTIVA on s'escriurà — o una de nova si no n'hi ha cap.
+
+    ⚠️ **LA PORTA D'ESCRIPTURA DEL GRADING (G6-B/T1).** Tots els camins que persisteixen
+    `GradedSpec` passen per aquí per saber ON escriuen. Per tant és aquí —i només aquí— que es
+    comprova que la destinació no estigui SEGELLADA. Si ho està, es refusa: `SealedGradingVersionError`.
+
+    **Cap auto-bump.** Seria còmode crear la v+1 tot sol i escriure-hi... i seria un desastre: qui
+    ha demanat "regenera les talles" es trobaria una versió nova que no ha demanat, i el segell
+    hauria deixat de voler dir res (sempre se superaria sol). Superar un segell és un acte
+    conscient: es refusa, es diu com fer-ho, i decideix una persona.
+
+    El `try/except Exception` que embolcallava això s'ha retirat: repetia el mateix codi dues
+    vegades com a "fallback" i **s'empassava qualsevol excepció** del cos — inclosa, ara, la del
+    guard. Un guard dins d'un `except Exception:` que reintenta no és un guard.
+    """
+    from fhort.fitting.models import GradingVersion
+
+    sealed = sealed_active_version(sf.pk)
+    if sealed is not None:
+        raise SealedGradingVersionError(sealed)
+
+    # `-version_number` (no `.last()`): el Meta.ordering de GradingVersion és
+    # ['size_fitting', '-data'], i per tant `.last()` retornava la MÉS ANTIGA de les actives
+    # (fork 3 de la diagnosi, §B3). Avui és latent —cap SizeFitting té 2+ actives— però aquest
+    # és el selector de la porta d'escriptura: no hi pot haver un criteri que ja sabem que és el
+    # revés del de tothom (`_active_grading_version` desempata per -version_number).
+    version = (GradingVersion.objects
+               .filter(size_fitting=sf, is_active=True)
+               .order_by('-version_number').first())
+    if version is None:
+        num = GradingVersion.objects.filter(size_fitting=sf).count() + 1
+        version = GradingVersion.objects.create(
+            size_fitting=sf, version_number=num, is_active=True,
+        )
+    return version
 
 
 def bump_grading_version_and_generate(sf_id, *, base_changed, profile_id=None,
@@ -533,10 +661,8 @@ def bump_grading_version_and_generate(sf_id, *, base_changed, profile_id=None,
         from fhort.accounts.models import UserProfile
         profile = UserProfile.objects.filter(pk=profile_id).first()
 
-    # 1. GUARD D-1.
-    sealed_active = (GradingVersion.objects
-                     .filter(size_fitting_id=sf_id, is_active=True, aprovada=True)
-                     .order_by('-version_number').first())
+    # 1. GUARD D-1. Mateix predicat que el guard d'escriptura (G6-B): `sealed_active_version`.
+    sealed_active = sealed_active_version(sf_id)
     if sealed_active is not None and not allow_reopen_sealed:
         raise ValueError(
             f"GradingVersion v{sealed_active.version_number} està aprovada "
@@ -691,9 +817,23 @@ def _upsert_graded_spec(
     increment_applied_cm: float,
     generated_from_version: int | None = None,
 ):
-    """Create or update a GradedSpec."""
+    """Create or update a GradedSpec.
+
+    G6-B/T1 — segona porta, i no és redundant. Avui l'ÚNIC cridador és `generate_graded_specs`,
+    que ja ha passat pel guard de `_get_or_create_grading_version`; això protegeix el cridador
+    de DEMÀ, que rebrà un `grading_version_id` d'on sigui i podria apuntar a una versió
+    segellada sense passar per la porta. Cap `GradedSpec` no pot aterrar sobre un segell.
+    """
+    from fhort.fitting.models import GradedSpec, GradingVersion
+
+    segellada = (GradingVersion.objects
+                 .select_related('size_fitting')
+                 .filter(pk=grading_version_id, aprovada=True)
+                 .first())
+    if segellada is not None:
+        raise SealedGradingVersionError(segellada)
+
     try:
-        from fhort.fitting.models import GradedSpec
         GradedSpec.objects.update_or_create(
             grading_version_id=grading_version_id,
             pom_id=pom_id,

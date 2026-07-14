@@ -15,6 +15,7 @@ import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
 import TasksTab from '../components/model/TasksTab'
+import PatternTab from '../components/pattern/PatternTab'
 
 const API = import.meta.env.VITE_API_URL || ''
 // Menú net (PEÇA 5): Size Check absorbit a Mesures (taula base amb estadis), Producció retirat;
@@ -22,7 +23,9 @@ const API = import.meta.env.VITE_API_URL || ''
 // redirigeix a /mesures (App.jsx), aquí ja no hi ha cap branca 'Size Check'.
 // 'Anàlisi IA' OCULTAT del menú (peça F): inert avui. El case i el component TabAIAnalysis es
 // conserven (no destructiu); simplement no apareix a la banda de pestanyes.
-const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Tasques']
+// 'Patró' va entre Escalat i Fitxa tècnica: és una etapa del flux tècnic (el patró es
+// digitalitza i s'escala), no un annex documental.
+const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Patró', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Tasques']
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
   'Dashboard': 'model_sheet.tab_dashboard',
@@ -30,6 +33,7 @@ const TAB_LABELS = {
   'Resum': 'model_sheet.tab_summary',
   'Mesures': 'model.tabs.mesures',
   'Escalat': 'model_sheet.tab_grading',
+  'Patró': 'model_sheet.tab_pattern',
   'Fitxa tècnica': 'model_sheet.tab_tech_sheet',
   'Fitxers': 'model.tabs.fitxers',
   "Registre d'activitat": 'model_sheet.tab_activity_log',
@@ -108,7 +112,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [taulaRows, setTaulaRows] = useState([])
   const [modelTaskRows, setModelTaskRows] = useState([])
   const [sizesAmbDades, setSizesAmbDades] = useState(null)
-  const [deltes, setDeltes] = useState(null)
+  const [, setDeltes] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState(null)
@@ -176,15 +180,6 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // Porta-menú: obre (crea-si-falta + auto-assign + En curs) la tasca `code` i navega a l'eina amb el
   // task_id. Reusa el servei open-task; el botó funciona encara que el model no tingui la tasca creada.
   const [openingTask, setOpeningTask] = useState(false)
-  const openTaskAndGo = (code, toRoute) => {
-    if (openingTask) return
-    setOpeningTask(true)
-    models.openTask(parseInt(id), code)
-      .then(res => navigate(toRoute(res.data.task_id)))
-      .catch(() => setFeedback({ type: 'err', text: t('model_sheet.open_task_err') }))
-      .finally(() => setOpeningTask(false))
-  }
-
   // FASE A — edició INLINE: la tab commuta consulta↔edició mantenint el context (sidebar+tabs+
   // capçalera+watchpoint), en comptes de navegar a /mesures·/escalat. openTask posa la tasca
   // InProgress (compta-temps); en sortir de mode edició es pausa. El lifecycle del timer es mou de
@@ -559,8 +554,17 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         {propStatus && propStep === 1 && (
           <Modal
             title={t('grading_propagate.warn_title')}
+            /* G6-B2: si la versió segellada ja ha quedat ENRERE (la base ha canviat sota el
+               segell), l'avís ho diu aquí — que és on es decideix propagar. Superar un segell que
+               ja no diu la veritat no és el mateix acte que superar-ne un de fresc, i qui ho
+               decideix ho ha de saber ABANS. No canvia què es pot fer: canvia què se sap. */
             subtitle={propStatus.segellada
-              ? t('grading_propagate.warn_sealed', { version: propStatus.version_number })
+              ? (propStatus.estalitud?.avisa
+                ? t('grading_propagate.warn_sealed_stale', {
+                  version: propStatus.version_number,
+                  n: propStatus.estalitud.canvis_base,
+                })
+                : t('grading_propagate.warn_sealed', { version: propStatus.version_number }))
               : t('grading_propagate.warn_substitute')}
             confirmLabel={t('grading_propagate.continue')}
             cancelLabel={t('app.cancel')}
@@ -578,6 +582,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             onConfirm={() => execPropagar(propStatus.segellada)}
           />
         )}
+        {activeTab === 'Patró' && <PatternTab modelId={parseInt(id)} />}
         {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
         {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}
@@ -1507,7 +1512,7 @@ function TabFiles({ modelId }) {
 
 // Una fila de la llista (esquerra). Columnes: icona · nom · tipus · data · versió.
 function FileRow({ fitxer, selected, onSelect }) {
-  const { t, i18n } = useTranslation()
+  const { i18n } = useTranslation()
   const ext = fileExt(fitxer.nom_fitxer)
   const date = fitxer.data_pujada
     ? new Date(fitxer.data_pujada).toLocaleDateString(i18n.language || 'ca', { day: '2-digit', month: '2-digit', year: '2-digit' })

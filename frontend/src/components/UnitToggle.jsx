@@ -32,7 +32,7 @@ export function UnitToggle() {
         // Notificar la resta de l'app
         window.dispatchEvent(new CustomEvent('unit-changed', { detail: { unit: nou } }))
       }
-    } catch (e) {}
+    } catch { /* preferència d'unitats: no poder-la desar no és fatal */ }
     setSaving(false)
   }
 

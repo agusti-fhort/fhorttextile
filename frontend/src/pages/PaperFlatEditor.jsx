@@ -24,7 +24,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   const labelsRef = useRef(labels)
   const zoomRef = useRef(zoom)
   const refreshHandlesRef = useRef(null)
-  const [status, setStatus] = useState(labels?.loading || '')
+  const [, setStatus] = useState(labels?.loading || '')
   const [canCommit, setCanCommit] = useState(false)
   const isStructuredPath = flat?.type === 'path'
 

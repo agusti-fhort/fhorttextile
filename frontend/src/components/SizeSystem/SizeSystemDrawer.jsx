@@ -74,7 +74,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
       try {
         const d = await res.json()
         msg = d.detail || d.error || msg
-      } catch {}
+      } catch { /* si això falla, el drawer no ha de petar */ }
       alert(msg)
     }
   }

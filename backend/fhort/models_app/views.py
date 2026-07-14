@@ -12,6 +12,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
 from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
+from fhort.pom.services import SealedGradingVersionError, _te_regles
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
 from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
 from .serializers import (
@@ -1508,8 +1509,13 @@ def generate_grading_view(request, model_id):
     except Model.DoesNotExist:
         return Response({'error': 'Model no trobat'}, status=404)
 
-    if not model.grading_rule_set_id:
-        return Response({'error': 'El model no té GradingRuleSet configurat'}, status=400)
+    # G6-A/T2 (forat que va quedar obert): el gate del MOTOR ja pregunta "té regles?" —residents o
+    # de set—, però aquest CALLER encara preguntava pel PUNTER pel seu compte. Efecte: el model 163
+    # (25 regles residents, `grading_rule_set` NULL) graduava si cridaves el servei, i rebia un 400
+    # si ho demanaves per l'endpoint. El predicat és un i és `_te_regles`.
+    if not _te_regles(model):
+        return Response({'error': 'El model no té regles de grading (ni residents ni de rule set)'},
+                        status=400)
     if not model.size_run_model or not model.base_size_label:
         return Response({'error': 'Cal configurar talles i talla base'}, status=400)
 
@@ -1611,6 +1617,10 @@ def generate_grading_view(request, model_id):
     else:
         try:
             graded_count = generate_graded_specs(sf.id)
+        except SealedGradingVersionError as e:
+            # G6-B/T1 · camí 1/6. Regenerar in-place sobre una versió segellada: refusat. La
+            # sortida és el `new_version=True` d'aquest mateix endpoint (el bump), no forçar.
+            return Response(e.payload, status=409)
         except ValueError as e:
             return Response({'error': str(e)}, status=400)
         except Exception as e:
@@ -1758,7 +1768,15 @@ def set_size_override_view(request, model_id):
             )
         try:
             generate_graded_specs(sf.id)
+        except SealedGradingVersionError as e:
+            # G6-B/T1 · camí 2/6. `set_rollback` NO és decoratiu: som DINS del `transaction.atomic`
+            # que acaba d'escriure el ModelGradingOverride, i un `return` des de dins d'un bloc
+            # atòmic **fa commit** (no propaga cap excepció). Sense això, el 409 deixaria l'override
+            # desat alimentant una versió segellada — exactament el que aquest guard ha d'impedir.
+            transaction.set_rollback(True)
+            return Response(e.payload, status=409)
         except ValueError as e:
+            transaction.set_rollback(True)
             return Response({'error': str(e)}, status=400)
 
     # 9. Retorna el GradedSpec resultant de la talla editada (reflecteix l'override).
@@ -1886,7 +1904,13 @@ def escalat_ajustar_talla_view(request, model_id):
 
             try:
                 generate_graded_specs(sf.id)
+            except SealedGradingVersionError as e:
+                # G6-B/T1 · camí 3/6. Igual que el 2: dins de l'atòmic que ha escrit l'override
+                # (i el MeasurementChangeLog). Rollback explícit o el 409 mentiria.
+                transaction.set_rollback(True)
+                return Response(e.payload, status=409)
             except ValueError as e:
+                transaction.set_rollback(True)
                 return Response({'error': str(e)}, status=400)
 
     # Files actualitzades del POM (mirall de 'linies' de /propagar): {id, valor_real} per talla.
@@ -1931,10 +1955,16 @@ def grading_status_view(request, model_id):
     sf = _resolve_working_size_fitting(model)
     gv = vigent_grading_version(sf) if sf else None
     te_dades = bool(gv and GradedSpec.objects.filter(grading_version=gv).exists())
+    # G6-B2: si la versió vigent està SEGELLADA, aquí es diu també si encara diu la veritat. És la
+    # superfície on es decideix propagar, i propagar sobre un segell que ja ha quedat enrere no és
+    # el mateix acte que propagar sobre un de fresc — qui ho decideix ho ha de saber abans, no
+    # després.
+    from fhort.fitting.staleness import com_a_dict, estalitud
     return Response({
         'te_dades_propagades': te_dades,
         'segellada': bool(gv and gv.aprovada),
         'version_number': gv.version_number if gv else None,
+        'estalitud': com_a_dict(estalitud(gv)) if gv else None,
     })
 
 

@@ -31,3 +31,10 @@ reportlab==4.5.1
 # Normalització del logo de l'emissor: rasteritza SVG → PNG per a la capçalera dels documents.
 # Depèn de la lib nativa libcairo2 (ja al sistema); només s'importa a l'upload del logo.
 cairosvg==2.9.0
+
+# --- Motor de patrons (S1): lectura/escriptura de DXF-AAMA ---
+# Nucli del parser. Preserva els tags desconeguts del DXF, que és el que permet
+# reproduir l'empremta del CAD d'origen en exportar. Arrossega numpy, fonttools i
+# pyparsing; NO s'instal·la l'extra "draw" (portaria matplotlib + Qt: el render SVG
+# el fem nosaltres des del model geomètric intern).
+ezdxf==1.4.4

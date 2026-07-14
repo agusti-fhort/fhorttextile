@@ -1,7 +1,7 @@
 import React, { useEffect, useState, lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useParams, useSearchParams, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import useAuthStore from './store/auth'
+import useAuthStore, { AUTH_DESCONEGUT, AUTH_VALID } from './store/auth'
 import Login from './pages/Login'
 import Shell from './components/layout/Shell'
 
@@ -41,6 +41,7 @@ const BulkImportWizard = lazy(() => import('./pages/BulkImportWizard'))
 const ModelFabric = lazy(() => import('./pages/ModelFabric'))
 const ModelSheet = lazy(() => import('./pages/ModelSheet'))
 const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
+const TallerPatro = lazy(() => import('./pages/TallerPatro'))
 const TechSheetEntry = lazy(() => import('./pages/TechSheetEntry'))
 const DissenyPlaceholder = lazy(() => import('./pages/DissenyPlaceholder'))
 const ItemAuthoring = lazy(() => import('./pages/ItemAuthoring'))
@@ -54,9 +55,36 @@ const PlanningCalendar = lazy(() => import('./pages/PlanningCalendar'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const PaperKonvaPoc = lazy(() => import('./pages/PaperKonvaPoc'))
 
+/**
+ * El guard de ruta (D10).
+ *
+ * **Mentre no se sap si hi ha sessió, NO es decideix.** Abans, el guard llegia un booleà que
+ * arrencava a `false` i redirigia al primer render; i `initAuth()` —que és qui llegeix el
+ * token del localStorage— corre en un efecte del PARE, que React executa DESPRÉS dels efectes
+ * dels fills. O sigui que el `<Navigate>` del guard ja havia disparat quan la sessió es
+ * carregava. Resultat: un F5 sobre qualsevol ruta protegida t'escupia al login encara que la
+ * sessió fos perfectament vàlida.
+ *
+ * La cursa no es guanya corrent més: es guanya no corrent. Amb l'estat desconegut es pinta un
+ * buit d'un frame i s'espera. Un redirect no es pot desfer —canvia l'historial i perd la ruta
+ * de destí—, i per això el dubte MAI pot resoldre's cap a /login.
+ *
+ * I quan sí que cal rebotar, es rebota dient D'ON: el `from` és el que permet que, en entrar,
+ * la persona torni allà on anava i no al taulell.
+ */
 function ProtectedRoute({ children }) {
-  const isAuthenticated = useAuthStore(s => s.isAuthenticated)
-  return isAuthenticated ? children : <Navigate to="/login" replace />
+  const estatAuth = useAuthStore(s => s.estatAuth)
+  const location = useLocation()
+
+  if (estatAuth === AUTH_DESCONEGUT) return <PantallaEspera />
+  if (estatAuth === AUTH_VALID) return children
+  return <Navigate to="/login" replace state={{ from: location }} />
+}
+
+/** El frame que dura el dubte. Buit a posta: un espinner que parpelleja a cada F5 fa més nosa
+ *  que servei, i això no és una càrrega —és una lectura de localStorage. */
+function PantallaEspera() {
+  return <div style={{ minHeight: '100vh', background: 'var(--bg-page)' }} />
 }
 
 // v2/J1: el Size Check antic es jubila. /size-check redirigeix al TAB Mesures del ModelSheet,
@@ -229,6 +257,14 @@ export default function App() {
             <TechSheetEditor />
           </ProtectedRoute>
         } />
+        {/* W2 — Taller de patró: FORA del Shell, com l'editor .ftt. És una eina a pantalla
+            completa (el canvas mana), no una pàgina del menú. `?file=` tria el PatternFile;
+            sense param, s'obre el vigent del model. */}
+        <Route path="/models/:id/patro/taller" element={
+          <ProtectedRoute>
+            <TallerPatro />
+          </ProtectedRoute>
+        } />
         <Route path="/" element={
           <ProtectedRoute>
             <Shell />
@@ -297,9 +333,10 @@ export default function App() {
           <Route path="poms" element={<POMs />} />
           <Route path="poms/grading" element={<GradingRuleSets />} />
           <Route path="size-library" element={<SizeLibrary />} />
-          {/* Grup Disseny (F6): documents .ftt i patró DXF. Placeholders fins als sprints propis. */}
+          {/* Grup Disseny (F6): documents .ftt. Placeholder fins al seu sprint propi.
+              La ruta "disseny/patro-dxf" s'ha retirat a S5: era un placeholder buit i el
+              motor de patrons ja viu al tab "Patró" de la fitxa del model. */}
           <Route path="disseny/documents" element={<DissenyPlaceholder titleKey="nav.documents" icon="ti-file-text" />} />
-          <Route path="disseny/patro-dxf" element={<DissenyPlaceholder titleKey="nav.patro_dxf" icon="ti-vector" />} />
           <Route path="disseny/poc-paper" element={<PaperKonvaPoc />} />
           <Route path="onboarding" element={<OnboardingWizard />} />
           <Route path="configuracio/general" element={<GeneralConfig />} />

@@ -4,6 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
+from fhort.pom.services import SealedGradingVersionError
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -17,6 +19,9 @@ def close_base_view(request, sf_id):
         from fhort.pom.services import close_base
         result = close_base(int(sf_id), request.user.id)
         return Response(result)
+    except SealedGradingVersionError as e:
+        # G6-B/T1 · camí 5/6 (close_base regenera les talles abans de tancar la base).
+        return Response(e.payload, status=status.HTTP_409_CONFLICT)
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
@@ -39,6 +44,9 @@ def regenerate_sizes_view(request, sf_id):
             'graded_specs_actualitzats': n,
             'missatge': f'{n} especificacions actualitzades',
         })
+    except SealedGradingVersionError as e:
+        # G6-B/T1 · camí 4/6. "Regenerar talles" era el camí més directe per reescriure un segell.
+        return Response(e.payload, status=status.HTTP_409_CONFLICT)
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:

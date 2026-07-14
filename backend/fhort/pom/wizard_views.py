@@ -8,6 +8,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 
+from fhort.pom.services import SealedGradingVersionError, _te_regles
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DESIGN FREEZE
@@ -263,12 +265,20 @@ def confirm_base_size_view(request, model_id):
 
         # Generate sizes if there is a grading_rule_set and size_run_model
         grading_generated = 0
-        if model.grading_rule_set_id and model.size_run_model and model.base_size_label:
+        # G6-A/T2: `_te_regles` (residents O set), no el punter. Aquest caller es va quedar amb la
+        # còpia vella del gate i saltava la graduació als models de regla resident, en silenci.
+        if _te_regles(model) and model.size_run_model and model.base_size_label:
             try:
                 from fhort.pom.services import generate_graded_specs
                 grading_generated = generate_graded_specs(sf.id)
                 sf.estat = 'TallesGenerades'
                 sf.save(update_fields=['estat'])
+            except SealedGradingVersionError as e:
+                # G6-B/T1 · camí 6/6. Aquest `except Exception` de sota es limitava a fer un
+                # WARNING i retornar 200: sobre una versió segellada, el rebuig del guard hauria
+                # passat per un "no s'ha pogut graduar" al log i l'usuari hauria vist un OK. El
+                # segell ha de ser visible a qui l'ha trobat, no només al fitxer de logs.
+                return Response(e.payload, status=409)
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).warning(f"Grading not generated: {e}")

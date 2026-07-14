@@ -53,31 +53,6 @@ function readPrefill() {
 }
 
 // Parse d'una taula enganxada des d'Excel (tab) o CSV: 1a fila = capçalera (POM | talles...).
-function parseTable(text) {
-  const lines = (text || '').trim().split(/\r?\n/).filter(l => l.trim())
-  if (lines.length < 2) return { sizeLabels: [], taula: [] }
-  // Separador detectat UN COP des del header: TAB o ';' deixen la coma lliure com a
-  // decimal (10,5); només CSV pur usa la coma com a separador de columna. Evita trencar
-  // decimals europeus, que /\t|,|;/ partia (10,5 → 10 i 5).
-  const sep = /\t/.test(lines[0]) ? '\t' : (/;/.test(lines[0]) ? ';' : ',')
-  const splitCols = (l) => l.split(sep).map(c => c.trim())
-  const header = splitCols(lines[0])
-  const sizeLabels = header.slice(1).filter(Boolean)
-  const taula = lines.slice(1).map(l => {
-    const cells = splitCols(l)
-    const valors = {}
-    sizeLabels.forEach((lbl, i) => {
-      const v = cells[i + 1]
-      if (v !== undefined && v !== '') {
-        const num = parseFloat(v.replace(',', '.'))
-        if (!isNaN(num)) valors[lbl] = num
-      }
-    })
-    return { pom_codi_client: cells[0], valors }
-  }).filter(r => r.pom_codi_client)
-  return { sizeLabels, taula }
-}
-
 export default function SizeMapSetup() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -327,15 +302,6 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
     setGradingAvisos(data?.avisos || [])
   }
 
-  const calcGrading = () => {
-    setErr(null); setGradingAvisos([]); setBusy(true)
-    const { taula } = parseTable(wiz.gradingText)
-    sizeMap.gradingPreview({ size_system_id: wiz.size_system_id, base_size: wiz.base_size, taula, customer_codi: wiz.customer_codi })
-      .then(r => applyGradingData(r.data))
-      .catch(e => setErr(e?.response?.data?.error || t('size_map_grading_err')))
-      .finally(() => setBusy(false))
-  }
-
   // P4 alternatiu → pujada de fitxer (Excel/PDF/imatge): reusa el motor d'extracció del model.
   const calcGradingFromFile = (fileObj) => {
     if (!fileObj) return
@@ -376,7 +342,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           incompleta: !!g.incompleta, missing_sizes: g.missing_sizes || [] }
         // valors_step és l'ORIGEN del break: enviar-lo sempre que el preview el va produir
         // (també per LINEAR amb break, p.ex. CHEST) perquè el create en derivi base+break.
-        let vs = null
+        let vs
         try { vs = g.valors_step_text ? JSON.parse(g.valors_step_text) : (g.valors_step || null) } catch { vs = g.valors_step || null }
         if (vs && Object.keys(vs).length) row.valors_step = vs
         if (g.logica !== 'STEP') row.increment = Number(g.increment) || 0

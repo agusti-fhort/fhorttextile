@@ -28,11 +28,25 @@ class SizeFittingSerializer(serializers.ModelSerializer):
 
 class GradingVersionSerializer(serializers.ModelSerializer):
     creat_per_nom = serializers.CharField(source='creat_per.nom_complet', read_only=True)
+    #: G6-B2 — L'ESTALITUD. Una versió aprovada pot haver quedat enrere (la base ha canviat sota el
+    #: segell), i el sistema ho ha de DIR: la mesura és sobirana i el segell és honest, i el preu de
+    #: no mentir per cap dels dos costats és que algú s'ha d'assabentar. Es CALCULA a cada lectura
+    #: sobre el registre append-only de canvis de base — no es desa, perquè un flag desat tornaria a
+    #: ser una cosa més que es pot quedar estala.
+    estalitud = serializers.SerializerMethodField()
+
+    def get_estalitud(self, obj):
+        from fhort.fitting.staleness import com_a_dict, estalitud
+        return com_a_dict(estalitud(obj))
 
     class Meta:
         model = GradingVersion
         fields = '__all__'
-        read_only_fields = ('data',)
+        # G6-B/T2 — el segell NO és un camp editable. El viewset ja és ReadOnly, però el pany de
+        # dalt és el que es descuida: el dia que algú hi torni a posar un ModelViewSet (era el que
+        # hi havia), aquests camps han de seguir sense poder-se flipar per REST. `aprovada` només
+        # l'escriu `seal_grading_version`, via l'acció `approve` (capability CLOSE_GATES).
+        read_only_fields = ('data', 'aprovada', 'aprovada_per', 'data_aprovacio', 'is_active')
 
 
 class POMAlertSerializer(serializers.ModelSerializer):

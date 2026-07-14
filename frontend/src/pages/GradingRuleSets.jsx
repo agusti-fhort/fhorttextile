@@ -192,7 +192,6 @@ export default function GradingRuleSets() {
     })
   }, [enrichedRuleSets, selectedTarget, selectedConstruction, selectedFit, selectedGarmentGroup, garmentGroupCodiById])
 
-  const name = (obj) => lang === 'ca' ? obj.nom_ca : obj.nom_en
 
   const totalRegles = useMemo(
     () => allRuleSets.reduce((s, rs) => s + (rs.regles_count ?? rs.regles?.length ?? 0), 0),

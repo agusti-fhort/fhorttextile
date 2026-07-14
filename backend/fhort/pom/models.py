@@ -249,8 +249,14 @@ class CustomerPOMAlias(models.Model):
     customer = models.ForeignKey(
         'tasks.Customer', on_delete=models.PROTECT, related_name='pom_aliases',
         db_constraint=False)
+    # NULLABLE (QA-S8-R1): un àlies SENSE pom és vocabulari del client encara PENDENT DE MAPAR.
+    # És un estat legítim del domini, no una dada incompleta: el client anomena una mesura i
+    # encara no sabem a quin POM canònic correspon (o el mapatge que teníem era FALS i s'ha
+    # desvinculat). El matcher no els mira (find_pom_master filtra `pom__isnull=False`): un
+    # àlies sense destí no pot vincular res. (Migració 0037.)
     pom = models.ForeignKey(
-        POMMaster, on_delete=models.CASCADE, related_name='client_aliases')
+        POMMaster, on_delete=models.CASCADE, related_name='client_aliases',
+        null=True, blank=True)
     client_code = models.CharField(max_length=60)
     # OBSOLET (TODO): camp de descripció únic heretat. Substituït per description_en +
     # description_local. Es manté la columna (migració 0035 hi va bolcar el contingut propi
@@ -279,7 +285,8 @@ class CustomerPOMAlias(models.Model):
         ]
 
     def __str__(self):
-        return f'{self.customer.codi}:{self.client_code} → {self.pom.codi_client}'
+        desti = self.pom.codi_client if self.pom_id else '(pendent de mapar)'
+        return f'{self.customer.codi}:{self.client_code} → {desti}'
 
 
 class SizeSystem(models.Model):
@@ -639,22 +646,18 @@ class GradingRule(models.Model):
 # BaseMeasurement lives in models_app (FK Model), GradedSpec lives in fitting (FK GradingVersion).
 # ─────────────────────────────────────────────────────────────────────────────
 
-class GradingException(models.Model):
-    """Specific override per (POM, size) within a GradingRuleSet."""
-    rule_set = models.ForeignKey(GradingRuleSet, on_delete=models.CASCADE, related_name='exceptions')
-    pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='grading_exceptions')
-    size_label = models.CharField(max_length=20)
-    value_cm = models.FloatField()
-    is_active = models.BooleanField(default=True)
-    notes = models.TextField(null=True, blank=True)
-
-    class Meta:
-        verbose_name = 'Excepció de grading'
-        verbose_name_plural = 'Excepcions de grading'
-        unique_together = [('rule_set', 'pom', 'size_label')]
-
-    def __str__(self):
-        return f'{self.rule_set.nom} · {self.pom.codi_client} @ {self.size_label}'
+# G6/1a — `GradingException` JUBILADA (2026-07-13, DIAGNOSI_G6_DUAL_PATH §B2.1).
+#
+# Era una excepció per (POM, talla) penjada del GradingRuleSet — o sigui, d'una PLANTILLA
+# COMPARTIDA: qualsevol model que fes servir aquell set l'heretava. El seu substitut viu és
+# `models_app.ModelGradingOverride`, que neix acotat a UN model, i el docstring d'aquell ja
+# declarava per escrit que existia per rellevar-la ("UNLIKE pom.GradingException, which lives
+# on the shared GradingRuleSet (a template) and would leak to every model using that set").
+#
+# La substitució estava feta; el mort no s'havia enterrat. En jubilar-la: 0 files a la BD (als
+# DOS schemes), cap escriptor a l'aplicació (cap viewset, cap serializer, cap URL, zero hits als
+# dos frontends) — només seeds i l'importador legacy. El que es mata de debò és una BRANCA del
+# fork de precedència del motor (`pom/services.py`), que tenia dues de les tres branques mortes.
 
 
 class ClientMesuraPerfil(models.Model):

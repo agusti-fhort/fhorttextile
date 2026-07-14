@@ -134,98 +134,307 @@ def _excel_to_text(file_bytes: bytes) -> str:
     return '\n'.join(lines)
 
 
-def _parse_excel_poms(file_bytes: bytes):
+# ═══════════════ Parser determinista d'Excel — perfil "spec sheet" ═══════════════
+# QA-S8 · FIX C (DIAGNOSI_QA_S8_IMPORT §D1c). El parser anterior cercava el codi a la
+# COLUMNA A i abdicava sempre que la taula no hi comencés — que és el cas de totes les
+# fitxes reals que tenim (la taula Brownie viu de la B a la H i la columna A és buida de
+# dalt a baix). Aquest perfil ancora la taula pel CONTINGUT de la capçalera i mapa les
+# columnes per ETIQUETA, no per índex.
+
+#: Etiquetes que ANCOREN la capçalera. La columna on viuen no importa: és el contingut
+#: qui mana (D1c·1). Calen totes dues famílies a la mateixa fila per considerar-la capçalera.
+_ETIQ_CODI = {'CODE', 'CODI', 'POM', 'POM CODE'}
+_ETIQ_DESC = {'DESCRIPTION', 'DESCRIPCIO', 'DESCRIPCIÓ', 'DESC', 'ENGLISH'}
+
+#: Columnes de SERVEI: tenen etiqueta però NO són talles (D1c·6). Sense aquesta llista,
+#: 'SAMPLE', 'ADJUSTMENTS' i 'COMMENTS' entrarien com si fossin tres talles més.
+_ETIQ_SERVEI = _ETIQ_CODI | _ETIQ_DESC | {
+    'GRADING', 'DIM', 'SAMPLE', 'SAMPLE SIZE', 'ADJUSTMENTS', 'ADJUSTMENT',
+    'COMMENTS', 'COMMENT', 'NOTES', 'NOTE', 'REMARKS', 'MEASUREMENT', 'MEASUREMENTS',
+}
+
+#: Una etiqueta de TALLA: lletres (S/M/L/XL/XXL/2XL), numèrica (34/36), edat (6M/8Y) o T2.
+_RE_TALLA = _re.compile(r'^(?:X*[SL]|M|\d+X[SL]|\d{1,3}(?:[.,]\d{1,2})?|\d{1,2}\s*[MYA]|T\d{1,2})$',
+                        _re.I)
+
+#: Un CODI de POM: curt i sense espais interns (A, D, G1, EK2, U2, LZ1, SF). El que no hi
+#: encaixa i seu a la columna del codi és un BANNER ('SKETCH WITH CODES'), no un POM (D1c·5).
+_RE_CODI = _re.compile(r'^[A-Za-z0-9][A-Za-z0-9.\-/]{0,7}$')
+
+#: Metadades del bloc superior (B2:B7 a la fitxa Brownie) → claus del `header`, les MATEIXES
+#: que retorna la via Opus (extraction_prompt.py), perquè els dos camins parlin igual.
+_META_HEADER = {
+    'BRAND': 'brand',
+    'NAME STYLE': 'style_name',
+    'STYLE NAME': 'style_name',
+    'STYLE': 'style_name',
+    'COLOR': 'color',
+    'COLOUR': 'color',
+    'SEASON': 'season',
+    'DATE': 'date',
+    'STYLE NO': 'style_reference',
+    'REF': 'style_reference',
+    'REFERENCE': 'style_reference',
+}
+
+#: Files amb codi I valor a la talla base que calen per donar la taula per ENTESA. Per sota
+#: d'això el parser abdica: tres files coherents són la prova mínima que hem trobat una taula
+#: de mesures de debò i no un bloc qualsevol amb text a sobre.
+_MIN_FILES_ENTESA = 3
+
+
+def _num(v):
+    """float si v és numèric (accepta coma decimal); None altrament."""
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return float(str(v).strip().replace(',', '.'))
+    except (ValueError, TypeError):
+        return None
+
+
+def _etiqueta(v):
+    """Text d'una cel·la de capçalera, normalitzat per COMPARAR (majúscules, espais collapsats)."""
+    if v is None:
+        return ''
+    return ' '.join(str(v).split()).upper()
+
+
+def _valor_meta(v):
+    """Valor d'una cel·la del bloc de metadades, com a text net."""
+    if v is None:
+        return ''
+    if isinstance(v, _dt.datetime):
+        return v.date().isoformat()
+    if isinstance(v, _dt.date):
+        return v.isoformat()
+    return str(v).strip()
+
+
+def _files_banner(ws, ci_codi):
+    """Files (1-indexades) tapades per un bloc FUSIONAT ample — sketch, comentaris, peus.
+
+    D1c·5 i bandera 4: la fitxa Brownie té `B39:H39` (el rètol 'SKETCH WITH CODES') i tres
+    blocs grans (`B40:H67`, `B70:H97`, `B100:H127`). Un parser que no els talli recorre fins
+    a la fila 127 i s'empassa el sketch com si fossin POMs. Un merge d'UNA columna (les
+    capçaleres verticals `B9:B10`) NO és un banner: només compten els que travessen la taula.
+    """
+    banner = set()
+    for rang in ws.merged_cells.ranges:
+        ample = rang.max_col - rang.min_col + 1
+        if ample >= 3 and rang.min_col <= ci_codi + 1 <= rang.max_col:
+            banner.update(range(rang.min_row, rang.max_row + 1))
+    return banner
+
+
+def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
     """Parse determinista d'una fitxa Excel de POMs (via ràpida del wizard).
 
-    Cerca la fila capçalera (cel·la A == 'POM') i en llegeix: A=codi, C=descripció,
-    D=DIM, i de la col E endavant les columnes de talla (excloent les que la capçalera
-    marca com a tolerància, 'tol'). Retorna (poms, talles):
-      poms  = [{'codi_fitxa', 'descripcio', 'dim', 'values': {talla: float}}]
-      talles = [etiquetes de talla, en ordre]
-    Si no troba cap capçalera 'POM', retorna ([], [])."""
+    Retorna `(poms, talles, meta)`:
+      poms  = [{'codi_fitxa', 'descripcio', 'dim', 'values': {talla: float}, 'tol_*'}]
+      talles = [etiquetes de talla, en ordre de columna]
+      meta  = {'header', 'base_size', 'full', 'n_files_amb_codi', 'motiu'}
+
+    ⚠️ **PORTA D'ABDICACIÓ — la llei d'aquest parser** (DIAGNOSI_QA_S8_IMPORT, risc de D1c).
+    El contracte del wizard és "si el parser no en treu res, cau a la IA". Un parser més
+    llest però EQUIVOCAT ja no cau: substitueix la IA **en silenci** i escriu dades dolentes.
+    Això és pitjor que el defecte que arregla. Per tant aquesta funció només retorna files
+    quan pot DEMOSTRAR que ha entès la taula:
+
+      1. capçalera ancorada per CONTINGUT — una fila amb una etiqueta de CODI *i* una de
+         DESCRIPCIÓ (a la columna que sigui);
+      2. columna de TALLA BASE identificada — el `SAMPLE SIZE` de les metadades (o el
+         `base_hint` del model) ha de correspondre a una columna de talla REAL; i
+      3. almenys `_MIN_FILES_ENTESA` files amb codi *i* valor numèric a aquella talla base.
+
+    Si qualsevol de les tres falla, retorna `([], [], meta)` amb el motiu, i el caller cau
+    a la IA **com fins ara**. La prova es fa full per full: en un llibre de diverses pestanyes
+    guanya la primera que la passa (a la fitxa Rosalia això descarta 'PROTO COMMENTS' —que té
+    la columna de la talla base BUIDA— i tria 'RECTI 1 COMMENTS', que és on hi ha les mesures).
+
+    `meta['n_files_amb_codi']` és el nombre de files de POM que el document conté de debò.
+    Serveix per al Fix D encara que s'abdiqui: si la IA en retorna menys, algú ho ha de dir
+    (la fitxa del Tate té 26 POMs i la IA en va perdre un, 'JJ', sense cap avís).
+    """
     import openpyxl
 
-    def _num(v):
-        """float si v és numèric (accepta coma decimal); None altrament."""
-        if v is None or isinstance(v, bool):
-            return None
-        if isinstance(v, (int, float)):
-            return float(v)
-        try:
-            return float(str(v).strip().replace(',', '.'))
-        except (ValueError, TypeError):
-            return None
+    meta = {'header': {}, 'base_size': None, 'full': None,
+            'n_files_amb_codi': 0, 'motiu': 'cap full amb capçalera de POMs reconeixible'}
+    run_canonic = {canonical_size_label(t) for t in (run_hint or []) if str(t).strip()}
 
-    wb = openpyxl.load_workbook(_io.BytesIO(file_bytes), data_only=True, read_only=True)
+    # read_only=False: els merges (D1c·3 i ·5) NO es poblen en mode read_only, i sense ells
+    # no es poden ni compondre les capçaleres dobles ni tallar els blocs del sketch.
+    wb = openpyxl.load_workbook(_io.BytesIO(file_bytes), data_only=True)
     try:
         for ws in wb.worksheets:
             rows = list(ws.iter_rows(values_only=True))
-            header_idx = None
+
+            # ── 1. Ancorar la capçalera pel CONTINGUT (D1c·1): la fila que porta alhora una
+            # etiqueta de codi i una de descripció. La columna on caiguin és la que sigui.
+            header_idx = ci_codi = ci_desc = None
             for idx, row in enumerate(rows):
-                a = row[0] if row else None
-                if a is not None and str(a).strip().upper() == 'POM':
-                    header_idx = idx
+                codi_ci = desc_ci = None
+                for ci, cell in enumerate(row):
+                    et = _etiqueta(cell)
+                    if codi_ci is None and et in _ETIQ_CODI:
+                        codi_ci = ci
+                    elif desc_ci is None and et in _ETIQ_DESC:
+                        desc_ci = ci
+                if codi_ci is not None and desc_ci is not None:
+                    header_idx, ci_codi, ci_desc = idx, codi_ci, desc_ci
                     break
             if header_idx is None:
                 continue
 
-            header = rows[header_idx]
-            # Columnes de talla: col E (índex 4) endavant. B2: les columnes de tolerància
-            # ('tol') ja NO es descarten — es capturen com a tol_minus/tol_plus. Una sola
-            # columna 'Tol' (sense signe) → mateix valor a minus i plus (simètrica).
-            size_cols = []  # [(col_index, label)]
+            # ── 2. Capçalera DOBLE amb merges (D1c·3). Els merges verticals (B9:B10) només
+            # porten valor a la cel·la de dalt; les etiquetes NO fusionades de la segona fila
+            # (C10='ENGLISH', F10='RECTI 1') són pròpies. Regla: mana la primera fila, la
+            # segona només omple els buits.
+            etiquetes = {ci: _etiqueta(c) for ci, c in enumerate(rows[header_idx])}
+            if header_idx + 1 < len(rows):
+                seguent = rows[header_idx + 1]
+                if not _etiqueta(seguent[ci_codi] if ci_codi < len(seguent) else None):
+                    for ci, cell in enumerate(seguent):
+                        if not etiquetes.get(ci):
+                            etiquetes[ci] = _etiqueta(cell)
+
+            # ── 3. Mapa de columnes per ETIQUETA (D1c·2 i ·6). Una columna és de TALLA si té
+            # etiqueta, no és de servei, no és de tolerància, i sembla una talla (o és al run
+            # del model). Així 'SAMPLE', 'ADJUSTMENTS' i 'COMMENTS' es queden fora.
+            size_cols, dim_ci = [], None
             tol_minus_ci = tol_plus_ci = tol_single_ci = None
-            for ci in range(4, len(header)):
-                label = header[ci]
-                if label is None or str(label).strip() == '':
+            for ci, et in sorted(etiquetes.items()):
+                if not et or ci in (ci_codi, ci_desc):
                     continue
-                low = str(label).strip().lower()
-                if 'tol' in low:
-                    if '-' in low or 'min' in low:
+                if 'TOL' in et:
+                    # B2: les columnes de tolerància es capturen (tol_minus/tol_plus). Una sola
+                    # columna 'Tol' sense signe → mateix valor als dos costats (simètrica).
+                    if '-' in et or 'MIN' in et:
                         tol_minus_ci = ci
-                    elif '+' in low or 'plus' in low or 'max' in low:
+                    elif '+' in et or 'PLUS' in et or 'MAX' in et:
                         tol_plus_ci = ci
                     else:
                         tol_single_ci = ci
                     continue
-                size_cols.append((ci, str(label).strip()))
-            talles = [lbl for _, lbl in size_cols]
+                if et == 'DIM':
+                    dim_ci = ci
+                    continue
+                if et in _ETIQ_SERVEI:
+                    continue
+                if _RE_TALLA.match(et) or canonical_size_label(et) in run_canonic:
+                    # L'etiqueta que es desa és la del document tal com hi surt (l'etiqueta
+                    # del tenant la posa el reconcile de W5); `et` és només per comparar.
+                    crua = rows[header_idx][ci] if ci < len(rows[header_idx]) else None
+                    size_cols.append((ci, str(crua).strip() if crua is not None else et))
+            if not size_cols:
+                meta['motiu'] = f"full '{ws.title}': cap columna de talla reconeguda"
+                continue
+
+            # ── 4. Bloc de metadades (B2:B7) — el bonus barat de D1c. Etiqueta a la columna del
+            # codi, valor a la de la descripció. D'aquí surt el SAMPLE SIZE, que és qui diu quina
+            # és la TALLA BASE del document (D1c·6): mai "la primera columna".
+            header_meta = {}
+            sample_size = None
+            for row in rows[:header_idx]:
+                clau = _etiqueta(row[ci_codi] if ci_codi < len(row) else None)
+                valor = _valor_meta(row[ci_desc] if ci_desc < len(row) else None)
+                if not clau or not valor:
+                    continue
+                if clau == 'SAMPLE SIZE':
+                    sample_size = valor
+                elif clau in _META_HEADER:
+                    header_meta[_META_HEADER[clau]] = valor
+
+            # ── 5. La TALLA BASE. Si el document (o el model) la declara, ha de correspondre a
+            # una columna de talla real: si no hi és, hem entès malament la taula → abdicar.
+            # Si ningú no la declara, la base és la primera talla (contracte del parser antic).
+            base_label = (sample_size or base_hint or '').strip()
+            base_ci = None
+            if base_label:
+                canon = canonical_size_label(base_label)
+                base_ci = next((ci for ci, lbl in size_cols
+                                if canonical_size_label(lbl) == canon), None)
+                if base_ci is None:
+                    meta['motiu'] = (f"full '{ws.title}': la talla base '{base_label}' no té "
+                                     f"columna a la taula")
+                    continue
+            else:
+                base_ci, base_label = size_cols[0][0], size_cols[0][1]
+
+            # ── 6. Files de dades. Tres menes de fila que NO són POMs:
+            #   · SECCIÓ ('Bodice:', 'Cord:') → codi buit + descripció plena. SALTAR, mai `break`
+            #     (D1c·4: el parser antic hi feia `break` i es quedava amb zero files).
+            #   · BANNER ('SKETCH WITH CODES') i blocs fusionats → FI DE TAULA (D1c·5).
+            #   · fila buida → saltar.
+            banner = _files_banner(ws, ci_codi)
 
             def _cell(row, ci):
                 return _num(row[ci]) if (ci is not None and ci < len(row)) else None
 
             poms = []
-            for row in rows[header_idx + 1:]:
-                a = row[0] if row else None
-                if a is None or str(a).strip() == '':
-                    break  # fi del bloc de dades
+            for idx in range(header_idx + 1, len(rows)):
+                row = rows[idx]
+                if (idx + 1) in banner:
+                    break
+                codi = str(row[ci_codi]).strip() if (ci_codi < len(row)
+                                                     and row[ci_codi] is not None) else ''
+                if not codi:
+                    continue                      # secció, capçalera-2, o fila buida
+                if not _RE_CODI.match(codi):
+                    break                         # rètol ('SKETCH WITH CODES') → fi de taula
+                desc = (str(row[ci_desc]).strip()
+                        if (ci_desc < len(row) and row[ci_desc] is not None) else '')
                 values = {}
                 for ci, lbl in size_cols:
-                    if ci < len(row):
-                        nv = _num(row[ci])
-                        if nv is not None:
-                            values[lbl] = nv
-                tm = _cell(row, tol_minus_ci)
-                tp = _cell(row, tol_plus_ci)
+                    nv = _cell(row, ci)
+                    if nv is not None:
+                        values[lbl] = nv
+                if not desc and not values:
+                    continue                      # codi solt sense res: soroll, no un POM
+                tm, tp = _cell(row, tol_minus_ci), _cell(row, tol_plus_ci)
                 ts = _cell(row, tol_single_ci)
                 if ts is not None:
-                    if tm is None:
-                        tm = ts
-                    if tp is None:
-                        tp = ts
-                desc = row[2] if len(row) > 2 and row[2] is not None else ''
+                    tm = ts if tm is None else tm
+                    tp = ts if tp is None else tp
                 poms.append({
-                    'codi_fitxa': str(a).strip(),
-                    'descripcio': str(desc).strip(),
-                    'dim': _num(row[3]) if len(row) > 3 else None,
+                    'codi_fitxa': codi,           # D1c·7: 'D ' → 'D' (strip)
+                    'descripcio': desc,
+                    'dim': _cell(row, dim_ci),
                     'values': values,
                     'tol_minus': tm,
                     'tol_plus': tp,
                 })
-            return poms, talles
+
+            # ── 7. LA PORTA. ¿Podem demostrar que hem entès la taula? Files amb codi I valor a
+            # la talla base. Si no arriben a _MIN_FILES_ENTESA, aquest full no és una taula de
+            # mesures que sapiguem llegir: abdiquem i que la IA hi digui la seva.
+            # El recompte de files sobreviu a l'abdicació a PROPÒSIT: si aquest full s'ha
+            # entès prou per comptar-ne les files però no per fiar-se'n, la IA se n'ocuparà
+            # — i el Fix D encara ha de poder dir "el document en tenia N i n'has tret menys".
+            meta['n_files_amb_codi'] = max(meta['n_files_amb_codi'], len(poms))
+
+            amb_base = sum(1 for p in poms if base_label in p['values'])
+            if amb_base < _MIN_FILES_ENTESA:
+                meta['motiu'] = (f"full '{ws.title}': només {amb_base} fila(es) amb valor a la "
+                                 f"talla base '{base_label}' (en calen {_MIN_FILES_ENTESA})")
+                continue
+
+            meta.update({
+                'header': header_meta,
+                'base_size': base_label,
+                'full': ws.title,
+                # Files de POM que el document conté DE DEBÒ (Fix D). Aquí és igual a len(poms):
+                # el parser no en deixa caure cap — una fila sense valor a la talla base ('JJ')
+                # és un POM legítim (BaseMeasurement.base_value_cm és null=True), no un descart.
+                'n_files_amb_codi': len(poms),
+                'motiu': None,
+            })
+            return poms, [lbl for _, lbl in size_cols], meta
     finally:
         wb.close()
-    return [], []
+    return [], [], meta
 
 
 def _cribratge_content_block(file_bytes: bytes, filename: str, content_type: str) -> dict:
@@ -527,8 +736,10 @@ def find_pom_master(code, description, customer=None):
           (context sense client) se salta. El `client_code` d'un àlies pot ser un codi posicional
           (LOS 'H.6') O el text de la descripció del client (BRW 'front armhole curve') → es prova
           contra `code` I contra `description`.
+          ⚠️ Un àlies amb `pendent_revisio=True` **NO auto-vincula** (v. sota, QA-S8-R1).
       (b) descripció + sinònims canònics → HIGH/MEDIUM (nom_client, POMGlobal.nom_en).
       (c) codi numèric + 'lining' → MEDIUM.
+      (c-bis) l'àlies PENDENT DE REVISIÓ, com a darrer suggeriment → LOW (mai auto-vincle).
       (d) FALLBACK TRANSITORI (deprecació — objectiu de la diagnosi: treure `codi_client` del
           matcher): `codi_client` exacte i root-prefix → LOW. Amb el llindar d'auto-vinculació
           (c2b19bd) un LOW NO auto-vincula: cau a pendents amb el suggeriment visible. Abans
@@ -541,12 +752,31 @@ def find_pom_master(code, description, customer=None):
 
     # (a) Àlies de nomenclatura del client. Va PRIMER: un codi/descripció reclamat explícitament
     # per un àlies d'AQUEST customer mana sobre qualsevol heurística de descripció.
+    #
+    # ⚠️ QA-S8-R1 · LA PORTA DEL MATCHER. Un àlies marcat `pendent_revisio` és un àlies del qual
+    # el sistema DESCONFIA: el guard d'aprenentatge (pom/services.py) el marca així quan el POM
+    # que reclama ja el reclamava un ALTRE codi del mateix client — o sigui, quan o bé sobra, o
+    # bé una de les dues mesures acabarà sobre el POM equivocat. Un àlies del qual desconfiem no
+    # pot ser alhora la font de màxima confiança del matcher: seria marcar-lo per revisar i
+    # continuar creient-l'hi. Aquí es DEGRADA a suggeriment (c-bis), mai a auto-vincle.
+    #
+    # I no s'atura la cerca: es prova la resta d'estratègies, que poden trobar-hi un vincle bo
+    # de debò. L'àlies pendent només parla si no parla ningú altre.
+    #
+    # `pom__isnull=False` (QA-S8-R1): un àlies SENSE POM no és matchable — és vocabulari del
+    # client pendent de mapar (CustomerPOMAlias.pom és nullable, migració 0037). No té destí,
+    # així que no pot vincular res, i sense el filtre `alias.pom.actiu` petaria amb AttributeError.
+    alias_pendent = None
     if customer is not None:
         for key in (k for k in (code, desc_clean) if k):
             alias = (CustomerPOMAlias.objects
-                     .filter(customer=customer, client_code__iexact=key)
+                     .filter(customer=customer, client_code__iexact=key, pom__isnull=False)
                      .select_related('pom').first())
             if alias and alias.pom.actiu:
+                if alias.pendent_revisio:
+                    if alias_pendent is None:
+                        alias_pendent = alias.pom
+                    continue
                 return alias.pom, 'alias_match', 'HIGH'
 
     if desc_clean:
@@ -597,6 +827,14 @@ def find_pom_master(code, description, customer=None):
                 if 'lining' in nom:
                     return pm, 'numeric_lining_match', 'MEDIUM'
 
+    # (c-bis) L'ÀLIES PENDENT DE REVISIÓ (QA-S8-R1). Cap altra estratègia no ha trobat res ferm,
+    # així que ara sí que val la pena dir què reclamava aquell àlies del qual desconfiem — però
+    # com el que és: un SUGGERIMENT (LOW). El llindar (`_apply_match_threshold`) el deixarà a
+    # pendents amb el nom visible, i una persona decidirà. Va per damunt dels fallbacks de codi
+    # (d) perquè un àlies el va declarar algú d'aquest client; un root-prefix no l'ha declarat ningú.
+    if alias_pendent is not None:
+        return alias_pendent, 'alias_pendent_revisio', 'LOW'
+
     # (d) FALLBACK TRANSITORI — `codi_client` exacte. Abans era la 1a estratègia amb HIGH; ara és
     # penúltim recurs amb LOW (deprecació): l'àlies i la descripció manen. Un exacte que arriba
     # aquí no ha resolt per àlies ni per descripció → suggeriment feble, no auto-vinculació.
@@ -618,6 +856,160 @@ def find_pom_master(code, description, customer=None):
                 return pm, 'root_code_match', 'LOW'
 
     return None, 'no_match', 'NO_MATCH'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PORTES DE VINCULACIÓ (QA-S8, DIAGNOSI_QA_S8_IMPORT)
+#
+# Bessones de les de `pom/size_map_views.py:29,53` (importador de la Size Library), que
+# ja les tenia i que l'importador de MODELS no. La diagnosi va trobar el forat: el mateix
+# mode de fallada estava protegit en un importador i despullat a l'altre. No s'extreu un
+# helper compartit entre les dues apps (seria refactor fora d'abast); s'adapten aquí a les
+# claus de `poms_extrets` (`pom_master_id`/`pom_codi`/`pom_nom`) i el docstring diu d'on
+# vénen, perquè el dia que una de les dues canviï se sàpiga que hi ha una germana.
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: Un match per sota d'això NO auto-vincula. Un LOW (codi legacy, arrel del codi) és el
+#: darrer recurs del matcher, no una certesa: la fila cau a pendents amb el suggeriment
+#: visible i la persona decideix. Vincular en silenci amb confiança baixa és el que va
+#: fer que 'U2' i 'U3' (First/Last button) acabessin tots dos sobre el POM 'U'
+#: (Width sequins piece) — un disbarat que ningú no va veure perquè no es va dir.
+_POM_AUTOLINK_CONF = ('HIGH', 'MEDIUM')
+
+
+def _apply_match_threshold(pom, conf):
+    """El llindar: (pom, conf) → (pom_efectiu, weak_suggestion).
+
+    Per sota del llindar es desvincula i es torna el nom suggerit, perquè la UI el mostri
+    com a pendent. Mai una vinculació dubtosa en silenci.
+    """
+    if pom is not None and conf not in _POM_AUTOLINK_CONF:
+        return None, pom
+    return pom, None
+
+
+def _apply_many_to_one_guard(rows):
+    """Si DUES files del document resolen al MATEIX POM, **cap de les dues auto-vincula**.
+
+    `BaseMeasurement` és únic per `(model, pom)`: dues files que hi cauen col·lapsen, i la
+    segona sobreescriu la primera **en silenci** (W5, `update_or_create`). El símptoma que
+    va veure QA —una mesura del document que desapareix— surt exactament d'aquí.
+
+    ⚠️ **AQUÍ L'ÀLIES NO QUEDA EXEMPT, i la germana de `size_map_views.py:53` SÍ.** La
+    divergència és deliberada i és el moll de l'os:
+
+      · A `size_map` el destí és `GradingRule`, i que dos codis del client comparteixin un
+        POM hi és tolerable (Losan H.11 sleeve opening / H.16 cuff opening).
+      · Aquí el destí és `BaseMeasurement`, **únic per (model, pom)**. Dues files NO hi
+        caben. Per legítim que sigui l'àlies, la segona esborra la primera. L'exempció
+        importaria una premissa que en aquest destí no es compleix.
+
+    I no és teòric: al catàleg viu, el client BRW té els àlies `F` i `FF` (Centre FRONT
+    length i Centre BACK length — dues mesures distintes) tots dos cap al POM 389
+    'TOTAL LENGTH', i `U2`/`U3` (First/Last button) tots dos cap al 439 'Width sequins
+    piece'. Amb l'exempció posada, aquestes quatre files travessaven les dues portes amb
+    confiança HIGH i dues mesures del document s'esborraven a W5 sense dir res.
+
+    Un àlies dolent és un problema del catàleg i es resol al catàleg; el que aquesta porta
+    ha de garantir és que **no acabi sent una pèrdua de dades silenciosa**.
+
+    Muta `rows` in situ.
+    """
+    counts = {}
+    for r in rows:
+        if r.get('pom_master_id'):
+            counts[r['pom_master_id']] = counts.get(r['pom_master_id'], 0) + 1
+    dup_ids = {pid for pid, n in counts.items() if n >= 2}
+    if not dup_ids:
+        return rows
+
+    for r in rows:
+        if r.get('pom_master_id') in dup_ids:
+            # El suggeriment queda VISIBLE: la persona ha de poder veure a què s'assemblava.
+            r['weak_suggestion'] = r.get('pom_nom')
+            r['weak_suggestion_codi'] = r.get('pom_codi')
+            r['pom_master_id'] = None
+            r['pom_codi'] = None
+            r['pom_nom'] = None
+            r['many_to_one'] = True
+            r['actiu'] = False
+    return rows
+
+
+def _match_rows(files, customer):
+    """Files llegides del document → `poms_extrets`, amb les portes aplicades.
+
+    **Font ÚNICA de matching per als DOS camins d'extracció** (parser ràpid d'Excel i visió
+    Opus). Abans cadascun es muntava la seva llista i divergien: la via ràpida marcava
+    `actiu=True` per a tothom i la via Opus `actiu=bool(pm)`. Ara el criteri és un i és
+    aquest:
+
+        **actiu ⇔ vincle FERM** (match per sobre del llindar i no compartit amb cap altra fila).
+
+    `files`: [{codi_fitxa, descripcio, values, tol_minus, tol_plus}].
+    Retorna (poms_extrets, stats) amb stats = {n_nomatch, n_low, n_many_to_one}.
+    """
+    rows = []
+    n_nomatch = n_low = 0
+
+    for i, f in enumerate(files):
+        codi = (f.get('codi_fitxa') or '').strip()
+        descripcio = (f.get('descripcio') or '').strip()
+        pm, match_type, confidence = find_pom_master(codi, descripcio, customer=customer)
+
+        # Els comptadors es prenen del match CRU (abans del llindar): així l'avís continua
+        # distingint "no s'ha trobat res" de "s'ha trobat però no és de fiar".
+        if pm is None:
+            n_nomatch += 1
+        elif confidence == 'LOW':
+            n_low += 1
+
+        pm_efectiu, suggeriment = _apply_match_threshold(pm, confidence)
+
+        rows.append({
+            'codi_fitxa': codi,
+            'descripcio': descripcio,
+            'pom_master_id': pm_efectiu.id if pm_efectiu else None,
+            'pom_codi': pm_efectiu.codi_client if pm_efectiu else None,
+            'pom_nom': pm_efectiu.nom_client if pm_efectiu else None,
+            'match_type': match_type,
+            'confidence': confidence,
+            'values': f.get('values') or {},
+            'tol_minus': f.get('tol_minus'),
+            'tol_plus': f.get('tol_plus'),
+            'actiu': bool(pm_efectiu),
+            'ordre': i,
+            'weak_suggestion': suggeriment.nom_client if suggeriment else None,
+            'weak_suggestion_codi': suggeriment.codi_client if suggeriment else None,
+            'many_to_one': False,
+        })
+
+    _apply_many_to_one_guard(rows)
+    n_many = sum(1 for r in rows if r.get('many_to_one'))
+
+    return rows, {'n_nomatch': n_nomatch, 'n_low': n_low, 'n_many_to_one': n_many}
+
+
+def _avisos_de_matching(stats):
+    """Els avisos del matching. Un per motiu, i cadascun diu QUÈ ha de fer la persona."""
+    avisos = []
+    if stats['n_nomatch']:
+        avisos.append(
+            f"{stats['n_nomatch']} POM(s) sense match al catàleg — cal revisar o "
+            f"afegir manualment."
+        )
+    if stats['n_low']:
+        avisos.append(
+            f"{stats['n_low']} POM(s) amb confiança baixa: NO s'han vinculat "
+            f"automàticament. Revisa'ls al pas de POMs — hi tens el suggeriment."
+        )
+    if stats['n_many_to_one']:
+        avisos.append(
+            f"{stats['n_many_to_one']} POM(s) de la fitxa apuntaven al MATEIX POM del "
+            f"catàleg: cap no s'ha vinculat automàticament (dues mesures no poden compartir "
+            f"un POM: la segona esborraria la primera). Resol-los un per un."
+        )
+    return avisos
 
 
 # ═══════════════════════════ W2 — Extracció POMs ═══════════════════════════
@@ -663,10 +1055,37 @@ No afegeixis cap text fora del JSON.""",
         return default
 
 
+def _avis_files_perdudes(n_document, n_extretes):
+    """FIX D (DIAGNOSI_QA_S8_IMPORT §D1e): el document té més files de POM que les extretes.
+
+    La fitxa del Tate té 26 POMs i la IA en va retornar 25. La que va deixar caure —`JJ`,
+    '1/2 Elbow width'— era l'única fila SENSE valor a la talla base, i **cap avís ho va dir**:
+    una fila del document desapareixia en silenci. Un POM sense mesura base és legítim
+    (`BaseMeasurement.base_value_cm` és `null=True`), així que la fila no s'havia de perdre;
+    i si es perd, s'ha de dir.
+
+    El recompte del document el dona el parser determinista (`meta['n_files_amb_codi']`), que
+    sap comptar les files encara que abdiqui de llegir-ne els valors. Només s'avisa en el sentit
+    que fa mal —el document en té MÉS que les extretes—, mai al revés.
+    """
+    if n_document and n_extretes < n_document:
+        perdudes = n_document - n_extretes
+        return [f"El document té {n_document} files amb codi de POM i se n'han extret "
+                f"{n_extretes}: {perdudes} fila(es) no s'han llegit. Revisa-les a mà (sovint "
+                f"són files sense valor a la talla base, que són POMs igualment vàlids)."]
+    return []
+
+
 def _extraccio_via_excel(session, api_key):
     """Via ràpida d'extracció per a fitxes Excel: parse determinista + revisió Sonnet,
-    SENSE la crida Opus. Retorna la MATEIXA forma de resposta que la via PDF/imatge,
-    o None si el parse determinista no troba POMs (el caller fa fallback IA via Opus)."""
+    SENSE la crida Opus.
+
+    Retorna `(resposta, meta)`:
+      · `resposta` = Response amb la MATEIXA forma que la via PDF/imatge, o **None** si el
+        parser abdica (el caller fa fallback IA via Opus, com sempre).
+      · `meta` = el que el parser ha pogut saber del document **encara que abdiqui** — hi ha
+        el recompte de files, que el camí IA necessita per al Fix D.
+    """
     # 1. Bytes del document desat al Pas 1.
     try:
         session.document.open('rb')
@@ -674,12 +1093,20 @@ def _extraccio_via_excel(session, api_key):
     finally:
         session.document.close()
 
-    # 2. Parse determinista.
-    raw_poms, talles_detectades = _parse_excel_poms(file_bytes)
+    # 2. Parse determinista. Les pistes del model (talla base i run) ajuden a reconèixer les
+    # columnes de talla quan el document no declara `SAMPLE SIZE`; si el document sí que ho
+    # diu, mana el document.
+    model = session.model
+    raw_poms, talles_detectades, meta = _parse_excel_poms(
+        file_bytes,
+        base_hint=(model.base_size_label if model else None),
+        run_hint=[s.strip() for s in ((model.size_run_model if model else '') or '')
+                  .replace(';', '·').split('·') if s.strip()],
+    )
 
     # 3. Sense POMs llegibles → senyal (None) perquè el caller faci fallback IA (Opus).
     if not raw_poms:
-        return None
+        return None, meta
 
     # 4. Text pla per a la revisió Sonnet.
     linies = [
@@ -710,49 +1137,66 @@ def _extraccio_via_excel(session, api_key):
             except (ValueError, TypeError):
                 pass
 
-    # 7-8. Matching POM + format IDÈNTIC al de la via Opus.
-    # N3: customer del model per resoldre els àlies de nomenclatura del client (paritat amb Opus).
+    # 7-8. Matching POM + format IDÈNTIC al de la via Opus: la MATEIXA funció (`_match_rows`),
+    # amb les mateixes portes. Abans aquesta via marcava `actiu=True` per a totes les files,
+    # inclosos els sense match; ara el criteri és únic (actiu ⇔ vincle ferm) perquè el
+    # matching és literalment el mateix codi.
+    # N3: customer del model per resoldre els àlies de nomenclatura del client.
     import_customer = session.model.customer if session.model_id else None
-    poms_extrets = []
-    for i, p in enumerate(raw_poms):
-        pm, match_type, confidence = find_pom_master(p['codi_fitxa'], p['descripcio'], customer=import_customer)
-        poms_extrets.append({
-            'codi_fitxa': p['codi_fitxa'],
-            'descripcio': p['descripcio'],
-            'pom_master_id': pm.id if pm else None,
-            'pom_codi': pm.codi_client if pm else None,
-            'pom_nom': (pm.nom_client if pm else None),
-            'match_type': match_type,
-            'confidence': confidence,
-            'values': p['values'],
-            'tol_minus': p.get('tol_minus'),   # B2: tolerància del document (None si no en porta)
-            'tol_plus': p.get('tol_plus'),
-            'actiu': True,
-            'ordre': i,
-        })
+    poms_extrets, stats = _match_rows(raw_poms, import_customer)
 
-    # 9. Talles.
+    avisos_extraccio = list(revision.get('warnings', []))
+    avisos_extraccio += _avisos_de_matching(stats)
+
+    # 9. Talles, capçalera i talla BASE — els tres, llegits del document.
+    #
+    # PARITAT AMB LA VIA OPUS (bandera 3 de la diagnosi). Aquesta via retornava `header: {}`
+    # i `base_size = sizes[0]` **encara quan funcionava**. Cap de les dues coses era innocent:
+    #   · el `header` buit deixava el wizard sense marca/temporada/nom d'estil, que la via Opus
+    #     sí que omplia → dues respostes amb la mateixa forma i contingut diferent;
+    #   · i `sizes[0]` NO és la talla base: a la fitxa Rosalia el run és XXS·XS·S·M·L i la base
+    #     és 'S', no 'XXS'. A més, sense `base_size` a `resultat['extraccio']`, la reconciliació
+    #     de talles de W5 (:1426) queda desactivada del tot per aquest camí ("manca base").
+    # Ara les dues surten del bloc de metadades del document (`SAMPLE SIZE`), i el camí ràpid
+    # deixa de ser un ciutadà de segona.
     sizes = [str(t) for t in talles_detectades]
+    header = meta.get('header') or {}
+    base_size = meta.get('base_size') or (sizes[0] if sizes else None)
+    extraccio = {'via': 'excel', 'header': header, 'sizes': sizes, 'base_size': base_size}
 
     # 10. Persisteix. NOTA: `session.poms_extrets` és la font de veritat per als passos
     # W2-confirmació (:1216) i W3-mesures (:1415); cal desar-la (paritat amb la via Opus).
     session.resultat = {**(session.resultat or {}),
-                        'extraccio': {'via': 'excel', 'header': {}, 'sizes': sizes},
+                        'extraccio': extraccio,
                         'grading_status': 'ok'}
     session.poms_extrets = poms_extrets
+    session.avisos = list(session.avisos or []) + avisos_extraccio
     session.estat = 'POMS'
-    session.save(update_fields=['resultat', 'poms_extrets', 'estat', 'actualitzat_at'])
+    session.save(update_fields=['resultat', 'poms_extrets', 'avisos', 'estat',
+                                'actualitzat_at'])
 
-    # 11. Resposta amb EXACTAMENT el mateix format que la via PDF/imatge (:1180-1188).
+    # 11. Resposta amb EXACTAMENT el mateix format que la via PDF/imatge (:1180-1188),
+    # `suggested_valors_mode` inclòs: el toggle absoluts/deltes del wizard el llegeix, i sense
+    # ell aquesta via el deixava sense default. Cosmètic → mai pot petar l'extracció.
+    try:
+        from fhort.pom.grading_utils import suggest_valors_mode
+        suggested_valors_mode = suggest_valors_mode(
+            {p['pom_master_id']: p['values'] for p in poms_extrets
+             if p.get('pom_master_id') and p.get('values')},
+            base_size, sizes)
+    except Exception:
+        suggested_valors_mode = 'absoluts'
+
     return Response({
         'estat': 'POMS',
         'poms_extrets': poms_extrets,
-        'header': {},
-        'base_size': sizes[0] if sizes else None,
+        'header': header,
+        'base_size': base_size,
         'sizes': sizes,
         'grading_status': {'status': 'ok', 'detail': ''},
-        'avisos': revision.get('warnings', []),
-    }, status=200)
+        'avisos': avisos_extraccio,
+        'suggested_valors_mode': suggested_valors_mode,
+    }, status=200), meta
 
 
 @api_view(['POST'])
@@ -788,8 +1232,9 @@ def import_session_extraccio_view(request, token):
     # Opus amb el full de càlcul convertit a text. PDF/imatge no canvien.
     doc_name = session.document.name or ''
     es_excel = doc_name.lower().endswith(('.xlsx', '.xls'))
+    excel_meta = {}
     if es_excel:
-        resposta_rapida = _extraccio_via_excel(session, api_key)
+        resposta_rapida, excel_meta = _extraccio_via_excel(session, api_key)
         if resposta_rapida is not None:
             return resposta_rapida
 
@@ -810,7 +1255,11 @@ def import_session_extraccio_view(request, token):
     if es_excel:
         content_block = {'type': 'text',
                          'text': f'Contingut del full de càlcul (fitxa Excel):\n{_excel_to_text(file_bytes)}'}
-        avisos.append('Format Excel no reconegut pel parser ràpid; extracció via IA.')
+        # L'avís diu ara PER QUÈ el parser ha abdicat. Abans deia només que ho havia fet, i la
+        # diagnosi va haver d'executar el parser sobre els bytes reals per esbrinar el motiu.
+        motiu = (excel_meta.get('motiu') or '').strip()
+        avisos.append('Format Excel no reconegut pel parser ràpid; extracció via IA.'
+                      + (f' Motiu: {motiu}.' if motiu else ''))
     else:
         content_block = _cribratge_content_block(file_bytes, session.document.name, '')
 
@@ -856,40 +1305,31 @@ def import_session_extraccio_view(request, token):
 
     measurements = extracted.get('measurements', []) or []
 
+    # FIX D — la fila que la IA deixa caure en silenci. Si el document és un Excel, el parser
+    # determinista n'ha comptat les files de POM encara que hagi abdicat de llegir-lo; si la IA
+    # en torna menys, es diu. (Amb el Tate: 26 al document, 25 d'Opus, `JJ` perduda i cap avís.)
+    avisos += _avis_files_perdudes(excel_meta.get('n_files_amb_codi') or 0, len(measurements))
+
     # Matching POM per fila.
     # N3 (DIAGNOSI_NOMENCLATURA_ALIES): customer del model → el matcher resol els àlies de
     # nomenclatura d'AQUEST client abans que per descripció. Si el model no en té, customer=None
     # (comportament previ: resol per descripció).
     import_customer = session.model.customer if session.model_id else None
-    poms_extrets = []
-    n_low, n_nomatch = 0, 0
-    for i, msr in enumerate(measurements):
-        codi_fitxa = (msr.get('client_code') or msr.get('code') or '').strip()
-        descripcio = (msr.get('description') or '').strip()
-        pm, match_type, confidence = find_pom_master(codi_fitxa, descripcio, customer=import_customer)
-        if confidence == 'LOW':
-            n_low += 1
-        if pm is None:
-            n_nomatch += 1
-        poms_extrets.append({
-            'codi_fitxa': codi_fitxa,
-            'descripcio': descripcio,
-            'pom_master_id': pm.id if pm else None,
-            'pom_codi': pm.codi_client if pm else None,
-            'pom_nom': (pm.nom_client if pm else None),
-            'match_type': match_type,
-            'confidence': confidence,
-            'values': msr.get('values') or {},
-            'tol_minus': msr.get('tol_minus'),   # B2: tolerància del document (None si absent)
-            'tol_plus': msr.get('tol_plus'),
-            'actiu': bool(pm),  # per defecte només actius els que tenen match
-            'ordre': i,
-        })
-
-    if n_nomatch:
-        avisos.append(f'{n_nomatch} POM(s) sense match al catàleg — cal revisar o afegir manualment.')
-    if n_low:
-        avisos.append(f'{n_low} POM(s) amb confiança baixa — recomanada revisió.')
+    poms_extrets, stats = _match_rows(
+        [
+            {
+                'codi_fitxa': msr.get('client_code') or msr.get('code') or '',
+                'descripcio': msr.get('description') or '',
+                'values': msr.get('values') or {},
+                # B2: tolerància del document (None si absent).
+                'tol_minus': msr.get('tol_minus'),
+                'tol_plus': msr.get('tol_plus'),
+            }
+            for msr in measurements
+        ],
+        import_customer,
+    )
+    avisos += _avisos_de_matching(stats)
 
     session.resultat = {**(session.resultat or {}), 'extraccio': extracted,
                         'grading_status': grading_status}
@@ -1342,12 +1782,24 @@ def import_session_confirmar_view(request, token):
             confirmed_pom_ids.append(pid)
             n_bm += 1
 
-            # Biblioteca del client: si el tècnic ha resolt aquest codi de document
-            # manualment (el matcher no l'encerta sol), sembra un CustomerPOMAlias
-            # reutilitzable per a futures importacions. NO toca cap model existent.
+            # Biblioteca del client (QA-S8-R1). S'aprèn de TOT vincle ferm que arriba aquí,
+            # no només de les resolucions manuals (`nomes_si_manual=False`).
+            #
+            # El que arriba aquí ja ha passat DUES portes (llindar + guard many-to-one: només
+            # són `actiu` els vincles ferms) i una PERSONA l'ha confirmat al pas 2. Per tant
+            # no és una endevinalla del matcher: és nomenclatura d'aquest client, donada per
+            # bona. Aprendre-la fa que el registre del client es completi sol a cada
+            # importació, i que la propera resolgui per àlies —determinista— en comptes de
+            # tornar a jugar-se-la a l'heurística de descripcions.
+            #
+            # El guard d'aprenentatge de pom/services.py hi continua aplicant: si el POM ja el
+            # reclama un ALTRE codi d'aquest client, l'àlies neix `pendent_revisio=True` i el
+            # matcher (find_pom_master) NO l'auto-vincularà.
+            #
+            # Idempotent: re-confirmar la mateixa sessió no duplica ni reescriu res.
             maybe_learn_customer_alias(
                 model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
-                origen='IMPORT')
+                origen='IMPORT', nomes_si_manual=False)
 
         # ── 2. Identificador del contenidor SF (NO es crea encara: si hi ha conflicte de grading
         # sense decisió, retornem 409 + rollback i NO volem deixar cap SizeFitting orfe).

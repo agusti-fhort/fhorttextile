@@ -652,12 +652,16 @@ class ModelGradingOverride(models.Model):
     """Sprint 5B.3 — Per-model, per-size grading override from a validated fitting.
 
     When a fitting validates a real value at a NON-base size, it is stored here,
-    scoped to ONE model — UNLIKE pom.GradingException, which lives on the shared
-    GradingRuleSet (a template) and would leak to every model using that set.
+    scoped to ONE model — unlike the old `pom.GradingException`, which lived on the
+    shared GradingRuleSet (a template) and would leak to every model using that set.
 
-    The grading engine (generate_graded_specs) reads these with PRIORITY over the
-    rule_set exceptions and the rules. The base-size case does NOT come here: it
-    promotes to BaseMeasurement (the root) instead.
+    G6/1a (2026-07-13): that argument won. `pom.GradingException` is now RETIRED, and this
+    class is the only per-(POM, size) override in the engine. The docstring keeps naming it
+    because the reason it was replaced is the reason this one is scoped to a single model —
+    lose the reason and someone re-adds a template-level exception.
+
+    The grading engine (generate_graded_specs) reads these with PRIORITY over the rules. The
+    base-size case does NOT come here: it promotes to BaseMeasurement (the root) instead.
     """
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='grading_overrides')
     pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='model_grading_overrides')

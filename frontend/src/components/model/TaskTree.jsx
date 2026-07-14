@@ -42,6 +42,9 @@ function toolRoute(code, taskId, modelId) {
     case 'tech_sheet': return `/models/${modelId}/fitxa?task_id=${taskId}`
     case 'size_check': return `/models/${modelId}?tab=Mesures&task_id=${taskId}`
     case 'grading':    return `/models/${modelId}/escalat?task_id=${taskId}`
+    // W2 (mirall de WorkPlan): el patró s'anota al TALLER, reprenent la tasca.
+    case 'pattern_digit':
+    case 'pattern_cad': return `/models/${modelId}/patro/taller?task_id=${taskId}`
     default:           return null
   }
 }

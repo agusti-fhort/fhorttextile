@@ -138,7 +138,6 @@ function PlanificacioPanel({ mode = 'pending' }) {
         const ts = byModel[m.model_id] || []
         const nonDone = ts.filter(x => x.status !== 'Done')
         if (nonDone.length === 0) return
-        const done = ts.filter(x => x.status === 'Done')
         const techIds = [...new Set(nonDone.map(x => x.assignee).filter(Boolean))]
         const starts = nonDone.map(x => x.planned_start).filter(Boolean).sort()
         const ends = nonDone.map(x => x.planned_end).filter(Boolean).sort()

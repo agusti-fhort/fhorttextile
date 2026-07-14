@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { customerDictionary, poms } from '../api/endpoints'
 import Badge from './ui/Badge'
 import { primaryBtn, selS } from './ui/buttons'
+import FileDropCard from './ui/FileDropCard'
+import { overlayBase } from './ui/overlay'
 
 // Wizard de revisió del diccionari de nomenclatura del client (setup, un sol cop).
 // Pas 1: descarregar plantilla + pujar l'Excel omplert → preview (proposta per fila).
@@ -23,6 +25,7 @@ const miniBtn = {
 
 export default function DictionaryWizard({ customer, t, onClose, onDone }) {
   const [step, setStep] = useState('upload')
+  const [fitxer, setFitxer] = useState(null)
   const [rows, setRows] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -39,8 +42,10 @@ export default function DictionaryWizard({ customer, t, onClose, onDone }) {
     } catch { setError(t('dictionary.err_template')) }
   }
 
-  const onFile = async (e) => {
-    const file = e.target.files?.[0]; e.target.value = ''
+  // El fitxer es TRIA (targeta) i després s'ANALITZA (botó): dos passos, com al tab Patró.
+  // Abans, triar-lo disparava la pujada de cop des de l'onChange de l'input: no hi havia manera
+  // de veure què havies triat, ni de canviar d'idea, ni de treure'l.
+  const analitza = async (file) => {
     if (!file) return
     setBusy(true); setError('')
     try {
@@ -109,7 +114,7 @@ export default function DictionaryWizard({ customer, t, onClose, onDone }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 60, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', overflowY: 'auto', padding: '3vh 0' }}
+    <div style={overlayBase({ alignItems: 'flex-start', overflowY: 'auto', padding: '3vh 0' })}
       onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ background: 'var(--white)', borderRadius: 12, width: 'min(1100px, 94vw)', boxShadow: '0 10px 40px rgba(0,0,0,0.18)', overflow: 'hidden' }}>
         {/* Capçalera */}
@@ -128,14 +133,33 @@ export default function DictionaryWizard({ customer, t, onClose, onDone }) {
         {step === 'upload' && (
           <div style={{ padding: '1.5rem 1.25rem' }}>
             <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 0 }}>{t('dictionary.upload_help')}</p>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <button onClick={downloadTemplate} style={miniBtn}>
-                <i className="ti ti-download" style={{ fontSize: 13, marginRight: 5 }} />{t('dictionary.download_template')}
-              </button>
-              <label style={{ ...primaryBtn, marginLeft: 0, cursor: 'pointer' }}>
-                <i className="ti ti-upload" style={{ fontSize: 14 }} />{busy ? t('dictionary.reading') : t('dictionary.upload')}
-                <input type="file" accept=".xlsx,.xls" hidden onChange={onFile} disabled={busy} />
-              </label>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              <FileDropCard
+                accept={['.xlsx', '.xls']}
+                icon="ti-file-spreadsheet"
+                title={t('dictionary.upload')}
+                required
+                file={fitxer}
+                onFile={setFitxer}
+                disabled={busy}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
+                <button onClick={downloadTemplate} style={miniBtn}>
+                  <i className="ti ti-download" style={{ fontSize: 13, marginRight: 5 }} />{t('dictionary.download_template')}
+                </button>
+                <button
+                  onClick={() => analitza(fitxer)}
+                  disabled={busy || !fitxer}
+                  style={{
+                    ...primaryBtn, marginLeft: 0,
+                    opacity: (!fitxer && !busy) ? 0.45 : 1,
+                    cursor: busy ? 'wait' : (!fitxer ? 'not-allowed' : 'pointer'),
+                  }}
+                >
+                  <i className={busy ? 'ti ti-loader' : 'ti ti-upload'} style={{ fontSize: 14 }} />
+                  {busy ? t('dictionary.reading') : t('dictionary.upload')}
+                </button>
+              </div>
             </div>
           </div>
         )}

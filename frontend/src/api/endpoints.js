@@ -617,6 +617,157 @@ export const users = {
   resetLink: (id) => client.post(`/api/v1/users/${id}/reset-link/`),   // -> {url}
 }
 
+// Motor de patrons (S3) — DXF-AAMA + RUL: pujar, llegir, renderitzar, descarregar.
+export const patterns = {
+  list: (modelId) => client.get('/api/v1/patterns/pattern-files/', { params: { model: modelId } }),
+  get: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/`),
+  // Content-Type: undefined perquè el navegador hi posi el boundary multipart; si s'hi
+  // força un valor, request.FILES arriba buit. Patró de la casa (v. itemFitxers.create).
+  upload: (formData) => client.post('/api/v1/patterns/pattern-files/', formData,
+    { headers: { 'Content-Type': undefined } }),
+  remove: (id) => client.delete(`/api/v1/patterns/pattern-files/${id}/`),
+
+  // URLs signades FRESQUES, al moment del clic (W5 · D9). Les del detall es couven amb la
+  // pàgina i caduquen als 15 min: al Taller, on el tab es queda obert mentre es treballa,
+  // això vol dir botons de descàrrega morts sense que res hagi canviat a la pantalla.
+  downloadLinks: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/download-links/`),
+
+  // La geometria SENCERA amb coordenades: el que dibuixa el visor Konva. El detall
+  // (get) només porta recomptes — un llistat no ha d'arrossegar milers de punts.
+  // Porta també els segments (el que una costura pot triar) i els POMs ja ancorats.
+  geometry: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/geometry/`),
+
+  // La LLISTA DE TREBALL del taller (W3): les Mesures del model creuades amb el que
+  // AQUEST patró mesura — valor de fitxa, valor mesurat i la Δ. El creuament és de domini
+  // (la frontissa és el POMMaster) i el fa el servidor: baixar-se dues llistes i creuar-les
+  // al client seria refer-lo a mà, i a mà cada pantalla el refaria una mica diferent.
+  modelPoms: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/model-poms/`),
+
+  // POMs ancorats (S6). El VALOR no s'envia mai: s'envia la recepta (quins punts) i el
+  // servidor la resol sobre la geometria. Un valor teclejat no seria una mesura del
+  // patró, seria una opinió sobre el patró.
+  poms: {
+    list: (patternFileId) => client.get('/api/v1/patterns/pattern-poms/',
+      { params: { pattern_piece__pattern_file: patternFileId } }),
+    create: (data) => client.post('/api/v1/patterns/pattern-poms/', data),
+    // REOBRIR (W4b/T5a): la recepta nova sobre el MATEIX PatternPOM, i el servidor RECALCULA
+    // el valor. Mai esborrar-i-crear: corregir on és una mesura no és tornar-la a ancorar.
+    update: (id, data) => client.patch(`/api/v1/patterns/pattern-poms/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/patterns/pattern-poms/${id}/`),
+  },
+
+  // Costures. L'estat (casa / no casa) el calcula el servidor cada cop sobre la
+  // geometria viva: no es desa, perquè una costura que casava i ja no casa ho ha de dir.
+  // Des de W1, `estat.cobertura` hi porta els avisos de solapament i excés de la vora.
+  sew: {
+    list: (modelId) => client.get('/api/v1/patterns/sew-relations/',
+      { params: { model: modelId } }),
+    create: (data) => client.post('/api/v1/patterns/sew-relations/', data),
+    // REOBRIR (W4b/T5c): tipus, diferencial, composició de costats i bateig, sobre la MATEIXA
+    // costura. Encunyar-ne una altra li perdria la data i l'autor per un canvi de tipus.
+    update: (id, data) => client.patch(`/api/v1/patterns/sew-relations/${id}/`, data),
+
+    // MARCAR PINÇA (W4b/T1): tres punts, i el servidor en fa els dos costats (trams
+    // declarats) i la costura de pinça que els uneix — en UNA transacció. Fer-ho amb tres
+    // crides des d'aquí podia fallar a la tercera i deixar dos trams orfes al patró, amb nom
+    // de pinça i sense pinça.
+    pinca: (data) => client.post('/api/v1/patterns/sew-relations/pinca/', data),
+
+    // Esborrar una pinça se n'emporta els seus dos costats: no existeixen sense ella.
+    remove: (id) => client.delete(`/api/v1/patterns/sew-relations/${id}/`),
+
+    // ── ASSISTIT (A2): el motor PROPOSA, la persona decideix ────────────────
+    //
+    // Les propostes NO es desen enlloc: es recalculen senceres a cada crida sobre la geometria
+    // viva. Per això no hi ha cap `id` de proposta —una proposta no és una fila— i el que la
+    // identifica és la `clau`: els dos trams que uneix. Confirmar-ne una o esborrar una costura
+    // canvia la cobertura, i per tant canvia la llista: es torna a demanar, no es pedaça.
+    propostes: (modelId, fileId = null) =>
+      client.get('/api/v1/patterns/sew-relations/propostes/',
+        { params: fileId ? { model: modelId, file: fileId } : { model: modelId } }),
+
+    // Confirmar = el gest manual, fet en un clic. En surt exactament el mateix que si el
+    // patronista hagués declarat els dos trams i els hagués cosit: dos trams DECLARATS i una
+    // costura. Una costura confirmada no és una entitat de segona categoria.
+    confirmarProposta: (data) =>
+      client.post('/api/v1/patterns/sew-relations/confirmar-proposta/', data),
+
+    // El rebuig és PERSISTENT: el que es diu que no, no torna a sortir. Una eina que reproposa
+    // el que ja li han dit que no ensenya a no mirar-la. El que es rebutja és la PARELLA —els
+    // seus trams queden lliures per a la proposta bona.
+    rebutjarProposta: (data) =>
+      client.post('/api/v1/patterns/sew-relations/rebutjar-proposta/', data),
+
+    // ── ASSISTIT (A1): les PINCES que el motor veu a la vora ────────────────
+    //
+    // Mateix patró que les costures proposades. **No hi ha cap endpoint de confirmació**: una
+    // pinça proposada es confirma cridant `pinca()` (aquí sobre) amb els tres punts que el
+    // candidat ja porta — el MATEIX camí de codi que els tres clics del taller. Un segon camí per
+    // a la mateixa cosa hauria estat un lloc més on la llei de la pinça podria divergir.
+    pincesProposades: (modelId, fileId = null) =>
+      client.get('/api/v1/patterns/sew-relations/pinces-proposades/',
+        { params: fileId ? { model: modelId, file: fileId } : { model: modelId } }),
+
+    rebutjarPinca: (data) =>
+      client.post('/api/v1/patterns/sew-relations/rebutjar-pinca/', data),
+  },
+
+  // Trams DECLARATS (W1/T4). La segmentació gir→gir és una proposta del motor (origen
+  // 'auto'); un tram DECLARAT és una afirmació humana: "aquest tros de vora existeix i es
+  // diu així". Per això té nom i es pot reanomenar. Esborrar-ne un que una costura fa
+  // servir rebota amb 409 + les costures que el retenen: deixar-la coixa en silenci seria
+  // pitjor que el rebuig.
+  // No hi ha `list`: els trams viuen a la geometria (amb origen i nom des de W4), i
+  // demanar-los a part era fer dues peticions per a una sola pregunta.
+  //
+  // Al crear NO s'envien t ni longituds: s'envien dos PUNTS i el servidor resol el tram
+  // sobre la geometria — el mateix principi que amb el valor d'un POM. `arc_llarg` tria
+  // quin dels dos arcs (dos punts d'una vora tancada en defineixen DOS, no un).
+  segments: {
+    create: (data) => client.post('/api/v1/patterns/pattern-segments/', data),
+    rename: (id, nom) => client.patch(`/api/v1/patterns/pattern-segments/${id}/`, { nom }),
+    // RECOL·LOCAR (W4b/T5b): els extrems nous, sobre la MATEIXA fila. Les costures la
+    // referencien: esborrar-la i crear-ne una altra els buidaria el costat en silenci. El
+    // PROTECT queda només per a ESBORRAR — corregir un tram mal posat no ha d'obligar a
+    // desmuntar la costura que el fa servir.
+    update: (id, data) => client.patch(`/api/v1/patterns/pattern-segments/${id}/`, data),
+    remove: (id) => client.delete(`/api/v1/patterns/pattern-segments/${id}/`),
+  },
+
+  // El render està gated per Authorization, i un <img src> no pot portar capçaleres: es
+  // baixa com a blob i es mostra per objectURL. (Les DESCÀRREGUES sí que tenen URL
+  // signada al serializer — download_url / download_rul_url —, i per això no es
+  // construeixen aquí a mà.)
+  renderSvg: (id, piece = '') =>
+    client.get(`/api/v1/patterns/pattern-files/${id}/render.svg/`, {
+      params: piece ? { piece } : undefined,
+      responseType: 'blob',
+    }),
+
+  // Escalat i exportació de la niada (S7).
+  export: {
+    // NOMÉS les versions aprovades. `aprovada` i `is_active` són ortogonals: la versió
+    // aprovada d'un model sovint NO és la que la UI serveix per defecte, i qui exporta
+    // una niada tria una versió SIGNADA, no la que passava per allà.
+    gradingVersions: (id) =>
+      client.get(`/api/v1/patterns/pattern-files/${id}/grading-versions/`),
+
+    // El pipeline sencer SENSE bytes: projecció + preview per talla + autovalidació. Si
+    // l'exportació ha de fallar, falla aquí — amb el modal obert i el motiu a la vista.
+    preview: (id, data) =>
+      client.post(`/api/v1/patterns/pattern-files/${id}/export-preview/`, data),
+
+    // Els bytes. Sense `acknowledged: true` el servidor no genera res (403): el gate és
+    // una precondició dura, no un registre a posteriori.
+    dxf: (id, data) =>
+      client.post(`/api/v1/patterns/pattern-files/${id}/export/`, data,
+        { responseType: 'blob' }),
+    rul: (id, data) =>
+      client.post(`/api/v1/patterns/pattern-files/${id}/export-rul/`, data,
+        { responseType: 'blob' }),
+  },
+}
+
 // Sprint M2 — Anàlisi de temps (gated view_team_tasks; set-estimate gated define_tasks).
 export const timeAnalysis = {
   byPhase: () => client.get('/api/v1/time-analysis/by-phase/'),               // -> {phases, welford_min_samples}

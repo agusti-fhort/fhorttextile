@@ -10,6 +10,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from fhort.accounts.capabilities import HasCapability, CLOSE_GATES
+
 from .models import (
     GradingVersion,
     POMAlert,
@@ -67,13 +69,59 @@ class SizeFittingViewSet(viewsets.ModelViewSet):
     ordering = ['model', 'numero']
 
 
-class GradingVersionViewSet(viewsets.ModelViewSet):
+class _CloseGates(HasCapability):
+    required_capability = CLOSE_GATES
+
+
+class GradingVersionViewSet(viewsets.ReadOnlyModelViewSet):
+    """Versions de grading: NOMÉS LECTURA + l'acció d'aprovar (G6-B/T2).
+
+    Era un `ModelViewSet` complet amb `fields = '__all__'` i `IsAuthenticated`: **qualsevol
+    usuari autenticat podia fer `PATCH {"aprovada": false}` sobre una versió segellada, o
+    `DELETE`-la sencera.** Sense capability, sense guard, sense rastre. El segell era una casella
+    editable per REST — i alhora la cosa en què confia el motor de patrons per projectar.
+
+    Ara: `PATCH`/`PUT`/`DELETE`/`POST` → **405**. L'única escriptura és `POST .../approve/`, que
+    demana `CLOSE_GATES` (aprovar és un gate, i els gates són decisió humana i gated) i passa pel
+    servei de segell únic, que escriu els tres camps junts.
+
+    **Des-aprovar NO existeix per API.** Una versió aprovada se supera creant-ne una de nova (el
+    bump de `generar-grading`), que deixa rastre; no desdient-se del segell en silenci.
+    """
     permission_classes = [IsAuthenticated]
     serializer_class = GradingVersionSerializer
     queryset = GradingVersion.objects.select_related('size_fitting', 'creat_per').all()
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['size_fitting', 'aprovada']
     ordering = ['-data']
+
+    @action(detail=True, methods=['post'], permission_classes=[_CloseGates])
+    def approve(self, request, pk=None):
+        """POST /api/v1/grading-versions/<pk>/approve/ — segella la versió (capability CLOSE_GATES)."""
+        from fhort.fitting.services import seal_grading_version
+
+        version = self.get_object()
+
+        # Només la versió VIGENT es pot segellar: aprovar una versió ja superada seria aprovar
+        # unes talles que ningú no serveix (i deixaria dues aprovades al mateix SizeFitting, que
+        # cap constraint no impedeix — v. R7 de la diagnosi).
+        if not version.is_active:
+            return Response({
+                'error': 'not_active',
+                'message': (f'La versió v{version.version_number} no és la vigent: només es pot '
+                            f'aprovar la versió activa del SizeFitting.'),
+            }, status=status.HTTP_409_CONFLICT)
+
+        ja_estava = version.aprovada
+        profile = getattr(request.user, 'profile', None)
+        seal_grading_version(version, user_profile_id=(profile.id if profile else None))
+        version.refresh_from_db()
+
+        return Response({
+            'ok': True,
+            'ja_estava_aprovada': ja_estava,   # idempotent: no es reescriu qui la va aprovar
+            **GradingVersionSerializer(version).data,
+        }, status=status.HTTP_200_OK)
 
 
 class POMAlertViewSet(viewsets.ModelViewSet):

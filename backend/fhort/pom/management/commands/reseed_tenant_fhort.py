@@ -221,12 +221,9 @@ class Command(BaseCommand):
                 # after a first run)
                 # =============================================
                 self.stdout.write(self.style.WARNING('Pas 0 · Neteja prèvia'))
-                from fhort.pom.models import (
-                    GradingException as _GradingException,
-                    ClientMesuraPerfil as _CMP,
-                )
+                # GradingException jubilada (G6/1a): ja no hi ha taula a netejar.
+                from fhort.pom.models import ClientMesuraPerfil as _CMP
                 for label, model in [
-                    ('GradingException', _GradingException),
                     ('GradingRule', GradingRule),
                     ('SizingProfile', SizingProfile),
                     ('GradingRuleSet', GradingRuleSet),

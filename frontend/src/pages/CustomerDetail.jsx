@@ -25,7 +25,10 @@ const dayOf = (r) => (r.issued_at || r.created_at || '').slice(0, 10)
 // (ofertes/comandes del client). L'edició d'àlies està gated CONFIGURE al backend.
 const MONO = 'IBM Plex Mono, monospace'
 const TABS = ['dades', 'tecnic', 'comercial']
-const ORIGEN_VARIANT = { IMPORT: 'gold', MANUAL: 'ok', MIGRACIO: 'gray' }
+// Els QUATRE choices d'origen del model (pom/models.py:243-246). Han d'estar tots aquí i tots
+// als tres i18n (clients.origen_*): la clau es construeix per interpolació (`origen_${r.origen}`)
+// i, si falta, i18next pinta la clau crua a la cel·la (QA-S8 · D4c).
+const ORIGEN_VARIANT = { IMPORT: 'gold', MANUAL: 'ok', MIGRACIO: 'gray', DICCIONARI: 'gate' }
 
 export default function CustomerDetail() {
   const { id } = useParams()
@@ -158,24 +161,36 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
   const [busy, setBusy] = useState(true)
   const [showDict, setShowDict] = useState(false)
 
-  const loadAliases = useCallback(() => customerAliases.list({ customer: customer.id })
-    .then(res => setAliases(res.data?.results ?? (Array.isArray(res.data) ? res.data : []))), [customer.id])
+  // La biblioteca ha de mostrar TOTA la nomenclatura del client, no la primera pàgina: la llista
+  // ve paginada (PAGE_SIZE=25, max_page_size=200) i el client 7 en té 95 -> se'n pintaven 25
+  // (QA-S8 · D5). Recorrem les pàgines fins que `next` s'esgota.
+  const fetchAllAliases = useCallback(async () => {
+    const out = []
+    for (let page = 1; ; page += 1) {
+      const res = await customerAliases.list({ customer: customer.id, page, page_size: 200 })
+      const d = res.data
+      out.push(...(d?.results ?? (Array.isArray(d) ? d : [])))
+      if (!d?.next) return out
+    }
+  }, [customer.id])
+
+  const loadAliases = useCallback(() => fetchAllAliases().then(setAliases), [fetchAllAliases])
 
   useEffect(() => {
     let alive = true
     Promise.all([
-      customerAliases.list({ customer: customer.id }),
+      fetchAllAliases(),
       gradingRuleSets.list({ customer: customer.id }),
       sizingProfiles.list({ customer_codi: customer.codi }),
     ]).then(([a, g, p]) => {
       if (!alive) return
-      setAliases(a.data?.results ?? (Array.isArray(a.data) ? a.data : []))
+      setAliases(a)
       setRulesets(g.data?.results ?? (Array.isArray(g.data) ? g.data : []))
       const prows = p.data?.results ?? (Array.isArray(p.data) ? p.data : [])
       setProfiles(prows.filter(r => r.customer_codi === customer.codi))
     }).finally(() => { if (alive) setBusy(false) })
     return () => { alive = false }
-  }, [customer.id, customer.codi])
+  }, [customer.id, customer.codi, fetchAllAliases])
 
   const removeAlias = (a) => {
     if (!window.confirm(t('clients.alias_confirm_delete', { code: a.client_code }))) return
@@ -185,20 +200,54 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
       .catch(() => notify({ type: 'err', text: t('clients.error') }))
   }
 
-  // Regla NOMÉS de visualització (no toca dades): si la descripció duplica el codi del
-  // client, mostrem '—'. El diccionari (description_en/local) omplirà això de veritat.
-  const descDup = (r) => !r.client_description ||
-    r.client_description.trim().toLowerCase() === (r.client_code || '').trim().toLowerCase()
+  // Mapa un àlies pendent (pom=null) al POM canònic que el tècnic tria a la mateixa fila.
+  const mapAlias = (a, pm) => {
+    customerAliases.update(a.id, { pom: pm.id, pendent_revisio: false })
+      .then(() => loadAliases())
+      .then(() => notify({ type: 'ok', text: t('clients.alias_mapped', { code: a.client_code, pom: pm.codi_client }) }))
+      .catch(() => notify({ type: 'err', text: t('clients.error') }))
+  }
+
+  // Descripció LLEGAT: `client_description` és el camp obsolet (models.py:255-258) i només
+  // s'usa de reserva per als àlies antics. Mai si duplica el codi: la migració 0031 hi va
+  // copiar el codi del client, i pintar-ho seria repetir la columna del costat.
+  const legacyDesc = (r) => {
+    const cd = (r.client_description || '').trim()
+    return cd.toLowerCase() === (r.client_code || '').trim().toLowerCase() ? '' : cd
+  }
 
   const aliasCols = [
     { key: 'client_code', label: t('clients.alias_code'),
       render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.client_code}</span> },
-    { key: 'client_description', label: t('clients.alias_desc'),
-      render: r => descDup(r) ? <span style={{ color: 'var(--text-muted)' }}>—</span> : r.client_description },
+    // Descripció: EN a dalt (canònica), local a sota amb el codi d'idioma (mateixa convenció que
+    // el pas 2 del wizard, DictionaryWizard.jsx:177-182). Els escriu el diccionari; abans la
+    // columna llegia el camp obsolet i sortia '—' per a TOTS els àlies del wizard (QA-S8 · D4b).
+    { key: 'description_en', label: t('clients.alias_desc'), render: r => {
+      const en = r.description_en || legacyDesc(r)
+      const local = r.description_local
+      if (!en && !local) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+      return (
+        <div style={{ lineHeight: 1.2 }}>
+          {en && <div>{en}</div>}
+          {local && (
+            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+              {r.language && <span style={{ fontFamily: MONO, marginRight: 4 }}>[{r.language}]</span>}{local}
+            </div>
+          )}
+        </div>
+      )
+    } },
     // POM canònic: codi global (POM-XXX) com a element principal; a sota, abreviatura + nom EN.
     // Fallback per a POMs tenant-only (sense pom_global): el codi_client fa d'identificador i
     // no repetim l'abreviatura si coincideix amb el principal.
+    // Sense POM (pom=null): és vocabulari del client PENDENT DE MAPAR (QA-S8-R1) — es pot mapar
+    // des de la mateixa fila amb el cercador de POM.
     { key: 'pom', label: t('clients.alias_pom'), render: r => {
+      if (!r.pom) {
+        return canEdit
+          ? <PomPicker t={t} onPick={pm => mapAlias(r, pm)} label={t('clients.alias_pendent_map')} />
+          : <Badge variant="warn">{t('clients.alias_pendent_map')}</Badge>
+      }
       const primary = r.pom_code_global || r.pom_codi
       const abbr = r.pom_abbreviation && r.pom_abbreviation !== primary ? r.pom_abbreviation : null
       const nomEn = r.pom_nom_en || r.pom_nom
@@ -304,10 +353,65 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
   )
 }
 
+// Cercador de POM del catàleg. Únic per a tot el tab tècnic: el fan servir l'alta d'àlies
+// (AliasAddRow) i el mapatge en línia d'un àlies pendent (QA-S8-R1). `label` és el text del
+// botó quan el desplegable està tancat; `onPick` rep el POMMaster triat.
+function PomPicker({ t, onPick, label }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState([])
+
+  const search = (value) => {
+    setQ(value)
+    if (!value.trim()) { setResults([]); return }
+    poms.list({ search: value.trim(), page_size: 15 })
+      .then(res => setResults(res.data?.results ?? (Array.isArray(res.data) ? res.data : [])))
+      .catch(() => setResults([]))
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} style={{
+        ...miniBtn, borderColor: 'var(--warn)', color: 'var(--warn)', cursor: 'pointer',
+      }}>
+        <i className="ti ti-map-pin-plus" style={{ fontSize: 13, marginRight: 4 }} />{label}
+      </button>
+    )
+  }
+  return (
+    <div>
+      <input autoFocus value={q} onChange={e => search(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQ(''); setResults([]) } }}
+        placeholder={t('clients.alias_search_pom')} style={{ ...selS, width: 220 }} />
+      {results.length > 0 && (
+        <ul style={{
+          listStyle: 'none', padding: 0, margin: '4px 0 0', maxHeight: 160, overflowY: 'auto',
+          border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)',
+        }}>
+          {results.map(pm => (
+            <li key={pm.id}>
+              <button onClick={() => { setOpen(false); setQ(''); setResults([]); onPick(pm) }}
+                style={{
+                  width: '100%', textAlign: 'left', background: 'none', border: 'none',
+                  cursor: 'pointer', padding: '5px 8px', fontSize: 'var(--fs-body)',
+                  borderBottom: '0.5px solid var(--border)',
+                }}>
+                <span style={{ fontFamily: MONO, fontWeight: 600 }}>{pm.codi_client}</span> · {pm.nom_client}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 // Fila d'alta d'un àlies: codi + descripció + cercador de POM del catàleg.
 function AliasAddRow({ customer, t, onCreated, onError }) {
   const [code, setCode] = useState('')
-  const [desc, setDesc] = useState('')
+  const [descEn, setDescEn] = useState('')
+  const [descLocal, setDescLocal] = useState('')
+  const [lang, setLang] = useState('')
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [pom, setPom] = useState(null)   // {id, codi_client, nom_client}
@@ -324,11 +428,19 @@ function AliasAddRow({ customer, t, onCreated, onError }) {
     if (!code.trim()) { onError(t('clients.required')); return }
     if (!pom) { onError(t('clients.alias_pom_required')); return }
     setSaving(true)
+    // Escriu els camps VIUS (description_en/local + language), no `client_description`: el model
+    // el declara obsolet i prohibeix escriure-hi (models.py:255-258). Fins ara l'alta manual hi
+    // anava, i era l'únic camí que encara alimentava el camp mort (QA-S8 · D4b).
     customerAliases.create({
-      customer: customer.id, client_code: code.trim(), client_description: desc.trim(),
+      customer: customer.id, client_code: code.trim(),
+      description_en: descEn.trim(), description_local: descLocal.trim(),
+      language: lang.trim().toLowerCase(),
       pom: pom.id, origen: 'MANUAL',
     })
-      .then(() => { setCode(''); setDesc(''); setQ(''); setResults([]); setPom(null); onCreated() })
+      .then(() => {
+        setCode(''); setDescEn(''); setDescLocal(''); setLang('')
+        setQ(''); setResults([]); setPom(null); onCreated()
+      })
       .catch(e => onError(e?.response?.data?.non_field_errors?.[0] || e?.response?.data?.detail || t('clients.error')))
       .finally(() => setSaving(false))
   }
@@ -340,9 +452,17 @@ function AliasAddRow({ customer, t, onCreated, onError }) {
           <input value={code} onChange={e => setCode(e.target.value)} maxLength={60}
             style={{ ...selS, width: 120, display: 'block', marginTop: 4, fontFamily: MONO }} />
         </label>
-        <label style={miniLabel}>{t('clients.alias_desc')}
-          <input value={desc} onChange={e => setDesc(e.target.value)} maxLength={200}
+        <label style={miniLabel}>{t('clients.alias_desc_en')}
+          <input value={descEn} onChange={e => setDescEn(e.target.value)} maxLength={200}
             style={{ ...selS, width: 200, display: 'block', marginTop: 4 }} />
+        </label>
+        <label style={miniLabel}>{t('clients.alias_desc_local')}
+          <input value={descLocal} onChange={e => setDescLocal(e.target.value)} maxLength={200}
+            style={{ ...selS, width: 180, display: 'block', marginTop: 4 }} />
+        </label>
+        <label style={miniLabel}>{t('clients.alias_lang')}
+          <input value={lang} onChange={e => setLang(e.target.value)} maxLength={2} placeholder="es"
+            style={{ ...selS, width: 56, display: 'block', marginTop: 4, fontFamily: MONO }} />
         </label>
         <label style={miniLabel}>{t('clients.alias_pom')}
           <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>

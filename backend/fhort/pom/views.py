@@ -205,7 +205,7 @@ class GradingRuleSetViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             if n_prof:
                 SizingProfile.objects.filter(grading_rule_set=instance).delete()
-            instance.delete()  # CASCADE: GradingRule + GradingException; Model → SET_NULL
+            instance.delete()  # CASCADE: GradingRule; Model → SET_NULL
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -346,7 +346,9 @@ class CustomerPOMAliasViewSet(viewsets.ModelViewSet):
     )
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['customer', 'pom', 'pendent_revisio', 'origen']
-    search_fields = ['client_code', 'client_description']
+    # La cerca ha de trobar també les descripcions del diccionari (QA-S8 · D4b): sense els camps
+    # nous, buscar "neckline" no retornava cap dels 90 àlies carregats pel wizard.
+    search_fields = ['client_code', 'client_description', 'description_en', 'description_local']
     ordering = ['client_code']
 
     def get_permissions(self):
