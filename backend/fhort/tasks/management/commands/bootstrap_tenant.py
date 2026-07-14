@@ -100,6 +100,31 @@ def models_for_blocks(blocks):
     return names
 
 
+def seed_block_counts(source='fhort'):
+    """Comptadors reals del tenant origen per bloc de sembra (F3 B4/B5).
+
+    Retorna {block: {'total': n, 'deps': [...], 'models': {ModelName: count}}}. Viu
+    AQUÍ (tasks) perquè és l'únic lloc que coneix el catàleg; el backoffice (SHARED)
+    hi delega sense importar cap model de tenant. Llegeix des del schema origen.
+    """
+    spec_models = {row[0].__name__: row[0] for row in _spec()}
+    out = {}
+    with schema_context(source):
+        for block, names in SEED_BLOCKS.items():
+            models, total = {}, 0
+            for nm in names:
+                m = spec_models.get(nm)
+                c = m.objects.count() if m is not None else 0
+                models[nm] = c
+                total += c
+            out[block] = {
+                'total': total,
+                'deps': sorted(SEED_BLOCK_DEPS.get(block, set())),
+                'models': models,
+            }
+    return out
+
+
 def _spec():
     """Ordre topològic (cens B5 + els 7 catàlegs-fulla, verificats buits en un tenant verge)."""
     from fhort.pom.models import (

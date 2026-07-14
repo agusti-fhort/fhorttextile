@@ -8,12 +8,14 @@ from .views_tenants import ClientViewSet, PlanViewSet
 from .views_contracts import ServiceCatalogViewSet, TenantContractViewSet
 from .views_contracts import generate_invoice_view
 from .views_pricing import pricing_public_view, pricing_view
+from .views_seeding import SeedProfileViewSet
 
 router = DefaultRouter()
 router.register('tenants', ClientViewSet, basename='tenant')
 router.register('plans', PlanViewSet, basename='plan')
 router.register('serveis', ServiceCatalogViewSet, basename='servei')
 router.register('contractes', TenantContractViewSet, basename='contracte')
+router.register('perfils-sembra', SeedProfileViewSet, basename='perfil-sembra')
 
 urlpatterns = [
     path('auth/login/', BackofficeTokenObtainView.as_view(), name='backoffice-login'),

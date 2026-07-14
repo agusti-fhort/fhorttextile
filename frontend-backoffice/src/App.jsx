@@ -6,6 +6,7 @@ import TenantsPage from './pages/TenantsPage'
 import TenantDetailPage from './pages/TenantDetailPage'
 import TenantFormPage from './pages/TenantFormPage'
 import ServeisPage from './pages/ServeisPage'
+import SeedProfilesPage from './pages/SeedProfilesPage'
 import ContractesPage from './pages/ContractesPage'
 import ContractFormPage from './pages/ContractFormPage'
 import ContractDetailPage from './pages/ContractDetailPage'
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/tenants/:codi" element={<TenantDetailPage />} />
           <Route path="/tenants/:codi/edit" element={<TenantFormPage />} />
           <Route path="/serveis" element={<ServeisPage />} />
+          <Route path="/perfils-sembra" element={<SeedProfilesPage />} />
           <Route path="/contractes" element={<ContractesPage />} />
           {/* Estàtica abans que dinàmica: /new no s'ha de capturar com a :id */}
           <Route path="/contractes/new" element={<ContractFormPage />} />

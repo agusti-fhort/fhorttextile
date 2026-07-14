@@ -30,6 +30,7 @@ const SECTIONS = [
       { to: '/dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
       { to: '/tenants', label: 'Tenants', icon: 'ti-building-store' },
       { to: '/serveis', label: 'Catàleg de serveis', icon: 'ti-category' },
+      { to: '/perfils-sembra', label: 'Perfils de sembra', icon: 'ti-seeding' },
       { to: '/contractes', label: 'Contractes', icon: 'ti-file-invoice' },
     ],
   },
