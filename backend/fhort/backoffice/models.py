@@ -2,8 +2,23 @@
 # El backoffice viu NOMÉS al schema public (SHARED_APPS). Aquests models són la
 # RBAC pròpia del backoffice (separada dels usuaris de tenant) i el log d'accions
 # del personal FHORT. Mai referencien models de tenant.
+import hashlib
+
 from django.conf import settings
 from django.db import models
+
+
+def normalitza_legal(contingut):
+    """Normalització canònica per al hash d'un document legal: UTF-8 + line endings
+    LF. El hash es calcula SEMPRE sobre aquesta forma perquè sigui determinista i
+    reproduïble (F4: re-publicar el mateix text en una versió nova dona el mateix hash)."""
+    text = (contingut or '').replace('\r\n', '\n').replace('\r', '\n')
+    return text
+
+
+def sha256_legal(contingut):
+    """SHA-256 hex del contingut normalitzat."""
+    return hashlib.sha256(normalitza_legal(contingut).encode('utf-8')).hexdigest()
 
 
 class BackofficeUser(models.Model):
@@ -266,3 +281,133 @@ class InvoiceLine(models.Model):
 
     def __str__(self):
         return f'{self.invoice} · {self.descripcio} · {self.total}'
+
+
+# ---------------------------------------------------------------------------
+# F4 P-LEGAL — documents legals amb hash + acceptacions probatòries.
+# Patró: BackofficeActionLog (append-only). Viuen a public (SHARED): el registre
+# legal és de la plataforma, i LegalAcceptance referencia el Client (registre
+# public de tenants), mai models de tenant-schema.
+# ---------------------------------------------------------------------------
+class LegalDocument(models.Model):
+    """Un document legal de la plataforma (Termes, Privacitat, DPA, SLA...).
+    El contingut viu a les VERSIONS; aquí només la identitat i el tipus."""
+
+    TIPUS_TERMES = 'TERMES'
+    TIPUS_PRIVACITAT = 'PRIVACITAT'
+    TIPUS_DPA = 'DPA'
+    TIPUS_SLA = 'SLA'
+    TIPUS_CHOICES = [
+        (TIPUS_TERMES, 'Termes i condicions'),
+        (TIPUS_PRIVACITAT, 'Política de privacitat'),
+        (TIPUS_DPA, 'Acord de tractament de dades (DPA)'),
+        (TIPUS_SLA, 'Acord de nivell de servei (SLA)'),
+    ]
+
+    tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES)
+    nom = models.CharField(max_length=200)
+    actiu = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['tipus', 'nom']
+
+    def __str__(self):
+        return f'{self.tipus} · {self.nom}'
+
+
+class LegalDocumentVersion(models.Model):
+    """Una versió d'un document legal. DRAFT és editable; en PUBLICAR es calcula el
+    sha256 sobre el contingut normalitzat i es CONGELA: cap canvi de contingut/hash
+    a partir d'aquí (save-guard). Cap endpoint d'esborrat sobre publicades."""
+
+    ESTAT_DRAFT = 'DRAFT'
+    ESTAT_PUBLICADA = 'PUBLICADA'
+    ESTAT_CHOICES = [(ESTAT_DRAFT, 'Esborrany'), (ESTAT_PUBLICADA, 'Publicada')]
+
+    document = models.ForeignKey(LegalDocument, on_delete=models.PROTECT,
+                                 related_name='versions')
+    numero_versio = models.PositiveIntegerField()
+    contingut = models.TextField(blank=True, default='')
+    sha256 = models.CharField(max_length=64, blank=True, default='')
+    estat = models.CharField(max_length=10, choices=ESTAT_CHOICES, default=ESTAT_DRAFT)
+    data_publicacio = models.DateTimeField(null=True, blank=True)
+    requereix_reacceptacio = models.BooleanField(
+        default=False,
+        help_text='Si True, els clients que havien acceptat versions anteriors han de '
+                  'reacceptar (apareix a pending/ i al gate del /me del tenant).')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['document', '-numero_versio']
+        constraints = [
+            models.UniqueConstraint(fields=['document', 'numero_versio'],
+                                    name='unique_versio_per_document'),
+        ]
+
+    def __str__(self):
+        return f'{self.document.tipus} v{self.numero_versio} [{self.estat}]'
+
+    def save(self, *args, **kwargs):
+        # IMMUTABILITAT: una versió PUBLICADA no pot canviar el contingut ni el hash.
+        # Es llegeix l'estat REAL a la BD (no el de la instància, que podria haver-se
+        # mutat en memòria) per decidir si el guard salta.
+        if self.pk:
+            anterior = type(self).objects.filter(pk=self.pk).only(
+                'estat', 'contingut', 'sha256').first()
+            if anterior and anterior.estat == self.ESTAT_PUBLICADA:
+                if self.contingut != anterior.contingut or self.sha256 != anterior.sha256:
+                    raise ValueError(
+                        f'LegalDocumentVersion {self.pk} està PUBLICADA i és immutable: '
+                        f'no es pot canviar contingut ni hash.')
+        super().save(*args, **kwargs)
+
+    def publica(self):
+        """Congela la versió: normalitza, calcula sha256, marca PUBLICADA i segella la
+        data. Determinista: mateix contingut → mateix hash. Idempotent si ja publicada."""
+        from django.utils import timezone
+        if self.estat == self.ESTAT_PUBLICADA:
+            return self
+        self.contingut = normalitza_legal(self.contingut)
+        self.sha256 = sha256_legal(self.contingut)
+        self.estat = self.ESTAT_PUBLICADA
+        self.data_publicacio = timezone.now()
+        self.save()
+        return self
+
+
+class LegalAcceptance(models.Model):
+    """Prova d'acceptació d'una versió legal per part d'un client (empresa). APPEND-ONLY:
+    cap update ni delete a cap capa (save-guard aquí + cap endpoint). Idempotent per
+    (client, versio): re-acceptar no duplica."""
+
+    METODE_CHECKBOX = 'CHECKBOX'
+    METODE_API = 'API'
+    METODE_CHOICES = [(METODE_CHECKBOX, 'Checkbox UI'), (METODE_API, 'API')]
+
+    client = models.ForeignKey('tenants.Client', on_delete=models.PROTECT,
+                               related_name='legal_acceptances')
+    versio = models.ForeignKey(LegalDocumentVersion, on_delete=models.PROTECT,
+                               related_name='acceptances')
+    accepted_by = models.CharField(max_length=254,
+                                   help_text="Email/identificador de qui va clicar.")
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default='')
+    metode = models.CharField(max_length=10, choices=METODE_CHOICES, default=METODE_CHECKBOX)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        constraints = [
+            models.UniqueConstraint(fields=['client', 'versio'],
+                                    name='unique_acceptance_per_client_versio'),
+        ]
+
+    def __str__(self):
+        return f'{self.client.codi_tenant} accepta {self.versio} @ {self.timestamp:%Y-%m-%d}'
+
+    def save(self, *args, **kwargs):
+        # APPEND-ONLY: una fila existent no es pot modificar mai.
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValueError('LegalAcceptance és append-only: no es pot modificar.')
+        super().save(*args, **kwargs)
