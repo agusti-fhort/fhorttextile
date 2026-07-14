@@ -191,7 +191,7 @@
     "rec_bloquejades": "bloquejades",
     "rec_codis_lliures": "{{n}} codis lliures",
     "rec_codis_ocupats": "{{n}} codis JA OCUPATS",
-    "rec_colisio_avis": "Algun dels codis a assignar ja existeix. No importis: torna a pujar el fitxer perquè es recalculin.",
+    "rec_colisio_avis": "Algun dels codis a assignar ja existeix a la base de dades (dades desalineades). Si importes, l'operació es rebutjarà sencera i no s'escriurà res. Avisa l'estudi.",
     "rec_col_incloure": "Entra",
     "rec_col_incloure_hint": "Quines files s'importaran. Les bloquejades queden fora amb el seu motiu.",
     "rec_col_codi": "Codi que ocuparà",

@@ -191,7 +191,7 @@
     "rec_bloquejades": "blocked",
     "rec_codis_lliures": "{{n}} codes free",
     "rec_codis_ocupats": "{{n}} codes ALREADY TAKEN",
-    "rec_colisio_avis": "One of the codes to be assigned already exists. Do not import: upload the file again so they are recalculated.",
+    "rec_colisio_avis": "One of the codes to be assigned already exists in the database (misaligned data). If you import, the whole operation will be rejected and nothing will be written. Tell the studio.",
     "rec_col_incloure": "In",
     "rec_col_incloure_hint": "Which rows will be imported. Blocked ones stay out, with their reason.",
     "rec_col_codi": "Code it will take",

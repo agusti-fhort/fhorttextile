@@ -191,7 +191,7 @@
     "rec_bloquejades": "bloqueadas",
     "rec_codis_lliures": "{{n}} códigos libres",
     "rec_codis_ocupats": "{{n}} códigos YA OCUPADOS",
-    "rec_colisio_avis": "Alguno de los códigos a asignar ya existe. No importes: vuelve a subir el fichero para que se recalculen.",
+    "rec_colisio_avis": "Alguno de los códigos a asignar ya existe en la base de datos (datos desalineados). Si importas, la operación se rechazará entera y no se escribirá nada. Avisa al estudio.",
     "rec_col_incloure": "Entra",
     "rec_col_incloure_hint": "Qué filas se importarán. Las bloqueadas quedan fuera con su motivo.",
     "rec_col_codi": "Código que ocupará",
