@@ -151,10 +151,38 @@ hi és; el disparador no. D1 ha de fixar si `email_facturacio` entra a l'alta.
 
 ---
 
-# ⛔ STOP-AGUS — FORMULARIS DE DECISIÓ
+# ✅ D-P1 — DECISIONS TANCADES (Agus, 2026-07-14)
 
-> Res del que segueix és decisió presa. Són `💡 PROPOSTA (a validar)`. Cap Patró B fins que
-> l'Agus respongui D1–D6.
+> Els formularis originals queden més avall com a **traça** (`💡 PROPOSTA`). Aquesta és la
+> **resolució vinculant** i l'input directe del brief de **F2-B**.
+
+| # | Decisió | Matís vinculant per a F2-B |
+|---|---|---|
+| **D1** | **B** — obligatoris a l'alta: `codi_tenant, nom, plan, pais, email_facturacio` | ⚠️ **`plan` obligatori SENSE default Free silenciós.** L'alta la fa un **operador** al backoffice; un default Free callat significaria que un descuit dispararia la sembra automàtica sencera quan el hook de F3 existeixi. Tria explícita de l'operador. El default Free només tindrà sentit amb **auto-registre públic (self-service)**, altra fase. **Promoure `email_facturacio` a `required`** (coordinació amb el hook F3 tancada). |
+| **D2** | **A** — reutilitzar `Client.pais` | Deute real = **connector**: F2-B ha d'incloure que l'endpoint de pricing de F1 **rebi el país de la fitxa** quan es calcula per a un client concret (el `?country=` ja existeix a `views_pricing.py:25`; falta que algú l'alimenti des de `Client.pais`). |
+| **D3** | **A** — camps al mateix `Client` (YAGNI total) | Objecte facturable separat **només** el dia que un Enterprise real ho demani, ni un abans. |
+| **D4** | **A** — `tipologia` informatiu, cap gate | El perfil derivat de Multi-Customer queda **anotat com a evolució**, no com a feina. |
+| **D5** | **A** — camp `idioma` mantingut | Deute de **consum** anotat amb nom: li arriba l'hora amb **F4-legal** i **F7-factures** (els primers documents que s'emeten en un idioma). |
+| **D6** | Reaprofitar tabs: ampliar **Condicions** amb contracte/tarifa + tab **Legal** nou (F4) | La **decisió fina de layout** es pren al **Patró B amb captura de l'actual al davant** (premissa d'estil). El brief de F2-B ho ha de demanar **com a primer pas**. |
+
+**Scope resultant per a F2-B (Patró B):**
+1. `ClientCreateSerializer`: `pais` i `email_facturacio` → `required` (avui `:112-113`); `plan`
+   segueix `required` **sense** injectar default Free. Reflectir-ho a la validació de la SPA
+   (`TenantFormPage.jsx:128-141`).
+2. **Connector pricing↔fitxa**: quan es calcula pricing per a un client concret, alimentar
+   `?country=` de F1 amb `Client.pais` (avui pricing és cec al client).
+3. Fitxa (D6): enllaçar el `TenantContract` vigent + tarifa a la tab **Condicions**; afegir
+   tab **Legal** (placeholder F4). **Layout fi decidit a Patró B amb captura.**
+4. Deutes anotats (no feina d'F2-B): consum de `Client.idioma` (F4/F7), `tipologia`→perfil
+   Multi-Customer, `BillingEntity` separat (Enterprise), màquina que tanca `onboarding_complet`,
+   i18n de la fitxa.
+
+---
+
+# ⛔ STOP-AGUS — FORMULARIS DE DECISIÓ (traça · resolts a dalt)
+
+> Resolts per l'Agus 2026-07-14 (veure bloc "D-P1 — DECISIONS TANCADES"). Es conserven com a
+> traça del raonament i els costos.
 
 ### D1 — Camps OBLIGATORIS a l'alta vs diferits a onboarding
 | Opció | Obligatoris a l'alta | Cost | Nota |
