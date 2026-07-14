@@ -46,6 +46,59 @@ NULL = 'null'        # FK a entitat del tenant origen: no viatja
 DEFER = 'defer'      # auto-FK: NULL a la 1a passada, resolta a la 2a
 NATURAL = 'natural'  # resoldre al destí per clau natural (el model NO es copia)
 
+# ---------------------------------------------------------------------------
+# F3 P-FREE-SEED (B2) — blocs de sembra seleccionables des del backoffice.
+# Cada bloc agrupa peces de `_spec()` per NOM de model. SEED_BLOCK_DEPS és el graf
+# de dependències DE SELECCIÓ: seleccionar un bloc n'arrossega la clausura (p.ex.
+# demanar 'grading' arrossega base + garments + size_systems + pom_masters, perquè
+# GradingRule.pom→POMMaster, .talla_base→SizeDefinition, .rule_set→GradingRuleSet).
+# L'ordre REAL de còpia el fixa _spec() (topològic); aquí només es decideix QUINES
+# peces hi entren. Les claus han de coincidir amb backoffice.SeedProfile.Bloc.
+SEED_BLOCKS = {
+    'base':            ['BodyMeasurementISO', 'POMCategory', 'GarmentGroup', 'Target',
+                        'FitType', 'ConstructionType', 'POMGlobal', 'GarmentTypeGlobal'],
+    'size_systems':    ['SizeSystem', 'SizeDefinition'],
+    'garments':        ['GarmentType', 'GarmentTypeItem'],
+    'pom_masters':     ['POMMaster', 'GarmentPOMMap'],
+    'grading':         ['GradingRuleSet', 'GradingRule'],
+    'sizing_profiles': ['SizingProfile'],
+    'time_seeds':      ['TaskTimeEstimate', 'TimeSeed'],
+}
+SEED_BLOCK_DEPS = {
+    'base':            set(),
+    'size_systems':    {'base'},
+    'garments':        {'base'},
+    'pom_masters':     {'base', 'garments'},
+    'grading':         {'base', 'size_systems', 'pom_masters', 'garments'},
+    # SizingProfile.grading_rule_set és PROTECT i NO nullable: un perfil de mesures
+    # exigeix un ruleset de grading al schema. Dependència DURA → arrossega grading.
+    'sizing_profiles': {'base', 'garments', 'size_systems', 'grading'},
+    'time_seeds':      {'base', 'garments'},
+}
+GRADING_BLOCK = 'grading'
+
+
+def seed_block_closure(blocks):
+    """Clausura transitiva de dependències de selecció. Falla fort si un bloc no existeix."""
+    seen, stack = set(), list(blocks)
+    while stack:
+        b = stack.pop()
+        if b in seen:
+            continue
+        if b not in SEED_BLOCK_DEPS:
+            raise CommandError(f"Bloc de sembra desconegut: {b!r}. Vàlids: {sorted(SEED_BLOCK_DEPS)}")
+        seen.add(b)
+        stack.extend(SEED_BLOCK_DEPS[b] - seen)
+    return seen
+
+
+def models_for_blocks(blocks):
+    """Conjunt de noms de model coberts per un conjunt de blocs (ja en clausura)."""
+    names = set()
+    for b in blocks:
+        names.update(SEED_BLOCKS[b])
+    return names
+
 
 def _spec():
     """Ordre topològic (cens B5 + els 7 catàlegs-fulla, verificats buits en un tenant verge)."""
@@ -102,6 +155,9 @@ class Command(BaseCommand):
                             help='Schema del tenant origen (default: fhort).')
         parser.add_argument('--dry-run', action='store_true',
                             help='Recompte del que faria, sense escriure res.')
+        parser.add_argument('--profile', dest='profile', type=int, default=None,
+                            help='ID d\'un backoffice.SeedProfile: sembra NOMÉS els blocs '
+                                 'seleccionats (+ dependències). Sense --profile: tot el catàleg.')
 
     # ------------------------------------------------------------------ utils
 
@@ -109,11 +165,18 @@ class Command(BaseCommand):
         """Camps concrets a copiar (sense pk, sense M2M). FK → attname (`x_id`)."""
         return [f for f in model._meta.fields if not f.primary_key]
 
-    def _read_source(self, model, source):
-        """Llegeix les files de l'origen com a dicts {field_name: valor|pk_origen}."""
+    def _read_source(self, model, source, filter_kwargs=None):
+        """Llegeix les files de l'origen com a dicts {field_name: valor|pk_origen}.
+
+        `filter_kwargs` restringeix la font (F3: gate de grading — només rulesets
+        origen=CANONICAL, i les regles que hi pengen). None = totes les files.
+        """
         with schema_context(source):
+            qs = model.objects.all()
+            if filter_kwargs:
+                qs = qs.filter(**filter_kwargs)
             rows = []
-            for obj in model.objects.all().order_by('pk'):
+            for obj in qs.order_by('pk'):
                 row = {'__pk__': obj.pk}
                 for f in self._concrete(model):
                     row[f.name] = getattr(obj, f.attname) if f.is_relation else getattr(obj, f.name)
@@ -135,9 +198,9 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------ còpia
 
     def _copy_piece(self, model, key_fields, fk_strat, m2m_fields, transform,
-                    source, maps, natural_cache, deferred):
+                    source, maps, natural_cache, deferred, source_filters=None):
         p = Piece(model.__name__)
-        rows = self._read_source(model, source)
+        rows = self._read_source(model, source, (source_filters or {}).get(model))
         if not rows:
             return p, []
 
@@ -196,6 +259,15 @@ class Command(BaseCommand):
                     rel = f.related_model
                     new = maps.get(rel, {}).get(old)
                     if new is None:
+                        # F3: en sembra selectiva, una FK NULLABLE cap a un bloc no
+                        # seleccionat no és un error: l'enllaç opcional no es pobla
+                        # (p.ex. GarmentTypeItem.grading_rule_set en un Free sense
+                        # grading). Només és skip dur si la FK és obligatòria (i llavors
+                        # la clausura de blocs hauria d'haver-la arrossegada abans).
+                        if f.null:
+                            p.nulled += 1
+                            values[att] = None
+                            continue
                         skip = f"{name}: {rel.__name__} pk={old} no s'ha copiat"
                         break
                     values[att] = new
@@ -275,8 +347,43 @@ class Command(BaseCommand):
         if not TenantModel.objects.filter(schema_name=source).exists():
             raise CommandError(f"Tenant origen '{source}' no existeix.")
 
+        # ---- F3 P-FREE-SEED: selecció per perfil (blocs + gate de grading) -----
+        # El SeedProfile viu a backoffice (SHARED/public); es llegeix des de public,
+        # ABANS d'obrir el schema_context del destí.
+        selected_models, source_filters = None, {}
+        prof_label = ''
+        if options['profile'] is not None:
+            from fhort.backoffice.models import SeedProfile
+            profile = SeedProfile.objects.filter(pk=options['profile']).first()
+            if profile is None:
+                raise CommandError(f"SeedProfile id={options['profile']} no existeix.")
+            if not profile.blocks:
+                raise CommandError(f"El perfil '{profile.nom}' no selecciona cap bloc.")
+            closure = seed_block_closure(profile.blocks)
+            selected_models = models_for_blocks(closure)
+            prof_label = f" · perfil '{profile.nom}' → blocs {sorted(closure)}"
+
+            # Gate de grading (llei RUN-CLIENT, A3): al flux automàtic només viatja
+            # grading CANONICAL. Si el perfil el demana i cap ruleset de l'origen és
+            # CANONICAL → error clar, cap còpia (mai còpia silenciosa de NULL/CLIENT_RUN).
+            if GRADING_BLOCK in closure:
+                from fhort.pom.models import GradingRuleSet, GradingRule
+                with schema_context(source):
+                    n_canon = GradingRuleSet.objects.filter(
+                        origen=GradingRuleSet.ORIGEN_CANONICAL).count()
+                if n_canon == 0:
+                    raise CommandError(
+                        f"El perfil '{profile.nom}' demana grading però l'origen '{source}' "
+                        f"no té cap GradingRuleSet amb origen=CANONICAL (classifica'ls amb "
+                        f"`set_grading_origen`). No es copia cap ruleset.")
+                source_filters[GradingRuleSet] = {'origen': GradingRuleSet.ORIGEN_CANONICAL}
+                source_filters[GradingRule] = {'rule_set__origen': GradingRuleSet.ORIGEN_CANONICAL}
+
         self.stdout.write(f"\n{'[DRY-RUN] ' if dry else ''}bootstrap_tenant: "
-                          f"{source} → {schema} ({client.codi_tenant})\n")
+                          f"{source} → {schema} ({client.codi_tenant}){prof_label}\n")
+
+        spec = [row for row in _spec()
+                if selected_models is None or row[0].__name__ in selected_models]
 
         maps, natural_cache, deferred, pieces = {}, {}, [], []
         ok = True
@@ -284,9 +391,10 @@ class Command(BaseCommand):
         try:
             with transaction.atomic():
                 with schema_context(schema):
-                    for model, key, fks, m2m, tr in _spec():
+                    for model, key, fks, m2m, tr in spec:
                         p, _ = self._copy_piece(model, key, fks, m2m, tr,
-                                                source, maps, natural_cache, deferred)
+                                                source, maps, natural_cache, deferred,
+                                                source_filters)
                         pieces.append(p)
                         extra = f" · {p.nulled} FK d'entitat → NULL" if p.nulled else ''
                         skip = f" · {p.skipped} saltats" if p.skipped else ''
