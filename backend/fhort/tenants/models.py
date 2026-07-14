@@ -47,6 +47,12 @@ class Plan(models.Model):
     preu_model_extra = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     moneda_pla = models.CharField(max_length=3, default='EUR')
 
+    # F1 (P-PRICE) — ganxo amb el catàleg de Stripe. NO és preu: és el punter al
+    # lookup_key de Stripe (font de veritat del preu). La BD FHORT no guarda imports.
+    # Sense seed encara (això és fase posterior amb la fitxa de client): només el ganxo.
+    stripe_lookup_platform = models.CharField(max_length=100, null=True, blank=True)
+    stripe_lookup_model = models.CharField(max_length=100, null=True, blank=True)
+
     class Meta:
         verbose_name = 'Pla'
         verbose_name_plural = 'Plans'
