@@ -33,6 +33,17 @@ def _key(s):
     return _norm(s).lower()
 
 
+# Falsos textuals: el que el client escriu a una columna de sí/no quan vol dir NO.
+# `bool('NO')` és True — una cel·la amb 'NO' es llegia com un sí i la fila petava demanant
+# 'referencia_conjunt'. Tot el que no sigui un fals explícit (ni buit) compta com a sí.
+FALSOS = {'', 'no', 'false', 'fals', '0', 'n', 'f', 'nan', 'none'}
+
+
+def _as_bool(raw):
+    """Booleà d'una cel·la d'Excel escrita per un humà: 'NO'/'FALSE'/'0'/buit → False."""
+    return _norm(raw).lower() not in FALSOS
+
+
 def _split_sizes(raw):
     """Separa un string de run de talles per comes/;/·/espais → llista neta."""
     parts = re.split(r'[,;·\n\t]+|\s{2,}', _norm(raw))
@@ -288,7 +299,7 @@ def resolve_row(cat, cells):
             warnings.append({'camp': 'run_talles', 'missatge_client': mr.warning})
 
     # conjunts
-    es_conjunt = bool(g('es_conjunt'))
+    es_conjunt = _as_bool(g('es_conjunt'))
     ref_conjunt = g('referencia_conjunt')
     piece_number = None
     if es_conjunt and not ref_conjunt:

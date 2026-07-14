@@ -18,7 +18,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from fhort.accounts.models import UserProfile
 from fhort.models_app.models import (
     BulkCollectionImport, BulkCollectionRow, Model, ModelSequence)
-from fhort.models_app.bulk_import_service import commit_import
+from fhort.models_app.bulk_import_service import _as_bool, commit_import, validate_rows
 from fhort.models_app.bulk_import_views import commit_view
 from fhort.models_app.services import reserve_sequence_range
 from fhort.tasks.models import Customer
@@ -132,6 +132,40 @@ class ImportSenseColisioTest(_BulkBase):
         self.assertIn('BRW-FW26-0018', codis)
         self.assertIn('BRW-FW26-0019', codis)
         self.assertEqual(len(codis), 19)
+
+
+class EsConjuntTextualTest(_TenantBase):
+    """T3 — 'NO' escrit a la columna es_conjunt vol dir NO. `bool('NO')` és True, i la fila
+    petava demanant 'referencia_conjunt' a qui no havia demanat cap conjunt."""
+
+    def setUp(self):
+        super().setUp()
+        self.customer = Customer.objects.create(codi='BRW', nom='Brownie SL')
+
+    def _fila(self, es_conjunt):
+        raw = [{'row_num': 2, 'cells': {
+            'nom_prenda': 'Tate', 'any': '2026', 'temporada': 'SS', 'es_conjunt': es_conjunt}}]
+        results, _resum = validate_rows(self.customer, raw)
+        return results[0]
+
+    def test_falsos_textuals_no_demanen_referencia_conjunt(self):
+        for valor in ['NO', 'FALSE', 'no', 'False', 'fals', '0', '', 'N']:
+            with self.subTest(valor=valor):
+                fila = self._fila(valor)
+                self.assertEqual(fila['estat'], 'OK', f"'{valor}' hauria de valer NO")
+                self.assertEqual(fila['errors'], [])
+
+    def test_un_si_de_debo_segueix_exigint_referencia_conjunt(self):
+        fila = self._fila('SI')
+
+        self.assertEqual(fila['estat'], 'ERROR')
+        self.assertIn('referencia_conjunt', fila['errors'][0]['missatge_client'])
+
+    def test_as_bool_unitari(self):
+        for fals in ['NO', 'FALSE', 'fals', '0', '', '  no  ', 'None']:
+            self.assertFalse(_as_bool(fals), fals)
+        for cert in ['SI', 'TRUE', 'X', '1', 'sí', 'yes']:
+            self.assertTrue(_as_bool(cert), cert)
 
 
 class ColisioRetorna409Test(_BulkBase):
