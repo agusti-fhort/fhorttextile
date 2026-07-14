@@ -7,6 +7,7 @@ from .views import BackofficeMeView, BackofficeTokenObtainView, health_view
 from .views_tenants import ClientViewSet, PlanViewSet
 from .views_contracts import ServiceCatalogViewSet, TenantContractViewSet
 from .views_contracts import generate_invoice_view
+from .views_pricing import pricing_public_view, pricing_view
 
 router = DefaultRouter()
 router.register('tenants', ClientViewSet, basename='tenant')
@@ -18,6 +19,8 @@ urlpatterns = [
     path('auth/login/', BackofficeTokenObtainView.as_view(), name='backoffice-login'),
     path('auth/me/', BackofficeMeView.as_view(), name='backoffice-me'),
     path('health/', health_view, name='backoffice-health'),
+    path('pricing/public/', pricing_public_view, name='backoffice-pricing-public'),
+    path('pricing/', pricing_view, name='backoffice-pricing'),
     path('facturacio/generar/', generate_invoice_view),
     path('', include(router.urls)),
 ]

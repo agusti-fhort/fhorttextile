@@ -137,9 +137,9 @@ def resolve_pricing(country=None):
 
     try:
         payload = _fetch_from_stripe(country)
-    except PricingUnavailable:
-        raise
-    except Exception as exc:  # noqa: BLE001 — qualsevol fallada de xarxa/Stripe
+    except Exception as exc:  # noqa: BLE001 — clau absent, xarxa o error de Stripe
+        # Degradació: qualsevol fallada (inclosa clau absent) intenta la cache stale
+        # abans de rendir-se. MAI s'inventa un preu.
         logger.warning('Stripe pricing indisponible (%s); intento cache stale.', exc)
         stale = cache.get(_stale_key(key))
         if stale is not None:
@@ -174,10 +174,17 @@ def _fetch_from_stripe(country):
                 ck = build_lookup_key(tier, concepte, 'eur', country)
                 wanted[ck] = (tier, concepte, True)
 
-    prices = stripe.Price.list(
-        lookup_keys=list(wanted.keys()), active=True, limit=100,
-    )
-    by_lookup = {sget(p, 'lookup_key'): p for p in prices.data if sget(p, 'lookup_key')}
+    # Stripe limita lookup_keys a 10 per crida → batchegem en trossos de 10.
+    by_lookup = {}
+    keys = list(wanted.keys())
+    for i in range(0, len(keys), 10):
+        prices = stripe.Price.list(
+            lookup_keys=keys[i:i + 10], active=True, limit=100,
+        )
+        for p in prices.data:
+            lk = sget(p, 'lookup_key')
+            if lk:
+                by_lookup[lk] = p
 
     payload = {'free': _free_payload()}
     for tier in TIERS:
