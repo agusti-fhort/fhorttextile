@@ -289,6 +289,21 @@ class InvoiceLine(models.Model):
 # legal és de la plataforma, i LegalAcceptance referencia el Client (registre
 # public de tenants), mai models de tenant-schema.
 # ---------------------------------------------------------------------------
+class NoDeleteQuerySet(models.QuerySet):
+    """QuerySet que bloqueja l'esborrat massiu (QuerySet.delete() no passa per
+    Model.delete(), així que cal aturar-lo aquí per garantir l'append-only a l'ORM)."""
+    def delete(self):
+        raise ValueError('Append-only: esborrat no permès en aquest model.')
+
+
+class VersionQuerySet(models.QuerySet):
+    """Bloqueja l'esborrat massiu si hi ha alguna versió PUBLICADA al conjunt."""
+    def delete(self):
+        if self.filter(estat=LegalDocumentVersion.ESTAT_PUBLICADA).exists():
+            raise ValueError('No es pot esborrar una versió PUBLICADA (immutable).')
+        return super().delete()
+
+
 class LegalDocument(models.Model):
     """Un document legal de la plataforma (Termes, Privacitat, DPA, SLA...).
     El contingut viu a les VERSIONS; aquí només la identitat i el tipus."""
@@ -324,6 +339,8 @@ class LegalDocumentVersion(models.Model):
     ESTAT_DRAFT = 'DRAFT'
     ESTAT_PUBLICADA = 'PUBLICADA'
     ESTAT_CHOICES = [(ESTAT_DRAFT, 'Esborrany'), (ESTAT_PUBLICADA, 'Publicada')]
+
+    objects = VersionQuerySet.as_manager()
 
     document = models.ForeignKey(LegalDocument, on_delete=models.PROTECT,
                                  related_name='versions')
@@ -362,6 +379,12 @@ class LegalDocumentVersion(models.Model):
                         f'no es pot canviar contingut ni hash.')
         super().save(*args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        # Una versió PUBLICADA és immutable: no s'esborra a cap capa.
+        if self.estat == self.ESTAT_PUBLICADA:
+            raise ValueError('Versió PUBLICADA immutable: no es pot esborrar.')
+        return super().delete(*args, **kwargs)
+
     def publica(self):
         """Congela la versió: normalitza, calcula sha256, marca PUBLICADA i segella la
         data. Determinista: mateix contingut → mateix hash. Idempotent si ja publicada."""
@@ -384,6 +407,8 @@ class LegalAcceptance(models.Model):
     METODE_CHECKBOX = 'CHECKBOX'
     METODE_API = 'API'
     METODE_CHOICES = [(METODE_CHECKBOX, 'Checkbox UI'), (METODE_API, 'API')]
+
+    objects = NoDeleteQuerySet.as_manager()
 
     client = models.ForeignKey('tenants.Client', on_delete=models.PROTECT,
                                related_name='legal_acceptances')
@@ -411,3 +436,7 @@ class LegalAcceptance(models.Model):
         if self.pk and type(self).objects.filter(pk=self.pk).exists():
             raise ValueError('LegalAcceptance és append-only: no es pot modificar.')
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # APPEND-ONLY: una prova d'acceptació no s'esborra mai.
+        raise ValueError('LegalAcceptance és append-only: no es pot esborrar.')
