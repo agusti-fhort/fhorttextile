@@ -1465,6 +1465,12 @@ export default function TechSheetEditor() {
   const panDrag = useRef(null)          // PEÇA P: estat de l'arrossegament de pan
   const saveTimer = useRef(null)
   const skipSave = useRef(true)        // salta l'autosave del primer load
+  // Mentre el document no és a la pantalla, NO es desa. `skipSave` no n'hi ha prou: només salta
+  // la PRIMERA passada de l'efecte, i el lock (que arriba de seguida) el torna a disparar amb
+  // `pages` encara al full en blanc del muntatge. Si la càrrega del document tarda més que el
+  // debounce de 2 s, aquell full en blanc es desa A SOBRE del document bo. No saber què hi ha
+  // encara i desar-hi un full buit són coses diferents.
+  const docCarregat = useRef(!fttMode)
   // Mode .ftt: estat del document (assets carregats + metadata + cap de cadena actual).
   const fttAssets = useRef({})         // {nom: dataURL} dels assets, ja baixats (vegeu carregarAssets)
   const fttUrlToName = useRef({})      // {dataURL: nom} per desar (dataURL → 'assets/<nom>')
@@ -1950,6 +1956,7 @@ export default function TechSheetEditor() {
           fttHeadId.current = data.fitxer?.id || fitxerId
           setSheet(data.fitxer)   // versio ve de ModelFitxer.versio
           hydrate({ template_json: documentToV2(data.document_json, assets) })
+          docCarregat.current = true   // a partir d'ara, i no abans, es pot desar
         }).catch(() => {})
 
       // F2: adquireix el lock del document lògic (TTL+force-if-stale al backend; el timer-gap
@@ -2049,6 +2056,7 @@ export default function TechSheetEditor() {
 
   // ── Autosave (debounce 2s; només amb lock; salta el primer load) ───────────
   useEffect(() => {
+    if (!docCarregat.current) return   // el document encara no hi és: desar ara seria desar un full en blanc
     if (skipSave.current) { skipSave.current = false; return }
     if (!locked) return
     setSaveState('saving')
