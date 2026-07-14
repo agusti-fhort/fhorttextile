@@ -18,10 +18,13 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from fhort.accounts.models import UserProfile
 from fhort.models_app.models import (
     BulkCollectionImport, BulkCollectionRow, Model, ModelSequence)
-from fhort.models_app.bulk_import_service import _as_bool, commit_import, validate_rows
+from fhort.models_app.bulk_import_service import (
+    _as_bool, commit_import, reconcile, validate_rows)
 from fhort.models_app.bulk_import_views import commit_view
 from fhort.models_app.services import reserve_sequence_range
-from fhort.tasks.models import Customer
+from fhort.pom.models import (
+    ConstructionType, GarmentType, SizeDefinition, SizeSystem, Target)
+from fhort.tasks.models import Customer, GarmentTypeItem
 
 
 class _TenantBase(TenantTestCase):
@@ -166,6 +169,150 @@ class EsConjuntTextualTest(_TenantBase):
             self.assertFalse(_as_bool(fals), fals)
         for cert in ['SI', 'TRUE', 'X', '1', 'sí', 'yes']:
             self.assertTrue(_as_bool(cert), cert)
+
+
+class ConciliacioTest(_BulkBase):
+    """IMPORT-2/T1 — el sistema ENSENYA el que ha entès de cada cel·la, i què ocuparà."""
+
+    def setUp(self):
+        super().setUp()
+        self.gt = GarmentType.objects.create(nom_client='Jersey Tops', actiu=True)
+        self.item = GarmentTypeItem.objects.create(
+            garment_type=self.gt, name='Samarreta / T-shirt', active=True)
+        self.target = Target.objects.create(codi='WOMAN', nom_en='Woman', display_order=1)
+        self.constr = ConstructionType.objects.create(
+            codi='KNIT', nom_en='Knit (Punt Jersey)', display_order=1)
+        self.ss = SizeSystem.objects.create(codi='ALPHA_EU_W', nom='Alpha', actiu=True,
+                                            base_unit='ALPHA')
+        self.ss.targets.add(self.target)
+        for i, et in enumerate(['XS', 'S', 'M', 'L', 'XL']):
+            SizeDefinition.objects.create(size_system=self.ss, etiqueta=et, ordre=i)
+
+    def _cells(self, **over):
+        base = {
+            'nom_prenda': 'Tate', 'any': '2026', 'temporada': 'SS',
+            'familia': 'Jersey Tops', 'tipus': 'Jersey Tops / Samarreta / T-shirt',
+            'target': 'Woman', 'construccio': 'Knit (Punt Jersey)',
+            'run_talles': 'XS, S, M, L, XL', 'talla_base': 'M', 'es_conjunt': '',
+        }
+        base.update(over)
+        return base
+
+    def _import(self, files_cells):
+        imp = BulkCollectionImport.objects.create(
+            customer=self.customer, creat_per=self.profile, estat='PREVISAT', resum={}, resultat=[])
+        results, _resum = validate_rows(
+            self.customer, [{'row_num': i, 'cells': c} for i, c in enumerate(files_cells, start=2)])
+        BulkCollectionRow.objects.bulk_create([
+            BulkCollectionRow(importacio=imp, row_num=r['row_num'], raw_data=r['raw_data'],
+                              estat=r['estat'], errors=r['errors']) for r in results])
+        return imp
+
+    def _camp(self, fila, camp):
+        return next(c for c in fila['camps'] if c['camp'] == camp)
+
+    def test_fitxer_net_tot_casa_i_els_codis_son_lliures(self):
+        imp = self._import([self._cells(nom_prenda=n) for n in ['Tate', 'Rosalia', 'Mika']])
+
+        rec = reconcile(imp)
+
+        self.assertEqual(rec['resum']['netes'], 3)
+        self.assertEqual(rec['resum']['bloquejades'], 0)
+        self.assertEqual(rec['resum']['codis_ocupats'], 0)
+        self.assertEqual([f['codi_previst'] for f in rec['files']],
+                         ['BRW-SS26-0001', 'BRW-SS26-0002', 'BRW-SS26-0003'])
+        self.assertTrue(all(f['codi_lliure'] for f in rec['files']))
+
+    def test_el_que_s_ha_transformat_es_MOSTRA(self):
+        # El bug real: "XS, S, M, L, XL" es transforma en silenci. Ara es veu.
+        imp = self._import([self._cells(target='  woman  ', temporada='ss')])
+
+        fila = reconcile(imp)['files'][0]
+
+        run = self._camp(fila, 'run_talles')
+        self.assertEqual(run['estat'], 'NORMALITZAT')
+        self.assertEqual(run['valor_fitxer'], 'XS, S, M, L, XL')
+        self.assertEqual(run['valor_resolt'], 'XS·S·M·L·XL')
+        self.assertEqual(run['candidat']['nom'], 'ALPHA_EU_W')   # contra quin sistema ha casat
+
+        tgt = self._camp(fila, 'target')
+        self.assertEqual(tgt['estat'], 'NORMALITZAT')
+        self.assertEqual((tgt['valor_fitxer'], tgt['valor_resolt']), ('woman', 'Woman'))
+
+        self.assertEqual(self._camp(fila, 'temporada')['estat'], 'NORMALITZAT')
+        self.assertEqual(self._camp(fila, 'familia')['estat'], 'MATCH')
+
+    def test_els_quatre_desajustos_cadascun_amb_el_seu_motiu(self):
+        imp = self._import([
+            self._cells(nom_prenda='A', familia='Familia Inventada'),
+            self._cells(nom_prenda='B', target='Womannn'),
+            self._cells(nom_prenda='C', talla_base='XXL'),
+            self._cells(nom_prenda='D', es_conjunt='NO'),
+        ])
+
+        files = reconcile(imp)['files']
+
+        fam = self._camp(files[0], 'familia')
+        self.assertEqual(fam['estat'], 'NO_MATCH')
+        self.assertIn('Familia Inventada', fam['motiu'])
+
+        tgt = self._camp(files[1], 'target')
+        self.assertEqual(tgt['estat'], 'NO_MATCH')
+        self.assertIn('Womannn', tgt['motiu'])
+
+        # El motiu va a la cel·la que el causa: talla_base, no run_talles.
+        base = self._camp(files[2], 'talla_base')
+        self.assertEqual(base['estat'], 'NO_MATCH')
+        self.assertIn("no és al run", base['motiu'])
+        self.assertEqual(self._camp(files[2], 'run_talles')['estat'], 'NORMALITZAT')
+
+        # es_conjunt='NO' vol dir NO: ni bloqueja ni demana referència (fix T3 d'IMPORT-1).
+        conj = self._camp(files[3], 'es_conjunt')
+        self.assertEqual((conj['estat'], conj['valor_resolt']), ('MATCH', 'NO'))
+        self.assertEqual(files[3]['estat'], 'OK')
+
+        # Les 3 bloquejades no reben codi; la neta sí. L'import parcial és legítim.
+        self.assertEqual([f['codi_previst'] for f in files],
+                         [None, None, None, 'BRW-SS26-0001'])
+        self.assertEqual(reconcile(imp)['resum']['bloquejades'], 3)
+
+    def test_el_codi_que_ENSENYA_es_el_que_el_commit_ESCRIU(self):
+        # La invariant de tot l'sprint: la pantalla no pot mentir.
+        self._manual_models(2, year=2026, season='SS')
+        imp = self._import([self._cells(nom_prenda=n) for n in ['Tate', 'Rosalia']])
+
+        promesos = [f['codi_previst'] for f in reconcile(imp)['files']]
+        commit_import(imp, self.profile)
+        escrits = list(Model.objects.filter(customer=self.customer, sequencial__gt=2)
+                       .order_by('sequencial').values_list('codi_intern', flat=True))
+
+        self.assertEqual(promesos, ['BRW-SS26-0003', 'BRW-SS26-0004'])
+        self.assertEqual(promesos, escrits)
+
+    def test_es_idempotent_i_no_escriu_res(self):
+        imp = self._import([self._cells()])
+        abans = (Model.objects.count(), ModelSequence.objects.count())
+
+        primera = reconcile(imp)
+        segona = reconcile(imp)
+
+        self.assertEqual(primera, segona)          # cridar-ho dos cops dona el mateix
+        self.assertEqual(abans, (Model.objects.count(), ModelSequence.objects.count()))
+        imp.refresh_from_db()
+        self.assertEqual(imp.estat, 'PREVISAT')    # ni tan sols mou l'estat
+
+    def test_un_codi_ocupat_es_VEU_abans_de_commitar(self):
+        # Model amb el codi 0001 ocupat però sequencial desalineat → el pla xocaria.
+        Model.objects.create(
+            codi_intern='BRW-SS26-0001', customer=self.customer, codi_tenant='BRW',
+            any=2026, temporada='SS', sequencial=0, nom_prenda='Desalineat', estat='Nou')
+        imp = self._import([self._cells(nom_prenda='Tate')])
+
+        rec = reconcile(imp)
+
+        self.assertEqual(rec['files'][0]['codi_previst'], 'BRW-SS26-0001')
+        self.assertFalse(rec['files'][0]['codi_lliure'])
+        self.assertEqual(rec['resum']['codis_ocupats'], 1)
 
 
 class ColisioRetorna409Test(_BulkBase):

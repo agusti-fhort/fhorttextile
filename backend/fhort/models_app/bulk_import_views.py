@@ -134,6 +134,25 @@ def commit_view(request, import_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def reconciliation_view(request, import_id):
+    """Conciliació d'una importació previsada: files × camps + els codis que ocuparà.
+
+    Dry-run pur: read-only i idempotent (ni escriu, ni reserva números, ni canvia l'estat).
+    És la pantalla que el tècnic ha de VEURE abans que res s'escrigui.
+    """
+    from fhort.models_app.models import BulkCollectionImport
+    from fhort.models_app.bulk_import_service import reconcile
+
+    try:
+        imp = BulkCollectionImport.objects.get(pk=import_id)
+    except BulkCollectionImport.DoesNotExist:
+        return Response({'error': 'Importació no trobada.'}, status=404)
+
+    return Response(reconcile(imp), status=200)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def errors_report_view(request, import_id):
     from fhort.models_app.models import BulkCollectionImport
     from fhort.models_app.bulk_import_service import errors_report_bytes

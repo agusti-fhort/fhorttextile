@@ -135,10 +135,12 @@ try:
         upload_view as bulk_upload_view,
         commit_view as bulk_commit_view,
         errors_report_view as bulk_errors_report_view,
+        reconciliation_view as bulk_reconciliation_view,
     )
     _bulk_paths = [
         path('bulk-import/template/', bulk_template_view, name='bulk-import-template'),
         path('bulk-import/upload/', bulk_upload_view, name='bulk-import-upload'),
+        path('bulk-import/<int:import_id>/reconciliation/', bulk_reconciliation_view, name='bulk-import-reconciliation'),
         path('bulk-import/<int:import_id>/commit/', bulk_commit_view, name='bulk-import-commit'),
         path('bulk-import/<int:import_id>/errors-report/', bulk_errors_report_view, name='bulk-import-errors-report'),
     ]
