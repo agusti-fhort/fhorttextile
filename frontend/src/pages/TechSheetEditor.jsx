@@ -795,6 +795,19 @@ function imageProps(obj) {
   }
 }
 
+// El peu d'una peça de patró: el nom del block, sota la imatge. Es dibuixa DINS del Group de
+// la peça, i per això el Group porta width/height explícits (imageProps ja els hi posa): un
+// Konva.Group sense width torna 0, i el camí genèric de transformEnd —que redimensiona amb
+// node.width() × escala— li hauria clavat el mínim de 2 mm a la primera nansa que s'arrossegués.
+function pieceCaptionProps(obj) {
+  return {
+    x: 0, y: toPx((obj.height || obj.width) + 1.2), width: toPx(obj.width),
+    text: obj.piece_name || '',
+    fontSize: Math.round(2.6 * MM_TO_PX), fontFamily: FONT,
+    fill: KONVA_COL.textMuted, align: 'center',
+  }
+}
+
 function dataBlockGroupProps(obj) {
   const scale = obj.scale || 1
   return { x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: scale * (obj.scaleX || 1), scaleY: scale * (obj.scaleY || 1) }
@@ -912,6 +925,18 @@ async function addObjectToLayer(layer, obj, ctx) {
       layer.add(new Konva.Image({ ...imageProps(obj), image: el }))
     } catch { /* imatge no carregada → s'omet */ }
   }
+  if (obj.type === 'pattern_piece') {
+    if (!obj.src) return
+    try {
+      const el = await loadImageEl(obj.src)
+      const p = imageProps(obj)
+      const g = new Konva.Group(p)
+      g.add(new Konva.Image({ image: el, x: 0, y: 0, width: p.width, height: p.height }))
+      if (obj.caption !== false) g.add(new Konva.Text(pieceCaptionProps(obj)))
+      layer.add(g)
+    } catch { /* peça no carregada → s'omet */ }
+    return
+  }
   if (obj.type === 'sketch_svg') {
     try {
       const el = await loadImageEl(svgDataUrl(obj.svg))
@@ -965,6 +990,26 @@ function ImageObj({ obj, src, common }) {
   }
   return <KonvaImage {...common} image={img} width={props.width} height={props.height}
     scaleX={props.scaleX} scaleY={props.scaleY} />
+}
+
+// La peça de patró (F1): el render del motor, encaixat. Mateix mecanisme que una imatge
+// —dataURL a `src`, per tant el backend l'extreu a asset com qualsevol altra— però amb el
+// nom del block a sota i les proporcions bloquejades: una peça estirada de través ja no
+// és la peça, és una mentida sobre la peça.
+function PatternPieceObj({ obj, src, common }) {
+  const img = useImage(src)
+  const props = imageProps(obj)
+  if (!img) {
+    return <Rect {...common} width={props.width} height={props.height}
+      scaleX={props.scaleX} scaleY={props.scaleY}
+      fill={COL.goldPale} stroke={KONVA_COL.border} dash={[4, 4]} />
+  }
+  return (
+    <Group {...common} width={props.width} height={props.height}>
+      <KonvaImage image={img} x={0} y={0} width={props.width} height={props.height} />
+      {obj.caption !== false && <Text {...pieceCaptionProps(obj)} />}
+    </Group>
+  )
 }
 
 function SketchSvgObj({ obj, common }) {
@@ -1095,6 +1140,9 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   }
   if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
+  }
+  if (obj.type === 'pattern_piece') {
+    return <PatternPieceObj obj={obj} src={src} common={common} />
   }
   if (obj.type === 'sketch_svg') {
     return <SketchSvgObj obj={obj} common={common} />
@@ -1789,7 +1837,7 @@ export default function TechSheetEditor() {
     if (!current || !current.canResize || current.width <= 0 || current.height <= 0) return
     const sx = nextW / current.width
     const sy = nextH / current.height
-    if (obj.type === 'rect' || obj.type === 'image' || obj.type === 'sketch_svg' || obj.type === 'text') {
+    if (obj.type === 'rect' || obj.type === 'image' || obj.type === 'sketch_svg' || obj.type === 'pattern_piece' || obj.type === 'text') {
       updateObject(obj.id, { width: nextW, ...(obj.type !== 'text' ? { height: nextH } : {}) })
       return
     }
@@ -3835,7 +3883,7 @@ export default function TechSheetEditor() {
                     ? <Line x={toPx(creatingGuide.pos)} y={0} points={[0, 0, 0, pageH]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
                     : <Line x={0} y={toPx(creatingGuide.pos)} points={[0, 0, pageW, 0]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
                 )}
-                <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && (selObj?.type === 'data_block' || selObj?.type === 'table'))}
+                <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && (selObj?.type === 'data_block' || selObj?.type === 'table' || selObj?.type === 'pattern_piece'))}
                   padding={5}
                   borderStroke={KONVA_COL.textMuted} borderStrokeWidth={0.5} borderDash={[4, 4]}
                   anchorSize={6} anchorStroke={KONVA_COL.textMuted} anchorStrokeWidth={1} anchorFill={KONVA_COL.white} anchorCornerRadius={2}
@@ -3971,8 +4019,8 @@ export default function TechSheetEditor() {
               <div style={{ marginBottom: 8, border: `1px solid ${COL.border}`, borderRadius: 5, overflow: 'hidden' }}>
                 {[...ordered].reverse().map(o => {
                   const on = selectedIds.includes(o.id)
-                  const icon = { text: 'ti-cursor-text', rect: 'ti-square', ellipse: 'ti-circle', line: 'ti-minus', arrow: 'ti-arrow-right', image: 'ti-photo', path: 'ti-vector', sketch_svg: 'ti-vector', data_block: 'ti-table', group: 'ti-box-multiple', field: 'ti-forms' }[o.type] || 'ti-shape'
-                  const label = o.type === 'text' ? (o.text || t('tech_sheet.tool_text')) : o.type === 'field' ? (o.label || o.type) : o.type
+                  const icon = { text: 'ti-cursor-text', rect: 'ti-square', ellipse: 'ti-circle', line: 'ti-minus', arrow: 'ti-arrow-right', image: 'ti-photo', path: 'ti-vector', sketch_svg: 'ti-vector', pattern_piece: 'ti-shirt', data_block: 'ti-table', group: 'ti-box-multiple', field: 'ti-forms' }[o.type] || 'ti-shape'
+                  const label = o.type === 'text' ? (o.text || t('tech_sheet.tool_text')) : o.type === 'field' ? (o.label || o.type) : o.type === 'pattern_piece' ? (o.piece_name || o.type) : o.type
                   return (
                     <div key={o.id} onClick={() => selectOnly(o.id)}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', cursor: 'pointer', background: on ? COL.goldPale : 'transparent', color: on ? COL.gold : COL.textMain, borderBottom: `1px solid ${COL.border}`, opacity: o.visible === false ? 0.45 : 1 }}>
