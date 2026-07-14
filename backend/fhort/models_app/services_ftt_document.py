@@ -380,6 +380,51 @@ def reescriure_ftt_per_model(blob, model_desti):
     return services_ftt.pack(document_json, assets=assets), report
 
 
+def font_per_al_model(origen, model_desti):
+    """L'origen (ModelFitxer **o** ItemFitxer), llest per copiar-lo al model destí.
+
+    UN SOL CAMÍ de descongelat per a tots els orígens. Abans n'hi havia dos i no feien el
+    mateix: el de model→model descongelava (D16) i el de catàleg→model copiava els bytes tal
+    qual, emparat en una docstring que deia que «un `.ftt` es copia tal qual: el ZIP és
+    auto-contingut». Això només és cert si el `.ftt` de l'item no ve d'un model — i l'única
+    manera d'entrar-ne un al catàleg, avui, és pujar-hi el que algú s'ha baixat d'un model.
+    Un ItemFitxer no és una font neta per definició: ho és pel que porta a dins.
+
+    Retorna `(font, report|None)`; `report` és None si l'origen no és un `.ftt` (PDF, DXF,
+    SVG, imatges: còpia directa de bytes). Cal cridar-la amb els bytes de l'origen oberts.
+    """
+    if not es_ftt(origen):
+        return origen.fitxer, None
+    blob, report = reescriure_ftt_per_model(origen.fitxer.read(), model_desti)
+    return ContentFile(blob, name=origen.nom_fitxer), report
+
+
+def avis_de_copia(report):
+    """El que el tècnic ha de saber d'una còpia, o None si no hi ha res a dir.
+
+    Res en silenci: si el document ha perdut el seu vincle amb el model origen, la resposta
+    ho diu. Qui ho ha de llegir és una persona, no un log.
+    """
+    if report is None:
+        return None
+    avisos = []
+    if report.get('taules_desvinculades'):
+        n = report['taules_desvinculades']
+        avisos.append(
+            f"{n} {'taula' if n == 1 else 'taules'} {'ha' if n == 1 else 'han'} quedat "
+            "PER VINCULAR: la graella es conserva, però els valors eren del model origen i "
+            "s'han buidat. Cal tornar-les a vincular al model."
+        )
+    if report.get('camps_descongelats') == 0:
+        # Degradació anunciada (D16): .ftt anterior a la marca `field_key`. Els camps de
+        # plantilla congelats segueixen mostrant dades del model origen.
+        avisos.append(
+            "El document és anterior al marcatge de camps: els camps de plantilla mantenen "
+            "les dades del model origen i cal editar-los a mà."
+        )
+    return ' '.join(avisos) if avisos else None
+
+
 def es_ftt(fitxer):
     """True si el ModelFitxer és un document .ftt (per tipus o per extensió)."""
     if fitxer.tipus == ModelFitxer.TIPUS_TECHSHEET:
