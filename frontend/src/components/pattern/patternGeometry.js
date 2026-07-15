@@ -185,9 +185,14 @@ export function puntsDelSegment(piece, segment) {
     // l'origen de la polilínia (t_fi < t_inici, vegeu `fraccio_tram` al motor), el rang és
     // la UNIÓ [t_inici, 1] ∪ [0, t_fi] — no un rang buit. Sense això, el tram curt que passa
     // per on tanca la vora simplement no es dibuixava.
+    //
+    // Solapar vol dir compartir LLARGADA, no tocar-se: l'aresta que acaba just a `t_inici`
+    // no és del tram. I tocar-se és el cas NORMAL, no el rar —`t_inici` és `cum[i]/total`,
+    // exactament la frontera entre dues arestes—, així que l'epsilon ha d'ESTRÈNYER el rang.
+    // Eixamplant-lo (`t_inici - 1e-9`), el tram es pintava una aresta més llarg per cada punta.
     const dins = envolta
-      ? (t1 > segment.t_inici - 1e-9 || t0 < segment.t_fi + 1e-9)
-      : (t1 > segment.t_inici - 1e-9 && t0 < segment.t_fi + 1e-9)
+      ? (t1 > segment.t_inici + 1e-9 || t0 < segment.t_fi - 1e-9)
+      : (t1 > segment.t_inici + 1e-9 && t0 < segment.t_fi - 1e-9)
     if (dins) {
       if (!out.length) out.push(pts[i])
       out.push(pts[(i + 1) % n])
