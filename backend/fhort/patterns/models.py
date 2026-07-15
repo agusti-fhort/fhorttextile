@@ -598,3 +598,89 @@ class DartProposalRejection(models.Model):
     def __str__(self):
         return (f'{self.punt_a_id}→{self.punt_vertex_id}→{self.punt_b_id}: NO '
                 f'(model {self.model_id})')
+
+
+class SegmentPreference(models.Model):
+    """Com aquest taller talla les costures d'un ROL de peça. Preferència apresa.
+
+    **S'aprèn de la CONFIRMACIÓ humana, mai de l'auto-match.** El motor proposa i una persona
+    diu que sí, que no, o ho corregeix; només aquell «sí» (o aquella correcció) es desa. Un
+    sistema que aprengués del seu propi encert es donaria la raó sol i acabaria repetint els
+    seus errors amb cada cop més confiança —el mateix motiu pel qual els rebuigs d'A1/A2 desen
+    el judici humà i no el veredicte del motor.
+
+    **La signatura és PARAMÈTRICA, no un id.** Els ids no viatgen entre patrons: la fila del
+    tram mor cada cop que es puja una versió nova. El que sí que viatja és ON cau el tram sobre
+    la seva vora (`t_inici`–`t_fi`, 0–1), perquè és una propietat de la forma i no de la taula.
+    Per això dues geometries diferents del mateix rol es poden comparar, i per això la
+    comparació ha de ser per TOLERÀNCIA i mai per igualtat: el mateix tram, redibuixat, no
+    dona el mateix float.
+
+    **`rol` és el nom de la peça normalitzat, i això és a posta.** Al material real el `rol`
+    del CAD no és cap rol canònic: `aama_reader` fa `rol = piece_name or block.name`, així que
+    l'AMELIA dona 'FRONT'/'BACK' (el CAD els va batejar així) i el Tate dona 'TATE_FRONT',
+    'TATE_FRONT_FACING', 'TATE_FRONT_YOKE'. Reduir-los a un FRONT canònic per subcadena
+    col·lapsaria el davanter amb la seva vista i el seu canesú —tres peces diferents— i faria
+    viatjar una preferència cap a on no toca. Amb el nom sencer, la preferència viatja entre
+    patrons que comparteixen nomenclatura (una versió nova del mateix estil, o un altre model
+    de la mateixa biblioteca de CAD), que és on serveix, i no s'inventa cap parentiu.
+
+    Generalitzar-ho a una família («tot davanter de camisa») seria herència ESTRUCTURAL, que
+    és una altra cosa i viu a un altre lloc (bases GTI/W6): allà hi ha una base per família
+    que tot patró hereta, i això demana el criteri d'un patronista, no l'estadística d'un
+    tenant. Això d'aquí és barat i local a posta.
+    """
+
+    #: Què va fer la persona amb el tram que el motor havia llegit.
+    ACCIO_CONFIRMAT = 'confirmat'
+    ACCIO_ALLARGAT = 'allargat'
+    ACCIO_TALLAT = 'tallat'
+    ACCIO_CHOICES = [
+        (ACCIO_CONFIRMAT, 'Confirmat tal com el motor el llegia'),
+        (ACCIO_ALLARGAT, 'Allargat respecte del que el motor llegia'),
+        (ACCIO_TALLAT, 'Escurçat respecte del que el motor llegia'),
+    ]
+
+    #: El nom de la peça, normalitzat (v. `rol_de_peca`). NO és una FK: la preferència ha de
+    #: sobreviure el patró on es va aprendre — si morís amb ell, no hauria après res.
+    rol = models.CharField(max_length=120)
+    #: La signatura del tram sobre la seva vora. 0–1, i `t_fi` < `t_inici` vol dir que
+    #: travessa l'origen de la polilínia (v. `engine.segments.fraccio_tram`).
+    t_inici = models.FloatField()
+    t_fi = models.FloatField()
+    accio = models.CharField(max_length=10, choices=ACCIO_CHOICES)
+
+    #: Quantes vegades s'ha repetit el mateix judici. Re-confirmar no duplica la fila: la
+    #: reforça. Un senyal vist deu cops no val el mateix que un vist una vegada.
+    vegades = models.PositiveIntegerField(default=1)
+
+    #: Qui i quan: una preferència que ningú no pot anar a mirar no és auditable, i una que
+    #: no és auditable no s'hauria de fer servir per moure cap confiança.
+    apres_de = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='preferencies_de_tram',
+    )
+    #: El patró on es va aprendre. SET_NULL i no CASCADE: el que es va aprendre segueix sent
+    #: cert encara que aquell patró desaparegui — és justament el que la fa una preferència i
+    #: no una anotació.
+    apres_a = models.ForeignKey(
+        PatternFile, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='preferencies_apreses',
+    )
+    creat_at = models.DateTimeField(auto_now_add=True)
+    actualitzat_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Preferència de tram per rol'
+        verbose_name_plural = 'Preferències de tram per rol'
+        ordering = ['rol', 't_inici']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['rol', 'accio', 't_inici', 't_fi'],
+                name='uniq_preferencia_rol_tram',
+            ),
+        ]
+        indexes = [models.Index(fields=['rol'])]
+
+    def __str__(self):
+        return f'{self.rol} [{self.t_inici:.4f}–{self.t_fi:.4f}] {self.accio} ×{self.vegades}'
