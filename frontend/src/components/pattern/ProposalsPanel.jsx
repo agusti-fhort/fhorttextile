@@ -241,10 +241,25 @@ function Senyal({ t, senyal, unit }) {
         a: formatLen(d.llarg_a_cm, unit), b: formatLen(d.llarg_b_cm, unit),
       })
     }
-    // Noms: el motiu és un codi del domini, i cada codi té la seva frase.
-    return t(`pattern.taller.sig_name_${d.motiu || 'none'}`, {
-      a: d.peca_a, b: d.peca_b,
-    })
+    // El COSTUM del taller (QA-TALLER-B · T4): què s'ha confirmat o corregit abans en aquest
+    // rol de peça. El servidor n'envia les PECES a `dades`, i la frase es construeix aquí —
+    // el seu `detall` va en català pla i es queda al `title`, com la resta.
+    if (senyal.mena === 'preferencia') {
+      if (contra) {
+        return t('pattern.taller.sig_pref_against', { peces: (d.contra || []).join(', ') })
+      }
+      return t('pattern.taller.sig_pref_ok', { peces: (d.confirmats || []).join(', ') })
+    }
+    if (senyal.mena === 'noms') {
+      // El motiu és un codi del domini, i cada codi té la seva frase.
+      return t(`pattern.taller.sig_name_${d.motiu || 'none'}`, {
+        a: d.peca_a, b: d.peca_b,
+      })
+    }
+    // Una mena que aquesta versió de la UI no coneix: val més el català pla del servidor que
+    // una clau i18n inventada que sortiria com a text cru. El motor pot afegir senyals nous
+    // sense que la pantalla els hagi de saber abans.
+    return senyal.detall || ''
   }
 
   return (
