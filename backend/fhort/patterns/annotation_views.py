@@ -21,6 +21,7 @@ from fhort.pom.models import POMMaster
 from .adapters import DjangoGeometryStore
 from .engine.measure import MeasureError, resoldre
 from .engine.dart_detection import clau_pinca
+from .preferences import registra
 from .engine.seam_matching import clau_parella
 from .engine.segments import (
     SegmentError, longitud_tram, longitud_vora, tram_entre_punts,
@@ -598,6 +599,12 @@ class SewRelationViewSet(viewsets.ModelViewSet):
                 )
                 for seg, nom in ((seg_a, nom_a), (seg_b, nom_b))
             ]
+            # El taller aprèn del «sí»: confirmar una proposta és el judici humà sobre la
+            # lectura del motor, i és l'únic moment en què n'hi ha un. Només ACUMULA senyal
+            # —no canvia res del que passa aquí— i va dins la mateixa transacció perquè un
+            # aprenentatge d'una costura que després no existeix seria un record fals.
+            for declarat in declarats:
+                registra(declarat, getattr(request.user, 'profile', None))
             rel = SewRelation.objects.create(
                 model_id=fp.model_id, tipus=tipus,
                 diferencial_cm=float(request.data.get('diferencial_cm') or 0),
@@ -797,6 +804,10 @@ class PatternSegmentViewSet(viewsets.ModelViewSet):
             origen=PatternSegment.ORIGEN_DECLARAT,
             nom=(request.data.get('nom') or '').strip() or None,
         )
+        # Declarar un tram a mà també és un judici sobre la lectura del motor: confirma un
+        # natural, l'allarga o l'escurça. S'acumula igual que quan es confirma una proposta
+        # —el gest és un altre, el judici és el mateix— i no canvia res del que passa aquí.
+        registra(seg, getattr(request.user, 'profile', None))
         dades = self.get_serializer(seg).data
         return Response(dades, status=status.HTTP_201_CREATED)
 
