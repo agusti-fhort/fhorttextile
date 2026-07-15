@@ -34,6 +34,14 @@
   --gate:       var(--ok);     /* gate llest = verd èxit canònic (abans #534ab7 lila) */
   --gate-bg:    var(--ok-bg);  /* variant soft del mateix verd (abans #eeedfe) */
 
+  /* Taller de patró — el TRAM declarat. Un tram és UN objecte: el mateix color mentre es
+     declara i un cop desat; l'estat només en canvia l'èmfasi (discontinu→ferm, gruix).
+     `--tram-sel` NO és una altra mena de tram: és l'eix d'assenyalar (hover de la llista,
+     ombra de reobrir). El canvas Konva no resol var(): `KONVA_COL` (PatternViewer.jsx) en fa
+     de mirall, i si es toca un valor d'aquí, s'ha de tocar allà. */
+  --tram:       #0969da; /* identitat del tram declarat */
+  --tram-sel:   #fb8500; /* el tram que s'assenyala — èmfasi, no identitat */
+
   /* Escala tipogràfica (Fase 2) — noms semàntics per rol, no per valor.
      8·10·12·14·18·22·32. El 8 és el terra (= mínim 8pt de la fitxa tècnica). */
   --fs-caption: 8px;   /* captions, hints, badges menors */
