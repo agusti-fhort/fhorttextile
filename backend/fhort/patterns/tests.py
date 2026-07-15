@@ -84,6 +84,9 @@ from fhort.patterns.engine.segments import (
     acumulats_vora, SegmentError, fraccio_tram, longitud_tram,
                                             longitud_vora, segmentar_peca, segmentar_vora,
                                             tram_entre_punts)
+from fhort.patterns.engine.natural_segments import (
+    LLINDAR_CANTONADA_GRAUS, cantonades_naturals, desviacio_angular,
+    segmentar_peca_natural, segmentar_vora_natural, vertexs_de_piquet)
 from fhort.patterns.engine.sew import (MENA_EXCES, MENA_SOLAPAMENT, CostatPinca, Descompte,
                                        TramCosit, conte, descomptar_pinces, validar,
                                        validar_cobertura)
@@ -1239,6 +1242,134 @@ class SegmentacioTest(unittest.TestCase):
         self.assertEqual(len(segs), 1)
         self.assertAlmostEqual(segs[0].t_inici, 0.0)
         self.assertAlmostEqual(segs[0].t_fi, 1.0)
+
+
+class TramsNaturalsTest(unittest.TestCase):
+    """La vora llegida com l'ofici la llegeix. Engine pur, material real (AMELIA)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = AAMAReader().read(AMELIA_DXF.read_bytes())
+
+    def test_els_naturals_sumen_el_perimetre(self):
+        """La mateixa prova que no es pot falsejar que als AUTO: fusionar no pot perdre
+        ni duplicar vora. Si un natural es menja un tros de més, la suma no dona."""
+        for piece in self.doc.pieces:
+            with self.subTest(peca=piece.nom_block):
+                nats = segmentar_peca_natural(piece)
+                cut = piece.boundary(LayerRole.CUT)
+                self.assertAlmostEqual(
+                    sum(s.longitud_mm for s in nats), longitud_vora(cut), places=6)
+
+    def test_l_amelia_surt_amb_quatre_costures_per_peca(self):
+        """El calibratge (T1b) sobre material real: l'AMELIA té 4 cantonades per peça, i
+        el CAD n'hi marca fins a 14. Aquest número el va mirar un humà."""
+        for piece in self.doc.pieces:
+            with self.subTest(peca=piece.nom_block):
+                self.assertEqual(len(segmentar_peca_natural(piece)), 4)
+
+    def test_els_naturals_son_menys_que_els_auto_i_no_els_toquen(self):
+        """Els naturals són una VISTA: no substitueixen els AUTO, que segueixen igual."""
+        for piece in self.doc.pieces:
+            with self.subTest(peca=piece.nom_block):
+                auto = segmentar_peca(piece)
+                nat = segmentar_peca_natural(piece)
+                self.assertLess(len(nat), len(auto))
+                self.assertAlmostEqual(
+                    sum(s.longitud_mm for s in auto),
+                    sum(s.longitud_mm for s in nat), places=6)
+
+    def test_el_llindar_te_una_meseta(self):
+        """T1b: entre 20° i 25° el resultat no es mou. Si algú toca el llindar i això peta,
+        és que el material ha canviat i cal recalibrar, no ajustar el número a ull."""
+        for piece in self.doc.pieces:
+            for llindar in (20.0, 22.0, 25.0):
+                with self.subTest(peca=piece.nom_block, llindar=llindar):
+                    self.assertEqual(
+                        len(segmentar_peca_natural(piece, llindar_graus=llindar)), 4)
+
+    def test_una_corba_suau_no_talla(self):
+        """Dotze girs en cercle: el CAD els marca tots, però cap no és cantonada. Un coll
+        rodó és UNA costura."""
+        punts = tuple(
+            PointData(x=math.cos(a) * 100, y=math.sin(a) * 100, kind=PointKind.TURN)
+            for a in [i * math.pi / 6 for i in range(12)]
+        )
+        vora = BoundaryData(role=LayerRole.CUT, layer='1', points=punts, closed=True)
+        peca = PieceData(nom_block='C', boundaries=(vora,))
+        # Cada gir desvia 30°: per sobre del llindar, dotze trams; per sota, un de sol.
+        self.assertEqual(len(segmentar_vora_natural(peca, vora, 0, llindar_graus=22.0)), 12)
+        self.assertEqual(len(segmentar_vora_natural(peca, vora, 0, llindar_graus=45.0)), 1)
+
+    def test_el_piquet_no_talla(self):
+        """La peça que sosté el mòdul. Una excursió de piquet en V té girs de ~60° —més
+        forts que cantonades de debò— i, si tallessin, partirien la costura en tres."""
+        # Una L: recta llarga cap a l'est amb un dent de piquet al mig, i una cantonada.
+        punts = (
+            PointData(x=0, y=0, kind=PointKind.TURN),        # cantonada d'inici
+            PointData(x=100, y=0, kind=PointKind.TURN),      # pota del piquet
+            PointData(x=110, y=8, kind=PointKind.TURN),      # pic del piquet
+            PointData(x=120, y=0, kind=PointKind.TURN),      # pota del piquet
+            PointData(x=300, y=0, kind=PointKind.TURN),      # cantonada
+            PointData(x=300, y=200, kind=PointKind.TURN),    # cantonada
+        )
+        vora = BoundaryData(role=LayerRole.CUT, layer='1', points=punts, closed=True)
+        sense = PieceData(nom_block='P', boundaries=(vora,))
+        amb = PieceData(nom_block='P', boundaries=(vora,), notches=(
+            NotchData(x=100, y=0), NotchData(x=120, y=0),
+        ))
+        # Sense declarar els piquets, els seus girs passen per cantonades i esmicolen la vora.
+        self.assertIn(2, cantonades_naturals(sense, vora))
+        # Declarats, l'excursió sencera queda fora: la recta 0→300 és UNA costura.
+        self.assertEqual(vertexs_de_piquet(amb, vora), {1, 2, 3})
+        cant = cantonades_naturals(amb, vora)
+        self.assertNotIn(1, cant)
+        self.assertNotIn(2, cant)
+        self.assertNotIn(3, cant)
+        self.assertEqual(cant, [0, 4, 5])
+
+    def test_el_piquet_viatja_dins_del_tram_com_a_metadada(self):
+        """No tallar no vol dir ignorar: A2 llegeix els piquets per inferir frunzit."""
+        punts = (
+            PointData(x=0, y=0, kind=PointKind.TURN),
+            PointData(x=100, y=0, kind=PointKind.TURN),
+            PointData(x=110, y=8, kind=PointKind.TURN),
+            PointData(x=120, y=0, kind=PointKind.TURN),
+            PointData(x=300, y=0, kind=PointKind.TURN),
+            PointData(x=300, y=200, kind=PointKind.TURN),
+        )
+        vora = BoundaryData(role=LayerRole.CUT, layer='1', points=punts, closed=True)
+        peca = PieceData(nom_block='P', boundaries=(vora,), notches=(
+            NotchData(x=100, y=0), NotchData(x=120, y=0),
+        ))
+        nats = segmentar_vora_natural(peca, vora, 0)
+        primer = next(s for s in nats if s.index_inici == 0)
+        self.assertEqual(len(primer.piquets), 2)
+        # I diu de quins girs surt: la fusió ha de ser auditable.
+        self.assertEqual(primer.girs_fusionats, (1, 2, 3))
+
+    def test_els_extrems_de_pinca_tallen_encara_que_l_angle_no(self):
+        """Una pinça declarada parteix la vora encara que hi arribi suau: el que hi ha a
+        banda i banda són dues costures diferents, i això és domini, no geometria."""
+        punts = tuple(
+            PointData(x=math.cos(a) * 100, y=math.sin(a) * 100, kind=PointKind.CURVE)
+            for a in [i * math.pi / 6 for i in range(12)]
+        )
+        vora = BoundaryData(role=LayerRole.CUT, layer='1', points=punts, closed=True)
+        peca = PieceData(nom_block='C', boundaries=(vora,))
+        self.assertEqual(len(segmentar_vora_natural(peca, vora, 0)), 1)
+        amb_pinca = segmentar_vora_natural(peca, vora, 0, talls_extra=(3, 6))
+        self.assertEqual(len(amb_pinca), 2)
+        self.assertEqual([s.index_inici for s in amb_pinca], [3, 6])
+
+    def test_la_desviacio_no_es_deixa_enganyar_per_vertexs_duplicats(self):
+        """Els fitxers reals repeteixen punts. Un vèrtex duplicat no defineix direcció i
+        no pot ser cantonada de res."""
+        pts = (PointData(x=0, y=0), PointData(x=0, y=0), PointData(x=10, y=0))
+        self.assertEqual(desviacio_angular(pts, 1, closed=True), 0.0)
+        self.assertEqual(desviacio_angular(pts, 1, closed=False), 0.0)
+        # I l'extrem d'una vora oberta sí que és frontera per definició.
+        self.assertEqual(desviacio_angular(pts, 0, closed=False), 180.0)
 
 
 class MesuraTest(unittest.TestCase):
