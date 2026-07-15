@@ -35,6 +35,7 @@ from .engine.geometry import (
 )
 from .engine.operations import POMSpec, PointRef, SegRef, SewSpec
 from .engine.ports import GradedPOMDelta, GradingSnapshot
+from .engine.natural_segments import segmentar_peca_natural
 from .engine.segments import segmentar_peca
 from .models import PatternPiece, PatternPoint, PatternSegment
 
@@ -300,9 +301,18 @@ class DjangoGeometryStore:
                 t_inici=s.t_inici,
                 t_fi=s.t_fi,
                 tipus_vora=s.tipus_vora.value,
-                origen=PatternSegment.ORIGEN_AUTO,
+                origen=origen,
             )
-            for s in segmentar_peca(piece)
+            # Les DUES lectures de la mateixa vora, i totes dues es desen. L'`auto` és la
+            # granularitat fina que el gest de precisió i l'aritmètica necessiten; el
+            # `natural` és la que A2 proposa i la que una persona reconeix com una costura.
+            # No competeixen: la fina no es pot deduir de la gruixuda, i proposar sobre la
+            # fina és proposar 25 candidats on n'hi ha 8.
+            for origen, derivats in (
+                (PatternSegment.ORIGEN_AUTO, segmentar_peca(piece)),
+                (PatternSegment.ORIGEN_NATURAL, segmentar_peca_natural(piece)),
+            )
+            for s in derivats
         ]
         PatternSegment.objects.bulk_create(segments, batch_size=500)
 

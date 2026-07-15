@@ -98,7 +98,7 @@ def candidats_del_patro(fp: PatternFile) -> tuple[list[Candidat], Descartats, di
         if piece is None:
             continue
 
-        segments = list(piece_row.segments.filter(origen=PatternSegment.ORIGEN_AUTO))
+        segments = list(piece_row.segments.filter(origen=PatternSegment.ORIGEN_NATURAL))
         if not segments:
             continue
 

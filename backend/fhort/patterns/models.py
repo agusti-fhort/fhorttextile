@@ -262,9 +262,16 @@ class PatternSegment(models.Model):
     """
 
     ORIGEN_AUTO = 'auto'
+    #: La MATEIXA vora llegida com poques costures (`engine.natural_segments`): es fusiona el
+    #: que el CAD esmicola i només es talla a les cantonades de debò. Es desa, igual que
+    #: l'`auto`, perquè «derivat» i «a la BD» no són oposats aquí: el que persisteix no és una
+    #: decisió humana, és la lectura sobre la qual les decisions humanes s'ancoren — i el rebuig
+    #: d'una proposta (`SewProposalRejection`) l'ha de poder apuntar amb una FK.
+    ORIGEN_NATURAL = 'natural'
     ORIGEN_DECLARAT = 'declarat'
     ORIGEN_CHOICES = [
         (ORIGEN_AUTO, 'Derivat (gir a gir)'),
+        (ORIGEN_NATURAL, 'Derivat (costura natural)'),
         (ORIGEN_DECLARAT, 'Declarat pel patronista'),
     ]
 

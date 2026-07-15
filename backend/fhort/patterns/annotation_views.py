@@ -689,6 +689,11 @@ class SewRelationViewSet(viewsets.ModelViewSet):
         Han d'existir, han de ser d'aquest patró i han de ser DERIVATS: una proposta és sempre
         sobre la hipòtesi del CAD. Si arribés un tram declarat, algú estaria fent passar per
         proposta una cosa que ja s'havia decidit.
+
+        DERIVAT vol dir `auto` **o** `natural`: totes dues són lectures del motor, i cap de les
+        dues és una decisió de ningú. Això es comprovava amb `== auto` quan «derivat» i «auto»
+        eren sinònims; des que A2 proposa sobre naturals (QA-TALLER-B · T3b) ja no ho són, i la
+        condició que sempre havia manat és la que la frase de sobre diu: **no declarat**.
         """
         ids = [data.get('segment_a'), data.get('segment_b')]
         if not all(ids):
@@ -706,7 +711,7 @@ class SewRelationViewSet(viewsets.ModelViewSet):
             if seg is None:
                 raise serializers.ValidationError(
                     {camp: 'Aquest tram no existeix en aquest patró.'})
-            if seg.origen != PatternSegment.ORIGEN_AUTO:
+            if seg.origen == PatternSegment.ORIGEN_DECLARAT:
                 raise serializers.ValidationError(
                     {camp: 'Això no és una proposta: aquest tram ja és un tram declarat.'})
             trams.append(seg)

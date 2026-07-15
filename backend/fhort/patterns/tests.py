@@ -1487,9 +1487,18 @@ class AnotacioAPITest(PatternsAPITestBase):
         return PatternPOMViewSet.as_view({'post': 'create'})(request)
 
     def test_els_segments_es_deriven_en_importar(self):
-        """No cal demanar-los: la peça ja ve amb les seves cantonades marcades pel CAD."""
-        self.assertEqual(self.back.segments.count(), 14)
-        self.assertEqual(self.fp.pieces.get(nom_block='FRONT').segments.count(), 10)
+        """No cal demanar-los: la peça ja ve amb les seves cantonades marcades pel CAD.
+
+        Se'n deriven DUES lectures i totes dues es desen: la fina (`auto`, gir→gir) i la de
+        l'ofici (`natural`, poques costures). Es compten per separat a posta —un total
+        agregat passaria per bo el dia que una de les dues deixés de generar-se."""
+        front = self.fp.pieces.get(nom_block='FRONT')
+        for peca, auto, natural in ((self.back, 14, 4), (front, 10, 4)):
+            with self.subTest(peca=peca.nom_block):
+                self.assertEqual(
+                    peca.segments.filter(origen=PatternSegment.ORIGEN_AUTO).count(), auto)
+                self.assertEqual(
+                    peca.segments.filter(origen=PatternSegment.ORIGEN_NATURAL).count(), natural)
 
     def test_ancorar_un_pom_el_mesura_al_servidor(self):
         resp = self._ancora(self.girs[0], self.girs[5])
@@ -1538,7 +1547,8 @@ class AnotacioAPITest(PatternsAPITestBase):
         back = next(p for p in dades['pieces'] if p['nom_block'] == 'BACK')
         self.assertEqual(len(back['poms']), 1)
         self.assertEqual(back['poms'][0]['pom_code'], 'CHEST')
-        self.assertEqual(len(back['segments']), 14)
+        self.assertEqual(
+            len([s for s in back['segments'] if s['origen'] == PatternSegment.ORIGEN_AUTO]), 14)
 
     # ── costures ─────────────────────────────────────────────────────────────
     def _costura(self, segs_a, segs_b, tipus='casat', dif=0.0):
@@ -2626,11 +2636,15 @@ class SegmentDeclaratAPITest(PatternsAPITestBase):
         force_authenticate(request, user=self.user)
         return PatternSegmentViewSet.as_view({'delete': 'destroy'})(request, pk=seg_id)
 
-    def test_els_derivats_son_auto(self):
-        """La migració els deixa tots 'auto': ningú no els ha declarat."""
-        self.assertGreater(self.front.segments.count(), 0)
+    def test_els_derivats_no_els_ha_declarat_ningu(self):
+        """L'import deixa les dues lectures derivades ('auto' i 'natural') i cap declarat:
+        un tram declarat és una afirmació d'algú, i en importar encara no n'hi ha cap."""
+        self.assertGreater(
+            self.front.segments.filter(origen=PatternSegment.ORIGEN_AUTO).count(), 0)
+        self.assertGreater(
+            self.front.segments.filter(origen=PatternSegment.ORIGEN_NATURAL).count(), 0)
         self.assertFalse(
-            self.front.segments.exclude(origen=PatternSegment.ORIGEN_AUTO).exists())
+            self.front.segments.filter(origen=PatternSegment.ORIGEN_DECLARAT).exists())
 
     def test_declarar_un_tram_entre_dos_punts(self):
         resp = self._declara(self.punts[3], self.punts[33])
@@ -3143,10 +3157,18 @@ class GeometriaPortaElsTramsDeclaratsTest(PatternsAPITestBase):
         resp = PatternFileViewSet.as_view({'get': 'geometry'})(request, pk=self.fp.id)
         return next(p for p in resp.data['pieces'] if p['nom_block'] == 'TATE_FRONT')
 
-    def test_els_trams_del_motor_surten_com_a_auto_i_sense_nom(self):
-        for seg in self._geometria()['segments']:
-            self.assertEqual(seg['origen'], PatternSegment.ORIGEN_AUTO)
+    def test_els_trams_del_motor_surten_derivats_i_sense_nom(self):
+        """El motor en fa DUES lectures (`auto` i `natural`) i cap no és una decisió de
+        ningú: derivat vol dir, exactament, que no l'ha batejat cap persona."""
+        derivats = {PatternSegment.ORIGEN_AUTO, PatternSegment.ORIGEN_NATURAL}
+        trams = self._geometria()['segments']
+        self.assertTrue(trams)
+        for seg in trams:
+            self.assertIn(seg['origen'], derivats)
             self.assertIsNone(seg['nom'])
+        # I les dues lectures hi són: si una deixés de generar-se, el bucle de sobre
+        # seguiria passant sense dir res.
+        self.assertEqual({s['origen'] for s in trams}, derivats)
 
     def test_un_tram_declarat_surt_amb_el_seu_origen_i_el_seu_nom(self):
         punts = list(self.front.points.filter(mena='vertex', boundary_index=0)
@@ -3626,14 +3648,22 @@ class PropostesAPITest(PatternsAPITestBase):
         self.assertEqual([s.nom for s in costats], ['Tram A', 'Tram B'])
 
     def test_confirmar_PROMOU_el_tram_i_no_toca_la_hipotesi_del_CAD(self):
-        """El tram derivat es queda on és: és la lectura del CAD, no una decisió de ningú."""
-        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
-        auto_a = p['a']['segment_id']
+        """El tram derivat es queda on és: és la lectura del CAD, no una decisió de ningú.
 
-        self._confirma(p)
+        A2 proposa sobre els NATURALS (T3b), així que la hipòtesi que no s'ha de tocar és
+        aquella; el que ha de néixer és un tram DECLARAT a part."""
+        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
+        derivat_a = p['a']['segment_id']
+        self.assertEqual(
+            PatternSegment.objects.get(pk=derivat_a).origen,
+            PatternSegment.ORIGEN_NATURAL)
+
+        resp = self._confirma(p)
+        self.assertEqual(resp.status_code, 201, resp.data)
 
         self.assertEqual(
-            PatternSegment.objects.get(pk=auto_a).origen, PatternSegment.ORIGEN_AUTO)
+            PatternSegment.objects.get(pk=derivat_a).origen,
+            PatternSegment.ORIGEN_NATURAL)
 
     def test_confirmar_una_proposta_RECALCULA_les_altres(self):
         """La cobertura canvia: els trams que la costura nova reclama surten de la subhasta."""
