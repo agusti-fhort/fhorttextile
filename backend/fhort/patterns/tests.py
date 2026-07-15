@@ -122,6 +122,7 @@ from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement,
                                    PatternPOM, PatternPoint, PatternSegment,
                                    SewProposalRejection, SewRelation)
 from fhort.patterns.services import save_pattern_file
+from fhort.patterns.serializers import PatternGeometrySerializer
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
                                   PatternFileViewSet)
 from fhort.pom.models import GarmentType, POMMaster
@@ -2543,6 +2544,52 @@ class PincaTest(unittest.TestCase):
         self.assertEqual(len(exces), 1)
         # Si els costats de pinça no comptessin, la suma seria 1.00 i no hi hauria excés.
         self.assertAlmostEqual(exces[0].suma_cosida_cm, 104.0, places=2)
+
+
+class NaturalsAPITest(PatternsAPITestBase):
+    """Els naturals arriben amb la geometria, amb el TATE real pujat per l'API."""
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(TATE_DXF.read_bytes()).data['id'])
+
+    def _peces(self):
+        return {p['nom_block']: p for p in PatternGeometrySerializer(self.fp).data['pieces']}
+
+    def test_el_tate_front_surt_amb_vuit_costures_i_no_amb_vint_i_cinc(self):
+        """El cas del sprint, end-to-end: el CAD en marca 25, l'ofici en llegeix 8."""
+        front = self._peces()['TATE_FRONT']
+        auto = [s for s in front['segments'] if s['origen'] == 'auto']
+        self.assertEqual(len(auto), 25)
+        self.assertEqual(len(front['naturals']), 8)
+
+    def test_els_naturals_no_substitueixen_els_auto(self):
+        """Vista derivada: els AUTO segueixen sencers al mateix payload, perquè el gest
+        manual de precisió i l'aritmètica els necessiten."""
+        for nom, p in self._peces().items():
+            with self.subTest(peca=nom):
+                auto = [s for s in p['segments'] if s['origen'] == 'auto']
+                if not auto:
+                    continue
+                self.assertLessEqual(len(p['naturals']), len(auto))
+
+    def test_un_natural_del_tate_es_la_costura_que_l_huma_va_declarar(self):
+        """La validació que no es pot arreglar amb un número: la capa retroba SOLA la
+        lateral que el patronista havia marcat a mà a W4b (32,13 cm)."""
+        front = self._peces()['TATE_FRONT']
+        llargs = [s['longitud_cm'] for s in front['naturals']]
+        self.assertIn(32.13, llargs)
+        esquena = self._peces()['TATE_BACK']
+        self.assertIn(29.8, [s['longitud_cm'] for s in esquena['naturals']])
+
+    def test_els_piquets_viatgen_dins_del_natural(self):
+        """No tallen, però hi són: A2 els llegeix per inferir frunzit."""
+        front = self._peces()['TATE_FRONT']
+        lateral = next(s for s in front['naturals'] if s['longitud_cm'] == 32.13)
+        self.assertEqual(len(lateral['piquets']), 2)
+        # I la fusió diu de quins girs surt.
+        self.assertTrue(lateral['girs_fusionats'])
 
 
 class SegmentDeclaratAPITest(PatternsAPITestBase):

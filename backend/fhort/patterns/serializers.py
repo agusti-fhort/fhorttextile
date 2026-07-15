@@ -7,7 +7,36 @@ va haver de desfer (S0-B1.2: el ViewSet genèric saltava la invariant).
 """
 from rest_framework import serializers
 
-from .models import PatternFile, PatternPiece
+from .engine.geometry import BoundaryData, LayerRole, NotchData, PieceData, PointData, PointKind
+from .engine.natural_segments import index_de_t, segmentar_vora_natural
+from .models import PatternFile, PatternPiece, PatternSegment
+
+
+def _vora_base_meta(boundaries):
+    """La vora d'on es deriven els trams: la de COSIT si n'hi ha, si no la de TALL.
+
+    És la mateixa tria que fa `segmentar_peca` al motor, i a propòsit: si els naturals
+    sortissin d'una vora i els AUTO d'una altra, no serien la mateixa lectura de la
+    mateixa costura.
+    """
+    for rol in (LayerRole.SEW.value, LayerRole.CUT.value):
+        for b in boundaries:
+            if b['role'] == rol:
+                return b, b['index']
+    return None
+
+
+def _boundary_del_dict(b):
+    """Un `BoundaryData` del motor a partir del dict que el serializer ja ha muntat."""
+    return BoundaryData(
+        role=LayerRole(b['role']),
+        layer=b['layer'],
+        points=tuple(
+            PointData(x=p['x'], y=p['y'], kind=PointKind(p['tipus']))
+            for p in b['points']
+        ),
+        closed=bool(b['closed']),
+    )
 
 
 def _signed_download_url(obj, request, *, salt, accio='download-signed'):
@@ -90,6 +119,64 @@ class PatternGeometrySerializer(serializers.ModelSerializer):
     def get_pieces(self, obj):
         return [self._piece(p) for p in obj.pieces.all()]
 
+    def _naturals(self, piece, boundaries):
+        """Els trams naturals de la vora base, calculats sobre el que ja tenim a la mà.
+
+        Es munten objectes del motor amb les MATEIXES files que el serializer ja ha llegit,
+        en comptes de tornar a obrir el DXF: la lectura de la geometria és cara i aquí no
+        cal, perquè els naturals només són aritmètica sobre punts i piquets.
+        """
+        vora_meta = _vora_base_meta(boundaries)
+        if vora_meta is None:
+            return []
+        b_dict, index_vora = vora_meta
+        b = _boundary_del_dict(b_dict)
+        if len(b.points) < 2:
+            return []
+
+        peca = PieceData(
+            nom_block=piece.nom_block,
+            boundaries=(b,),
+            notches=tuple(
+                NotchData(x=p.x, y=p.y)
+                for p in piece.points.all() if p.mena == 'notch'
+            ),
+        )
+
+        # Els extrems de PINÇA DE VORA tallen encara que l'angle hi arribi suau: el que hi
+        # ha a banda i banda són dues costures diferents. Només la PINÇA parteix — un tram
+        # qualsevol que estigui cosit a una altra peça no és cap frontera de la seva vora.
+        # (Import diferit, com fa `dart_proposals`: la condició és de domini i es constata
+        # de la geometria, no d'un flag; no se'n pot tenir una segona versió aquí.)
+        from .annotation_views import es_pinca_de_vora
+
+        talls = []
+        for s in piece.segments.all():
+            if s.vora != index_vora or s.origen != PatternSegment.ORIGEN_DECLARAT:
+                continue
+            rels = list(s.sew_relations_a.all()) + list(s.sew_relations_b.all())
+            if not any(es_pinca_de_vora(r) for r in rels):
+                continue
+            for t in (s.t_inici, s.t_fi):
+                i = index_de_t(b, t)
+                if i is not None:
+                    talls.append(i)
+
+        return [
+            {
+                'vora': s.vora,
+                't_inici': s.t_inici, 't_fi': s.t_fi,
+                'tipus_vora': s.tipus_vora.value,
+                'index_inici': s.index_inici, 'index_fi': s.index_fi,
+                'longitud_cm': round(s.longitud_mm / 10.0, 2),
+                # De quins girs surt: la fusió ha de ser auditable des de la UI.
+                'girs_fusionats': list(s.girs_fusionats),
+                # Metadada, no frontera: A2 els llegeix per inferir frunzit.
+                'piquets': [{'x': k.x, 'y': k.y} for k in s.piquets],
+            }
+            for s in segmentar_vora_natural(peca, b, index_vora, talls_extra=tuple(talls))
+        ]
+
     def _piece(self, piece):
         # Els punts arriben ja ordenats pel Meta.ordering de PatternPoint
         # (piece, mena, boundary_index, ordre): l'ordre dins la vora és el del contorn, i
@@ -157,6 +244,11 @@ class PatternGeometrySerializer(serializers.ModelSerializer):
                 }
                 for s in piece.segments.all()
             ],
+            # Els trams NATURALS: la mateixa vora llegida com poques costures (v.
+            # `engine/natural_segments`). Vista DERIVADA —no és a la BD, es calcula aquí— i
+            # per això viatja al costat dels AUTO en comptes de substituir-los: el selector
+            # de Cosir vol aquests, i el gest manual de precisió segueix volent els altres.
+            'naturals': self._naturals(piece, boundaries),
             # Els POMs ja ancorats, per dibuixar-los sobre la geometria.
             'poms': [
                 {

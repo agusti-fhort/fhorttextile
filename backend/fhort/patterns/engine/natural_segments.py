@@ -177,6 +177,23 @@ def cantonades_naturals(
     return sorted(cantonades)
 
 
+def index_de_t(boundary: BoundaryData, t: float, tol: float = 1e-6) -> int | None:
+    """El vèrtex que seu al paràmetre `t`, o None si `t` no cau sobre cap.
+
+    Els trams es desen en `t` i les cantonades es compten en ÍNDEXS: per fer-los parlar cal
+    aquesta traducció. Només respon quan la `t` cau realment sobre un vèrtex —que és el cas
+    de tot el que surt de `tram_entre_punts`, perquè allà la `t` ÉS `cum[i]/total`—; una `t`
+    a mig tram no és cap frontera i inventar-li el vèrtex més proper seria moure-la.
+    """
+    cum, total = acumulats_vora(boundary)
+    if total <= 0:
+        return None
+    for i, c in enumerate(cum):
+        if abs(c / total - t) <= tol:
+            return i
+    return None
+
+
 def segmentar_vora_natural(
     piece: PieceData,
     boundary: BoundaryData,
