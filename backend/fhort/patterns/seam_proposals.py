@@ -19,6 +19,7 @@ from .engine.seam_matching import (
 from .engine.segments import longitud_tram, longitud_vora
 from .engine.sew import solapament_t, validar
 from .models import PatternFile, PatternSegment, SewProposalRejection, SewRelation
+from .preferences import preferencia_del_tram, rangs_apresos, rol_de_peca
 
 #: Un tram del qual una costura declarada ja reclama més d'aquesta fracció NO es proposa. No és
 #: zero perquè dos trams veïns es toquen per un extrem i un solapament de zero coma res no és una
@@ -88,6 +89,9 @@ def candidats_del_patro(fp: PatternFile) -> tuple[list[Candidat], Descartats, di
     store = DjangoGeometryStore()
     doc = store.load_from(fp)
     ocupats = _trams_ja_declarats(fp.model_id)
+    # El costum del taller per als rols d'aquest patró: una consulta per a tot, no una per
+    # candidat. És un senyal de desempat i no pot costar una volta a la BD per tram.
+    apresos = rangs_apresos({rol_de_peca(p) for p in fp.pieces.all()})
 
     candidats: list[Candidat] = []
     desc = Descartats()
@@ -116,6 +120,7 @@ def candidats_del_patro(fp: PatternFile) -> tuple[list[Candidat], Descartats, di
 
         piquets_vora = piquets_de_la_vora(
             boundary.points, boundary.closed, piece.notches, llarg_vora)
+        confirmats, tallats = apresos.get(rol_de_peca(piece_row), ([], []))
 
         for seg in segments:
             llarg_mm = longitud_tram(boundary, seg.t_inici, seg.t_fi)
@@ -136,6 +141,8 @@ def candidats_del_patro(fp: PatternFile) -> tuple[list[Candidat], Descartats, di
                 t_fi=seg.t_fi,
                 longitud_mm=llarg_mm,
                 piquets=piquets_del_tram(piquets_vora, seg.t_inici, seg.t_fi),
+                preferencia=preferencia_del_tram(
+                    seg.t_inici, seg.t_fi, confirmats, tallats),
             ))
 
     return candidats, desc, {'files': files}

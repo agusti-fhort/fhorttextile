@@ -83,6 +83,25 @@ PES_PIQUETS = 0.50
 PES_LONGITUD = 0.35
 PES_NOMS = 0.15
 
+#: El costum del taller (QA-TALLER-B · T4): què ha confirmat o corregit una persona en aquest
+#: ROL de peça abans. **És el senyal més FLUIX de tots, i a posta.**
+#:
+#: Per sota de `PES_NOMS` perquè diu encara menys sobre AQUEST patró: el nom almenys descriu la
+#: peça que tens al davant, mentre que el costum descriu el que algú va fer en una ALTRA. Amb
+#: 0,10 no puja cap parella de 0,38 (el soroll calibrat, «coll ⛓ màniga») per sobre del llindar
+#: de 0,40 tot sol —hi calen 0,30 llargs de geometria—, i en canvi desempata dues candidates
+#: que la geometria deixa igualades, que és exactament la feina que ha de fer.
+#:
+#: I no entra a `_te_evidencia_geometrica`: un costum no és evidència sobre aquesta peça, i no
+#: pot HABILITAR cap proposta que els piquets i les longituds no sostinguin.
+PES_PREFERENCIA = 0.10
+
+#: Una correcció explícita pesa el DOBLE que una confirmació, i en negatiu. Confirmar és dir
+#: «sí, i prou»; corregir és dir «això que em proposes ja me l'has proposat i ja te l'he
+#: esmenat». Tornar-ho a oferir amb el mateix pes que qualsevol altra cosa és no haver escoltat
+#: —el mateix motiu pel qual el rebuig és persistent.
+PES_PREFERENCIA_CONTRA = -0.20
+
 #: Per sota d'això no es proposa res. No és un llindar de veritat, és un llindar de SOROLL:
 #: una proposta que ningú confirmarà mai fa més mal que bé, perquè ensenya a ignorar la llista.
 #:
@@ -232,6 +251,10 @@ class Candidat:
     longitud_mm: float
     piquets: tuple[float, ...] = ()
     nom: str = ''
+    #: Què ha fet abans aquest taller amb un tram com aquest en aquest ROL de peça:
+    #: `''` (res), `'confirmat'` o `'tallat'`. Viatja al candidat —i no es consulta des del
+    #: motor— perquè el motor no sap què és una BD: qui ho resol és el pont (`preferences`).
+    preferencia: str = ''
 
     @property
     def longitud_cm(self) -> float:
@@ -596,17 +619,59 @@ def _te_evidencia_geometrica(senyals: dict[str, Senyal]) -> bool:
     return senyals['piquets'].punts > 0 or senyals['longitud'].punts > 0
 
 
+def senyal_preferencia(a: Candidat, b: Candidat) -> Senyal:
+    """El costum del taller sobre aquests dos rols de peça (T4).
+
+    Una CORRECCIÓ mana sobre una confirmació i sobre l'altre costat: si algú ja va escurçar un
+    tram com aquest en aquest rol, tornar-l'hi a proposar sencer és proposar-li el que ja ha
+    esmenat. Que l'altre costat estigui confirmat no ho compensa —una costura amb un costat
+    corregit no és mitja bona.
+    """
+    tallats = [c for c in (a, b) if c.preferencia == 'tallat']
+    if tallats:
+        return Senyal(
+            mena='preferencia', punts=PES_PREFERENCIA_CONTRA,
+            detall=(f'Aquest taller ja va escurçar un tram com aquest a '
+                    f'{", ".join(c.piece_nom for c in tallats)}.'),
+            dades={'contra': [c.piece_nom for c in tallats]},
+        )
+
+    confirmats = [c for c in (a, b) if c.preferencia == 'confirmat']
+    if not confirmats:
+        return Senyal(mena='preferencia', punts=0.0, detall='', dades={})
+
+    # Els dos costats confirmats pesen el doble que un de sol: que el taller hagi validat les
+    # DUES lectures és una coincidència més difícil que no pas que n'hagi validat una.
+    punts = PES_PREFERENCIA * (1.0 if len(confirmats) == 2 else 0.5)
+    return Senyal(
+        mena='preferencia', punts=punts,
+        detall=(f'Aquest taller ja ha confirmat trams com aquests a '
+                f'{", ".join(c.piece_nom for c in confirmats)}.'),
+        dades={'confirmats': [c.piece_nom for c in confirmats]},
+    )
+
+
 def avaluar(a: Candidat, b: Candidat) -> Proposta | None:
-    """Els tres senyals sobre una parella. `None` si no arriba a proposta."""
+    """Els senyals sobre una parella. `None` si no arriba a proposta."""
     s_piquets, invertit = senyal_piquets(a, b)
     s_longitud, tipus, diferencial = senyal_longitud(a, b)
     s_noms = senyal_noms(a, b)
+    s_pref = senyal_preferencia(a, b)
     senyals = {'piquets': s_piquets, 'longitud': s_longitud, 'noms': s_noms}
 
+    # La porta és NOMÉS geomètrica: el costum del taller no hi entra, igual que el nom. Si
+    # una preferència pogués habilitar una proposta, el motor acabaria proposant pel que la
+    # gent sol fer i no pel que aquesta peça diu — i el dia que el costum fos dolent, el
+    # repetiria amb cada cop més confiança.
     if not _te_evidencia_geometrica(senyals):
         return None
 
-    confianca = s_piquets.punts + s_longitud.punts + s_noms.punts
+    # El costum només surt al desglòs si diu ALGUNA cosa. Un senyal de zero punts i sense
+    # frase no es pot discutir, i el desglòs existeix precisament per poder-lo discutir: seria
+    # una fila més a la UI que no ajuda a decidir res.
+    if s_pref.punts:
+        senyals['preferencia'] = s_pref
+    confianca = s_piquets.punts + s_longitud.punts + s_noms.punts + s_pref.punts
     confianca = max(0.0, min(1.0, confianca))
     if confianca < LLINDAR_PROPOSTA:
         return None

@@ -67,10 +67,18 @@ from fhort.patterns.engine.dart_detection import (
     clau_pinca,
     detectar,
 )
+from fhort.patterns.preferences import (
+    classifica_accio, preferencia_del_tram, rangs_apresos, registra, rol_de_peca)
 from fhort.patterns.engine.seam_matching import (
     Candidat,
     LLINDAR_PROPOSTA,
+    PES_LONGITUD,
+    PES_NOMS,
+    PES_PIQUETS,
+    PES_PREFERENCIA,
+    PES_PREFERENCIA_CONTRA,
     TOL_PIQUET_S,
+    avaluar,
     casen_piquets,
     clau_parella,
     piquets_de_la_vora,
@@ -79,6 +87,7 @@ from fhort.patterns.engine.seam_matching import (
     proposar,
     senyal_longitud,
     senyal_noms,
+    senyal_preferencia,
 )
 from fhort.patterns.engine.segments import (
     acumulats_vora, SegmentError, fraccio_tram, longitud_tram,
@@ -120,7 +129,7 @@ from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentVi
 from fhort.patterns.export import ExportBlocked, build_export
 from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
                                    PatternPOM, PatternPoint, PatternSegment,
-                                   SewProposalRejection, SewRelation)
+                                   SegmentPreference, SewProposalRejection, SewRelation)
 from fhort.patterns.services import save_pattern_file
 from fhort.patterns.serializers import PatternGeometrySerializer
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
@@ -1371,6 +1380,150 @@ class TramsNaturalsTest(unittest.TestCase):
         self.assertEqual(desviacio_angular(pts, 1, closed=False), 0.0)
         # I l'extrem d'una vora oberta sí que és frontera per definició.
         self.assertEqual(desviacio_angular(pts, 0, closed=False), 180.0)
+
+
+class PreferenciaSenyalTest(unittest.TestCase):
+    """El costum del taller com a senyal. Engine pur: sense BD, amb números inventats."""
+
+    def _c(self, nom, pref='', **kw):
+        return Candidat(
+            segment_id=kw.get('sid', 1), piece_id=1, piece_nom=nom, vora=0,
+            t_inici=0.0, t_fi=0.5, longitud_mm=500.0, preferencia=pref)
+
+    def test_els_dos_costats_confirmats_pesen_el_doble_que_un(self):
+        un = senyal_preferencia(self._c('A', 'confirmat'), self._c('B'))
+        dos = senyal_preferencia(self._c('A', 'confirmat'), self._c('B', 'confirmat'))
+        self.assertAlmostEqual(un.punts, PES_PREFERENCIA * 0.5)
+        self.assertAlmostEqual(dos.punts, PES_PREFERENCIA)
+
+    def test_sense_costum_el_senyal_no_diu_res(self):
+        self.assertEqual(senyal_preferencia(self._c('A'), self._c('B')).punts, 0.0)
+
+    def test_un_costum_mut_no_embruta_el_desglos(self):
+        """Sense res après, la proposta porta els tres senyals de sempre i cap més: una fila
+        de zero punts i sense frase no es pot discutir."""
+        a = Candidat(segment_id=1, piece_id=1, piece_nom='FRONT', vora=0, t_inici=0.0,
+                     t_fi=0.5, longitud_mm=500.0, piquets=(0.25,))
+        b = Candidat(segment_id=2, piece_id=2, piece_nom='BACK', vora=0, t_inici=0.0,
+                     t_fi=0.5, longitud_mm=500.0, piquets=(0.25,))
+        p = avaluar(a, b)
+        self.assertIsNotNone(p)
+        self.assertEqual({s.mena for s in p.senyals}, {'piquets', 'longitud', 'noms'})
+        # I amb costum, hi surt.
+        amb = avaluar(replace(a, preferencia='confirmat'), b)
+        self.assertIn('preferencia', {s.mena for s in amb.senyals})
+
+    def test_una_correccio_mana_sobre_una_confirmacio(self):
+        """Si un costat s'ha corregit, que l'altre estigui confirmat no ho compensa: una
+        costura amb un costat esmenat no és mitja bona."""
+        s = senyal_preferencia(self._c('A', 'tallat'), self._c('B', 'confirmat'))
+        self.assertAlmostEqual(s.punts, PES_PREFERENCIA_CONTRA)
+        self.assertLess(s.punts, 0)
+
+    def test_el_costum_NO_pot_habilitar_una_proposta_sense_geometria(self):
+        """La llei del motor (W4): la geometria mana, i el costum ni tan sols acompanya —no
+        entra a la porta. Dues peces sense cap evidència geomètrica no es proposen encara que
+        el taller les hagi confirmat mil vegades; si ho fessin, el motor proposaria pel que la
+        gent sol fer i repetiria els mals costums amb cada cop més confiança."""
+        # Longituds incompatibles i cap piquet: geometria muda.
+        a = Candidat(segment_id=1, piece_id=1, piece_nom='FRONT', vora=0, t_inici=0.0,
+                     t_fi=0.5, longitud_mm=500.0, preferencia='confirmat')
+        b = Candidat(segment_id=2, piece_id=2, piece_nom='BACK', vora=0, t_inici=0.0,
+                     t_fi=0.5, longitud_mm=5000.0, preferencia='confirmat')
+        self.assertIsNone(avaluar(a, b))
+
+    def test_el_costum_pesa_menys_que_el_nom(self):
+        """Ordre de pesos, escrit com a test: el costum diu menys sobre AQUEST patró que el
+        nom, perquè descriu el que algú va fer en un ALTRE."""
+        self.assertLess(PES_PREFERENCIA, PES_NOMS)
+        self.assertLess(PES_PREFERENCIA, PES_LONGITUD)
+        self.assertLess(PES_PREFERENCIA, PES_PIQUETS)
+
+
+class PreferenciaAprenentatgeTest(PatternsAPITestBase):
+    """Què s'aprèn i quan, amb el TATE real."""
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(TATE_DXF.read_bytes()).data['id'])
+        self.front = self.fp.pieces.get(nom_block='TATE_FRONT')
+        self.nat = (self.front.segments
+                    .filter(origen=PatternSegment.ORIGEN_NATURAL).order_by('-t_fi').first())
+
+    def _declara(self, t_inici, t_fi, nom='QA'):
+        return PatternSegment.objects.create(
+            piece=self.front, vora=self.nat.vora, t_inici=t_inici, t_fi=t_fi,
+            tipus_vora=self.nat.tipus_vora, origen=PatternSegment.ORIGEN_DECLARAT, nom=nom)
+
+    def test_el_rol_no_col_lapsa_peces_diferents(self):
+        """Al Tate el 'rol' del CAD és el nom sencer. Reduir-lo a un FRONT canònic faria que
+        el que s'aprèn del davanter viatgés a la seva vista i al seu canesú."""
+        rols = {rol_de_peca(p) for p in self.fp.pieces.all()}
+        self.assertIn('TATE_FRONT', rols)
+        self.assertIn('TATE_FRONT_FACING', rols)
+        self.assertIn('TATE_FRONT_YOKE', rols)
+        self.assertNotEqual(
+            rol_de_peca(self.front),
+            rol_de_peca(self.fp.pieces.get(nom_block='TATE_FRONT_FACING')))
+
+    def test_confirmar_un_natural_tal_qual_s_apren_com_a_CONFIRMAT(self):
+        pref = registra(self._declara(self.nat.t_inici, self.nat.t_fi))
+        self.assertIsNotNone(pref)
+        self.assertEqual(pref.accio, SegmentPreference.ACCIO_CONFIRMAT)
+        self.assertEqual(pref.rol, 'TATE_FRONT')
+
+    def test_re_confirmar_NO_duplica_la_fila_la_REFORCA(self):
+        registra(self._declara(self.nat.t_inici, self.nat.t_fi))
+        pref = registra(self._declara(self.nat.t_inici, self.nat.t_fi, nom='QA2'))
+        self.assertEqual(SegmentPreference.objects.count(), 1)
+        self.assertEqual(pref.vegades, 2)
+
+    def test_escurcar_un_natural_s_apren_com_a_TALLAT(self):
+        mig = self.nat.t_inici + (self.nat.t_fi - self.nat.t_inici) * 0.9
+        pref = registra(self._declara(self.nat.t_inici, mig))
+        self.assertIsNotNone(pref)
+        self.assertEqual(pref.accio, SegmentPreference.ACCIO_TALLAT)
+
+    def test_escurcar_molt_segueix_sent_una_correccio(self):
+        """Declarar un tros petit d'un natural NO és un tram nou: és dir que aquell natural
+        sencer no és el que es cus. Per això s'aprèn, i per això després baixa la proposta."""
+        curt = self.nat.t_inici + (self.nat.t_fi - self.nat.t_inici) * 0.05
+        pref = registra(self._declara(self.nat.t_inici, curt))
+        self.assertIsNotNone(pref)
+        self.assertEqual(pref.accio, SegmentPreference.ACCIO_TALLAT)
+
+    def test_d_un_tram_que_CAVALCA_dues_lectures_no_se_n_apren_res(self):
+        """Un tram a cavall de dos naturals no corregeix cap dels dos: no diu «aquest havia de
+        ser més curt», diu una altra cosa. Inventar-li una preferència seria posar-li paraules
+        a la boca."""
+        naturals = list(self.front.segments
+                        .filter(origen=PatternSegment.ORIGEN_NATURAL, vora=self.nat.vora)
+                        .order_by('t_inici'))
+        a, b = naturals[0], naturals[1]
+        # De mig del primer a mig del segon: no cau dins de cap.
+        mig_a = a.t_inici + (a.t_fi - a.t_inici) * 0.5
+        mig_b = b.t_inici + (b.t_fi - b.t_inici) * 0.5
+        self.assertIsNone(registra(self._declara(mig_a, mig_b)))
+
+    def test_d_un_tram_DERIVAT_no_se_n_apren_res(self):
+        """Només s'aprèn del «sí» humà. Un derivat no l'ha decidit ningú, i aprendre'n seria
+        que el motor es donés la raó sol."""
+        self.assertIsNone(registra(self.nat))
+
+    def test_declarar_un_tram_per_l_API_ja_deixa_el_senyal(self):
+        """El ganxo: el gest manual és un judici sobre la lectura, igual que confirmar una
+        proposta. I no canvia res del que la crida feia abans."""
+        punts = list(self.front.points.filter(
+            mena='vertex', boundary_index=self.nat.vora).order_by('ordre'))
+        a = next(p for p in punts if p.ordre == self.nat.index_inici) if hasattr(
+            self.nat, 'index_inici') else punts[0]
+        request = self.factory.post('/api/v1/patterns/pattern-segments/', {
+            'point_a': punts[0].id, 'point_b': punts[4].id, 'nom': 'lateral',
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        resp = PatternSegmentViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(resp.status_code, 201, resp.data)
 
 
 class MesuraTest(unittest.TestCase):
@@ -3600,8 +3753,12 @@ class PropostesAPITest(PatternsAPITestBase):
         self.assertEqual(lateral['tipus'], 'casat')
         self.assertGreater(lateral['confianca'], 0.7)
 
-    def test_cada_proposta_porta_el_DESGLOS_dels_tres_senyals(self):
-        """Una confiança sola («87%») no es pot discutir. El desglòs, sí."""
+    def test_cada_proposta_porta_el_DESGLOS_dels_senyals(self):
+        """Una confiança sola («87%») no es pot discutir. El desglòs, sí.
+
+        Els tres de sempre hi són SEMPRE. El costum del taller (T4) només si diu alguna cosa:
+        un senyal de zero punts i sense frase no es podria discutir, que és per al que serveix
+        el desglòs."""
         p = self._propostes().data['propostes'][0]
 
         self.assertEqual({s['mena'] for s in p['senyals']}, {'piquets', 'longitud', 'noms'})
