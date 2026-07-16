@@ -4,6 +4,8 @@ import DartProposalsPanel from './DartProposalsPanel'
 import ProposalsPanel from './ProposalsPanel'
 import { nomCostura, textAritmetica, textCobertura, textEstat } from './sewText'
 import { formatLen, titleLen } from '../../utils/format'
+import { AccionsGrup, Casella, Informe, useSeleccio } from './seleccio'
+import Modal from '../ui/Modal'
 
 /**
  * RELACIONS — el que s'ha declarat sobre el patró, editable.
@@ -17,6 +19,10 @@ import { formatLen, titleLen } from '../../utils/format'
  * què es van crear, al canvas, i sobre la MATEIXA fila: un POM reobert es recalcula, no es
  * torna a ancorar; un tram es recol·loca, no s'esborra i es refà. La diferència no és de
  * matís: les costures referencien els trams, i refer-los les buidaria en silenci.
+ *
+ * **I d'aquí és d'on s'esborra en BLOC** (QA-TALLER E · T3). Cada grup porta la seva pròpia
+ * selecció, la seva pròpia paperera i el seu propi informe: v. `seleccio.jsx` per què la
+ * selecció no travessa mai els blocs.
  */
 export default function RelationsPanel({
   poms, sews, pinces, segments, tramsPerId, unit = 'CM',
@@ -28,8 +34,40 @@ export default function RelationsPanel({
   onEsborraSew, onReobreSew, onReanomenaSew,
   onEsborraPinca, onReanomenaPinca,
   onReanomenaTram, onReobreTram, onEsborraTram,
+  onEsborraBlocProposta, onEsborraBlocPom, onEsborraBlocSew,
+  onEsborraBlocPinca, onEsborraBlocTram,
 }) {
   const { t } = useTranslation()
+
+  // Una selecció per grup. Cinc `useSeleccio` i no un de sol amb cinc claus: el que fa que no
+  // hi pugui haver mai un «esborra-ho tot» no és una comprovació, és que l'estat no existeix.
+  const selProp = useSeleccio(propostes.map(p => p.clau.join('-')))
+  const selPom = useSeleccio(poms.map(p => p.id))
+  const selSew = useSeleccio(sews.map(s => s.id))
+  const selPinca = useSeleccio(pinces.map(p => p.id))
+  const selTram = useSeleccio(segments.map(s => s.id))
+
+  const [confirma, setConfirma] = useState(null)
+  const [informes, setInformes] = useState({})
+
+  /**
+   * Res cau sense passar per aquí: es demana la confirmació, i només el «sí» executa.
+   *
+   * L'informe es desa PER MENA i la selecció es buida només quan l'esborrat ha anat: si
+   * rebota, el que s'havia marcat continua marcat i es pot tornar a provar sense refer la
+   * tria.
+   */
+  const demana = (mena, ids, fn, seleccio) => setConfirma({
+    mena,
+    count: ids.length,
+    executa: async () => {
+      const informe = await fn(ids)
+      setInformes(i => ({ ...i, [mena]: informe?.retinguts || [] }))
+      seleccio.buida()
+    },
+  })
+
+  const tanca = mena => setInformes(i => ({ ...i, [mena]: [] }))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
@@ -37,9 +75,25 @@ export default function RelationsPanel({
           decidir; el que hi ha a sota ja està decidit. I van DINS de Relacions, no en un tab
           a part: proposar i declarar són el mateix ofici, i separar-los faria que la llista
           d'assistència fos una pantalla on s'ha d'anar en comptes d'una que ja s'està mirant. */}
-      <Seccio titol={t('pattern.taller.proposals', { n: propostes.length })}>
+      <Seccio
+        titol={t('pattern.taller.proposals', { n: propostes.length })}
+        accions={
+          <AccionsGrup
+            t={t} n={selProp.sel.size} total={propostes.length}
+            onTots={selProp.tots}
+            onEsborra={() => demana(
+              'proposals',
+              propostes.filter(p => selProp.sel.has(p.clau.join('-'))),
+              onEsborraBlocProposta,
+              selProp,
+            )}
+          />
+        }
+      >
+        <Informe t={t} retinguts={informes.proposals} onTanca={() => tanca('proposals')} />
         <ProposalsPanel
           propostes={propostes} descartats={descartatsProp} unit={unit}
+          sel={selProp.sel} onAlterna={selProp.alterna}
           onConfirma={onConfirmaProposta}
           onRebutja={onRebutjaProposta}
           onRessalta={onRessaltaProposta}
@@ -58,11 +112,27 @@ export default function RelationsPanel({
         />
       </Seccio>
 
-      <Seccio titol={t('pattern.poms_anchored', { n: poms.length })}>
+      <Seccio
+        titol={t('pattern.poms_anchored', { n: poms.length })}
+        accions={
+          <AccionsGrup
+            t={t} n={selPom.sel.size} total={poms.length}
+            onTots={selPom.tots}
+            onEsborra={() => demana(
+              'poms', [...selPom.sel], onEsborraBlocPom, selPom)}
+          />
+        }
+      >
+        <Informe t={t} retinguts={informes.poms} onTanca={() => tanca('poms')} />
         {poms.length === 0 ? (
           <Buit text={t('pattern.poms_empty')} />
         ) : poms.map(p => (
           <Fila key={p.id}>
+            <Casella
+              marcat={selPom.sel.has(p.id)}
+              onChange={() => selPom.alterna(p.id)}
+              etiqueta={t('pattern.taller.bulk_select_row')}
+            />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: 'var(--mono)',
@@ -97,12 +167,24 @@ export default function RelationsPanel({
         ))}
       </Seccio>
 
-      <Seccio titol={t('pattern.sews', { n: sews.length })}>
+      <Seccio
+        titol={t('pattern.sews', { n: sews.length })}
+        accions={
+          <AccionsGrup
+            t={t} n={selSew.sel.size} total={sews.length}
+            onTots={selSew.tots}
+            onEsborra={() => demana('sews', [...selSew.sel], onEsborraBlocSew, selSew)}
+          />
+        }
+      >
+        <Informe t={t} retinguts={informes.sews} onTanca={() => tanca('sews')} />
         {sews.length === 0 ? (
           <Buit text={t('pattern.sews_empty')} />
         ) : sews.map(s => (
           <Costura
             key={s.id} t={t} sew={s} unit={unit} tramsPerId={tramsPerId}
+            marcat={selSew.sel.has(s.id)}
+            onMarca={() => selSew.alterna(s.id)}
             onReobre={() => onReobreSew(s)}
             onReanomena={onReanomenaSew}
             onEsborra={() => onEsborraSew(s.id)}
@@ -113,35 +195,80 @@ export default function RelationsPanel({
       {/* Les PINCES a part (W4b): una pinça NO és una costura més. És el forat que explica per
           què una vora fa 32 cm i només n'aporta 30 a la costura, i barrejar-la amb les costures
           amagaria justament això. */}
-      <Seccio titol={t('pattern.taller.pinces', { n: pinces.length })}>
+      <Seccio
+        titol={t('pattern.taller.pinces', { n: pinces.length })}
+        accions={
+          <AccionsGrup
+            t={t} n={selPinca.sel.size} total={pinces.length}
+            onTots={selPinca.tots}
+            onEsborra={() => demana('pinces', [...selPinca.sel], onEsborraBlocPinca, selPinca)}
+          />
+        }
+      >
+        <Informe t={t} retinguts={informes.pinces} onTanca={() => tanca('pinces')} />
         {pinces.length === 0 ? (
           <Buit text={t('pattern.taller.pinces_empty')} />
         ) : pinces.map(p => (
           <Pinca
             key={p.id} t={t} pinca={p} unit={unit}
+            marcat={selPinca.sel.has(p.id)}
+            onMarca={() => selPinca.alterna(p.id)}
             onReanomena={onReanomenaPinca}
             onEsborra={() => onEsborraPinca(p.id)}
           />
         ))}
       </Seccio>
 
-      <Seccio titol={t('pattern.taller.segments', { n: segments.length })}>
+      <Seccio
+        titol={t('pattern.taller.segments', { n: segments.length })}
+        accions={
+          <AccionsGrup
+            t={t} n={selTram.sel.size} total={segments.length}
+            onTots={selTram.tots}
+            onEsborra={() => demana('segments', [...selTram.sel], onEsborraBlocTram, selTram)}
+          />
+        }
+      >
+        <Informe t={t} retinguts={informes.segments} onTanca={() => tanca('segments')} />
         {segments.length === 0 ? (
           <Buit text={t('pattern.taller.segments_empty')} />
         ) : segments.map(s => (
           <Tram
             key={s.id} t={t} tram={s} unit={unit}
+            marcat={selTram.sel.has(s.id)}
+            onMarca={() => selTram.alterna(s.id)}
             onReanomena={onReanomenaTram} onReobre={onReobreTram} onEsborra={onEsborraTram}
           />
         ))}
       </Seccio>
+
+      {/* La CONFIRMACIÓ. Un esborrat en bloc és el gest que més pot destruir d'un sol clic, i
+          el diàleg diu el compte i la MENA: «Esborrar 18 trams declarats?». Sense la mena, qui
+          té cinc grups a la columna ha de recordar quina paperera ha clicat. */}
+      {confirma && (
+        <Modal
+          title={t('pattern.taller.bulk_confirm_title', {
+            count: confirma.count,
+            mena: t(`pattern.taller.bulk_kind_${confirma.mena}`, { count: confirma.count }),
+          })}
+          subtitle={t('pattern.taller.bulk_confirm_body')}
+          confirmLabel={t('pattern.taller.bulk_delete', { count: confirma.count })}
+          cancelLabel={t('app.cancel')}
+          onCancel={() => setConfirma(null)}
+          onConfirm={() => {
+            const executa = confirma.executa
+            setConfirma(null)
+            executa()
+          }}
+        />
+      )}
     </div>
   )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Costura({ t, sew, unit, tramsPerId, onReobre, onReanomena, onEsborra }) {
+function Costura({ t, sew, unit, tramsPerId, marcat, onMarca, onReobre, onReanomena, onEsborra }) {
   const e = sew.estat || {}
   const cobertura = e.cobertura || []
   const [editantNom, setEditantNom] = useState(false)
@@ -164,6 +291,10 @@ function Costura({ t, sew, unit, tramsPerId, onReobre, onReanomena, onEsborra })
       display: 'flex', flexDirection: 'column', gap: 4,
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+        <Casella
+          marcat={marcat} onChange={onMarca}
+          etiqueta={t('pattern.taller.bulk_select_row')}
+        />
         <i className={`ti ${e.casa ? 'ti-check' : 'ti-alert-triangle'}`}
            style={{ color: e.casa ? 'var(--ok)' : 'var(--err)', marginTop: 2 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -241,7 +372,7 @@ function Costura({ t, sew, unit, tramsPerId, onReobre, onReanomena, onEsborra })
  * restat a la costura que la conté. Es diu aquí perquè, quan algú vegi «− 2,3 (Pinça 1)» a la
  * costura lateral, pugui venir a comprovar d'on surt aquell 2,3.
  */
-function Pinca({ t, pinca, unit, onReanomena, onEsborra }) {
+function Pinca({ t, pinca, unit, marcat, onMarca, onReanomena, onEsborra }) {
   const [editant, setEditant] = useState(false)
   const [nom, setNom] = useState(pinca.sew?.nom || '')
   const e = pinca.estat || {}
@@ -258,6 +389,10 @@ function Pinca({ t, pinca, unit, onReanomena, onEsborra }) {
       display: 'flex', flexDirection: 'column', gap: 3,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <Casella
+          marcat={marcat} onChange={onMarca}
+          etiqueta={t('pattern.taller.bulk_select_row')}
+        />
         <i className="ti ti-triangle" style={{ color: 'var(--gold)', flexShrink: 0 }} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -336,7 +471,7 @@ function Pinca({ t, pinca, unit, onReanomena, onEsborra }) {
   )
 }
 
-function Tram({ t, tram, unit, onReanomena, onReobre, onEsborra }) {
+function Tram({ t, tram, unit, marcat, onMarca, onReanomena, onReobre, onEsborra }) {
   const [editant, setEditant] = useState(false)
   const [nom, setNom] = useState(tram.nom || '')
   const [rebuig, setRebuig] = useState(null)   // per què no s'ha pogut esborrar
@@ -365,6 +500,10 @@ function Tram({ t, tram, unit, onReanomena, onReobre, onEsborra }) {
       display: 'flex', flexDirection: 'column', gap: 3,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <Casella
+          marcat={marcat} onChange={onMarca}
+          etiqueta={t('pattern.taller.bulk_select_row')}
+        />
         <i className="ti ti-line" style={{ color: 'var(--gold)', flexShrink: 0 }} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -461,7 +600,7 @@ function Tram({ t, tram, unit, onReanomena, onReobre, onEsborra }) {
  * Que sigui INSET (amb marge i cantonada) i no a sang és el que la diferencia de la capçalera
  * del contenidor que la conté: mateix color, jerarquia diferent.
  */
-function Seccio({ titol, children }) {
+function Seccio({ titol, accions, children }) {
   return (
     <div>
       <div style={{
@@ -477,6 +616,7 @@ function Seccio({ titol, children }) {
         }}>
           {titol}
         </h4>
+        {accions}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {children}

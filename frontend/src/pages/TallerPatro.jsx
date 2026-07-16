@@ -514,6 +514,56 @@ export default function TallerPatro() {
     }
   }
 
+  // ── ESBORRAT EN BLOC (QA-TALLER E · T3) ───────────────────────────────────
+  //
+  // Cada família té la seva crida, i totes tornen el MATEIX informe
+  // `{esborrats, retinguts}`: el panell no ha de saber quina mena d'entitat acaba de tocar
+  // per saber llegir què s'ha quedat.
+
+  /**
+   * Rebutjar propostes en bloc.
+   *
+   * Aquí NO hi ha bulk del servidor, i és a posta: una proposta no és cap fila (es recalcula
+   * a cada crida) i «esborrar-la» és crear-ne el REBUIG. L'endpoint que ja hi ha és
+   * idempotent (`get_or_create`), i inventar-ne un segon per a un bucle hauria estat un lloc
+   * més on la llei del rebuig podria divergir. Les crides van en paral·lel, i el que rebota
+   * s'informa en comptes de fer caure les altres.
+   */
+  const esborrarBlocProposta = async (props) => {
+    setPropostaRessaltada(null)
+    const resultats = await Promise.allSettled(props.map(p =>
+      patterns.sew.rebutjarProposta({
+        model: modelId, segment_a: p.a.segment_id, segment_b: p.b.segment_id,
+      })))
+    await recarregarRelacions()
+    return {
+      retinguts: resultats.flatMap((r, i) => (r.status === 'rejected'
+        ? [{ id: props[i].clau.join('-'), motiu: 'error' }]
+        : [])),
+    }
+  }
+
+  const esborrarBlocPom = async (ids) => {
+    const { data } = await patterns.poms.bulkRemove(ids)
+    await recarregarRelacions()
+    return data
+  }
+
+  // Costures i pinces comparteixen endpoint —una pinça ÉS una SewRelation— però no
+  // selecció: al panell són dos grups, perquè esborrar costures i esborrar pinces són dues
+  // intencions, i el compte de la paperera ha de dir la mena que caurà.
+  const esborrarBlocSew = async (ids) => {
+    const { data } = await patterns.sew.bulkRemove(ids)
+    await recarregarRelacions()
+    return data
+  }
+
+  const esborrarBlocTram = async (ids) => {
+    const { data } = await patterns.segments.bulkRemove(ids)
+    await recarregarRelacions()
+    return data
+  }
+
   /** El nom que un tram proposat tindrà quan la proposta es confirmi. */
   const nomTramProposat = (costat) => t('pattern.taller.proposal_seg', {
     peca: costat.peca, llarg: formatLen(costat.longitud_cm, unit),
@@ -931,6 +981,11 @@ export default function TallerPatro() {
               onEsborraPinca={esborrarPinca} onReanomenaPinca={reanomenarSew}
               onReanomenaTram={reanomenarTram} onReobreTram={reobrirTram}
               onEsborraTram={esborrarTram}
+              onEsborraBlocProposta={esborrarBlocProposta}
+              onEsborraBlocPom={esborrarBlocPom}
+              onEsborraBlocSew={esborrarBlocSew}
+              onEsborraBlocPinca={esborrarBlocSew}
+              onEsborraBlocTram={esborrarBlocTram}
             />
           </Contenidor>
         </aside>

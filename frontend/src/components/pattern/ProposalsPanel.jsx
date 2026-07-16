@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CADENA } from './sewText'
 import { formatLen, titleLen } from '../../utils/format'
+import { Casella } from './seleccio'
 
 /**
  * COSTURES PROPOSADES (A2) — el motor proposa, la persona decideix.
@@ -21,6 +22,7 @@ import { formatLen, titleLen } from '../../utils/format'
  */
 export default function ProposalsPanel({
   propostes, descartats, unit = 'CM',
+  sel = null, onAlterna = null,
   onConfirma, onRebutja, onRessalta,
 }) {
   const { t } = useTranslation()
@@ -38,6 +40,8 @@ export default function ProposalsPanel({
       {propostes.map(p => (
         <Proposta
           key={p.clau.join('-')} t={t} p={p} unit={unit}
+          marcat={sel ? sel.has(p.clau.join('-')) : null}
+          onMarca={onAlterna ? () => onAlterna(p.clau.join('-')) : null}
           onConfirma={onConfirma} onRebutja={onRebutja} onRessalta={onRessalta}
         />
       ))}
@@ -67,7 +71,7 @@ export default function ProposalsPanel({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Proposta({ t, p, unit, onConfirma, onRebutja, onRessalta }) {
+function Proposta({ t, p, unit, marcat, onMarca, onConfirma, onRebutja, onRessalta }) {
   const [ocupat, setOcupat] = useState(false)
   const v = p.veredicte || {}
 
@@ -96,6 +100,14 @@ function Proposta({ t, p, unit, onConfirma, onRebutja, onRessalta }) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+        {/* La casella només hi és si algú l'escolta: el panell també es fa servir sense
+            selecció, i una casella que no fa res és pitjor que cap casella. */}
+        {onMarca && (
+          <Casella
+            marcat={marcat} onChange={onMarca}
+            etiqueta={t('pattern.taller.bulk_select_row')}
+          />
+        )}
         <i className="ti ti-wand" style={{ color: 'var(--gold)', marginTop: 2, flexShrink: 0 }} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
