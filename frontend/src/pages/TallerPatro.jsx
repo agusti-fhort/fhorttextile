@@ -610,10 +610,16 @@ export default function TallerPatro() {
    * no demana confirmació i no en cal: tornar a buscar les retorna totes. La llibertat de
    * netejar sense conseqüències és el que fa que la llista es pugui fer servir com una taula
    * de treball en comptes d'un formulari que s'ha d'omplir bé a la primera.
+   *
+   * Torna `cercades` a fals a posta: netejar desfà la cerca, no la deixa vigent i buida. Si no
+   * ho fes, el buit diria «el motor no veu cap costura» —la frase de «cercat i cap»— quan la
+   * veritat és que n'havia trobades i les has amagades. Un buit que menteix sobre per què és
+   * buit és justament el que T3 no vol; el buit honest, aquí, és «torna-ho a buscar».
    */
   const netejarPropostes = () => {
     setPropostaRessaltada(null)
     setPropostes([])
+    setCercades(false)
   }
 
   /**
