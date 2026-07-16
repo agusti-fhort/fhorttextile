@@ -125,7 +125,8 @@ from fhort.models_app.services_fitxers import DOWNLOAD_TTL
 from fhort.patterns.adapters import (DjangoGeometryStore, DjangoGradingSource,
                                      pom_specs, sew_specs)
 from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentViewSet,
-                                             SewRelationViewSet, comprovar_costura)
+                                             SewProposalRejectionViewSet, SewRelationViewSet,
+                                             comprovar_costura)
 from fhort.patterns.export import ExportBlocked, build_export
 from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
                                    PatternPOM, PatternPoint, PatternSegment,
@@ -4012,6 +4013,72 @@ class PropostesAPITest(PatternsAPITestBase):
 
         claus = {tuple(x['clau']) for x in self._propostes().data['propostes']}
         self.assertNotIn(tuple(p['clau']), claus)
+
+    # ── T3: llegir i DESFER els rebuigs (QA-TALLER F) ───────────────────────
+
+    def _llista_rebuigs(self):
+        request = self.factory.get(
+            '/api/v1/patterns/sew-proposal-rejections/', {'model': self.model.id})
+        force_authenticate(request, user=self.user)
+        return SewProposalRejectionViewSet.as_view({'get': 'list'})(request)
+
+    def _desfa_rebuig(self, rid):
+        request = self.factory.delete(f'/api/v1/patterns/sew-proposal-rejections/{rid}/')
+        force_authenticate(request, user=self.user)
+        return SewProposalRejectionViewSet.as_view({'delete': 'destroy'})(request, pk=rid)
+
+    def _claus(self):
+        return {tuple(x['clau']) for x in self._propostes().data['propostes']}
+
+    def test_el_rebuig_es_pot_llegir_amb_la_cara_que_tenia_a_la_pantalla(self):
+        """Els ids dels trams no identifiquen res per a ningú: el que la persona va veure quan
+        va dir que no era «TATE_BACK · 25,3 cm ⛓ TATE_FRONT · 25,2 cm»."""
+        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
+        self._rebutja(p, motiu='no es cusen')
+
+        resp = self._llista_rebuigs()
+
+        self.assertEqual(resp.status_code, 200)
+        fila = resp.data['results'][0]
+        self.assertEqual({fila['peca_a'], fila['peca_b']}, {'TATE_BACK', 'TATE_FRONT'})
+        self.assertEqual(fila['motiu'], 'no es cusen')
+        for k in ('longitud_a_cm', 'longitud_b_cm'):
+            self.assertGreater(fila[k], 0, f'{k} ha de portar la xifra que es va veure')
+
+    def test_desfer_un_rebuig_torna_a_deixar_proposar_la_parella(self):
+        """Persistent no vol dir irreversible. Sense el DELETE, un «no» premut per error amaga
+        aquella parella per sempre i l'única sortida seria tornar a pujar el patró.
+
+        La parella s'identifica per la seva CLAU i no per les peces que uneix: el TATE proposa
+        més d'una costura entre el davanter i l'esquena, i buscar-la pel nom de les peces
+        trobaria una germana i el test passaria sense provar res.
+        """
+        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
+        clau = tuple(p['clau'])
+        self._rebutja(p)
+        self.assertNotIn(clau, self._claus(),
+                         'el rebuig no ha amagat la parella: el test no prova res')
+        rid = self._llista_rebuigs().data['results'][0]['id']
+
+        resp = self._desfa_rebuig(rid)
+
+        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(SewProposalRejection.objects.count(), 0)
+        self.assertIn(clau, self._claus(),
+                      'desfet el rebuig, el motor ha de tornar a poder proposar la parella')
+
+    def test_els_rebuigs_dun_altre_model_no_es_llisten(self):
+        p = self._propostes().data['propostes'][0]
+        self._rebutja(p)
+        altre = Model.objects.create(
+            codi_intern='QA-PAT-0002', codi_tenant='TST', any=2026, temporada='SS', sequencial=2)
+
+        request = self.factory.get(
+            '/api/v1/patterns/sew-proposal-rejections/', {'model': altre.id})
+        force_authenticate(request, user=self.user)
+        resp = SewProposalRejectionViewSet.as_view({'get': 'list'})(request)
+
+        self.assertEqual(resp.data['results'], [])
 
 
 # ═════════════════════════════════════════════════════════════════════════════

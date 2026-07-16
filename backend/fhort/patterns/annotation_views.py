@@ -10,7 +10,7 @@ de ser una mesura del patró per ser una xifra que algú hi ha escrit a sobre.
 """
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import exceptions, serializers, status, viewsets
+from rest_framework import exceptions, mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -810,6 +810,64 @@ class SewRelationViewSet(BulkDeleteMixin, viewsets.ModelViewSet):
                     {camp: 'Això no és una proposta: aquest tram ja és un tram declarat.'})
             trams.append(seg)
         return trams[0], trams[1]
+
+
+class SewProposalRejectionSerializer(serializers.ModelSerializer):
+    """Un rebuig, dit de manera que una persona pugui reconèixer QUÈ va dir que no.
+
+    Els ids dels trams no identifiquen res per a ningú: el que la pantalla ensenyava quan es va
+    prémer «no» era «TATE_BACK · 25,3 cm ⛓ TATE_FRONT · 25,2 cm». Per tornar-ho a dir igual
+    calen la peça i la longitud de cada costat — i van en XIFRA, no en frase, perquè qui té els
+    tres idiomes és la UI.
+    """
+
+    peca_a = serializers.CharField(source='segment_a.piece.nom_block', read_only=True)
+    peca_b = serializers.CharField(source='segment_b.piece.nom_block', read_only=True)
+    longitud_a_cm = serializers.SerializerMethodField()
+    longitud_b_cm = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SewProposalRejection
+        fields = [
+            'id', 'model', 'segment_a', 'segment_b', 'peca_a', 'peca_b',
+            'longitud_a_cm', 'longitud_b_cm', 'motiu', 'data',
+        ]
+        read_only_fields = fields
+
+    def _llarg(self, seg):
+        boundary = self.context.setdefault('_vores', _BoundaryCache()).get(seg.piece, seg.vora)
+        if boundary is None:
+            return None
+        return round(longitud_tram(boundary, seg.t_inici, seg.t_fi) / 10.0, 2)
+
+    def get_longitud_a_cm(self, obj):
+        return self._llarg(obj.segment_a)
+
+    def get_longitud_b_cm(self, obj):
+        return self._llarg(obj.segment_b)
+
+
+class SewProposalRejectionViewSet(mixins.ListModelMixin, mixins.DestroyModelMixin,
+                                  viewsets.GenericViewSet):
+    """Els «no» que algú ha dit al motor: llegir-los i DESFER-LOS.
+
+    Només llistar i esborrar. Crear-ne un és `sew-relations/rebutjar-proposta/`, que és on viu
+    la llei del rebuig (clau canònica, idempotència): una segona porta d'entrada seria un segon
+    lloc on aquella llei podria divergir.
+
+    **Desfer ha d'existir.** Un rebuig és persistent a posta —si no ho fos no seria un rebuig—,
+    però persistent no vol dir irreversible: sense el DELETE, un «no» premut per error amaga
+    aquella parella per sempre i l'única sortida seria tornar a pujar el patró. Esborrar el
+    rebuig no torna a proposar res per ell mateix; només treu la mordassa, i el motor tornarà a
+    dir el que vegi la propera vegada que se li demani.
+    """
+
+    queryset = SewProposalRejection.objects.select_related(
+        'segment_a__piece', 'segment_b__piece').all()
+    serializer_class = SewProposalRejectionSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['model']
 
 
 class PatternSegmentSerializer(serializers.ModelSerializer):

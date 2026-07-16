@@ -5,7 +5,9 @@ l'`include` de `fhort/urls.py`, que sempre és `api/v1/`.
 """
 from rest_framework.routers import DefaultRouter
 
-from .annotation_views import PatternPOMViewSet, PatternSegmentViewSet, SewRelationViewSet
+from .annotation_views import (
+    PatternPOMViewSet, PatternSegmentViewSet, SewProposalRejectionViewSet, SewRelationViewSet,
+)
 from .views import PatternFileViewSet
 
 router = DefaultRouter()
@@ -14,5 +16,9 @@ router.register(r'patterns/pattern-poms', PatternPOMViewSet, basename='patterns-
 router.register(r'patterns/pattern-segments', PatternSegmentViewSet,
                 basename='patterns-pattern-segments')
 router.register(r'patterns/sew-relations', SewRelationViewSet, basename='patterns-sew-relations')
+# Els rebuigs de proposta: llegir-los i desfer-los. Crear-los és `sew-relations/
+# rebutjar-proposta/` — la llei del rebuig té una sola porta d'entrada.
+router.register(r'patterns/sew-proposal-rejections', SewProposalRejectionViewSet,
+                basename='patterns-sew-proposal-rejections')
 
 urlpatterns = router.urls
