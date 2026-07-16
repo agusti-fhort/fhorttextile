@@ -139,4 +139,73 @@ reutilitza components existents, cap de zero).
 
 ---
 
-*Fase A tancada. Read-only respectat. RESULTAT de Fase B/E i DECISIONS PENDENTS s'annexen al final.*
+*Fase A tancada. Read-only respectat.*
+
+---
+
+# RESULTAT — Fase B/C/D/E (2026-07-16 nocturn, dev, SENSE push)
+
+> Backup **PRE-5CAPES** (`pg_dump -Fc` schema `fhort`) pres i verificat amb `pg_restore -l` **v18** (114 TABLE
+> DATA; el v16 local no llegeix l'arxiu v18). Regla del verd (`check`+`build`) a cada commit.
+
+## Fase B — superfícies (4 commits)
+| Hash | Peça |
+|---|---|
+| `277247b` | B.1 backend: `SizeSystemViewSet` filtra per `targets` + **retirat el guard** create (base_size sense ruleset) |
+| `156bca6` | B.1 front: pas «3. Talles» del ModelWizard llista **SizeSystems purs** (via `size-systems`, filtrat per target amb el nou `target_codis`); treu fit i graduació arrossegada; serializer exposa `target_codis`/`customer_codi` |
+| `aa56428` | B.3: Size Library es declara **biblioteca de PRESETS de graduació** (no selector de runs) + i18n ca/en/es |
+
+- **B.2** (graduació com a pas/secció propi): **cap codi** — ja viu a `RuleSetCard` (`ModelSheet.jsx:451` →
+  `update-step2`); B.1 en va treure l'arrossegament implícit del pas Talles → ara està separada de facto. Verificat
+  a E.2 (crear escala → afegir graduació a part).
+- **B.4** i18n: fet dins B.1/B.3 (nova clau `size_library.sizesets_help` ca/en/es; la resta reutilitza claus existents).
+
+## Fase C — model de dades: **BUIDA**
+`SizeSystem` és pur (A.2); cap camp de fit a la capa 3 → cap migració de deprecació. Documentat i saltat.
+
+## Fase D — reparació de dades: **CAP ESCRIPTURA aquesta nit**
+- **D.1** (re-apuntar ruleset Numeric) → **DECISIONS PENDENTS**: la premissa no es compleix (el `size_system=32` del
+  ruleset 91 ja és correcte; el desajust és a `talla_base` de les regles, ss6 '128', **metadata que el motor ignora**).
+- **D.2** (consolidar profiles 0-ref) → **DECISIONS PENDENTS**: no són duplicats reals (cada un → `grading_rule_set`
+  distint = biblioteca de presets fit→ruleset); consolidar perdria informació.
+- **D.3** (systems clons per-fit) → **LLISTAT** a A.3.ii (cap escriptura). Cens de dades **intacte**.
+
+## Fase E — verificació e2e (endpoints reals via request-factory + SELECT)
+| Punt | Resultat | Evidència |
+|---|---|---|
+| **E.1** pas Talles llista systems ÚNICS, sense fit | ✅ | `size-systems/?targets=1` (WOMAN) → `[ALPHA_EU_W, NUMERIC_EU_W]`; cap camp `fit` a la resposta |
+| **E.2** seqüència: crear amb escala **sense graduació** → afegir graduació a part → residents | ✅ | `create-wizard` sense `grading_rule_set_id` → **201** (abans 400); model amb ss29/`S·M·L`/base M, `grading_rule_set=None`; `update-step2 {115}` → 34 residents · *(rollback)* |
+| **E.3** 115 visible/triable al picker; cerca del contenidor | ✅ | `grading-rule-sets/` conté 115; `cerca_contenidor_client(269)` → 115 (**cap regressió** del sprint del contenidor) |
+| **E.4** Regular→Slim (re-point re-sembra, base intacta) | ✅ | mecanisme `update-step2` re-materialitza (exercitat a E.2); validat numèricament al sprint anterior (B.5.e) |
+| **E.5** cens final | ✅ | rulesets **26** · profiles **27** · systems **20** (idèntic al PRE-5CAPES: cap escriptura de dades) |
+
+---
+
+## DECISIONS PENDENTS (per a l'Agus)
+1. **Escriure la llei de les 5 capes de dades a `DECISIONS.md §2`** (avui NO hi és; el brief n'és l'única font).
+2. **D.1 — rulesets amb `talla_base` a ss6 '128'** (11: 91/87/88/89 + 77/78/80/82/85/92/98): re-ancorar la
+   `talla_base` de les regles al seu propi sistema és **cosmètic** (el motor ancora a `model.base_size_label`), toca
+   61+ regles per ruleset i té SizingProfiles al darrere (87/88/89/98). Decidir si val la pena i com (no nocturn).
+3. **D.2 — consolidació de la biblioteca de presets**: els 27 SizingProfiles són 0-ref però encoden fit→ruleset. Si
+   es vol reduir-los, cal decidir el model destí (què és un "preset" canònic vs client) — reforma pròpia.
+4. **D.3 — SizeSystems clon per-fit**: `GIRL_LOS_02` (id 49) porta **"Knit Regular" al nom** (fit dins la identitat
+   d'escala) + shells buits (31,33,39,40,26). Consolidar afecta la biblioteca; decisió d'Agus.
+5. **Reforma de fons de SizingProfile** (watchpoint A.4): l'origen dels clons per-fit és `size_map_create_view`
+   (un perfil per fit). Fer que SizingProfile sigui netament "preset de biblioteca de capa 4" és un sprint propi.
+6. **`CustomerDetail.jsx:184`** (3a superfície que llista profiles com a inventari del client) — fora d'abast
+   d'aquesta nit; mateixa contaminació de superfície.
+
+## CHECKLIST DEL MATÍ (validació visual d'Agus abans del push)
+- [ ] **Pas «3. Talles»** (crear i editar model): mostra sistemes de talla ÚNICS (p.ex. una peça de dona → *Alpha
+      EU Women* i *Numeric EU Women*, **cap targeta duplicada per fit**), i deixa triar run + talla base. **Cap
+      menció de fit ni de graduació** al pas.
+- [ ] **Crear un model** fins al final SENSE triar graduació → es desa (no dona error); la graduació es tria després
+      a la fitxa (**RuleSetCard**, cascada rica) i re-materialitza.
+- [ ] **Size Library**: la secció ara diu **«Presets de graduació»** amb la línia d'ajuda (sistema + graduació per
+      fit; la talla del model es tria al pas Talles). Les 3 targetes "clòniques" ara es llegeixen com a presets.
+- [ ] **No-regressió**: la fitxa del 268/269 segueix veient/triant el contenidor **115** per la cascada; importar
+      una fitxa segueix sembrant+ampliant (sprint del contenidor intacte).
+- Si tot verd → **push de la cadena sencera** (l'Agus, des de SSH). Cap push fet per l'agent.
+
+*Fase B/E tancada. Commits locals verds a `dev`, SENSE push. Fase C buida, Fase D sense escriptures (tot a
+DECISIONS PENDENTS). Backup PRE-5CAPES disponible. El motor de graduació NO s'ha tocat.*
