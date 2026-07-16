@@ -3078,6 +3078,7 @@
     "reuse_conflict_title": "Ya existe graduación para este cliente",
     "reuse_conflict_help": "Este cliente ya tiene una o más graduaciones para este sistema de tallas. Reutiliza una (recomendado, evita duplicados) o crea una nueva a partir del documento.",
     "reuse_use": "Reutilizar «{{nom}}» ({{count}} reglas)",
+    "reuse_keep_current": "Mantener la actual · {{nom}}",
     "reuse_create_new": "Crear una nueva",
     "configure_run_title": "Configurar el run en la Size Library",
     "go_to_library": "Ir a la Library",

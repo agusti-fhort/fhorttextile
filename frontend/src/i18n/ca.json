@@ -3078,6 +3078,7 @@
     "reuse_conflict_title": "Ja existeix graduació per aquest client",
     "reuse_conflict_help": "Aquest client ja té una o més graduacions per aquest sistema de talles. Reutilitza'n una (recomanat, evita duplicats) o crea'n una de nova a partir del document.",
     "reuse_use": "Reutilitzar «{{nom}}» ({{count}} regles)",
+    "reuse_keep_current": "Mantenir l'actual · {{nom}}",
     "reuse_create_new": "Crear-ne una de nova",
     "configure_run_title": "Configurar el run a la Size Library",
     "go_to_library": "Anar a la Library",

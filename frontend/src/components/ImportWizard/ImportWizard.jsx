@@ -1016,12 +1016,17 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                 {t('import_wizard.reuse_conflict_help')}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {(reuseConflict.reuse_candidates || []).map(c => (
+                {[...(reuseConflict.reuse_candidates || [])]
+                  .sort((a, b) => (b.is_current ? 1 : 0) - (a.is_current ? 1 : 0))
+                  .map(c => (
                   <button key={c.id} type="button" onClick={() => handleConfirmar(null, `reuse:${c.id}`)} disabled={confirming}
-                    style={{ padding: '8px 14px', borderRadius: 6, border: `0.5px solid ${BORDER}`, textAlign: 'left',
-                             fontSize: 'var(--fs-body)', fontWeight: 500, background: 'var(--white)',
+                    style={{ padding: '8px 14px', borderRadius: 6,
+                             border: `${c.is_current ? '1px' : '0.5px'} solid ${c.is_current ? GOLD : BORDER}`, textAlign: 'left',
+                             fontSize: 'var(--fs-body)', fontWeight: c.is_current ? 600 : 500, background: 'var(--white)',
                              color: 'var(--text-main)', cursor: confirming ? 'not-allowed' : 'pointer' }}>
-                    {t('import_wizard.reuse_use', { nom: c.nom, count: c.n_regles })}
+                    {c.is_current
+                      ? t('import_wizard.reuse_keep_current', { nom: c.nom })
+                      : t('import_wizard.reuse_use', { nom: c.nom, count: c.n_regles })}
                   </button>
                 ))}
                 <button type="button" onClick={() => handleConfirmar(null, 'new')} disabled={confirming}

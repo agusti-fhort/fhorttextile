@@ -3078,6 +3078,7 @@
     "reuse_conflict_title": "This client already has grading",
     "reuse_conflict_help": "This client already has one or more grading sets for this size system. Reuse one (recommended, avoids duplicates) or create a new one from the document.",
     "reuse_use": "Reuse \"{{nom}}\" ({{count}} rules)",
+    "reuse_keep_current": "Keep the current one · {{nom}}",
     "reuse_create_new": "Create a new one",
     "configure_run_title": "Configure the run in the Size Library",
     "go_to_library": "Go to the Library",

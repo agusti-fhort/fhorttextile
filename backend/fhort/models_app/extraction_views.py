@@ -1824,26 +1824,37 @@ def import_session_confirmar_view(request, token):
         # amb `ruleset_choice` = 'reuse:<id>' | 'new'. Reusa el patró 409 del conflicte de grading.
         from fhort.pom.grading_utils import cerca_client_equivalent
         ruleset_choice = (request.data.get('ruleset_choice') or '').strip().lower()
-        reuse_candidates = list(cerca_client_equivalent(
-            model.customer, model.size_system, exclude_ids=[model.grading_rule_set_id]))
+        cur_grs_id = model.grading_rule_set_id
+        # NO s'exclou el ruleset actual: s'ofereix com a "mantenir l'actual" (marcat is_current).
+        reuse_candidates = list(cerca_client_equivalent(model.customer, model.size_system))
         if reuse_candidates and not ruleset_choice:
+            # Serialitza els candidats (amb els .count()) ABANS de set_rollback: un cop la transacció
+            # està marcada per rollback no es pot córrer cap query (mateix patró que el 409 de grading).
+            candidates_payload = [
+                {'id': c.id, 'nom': c.nom, 'n_regles': c.regles.count(),
+                 'origen': c.origen, 'is_current': c.id == cur_grs_id}
+                for c in reuse_candidates]
             transaction.set_rollback(True)
             return Response({
                 'conflict': True,
                 'tipus': 'ruleset_reuse',
-                'reuse_candidates': [
-                    {'id': c.id, 'nom': c.nom, 'n_regles': c.regles.count(),
-                     'origen': c.origen} for c in reuse_candidates],
-                'message': ('Aquest client ja té graduació per aquest sistema de talles. '
-                            'Reutilitzar-ne una o crear-ne una de nova?'),
+                'reuse_candidates': candidates_payload,
+                'message': ("Aquest client ja té graduació per aquest sistema de talles. "
+                            "Mantenir l'actual, reutilitzar-ne una o crear-ne una de nova?"),
             }, status=409)
+
+        # Tries del tècnic: mantenir l'actual (reuse:<grs actual>) · reutilitzar un germà · crear nou.
         reused = None
+        keep_current = False
         if ruleset_choice.startswith('reuse:'):
             try:
                 _reuse_id = int(ruleset_choice.split(':', 1)[1])
             except (ValueError, IndexError):
                 _reuse_id = None
-            reused = next((c for c in reuse_candidates if c.id == _reuse_id), None)
+            if _reuse_id is not None and _reuse_id == cur_grs_id:
+                keep_current = True   # mantenir: NO derivar, NO re-apuntar
+            else:
+                reused = next((c for c in reuse_candidates if c.id == _reuse_id), None)
 
         # ── 3b. Derivar la regla de grading des dels valors i re-apuntar-hi el model.
         # La derivació (detect_grading per POM + dedup + anti-proliferació 1D + crear/
@@ -1861,7 +1872,14 @@ def import_session_confirmar_view(request, token):
         prev_grs_id = model.grading_rule_set_id  # per restaurar la FK si el desament peta
         try:
             with transaction.atomic():
-                if reused is not None:
+                if keep_current:
+                    # MANTENIR l'actual (tria del tècnic): NO deriva, NO re-apunta, NO materialitza —
+                    # el model ja hi apunta. new_rule_set és només punter per al report.
+                    new_rule_set = model.grading_rule_set
+                    grading_avisos.append(
+                        f"Grading mantingut per decisió del tècnic: ruleset actual "
+                        f"#{cur_grs_id} '{new_rule_set.nom if new_rule_set else ''}'.")
+                elif reused is not None:
                     # REUTILITZAR el ruleset de client existent (tria del tècnic): NO deriva → cap
                     # bessó nou (com el 116). El re-apuntat + materialització (origen='IMPORTED') els
                     # fa el bloc de sota, comú amb el camí derivat (new_rule_set com a punter).
@@ -1888,7 +1906,7 @@ def import_session_confirmar_view(request, token):
                 # P2 — CONFLICTE conscient: regla IMPORTADA (del document) vs RETINGUDA del model.
                 # Comparació per FORMA (grading_rules_match, util pur — NO toca el motor). Si
                 # difereixen i el tècnic no ha decidit, NO sobreescriure (→ 409 + rollback a fora).
-                if new_rule_set is not None and retingut_snapshot:
+                if not keep_current and new_rule_set is not None and retingut_snapshot:
                     ok_ret, divs_ret = grading_rules_match(
                         retingut_snapshot, new_rule_set.regles.all())
                     if not ok_ret:
@@ -1905,7 +1923,7 @@ def import_session_confirmar_view(request, token):
                             aplicar_importada = False
                             conflict_divs = divs_ret
 
-                if aplicar_importada and new_rule_set is not None and conflict_divs is None:
+                if not keep_current and aplicar_importada and new_rule_set is not None and conflict_divs is None:
                     model.grading_rule_set = new_rule_set
                     model.save(update_fields=['grading_rule_set'])
                     # PG-2 Cas A: materialitza les regles residents (origen=IMPORTED). El motor
