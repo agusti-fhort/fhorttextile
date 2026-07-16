@@ -12,7 +12,7 @@ import RelationsPanel from '../components/pattern/RelationsPanel'
 import POMPicker from '../components/pattern/POMPicker'
 import SewEditor from '../components/pattern/SewEditor'
 import SegmentEditor from '../components/pattern/SegmentEditor'
-import { textCobertura, textEstat } from '../components/pattern/sewText'
+import { grauVisual, textCobertura, textEstat } from '../components/pattern/sewText'
 import { formatLen } from '../utils/format'
 import { useUnit } from './fittingShared'
 
@@ -410,7 +410,7 @@ export default function TallerPatro() {
       // s'ha d'anar a buscar és un avís que no s'ha donat.
       const e = data.estat || {}
       setVeredicte({
-        casa: !!e.casa,
+        casa: !!e.casa, grau: e.grau,
         estat: textEstat(t, e, unit),
         missatge: e.missatge || '',
         cobertura: (e.cobertura || []).map(a => ({
@@ -498,7 +498,7 @@ export default function TallerPatro() {
       })
       const e = data.estat || {}
       setVeredicte({
-        casa: !!e.casa,
+        casa: !!e.casa, grau: e.grau,
         estat: textEstat(t, e, unit),
         missatge: e.missatge || '',
         cobertura: (e.cobertura || []).map(a => ({
@@ -550,7 +550,7 @@ export default function TallerPatro() {
       // mà: el veredicte que la proposta PREDEIA, ara constatat sobre la costura de veritat.
       const e = data.estat || {}
       setVeredicte({
-        casa: !!e.casa,
+        casa: !!e.casa, grau: e.grau,
         estat: textEstat(t, e, unit),
         missatge: e.missatge || '',
         cobertura: (e.cobertura || []).map(a => ({
@@ -964,7 +964,7 @@ export default function TallerPatro() {
       // apareixerà restat a la costura que la conté, i val més veure'l néixer.
       const e = data.estat || {}
       setVeredicte({
-        casa: !!e.casa,
+        casa: !!e.casa, grau: e.grau,
         estat: textEstat(t, e, unit),
         missatge: e.missatge || '',
         cobertura: (e.cobertura || []).map(a => ({
@@ -1408,16 +1408,18 @@ function BarraEines({ t, mode, onMode, tascaId, errTasca }) {
  * una costura que no casa. El que no pot passar és que no ho sàpiga.
  */
 function Veredicte({ t, v, onTanca }) {
+  // El mateix semàfor que a RELACIONS (H/T1): l'avís immediat en declarar i la fila han de dir
+  // el mateix color per a la mateixa costura.
+  const g = grauVisual(v)
   return (
     <div style={{
       flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4,
-      border: `1px solid ${v.casa ? 'var(--ok)' : 'var(--err)'}`,
-      background: v.casa ? 'var(--ok-bg)' : 'var(--err-bg)',
+      border: `1px solid ${g.color}`,
+      background: g.bg,
       borderRadius: 4, padding: '0.4rem 0.6rem', fontSize: 'var(--fs-caption)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-        <i className={`ti ${v.casa ? 'ti-check' : 'ti-alert-triangle'}`}
-           style={{ color: v.casa ? 'var(--ok)' : 'var(--err)' }} />
+        <i className={`ti ${g.icona}`} style={{ color: g.color }} />
         <strong>{t('pattern.taller.sew_done')}</strong>
         <span title={v.missatge || undefined} style={{ fontFamily: 'var(--mono)' }}>
           {v.estat}

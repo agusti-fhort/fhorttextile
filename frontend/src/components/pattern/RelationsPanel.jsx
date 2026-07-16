@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import DartProposalsPanel from './DartProposalsPanel'
 import ProposalsPanel from './ProposalsPanel'
-import { CADENA, nomCostura, textAritmetica, textCobertura, textEstat } from './sewText'
+import { CADENA, grauVisual, nomCostura, textAritmetica, textCobertura, textEstat } from './sewText'
 import { formatLen, titleLen } from '../../utils/format'
 import { AccionsGrup, Casella, Informe, useSeleccio } from './seleccio'
 import Modal from '../ui/Modal'
@@ -490,10 +490,12 @@ function Costura({ t, sew, unit, tramsPerId, marcat, onMarca, onReobre, onReanom
     if ((nom || '') !== (sew.nom || '')) await onReanomena(sew.id, nom)
   }
 
+  const g = grauVisual(e)
+
   return (
     <div style={{
-      border: `1px solid ${e.casa ? 'var(--ok)' : 'var(--err)'}`,
-      background: e.casa ? 'var(--ok-bg)' : 'var(--err-bg)',
+      border: `1px solid ${g.color}`,
+      background: g.bg,
       borderRadius: 4, padding: '0.35rem 0.5rem',
       display: 'flex', flexDirection: 'column', gap: 4,
     }}>
@@ -502,8 +504,8 @@ function Costura({ t, sew, unit, tramsPerId, marcat, onMarca, onReobre, onReanom
           marcat={marcat} onChange={onMarca}
           etiqueta={t('pattern.taller.bulk_select_row')}
         />
-        <i className={`ti ${e.casa ? 'ti-check' : 'ti-alert-triangle'}`}
-           style={{ color: e.casa ? 'var(--ok)' : 'var(--err)', marginTop: 2 }} />
+        <i className={`ti ${g.icona}`}
+           style={{ color: g.color, marginTop: 2 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           {editantNom ? (
             <input
@@ -583,6 +585,11 @@ function Pinca({ t, pinca, unit, marcat, onMarca, onReanomena, onEsborra }) {
   const [editant, setEditant] = useState(false)
   const [nom, setNom] = useState(pinca.sew?.nom || '')
   const e = pinca.estat || {}
+  // El GRAU de la pinça (H/T1): una pinça amb els costats desiguals és el defecte més fàcil
+  // d'ignorar, i el semàfor el fa visible d'un cop d'ull. Verd no es tenyeix (queda neutre); el
+  // groc i el vermell sí que marquen la vora, perquè és el que demana mirada.
+  const g = grauVisual(e)
+  const desajust = e.grau === 'warn' || e.grau === 'err'
 
   const desa = async () => {
     setEditant(false)
@@ -591,8 +598,8 @@ function Pinca({ t, pinca, unit, marcat, onMarca, onReanomena, onEsborra }) {
 
   return (
     <div style={{
-      border: '1px solid var(--border)', borderRadius: 4,
-      padding: '0.3rem 0.5rem', background: 'var(--bg-card)',
+      border: `1px solid ${desajust ? g.color : 'var(--border)'}`, borderRadius: 4,
+      padding: '0.3rem 0.5rem', background: desajust ? g.bg : 'var(--bg-card)',
       display: 'flex', flexDirection: 'column', gap: 3,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -658,12 +665,13 @@ function Pinca({ t, pinca, unit, marcat, onMarca, onReanomena, onEsborra }) {
 
       {/* Els dos costats d'una pinça s'han de poder cosir l'un contra l'altre: si no fan el
           mateix, la pinça no tanca plana. No bloqueja res —el patró és del patronista— però
-          es diu, amb la xifra. */}
-      {e.casa === false && (
+          es diu, amb la xifra, i amb el color del grau (groc si val la pena mirar, vermell si
+          no s'hauria d'ignorar). */}
+      {desajust && (
         <div style={{
           display: 'flex', alignItems: 'flex-start', gap: '0.35rem',
-          fontSize: 'var(--fs-caption)', color: 'var(--warn)',
-          background: 'var(--warn-bg)', borderRadius: 4, padding: '3px 6px',
+          fontSize: 'var(--fs-caption)', color: g.color,
+          background: g.bg, borderRadius: 4, padding: '3px 6px',
         }}>
           <i className="ti ti-alert-triangle" style={{ marginTop: 2 }} />
           <span>
