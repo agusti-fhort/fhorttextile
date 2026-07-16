@@ -786,6 +786,19 @@ def size_map_create_view(request):
             from fhort.pom.services import maybe_learn_customer_alias
             alias_customer = _resolve_run_customer(data, src_ssid)
 
+            # F-1 — eixos construction/fit del run: el wizard en té UN de sol (compartit pels
+            # perfils). Cablar-los al ruleset perquè neixi CLASSIFICAT (com el camí import-fitxa),
+            # sigui reutilitzable per la dedup 1D i abastable al RuleSetPicker (evita eixos NULL).
+            rs_construction = rs_fit = None
+            for p in perfils:
+                c = (ConstructionType.objects.filter(pk=p.get('construction_id')).first()
+                     if p.get('construction_id') else None)
+                f = (FitType.objects.filter(pk=p.get('fit_type_id')).first()
+                     if p.get('fit_type_id') else None)
+                if c or f:
+                    rs_construction, rs_fit = c, f
+                    break
+
             # ---- 4. GradingRuleSet (graduació; el nom és el discriminador de variant) ----
             # nom explícit del payload, o fallback derivat. filter().first() en lloc de
             # get_or_create: GradingRuleSet no té unique (size_system, nom) → evita
@@ -815,6 +828,7 @@ def size_map_create_view(request):
                             "run genèric; procedència tancada per origen.", rs_nom)
                     rule_set = GradingRuleSet.objects.create(
                         nom=rs_nom, size_system=ss, actiu=True, target=target,
+                        construction=rs_construction, fit_type=rs_fit,
                         origen=GradingRuleSet.ORIGEN_CLIENT_RUN, customer=alias_customer,
                     )
             if target:
