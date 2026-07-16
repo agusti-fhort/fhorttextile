@@ -2863,6 +2863,64 @@ class SegmentDeclaratAPITest(PatternsAPITestBase):
         self.assertEqual(resp.data['sew_relations'], [rel.id])
         self.assertTrue(PatternSegment.objects.filter(pk=seg_id).exists())
 
+    # ── ESBORRAT EN BLOC (QA-TALLER E · T3) ─────────────────────────────────
+
+    def _esborra_bloc(self, ids):
+        request = self.factory.post(
+            '/api/v1/patterns/pattern-segments/bulk-delete/', {'ids': ids}, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternSegmentViewSet.as_view({'post': 'bulk_delete'})(request)
+
+    def test_el_bloc_esborra_els_trams_que_ningu_no_cus(self):
+        a = self._declara(self.punts[3], self.punts[33]).data['id']
+        b = self._declara(self.punts[40], self.punts[60]).data['id']
+
+        resp = self._esborra_bloc([a, b])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [a, b])
+        self.assertEqual(resp.data['retinguts'], [])
+        self.assertFalse(PatternSegment.objects.filter(pk__in=[a, b]).exists())
+
+    def test_un_tram_retingut_no_atura_lesborrat_dels_altres(self):
+        """El cor de T3: qui n'ha demanat tres no ha demanat «tot o res», n'ha demanat tres.
+
+        Si el bloc fos una transacció sola, una sola costura faria caure la feina sencera i
+        la pantalla no sabria dir QUÈ ha quedat viu. L'atomicitat és per ítem, i el que es
+        queda es diu id per id.
+        """
+        lliure = self._declara(self.punts[3], self.punts[33]).data['id']
+        cosit = self._declara(self.punts[40], self.punts[60]).data['id']
+        rel = SewRelation.objects.create(model=self.model, tipus='casat')
+        rel.segments_a.add(cosit)
+        rel.segments_b.add(self.tram_back)
+
+        resp = self._esborra_bloc([lliure, cosit])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [lliure])
+        self.assertEqual(
+            resp.data['retinguts'],
+            [{'id': cosit, 'motiu': 'en_us', 'sew_relations': [rel.id]}],
+        )
+        self.assertFalse(PatternSegment.objects.filter(pk=lliure).exists())
+        self.assertTrue(PatternSegment.objects.filter(pk=cosit).exists())
+
+    def test_un_id_que_no_existeix_no_peta_el_bloc(self):
+        """Mai 500: un id fantasma és una resposta de l'informe, no una avaria."""
+        a = self._declara(self.punts[3], self.punts[33]).data['id']
+
+        resp = self._esborra_bloc([a, 999999])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [a])
+        self.assertEqual(resp.data['retinguts'], [{'id': 999999, 'motiu': 'no_trobat'}])
+
+    def test_un_bloc_sense_ids_es_400(self):
+        resp = self._esborra_bloc([])
+
+        self.assertEqual(resp.status_code, 400)
+
     def test_la_costura_veu_el_solapament_al_seu_detall(self):
         """La validació de cobertura viatja al detall de la costura: dues costures que
         reclamen el mateix tros de vora ho canten, amb els centímetres."""

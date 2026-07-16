@@ -379,7 +379,93 @@ def _cobertura_de(rel: SewRelation, boundaries: _BoundaryCache) -> list[dict]:
     return avisos
 
 
-class PatternPOMViewSet(viewsets.ModelViewSet):
+def costures_que_retenen(seg: PatternSegment) -> list[int]:
+    """Les costures que cusen aquest tram. Si n'hi ha cap, el tram no s'esborra.
+
+    PROTECT a mà: `segments_a`/`segments_b` són M2M i un `on_delete` no hi arriba. Sense
+    aquesta porta, esborrar un tram buidaria un costat d'una costura en silenci i la costura
+    passaria a mesurar de menys sense que ningú n'hagués tocat res.
+
+    Viu aquí, i no dins de `destroy`, perquè l'esborrat en BLOC ha de fer exactament la
+    mateixa pregunta: una segona còpia de la llei del PROTECT és una llei que algun dia
+    divergirà, i el dia que divergeixi ho farà en silenci.
+    """
+    return sorted(
+        {r.id for r in seg.sew_relations_a.all()} | {r.id for r in seg.sew_relations_b.all()}
+    )
+
+
+def esborra_costura(rel: SewRelation) -> None:
+    """Esborrar una costura. Si és una PINÇA, se'n va amb els seus dos costats.
+
+    Els costats d'una pinça no existeixen sense ella: SÓN la pinça. Deixar-los enrere ompliria
+    el patró de trams declarats que ningú no cus i que ningú no sabria d'on venen.
+
+    Un costat que, contra tot pronòstic, el cusi alguna altra costura, es queda: el PROTECT
+    dels trams val aquí igual que a `PatternSegmentViewSet`, i esborrar-lo deixaria coixa una
+    costura que ningú ha tocat.
+    """
+    if not es_pinca_de_vora(rel):
+        rel.delete()
+        return
+
+    costats = list(rel.segments_a.all()) + list(rel.segments_b.all())
+    with transaction.atomic():
+        rel.delete()
+        for seg in costats:
+            if not costures_que_retenen(seg):
+                seg.delete()
+
+
+class BulkDeleteMixin:
+    """Esborrar en bloc: `{ids: [...]}` → què ha caigut i què s'ha quedat, i per què.
+
+    **Un bloc no és una transacció sola.** Si ho fos, un sol tram retingut per una costura
+    faria caure l'esborrat dels altres divuit, i qui ha demanat divuit no ha demanat «tot o
+    res»: ha demanat divuit. Per això l'atomicitat és PER ÍTEM —una pinça i els seus costats
+    cauen junts o no cau cap— i el bloc n'aixeca un informe.
+
+    I per això no retorna mai 500 per una dependència: que un tram el cusi una costura no és
+    una avaria, és la resposta. Un 500 obligaria la pantalla a endevinar què ha passat i què
+    ha quedat viu; l'informe li ho diu id per id.
+    """
+
+    def _esborra_un(self, obj) -> dict | None:
+        """Esborra `obj`. Retorna None si ha caigut, o el motiu pel qual s'ha quedat."""
+        raise NotImplementedError
+
+    @action(detail=False, methods=['post'], url_path='bulk-delete')
+    def bulk_delete(self, request):
+        ids = request.data.get('ids')
+        if not isinstance(ids, list) or not ids:
+            raise serializers.ValidationError(
+                {'ids': 'Cal una llista d\'ids, i no pot ser buida.'})
+        try:
+            ids = [int(i) for i in ids]
+        except (TypeError, ValueError):
+            raise serializers.ValidationError({'ids': 'Els ids han de ser enters.'})
+
+        # El queryset del ViewSet, no el manager: el filtre de permisos i de tenant ha de
+        # valer aquí igual que a `destroy`. Demanar un id d'un altre patró ha de dir
+        # «no trobat», no esborrar-lo.
+        objectes = {o.id: o for o in self.get_queryset().filter(id__in=set(ids))}
+
+        esborrats, retinguts = [], []
+        for i in dict.fromkeys(ids):          # sense repetits, i en l'ordre demanat
+            obj = objectes.get(i)
+            if obj is None:
+                retinguts.append({'id': i, 'motiu': 'no_trobat'})
+                continue
+            motiu = self._esborra_un(obj)
+            if motiu is None:
+                esborrats.append(i)
+            else:
+                retinguts.append({'id': i, **motiu})
+
+        return Response({'esborrats': esborrats, 'retinguts': retinguts})
+
+
+class PatternPOMViewSet(BulkDeleteMixin, viewsets.ModelViewSet):
     """POMs ancorats a la geometria."""
 
     queryset = PatternPOM.objects.select_related(
@@ -415,8 +501,13 @@ class PatternPOMViewSet(viewsets.ModelViewSet):
             )
         return resposta
 
+    def _esborra_un(self, pom: PatternPOM) -> dict | None:
+        """Un POM ancorat no reté res: ningú no el referencia. Sempre cau."""
+        pom.delete()
+        return None
 
-class SewRelationViewSet(viewsets.ModelViewSet):
+
+class SewRelationViewSet(BulkDeleteMixin, viewsets.ModelViewSet):
     """Costures declarades sobre el muntatge d'un model."""
 
     queryset = SewRelation.objects.prefetch_related(
@@ -430,27 +521,14 @@ class SewRelationViewSet(viewsets.ModelViewSet):
         serializer.save(creat_per=getattr(self.request.user, 'profile', None))
 
     def destroy(self, request, *args, **kwargs):
-        """Esborrar una costura. Si és una PINÇA, se'n va amb els seus dos costats.
-
-        Els costats d'una pinça no existeixen sense ella: SÓN la pinça. Deixar-los enrere
-        ompliria el patró de trams declarats que ningú no cus i que ningú no sabria d'on
-        venen —i que continuarien sortint a la llista del que es pot cosir.
-
-        Un costat que, contra tot pronòstic, el cusi alguna altra costura, es queda: el
-        PROTECT dels trams val aquí igual que a `PatternSegmentViewSet.destroy`, i esborrar-lo
-        deixaria coixa una costura que ningú ha tocat.
-        """
-        rel = self.get_object()
-        if not es_pinca_de_vora(rel):
-            return super().destroy(request, *args, **kwargs)
-
-        costats = list(rel.segments_a.all()) + list(rel.segments_b.all())
-        with transaction.atomic():
-            rel.delete()
-            for seg in costats:
-                if not (seg.sew_relations_a.exists() or seg.sew_relations_b.exists()):
-                    seg.delete()
+        """Esborrar una costura, i —si és pinça— els seus costats. La llei és `esborra_costura`."""
+        esborra_costura(self.get_object())
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _esborra_un(self, rel: SewRelation) -> dict | None:
+        """Una costura no la reté ningú: cau, i s'emporta els costats que només eren seus."""
+        esborra_costura(rel)
+        return None
 
     @action(detail=False, methods=['post'], url_path='pinca')
     def pinca(self, request):
@@ -760,7 +838,7 @@ class PatternSegmentSerializer(serializers.ModelSerializer):
         return obj.sew_relations_a.exists() or obj.sew_relations_b.exists()
 
 
-class PatternSegmentViewSet(viewsets.ModelViewSet):
+class PatternSegmentViewSet(BulkDeleteMixin, viewsets.ModelViewSet):
     """Trams d'una peça: els derivats (gir→gir) i els DECLARATS pel patronista.
 
     **Primer declarar, després cosir.** La segmentació automàtica és una proposta del CAD;
@@ -859,16 +937,9 @@ class PatternSegmentViewSet(viewsets.ModelViewSet):
         return pa, pb
 
     def destroy(self, request, *args, **kwargs):
-        """Esborrar un tram, si ningú no el cus.
-
-        PROTECT a mà: `segments_a`/`segments_b` són M2M i un `on_delete` no hi arriba. Sense
-        aquesta porta, esborrar un tram buidaria un costat d'una costura en silenci i la
-        costura passaria a mesurar de menys sense que ningú n'hagués tocat res.
-        """
+        """Esborrar un tram, si ningú no el cus. La porta és `costures_que_retenen`."""
         seg = self.get_object()
-        sews = sorted(
-            {r.id for r in seg.sew_relations_a.all()} | {r.id for r in seg.sew_relations_b.all()}
-        )
+        sews = costures_que_retenen(seg)
         if sews:
             return Response(
                 {
@@ -882,3 +953,16 @@ class PatternSegmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
         return super().destroy(request, *args, **kwargs)
+
+    def _esborra_un(self, seg: PatternSegment) -> dict | None:
+        """Un tram EN ÚS es queda, i l'informe diu quines costures el retenen.
+
+        És la mateixa porta que el `destroy` (`costures_que_retenen`), dita en informe en
+        comptes de 409: en bloc, que un tram es quedi no és l'excepció que atura la feina, és
+        una de les respostes possibles.
+        """
+        sews = costures_que_retenen(seg)
+        if sews:
+            return {'motiu': 'en_us', 'sew_relations': sews}
+        seg.delete()
+        return None
