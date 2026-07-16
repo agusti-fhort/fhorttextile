@@ -35,6 +35,7 @@ from .models import (
     SewProposalRejection, SewRelation,
 )
 from .seam_proposals import propostes_del_model
+from .tolerance import graduar
 
 
 class PatternPOMSerializer(serializers.ModelSerializer):
@@ -235,6 +236,19 @@ def comprovar_costura(rel: SewRelation) -> dict:
         'desviament_cm': round(check.desviament_cm, 2),
         'missatge': check.missatge,
         'cobertura': _cobertura_de(rel, boundaries),
+        # El SEMÀFOR (QA-TALLER H · T1): verd/groc/vermell segons el tipus i el desajust. És
+        # PRESENTACIÓ —el motor ja ha dit la xifra—, i el llindar aplicat viatja amb ell perquè
+        # la UI el pugui dir i l'acceptació el pugui congelar. Substitueix el dins/fora sec.
+        **_graduacio(rel.tipus, check.desviament_cm),
+    }
+
+
+def _graduacio(tipus: str, desviament_cm: float) -> dict:
+    """El grau i el llindar aplicat, en el format que la UI i l'acceptació esperen."""
+    g = graduar(tipus, desviament_cm)
+    return {
+        'grau': g['grau'],
+        'llindar': {'mena': g['mena'], 'verd_mm': g['verd_mm'], 'groc_mm': g['groc_mm']},
     }
 
 

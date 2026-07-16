@@ -100,6 +100,7 @@ from fhort.patterns.engine.sew import (MENA_EXCES, MENA_SOLAPAMENT, CostatPinca,
                                        TramCosit, conte, descomptar_pinces, validar,
                                        validar_cobertura)
 from fhort.patterns.engine.rul_reader import RULReader, coherencia_dxf_rul
+from fhort.patterns.tolerance import graduar
 from fhort.patterns.engine.rul_writer import RULWriter
 
 # ── el que només fa falta per als tests de S3 (adaptadors: SÍ que toquen Django) ──
@@ -3659,6 +3660,40 @@ class CasenPiquetsTest(unittest.TestCase):
 
         self.assertFalse(casen)
         self.assertGreater(desv, TOL_PIQUET_S)
+
+
+class GraduacioToleranciaTest(unittest.TestCase):
+    """El semàfor del veredicte (QA-TALLER H · T1). Presentació, no motor.
+
+    Els llindars són criteri d'ofici (afinable); el test fixa el COMPORTAMENT als límits, no els
+    valors —si la Montse els mou, s'actualitza aquí a posta, no és una regressió muda."""
+
+    def test_pinca_desigual_de_3_1_mm_es_vermella(self):
+        # El cas del banc: la pinça del TATE té els costats a 3,1 mm → passa el groc (3,0).
+        g = graduar('pinca', 0.31)
+        self.assertEqual(g['grau'], 'err')
+        self.assertEqual((g['verd_mm'], g['groc_mm']), (1.5, 3.0))
+
+    def test_els_limits_de_cada_banda(self):
+        # Verd inclou el límit; groc inclou el seu; per sobre, vermell.
+        self.assertEqual(graduar('pinca', 0.15)['grau'], 'ok')     # 1,5 mm just
+        self.assertEqual(graduar('pinca', 0.16)['grau'], 'warn')   # 1,6 mm
+        self.assertEqual(graduar('pinca', 0.30)['grau'], 'warn')   # 3,0 mm just
+        self.assertEqual(graduar('pinca', 0.31)['grau'], 'err')
+        self.assertEqual(graduar('casat', 0.20)['grau'], 'ok')     # 2,0 mm just
+        self.assertEqual(graduar('casat', 0.41)['grau'], 'err')    # 4,1 mm
+
+    def test_frunzit_no_te_gradient(self):
+        # El diferencial del frunzit és intencional: no es gradua.
+        g = graduar('frunzit', 1.5)
+        self.assertEqual(g['grau'], 'na')
+        self.assertIsNone(g['verd_mm'])
+
+    def test_un_tipus_desconegut_cau_a_muntatge(self):
+        # Val més graduar de menys que inventar-se una exigència no validada.
+        g = graduar('mena-nova', 0.25)
+        self.assertEqual(g['mena'], 'muntatge')
+        self.assertEqual(g['grau'], 'ok')      # 2,5 mm ≤ 3,0 verd de muntatge
 
 
 class SenyalLongitudTest(unittest.TestCase):
