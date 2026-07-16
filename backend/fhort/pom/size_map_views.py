@@ -720,6 +720,38 @@ def size_map_create_view(request):
                                     'Tria actualitzar-ne una o crear-ne una de nova amb un nom.'),
                     }, status=status.HTTP_409_CONFLICT)
 
+        # ── Pre-check d'UNICITAT DEL CONTENIDOR de client (llei 2026-07-16): si el client ja té un
+        # contenidor de graduació per la IDENTITAT COMPLETA (customer + size_system + garment_type_item
+        # + fit) i el tècnic no ha decidit, 409 avís-i-confirma (no duplicar; evita també la
+        # IntegrityError de la constraint parcial). Només s'activa quan el payload informa
+        # `garment_type_item_id` (identitat completa); ABANS de l'atomic, mai sobreescriure en silenci.
+        if on_conflict is None and data.get('garment_type_item_id'):
+            from fhort.tasks.models import GarmentTypeItem
+            from fhort.pom.grading_utils import cerca_contenidor_client
+            _gti = GarmentTypeItem.objects.filter(pk=data.get('garment_type_item_id')).first()
+            _cust = _resolve_run_customer(data, src_ssid)
+            _ss = (SizeSystem.objects.filter(pk=src_ssid).first()
+                   if accio == 'REUTILITZAR' else None)
+            _fit = None
+            for p in perfils:
+                f = (FitType.objects.filter(pk=p.get('fit_type_id')).first()
+                     if p.get('fit_type_id') else None)
+                if f:
+                    _fit = f
+                    break
+            if _cust and _ss and _gti:
+                _cont = cerca_contenidor_client(_cust, _ss, _gti, _fit)
+                if _cont is not None:
+                    return Response({
+                        'conflict': True,
+                        'tipus': 'container_exists',
+                        'existing': {'id': _cont.id, 'nom': _cont.nom,
+                                     'n_regles': _cont.regles.count()},
+                        'message': ("El client ja té un contenidor de graduació per aquesta "
+                                    "combinació (peça + sistema de talles + fit). Actualitza'l o "
+                                    "crea'n un de nou amb un nom explícit."),
+                    }, status=status.HTTP_409_CONFLICT)
+
         with transaction.atomic():
             # ---- 1. Resoldre / crear el SizeSystem ----
             if accio == 'REUTILITZAR':
@@ -799,6 +831,13 @@ def size_map_create_view(request):
                     rs_construction, rs_fit = c, f
                     break
 
+            # garment_type_item (identitat del contenidor, llei 2026-07-16): opcional al payload.
+            # Quan s'informa, el ruleset neix amb la identitat COMPLETA (i la constraint parcial en
+            # garanteix la unicitat). Default NULL = contenidor de catàleg (comportament d'avui).
+            from fhort.tasks.models import GarmentTypeItem
+            rs_gti = (GarmentTypeItem.objects.filter(pk=data.get('garment_type_item_id')).first()
+                      if data.get('garment_type_item_id') else None)
+
             # ---- 4. GradingRuleSet (graduació; el nom és el discriminador de variant) ----
             # nom explícit del payload, o fallback derivat. filter().first() en lloc de
             # get_or_create: GradingRuleSet no té unique (size_system, nom) → evita
@@ -828,7 +867,7 @@ def size_map_create_view(request):
                             "run genèric; procedència tancada per origen.", rs_nom)
                     rule_set = GradingRuleSet.objects.create(
                         nom=rs_nom, size_system=ss, actiu=True, target=target,
-                        construction=rs_construction, fit_type=rs_fit,
+                        construction=rs_construction, fit_type=rs_fit, garment_type_item=rs_gti,
                         origen=GradingRuleSet.ORIGEN_CLIENT_RUN, customer=alias_customer,
                     )
             if target:
