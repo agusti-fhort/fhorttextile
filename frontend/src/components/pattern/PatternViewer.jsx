@@ -43,8 +43,10 @@ export const KONVA_COL = {
   pom: '#bf3989',      // la mesura d'un POM ancorat
   sewA: '#1f6feb',     // costat A d'una costura
   sewB: '#8250df',     // costat B
-  tram: '#0969da',     // tram DECLARAT (el que una costura pot triar)
-  tramSel: '#fb8500',  // el tram assenyalat o triat
+  // Miralls dels tokens `--tram` / `--tram-sel` (index.css): el tram es pinta IGUAL mentre
+  // es declara i un cop desat —és el mateix objecte—, i l'estat només en canvia l'èmfasi.
+  tram: '#0969da',     // = var(--tram) · identitat del tram, declarant-lo i declarat
+  tramSel: '#fb8500',  // = var(--tram-sel) · el tram que s'assenyala: èmfasi, no identitat
   pinca: '#1b7c83',    // una PINÇA declarada: els seus dos costats i el seu vèrtex
 }
 
@@ -531,24 +533,31 @@ export default function PatternViewer({
               </Group>
             )}
 
-            {/* Els arcs JA FIXATS del gest en curs (el primer costat d'una pinça). */}
+            {/* Els arcs JA FIXATS del gest en curs (el primer costat d'una pinça). Ja tenen el
+                color del que seran: el clic que ve no els canviarà de naturalesa, només els
+                assentarà. */}
             {arcsFixats.map((arc, i) => (
               <Line
                 key={`fix-${i}`}
                 points={arc.punts.flatMap(p => [p.x, -p.y])}
-                stroke={mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.tramSel}
+                stroke={mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.tram}
                 strokeWidth={5 / zoom}
                 lineCap="round" listening={false} perfectDrawEnabled={false}
               />
             ))}
 
             {/* La PRÈVIA DIRECCIONAL: l'arc que el cursor està assenyalant ara mateix. Es veu
-                ABANS de clicar —amb la seva longitud— i la tecla d'invertir el gira. */}
+                ABANS de clicar —amb la seva longitud— i la tecla d'invertir el gira.
+
+                Es pinta del color del tram, no d'un altre: el que s'ensenya és el que es
+                desarà, i canviar-li el to en desar el feia llegir com un objecte diferent. El
+                que diu "això encara no és del patró" és el traç discontinu i translúcid —
+                l'èmfasi—, i en desar-se només es solidifica. */}
             {previa && (
               <>
                 <Line
                   points={previa.punts.flatMap(p => [p.x, -p.y])}
-                  stroke={mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.tramSel}
+                  stroke={mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.tram}
                   strokeWidth={4 / zoom}
                   opacity={0.85}
                   dash={[9 / zoom, 5 / zoom]}
@@ -562,7 +571,7 @@ export default function PatternViewer({
                       x={mig.x} y={-mig.y - 16 / zoom}
                       text={formatLen(previa.longitud / 10, unit)}
                       fontSize={13 / zoom}
-                      fill={mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.tramSel}
+                      fill={mode === 'pinca' ? KONVA_COL.pinca : KONVA_COL.tram}
                       listening={false} perfectDrawEnabled={false}
                     />
                   )

@@ -17,6 +17,29 @@ import { formatLen, formatLenNum } from '../../utils/format'
 export const CADENA = '⛓'
 
 /**
+ * El SEMÀFOR d'un veredicte (QA-TALLER H · T1): color i icona a partir del `grau` del servidor.
+ *
+ * El grau (`ok`/`warn`/`err`) el calcula el backend segons el tipus i el desajust; aquí només
+ * es tradueix a tokens. **Res tenyeix la xifra**: el color va a la vora i a la icona, i el número
+ * es queda negre —tolerància no és error, i un número vermell obliga a endevinar si ho és perquè
+ * està fora o perquè importa.
+ *
+ * El frunzit (`grau === 'na'`) no té gradient —el diferencial és intencional—: cau a la lectura
+ * binària del motor (`casa`), com sempre. I una costura sense grau (dades velles, o un estat que
+ * encara no l'ha calculat) també, perquè el panell no ha de petar per un camp que falta.
+ */
+export function grauVisual(estat) {
+  const e = estat || {}
+  const grau = e.grau && e.grau !== 'na' ? e.grau : (e.casa ? 'ok' : 'err')
+  const taula = {
+    ok: { color: 'var(--ok)', bg: 'var(--ok-bg)', icona: 'ti-check' },
+    warn: { color: 'var(--warn)', bg: 'var(--warn-bg)', icona: 'ti-alert-triangle' },
+    err: { color: 'var(--err)', bg: 'var(--err-bg)', icona: 'ti-alert-triangle' },
+  }
+  return taula[grau] || taula.err
+}
+
+/**
  * L'ARITMÈTICA d'un costat, sencera (W4b/T2).
  *
  * Sense pinces és una xifra i prou. Amb pinces, és una OPERACIÓ —«32,1 − 2,3 (Pinça 1) =

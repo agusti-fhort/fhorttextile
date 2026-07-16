@@ -175,24 +175,36 @@ export function puntsDelSegment(piece, segment) {
   }
   if (total === 0) return []
 
-  const envolta = segment.t_fi < segment.t_inici
-  const out = []
+  const rangs = []
   let acumulat = 0
   for (let i = 0; i < trams; i++) {
-    const t0 = acumulat / total
-    const t1 = (acumulat + llargs[i]) / total
-    // Un tram entra si se solapa amb [t_inici, t_fi] del segment. Si el segment TRAVESSA
-    // l'origen de la polilínia (t_fi < t_inici, vegeu `fraccio_tram` al motor), el rang és
-    // la UNIÓ [t_inici, 1] ∪ [0, t_fi] — no un rang buit. Sense això, el tram curt que passa
-    // per on tanca la vora simplement no es dibuixava.
-    const dins = envolta
-      ? (t1 > segment.t_inici - 1e-9 || t0 < segment.t_fi + 1e-9)
-      : (t1 > segment.t_inici - 1e-9 && t0 < segment.t_fi + 1e-9)
-    if (dins) {
-      if (!out.length) out.push(pts[i])
-      out.push(pts[(i + 1) % n])
-    }
+    rangs.push([acumulat / total, (acumulat + llargs[i]) / total])
     acumulat += llargs[i]
+  }
+
+  // Una aresta és del tram si hi comparteix LLARGADA. Tocar-lo per un extrem no és
+  // compartir-hi res —i tocar-lo és el cas NORMAL, no el rar: `t_inici` és `cum[i]/total`,
+  // exactament la frontera entre dues arestes—, així que l'epsilon ha d'ESTRÈNYER el rang.
+  // Eixamplant-lo, el tram es pintava una aresta sencera més llarg per cada punta.
+  const solapa = (i, ini, fi) => rangs[i][1] > ini + 1e-9 && rangs[i][0] < fi - 1e-9
+
+  // L'ordre de sortida és el del RECORREGUT, no el dels índexs. Si el tram travessa
+  // l'origen de la polilínia (t_fi < t_inici, vegeu `fraccio_tram` al motor), el rang és
+  // la UNIÓ [t_inici, 1] ∪ [0, t_fi], i es recorre EN AQUEST ORDRE: primer el que queda
+  // fins al tancament, després el que hi ha des del començament. Emetent-lo per índex, la
+  // polilínia tornava enrere a mig traç i pintava una diagonal per dins de la peça.
+  const ordre = []
+  if (segment.t_fi < segment.t_inici) {
+    for (let i = 0; i < trams; i++) if (solapa(i, segment.t_inici, 1)) ordre.push(i)
+    for (let i = 0; i < trams; i++) if (solapa(i, 0, segment.t_fi)) ordre.push(i)
+  } else {
+    for (let i = 0; i < trams; i++) if (solapa(i, segment.t_inici, segment.t_fi)) ordre.push(i)
+  }
+
+  const out = []
+  for (const i of ordre) {
+    if (!out.length) out.push(pts[i])
+    out.push(pts[(i + 1) % n])
   }
   return out
 }

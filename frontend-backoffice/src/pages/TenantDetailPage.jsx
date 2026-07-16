@@ -5,6 +5,7 @@ import {
   getTenant, getContactes, createContacte, deleteContacte,
   getPlans, updateTenant, MOCK_TENANTS, MOCK_CONTACTES, MOCK_PLANS,
 } from '../api/tenants'
+import { getContractes, getContracte } from '../api/contracts'
 import { estatConfig } from '../config/estats'
 import { countryName, regimVat, regimVatLabel } from '../config/fiscal'
 
@@ -15,6 +16,7 @@ const TABS = [
   { key: 'condicions', label: 'CONDICIONS COMERCIALS' },
   { key: 'facturacio', label: 'FACTURACIÓ I PAGAMENTS' },
   { key: 'pagament', label: 'MÈTODE DE PAGAMENT' },
+  { key: 'legal', label: 'LEGAL' },
   { key: 'activitat', label: 'ACTIVITAT' },
   { key: 'tiquets', label: 'TIQUETS' },
 ]
@@ -85,6 +87,24 @@ function Placeholder({ children }) {
   )
 }
 
+// ── Tab Legal (placeholder estructurat per a F4) ──────────────────────────
+// El backend legal de F4 ja existeix (legal/acceptances). F4-bis (1 commit de la seva
+// sessió) cablejarà l'historial real sota AQUESTA capçalera. De moment, estat buit.
+function LegalTab() {
+  return (
+    <div style={cardStyle}>
+      <SectionTitle>Historial d'acceptacions</SectionTitle>
+      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: '32px 16px' }}>
+        <i className="ti ti-file-certificate" style={{ fontSize: 26, display: 'block', marginBottom: 10, opacity: 0.6 }} />
+        Cap document legal encara.
+        <div style={{ fontSize: 11.5, marginTop: 6 }}>
+          L'historial d'acceptacions apareixerà aquí quan el mòdul legal (F4) hi cablegi les dades.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const ghostBtn = { display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 13px', fontFamily: MONO, fontSize: 12, color: 'var(--gold)', cursor: 'pointer' }
 
 export default function TenantDetailPage() {
@@ -97,20 +117,28 @@ export default function TenantDetailPage() {
   const [tab, setTab] = useState('dades')
   const [tenant, setTenant] = useState(null)
   const [contactes, setContactes] = useState([])
-  const [plans, setPlans] = useState(MOCK_PLANS)
+  const [plans, setPlans] = useState(import.meta.env.DEV ? MOCK_PLANS : [])
   const [loading, setLoading] = useState(true)
   const [mock, setMock] = useState(false)
+  const [error, setError] = useState('')
 
   const loadTenant = useCallback(async () => {
     setLoading(true)
+    setError('')
     try {
       const t = await getTenant(codi)
       setTenant(t)
       setMock(false)
     } catch {
-      const m = MOCK_TENANTS.find((x) => x.codi_tenant === codi) || MOCK_TENANTS[0]
-      setTenant(m)
-      setMock(true)
+      if (import.meta.env.DEV) {
+        const m = MOCK_TENANTS.find((x) => x.codi_tenant === codi) || MOCK_TENANTS[0]
+        setTenant(m)
+        setMock(true)
+      } else {
+        // Staging/PROD: un error d'API NO pot pintar dades inventades (Stripe fals).
+        setTenant(null)
+        setError(`No s’ha pogut carregar el tenant «${codi}». Potser no existeix o l’API no respon.`)
+      }
     } finally {
       setLoading(false)
     }
@@ -121,19 +149,36 @@ export default function TenantDetailPage() {
       const c = await getContactes(codi)
       setContactes(Array.isArray(c) ? c : (c?.results ?? []))
     } catch {
-      setContactes(MOCK_CONTACTES)
+      setContactes(import.meta.env.DEV ? MOCK_CONTACTES : [])
     }
   }, [codi])
 
   useEffect(() => {
     loadTenant()
     loadContactes()
-    getPlans().then((d) => setPlans(Array.isArray(d) ? d : (d?.results ?? MOCK_PLANS))).catch(() => setPlans(MOCK_PLANS))
+    getPlans()
+      .then((d) => setPlans(Array.isArray(d) ? d : (d?.results ?? [])))
+      .catch(() => setPlans(import.meta.env.DEV ? MOCK_PLANS : []))
   }, [loadTenant, loadContactes])
 
-  if (loading || !tenant) {
+  if (loading) {
     return <div style={{ padding: '28px 32px', fontFamily: MONO, color: 'var(--text-muted)', fontSize: 13 }}>Carregant…</div>
   }
+
+  if (error && !tenant) {
+    return (
+      <div style={{ padding: '28px 32px', fontFamily: MONO }}>
+        <button type="button" onClick={() => navigate('/tenants')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 16 }}>
+          ← Tenants
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--err-bg, var(--warn-bg))', color: 'var(--err, var(--warn))', border: '1px solid var(--err, var(--warn))', borderRadius: 8, padding: '12px 15px', fontSize: 13 }}>
+          <i className="ti ti-alert-triangle" style={{ fontSize: 16 }} /> {error}
+        </div>
+      </div>
+    )
+  }
+
+  if (!tenant) return null
 
   const planObj = plans.find((p) => p.nom === (tenant.plan_nom || tenant.plan) || String(p.id) === String(tenant.plan_id))
   const stripeOk = tenant.stripe_configurat ?? !!tenant.stripe_customer_id
@@ -225,6 +270,8 @@ export default function TenantDetailPage() {
           <Placeholder>Gestió Stripe — Sprint 7.</Placeholder>
         </div>
       )}
+
+      {tab === 'legal' && <LegalTab />}
 
       {tab === 'activitat' && <Placeholder>Log d'activitat — Sprint 10.</Placeholder>}
       {tab === 'tiquets' && <Placeholder>Tiquets de suport — Sprint 9.</Placeholder>}
@@ -440,7 +487,93 @@ function CondicionsTab({ tenant, planObj, plans, isAdmin, codi, onChanged }) {
         )}
       </div>
 
+      {/* F2-B P3: contracte vigent + tarifa negociada (read-only, enllaça l'editor). */}
+      <ContracteVigent codi={codi} />
+
       <Placeholder>Historial de canvis de condicions — pròximament.</Placeholder>
+    </div>
+  )
+}
+
+// ── Contracte vigent del tenant (Sprint 5) mostrat des de la fitxa ──────────
+// Read-only: llegeix el TenantContract actiu + les seves línies (tarifa/inclosos) i
+// enllaça a l'editor existent (/contractes/:id). NO duplica l'editor.
+function ContracteVigent({ codi }) {
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(true)
+  const [contract, setContract] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    setError('')
+    const avui = new Date().toISOString().slice(0, 10)
+    getContractes({ client: codi, actiu: true })
+      .then((r) => {
+        const d = r.data
+        const list = Array.isArray(d) ? d : (d?.results ?? [])
+        const vigent = list.find((c) => !c.data_fi || c.data_fi >= avui) || list[0]
+        if (!vigent) { if (alive) { setContract(null); setLoading(false) } return null }
+        return getContracte(vigent.id).then((r2) => { if (alive) { setContract(r2.data); setLoading(false) } })
+      })
+      .catch(() => { if (alive) { setError('No s’ha pogut carregar el contracte vigent.'); setLoading(false) } })
+    return () => { alive = false }
+  }, [codi])
+
+  const lines = contract?.lines ?? []
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 16 }}>
+      <SectionTitle action={contract ? (
+        <button type="button" onClick={() => navigate(`/contractes/${contract.id}`)} style={ghostBtn}>
+          <i className="ti ti-external-link" style={{ fontSize: 15 }} /> Editar contracte
+        </button>
+      ) : null}>Contracte vigent</SectionTitle>
+
+      {loading ? (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Carregant contracte…</div>
+      ) : error ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--warn)' }}>
+          <i className="ti ti-alert-triangle" style={{ fontSize: 15 }} /> {error}
+        </div>
+      ) : !contract ? (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Cap contracte vigent per a aquest tenant.</div>
+      ) : (
+        <>
+          <Grid>
+            <Field label="Vigència" value={`${contract.data_inici} → ${contract.data_fi || 'indefinit'}`} />
+            <Field label="Estat" value={contract.actiu ? 'Actiu' : 'Inactiu'} />
+          </Grid>
+          <div style={{ marginTop: 6 }}>
+            <div style={{ ...labelStyle, marginBottom: 8 }}>Línies · tarifa negociada</div>
+            {lines.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>El contracte no té línies de servei.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 12.5 }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ padding: '6px 10px 6px 0', fontWeight: 600 }}>Servei</th>
+                      <th style={{ padding: '6px 10px', fontWeight: 600 }}>Tarifa</th>
+                      <th style={{ padding: '6px 0', fontWeight: 600 }}>Inclosos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((l) => (
+                      <tr key={l.id} style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-main)' }}>
+                        <td style={{ padding: '7px 10px 7px 0' }}>{l.service_nom || l.service_code || l.service}</td>
+                        <td style={{ padding: '7px 10px' }}>{l.preu} {l.moneda}</td>
+                        <td style={{ padding: '7px 0' }}>{l.inclosos != null ? l.inclosos : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

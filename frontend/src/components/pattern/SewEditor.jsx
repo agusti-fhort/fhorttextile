@@ -28,7 +28,14 @@ export default function SewEditor({
   trams, onTriaTram, onRessalta, onDefinirTram, unit = 'CM',
 }) {
   const { t } = useTranslation()
-  const llest = segmentsA.length > 0 && segmentsB.length > 0
+
+  // El gate HONEST és a nivell de TRAM, no de peça (QA-TALLER G · T2). Cosir dues vores de la
+  // MATEIXA peça és legítim (una màniga sobre si mateixa, un canó, un puny), i el sistema no ha
+  // de mirar mai de quina peça és cada costat. El que SÍ que és absurd és cosir un tram amb
+  // ELL MATEIX: mateix segment als dos costats vol dir comparar una longitud amb ella mateixa,
+  // desviament sempre zero, una costura que no cus res. Això és el que es tapa.
+  const repetits = segmentsA.filter(id => segmentsB.includes(id))
+  const llest = segmentsA.length > 0 && segmentsB.length > 0 && repetits.length === 0
 
   const chip = (actiu, color) => ({
     background: actiu ? color : 'var(--white)',
@@ -113,6 +120,35 @@ export default function SewEditor({
           {t(editant ? 'pattern.taller.sew_save' : 'pattern.sew_declare')}
         </button>
       </div>
+
+      {/* CAP A QUIN COSTAT CAU EL CLIC (T1). El focus salta sol A→B després del primer tram;
+          dir on cau el pròxim clic és el que fa que aquell salt no confongui. El punt du el
+          color del costat, el mateix que el xip i el tram al canvas. */}
+      {trams.length > 0 && repetits.length === 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem',
+                      fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+            background: costatActiu === 'a' ? KONVA_COL.sewA : KONVA_COL.sewB,
+          }} />
+          <span>{t('pattern.taller.sew_active_side', { costat: costatActiu === 'a' ? 'A' : 'B' })}</span>
+        </div>
+      )}
+
+      {/* MATEIX TRAM ALS DOS COSTATS (T2): el gate honest ja apaga el botó; això diu PER QUÈ.
+          No és «mateixa peça» —això és legítim—, és el mateix tram cosit amb ell mateix. */}
+      {repetits.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.35rem',
+                      fontSize: 'var(--fs-caption)', color: 'var(--err)',
+                      background: 'var(--err-bg)', borderRadius: 4, padding: '3px 6px' }}>
+          <i className="ti ti-alert-triangle" style={{ marginTop: 2, flexShrink: 0 }} />
+          <span>{t('pattern.taller.sew_same_tram', {
+            trams: repetits
+              .map(id => trams.find(x => x.id === id)?.nom || t('pattern.taller.segment_unnamed'))
+              .join(', '),
+          })}</span>
+        </div>
+      )}
 
       {trams.length === 0 ? (
         // El buit-estat no és un mur: és la porta al pas que falta.

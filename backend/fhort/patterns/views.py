@@ -32,6 +32,7 @@ from fhort.fitting.staleness import com_a_dict, estalitud
 from fhort.models_app.models import BaseMeasurement, Model
 from fhort.models_app.services_fitxers import (DOWNLOAD_TTL, UploadRejected,
                                                serve_fitxer, validate_upload)
+from fhort.pom.models import CustomerPOMAlias
 from fhort.tasks.models import GarmentTypeItem
 
 from .adapters import DjangoGeometryStore
@@ -64,6 +65,82 @@ def _tol(de_la_mesura, del_cataleg):
         if v is not None:
             return float(v)
     return TOL_FALLBACK
+
+
+def _noms_del_global(glob) -> dict:
+    """El nom canònic per idioma, en cru. El buit no s'omple: qui tria és la UI."""
+    if glob is None:
+        return {}
+    return {'en': glob.nom_en or '', 'ca': glob.nom_ca or '', 'es': glob.nom_es or ''}
+
+
+def _descripcions_del_global(glob) -> dict:
+    """La descripció canònica per idioma, en cru.
+
+    ⚠️ `POMGlobal` només té `descripcio_en` i `descripcio_ca`: **no hi ha castellà**. No
+    s'inventa aquí una equivalència (l'anglès no és la descripció en castellà); es diu el que
+    hi ha i la UI decideix a què recorre.
+    """
+    if glob is None:
+        return {}
+    return {'en': glob.descripcio_en or '', 'ca': glob.descripcio_ca or ''}
+
+
+def _fitxa_del_global(glob) -> dict:
+    """La mini-fitxa del POM: el que el catàleg canònic JA sap.
+
+    La RECEPTA (`start_point`/`end_point`/`reference_point`) ja existeix al model des de
+    sempre. Es dona tal com és, buida inclosa: la llei de «buit = línia absent» és de la
+    pantalla, i posar-hi aquí un text de farciment li trauria la possibilitat d'aplicar-la.
+    """
+    if glob is None:
+        return {}
+    return {
+        'categoria': glob.categoria or '',
+        'abreviatura': glob.abbreviation or '',
+        # Com es pren la mesura: recta, per la vora, en angle…
+        'metode': glob.line or '',
+        'scope': glob.scope or '',
+        'orientacio': glob.orientation or '',
+        'estat': glob.state or '',
+        'seccio': glob.body_section or '',
+        'unitat': glob.unitat or '',
+        # La recepta: d'on a on es mesura. Buit fins que la Montse l'ompli.
+        'punt_inici': glob.start_point or '',
+        'punt_final': glob.end_point or '',
+        'punt_referencia': glob.reference_point or '',
+    }
+
+
+def _alies_unics_del_customer(model_id: int, pom_ids: list) -> dict:
+    """pom_master_id → l'àlies del client, NOMÉS quan n'hi ha exactament un.
+
+    La unicitat de `CustomerPOMAlias` és (customer, client_code) i **no** (customer, pom): un
+    client pot tenir diversos codis per al mateix POM (el propi model ho documenta). Amb dos o
+    més no hi ha cap regla que en triï un, i inventar-ne una —el més recent, el primer— faria
+    que la fila digués «el teu client en diu això» sense que sigui veritat. Es calla.
+    """
+    if not pom_ids:
+        return {}
+    customer_id = (
+        Model.objects.filter(pk=model_id).values_list('customer_id', flat=True).first()
+    )
+    if customer_id is None:
+        return {}
+
+    per_pom: dict[int, list] = {}
+    for a in CustomerPOMAlias.objects.filter(customer_id=customer_id, pom_id__in=pom_ids):
+        per_pom.setdefault(a.pom_id, []).append(a)
+
+    return {
+        pom_id: {
+            'client_code': llista[0].client_code,
+            'description_local': llista[0].description_local,
+            'language': llista[0].language,
+        }
+        for pom_id, llista in per_pom.items()
+        if len(llista) == 1 and llista[0].description_local
+    }
 
 #: ⚠️ TEXT PROVISIONAL — PENDENT D'ADVOCAT ABANS DE PRODUCCIÓ REAL.
 #: Viu aquí i no al frontend perquè és el text que es DESA a `ExportAcknowledgement`: el
@@ -403,6 +480,7 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             .select_related('pom', 'pom__pom_global')
             .order_by('ordre', 'pom__codi_client')
         )
+        alies = _alies_unics_del_customer(fp.model_id, [bm.pom_id for bm in base])
         for bm in base:
             pom, glob = bm.pom, bm.pom.pom_global
             anc = ancorats.get(bm.pom_id)
@@ -420,6 +498,21 @@ class PatternFileViewSet(mixins.CreateModelMixin,
                 'nom_client': pom.nom_client,
                 'nom_canonic': glob.nom_ca or glob.nom_en if glob else '',
                 'codi_global': glob.codi if glob else '',
+                # El catàleg canònic en CRU, per idioma. No es tria aquí: qui té els tres
+                # idiomes és la UI (i18n-gate), i el servidor que en triés un obligaria el
+                # client a demanar-ho una altra vegada el dia que l'usuari canviï de llengua.
+                # Ull: POMGlobal NO té `descripcio_es` — només `_en` i `_ca`.
+                'nom': _noms_del_global(glob),
+                'descripcio': _descripcions_del_global(glob),
+                # La mini-fitxa del POM: el que el catàleg JA sap. La RECEPTA (d'on a on es
+                # mesura) hi és des de sempre; si és buida, la UI no en pinta la línia.
+                'fitxa_pom': _fitxa_del_global(glob),
+                # Com ho diu el client, si es pot dir sense inventar: només amb UN àlies. La
+                # unicitat de l'àlies és (customer, client_code) i NO (customer, pom), o sigui
+                # que un client pot tenir-ne diversos per al mateix POM; amb dos o més no hi ha
+                # cap regla que en triï un, i triar-ne un a l'atzar seria dir-li al patronista
+                # que el seu client en diu una cosa que potser no en diu.
+                'alias_client': alies.get(bm.pom_id),
                 'valor_fitxa_cm': bm.base_value_cm,
                 'tolerancia_minus_cm': tol_minus,
                 'tolerancia_plus_cm': tol_plus,

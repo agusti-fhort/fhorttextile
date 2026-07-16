@@ -34,8 +34,12 @@ export const deleteContacte = (codi, id) =>
   client.delete(`${BASE}/tenants/${codi}/contactes/${id}/`).then((r) => r.data)
 
 // ── Dades de mostra ───────────────────────────────────────────────────────
-// El backend del Sprint 2 pot no estar migrat encara. Les pàgines fan servir
-// aquestes dades com a fallback (amb avís visible) per poder desenvolupar la UI.
+// NOMÉS per a desenvolupament local. Les pàgines gaten el fallback amb
+// `import.meta.env.DEV` DIRECTAMENT (true a `npm run dev`, false a `npm run build`):
+// Vite el substitueix per la constant literal, així el branch del mock i aquestes
+// dades s'eliminen (dead-code) del build de staging/PROD. Regla dura (F2-B, Troballa
+// 2): a staging/PROD un error d'API mostra un ERROR, mai dades inventades amb aparença
+// real (el mock arribava a pintar un "Stripe Configurat" fals).
 export const MOCK_TENANTS = [
   {
     id: 1, codi_tenant: '001', nom: 'Fhort Demo Tèxtil', tipologia: 'Confecció',

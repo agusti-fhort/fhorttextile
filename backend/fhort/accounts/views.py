@@ -40,8 +40,24 @@ class UserFilter(django_filters.FilterSet):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def me_view(request):
-    """GET /api/v1/me/ — profile of the authenticated user in the current tenant."""
-    return Response(MeSerializer(request.user).data)
+    """GET /api/v1/me/ — profile of the authenticated user in the current tenant.
+
+    F4 P-LEGAL (única incursió al tenant): s'hi afegeix `legal_pending` — les versions
+    legals vigents amb requereix_reacceptacio=True que el Client (empresa) encara no ha
+    acceptat. El gate és PER-CLIENT (B2B): l'admin accepta en nom de l'empresa; la UI de
+    tenant que consumeix aquesta dada és territori PLATAFORMA (handoff, no es construeix aquí).
+    """
+    data = dict(MeSerializer(request.user).data)
+    # Import local: evita cicle accounts↔backoffice en càrrega.
+    from fhort.backoffice.legal_service import pending_versions_for_client
+    client = getattr(request, 'tenant', None)
+    pend = pending_versions_for_client(client, nomes_reacceptacio=True)
+    data['legal_pending'] = [
+        {'id': v.id, 'tipus': v.document.tipus, 'nom': v.document.nom,
+         'numero_versio': v.numero_versio, 'sha256': v.sha256, 'contingut': v.contingut}
+        for v in pend
+    ]
+    return Response(data)
 
 
 @api_view(['POST'])

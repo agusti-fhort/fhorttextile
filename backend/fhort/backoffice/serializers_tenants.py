@@ -105,12 +105,29 @@ class ClientCreateSerializer(serializers.ModelSerializer):
             'plan': {'required': True},
             'moneda': {'required': True},
             'idioma': {'required': True},
+            # D1 (F2-B): alta mínima comercial. `pais` i `email_facturacio` passen a
+            # OBLIGATORIS (país = pivot fiscal + pricing D2; email = el hook Free de F3
+            # el llegeix per crear l'admin, provision_free_tenant). `plan` segueix
+            # obligatori SENSE default (tria explícita de l'operador; cap injecció de Free).
+            'pais': {
+                'required': True, 'allow_blank': False,
+                'error_messages': {
+                    'required': 'El país és obligatori.',
+                    'blank': 'El país és obligatori.',
+                },
+            },
+            'email_facturacio': {
+                'required': True, 'allow_blank': False,
+                'error_messages': {
+                    'required': "L'email de facturació és obligatori.",
+                    'blank': "L'email de facturació és obligatori.",
+                    'invalid': 'Introdueix un email vàlid.',
+                },
+            },
             'rao_social': {'required': False},
             'nif': {'required': False},
             'adreca_linia1': {'required': False},
             'ciutat': {'required': False},
-            'pais': {'required': False},
-            'email_facturacio': {'required': False},
             'tipus_client': {'required': False},
         }
 

@@ -655,6 +655,11 @@ export const patterns = {
     // el valor. Mai esborrar-i-crear: corregir on és una mesura no és tornar-la a ancorar.
     update: (id, data) => client.patch(`/api/v1/patterns/pattern-poms/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/patterns/pattern-poms/${id}/`),
+
+    // ESBORRAT EN BLOC (E/T3). Torna `{esborrats, retinguts}`: mai un 500 per dependència,
+    // i mai «tot o res» —qui n'ha marcat divuit no ha demanat que un de retingut en salvés
+    // disset. L'atomicitat és per ítem, al servidor.
+    bulkRemove: (ids) => client.post('/api/v1/patterns/pattern-poms/bulk-delete/', { ids }),
   },
 
   // Costures. L'estat (casa / no casa) el calcula el servidor cada cop sobre la
@@ -676,6 +681,10 @@ export const patterns = {
 
     // Esborrar una pinça se n'emporta els seus dos costats: no existeixen sense ella.
     remove: (id) => client.delete(`/api/v1/patterns/sew-relations/${id}/`),
+
+    // En BLOC (E/T3), costures i pinces: cada pinça s'emporta els seus costats dins de la
+    // seva pròpia transacció. Torna `{esborrats, retinguts}`.
+    bulkRemove: (ids) => client.post('/api/v1/patterns/sew-relations/bulk-delete/', { ids }),
 
     // ── ASSISTIT (A2): el motor PROPOSA, la persona decideix ────────────────
     //
@@ -713,6 +722,28 @@ export const patterns = {
       client.post('/api/v1/patterns/sew-relations/rebutjar-pinca/', data),
   },
 
+  // ACCEPTACIÓ DE TOLERÀNCIA (H/T2): el tècnic accepta/desaccepta un desajust, amb rastre
+  // append-only. Desacceptar NO esborra: és un esdeveniment nou. `history` llegeix l'auditoria
+  // (per model = transversal; l'estat viu de cada costura ja ve inline a `estat`/`acceptacio`).
+  tolerance: {
+    accept: (sewId, nota = '') => client.post('/api/v1/patterns/sew-tolerance-acceptances/',
+      { sew_relation: sewId, accio: 'accepta', nota }),
+    unaccept: (sewId, nota = '') => client.post('/api/v1/patterns/sew-tolerance-acceptances/',
+      { sew_relation: sewId, accio: 'desaccepta', nota }),
+    history: (modelId) => client.get('/api/v1/patterns/sew-tolerance-acceptances/',
+      { params: { model: modelId } }),
+  },
+
+  // Els REBUIGS de proposta: llegir-los i DESFER-LOS (F/T3). Crear-ne un NO és aquí, és
+  // `sew.rebutjarProposta` — la llei del rebuig (clau canònica, idempotència) té una sola
+  // porta d'entrada. Desfer-lo no torna a proposar res per ell mateix: només treu la
+  // mordassa, i el motor dirà el que vegi la propera vegada que se li demani.
+  sewRejections: {
+    list: (modelId) => client.get('/api/v1/patterns/sew-proposal-rejections/',
+      { params: { model: modelId } }),
+    remove: (id) => client.delete(`/api/v1/patterns/sew-proposal-rejections/${id}/`),
+  },
+
   // Trams DECLARATS (W1/T4). La segmentació gir→gir és una proposta del motor (origen
   // 'auto'); un tram DECLARAT és una afirmació humana: "aquest tros de vora existeix i es
   // diu així". Per això té nom i es pot reanomenar. Esborrar-ne un que una costura fa
@@ -733,6 +764,12 @@ export const patterns = {
     // desmuntar la costura que el fa servir.
     update: (id, data) => client.patch(`/api/v1/patterns/pattern-segments/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/patterns/pattern-segments/${id}/`),
+
+    // En BLOC (E/T3). El PROTECT que aquí rebota amb 409 hi arriba com a INFORME: en bloc,
+    // que un tram es quedi no és l'excepció que atura la feina, és una de les respostes.
+    // `retinguts: [{id, motiu: 'en_us', sew_relations: [...]}]`.
+    bulkRemove: (ids) =>
+      client.post('/api/v1/patterns/pattern-segments/bulk-delete/', { ids }),
   },
 
   // El render està gated per Authorization, i un <img src> no pot portar capçaleres: es

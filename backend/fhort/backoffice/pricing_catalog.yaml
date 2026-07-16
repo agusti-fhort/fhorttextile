@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CATÀLEG DE PREUS FHORT — F1 (P-PRICE)
+#
+# STRIPE ÉS LA FONT DE VERITAT DEL PREU. Aquest fitxer és la definició del catàleg
+# DESITJAT, no el preu vigent: el preu vigent viu SEMPRE a Stripe (Products/Prices).
+# `sync_stripe_catalog` empeny aquesta definició cap a Stripe de manera idempotent;
+# la BD FHORT no guarda mai imports, només lookup_keys.
+#
+# Numeros: FTT_PRICING_MODEL_V1.md §17 (Hipòtesi v1). unit_amount SEMPRE en cèntims.
+# Decisions: D-P2 (el motor propi factura; Stripe només cobra i custodia el preu),
+#            D-P3 (ajust per país via Prices; de moment només EUR, cap entrada amb país).
+#
+# Convenció de lookup_key: {tier}_{concepte}_{moneda}[_{pais}]
+#   tier     ∈ starter | team          (enterprise NO va a Stripe: contracte a mida)
+#   concepte ∈ platform | model | extra_user
+#   moneda   = eur                     (multi-moneda futur)
+#   pais     = ISO alpha-2 en minúscula (opcional; cap entrada encara)
+#
+# interval:
+#   platform / extra_user → month  (subscripció recurrent)
+#   model                 → one_time  ⚠️ el càrrec per model NO és recurrent; és preu
+#                           unitari que F6 usarà per cobrar meritacions (models iniciats).
+#
+# Free NO viu aquí: no hi ha res a cobrar; l'endpoint el retorna hardcoded a 0.
+# ─────────────────────────────────────────────────────────────────────────────
+
+entries:
+  # ── Starter — 250 €/mes de plataforma + 25 €/model iniciat ──────────────────
+  - product: starter
+    concepte: platform
+    interval: month
+    currency: eur
+    unit_amount: 25000        # 250,00 €/mes
+    lookup_key: starter_platform_eur
+
+  - product: starter
+    concepte: model
+    interval: one_time
+    currency: eur
+    unit_amount: 2500         # 25,00 € per model iniciat (meritació, no recurrent)
+    lookup_key: starter_model_eur
+
+  - product: starter
+    concepte: extra_user
+    interval: month
+    currency: eur
+    unit_amount: 3000         # 30,00 €/mes per usuari addicional
+    lookup_key: starter_extra_user_eur
+
+  # ── Team — 750 €/mes de plataforma + 25 €/model iniciat ─────────────────────
+  - product: team
+    concepte: platform
+    interval: month
+    currency: eur
+    unit_amount: 75000        # 750,00 €/mes
+    lookup_key: team_platform_eur
+
+  - product: team
+    concepte: model
+    interval: one_time
+    currency: eur
+    unit_amount: 2500         # 25,00 € per model iniciat (meritació, no recurrent)
+    lookup_key: team_model_eur
+
+  - product: team
+    concepte: extra_user
+    interval: month
+    currency: eur
+    unit_amount: 3000         # 30,00 €/mes per usuari addicional
+    lookup_key: team_extra_user_eur

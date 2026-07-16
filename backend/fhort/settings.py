@@ -276,3 +276,18 @@ LOGGING = {
         'fhort': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
     },
 }
+
+# ─────────────────────────────────────────────────────────────
+# Stripe — F1 (P-PRICE): catàleg de preus. STRIPE ÉS LA FONT DE VERITAT DEL PREU.
+# El motor propi factura; Stripe NOMÉS cobra i custodia el preu (D-P2). La BD FHORT
+# no guarda mai imports — només lookup_keys. Claus al .env (mode test: sk_test_/pk_test_);
+# absents → sync i endpoint fallen de manera controlada, mai inventen preus.
+# ─────────────────────────────────────────────────────────────
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
+STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', '')
+
+# Definició declarativa del catàleg DESITJAT (no el preu vigent: el vigent viu a Stripe).
+STRIPE_PRICING_CATALOG = BASE_DIR / 'fhort' / 'backoffice' / 'pricing_catalog.yaml'
+
+# Cache del pricing servit per l'endpoint: 5 min (LocMemCache per defecte a staging).
+PRICING_CACHE_TTL = 60 * 5

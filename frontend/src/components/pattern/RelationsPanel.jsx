@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import DartProposalsPanel from './DartProposalsPanel'
 import ProposalsPanel from './ProposalsPanel'
-import { nomCostura, textAritmetica, textCobertura, textEstat } from './sewText'
+import { CADENA, grauVisual, nomCostura, textAritmetica, textCobertura, textEstat } from './sewText'
 import { formatLen, titleLen } from '../../utils/format'
+import { AccionsGrup, Casella, Informe, useSeleccio } from './seleccio'
+import Modal from '../ui/Modal'
 
 /**
  * RELACIONS — el que s'ha declarat sobre el patró, editable.
@@ -17,10 +19,16 @@ import { formatLen, titleLen } from '../../utils/format'
  * què es van crear, al canvas, i sobre la MATEIXA fila: un POM reobert es recalcula, no es
  * torna a ancorar; un tram es recol·loca, no s'esborra i es refà. La diferència no és de
  * matís: les costures referencien els trams, i refer-los les buidaria en silenci.
+ *
+ * **I d'aquí és d'on s'esborra en BLOC** (QA-TALLER E · T3). Cada grup porta la seva pròpia
+ * selecció, la seva pròpia paperera i el seu propi informe: v. `seleccio.jsx` per què la
+ * selecció no travessa mai els blocs.
  */
 export default function RelationsPanel({
   poms, sews, pinces, segments, tramsPerId, unit = 'CM',
   propostes = [], descartatsProp = null,
+  cercades = false, buscant = false, onBuscaPropostes, onNetejaPropostes,
+  rebuigs = [], onDesfaRebuig,
   onConfirmaProposta, onRebutjaProposta, onRessaltaProposta,
   pincesProposades = [], descartatsPinca = null,
   onConfirmaPinca, onRebutjaPinca, onRessaltaPinca,
@@ -28,8 +36,53 @@ export default function RelationsPanel({
   onEsborraSew, onReobreSew, onReanomenaSew,
   onEsborraPinca, onReanomenaPinca,
   onReanomenaTram, onReobreTram, onEsborraTram,
+  onAcceptaTolerancia, onDesacceptaTolerancia,
+  onRebutjaBlocProposta, onEsborraBlocPom, onEsborraBlocSew,
+  onEsborraBlocPinca, onEsborraBlocTram,
 }) {
   const { t } = useTranslation()
+
+  // Una selecció per grup. Cinc `useSeleccio` i no un de sol amb cinc claus: el que fa que no
+  // hi pugui haver mai un «esborra-ho tot» no és una comprovació, és que l'estat no existeix.
+  const selProp = useSeleccio(propostes.map(p => p.clau.join('-')))
+  const selPom = useSeleccio(poms.map(p => p.id))
+  const selSew = useSeleccio(sews.map(s => s.id))
+  const selPinca = useSeleccio(pinces.map(p => p.id))
+  const selTram = useSeleccio(segments.map(s => s.id))
+
+  const [confirma, setConfirma] = useState(null)
+  const [informes, setInformes] = useState({})
+
+  /**
+   * Res cau sense passar per aquí: es demana la confirmació, i només el «sí» executa.
+   *
+   * **El camí d'error importa tant com el d'èxit** (E/T4). L'esborrat és per ítem: quan el
+   * servidor rebota a mig bloc, els que ja han caigut han caigut de debò. Si el client es
+   * quedés callat, la columna continuaria pintant files que ja no existeixen i la selecció
+   * seguiria marcada a sobre — i el segon clic les tornaria com a «no trobat». Per això:
+   *
+   * - l'informe vell es neteja ABANS (cap informe d'un intent anterior sobre una llista nova),
+   * - qui avisa de l'error és `errEina`, com a tot el Taller (el `catch` és del cridador),
+   * - i la selecció es buida al `finally`, perquè les files que hi havia sota ja no hi són.
+   *
+   * Qui garanteix que la llista es rellegeixi passi el que passi és el `finally` dels handlers
+   * del Taller: la pantalla no pot mentir ni quan la crida peta.
+   */
+  const demana = (mena, ids, fn, seleccio) => setConfirma({
+    mena,
+    count: ids.length,
+    executa: async () => {
+      setInformes(i => ({ ...i, [mena]: [] }))
+      try {
+        const informe = await fn(ids)
+        setInformes(i => ({ ...i, [mena]: informe?.retinguts || [] }))
+      } finally {
+        seleccio.buida()
+      }
+    },
+  })
+
+  const tanca = mena => setInformes(i => ({ ...i, [mena]: [] }))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
@@ -37,13 +90,41 @@ export default function RelationsPanel({
           decidir; el que hi ha a sota ja està decidit. I van DINS de Relacions, no en un tab
           a part: proposar i declarar són el mateix ofici, i separar-los faria que la llista
           d'assistència fos una pantalla on s'ha d'anar en comptes d'una que ja s'està mirant. */}
-      <Seccio titol={t('pattern.taller.proposals', { n: propostes.length })}>
-        <ProposalsPanel
-          propostes={propostes} descartats={descartatsProp} unit={unit}
-          onConfirma={onConfirmaProposta}
-          onRebutja={onRebutjaProposta}
-          onRessalta={onRessaltaProposta}
-        />
+      <Seccio
+        titol={t('pattern.taller.proposals', { n: propostes.length })}
+        accions={
+          <AccionsProp
+            t={t} n={selProp.sel.size} total={propostes.length}
+            onTots={selProp.tots}
+            onNeteja={onNetejaPropostes}
+            onRebutja={() => demana(
+              'proposals',
+              propostes.filter(p => selProp.sel.has(p.clau.join('-'))),
+              onRebutjaBlocProposta,
+              selProp,
+            )}
+          />
+        }
+      >
+        <Informe t={t} retinguts={informes.proposals} onTanca={() => tanca('proposals')} />
+
+        {/* EL RECOMPTE NO POT MENTIR (F/T3). El títol diu el que hi ha a la llista; si hi ha
+            «no» vius que n'amaguen candidats, es diu aquí —i es poden desfer. Un zero que en
+            realitat vol dir «zero, menys els cinc que vas amagar el mes passat» és un zero
+            que enganya. */}
+        <Rebuigs t={t} rebuigs={rebuigs} unit={unit} onDesfa={onDesfaRebuig} />
+
+        {propostes.length === 0 ? (
+          <BuscaPropostes t={t} cercades={cercades} buscant={buscant} onBusca={onBuscaPropostes} />
+        ) : (
+          <ProposalsPanel
+            propostes={propostes} descartats={descartatsProp} unit={unit}
+            sel={selProp.sel} onAlterna={selProp.alterna}
+            onConfirma={onConfirmaProposta}
+            onRebutja={onRebutjaProposta}
+            onRessalta={onRessaltaProposta}
+          />
+        )}
       </Seccio>
 
       {/* LES PINCES PROPOSADES (A1), just sota les costures proposades: les dues llistes són la
@@ -58,11 +139,27 @@ export default function RelationsPanel({
         />
       </Seccio>
 
-      <Seccio titol={t('pattern.poms_anchored', { n: poms.length })}>
+      <Seccio
+        titol={t('pattern.poms_anchored', { n: poms.length })}
+        accions={
+          <AccionsGrup
+            t={t} n={selPom.sel.size} total={poms.length}
+            onTots={selPom.tots}
+            onEsborra={() => demana(
+              'poms', [...selPom.sel], onEsborraBlocPom, selPom)}
+          />
+        }
+      >
+        <Informe t={t} retinguts={informes.poms} onTanca={() => tanca('poms')} />
         {poms.length === 0 ? (
           <Buit text={t('pattern.poms_empty')} />
         ) : poms.map(p => (
           <Fila key={p.id}>
+            <Casella
+              marcat={selPom.sel.has(p.id)}
+              onChange={() => selPom.alterna(p.id)}
+              etiqueta={t('pattern.taller.bulk_select_row')}
+            />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: 'var(--mono)',
@@ -97,15 +194,28 @@ export default function RelationsPanel({
         ))}
       </Seccio>
 
-      <Seccio titol={t('pattern.sews', { n: sews.length })}>
+      <Seccio
+        titol={t('pattern.sews', { n: sews.length })}
+        accions={
+          <AccionsGrup
+            t={t} n={selSew.sel.size} total={sews.length}
+            onTots={selSew.tots}
+            onEsborra={() => demana('sews', [...selSew.sel], onEsborraBlocSew, selSew)}
+          />
+        }
+      >
+        <Informe t={t} retinguts={informes.sews} onTanca={() => tanca('sews')} />
         {sews.length === 0 ? (
           <Buit text={t('pattern.sews_empty')} />
         ) : sews.map(s => (
           <Costura
             key={s.id} t={t} sew={s} unit={unit} tramsPerId={tramsPerId}
+            marcat={selSew.sel.has(s.id)}
+            onMarca={() => selSew.alterna(s.id)}
             onReobre={() => onReobreSew(s)}
             onReanomena={onReanomenaSew}
             onEsborra={() => onEsborraSew(s.id)}
+            onAccepta={onAcceptaTolerancia} onDesaccepta={onDesacceptaTolerancia}
           />
         ))}
       </Seccio>
@@ -113,35 +223,332 @@ export default function RelationsPanel({
       {/* Les PINCES a part (W4b): una pinça NO és una costura més. És el forat que explica per
           què una vora fa 32 cm i només n'aporta 30 a la costura, i barrejar-la amb les costures
           amagaria justament això. */}
-      <Seccio titol={t('pattern.taller.pinces', { n: pinces.length })}>
+      <Seccio
+        titol={t('pattern.taller.pinces', { n: pinces.length })}
+        accions={
+          <AccionsGrup
+            t={t} n={selPinca.sel.size} total={pinces.length}
+            onTots={selPinca.tots}
+            onEsborra={() => demana('pinces', [...selPinca.sel], onEsborraBlocPinca, selPinca)}
+          />
+        }
+      >
+        <Informe t={t} retinguts={informes.pinces} onTanca={() => tanca('pinces')} />
         {pinces.length === 0 ? (
           <Buit text={t('pattern.taller.pinces_empty')} />
         ) : pinces.map(p => (
           <Pinca
             key={p.id} t={t} pinca={p} unit={unit}
+            marcat={selPinca.sel.has(p.id)}
+            onMarca={() => selPinca.alterna(p.id)}
             onReanomena={onReanomenaPinca}
             onEsborra={() => onEsborraPinca(p.id)}
+            onAccepta={onAcceptaTolerancia} onDesaccepta={onDesacceptaTolerancia}
           />
         ))}
       </Seccio>
 
-      <Seccio titol={t('pattern.taller.segments', { n: segments.length })}>
+      <Seccio
+        titol={t('pattern.taller.segments', { n: segments.length })}
+        accions={
+          <AccionsGrup
+            t={t} n={selTram.sel.size} total={segments.length}
+            onTots={selTram.tots}
+            onEsborra={() => demana('segments', [...selTram.sel], onEsborraBlocTram, selTram)}
+          />
+        }
+      >
+        <Informe t={t} retinguts={informes.segments} onTanca={() => tanca('segments')} />
         {segments.length === 0 ? (
           <Buit text={t('pattern.taller.segments_empty')} />
         ) : segments.map(s => (
           <Tram
             key={s.id} t={t} tram={s} unit={unit}
+            marcat={selTram.sel.has(s.id)}
+            onMarca={() => selTram.alterna(s.id)}
             onReanomena={onReanomenaTram} onReobre={onReobreTram} onEsborra={onEsborraTram}
           />
         ))}
       </Seccio>
+
+      {/* La CONFIRMACIÓ. Un gest en bloc és el que més pot destruir d'un sol clic, i el diàleg
+          diu el compte i la MENA: «Esborrar 18 trams declarats?». Sense la mena, qui té cinc
+          grups a la columna ha de recordar quina paperera ha clicat.
+
+          Les PROPOSTES tenen el seu text (F/T2): el que passa quan es rebutgen no és que
+          s'esborrin —no hi ha res a esborrar, no són files—, és que no es tornaran a proposar.
+          Dir-ho amb la frase de l'esborrat amagaria l'única cosa que importa d'aquest botó:
+          que és permanent. */}
+      {confirma && (
+        <Modal
+          title={confirma.mena === 'proposals'
+            ? t('pattern.taller.prop_reject_confirm_title', { count: confirma.count })
+            : t('pattern.taller.bulk_confirm_title', {
+              count: confirma.count,
+              mena: t(`pattern.taller.bulk_kind_${confirma.mena}`, { count: confirma.count }),
+            })}
+          subtitle={confirma.mena === 'proposals'
+            ? t('pattern.taller.prop_reject_confirm_body')
+            : t('pattern.taller.bulk_confirm_body')}
+          confirmLabel={confirma.mena === 'proposals'
+            ? t('pattern.taller.prop_reject_bulk', { count: confirma.count })
+            : t('pattern.taller.bulk_delete', { count: confirma.count })}
+          cancelLabel={t('app.cancel')}
+          onCancel={() => setConfirma(null)}
+          onConfirm={() => {
+            const executa = confirma.executa
+            setConfirma(null)
+            // El `catch` buit no s'empassa res: qui ho diu és `errEina`, des del Taller. El que
+            // evita és una promesa rebutjada sense amo, que no la veuria ningú.
+            executa().catch(() => {})
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── LES PROPOSTES, SOTA DEMANDA (QA-TALLER F) ────────────────────────────────
+
+/**
+ * La capçalera del grup de propostes. **No és `AccionsGrup`**, i és la diferència que dona
+ * sentit a tot el sprint.
+ *
+ * Als altres grups la paperera esborra: hi ha una sola manera de treure una fila. Aquí n'hi ha
+ * DUES, i no són la mateixa cosa dita dos cops:
+ *
+ * - **Netejar** (la paperera) és efímer: treu de la vista, no escriu res, i tornar a buscar ho
+ *   retorna. Per això no demana confirmació —no hi ha res a confirmar.
+ * - **Rebutjar** (només amb selecció) és permanent: és el «no» que el motor recordarà.
+ *
+ * Posar-les totes dues sota la mateixa icona era el defecte d'E: la paperera escrivia 27
+ * rebuigs permanents amb un clic, i qui volia «treu-m'ho del davant» acabava dient «això no es
+ * cus mai més» sense saber-ho.
+ */
+function AccionsProp({ t, n, total, onTots, onNeteja, onRebutja }) {
+  if (!total) return null
+  return (
+    <>
+      {n > 0 && (
+        <button
+          onClick={onRebutja}
+          title={t('pattern.taller.prop_reject_bulk_title')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0,
+            background: 'none', border: '1px solid var(--err)', borderRadius: 4,
+            color: 'var(--err)', cursor: 'pointer', padding: '0 5px',
+            fontSize: 'var(--fs-caption)',
+          }}
+        >
+          <i className="ti ti-ban" />
+          {t('pattern.taller.prop_reject_bulk', { count: n })}
+        </button>
+      )}
+      <button
+        onClick={onNeteja}
+        title={t('pattern.taller.prop_clear_title')}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0,
+          background: 'none', border: '1px solid var(--white)', borderRadius: 4,
+          color: 'var(--white)', cursor: 'pointer', padding: '0 5px',
+          fontSize: 'var(--fs-caption)',
+        }}
+      >
+        <i className="ti ti-trash" />
+        {t('pattern.taller.prop_clear')}
+      </button>
+      <Casella
+        marcat={n > 0 && n === total}
+        indeterminat={n > 0 && n < total}
+        onChange={onTots}
+        etiqueta={t('pattern.taller.bulk_select_all')}
+      />
+    </>
+  )
+}
+
+/**
+ * El grup buit: un botó, i què vol dir el buit.
+ *
+ * «Encara no ho he demanat» i «ho he demanat i no n'hi ha cap» són dues coses diferents, i una
+ * llista buida sense dir quina de les dues és fa que ningú sàpiga si el motor no veu res o si
+ * simplement no ha mirat.
+ */
+function BuscaPropostes({ t, cercades, buscant, onBusca }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.4rem',
+      padding: '0.2rem 0',
+    }}>
+      <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0 }}>
+        {cercades
+          ? t('pattern.taller.proposals_none_found')
+          : t('pattern.taller.proposals_not_searched')}
+      </p>
+      <button
+        onClick={onBusca}
+        disabled={buscant}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '0.3rem',
+          background: 'var(--gold)', color: 'var(--white)',
+          border: '1px solid var(--gold)', borderRadius: 4,
+          padding: '0.25rem 0.6rem', fontSize: 'var(--fs-caption)',
+          cursor: buscant ? 'wait' : 'pointer', opacity: buscant ? 0.6 : 1,
+        }}
+      >
+        <i className={`ti ${buscant ? 'ti-loader' : 'ti-wand'}`} />
+        {buscant ? t('pattern.taller.proposals_searching') : t('pattern.taller.proposals_search')}
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Els «no» vius, i com desfer-los.
+ *
+ * Va plegat perquè no és la feina: és la nota al peu que evita que el recompte menteixi. Qui
+ * no hi tingui res a fer no l'ha de veure; qui es pregunti «per què no em proposa la lateral?»
+ * ha de poder respondre-s'ho sense sortir d'aquí.
+ */
+function Rebuigs({ t, rebuigs, unit, onDesfa }) {
+  const [obert, setObert] = useState(false)
+  if (!rebuigs.length) return null
+
+  return (
+    <div style={{ margin: '0 0 0.35rem' }}>
+      <button
+        onClick={() => setObert(o => !o)}
+        aria-expanded={obert}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '0.3rem', width: '100%',
+          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', textAlign: 'left',
+        }}
+      >
+        <i className="ti ti-ban" style={{ flexShrink: 0 }} />
+        <span style={{ flex: 1 }}>
+          {t('pattern.taller.rejections_hidden', { count: rebuigs.length })}
+        </span>
+        <i className={`ti ${obert ? 'ti-chevron-up' : 'ti-chevron-down'}`} />
+      </button>
+
+      {obert && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 3 }}>
+          {rebuigs.map(r => (
+            <div
+              key={r.id}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                border: '1px solid var(--border)', borderRadius: 4,
+                padding: '0.2rem 0.4rem', background: 'var(--bg-card)',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {/* La MATEIXA cara que tenia a la llista quan es va dir que no: peça i
+                    longitud. Els ids dels trams no identifiquen res per a ningú. */}
+                <div style={{
+                  fontSize: 'var(--fs-caption)', color: 'var(--text-main)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {t('pattern.taller.proposal_seg', {
+                    peca: r.peca_a, llarg: formatLen(r.longitud_a_cm, unit),
+                  })}
+                  {` ${CADENA} `}
+                  {t('pattern.taller.proposal_seg', {
+                    peca: r.peca_b, llarg: formatLen(r.longitud_b_cm, unit),
+                  })}
+                </div>
+                {r.motiu && (
+                  <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+                    {r.motiu}
+                  </div>
+                )}
+              </div>
+              <BotoIcona
+                icona="ti-arrow-back-up" etiqueta={t('pattern.taller.rejection_undo')}
+                onClick={() => onDesfa(r.id)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Costura({ t, sew, unit, tramsPerId, onReobre, onReanomena, onEsborra }) {
+/**
+ * ACCEPTAR un desajust (QA-TALLER H · T3).
+ *
+ * Només apareix si hi ha desajust (groc o vermell): una costura verda no té res a acceptar, i
+ * una de frunzit tampoc (el diferencial és intencional). Acceptar no arregla res —el patró
+ * mana—: diu «ho he vist i el dono per bo», i ho registra amb qui i quan (rastre auditable).
+ *
+ * Un cop acceptat, la fila ho ensenya i el qui/quan viu al `title`; es pot DESACCEPTAR, i això
+ * no esborra l'històric —al servidor és un esdeveniment nou.
+ */
+function AcceptaTolerancia({ t, sewId, estat, acceptacio, onAccepta, onDesaccepta }) {
+  const [ocupat, setOcupat] = useState(false)
+  const desajust = estat?.grau === 'warn' || estat?.grau === 'err'
+  if (!desajust && !acceptacio?.acceptat) return null
+
+  const acte = async (fn) => {
+    setOcupat(true)
+    try { await fn() } finally { setOcupat(false) }
+  }
+
+  if (acceptacio?.acceptat) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '0.35rem',
+        fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+      }}>
+        <i className="ti ti-rosette-discount-check" style={{ color: 'var(--ok)', flexShrink: 0 }} />
+        <span
+          title={t('pattern.taller.tol_accepted_by', {
+            per: acceptacio.per || '—',
+            data: (acceptacio.data || '').slice(0, 10),
+          })}
+          style={{ flex: 1, minWidth: 0 }}
+        >
+          {t('pattern.taller.tol_accepted')}
+        </span>
+        <button
+          onClick={() => acte(() => onDesaccepta(sewId))}
+          disabled={ocupat}
+          style={{
+            background: 'none', border: 'none', cursor: ocupat ? 'wait' : 'pointer',
+            color: 'var(--text-muted)', textDecoration: 'underline', padding: 0,
+            fontSize: 'var(--fs-caption)', flexShrink: 0,
+          }}
+        >
+          {t('pattern.taller.tol_unaccept')}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => acte(() => onAccepta(sewId))}
+      disabled={ocupat}
+      title={t('pattern.taller.tol_accept_title')}
+      style={{
+        alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '0.3rem',
+        background: 'none', border: '1px solid var(--border)', borderRadius: 4,
+        padding: '0.1rem 0.5rem', cursor: ocupat ? 'wait' : 'pointer',
+        color: 'var(--text-main)', fontSize: 'var(--fs-caption)',
+      }}
+    >
+      <i className="ti ti-check" />
+      {t('pattern.taller.tol_accept')}
+    </button>
+  )
+}
+
+function Costura({ t, sew, unit, tramsPerId, marcat, onMarca, onReobre, onReanomena, onEsborra,
+                   onAccepta, onDesaccepta }) {
   const e = sew.estat || {}
   const cobertura = e.cobertura || []
   const [editantNom, setEditantNom] = useState(false)
@@ -156,16 +563,22 @@ function Costura({ t, sew, unit, tramsPerId, onReobre, onReanomena, onEsborra })
     if ((nom || '') !== (sew.nom || '')) await onReanomena(sew.id, nom)
   }
 
+  const g = grauVisual(e)
+
   return (
     <div style={{
-      border: `1px solid ${e.casa ? 'var(--ok)' : 'var(--err)'}`,
-      background: e.casa ? 'var(--ok-bg)' : 'var(--err-bg)',
+      border: `1px solid ${g.color}`,
+      background: g.bg,
       borderRadius: 4, padding: '0.35rem 0.5rem',
       display: 'flex', flexDirection: 'column', gap: 4,
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-        <i className={`ti ${e.casa ? 'ti-check' : 'ti-alert-triangle'}`}
-           style={{ color: e.casa ? 'var(--ok)' : 'var(--err)', marginTop: 2 }} />
+        <Casella
+          marcat={marcat} onChange={onMarca}
+          etiqueta={t('pattern.taller.bulk_select_row')}
+        />
+        <i className={`ti ${g.icona}`}
+           style={{ color: g.color, marginTop: 2 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           {editantNom ? (
             <input
@@ -230,6 +643,11 @@ function Costura({ t, sew, unit, tramsPerId, onReobre, onReanomena, onEsborra })
           <span>{textCobertura(t, a, unit)}</span>
         </div>
       ))}
+
+      <AcceptaTolerancia
+        t={t} sewId={sew.id} estat={e} acceptacio={sew.acceptacio}
+        onAccepta={onAccepta} onDesaccepta={onDesaccepta}
+      />
     </div>
   )
 }
@@ -241,10 +659,15 @@ function Costura({ t, sew, unit, tramsPerId, onReobre, onReanomena, onEsborra })
  * restat a la costura que la conté. Es diu aquí perquè, quan algú vegi «− 2,3 (Pinça 1)» a la
  * costura lateral, pugui venir a comprovar d'on surt aquell 2,3.
  */
-function Pinca({ t, pinca, unit, onReanomena, onEsborra }) {
+function Pinca({ t, pinca, unit, marcat, onMarca, onReanomena, onEsborra, onAccepta, onDesaccepta }) {
   const [editant, setEditant] = useState(false)
   const [nom, setNom] = useState(pinca.sew?.nom || '')
   const e = pinca.estat || {}
+  // El GRAU de la pinça (H/T1): una pinça amb els costats desiguals és el defecte més fàcil
+  // d'ignorar, i el semàfor el fa visible d'un cop d'ull. Verd no es tenyeix (queda neutre); el
+  // groc i el vermell sí que marquen la vora, perquè és el que demana mirada.
+  const g = grauVisual(e)
+  const desajust = e.grau === 'warn' || e.grau === 'err'
 
   const desa = async () => {
     setEditant(false)
@@ -253,11 +676,15 @@ function Pinca({ t, pinca, unit, onReanomena, onEsborra }) {
 
   return (
     <div style={{
-      border: '1px solid var(--border)', borderRadius: 4,
-      padding: '0.3rem 0.5rem', background: 'var(--bg-card)',
+      border: `1px solid ${desajust ? g.color : 'var(--border)'}`, borderRadius: 4,
+      padding: '0.3rem 0.5rem', background: desajust ? g.bg : 'var(--bg-card)',
       display: 'flex', flexDirection: 'column', gap: 3,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <Casella
+          marcat={marcat} onChange={onMarca}
+          etiqueta={t('pattern.taller.bulk_select_row')}
+        />
         <i className="ti ti-triangle" style={{ color: 'var(--gold)', flexShrink: 0 }} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -316,12 +743,13 @@ function Pinca({ t, pinca, unit, onReanomena, onEsborra }) {
 
       {/* Els dos costats d'una pinça s'han de poder cosir l'un contra l'altre: si no fan el
           mateix, la pinça no tanca plana. No bloqueja res —el patró és del patronista— però
-          es diu, amb la xifra. */}
-      {e.casa === false && (
+          es diu, amb la xifra, i amb el color del grau (groc si val la pena mirar, vermell si
+          no s'hauria d'ignorar). */}
+      {desajust && (
         <div style={{
           display: 'flex', alignItems: 'flex-start', gap: '0.35rem',
-          fontSize: 'var(--fs-caption)', color: 'var(--warn)',
-          background: 'var(--warn-bg)', borderRadius: 4, padding: '3px 6px',
+          fontSize: 'var(--fs-caption)', color: g.color,
+          background: g.bg, borderRadius: 4, padding: '3px 6px',
         }}>
           <i className="ti ti-alert-triangle" style={{ marginTop: 2 }} />
           <span>
@@ -332,11 +760,16 @@ function Pinca({ t, pinca, unit, onReanomena, onEsborra }) {
           </span>
         </div>
       )}
+
+      <AcceptaTolerancia
+        t={t} sewId={pinca.id} estat={e} acceptacio={pinca.sew?.acceptacio}
+        onAccepta={onAccepta} onDesaccepta={onDesaccepta}
+      />
     </div>
   )
 }
 
-function Tram({ t, tram, unit, onReanomena, onReobre, onEsborra }) {
+function Tram({ t, tram, unit, marcat, onMarca, onReanomena, onReobre, onEsborra }) {
   const [editant, setEditant] = useState(false)
   const [nom, setNom] = useState(tram.nom || '')
   const [rebuig, setRebuig] = useState(null)   // per què no s'ha pogut esborrar
@@ -365,6 +798,10 @@ function Tram({ t, tram, unit, onReanomena, onReobre, onEsborra }) {
       display: 'flex', flexDirection: 'column', gap: 3,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <Casella
+          marcat={marcat} onChange={onMarca}
+          etiqueta={t('pattern.taller.bulk_select_row')}
+        />
         <i className="ti ti-line" style={{ color: 'var(--gold)', flexShrink: 0 }} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -406,10 +843,15 @@ function Tram({ t, tram, unit, onReanomena, onReobre, onEsborra }) {
           </div>
         </div>
 
+        {/* La DADA, a la MATEIXA escala que la d'un POM (QA-TALLER E · T2): un tram de 29,8 cm i
+            un POM de 29,8 cm són la mateixa mena de xifra —una longitud llegida del patró— i
+            anaven a mides diferents (caption vs body). La mida d'un número és una afirmació
+            sobre quant importa; dir-ho diferent a cada bloc és dir-ho malament en un dels dos.
+            El `title` porta el valor sense arrodonir (T7c). */}
         <span
           title={titleLen(tram.longitud_cm)}
           style={{
-            fontFamily: 'var(--mono)', fontSize: 'var(--fs-caption)',
+            fontFamily: 'var(--mono)', fontSize: 'var(--fs-body)',
             color: 'var(--text-main)', flexShrink: 0,
           }}
         >
@@ -446,15 +888,34 @@ function Tram({ t, tram, unit, onReanomena, onReobre, onEsborra }) {
   )
 }
 
-function Seccio({ titol, children }) {
+/**
+ * La capçalera d'un sub-bloc de Relacions.
+ *
+ * Va en FOSC (QA-TALLER E · T1), com el contenidor de la columna: cinc famílies seguides, cada
+ * una amb les seves files, i el títol en gris clar es llegia com una fila més. El que separa un
+ * bloc del següent no pot pesar menys que el que hi ha a dins.
+ *
+ * Que sigui INSET (amb marge i cantonada) i no a sang és el que la diferencia de la capçalera
+ * del contenidor que la conté: mateix color, jerarquia diferent.
+ */
+function Seccio({ titol, accions, children }) {
   return (
     <div>
-      <h4 style={{
-        fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '0.03em',
-        color: 'var(--text-muted)', margin: '0 0 0.35rem',
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '0.4rem',
+        background: 'var(--charcoal)', color: 'var(--white)',
+        borderRadius: 4, padding: '0.25rem 0.5rem', margin: '0 0 0.35rem',
       }}>
-        {titol}
-      </h4>
+        <h4 style={{
+          flex: 1, minWidth: 0, margin: 0,
+          fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '0.03em',
+          fontWeight: 600, color: 'var(--white)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {titol}
+        </h4>
+        {accions}
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {children}
       </div>

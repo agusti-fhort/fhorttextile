@@ -32,6 +32,14 @@ reportlab==4.5.1
 # Depèn de la lib nativa libcairo2 (ja al sistema); només s'importa a l'upload del logo.
 cairosvg==2.9.0
 
+# --- Facturació F1 (P-PRICE): catàleg de preus a Stripe (font única del PREU) ---
+# NOMÉS cobrament + font de veritat del preu (D-P2). El motor propi factura; Stripe
+# guarda Products/Prices amb lookup_key. Arrossega requests + urllib3.
+stripe==15.3.0
+# Catàleg declaratiu del pricing (pricing_catalog.yaml). Ja era transitiva; ara és
+# import directe del sync_stripe_catalog i del servei de pricing.
+PyYAML==6.0.3
+
 # --- Motor de patrons (S1): lectura/escriptura de DXF-AAMA ---
 # Nucli del parser. Preserva els tags desconeguts del DXF, que és el que permet
 # reproduir l'empremta del CAD d'origen en exportar. Arrossega numpy, fonttools i

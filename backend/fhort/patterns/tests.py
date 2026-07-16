@@ -67,10 +67,18 @@ from fhort.patterns.engine.dart_detection import (
     clau_pinca,
     detectar,
 )
+from fhort.patterns.preferences import (
+    classifica_accio, preferencia_del_tram, rangs_apresos, registra, rol_de_peca)
 from fhort.patterns.engine.seam_matching import (
     Candidat,
     LLINDAR_PROPOSTA,
+    PES_LONGITUD,
+    PES_NOMS,
+    PES_PIQUETS,
+    PES_PREFERENCIA,
+    PES_PREFERENCIA_CONTRA,
     TOL_PIQUET_S,
+    avaluar,
     casen_piquets,
     clau_parella,
     piquets_de_la_vora,
@@ -79,15 +87,20 @@ from fhort.patterns.engine.seam_matching import (
     proposar,
     senyal_longitud,
     senyal_noms,
+    senyal_preferencia,
 )
 from fhort.patterns.engine.segments import (
     acumulats_vora, SegmentError, fraccio_tram, longitud_tram,
                                             longitud_vora, segmentar_peca, segmentar_vora,
                                             tram_entre_punts)
+from fhort.patterns.engine.natural_segments import (
+    LLINDAR_CANTONADA_GRAUS, cantonades_naturals, desviacio_angular,
+    segmentar_peca_natural, segmentar_vora_natural, vertexs_de_piquet)
 from fhort.patterns.engine.sew import (MENA_EXCES, MENA_SOLAPAMENT, CostatPinca, Descompte,
                                        TramCosit, conte, descomptar_pinces, validar,
                                        validar_cobertura)
 from fhort.patterns.engine.rul_reader import RULReader, coherencia_dxf_rul
+from fhort.patterns.tolerance import graduar
 from fhort.patterns.engine.rul_writer import RULWriter
 
 # ── el que només fa falta per als tests de S3 (adaptadors: SÍ que toquen Django) ──
@@ -113,12 +126,16 @@ from fhort.models_app.services_fitxers import DOWNLOAD_TTL
 from fhort.patterns.adapters import (DjangoGeometryStore, DjangoGradingSource,
                                      pom_specs, sew_specs)
 from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentViewSet,
-                                             SewRelationViewSet, comprovar_costura)
+                                             SewProposalRejectionViewSet, SewRelationSerializer,
+                                             SewRelationViewSet, SewToleranceAcceptanceViewSet,
+                                             comprovar_costura)
 from fhort.patterns.export import ExportBlocked, build_export
 from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
                                    PatternPOM, PatternPoint, PatternSegment,
-                                   SewProposalRejection, SewRelation)
+                                   SegmentPreference, SewProposalRejection, SewRelation,
+                                   SewToleranceAcceptance)
 from fhort.patterns.services import save_pattern_file
+from fhort.patterns.serializers import PatternGeometrySerializer
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
                                   PatternFileViewSet)
 from fhort.pom.models import GarmentType, POMMaster
@@ -1241,6 +1258,278 @@ class SegmentacioTest(unittest.TestCase):
         self.assertAlmostEqual(segs[0].t_fi, 1.0)
 
 
+class TramsNaturalsTest(unittest.TestCase):
+    """La vora llegida com l'ofici la llegeix. Engine pur, material real (AMELIA)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = AAMAReader().read(AMELIA_DXF.read_bytes())
+
+    def test_els_naturals_sumen_el_perimetre(self):
+        """La mateixa prova que no es pot falsejar que als AUTO: fusionar no pot perdre
+        ni duplicar vora. Si un natural es menja un tros de més, la suma no dona."""
+        for piece in self.doc.pieces:
+            with self.subTest(peca=piece.nom_block):
+                nats = segmentar_peca_natural(piece)
+                cut = piece.boundary(LayerRole.CUT)
+                self.assertAlmostEqual(
+                    sum(s.longitud_mm for s in nats), longitud_vora(cut), places=6)
+
+    def test_l_amelia_surt_amb_quatre_costures_per_peca(self):
+        """El calibratge (T1b) sobre material real: l'AMELIA té 4 cantonades per peça, i
+        el CAD n'hi marca fins a 14. Aquest número el va mirar un humà."""
+        for piece in self.doc.pieces:
+            with self.subTest(peca=piece.nom_block):
+                self.assertEqual(len(segmentar_peca_natural(piece)), 4)
+
+    def test_els_naturals_son_menys_que_els_auto_i_no_els_toquen(self):
+        """Els naturals són una VISTA: no substitueixen els AUTO, que segueixen igual."""
+        for piece in self.doc.pieces:
+            with self.subTest(peca=piece.nom_block):
+                auto = segmentar_peca(piece)
+                nat = segmentar_peca_natural(piece)
+                self.assertLess(len(nat), len(auto))
+                self.assertAlmostEqual(
+                    sum(s.longitud_mm for s in auto),
+                    sum(s.longitud_mm for s in nat), places=6)
+
+    def test_el_llindar_te_una_meseta(self):
+        """T1b: entre 20° i 25° el resultat no es mou. Si algú toca el llindar i això peta,
+        és que el material ha canviat i cal recalibrar, no ajustar el número a ull."""
+        for piece in self.doc.pieces:
+            for llindar in (20.0, 22.0, 25.0):
+                with self.subTest(peca=piece.nom_block, llindar=llindar):
+                    self.assertEqual(
+                        len(segmentar_peca_natural(piece, llindar_graus=llindar)), 4)
+
+    def test_una_corba_suau_no_talla(self):
+        """Dotze girs en cercle: el CAD els marca tots, però cap no és cantonada. Un coll
+        rodó és UNA costura."""
+        punts = tuple(
+            PointData(x=math.cos(a) * 100, y=math.sin(a) * 100, kind=PointKind.TURN)
+            for a in [i * math.pi / 6 for i in range(12)]
+        )
+        vora = BoundaryData(role=LayerRole.CUT, layer='1', points=punts, closed=True)
+        peca = PieceData(nom_block='C', boundaries=(vora,))
+        # Cada gir desvia 30°: per sobre del llindar, dotze trams; per sota, un de sol.
+        self.assertEqual(len(segmentar_vora_natural(peca, vora, 0, llindar_graus=22.0)), 12)
+        self.assertEqual(len(segmentar_vora_natural(peca, vora, 0, llindar_graus=45.0)), 1)
+
+    def test_el_piquet_no_talla(self):
+        """La peça que sosté el mòdul. Una excursió de piquet en V té girs de ~60° —més
+        forts que cantonades de debò— i, si tallessin, partirien la costura en tres."""
+        # Una L: recta llarga cap a l'est amb un dent de piquet al mig, i una cantonada.
+        punts = (
+            PointData(x=0, y=0, kind=PointKind.TURN),        # cantonada d'inici
+            PointData(x=100, y=0, kind=PointKind.TURN),      # pota del piquet
+            PointData(x=110, y=8, kind=PointKind.TURN),      # pic del piquet
+            PointData(x=120, y=0, kind=PointKind.TURN),      # pota del piquet
+            PointData(x=300, y=0, kind=PointKind.TURN),      # cantonada
+            PointData(x=300, y=200, kind=PointKind.TURN),    # cantonada
+        )
+        vora = BoundaryData(role=LayerRole.CUT, layer='1', points=punts, closed=True)
+        sense = PieceData(nom_block='P', boundaries=(vora,))
+        amb = PieceData(nom_block='P', boundaries=(vora,), notches=(
+            NotchData(x=100, y=0), NotchData(x=120, y=0),
+        ))
+        # Sense declarar els piquets, els seus girs passen per cantonades i esmicolen la vora.
+        self.assertIn(2, cantonades_naturals(sense, vora))
+        # Declarats, l'excursió sencera queda fora: la recta 0→300 és UNA costura.
+        self.assertEqual(vertexs_de_piquet(amb, vora), {1, 2, 3})
+        cant = cantonades_naturals(amb, vora)
+        self.assertNotIn(1, cant)
+        self.assertNotIn(2, cant)
+        self.assertNotIn(3, cant)
+        self.assertEqual(cant, [0, 4, 5])
+
+    def test_el_piquet_viatja_dins_del_tram_com_a_metadada(self):
+        """No tallar no vol dir ignorar: A2 llegeix els piquets per inferir frunzit."""
+        punts = (
+            PointData(x=0, y=0, kind=PointKind.TURN),
+            PointData(x=100, y=0, kind=PointKind.TURN),
+            PointData(x=110, y=8, kind=PointKind.TURN),
+            PointData(x=120, y=0, kind=PointKind.TURN),
+            PointData(x=300, y=0, kind=PointKind.TURN),
+            PointData(x=300, y=200, kind=PointKind.TURN),
+        )
+        vora = BoundaryData(role=LayerRole.CUT, layer='1', points=punts, closed=True)
+        peca = PieceData(nom_block='P', boundaries=(vora,), notches=(
+            NotchData(x=100, y=0), NotchData(x=120, y=0),
+        ))
+        nats = segmentar_vora_natural(peca, vora, 0)
+        primer = next(s for s in nats if s.index_inici == 0)
+        self.assertEqual(len(primer.piquets), 2)
+        # I diu de quins girs surt: la fusió ha de ser auditable.
+        self.assertEqual(primer.girs_fusionats, (1, 2, 3))
+
+    def test_els_extrems_de_pinca_tallen_encara_que_l_angle_no(self):
+        """Una pinça declarada parteix la vora encara que hi arribi suau: el que hi ha a
+        banda i banda són dues costures diferents, i això és domini, no geometria."""
+        punts = tuple(
+            PointData(x=math.cos(a) * 100, y=math.sin(a) * 100, kind=PointKind.CURVE)
+            for a in [i * math.pi / 6 for i in range(12)]
+        )
+        vora = BoundaryData(role=LayerRole.CUT, layer='1', points=punts, closed=True)
+        peca = PieceData(nom_block='C', boundaries=(vora,))
+        self.assertEqual(len(segmentar_vora_natural(peca, vora, 0)), 1)
+        amb_pinca = segmentar_vora_natural(peca, vora, 0, talls_extra=(3, 6))
+        self.assertEqual(len(amb_pinca), 2)
+        self.assertEqual([s.index_inici for s in amb_pinca], [3, 6])
+
+    def test_la_desviacio_no_es_deixa_enganyar_per_vertexs_duplicats(self):
+        """Els fitxers reals repeteixen punts. Un vèrtex duplicat no defineix direcció i
+        no pot ser cantonada de res."""
+        pts = (PointData(x=0, y=0), PointData(x=0, y=0), PointData(x=10, y=0))
+        self.assertEqual(desviacio_angular(pts, 1, closed=True), 0.0)
+        self.assertEqual(desviacio_angular(pts, 1, closed=False), 0.0)
+        # I l'extrem d'una vora oberta sí que és frontera per definició.
+        self.assertEqual(desviacio_angular(pts, 0, closed=False), 180.0)
+
+
+class PreferenciaSenyalTest(unittest.TestCase):
+    """El costum del taller com a senyal. Engine pur: sense BD, amb números inventats."""
+
+    def _c(self, nom, pref='', **kw):
+        return Candidat(
+            segment_id=kw.get('sid', 1), piece_id=1, piece_nom=nom, vora=0,
+            t_inici=0.0, t_fi=0.5, longitud_mm=500.0, preferencia=pref)
+
+    def test_els_dos_costats_confirmats_pesen_el_doble_que_un(self):
+        un = senyal_preferencia(self._c('A', 'confirmat'), self._c('B'))
+        dos = senyal_preferencia(self._c('A', 'confirmat'), self._c('B', 'confirmat'))
+        self.assertAlmostEqual(un.punts, PES_PREFERENCIA * 0.5)
+        self.assertAlmostEqual(dos.punts, PES_PREFERENCIA)
+
+    def test_sense_costum_el_senyal_no_diu_res(self):
+        self.assertEqual(senyal_preferencia(self._c('A'), self._c('B')).punts, 0.0)
+
+    def test_un_costum_mut_no_embruta_el_desglos(self):
+        """Sense res après, la proposta porta els tres senyals de sempre i cap més: una fila
+        de zero punts i sense frase no es pot discutir."""
+        a = Candidat(segment_id=1, piece_id=1, piece_nom='FRONT', vora=0, t_inici=0.0,
+                     t_fi=0.5, longitud_mm=500.0, piquets=(0.25,))
+        b = Candidat(segment_id=2, piece_id=2, piece_nom='BACK', vora=0, t_inici=0.0,
+                     t_fi=0.5, longitud_mm=500.0, piquets=(0.25,))
+        p = avaluar(a, b)
+        self.assertIsNotNone(p)
+        self.assertEqual({s.mena for s in p.senyals}, {'piquets', 'longitud', 'noms'})
+        # I amb costum, hi surt.
+        amb = avaluar(replace(a, preferencia='confirmat'), b)
+        self.assertIn('preferencia', {s.mena for s in amb.senyals})
+
+    def test_una_correccio_mana_sobre_una_confirmacio(self):
+        """Si un costat s'ha corregit, que l'altre estigui confirmat no ho compensa: una
+        costura amb un costat esmenat no és mitja bona."""
+        s = senyal_preferencia(self._c('A', 'tallat'), self._c('B', 'confirmat'))
+        self.assertAlmostEqual(s.punts, PES_PREFERENCIA_CONTRA)
+        self.assertLess(s.punts, 0)
+
+    def test_el_costum_NO_pot_habilitar_una_proposta_sense_geometria(self):
+        """La llei del motor (W4): la geometria mana, i el costum ni tan sols acompanya —no
+        entra a la porta. Dues peces sense cap evidència geomètrica no es proposen encara que
+        el taller les hagi confirmat mil vegades; si ho fessin, el motor proposaria pel que la
+        gent sol fer i repetiria els mals costums amb cada cop més confiança."""
+        # Longituds incompatibles i cap piquet: geometria muda.
+        a = Candidat(segment_id=1, piece_id=1, piece_nom='FRONT', vora=0, t_inici=0.0,
+                     t_fi=0.5, longitud_mm=500.0, preferencia='confirmat')
+        b = Candidat(segment_id=2, piece_id=2, piece_nom='BACK', vora=0, t_inici=0.0,
+                     t_fi=0.5, longitud_mm=5000.0, preferencia='confirmat')
+        self.assertIsNone(avaluar(a, b))
+
+    def test_el_costum_pesa_menys_que_el_nom(self):
+        """Ordre de pesos, escrit com a test: el costum diu menys sobre AQUEST patró que el
+        nom, perquè descriu el que algú va fer en un ALTRE."""
+        self.assertLess(PES_PREFERENCIA, PES_NOMS)
+        self.assertLess(PES_PREFERENCIA, PES_LONGITUD)
+        self.assertLess(PES_PREFERENCIA, PES_PIQUETS)
+
+
+class PreferenciaAprenentatgeTest(PatternsAPITestBase):
+    """Què s'aprèn i quan, amb el TATE real."""
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(TATE_DXF.read_bytes()).data['id'])
+        self.front = self.fp.pieces.get(nom_block='TATE_FRONT')
+        self.nat = (self.front.segments
+                    .filter(origen=PatternSegment.ORIGEN_NATURAL).order_by('-t_fi').first())
+
+    def _declara(self, t_inici, t_fi, nom='QA'):
+        return PatternSegment.objects.create(
+            piece=self.front, vora=self.nat.vora, t_inici=t_inici, t_fi=t_fi,
+            tipus_vora=self.nat.tipus_vora, origen=PatternSegment.ORIGEN_DECLARAT, nom=nom)
+
+    def test_el_rol_no_col_lapsa_peces_diferents(self):
+        """Al Tate el 'rol' del CAD és el nom sencer. Reduir-lo a un FRONT canònic faria que
+        el que s'aprèn del davanter viatgés a la seva vista i al seu canesú."""
+        rols = {rol_de_peca(p) for p in self.fp.pieces.all()}
+        self.assertIn('TATE_FRONT', rols)
+        self.assertIn('TATE_FRONT_FACING', rols)
+        self.assertIn('TATE_FRONT_YOKE', rols)
+        self.assertNotEqual(
+            rol_de_peca(self.front),
+            rol_de_peca(self.fp.pieces.get(nom_block='TATE_FRONT_FACING')))
+
+    def test_confirmar_un_natural_tal_qual_s_apren_com_a_CONFIRMAT(self):
+        pref = registra(self._declara(self.nat.t_inici, self.nat.t_fi))
+        self.assertIsNotNone(pref)
+        self.assertEqual(pref.accio, SegmentPreference.ACCIO_CONFIRMAT)
+        self.assertEqual(pref.rol, 'TATE_FRONT')
+
+    def test_re_confirmar_NO_duplica_la_fila_la_REFORCA(self):
+        registra(self._declara(self.nat.t_inici, self.nat.t_fi))
+        pref = registra(self._declara(self.nat.t_inici, self.nat.t_fi, nom='QA2'))
+        self.assertEqual(SegmentPreference.objects.count(), 1)
+        self.assertEqual(pref.vegades, 2)
+
+    def test_escurcar_un_natural_s_apren_com_a_TALLAT(self):
+        mig = self.nat.t_inici + (self.nat.t_fi - self.nat.t_inici) * 0.9
+        pref = registra(self._declara(self.nat.t_inici, mig))
+        self.assertIsNotNone(pref)
+        self.assertEqual(pref.accio, SegmentPreference.ACCIO_TALLAT)
+
+    def test_escurcar_molt_segueix_sent_una_correccio(self):
+        """Declarar un tros petit d'un natural NO és un tram nou: és dir que aquell natural
+        sencer no és el que es cus. Per això s'aprèn, i per això després baixa la proposta."""
+        curt = self.nat.t_inici + (self.nat.t_fi - self.nat.t_inici) * 0.05
+        pref = registra(self._declara(self.nat.t_inici, curt))
+        self.assertIsNotNone(pref)
+        self.assertEqual(pref.accio, SegmentPreference.ACCIO_TALLAT)
+
+    def test_d_un_tram_que_CAVALCA_dues_lectures_no_se_n_apren_res(self):
+        """Un tram a cavall de dos naturals no corregeix cap dels dos: no diu «aquest havia de
+        ser més curt», diu una altra cosa. Inventar-li una preferència seria posar-li paraules
+        a la boca."""
+        naturals = list(self.front.segments
+                        .filter(origen=PatternSegment.ORIGEN_NATURAL, vora=self.nat.vora)
+                        .order_by('t_inici'))
+        a, b = naturals[0], naturals[1]
+        # De mig del primer a mig del segon: no cau dins de cap.
+        mig_a = a.t_inici + (a.t_fi - a.t_inici) * 0.5
+        mig_b = b.t_inici + (b.t_fi - b.t_inici) * 0.5
+        self.assertIsNone(registra(self._declara(mig_a, mig_b)))
+
+    def test_d_un_tram_DERIVAT_no_se_n_apren_res(self):
+        """Només s'aprèn del «sí» humà. Un derivat no l'ha decidit ningú, i aprendre'n seria
+        que el motor es donés la raó sol."""
+        self.assertIsNone(registra(self.nat))
+
+    def test_declarar_un_tram_per_l_API_ja_deixa_el_senyal(self):
+        """El ganxo: el gest manual és un judici sobre la lectura, igual que confirmar una
+        proposta. I no canvia res del que la crida feia abans."""
+        punts = list(self.front.points.filter(
+            mena='vertex', boundary_index=self.nat.vora).order_by('ordre'))
+        a = next(p for p in punts if p.ordre == self.nat.index_inici) if hasattr(
+            self.nat, 'index_inici') else punts[0]
+        request = self.factory.post('/api/v1/patterns/pattern-segments/', {
+            'point_a': punts[0].id, 'point_b': punts[4].id, 'nom': 'lateral',
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        resp = PatternSegmentViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+
 class MesuraTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -1355,9 +1644,18 @@ class AnotacioAPITest(PatternsAPITestBase):
         return PatternPOMViewSet.as_view({'post': 'create'})(request)
 
     def test_els_segments_es_deriven_en_importar(self):
-        """No cal demanar-los: la peça ja ve amb les seves cantonades marcades pel CAD."""
-        self.assertEqual(self.back.segments.count(), 14)
-        self.assertEqual(self.fp.pieces.get(nom_block='FRONT').segments.count(), 10)
+        """No cal demanar-los: la peça ja ve amb les seves cantonades marcades pel CAD.
+
+        Se'n deriven DUES lectures i totes dues es desen: la fina (`auto`, gir→gir) i la de
+        l'ofici (`natural`, poques costures). Es compten per separat a posta —un total
+        agregat passaria per bo el dia que una de les dues deixés de generar-se."""
+        front = self.fp.pieces.get(nom_block='FRONT')
+        for peca, auto, natural in ((self.back, 14, 4), (front, 10, 4)):
+            with self.subTest(peca=peca.nom_block):
+                self.assertEqual(
+                    peca.segments.filter(origen=PatternSegment.ORIGEN_AUTO).count(), auto)
+                self.assertEqual(
+                    peca.segments.filter(origen=PatternSegment.ORIGEN_NATURAL).count(), natural)
 
     def test_ancorar_un_pom_el_mesura_al_servidor(self):
         resp = self._ancora(self.girs[0], self.girs[5])
@@ -1406,7 +1704,8 @@ class AnotacioAPITest(PatternsAPITestBase):
         back = next(p for p in dades['pieces'] if p['nom_block'] == 'BACK')
         self.assertEqual(len(back['poms']), 1)
         self.assertEqual(back['poms'][0]['pom_code'], 'CHEST')
-        self.assertEqual(len(back['segments']), 14)
+        self.assertEqual(
+            len([s for s in back['segments'] if s['origen'] == PatternSegment.ORIGEN_AUTO]), 14)
 
     # ── costures ─────────────────────────────────────────────────────────────
     def _costura(self, segs_a, segs_b, tipus='casat', dif=0.0):
@@ -2414,6 +2713,52 @@ class PincaTest(unittest.TestCase):
         self.assertAlmostEqual(exces[0].suma_cosida_cm, 104.0, places=2)
 
 
+class NaturalsAPITest(PatternsAPITestBase):
+    """Els naturals arriben amb la geometria, amb el TATE real pujat per l'API."""
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(TATE_DXF.read_bytes()).data['id'])
+
+    def _peces(self):
+        return {p['nom_block']: p for p in PatternGeometrySerializer(self.fp).data['pieces']}
+
+    def test_el_tate_front_surt_amb_vuit_costures_i_no_amb_vint_i_cinc(self):
+        """El cas del sprint, end-to-end: el CAD en marca 25, l'ofici en llegeix 8."""
+        front = self._peces()['TATE_FRONT']
+        auto = [s for s in front['segments'] if s['origen'] == 'auto']
+        self.assertEqual(len(auto), 25)
+        self.assertEqual(len(front['naturals']), 8)
+
+    def test_els_naturals_no_substitueixen_els_auto(self):
+        """Vista derivada: els AUTO segueixen sencers al mateix payload, perquè el gest
+        manual de precisió i l'aritmètica els necessiten."""
+        for nom, p in self._peces().items():
+            with self.subTest(peca=nom):
+                auto = [s for s in p['segments'] if s['origen'] == 'auto']
+                if not auto:
+                    continue
+                self.assertLessEqual(len(p['naturals']), len(auto))
+
+    def test_un_natural_del_tate_es_la_costura_que_l_huma_va_declarar(self):
+        """La validació que no es pot arreglar amb un número: la capa retroba SOLA la
+        lateral que el patronista havia marcat a mà a W4b (32,13 cm)."""
+        front = self._peces()['TATE_FRONT']
+        llargs = [s['longitud_cm'] for s in front['naturals']]
+        self.assertIn(32.13, llargs)
+        esquena = self._peces()['TATE_BACK']
+        self.assertIn(29.8, [s['longitud_cm'] for s in esquena['naturals']])
+
+    def test_els_piquets_viatgen_dins_del_natural(self):
+        """No tallen, però hi són: A2 els llegeix per inferir frunzit."""
+        front = self._peces()['TATE_FRONT']
+        lateral = next(s for s in front['naturals'] if s['longitud_cm'] == 32.13)
+        self.assertEqual(len(lateral['piquets']), 2)
+        # I la fusió diu de quins girs surt.
+        self.assertTrue(lateral['girs_fusionats'])
+
+
 class SegmentDeclaratAPITest(PatternsAPITestBase):
     """CRUD del tram declarat, amb el TATE real pujat per l'API."""
 
@@ -2448,11 +2793,15 @@ class SegmentDeclaratAPITest(PatternsAPITestBase):
         force_authenticate(request, user=self.user)
         return PatternSegmentViewSet.as_view({'delete': 'destroy'})(request, pk=seg_id)
 
-    def test_els_derivats_son_auto(self):
-        """La migració els deixa tots 'auto': ningú no els ha declarat."""
-        self.assertGreater(self.front.segments.count(), 0)
+    def test_els_derivats_no_els_ha_declarat_ningu(self):
+        """L'import deixa les dues lectures derivades ('auto' i 'natural') i cap declarat:
+        un tram declarat és una afirmació d'algú, i en importar encara no n'hi ha cap."""
+        self.assertGreater(
+            self.front.segments.filter(origen=PatternSegment.ORIGEN_AUTO).count(), 0)
+        self.assertGreater(
+            self.front.segments.filter(origen=PatternSegment.ORIGEN_NATURAL).count(), 0)
         self.assertFalse(
-            self.front.segments.exclude(origen=PatternSegment.ORIGEN_AUTO).exists())
+            self.front.segments.filter(origen=PatternSegment.ORIGEN_DECLARAT).exists())
 
     def test_declarar_un_tram_entre_dos_punts(self):
         resp = self._declara(self.punts[3], self.punts[33])
@@ -2517,6 +2866,64 @@ class SegmentDeclaratAPITest(PatternsAPITestBase):
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.data['sew_relations'], [rel.id])
         self.assertTrue(PatternSegment.objects.filter(pk=seg_id).exists())
+
+    # ── ESBORRAT EN BLOC (QA-TALLER E · T3) ─────────────────────────────────
+
+    def _esborra_bloc(self, ids):
+        request = self.factory.post(
+            '/api/v1/patterns/pattern-segments/bulk-delete/', {'ids': ids}, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternSegmentViewSet.as_view({'post': 'bulk_delete'})(request)
+
+    def test_el_bloc_esborra_els_trams_que_ningu_no_cus(self):
+        a = self._declara(self.punts[3], self.punts[33]).data['id']
+        b = self._declara(self.punts[40], self.punts[60]).data['id']
+
+        resp = self._esborra_bloc([a, b])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [a, b])
+        self.assertEqual(resp.data['retinguts'], [])
+        self.assertFalse(PatternSegment.objects.filter(pk__in=[a, b]).exists())
+
+    def test_un_tram_retingut_no_atura_lesborrat_dels_altres(self):
+        """El cor de T3: qui n'ha demanat tres no ha demanat «tot o res», n'ha demanat tres.
+
+        Si el bloc fos una transacció sola, una sola costura faria caure la feina sencera i
+        la pantalla no sabria dir QUÈ ha quedat viu. L'atomicitat és per ítem, i el que es
+        queda es diu id per id.
+        """
+        lliure = self._declara(self.punts[3], self.punts[33]).data['id']
+        cosit = self._declara(self.punts[40], self.punts[60]).data['id']
+        rel = SewRelation.objects.create(model=self.model, tipus='casat')
+        rel.segments_a.add(cosit)
+        rel.segments_b.add(self.tram_back)
+
+        resp = self._esborra_bloc([lliure, cosit])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [lliure])
+        self.assertEqual(
+            resp.data['retinguts'],
+            [{'id': cosit, 'motiu': 'en_us', 'sew_relations': [rel.id]}],
+        )
+        self.assertFalse(PatternSegment.objects.filter(pk=lliure).exists())
+        self.assertTrue(PatternSegment.objects.filter(pk=cosit).exists())
+
+    def test_un_id_que_no_existeix_no_peta_el_bloc(self):
+        """Mai 500: un id fantasma és una resposta de l'informe, no una avaria."""
+        a = self._declara(self.punts[3], self.punts[33]).data['id']
+
+        resp = self._esborra_bloc([a, 999999])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [a])
+        self.assertEqual(resp.data['retinguts'], [{'id': 999999, 'motiu': 'no_trobat'}])
+
+    def test_un_bloc_sense_ids_es_400(self):
+        resp = self._esborra_bloc([])
+
+        self.assertEqual(resp.status_code, 400)
 
     def test_la_costura_veu_el_solapament_al_seu_detall(self):
         """La validació de cobertura viatja al detall de la costura: dues costures que
@@ -2844,6 +3251,64 @@ class PincaAPITest(PatternsAPITestBase):
         self.assertEqual(estat['descomptes_b'], [])
         self.assertGreater(estat['longitud_a_cm'], 0)
 
+    # ── ESBORRAT EN BLOC del camí amb més risc (QA-TALLER E · T8) ───────────
+
+    def _esborra_bloc_sew(self, ids):
+        request = self.factory.post(
+            '/api/v1/patterns/sew-relations/bulk-delete/', {'ids': ids}, format='json')
+        force_authenticate(request, user=self.user)
+        return SewRelationViewSet.as_view({'post': 'bulk_delete'})(request)
+
+    def test_el_bloc_sen_emporta_la_pinca_i_els_seus_dos_costats(self):
+        """El camí amb més risc: la cascada de la pinça, dins d'un bloc.
+
+        Els costats d'una pinça no existeixen sense ella. Si el bloc els deixés enrere, el
+        patró s'ompliria de trams declarats que ningú no cus, amb nom de pinça i sense pinça
+        —i continuarien sortint a la llista del que es pot cosir.
+        """
+        self._marca_pinca()
+        rel = SewRelation.objects.get(tipus=SewRelation.TIPUS_PINCA)
+        costats = [c.id for c in list(rel.segments_a.all()) + list(rel.segments_b.all())]
+        self.assertEqual(len(costats), 2)
+
+        resp = self._esborra_bloc_sew([rel.id])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [rel.id])
+        self.assertFalse(SewRelation.objects.filter(pk=rel.id).exists())
+        self.assertFalse(PatternSegment.objects.filter(pk__in=costats).exists())
+
+    def test_un_costat_de_pinca_que_una_altra_costura_cus_es_queda(self):
+        """El PROTECT val dins del bloc igual que fora: esborrar-lo deixaria coixa una costura
+        que ningú ha tocat. La pinça cau; el costat en ús, no."""
+        self._marca_pinca()
+        rel = SewRelation.objects.get(tipus=SewRelation.TIPUS_PINCA)
+        costats = list(rel.segments_a.all()) + list(rel.segments_b.all())
+        altra = SewRelation.objects.create(model=self.model, tipus='casat')
+        altra.segments_a.add(costats[0])
+
+        resp = self._esborra_bloc_sew([rel.id])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [rel.id])
+        self.assertTrue(PatternSegment.objects.filter(pk=costats[0].id).exists())
+        self.assertFalse(PatternSegment.objects.filter(pk=costats[1].id).exists())
+
+    def test_un_id_que_rebota_al_mig_no_sen_emporta_els_anteriors(self):
+        """Èxit PARCIAL, i informe. El bloc no és «tot o res»: qui n'ha demanat tres no ha
+        demanat que el segon en salvi dos. I mai un 500 —un id fantasma és una resposta."""
+        self._marca_pinca()
+        pinca = SewRelation.objects.get(tipus=SewRelation.TIPUS_PINCA)
+        altra = SewRelation.objects.create(model=self.model, tipus='casat')
+
+        resp = self._esborra_bloc_sew([pinca.id, 999999, altra.id])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [pinca.id, altra.id])
+        self.assertEqual(resp.data['retinguts'], [{'id': 999999, 'motiu': 'no_trobat'}])
+        self.assertFalse(
+            SewRelation.objects.filter(pk__in=[pinca.id, altra.id]).exists())
+
     def test_una_pinca_entre_dues_peces_no_es_una_pinca_de_vora(self):
         """`es_pinca_de_vora` es constata de la geometria, no d'un flag: una 'pinca' amb un
         costat a cada peça és una instrucció de muntatge, i no descompta tela de ningú."""
@@ -2945,6 +3410,112 @@ class PincaAPITest(PatternsAPITestBase):
         self.assertEqual(rel.nom, 'Costura lateral dreta')
 
 
+class AcceptacioToleranciaAPITest(PincaAPITest):
+    """El tècnic accepta un desajust, amb rastre append-only (QA-TALLER H · T2).
+
+    Hereta de PincaAPITest perquè marcar una pinça del TATE ja dona una relació amb desajust
+    (els costats fan 1,33 i 1,01 cm → 3,2 mm → grau vermell), que és el que es pot acceptar.
+    """
+
+    def _accio(self, sew_id, accio, nota=''):
+        req = self.factory.post(
+            '/api/v1/patterns/sew-tolerance-acceptances/',
+            {'sew_relation': sew_id, 'accio': accio, 'nota': nota}, format='json')
+        force_authenticate(req, user=self.user)
+        return SewToleranceAcceptanceViewSet.as_view({'post': 'create'})(req)
+
+    def _estat_sew(self, sew_id):
+        rel = SewRelation.objects.get(pk=sew_id)
+        return SewRelationSerializer(rel).data
+
+    def _pinca_amb_desajust(self):
+        self._marca_pinca()
+        rel = SewRelation.objects.get(tipus=SewRelation.TIPUS_PINCA)
+        self.assertEqual(comprovar_costura(rel)['grau'], 'err',
+                         'la pinça del TATE ha de tenir desajust per poder-se acceptar')
+        return rel
+
+    def test_acceptar_congela_el_desajust_i_el_llindar(self):
+        rel = self._pinca_amb_desajust()
+
+        resp = self._accio(rel.id, 'accepta', nota='el patró és correcte, la pinça tanca bé')
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['accio'], 'accepta')
+        self.assertEqual(resp.data['grau'], 'err')
+        self.assertEqual(resp.data['tipus_relacio'], 'pinca')
+        self.assertEqual(resp.data['mena_tolerancia'], 'pinca')
+        self.assertEqual((resp.data['llindar_verd_mm'], resp.data['llindar_groc_mm']), (1.5, 3.0))
+        self.assertGreater(resp.data['desajust_cm'], 0.3)
+        self.assertEqual(resp.data['sew_relation_snapshot'], rel.id)
+        # La costura ara diu, inline, que està acceptada i per qui.
+        acc = self._estat_sew(rel.id)['acceptacio']
+        self.assertTrue(acc['acceptat'])
+        self.assertEqual(acc['grau'], 'err')
+
+    def test_desacceptar_es_un_esdeveniment_nou_no_un_esborrat(self):
+        rel = self._pinca_amb_desajust()
+        self._accio(rel.id, 'accepta')
+
+        resp = self._accio(rel.id, 'desaccepta', nota='ho reviso millor')
+
+        self.assertEqual(resp.status_code, 201)
+        # Dos esdeveniments a l'històric; l'estat viu és «no acceptat».
+        self.assertEqual(SewToleranceAcceptance.objects.filter(sew_relation=rel).count(), 2)
+        self.assertIsNone(self._estat_sew(rel.id)['acceptacio'])
+
+    def test_el_registre_es_APPEND_ONLY(self):
+        rel = self._pinca_amb_desajust()
+        self._accio(rel.id, 'accepta')
+        ev = SewToleranceAcceptance.objects.filter(sew_relation=rel).first()
+
+        with self.assertRaises(ValueError):
+            ev.nota = 'reescrit'
+            ev.save()
+        with self.assertRaises(ValueError):
+            ev.delete()
+        with self.assertRaises(ValueError):
+            SewToleranceAcceptance.objects.filter(sew_relation=rel).delete()
+
+    def test_no_es_pot_acceptar_una_costura_verda(self):
+        # Una costura casada dins tolerància (grau ok) no té res a acceptar.
+        a = self._tram(self.pf[self.TRAM_INICI], self.pf[self.TRAM_FI], 'A')
+        b = self._tram(self.pf[self.TRAM_INICI], self.pf[self.TRAM_FI], 'B')
+        req = self.factory.post(
+            '/api/v1/patterns/sew-relations/',
+            {'model': self.model.id, 'segments_a': [a.data['id']],
+             'segments_b': [b.data['id']], 'tipus': 'casat', 'diferencial_cm': 0},
+            format='json')
+        force_authenticate(req, user=self.user)
+        sew = SewRelationViewSet.as_view({'post': 'create'})(req)
+        self.assertEqual(comprovar_costura(SewRelation.objects.get(pk=sew.data['id']))['grau'],
+                         'ok')
+
+        resp = self._accio(sew.data['id'], 'accepta')
+
+        self.assertEqual(resp.status_code, 400)
+
+    def test_ni_acceptar_dues_vegades_ni_desacceptar_el_que_no_hi_es(self):
+        rel = self._pinca_amb_desajust()
+
+        self.assertEqual(self._accio(rel.id, 'desaccepta').status_code, 400)  # encara no acceptat
+        self._accio(rel.id, 'accepta')
+        self.assertEqual(self._accio(rel.id, 'accepta').status_code, 400)     # ja acceptat
+
+    def test_lauditoria_es_llegeix_per_model(self):
+        rel = self._pinca_amb_desajust()
+        self._accio(rel.id, 'accepta')
+        self._accio(rel.id, 'desaccepta')
+
+        req = self.factory.get(
+            '/api/v1/patterns/sew-tolerance-acceptances/', {'model': self.model.id})
+        force_authenticate(req, user=self.user)
+        resp = SewToleranceAcceptanceViewSet.as_view({'get': 'list'})(req)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data['results']), 2)   # tot l'històric, transversal per model
+
+
 class GeometriaPortaElsTramsDeclaratsTest(PatternsAPITestBase):
     """La geometria ha de dir, d'un tram, si és una PROPOSTA del motor o una DECLARACIÓ.
 
@@ -2965,10 +3536,18 @@ class GeometriaPortaElsTramsDeclaratsTest(PatternsAPITestBase):
         resp = PatternFileViewSet.as_view({'get': 'geometry'})(request, pk=self.fp.id)
         return next(p for p in resp.data['pieces'] if p['nom_block'] == 'TATE_FRONT')
 
-    def test_els_trams_del_motor_surten_com_a_auto_i_sense_nom(self):
-        for seg in self._geometria()['segments']:
-            self.assertEqual(seg['origen'], PatternSegment.ORIGEN_AUTO)
+    def test_els_trams_del_motor_surten_derivats_i_sense_nom(self):
+        """El motor en fa DUES lectures (`auto` i `natural`) i cap no és una decisió de
+        ningú: derivat vol dir, exactament, que no l'ha batejat cap persona."""
+        derivats = {PatternSegment.ORIGEN_AUTO, PatternSegment.ORIGEN_NATURAL}
+        trams = self._geometria()['segments']
+        self.assertTrue(trams)
+        for seg in trams:
+            self.assertIn(seg['origen'], derivats)
             self.assertIsNone(seg['nom'])
+        # I les dues lectures hi són: si una deixés de generar-se, el bucle de sobre
+        # seguiria passant sense dir res.
+        self.assertEqual({s['origen'] for s in trams}, derivats)
 
     def test_un_tram_declarat_surt_amb_el_seu_origen_i_el_seu_nom(self):
         punts = list(self.front.points.filter(mena='vertex', boundary_index=0)
@@ -3191,6 +3770,40 @@ class CasenPiquetsTest(unittest.TestCase):
         self.assertGreater(desv, TOL_PIQUET_S)
 
 
+class GraduacioToleranciaTest(unittest.TestCase):
+    """El semàfor del veredicte (QA-TALLER H · T1). Presentació, no motor.
+
+    Els llindars són criteri d'ofici (afinable); el test fixa el COMPORTAMENT als límits, no els
+    valors —si la Montse els mou, s'actualitza aquí a posta, no és una regressió muda."""
+
+    def test_pinca_desigual_de_3_1_mm_es_vermella(self):
+        # El cas del banc: la pinça del TATE té els costats a 3,1 mm → passa el groc (3,0).
+        g = graduar('pinca', 0.31)
+        self.assertEqual(g['grau'], 'err')
+        self.assertEqual((g['verd_mm'], g['groc_mm']), (1.5, 3.0))
+
+    def test_els_limits_de_cada_banda(self):
+        # Verd inclou el límit; groc inclou el seu; per sobre, vermell.
+        self.assertEqual(graduar('pinca', 0.15)['grau'], 'ok')     # 1,5 mm just
+        self.assertEqual(graduar('pinca', 0.16)['grau'], 'warn')   # 1,6 mm
+        self.assertEqual(graduar('pinca', 0.30)['grau'], 'warn')   # 3,0 mm just
+        self.assertEqual(graduar('pinca', 0.31)['grau'], 'err')
+        self.assertEqual(graduar('casat', 0.20)['grau'], 'ok')     # 2,0 mm just
+        self.assertEqual(graduar('casat', 0.41)['grau'], 'err')    # 4,1 mm
+
+    def test_frunzit_no_te_gradient(self):
+        # El diferencial del frunzit és intencional: no es gradua.
+        g = graduar('frunzit', 1.5)
+        self.assertEqual(g['grau'], 'na')
+        self.assertIsNone(g['verd_mm'])
+
+    def test_un_tipus_desconegut_cau_a_muntatge(self):
+        # Val més graduar de menys que inventar-se una exigència no validada.
+        g = graduar('mena-nova', 0.25)
+        self.assertEqual(g['mena'], 'muntatge')
+        self.assertEqual(g['grau'], 'ok')      # 2,5 mm ≤ 3,0 verd de muntatge
+
+
 class SenyalLongitudTest(unittest.TestCase):
     """Casat, frunzit, o ni una cosa ni l'altra. I l'ORDRE en què es pregunta."""
 
@@ -3400,8 +4013,12 @@ class PropostesAPITest(PatternsAPITestBase):
         self.assertEqual(lateral['tipus'], 'casat')
         self.assertGreater(lateral['confianca'], 0.7)
 
-    def test_cada_proposta_porta_el_DESGLOS_dels_tres_senyals(self):
-        """Una confiança sola («87%») no es pot discutir. El desglòs, sí."""
+    def test_cada_proposta_porta_el_DESGLOS_dels_senyals(self):
+        """Una confiança sola («87%») no es pot discutir. El desglòs, sí.
+
+        Els tres de sempre hi són SEMPRE. El costum del taller (T4) només si diu alguna cosa:
+        un senyal de zero punts i sense frase no es podria discutir, que és per al que serveix
+        el desglòs."""
         p = self._propostes().data['propostes'][0]
 
         self.assertEqual({s['mena'] for s in p['senyals']}, {'piquets', 'longitud', 'noms'})
@@ -3448,14 +4065,22 @@ class PropostesAPITest(PatternsAPITestBase):
         self.assertEqual([s.nom for s in costats], ['Tram A', 'Tram B'])
 
     def test_confirmar_PROMOU_el_tram_i_no_toca_la_hipotesi_del_CAD(self):
-        """El tram derivat es queda on és: és la lectura del CAD, no una decisió de ningú."""
-        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
-        auto_a = p['a']['segment_id']
+        """El tram derivat es queda on és: és la lectura del CAD, no una decisió de ningú.
 
-        self._confirma(p)
+        A2 proposa sobre els NATURALS (T3b), així que la hipòtesi que no s'ha de tocar és
+        aquella; el que ha de néixer és un tram DECLARAT a part."""
+        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
+        derivat_a = p['a']['segment_id']
+        self.assertEqual(
+            PatternSegment.objects.get(pk=derivat_a).origen,
+            PatternSegment.ORIGEN_NATURAL)
+
+        resp = self._confirma(p)
+        self.assertEqual(resp.status_code, 201, resp.data)
 
         self.assertEqual(
-            PatternSegment.objects.get(pk=auto_a).origen, PatternSegment.ORIGEN_AUTO)
+            PatternSegment.objects.get(pk=derivat_a).origen,
+            PatternSegment.ORIGEN_NATURAL)
 
     def test_confirmar_una_proposta_RECALCULA_les_altres(self):
         """La cobertura canvia: els trams que la costura nova reclama surten de la subhasta."""
@@ -3531,6 +4156,72 @@ class PropostesAPITest(PatternsAPITestBase):
 
         claus = {tuple(x['clau']) for x in self._propostes().data['propostes']}
         self.assertNotIn(tuple(p['clau']), claus)
+
+    # ── T3: llegir i DESFER els rebuigs (QA-TALLER F) ───────────────────────
+
+    def _llista_rebuigs(self):
+        request = self.factory.get(
+            '/api/v1/patterns/sew-proposal-rejections/', {'model': self.model.id})
+        force_authenticate(request, user=self.user)
+        return SewProposalRejectionViewSet.as_view({'get': 'list'})(request)
+
+    def _desfa_rebuig(self, rid):
+        request = self.factory.delete(f'/api/v1/patterns/sew-proposal-rejections/{rid}/')
+        force_authenticate(request, user=self.user)
+        return SewProposalRejectionViewSet.as_view({'delete': 'destroy'})(request, pk=rid)
+
+    def _claus(self):
+        return {tuple(x['clau']) for x in self._propostes().data['propostes']}
+
+    def test_el_rebuig_es_pot_llegir_amb_la_cara_que_tenia_a_la_pantalla(self):
+        """Els ids dels trams no identifiquen res per a ningú: el que la persona va veure quan
+        va dir que no era «TATE_BACK · 25,3 cm ⛓ TATE_FRONT · 25,2 cm»."""
+        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
+        self._rebutja(p, motiu='no es cusen')
+
+        resp = self._llista_rebuigs()
+
+        self.assertEqual(resp.status_code, 200)
+        fila = resp.data['results'][0]
+        self.assertEqual({fila['peca_a'], fila['peca_b']}, {'TATE_BACK', 'TATE_FRONT'})
+        self.assertEqual(fila['motiu'], 'no es cusen')
+        for k in ('longitud_a_cm', 'longitud_b_cm'):
+            self.assertGreater(fila[k], 0, f'{k} ha de portar la xifra que es va veure')
+
+    def test_desfer_un_rebuig_torna_a_deixar_proposar_la_parella(self):
+        """Persistent no vol dir irreversible. Sense el DELETE, un «no» premut per error amaga
+        aquella parella per sempre i l'única sortida seria tornar a pujar el patró.
+
+        La parella s'identifica per la seva CLAU i no per les peces que uneix: el TATE proposa
+        més d'una costura entre el davanter i l'esquena, i buscar-la pel nom de les peces
+        trobaria una germana i el test passaria sense provar res.
+        """
+        p = self._parella(self._propostes().data['propostes'], 'TATE_BACK', 'TATE_FRONT')
+        clau = tuple(p['clau'])
+        self._rebutja(p)
+        self.assertNotIn(clau, self._claus(),
+                         'el rebuig no ha amagat la parella: el test no prova res')
+        rid = self._llista_rebuigs().data['results'][0]['id']
+
+        resp = self._desfa_rebuig(rid)
+
+        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(SewProposalRejection.objects.count(), 0)
+        self.assertIn(clau, self._claus(),
+                      'desfet el rebuig, el motor ha de tornar a poder proposar la parella')
+
+    def test_els_rebuigs_dun_altre_model_no_es_llisten(self):
+        p = self._propostes().data['propostes'][0]
+        self._rebutja(p)
+        altre = Model.objects.create(
+            codi_intern='QA-PAT-0002', codi_tenant='TST', any=2026, temporada='SS', sequencial=2)
+
+        request = self.factory.get(
+            '/api/v1/patterns/sew-proposal-rejections/', {'model': altre.id})
+        force_authenticate(request, user=self.user)
+        resp = SewProposalRejectionViewSet.as_view({'get': 'list'})(request)
+
+        self.assertEqual(resp.data['results'], [])
 
 
 # ═════════════════════════════════════════════════════════════════════════════

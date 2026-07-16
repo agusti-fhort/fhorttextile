@@ -10,7 +10,7 @@ de ser una mesura del patró per ser una xifra que algú hi ha escrit a sobre.
 """
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import serializers, status, viewsets
+from rest_framework import exceptions, mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -21,6 +21,7 @@ from fhort.pom.models import POMMaster
 from .adapters import DjangoGeometryStore
 from .engine.measure import MeasureError, resoldre
 from .engine.dart_detection import clau_pinca
+from .preferences import registra
 from .engine.seam_matching import clau_parella
 from .engine.segments import (
     SegmentError, longitud_tram, longitud_vora, tram_entre_punts,
@@ -31,9 +32,10 @@ from .engine.sew import (
 from .dart_proposals import candidats_del_patro
 from .models import (
     DartProposalRejection, PatternFile, PatternPiece, PatternPOM, PatternPoint, PatternSegment,
-    SewProposalRejection, SewRelation,
+    SewProposalRejection, SewRelation, SewToleranceAcceptance,
 )
 from .seam_proposals import propostes_del_model
+from .tolerance import graduar
 
 
 class PatternPOMSerializer(serializers.ModelSerializer):
@@ -80,26 +82,53 @@ class PatternPOMSerializer(serializers.ModelSerializer):
         return valor
 
 
+def acceptacio_viva(rel: SewRelation) -> SewToleranceAcceptance | None:
+    """L'ÚLTIM esdeveniment d'acceptació d'una costura, si n'hi ha cap.
+
+    L'estat viu és l'últim esdeveniment per data: si és `accepta`, el desajust està acceptat; si
+    és `desaccepta` (o no n'hi ha cap), no ho està. L'històric anterior es conserva sencer —això
+    només en llegeix la punta.
+    """
+    return rel.tolerance_acceptances.order_by('-data', '-id').first()
+
+
 class SewRelationSerializer(serializers.ModelSerializer):
     estat = serializers.SerializerMethodField()
     #: És una pinça de vora? Ho decideix la geometria (v. `es_pinca_de_vora`), i el client ho
     #: necessita per pintar-la amb el seu glif i llistar-la com el que és — no com una costura
     #: qualsevol que casualment es diu 'pinca'.
     es_pinca = serializers.SerializerMethodField()
+    #: L'estat d'acceptació VIU (H/T2): si el desajust d'aquesta costura s'ha acceptat, i per qui.
+    #: Va inline amb la costura perquè la fila el pugui pintar sense una crida per costura.
+    acceptacio = serializers.SerializerMethodField()
 
     class Meta:
         model = SewRelation
         fields = [
             'id', 'model', 'segments_a', 'segments_b', 'tipus', 'diferencial_cm',
-            'nom', 'notes', 'estat', 'es_pinca', 'data_creacio',
+            'nom', 'notes', 'estat', 'es_pinca', 'acceptacio', 'data_creacio',
         ]
-        read_only_fields = ['estat', 'es_pinca', 'data_creacio']
+        read_only_fields = ['estat', 'es_pinca', 'acceptacio', 'data_creacio']
 
     def get_estat(self, obj):
         return comprovar_costura(obj)
 
     def get_es_pinca(self, obj):
         return es_pinca_de_vora(obj)
+
+    def get_acceptacio(self, obj):
+        ev = acceptacio_viva(obj)
+        if ev is None or ev.accio != SewToleranceAcceptance.ACCIO_ACCEPTA:
+            return None
+        return {
+            'acceptat': True,
+            'per': str(ev.decidit_per) if ev.decidit_per else None,
+            'data': ev.data.isoformat(),
+            'desajust_cm': round(ev.desajust_cm, 2),
+            'grau': ev.grau,
+            'mena': ev.mena_tolerancia,
+            'nota': ev.nota,
+        }
 
 
 def _mesurar(pom: PatternPOM) -> float | None:
@@ -234,6 +263,19 @@ def comprovar_costura(rel: SewRelation) -> dict:
         'desviament_cm': round(check.desviament_cm, 2),
         'missatge': check.missatge,
         'cobertura': _cobertura_de(rel, boundaries),
+        # El SEMÀFOR (QA-TALLER H · T1): verd/groc/vermell segons el tipus i el desajust. És
+        # PRESENTACIÓ —el motor ja ha dit la xifra—, i el llindar aplicat viatja amb ell perquè
+        # la UI el pugui dir i l'acceptació el pugui congelar. Substitueix el dins/fora sec.
+        **_graduacio(rel.tipus, check.desviament_cm),
+    }
+
+
+def _graduacio(tipus: str, desviament_cm: float) -> dict:
+    """El grau i el llindar aplicat, en el format que la UI i l'acceptació esperen."""
+    g = graduar(tipus, desviament_cm)
+    return {
+        'grau': g['grau'],
+        'llindar': {'mena': g['mena'], 'verd_mm': g['verd_mm'], 'groc_mm': g['groc_mm']},
     }
 
 
@@ -378,7 +420,102 @@ def _cobertura_de(rel: SewRelation, boundaries: _BoundaryCache) -> list[dict]:
     return avisos
 
 
-class PatternPOMViewSet(viewsets.ModelViewSet):
+def costures_que_retenen(seg: PatternSegment) -> list[int]:
+    """Les costures que cusen aquest tram. Si n'hi ha cap, el tram no s'esborra.
+
+    PROTECT a mà: `segments_a`/`segments_b` són M2M i un `on_delete` no hi arriba. Sense
+    aquesta porta, esborrar un tram buidaria un costat d'una costura en silenci i la costura
+    passaria a mesurar de menys sense que ningú n'hagués tocat res.
+
+    Viu aquí, i no dins de `destroy`, perquè l'esborrat en BLOC ha de fer exactament la
+    mateixa pregunta: una segona còpia de la llei del PROTECT és una llei que algun dia
+    divergirà, i el dia que divergeixi ho farà en silenci.
+    """
+    return sorted(
+        {r.id for r in seg.sew_relations_a.all()} | {r.id for r in seg.sew_relations_b.all()}
+    )
+
+
+def esborra_costura(rel: SewRelation) -> None:
+    """Esborrar una costura. Si és una PINÇA, se'n va amb els seus dos costats.
+
+    Els costats d'una pinça no existeixen sense ella: SÓN la pinça. Deixar-los enrere ompliria
+    el patró de trams declarats que ningú no cus i que ningú no sabria d'on venen.
+
+    Un costat que, contra tot pronòstic, el cusi alguna altra costura, es queda: el PROTECT
+    dels trams val aquí igual que a `PatternSegmentViewSet`, i esborrar-lo deixaria coixa una
+    costura que ningú ha tocat.
+    """
+    if not es_pinca_de_vora(rel):
+        rel.delete()
+        return
+
+    costats = list(rel.segments_a.all()) + list(rel.segments_b.all())
+    with transaction.atomic():
+        rel.delete()
+        for seg in costats:
+            if not costures_que_retenen(seg):
+                seg.delete()
+
+
+class BulkDeleteMixin:
+    """Esborrar en bloc: `{ids: [...]}` → què ha caigut i què s'ha quedat, i per què.
+
+    **Un bloc no és una transacció sola.** Si ho fos, un sol tram retingut per una costura
+    faria caure l'esborrat dels altres divuit, i qui ha demanat divuit no ha demanat «tot o
+    res»: ha demanat divuit. Per això l'atomicitat és PER ÍTEM —una pinça i els seus costats
+    cauen junts o no cau cap— i el bloc n'aixeca un informe.
+
+    I per això no retorna mai 500 per una dependència: que un tram el cusi una costura no és
+    una avaria, és la resposta. Un 500 obligaria la pantalla a endevinar què ha passat i què
+    ha quedat viu; l'informe li ho diu id per id.
+    """
+
+    def _esborra_un(self, obj) -> dict | None:
+        """Esborra `obj`. Retorna None si ha caigut, o el motiu pel qual s'ha quedat."""
+        raise NotImplementedError
+
+    @action(detail=False, methods=['post'], url_path='bulk-delete')
+    def bulk_delete(self, request):
+        ids = request.data.get('ids')
+        if not isinstance(ids, list) or not ids:
+            raise serializers.ValidationError(
+                {'ids': 'Cal una llista d\'ids, i no pot ser buida.'})
+        try:
+            ids = [int(i) for i in ids]
+        except (TypeError, ValueError):
+            raise serializers.ValidationError({'ids': 'Els ids han de ser enters.'})
+
+        # El MATEIX camí que `get_object()`: `filter_queryset()` sobre el queryset del ViewSet
+        # i `check_object_permissions()` per ítem. No n'hi ha prou amb `get_queryset()`: avui
+        # dona el mateix resultat, però el dia que algú posi una permission_class amb
+        # `has_object_permission` de debò, `destroy` quedaria protegit i el bloc no —i ho faria
+        # en silenci, que és exactament el que aquest endpoint existeix per evitar. El que no
+        # passa el filtre és «no trobat»: un id d'un altre patró no s'esborra i no es confirma.
+        objectes = {o.id: o for o in self.filter_queryset(self.get_queryset())
+                    .filter(id__in=set(ids))}
+
+        esborrats, retinguts = [], []
+        for i in dict.fromkeys(ids):          # sense repetits, i en l'ordre demanat
+            obj = objectes.get(i)
+            if obj is None:
+                retinguts.append({'id': i, 'motiu': 'no_trobat'})
+                continue
+            try:
+                self.check_object_permissions(request, obj)
+            except (exceptions.NotFound, exceptions.PermissionDenied):
+                retinguts.append({'id': i, 'motiu': 'no_trobat'})
+                continue
+            motiu = self._esborra_un(obj)
+            if motiu is None:
+                esborrats.append(i)
+            else:
+                retinguts.append({'id': i, **motiu})
+
+        return Response({'esborrats': esborrats, 'retinguts': retinguts})
+
+
+class PatternPOMViewSet(BulkDeleteMixin, viewsets.ModelViewSet):
     """POMs ancorats a la geometria."""
 
     queryset = PatternPOM.objects.select_related(
@@ -414,8 +551,13 @@ class PatternPOMViewSet(viewsets.ModelViewSet):
             )
         return resposta
 
+    def _esborra_un(self, pom: PatternPOM) -> dict | None:
+        """Un POM ancorat no reté res: ningú no el referencia. Sempre cau."""
+        pom.delete()
+        return None
 
-class SewRelationViewSet(viewsets.ModelViewSet):
+
+class SewRelationViewSet(BulkDeleteMixin, viewsets.ModelViewSet):
     """Costures declarades sobre el muntatge d'un model."""
 
     queryset = SewRelation.objects.prefetch_related(
@@ -429,27 +571,14 @@ class SewRelationViewSet(viewsets.ModelViewSet):
         serializer.save(creat_per=getattr(self.request.user, 'profile', None))
 
     def destroy(self, request, *args, **kwargs):
-        """Esborrar una costura. Si és una PINÇA, se'n va amb els seus dos costats.
-
-        Els costats d'una pinça no existeixen sense ella: SÓN la pinça. Deixar-los enrere
-        ompliria el patró de trams declarats que ningú no cus i que ningú no sabria d'on
-        venen —i que continuarien sortint a la llista del que es pot cosir.
-
-        Un costat que, contra tot pronòstic, el cusi alguna altra costura, es queda: el
-        PROTECT dels trams val aquí igual que a `PatternSegmentViewSet.destroy`, i esborrar-lo
-        deixaria coixa una costura que ningú ha tocat.
-        """
-        rel = self.get_object()
-        if not es_pinca_de_vora(rel):
-            return super().destroy(request, *args, **kwargs)
-
-        costats = list(rel.segments_a.all()) + list(rel.segments_b.all())
-        with transaction.atomic():
-            rel.delete()
-            for seg in costats:
-                if not (seg.sew_relations_a.exists() or seg.sew_relations_b.exists()):
-                    seg.delete()
+        """Esborrar una costura, i —si és pinça— els seus costats. La llei és `esborra_costura`."""
+        esborra_costura(self.get_object())
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _esborra_un(self, rel: SewRelation) -> dict | None:
+        """Una costura no la reté ningú: cau, i s'emporta els costats que només eren seus."""
+        esborra_costura(rel)
+        return None
 
     @action(detail=False, methods=['post'], url_path='pinca')
     def pinca(self, request):
@@ -598,6 +727,12 @@ class SewRelationViewSet(viewsets.ModelViewSet):
                 )
                 for seg, nom in ((seg_a, nom_a), (seg_b, nom_b))
             ]
+            # El taller aprèn del «sí»: confirmar una proposta és el judici humà sobre la
+            # lectura del motor, i és l'únic moment en què n'hi ha un. Només ACUMULA senyal
+            # —no canvia res del que passa aquí— i va dins la mateixa transacció perquè un
+            # aprenentatge d'una costura que després no existeix seria un record fals.
+            for declarat in declarats:
+                registra(declarat, getattr(request.user, 'profile', None))
             rel = SewRelation.objects.create(
                 model_id=fp.model_id, tipus=tipus,
                 diferencial_cm=float(request.data.get('diferencial_cm') or 0),
@@ -689,6 +824,11 @@ class SewRelationViewSet(viewsets.ModelViewSet):
         Han d'existir, han de ser d'aquest patró i han de ser DERIVATS: una proposta és sempre
         sobre la hipòtesi del CAD. Si arribés un tram declarat, algú estaria fent passar per
         proposta una cosa que ja s'havia decidit.
+
+        DERIVAT vol dir `auto` **o** `natural`: totes dues són lectures del motor, i cap de les
+        dues és una decisió de ningú. Això es comprovava amb `== auto` quan «derivat» i «auto»
+        eren sinònims; des que A2 proposa sobre naturals (QA-TALLER-B · T3b) ja no ho són, i la
+        condició que sempre havia manat és la que la frase de sobre diu: **no declarat**.
         """
         ids = [data.get('segment_a'), data.get('segment_b')]
         if not all(ids):
@@ -706,11 +846,156 @@ class SewRelationViewSet(viewsets.ModelViewSet):
             if seg is None:
                 raise serializers.ValidationError(
                     {camp: 'Aquest tram no existeix en aquest patró.'})
-            if seg.origen != PatternSegment.ORIGEN_AUTO:
+            if seg.origen == PatternSegment.ORIGEN_DECLARAT:
                 raise serializers.ValidationError(
                     {camp: 'Això no és una proposta: aquest tram ja és un tram declarat.'})
             trams.append(seg)
         return trams[0], trams[1]
+
+
+class SewProposalRejectionSerializer(serializers.ModelSerializer):
+    """Un rebuig, dit de manera que una persona pugui reconèixer QUÈ va dir que no.
+
+    Els ids dels trams no identifiquen res per a ningú: el que la pantalla ensenyava quan es va
+    prémer «no» era «TATE_BACK · 25,3 cm ⛓ TATE_FRONT · 25,2 cm». Per tornar-ho a dir igual
+    calen la peça i la longitud de cada costat — i van en XIFRA, no en frase, perquè qui té els
+    tres idiomes és la UI.
+    """
+
+    peca_a = serializers.CharField(source='segment_a.piece.nom_block', read_only=True)
+    peca_b = serializers.CharField(source='segment_b.piece.nom_block', read_only=True)
+    longitud_a_cm = serializers.SerializerMethodField()
+    longitud_b_cm = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SewProposalRejection
+        fields = [
+            'id', 'model', 'segment_a', 'segment_b', 'peca_a', 'peca_b',
+            'longitud_a_cm', 'longitud_b_cm', 'motiu', 'data',
+        ]
+        read_only_fields = fields
+
+    def _llarg(self, seg):
+        boundary = self.context.setdefault('_vores', _BoundaryCache()).get(seg.piece, seg.vora)
+        if boundary is None:
+            return None
+        return round(longitud_tram(boundary, seg.t_inici, seg.t_fi) / 10.0, 2)
+
+    def get_longitud_a_cm(self, obj):
+        return self._llarg(obj.segment_a)
+
+    def get_longitud_b_cm(self, obj):
+        return self._llarg(obj.segment_b)
+
+
+class SewProposalRejectionViewSet(mixins.ListModelMixin, mixins.DestroyModelMixin,
+                                  viewsets.GenericViewSet):
+    """Els «no» que algú ha dit al motor: llegir-los i DESFER-LOS.
+
+    Només llistar i esborrar. Crear-ne un és `sew-relations/rebutjar-proposta/`, que és on viu
+    la llei del rebuig (clau canònica, idempotència): una segona porta d'entrada seria un segon
+    lloc on aquella llei podria divergir.
+
+    **Desfer ha d'existir.** Un rebuig és persistent a posta —si no ho fos no seria un rebuig—,
+    però persistent no vol dir irreversible: sense el DELETE, un «no» premut per error amaga
+    aquella parella per sempre i l'única sortida seria tornar a pujar el patró. Esborrar el
+    rebuig no torna a proposar res per ell mateix; només treu la mordassa, i el motor tornarà a
+    dir el que vegi la propera vegada que se li demani.
+    """
+
+    queryset = SewProposalRejection.objects.select_related(
+        'segment_a__piece', 'segment_b__piece').all()
+    serializer_class = SewProposalRejectionSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['model']
+
+
+class SewToleranceAcceptanceSerializer(serializers.ModelSerializer):
+    """El registre d'auditoria, per llegir-lo. Read-only: crear és pel `create` del ViewSet, que
+    congela el snapshot; deixar escriure els camps del snapshot faria que algú pogués desar un
+    desajust que no és el que hi havia."""
+
+    decidit_per_nom = serializers.CharField(source='decidit_per', read_only=True)
+
+    class Meta:
+        model = SewToleranceAcceptance
+        fields = [
+            'id', 'model', 'sew_relation', 'sew_relation_snapshot', 'accio',
+            'tipus_relacio', 'mena_tolerancia', 'desajust_cm', 'grau',
+            'llindar_verd_mm', 'llindar_groc_mm', 'nota', 'decidit_per_nom', 'data',
+        ]
+        read_only_fields = fields
+
+
+class SewToleranceAcceptanceViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Acceptar/desacceptar desajustos, i llegir-ne l'històric (H/T2).
+
+    **Primera baula del mòdul d'auditoria.** APPEND-ONLY: no hi ha update ni destroy —desacceptar
+    és crear un esdeveniment `desaccepta`, no esborrar l'`accepta`. La llista es filtra per `model`
+    (lectura transversal de l'auditoria) o per `sew_relation` (l'històric d'una costura).
+
+    Crear NO passa pel serializer d'escriptura: el snapshot (desajust, grau, llindar) es CONGELA
+    del `comprovar_costura` d'ara, no s'accepta del client —un client que digués el desajust
+    podria acceptar un que no és el que hi ha.
+    """
+
+    queryset = SewToleranceAcceptance.objects.select_related('decidit_per').all()
+    serializer_class = SewToleranceAcceptanceSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['model', 'sew_relation']
+
+    def create(self, request, *args, **kwargs):
+        accio = request.data.get('accio')
+        if accio not in dict(SewToleranceAcceptance.ACCIO_CHOICES):
+            raise serializers.ValidationError(
+                {'accio': f"Ha de ser un de {list(dict(SewToleranceAcceptance.ACCIO_CHOICES))}."})
+
+        rel = self._costura(request.data.get('sew_relation'))
+        estat = comprovar_costura(rel)
+        viu = acceptacio_viva(rel)
+        acceptada_ara = viu is not None and viu.accio == SewToleranceAcceptance.ACCIO_ACCEPTA
+
+        if accio == SewToleranceAcceptance.ACCIO_ACCEPTA:
+            # Acceptar un desajust que no existeix no vol dir res: verd i frunzit no s'accepten.
+            if estat['grau'] not in ('warn', 'err'):
+                raise serializers.ValidationError(
+                    {'accio': 'Aquesta costura no té cap desajust a acceptar (és verda o no es '
+                              'gradua).'})
+            if acceptada_ara:
+                raise serializers.ValidationError(
+                    {'accio': 'Aquest desajust ja està acceptat.'})
+        else:  # desaccepta
+            if not acceptada_ara:
+                raise serializers.ValidationError(
+                    {'accio': 'Aquest desajust no està acceptat: no hi ha res a desacceptar.'})
+
+        llindar = estat.get('llindar') or {}
+        ev = SewToleranceAcceptance.objects.create(
+            model=rel.model,
+            sew_relation=rel,
+            sew_relation_snapshot=rel.id,
+            accio=accio,
+            tipus_relacio=rel.tipus,
+            mena_tolerancia=llindar.get('mena') or '',
+            desajust_cm=estat['desviament_cm'],
+            grau=estat['grau'],
+            llindar_verd_mm=llindar.get('verd_mm'),
+            llindar_groc_mm=llindar.get('groc_mm'),
+            nota=(request.data.get('nota') or '').strip(),
+            decidit_per=getattr(request.user, 'profile', None),
+        )
+        dades = self.get_serializer(ev).data
+        return Response(dades, status=status.HTTP_201_CREATED)
+
+    def _costura(self, sew_id) -> SewRelation:
+        if not sew_id:
+            raise serializers.ValidationError({'sew_relation': 'Cal la costura a acceptar.'})
+        try:
+            return SewRelation.objects.get(pk=sew_id)
+        except SewRelation.DoesNotExist:
+            raise serializers.ValidationError({'sew_relation': 'Aquesta costura no existeix.'})
 
 
 class PatternSegmentSerializer(serializers.ModelSerializer):
@@ -748,7 +1033,7 @@ class PatternSegmentSerializer(serializers.ModelSerializer):
         return obj.sew_relations_a.exists() or obj.sew_relations_b.exists()
 
 
-class PatternSegmentViewSet(viewsets.ModelViewSet):
+class PatternSegmentViewSet(BulkDeleteMixin, viewsets.ModelViewSet):
     """Trams d'una peça: els derivats (gir→gir) i els DECLARATS pel patronista.
 
     **Primer declarar, després cosir.** La segmentació automàtica és una proposta del CAD;
@@ -792,6 +1077,10 @@ class PatternSegmentViewSet(viewsets.ModelViewSet):
             origen=PatternSegment.ORIGEN_DECLARAT,
             nom=(request.data.get('nom') or '').strip() or None,
         )
+        # Declarar un tram a mà també és un judici sobre la lectura del motor: confirma un
+        # natural, l'allarga o l'escurça. S'acumula igual que quan es confirma una proposta
+        # —el gest és un altre, el judici és el mateix— i no canvia res del que passa aquí.
+        registra(seg, getattr(request.user, 'profile', None))
         dades = self.get_serializer(seg).data
         return Response(dades, status=status.HTTP_201_CREATED)
 
@@ -843,16 +1132,9 @@ class PatternSegmentViewSet(viewsets.ModelViewSet):
         return pa, pb
 
     def destroy(self, request, *args, **kwargs):
-        """Esborrar un tram, si ningú no el cus.
-
-        PROTECT a mà: `segments_a`/`segments_b` són M2M i un `on_delete` no hi arriba. Sense
-        aquesta porta, esborrar un tram buidaria un costat d'una costura en silenci i la
-        costura passaria a mesurar de menys sense que ningú n'hagués tocat res.
-        """
+        """Esborrar un tram, si ningú no el cus. La porta és `costures_que_retenen`."""
         seg = self.get_object()
-        sews = sorted(
-            {r.id for r in seg.sew_relations_a.all()} | {r.id for r in seg.sew_relations_b.all()}
-        )
+        sews = costures_que_retenen(seg)
         if sews:
             return Response(
                 {
@@ -866,3 +1148,16 @@ class PatternSegmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
         return super().destroy(request, *args, **kwargs)
+
+    def _esborra_un(self, seg: PatternSegment) -> dict | None:
+        """Un tram EN ÚS es queda, i l'informe diu quines costures el retenen.
+
+        És la mateixa porta que el `destroy` (`costures_que_retenen`), dita en informe en
+        comptes de 409: en bloc, que un tram es quedi no és l'excepció que atura la feina, és
+        una de les respostes possibles.
+        """
+        sews = costures_que_retenen(seg)
+        if sews:
+            return {'motiu': 'en_us', 'sew_relations': sews}
+        seg.delete()
+        return None

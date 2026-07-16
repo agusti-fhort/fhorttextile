@@ -3,6 +3,10 @@
 # TenantContacte al schema public). En crear un tenant, django-tenants
 # PROVISIONA un schema nou (auto_create_schema); MAI s'entra al schema d'un
 # tenant existent per llegir-ne dades.
+import subprocess
+import sys
+
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -25,6 +29,24 @@ from .views import HasBackofficeRole
 
 # Accions que muten el registre → només ADMIN.
 ADMIN_ACTIONS = {'create', 'partial_update', 'update_estat', 'contactes', 'contacte_detail'}
+
+
+def _llanca_sembra_free(client):
+    """F3 P-FREE-SEED (B3): dispara la sembra automàtica d'un tenant Free.
+
+    Es crida NOMÉS quan `client.plan` és el tier Free, DESPRÉS de crear el Domain
+    (el schema ja existeix i el host resol). Llança `provision_free_tenant` en un
+    subprocés DETACHED (start_new_session) i torna a l'instant: el create() HTTP
+    respon 201 sense esperar la sembra; el frontend fa polling de `Client.estat`
+    (onboarding→actiu, que tanca el bootstrap). L'orquestrador escriu cada pas al
+    Registre d'activitat i és re-executable si falla.
+    """
+    manage_py = str(settings.BASE_DIR / 'manage.py')
+    subprocess.Popen(
+        [sys.executable, manage_py, 'provision_free_tenant', client.schema_name],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        start_new_session=True,  # desacobla del cicle de vida del worker/petició
+    )
 
 
 class ClientViewSet(viewsets.ReadOnlyModelViewSet):
@@ -74,6 +96,11 @@ class ClientViewSet(viewsets.ReadOnlyModelViewSet):
             objecte_id=client.codi_tenant,
             detall={'nom': client.nom, 'schema': client.schema_name, 'domini': domini},
         )
+        # F3 P-FREE-SEED: només un tenant Free sembra sol. La resta de plans (i plan
+        # NULL) queden en onboarding, buits, fins a provisió manual. `plan.nom` és la
+        # font (F1 hi ha afegit NOM_FREE); si plan és NULL, no és Free.
+        if client.plan_id and client.plan.nom == Plan.NOM_FREE:
+            _llanca_sembra_free(client)
         return Response(
             ClientDetailSerializer(client).data, status=status.HTTP_201_CREATED,
         )
