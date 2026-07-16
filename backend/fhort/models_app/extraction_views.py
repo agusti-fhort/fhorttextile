@@ -1811,173 +1811,157 @@ def import_session_confirmar_view(request, token):
             next_num += 1
             sf_codi = f"IMP-{model.id}-{next_num}"
 
-        # P2 — snapshot de la regla RETINGUDA/HERETADA del model ABANS de qualsevol wipe
-        # (materialize_model_grading_rules és esborra-i-recrea). Serveix per detectar el conflicte
-        # conscient amb la regla IMPORTADA del document, sense sobreescriure en silenci.
-        from fhort.pom.grading_utils import grading_rules_match
-        retingut_snapshot = list(model.grading_rules.select_related('pom').all())
-        grading_choice = (request.data.get('grading_choice') or '').strip().lower()
+        # ══ 3. GRADING segons la LLEI DEL CONTENIDOR (2026-07-16) ═══════════════════════════
+        # El contenidor de client (GradingRuleSet origen=CLIENT_RUN) és ÚNIC per
+        # (customer + size_system + garment_type_item + fit). L'import: SEMBRA del contenidor
+        # (POMs de la fitxa, descarta la resta), AMPLIA (POMs noves → al contenidor, avís tou),
+        # CONFLICTE per-regla (409 conscient: mantenir/actualitzar catàleg o resident-només), i
+        # CREA el contenidor només com a ACTE EXPLÍCIT (combinació verge). derive_grading_rule_set
+        # (creador automàtic) queda JUBILAT; es reutilitza el motor de detecció.
+        from fhort.pom.grading_utils import (
+            derive_rules_from_fitxa, cerca_contenidor_client, classifica_fitxa_vs_contenidor)
+        from fhort.pom.models import FitType, Target, ConstructionType, GradingRuleSet
+        from fhort.models_app.services import (
+            materialize_model_grading_rules_from_specs, afegeix_regles_al_contenidor)
 
-        # ── 3a. AVÍS-I-CONFIRMA client-aware (Peça R): si el client ja té graduació(ns) per aquest
-        # size_system, OFEREIX reutilitzar-les abans de derivar-ne una de nova (evita la duplicació
-        # 115/116: derive_grading_rule_set/1D no casa quan els eixos difereixen). TOU: el tècnic tria
-        # amb `ruleset_choice` = 'reuse:<id>' | 'new'. Reusa el patró 409 del conflicte de grading.
-        from fhort.pom.grading_utils import cerca_client_equivalent
-        ruleset_choice = (request.data.get('ruleset_choice') or '').strip().lower()
-        cur_grs_id = model.grading_rule_set_id
-        # NO s'exclou el ruleset actual: s'ofereix com a "mantenir l'actual" (marcat is_current).
-        reuse_candidates = list(cerca_client_equivalent(model.customer, model.size_system))
-        if reuse_candidates and not ruleset_choice:
-            # Serialitza els candidats (amb els .count()) ABANS de set_rollback: un cop la transacció
-            # està marcada per rollback no es pot córrer cap query (mateix patró que el 409 de grading).
-            candidates_payload = [
-                {'id': c.id, 'nom': c.nom, 'n_regles': c.regles.count(),
-                 'origen': c.origen, 'is_current': c.id == cur_grs_id}
-                for c in reuse_candidates]
-            transaction.set_rollback(True)
-            return Response({
-                'conflict': True,
-                'tipus': 'ruleset_reuse',
-                'reuse_candidates': candidates_payload,
-                'message': ("Aquest client ja té graduació per aquest sistema de talles. "
-                            "Mantenir l'actual, reutilitzar-ne una o crear-ne una de nova?"),
-            }, status=409)
-
-        # Tries del tècnic: mantenir l'actual (reuse:<grs actual>) · reutilitzar un germà · crear nou.
-        reused = None
-        keep_current = False
-        if ruleset_choice.startswith('reuse:'):
-            try:
-                _reuse_id = int(ruleset_choice.split(':', 1)[1])
-            except (ValueError, IndexError):
-                _reuse_id = None
-            if _reuse_id is not None and _reuse_id == cur_grs_id:
-                keep_current = True   # mantenir: NO derivar, NO re-apuntar
-            else:
-                reused = next((c for c in reuse_candidates if c.id == _reuse_id), None)
-
-        # ── 3b. Derivar la regla de grading des dels valors i re-apuntar-hi el model.
-        # La derivació (detect_grading per POM + dedup + anti-proliferació 1D + crear/
-        # reutilitzar el ruleset) viu a pom.grading_utils.derive_grading_rule_set (pura de
-        # model: 1C-1) perquè la Size Library la pugui cridar amb dades del fitxer. Aquí el
-        # W5 la crida amb dades del model i fa el re-apuntat A FORA. Chain de GradedSpec no
-        # tocat. Degradació amb gràcia: un error de desament no atura l'import.
-        from fhort.pom.grading_utils import derive_grading_rule_set
-
-        new_rule_set = None
-        n_rules = 0
         grading_avisos = []
-        conflict_divs = None        # P2: divergències importat-vs-retingut sense decisió → 409
-        aplicar_importada = True    # P2: per defecte (model nou / sense conflicte) s'aplica la importada
-        prev_grs_id = model.grading_rule_set_id  # per restaurar la FK si el desament peta
-        try:
-            with transaction.atomic():
-                if keep_current:
-                    # MANTENIR l'actual (tria del tècnic): NO deriva, NO re-apunta, NO materialitza —
-                    # el model ja hi apunta. new_rule_set és només punter per al report.
-                    new_rule_set = model.grading_rule_set
-                    grading_avisos.append(
-                        f"Grading mantingut per decisió del tècnic: ruleset actual "
-                        f"#{cur_grs_id} '{new_rule_set.nom if new_rule_set else ''}'.")
-                elif reused is not None:
-                    # REUTILITZAR el ruleset de client existent (tria del tècnic): NO deriva → cap
-                    # bessó nou (com el 116). El re-apuntat + materialització (origen='IMPORTED') els
-                    # fa el bloc de sota, comú amb el camí derivat (new_rule_set com a punter).
-                    new_rule_set = reused
-                    grading_avisos.append(
-                        f"Grading reutilitzat per decisió del tècnic: ruleset de client existent "
-                        f"#{reused.id} '{reused.nom}' (no s'ha creat cap ruleset nou).")
-                else:
-                    new_rule_set = derive_grading_rule_set(
-                        size_run_model=model.size_run_model,
-                        base_size=base_size,
-                        valors=valors,
-                        confirmed_pom_ids=confirmed_pom_ids,
-                        size_system=model.size_system,
-                        garment_group=model.garment_group,
-                        target_codi=model.target,
-                        construction_codi=model.construction,
-                        fit_type_codi=model.fit_type,
-                        nom=f"Importació fitxa · {model.codi_intern}",
-                        nom_sufix_unic=sf_codi,
-                        avisos=grading_avisos,
-                        customer=model.customer,   # PROVINENÇA: eix de client del run
-                    )
-                # P2 — CONFLICTE conscient: regla IMPORTADA (del document) vs RETINGUDA del model.
-                # Comparació per FORMA (grading_rules_match, util pur — NO toca el motor). Si
-                # difereixen i el tècnic no ha decidit, NO sobreescriure (→ 409 + rollback a fora).
-                if not keep_current and new_rule_set is not None and retingut_snapshot:
-                    ok_ret, divs_ret = grading_rules_match(
-                        retingut_snapshot, new_rule_set.regles.all())
-                    if not ok_ret:
-                        if grading_choice == 'heretats':
-                            aplicar_importada = False
-                            grading_avisos.append(
-                                "Regla del model mantinguda (heretada): la regla importada del "
-                                "document s'ha descartat per decisió del tècnic.")
-                        elif grading_choice == 'importats':
-                            grading_avisos.append(
-                                "Regla importada del document aplicada per decisió del tècnic "
-                                "(substitueix la regla retinguda del model).")
-                        else:
-                            aplicar_importada = False
-                            conflict_divs = divs_ret
+        # (a) DETECCIÓ de les regles de la fitxa (pur, sense persistència; reusa detect_grading).
+        fitxa_specs = derive_rules_from_fitxa(
+            size_run_model=model.size_run_model, base_size=base_size, valors=valors,
+            confirmed_pom_ids=confirmed_pom_ids, size_system=model.size_system, avisos=grading_avisos)
+        base_def_id = fitxa_specs[0]['talla_base_id'] if fitxa_specs else None
 
-                if not keep_current and aplicar_importada and new_rule_set is not None and conflict_divs is None:
-                    model.grading_rule_set = new_rule_set
-                    model.save(update_fields=['grading_rule_set'])
-                    # PG-2 Cas A: materialitza les regles residents (origen=IMPORTED). El motor
-                    # (PG-1) les llegeix amb prioritat; el ruleset extern queda com a punter/rastre.
-                    from fhort.models_app.services import materialize_model_grading_rules
-                    materialize_model_grading_rules(
-                        model, new_rule_set.regles.all(), origen='IMPORTED')
-                    # PG-3 Cas A: eix COMPLEMENTARI (importat vs CANÒNIC-Library, NO vs retingut):
-                    # compara el grading materialitzat amb el canònic que encaixaria i emet
-                    # advertència. NOMÉS informa (try propi: un error de comparació no fa rollback).
-                    try:
-                        from fhort.pom.grading_utils import cerca_canonic_equivalent
-                        canonic = cerca_canonic_equivalent(model)
-                        if canonic is None:
+        # (b) IDENTITAT del contenidor del client: resol fit (codi→FK) i cerca EL contenidor únic.
+        rs_fit = FitType.objects.filter(codi__iexact=model.fit_type).first() if model.fit_type else None
+        gti = model.garment_type_item
+        container = cerca_contenidor_client(model.customer, model.size_system, gti, rs_fit)
+
+        # Tries del tècnic (re-confirmació del wizard):
+        container_choice = (request.data.get('container_choice') or '').strip().lower()   # 'create' | 'no_container'
+        conflict_resolutions = request.data.get('conflict_resolutions') or {}             # {pom_id: keep_catalog|update_catalog|model_resident}
+        conflict_choice = (request.data.get('conflict_choice') or '').strip().lower()     # bulk fallback
+
+        cls = None
+        if fitxa_specs:
+            # (c) DECISIONS que exigeixen tria conscient → 409 + rollback (cap escriptura encara).
+            if container is None and container_choice not in ('create', 'no_container'):
+                transaction.set_rollback(True)
+                return Response({
+                    'conflict': True,
+                    'tipus': 'container_absent',
+                    'customer_nom': str(getattr(model.customer, 'nom', '') or model.customer or ''),
+                    'garment_type_item': (getattr(gti, 'name', '') if gti else ''),
+                    'size_system': str(getattr(model.size_system, 'nom', '') or model.size_system or ''),
+                    'fit': (rs_fit.codi if rs_fit else (model.fit_type or '')),
+                    'n_regles': len(fitxa_specs),
+                    'message': ("Aquest client no té graduació per a aquesta combinació "
+                                "(peça + sistema de talles + fit). Vols crear-ne el contenidor?"),
+                }, status=409)
+            if container is not None:
+                cls = classifica_fitxa_vs_contenidor(fitxa_specs, container)
+                unresolved = [c for c in cls['conflicte']
+                              if not (conflict_resolutions.get(str(c['pom_id'])) or conflict_choice)]
+                if unresolved:
+                    transaction.set_rollback(True)
+                    return Response({
+                        'conflict': True,
+                        'tipus': 'grading_conflict',
+                        'container_id': container.id,
+                        'container_nom': container.nom,
+                        'divergencies': [
+                            {'pom': c['pom_codi'], 'detall': c['detall']} for c in unresolved],
+                        'options': ['keep_catalog', 'update_catalog', 'model_resident'],
+                        'message': ("Algunes regles de la fitxa contradiuen el catàleg del client. "
+                                    "Per a cada POM: mantenir el catàleg, actualitzar-lo, o "
+                                    "deixar la regla només resident al model."),
+                    }, status=409)
+
+        # (d) APLICAR (escriptures) — savepoint intern amb degradació amb gràcia.
+        new_rule_set = model.grading_rule_set
+        resident_specs = None
+        prev_grs_id = model.grading_rule_set_id
+        if fitxa_specs:
+            try:
+                with transaction.atomic():
+                    if container is None:
+                        if container_choice == 'no_container':
+                            # SOBIRANIA: el model queda amb regles residents pròpies, sense contenidor.
+                            model.grading_rule_set = None
+                            model.save(update_fields=['grading_rule_set'])
+                            new_rule_set = None
+                            resident_specs = fitxa_specs
                             grading_avisos.append(
-                                "Grading específic per aquest model: cap graduació canònica de "
-                                "la Library hi encaixa.")
-                        else:
-                            ok, divs = grading_rules_match(
-                                model.grading_rules.all(), canonic.regles.all())
-                            if not ok:
-                                detall = "; ".join(
-                                    f"{d['pom_codi']}: {d['detall']}" for d in divs[:5])
+                                "Contenidor no creat (decisió del tècnic): el model queda amb "
+                                "regles residents pròpies (sobirania de dades).")
+                        else:  # 'create' — CREAR EL contenidor amb la identitat completa.
+                            rs_target = (Target.objects.filter(codi__iexact=model.target).first()
+                                         if model.target else None)
+                            rs_constr = (ConstructionType.objects.filter(codi__iexact=model.construction).first()
+                                         if model.construction else None)
+                            nom_cont = " · ".join(p for p in [
+                                str(getattr(model.customer, 'nom', '') or model.customer or ''),
+                                (getattr(gti, 'name', '') if gti else ''),
+                                str(getattr(model.size_system, 'nom', '') or model.size_system or ''),
+                            ] if p)[:120] or f"Contenidor client · {model.codi_intern}"
+                            container = GradingRuleSet.objects.create(
+                                nom=nom_cont, size_system=model.size_system,
+                                garment_group=model.garment_group, garment_type_item=gti,
+                                target=rs_target, construction=rs_constr, fit_type=rs_fit,
+                                is_system_default=False, actiu=True,
+                                origen=GradingRuleSet.ORIGEN_CLIENT_RUN, customer=model.customer)
+                            if rs_target:
+                                container.targets.add(rs_target)
+                            afegeix_regles_al_contenidor(container, fitxa_specs, base_def_id)
+                            model.grading_rule_set = container
+                            model.save(update_fields=['grading_rule_set'])
+                            new_rule_set = container
+                            resident_specs = fitxa_specs
+                            grading_avisos.append(
+                                f"Contenidor de client NOU creat #{container.id} '{container.nom}' "
+                                f"(el client estrenava aquesta combinació) amb {len(fitxa_specs)} regla(es).")
+                    else:
+                        # CONTENIDOR EXISTENT → SEMBRA / AMPLIA / CONFLICTE.
+                        if cls['amplia']:
+                            afegeix_regles_al_contenidor(container, cls['amplia'], base_def_id)
+                            grading_avisos.append(
+                                f"{len(cls['amplia'])} regla(es) noves de la fitxa afegides al "
+                                f"contenidor #{container.id} (ampliació de catàleg).")
+                        resident_specs = list(cls['sembra'])
+                        for c in cls['conflicte']:
+                            choice = (conflict_resolutions.get(str(c['pom_id']))
+                                      or conflict_choice or 'keep_catalog')
+                            if choice == 'update_catalog':
+                                afegeix_regles_al_contenidor(container, [c['spec_fitxa']], base_def_id)
+                                resident_specs.append(c['spec_fitxa'])
                                 grading_avisos.append(
-                                    f"El grading del document difereix del canònic "
-                                    f"'{canonic.nom}': {detall}")
-                            # encaixa → cap append (silenci)
-                    except Exception as _cmp_e:
+                                    f"POM {c['pom_codi']}: catàleg del contenidor ACTUALITZAT amb la "
+                                    f"regla de la fitxa.")
+                            elif choice == 'model_resident':
+                                resident_specs.append(c['spec_fitxa'])
+                                grading_avisos.append(
+                                    f"POM {c['pom_codi']}: regla de la fitxa NOMÉS resident al model "
+                                    f"(catàleg del contenidor intacte).")
+                            else:  # keep_catalog
+                                resident_specs.append(c['spec_container'])
+                                grading_avisos.append(
+                                    f"POM {c['pom_codi']}: es manté la regla del catàleg del contenidor.")
+                        resident_specs += cls['amplia']
+                        model.grading_rule_set = container
+                        model.save(update_fields=['grading_rule_set'])
+                        new_rule_set = container
                         grading_avisos.append(
-                            f"Comparació amb el grading canònic omesa (error: {_cmp_e}).")
-        except Exception as e:
-            # Rollback del savepoint (creació + re-apuntat junts): la fila del ruleset ja no
-            # existeix. Restaurem la FK en memòria AQUÍ, abans de qualsevol model.save()
-            # posterior de l'import (p.ex. teixit), perquè no escrigui un id mort.
-            model.grading_rule_set_id = prev_grs_id
-            new_rule_set = None
-            grading_avisos.append(
-                f"Grading no derivat (error en desar regles: {e}); es manté el ruleset previ.")
-        n_rules = (new_rule_set.regles.count()
-                   if (new_rule_set and aplicar_importada and conflict_divs is None) else 0)
-
-        # P2 — conflicte de grading SENSE decisió del tècnic: NO sobreescriure res. Rollback de tot
-        # l'import (cap estat a mig fer, cap SizeFitting orfe) i 409 perquè el wizard demani la tria;
-        # el tècnic re-confirma amb grading_choice. Reusa el patró d'avís-i-confirma de la Size Library.
-        if conflict_divs is not None:
-            transaction.set_rollback(True)
-            return Response({
-                'conflict': True,
-                'tipus': 'grading',
-                'divergencies': [
-                    {'pom': d['pom_codi'], 'detall': d['detall']} for d in conflict_divs],
-                'message': ('La regla de grading importada del document difereix de la regla '
-                            'retinguda al model. Tria quina aplicar.'),
-            }, status=409)
+                            f"Grading sembrat des del contenidor #{container.id} '{container.nom}' "
+                            f"({len(resident_specs)} regla(es) residents per als POMs de la fitxa).")
+                    # SEMBRA SELECTIVA de residents (origen=IMPORTED); el motor les llegeix amb prioritat.
+                    if resident_specs is not None:
+                        materialize_model_grading_rules_from_specs(
+                            model, resident_specs, origen='IMPORTED')
+            except Exception as e:
+                model.grading_rule_set_id = prev_grs_id
+                new_rule_set = model.grading_rule_set
+                grading_avisos.append(
+                    f"Grading no aplicat (error en desar: {e}); es manté el ruleset previ del model.")
+        n_rules = model.grading_rules.count()
 
         # ── 3. SizeFitting CONTENIDOR per a la projecció CONSCIENT (D-10) — només quan no hi ha
         # conflicte pendent. L'import reté base + deltes + breaks (ModelGradingRule); el grading
@@ -2044,9 +2028,7 @@ def import_session_confirmar_view(request, token):
         'size_fitting': size_fitting.codi,
         'document_fitxer': (doc_fitxer.nom_fitxer if doc_fitxer else None),
         'teixit_aplicat': teixit_aplicat,
-        'grading_rule_set': (new_rule_set.nom
-                             if (new_rule_set and aplicar_importada and conflict_divs is None)
-                             else None),
+        'grading_rule_set': (new_rule_set.nom if new_rule_set else None),
         'grading_rules': n_rules,
         'grading_avisos': grading_avisos,
         'message': f'Importació confirmada: {n_bm} POMs, regla (deltes+breaks) retinguda al model; '

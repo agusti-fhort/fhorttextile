@@ -559,6 +559,7 @@ def classifica_fitxa_vs_contenidor(specs, container):
                 'pom_id': s['pom_id'],
                 'pom_codi': getattr(s.get('pom'), 'codi_client', None) or s['pom_id'],
                 'spec_fitxa': s,
+                'spec_container': rule_to_spec(cr),
                 'regla_container_id': cr.id,
                 'detall': (f"forma difereix (contenidor ib={cr.increment_base}"
                            f"/brk={cr.increment_break} vs fitxa ib={s['increment_base']}"
