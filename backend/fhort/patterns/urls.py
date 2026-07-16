@@ -7,6 +7,7 @@ from rest_framework.routers import DefaultRouter
 
 from .annotation_views import (
     PatternPOMViewSet, PatternSegmentViewSet, SewProposalRejectionViewSet, SewRelationViewSet,
+    SewToleranceAcceptanceViewSet,
 )
 from .views import PatternFileViewSet
 
@@ -20,5 +21,9 @@ router.register(r'patterns/sew-relations', SewRelationViewSet, basename='pattern
 # rebutjar-proposta/` — la llei del rebuig té una sola porta d'entrada.
 router.register(r'patterns/sew-proposal-rejections', SewProposalRejectionViewSet,
                 basename='patterns-sew-proposal-rejections')
+# Auditoria de tolerància (H/T2): acceptar/desacceptar desajustos, append-only. Primera baula
+# del mòdul d'auditoria de model — es llegeix per model (transversal) o per costura (històric).
+router.register(r'patterns/sew-tolerance-acceptances', SewToleranceAcceptanceViewSet,
+                basename='patterns-sew-tolerance-acceptances')
 
 urlpatterns = router.urls

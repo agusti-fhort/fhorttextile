@@ -126,12 +126,14 @@ from fhort.models_app.services_fitxers import DOWNLOAD_TTL
 from fhort.patterns.adapters import (DjangoGeometryStore, DjangoGradingSource,
                                      pom_specs, sew_specs)
 from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentViewSet,
-                                             SewProposalRejectionViewSet, SewRelationViewSet,
+                                             SewProposalRejectionViewSet, SewRelationSerializer,
+                                             SewRelationViewSet, SewToleranceAcceptanceViewSet,
                                              comprovar_costura)
 from fhort.patterns.export import ExportBlocked, build_export
 from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
                                    PatternPOM, PatternPoint, PatternSegment,
-                                   SegmentPreference, SewProposalRejection, SewRelation)
+                                   SegmentPreference, SewProposalRejection, SewRelation,
+                                   SewToleranceAcceptance)
 from fhort.patterns.services import save_pattern_file
 from fhort.patterns.serializers import PatternGeometrySerializer
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
@@ -3406,6 +3408,112 @@ class PincaAPITest(PatternsAPITestBase):
         self.assertEqual(resp.status_code, 200, resp.data)
         rel.refresh_from_db()
         self.assertEqual(rel.nom, 'Costura lateral dreta')
+
+
+class AcceptacioToleranciaAPITest(PincaAPITest):
+    """El tècnic accepta un desajust, amb rastre append-only (QA-TALLER H · T2).
+
+    Hereta de PincaAPITest perquè marcar una pinça del TATE ja dona una relació amb desajust
+    (els costats fan 1,33 i 1,01 cm → 3,2 mm → grau vermell), que és el que es pot acceptar.
+    """
+
+    def _accio(self, sew_id, accio, nota=''):
+        req = self.factory.post(
+            '/api/v1/patterns/sew-tolerance-acceptances/',
+            {'sew_relation': sew_id, 'accio': accio, 'nota': nota}, format='json')
+        force_authenticate(req, user=self.user)
+        return SewToleranceAcceptanceViewSet.as_view({'post': 'create'})(req)
+
+    def _estat_sew(self, sew_id):
+        rel = SewRelation.objects.get(pk=sew_id)
+        return SewRelationSerializer(rel).data
+
+    def _pinca_amb_desajust(self):
+        self._marca_pinca()
+        rel = SewRelation.objects.get(tipus=SewRelation.TIPUS_PINCA)
+        self.assertEqual(comprovar_costura(rel)['grau'], 'err',
+                         'la pinça del TATE ha de tenir desajust per poder-se acceptar')
+        return rel
+
+    def test_acceptar_congela_el_desajust_i_el_llindar(self):
+        rel = self._pinca_amb_desajust()
+
+        resp = self._accio(rel.id, 'accepta', nota='el patró és correcte, la pinça tanca bé')
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['accio'], 'accepta')
+        self.assertEqual(resp.data['grau'], 'err')
+        self.assertEqual(resp.data['tipus_relacio'], 'pinca')
+        self.assertEqual(resp.data['mena_tolerancia'], 'pinca')
+        self.assertEqual((resp.data['llindar_verd_mm'], resp.data['llindar_groc_mm']), (1.5, 3.0))
+        self.assertGreater(resp.data['desajust_cm'], 0.3)
+        self.assertEqual(resp.data['sew_relation_snapshot'], rel.id)
+        # La costura ara diu, inline, que està acceptada i per qui.
+        acc = self._estat_sew(rel.id)['acceptacio']
+        self.assertTrue(acc['acceptat'])
+        self.assertEqual(acc['grau'], 'err')
+
+    def test_desacceptar_es_un_esdeveniment_nou_no_un_esborrat(self):
+        rel = self._pinca_amb_desajust()
+        self._accio(rel.id, 'accepta')
+
+        resp = self._accio(rel.id, 'desaccepta', nota='ho reviso millor')
+
+        self.assertEqual(resp.status_code, 201)
+        # Dos esdeveniments a l'històric; l'estat viu és «no acceptat».
+        self.assertEqual(SewToleranceAcceptance.objects.filter(sew_relation=rel).count(), 2)
+        self.assertIsNone(self._estat_sew(rel.id)['acceptacio'])
+
+    def test_el_registre_es_APPEND_ONLY(self):
+        rel = self._pinca_amb_desajust()
+        self._accio(rel.id, 'accepta')
+        ev = SewToleranceAcceptance.objects.filter(sew_relation=rel).first()
+
+        with self.assertRaises(ValueError):
+            ev.nota = 'reescrit'
+            ev.save()
+        with self.assertRaises(ValueError):
+            ev.delete()
+        with self.assertRaises(ValueError):
+            SewToleranceAcceptance.objects.filter(sew_relation=rel).delete()
+
+    def test_no_es_pot_acceptar_una_costura_verda(self):
+        # Una costura casada dins tolerància (grau ok) no té res a acceptar.
+        a = self._tram(self.pf[self.TRAM_INICI], self.pf[self.TRAM_FI], 'A')
+        b = self._tram(self.pf[self.TRAM_INICI], self.pf[self.TRAM_FI], 'B')
+        req = self.factory.post(
+            '/api/v1/patterns/sew-relations/',
+            {'model': self.model.id, 'segments_a': [a.data['id']],
+             'segments_b': [b.data['id']], 'tipus': 'casat', 'diferencial_cm': 0},
+            format='json')
+        force_authenticate(req, user=self.user)
+        sew = SewRelationViewSet.as_view({'post': 'create'})(req)
+        self.assertEqual(comprovar_costura(SewRelation.objects.get(pk=sew.data['id']))['grau'],
+                         'ok')
+
+        resp = self._accio(sew.data['id'], 'accepta')
+
+        self.assertEqual(resp.status_code, 400)
+
+    def test_ni_acceptar_dues_vegades_ni_desacceptar_el_que_no_hi_es(self):
+        rel = self._pinca_amb_desajust()
+
+        self.assertEqual(self._accio(rel.id, 'desaccepta').status_code, 400)  # encara no acceptat
+        self._accio(rel.id, 'accepta')
+        self.assertEqual(self._accio(rel.id, 'accepta').status_code, 400)     # ja acceptat
+
+    def test_lauditoria_es_llegeix_per_model(self):
+        rel = self._pinca_amb_desajust()
+        self._accio(rel.id, 'accepta')
+        self._accio(rel.id, 'desaccepta')
+
+        req = self.factory.get(
+            '/api/v1/patterns/sew-tolerance-acceptances/', {'model': self.model.id})
+        force_authenticate(req, user=self.user)
+        resp = SewToleranceAcceptanceViewSet.as_view({'get': 'list'})(req)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data['results']), 2)   # tot l'històric, transversal per model
 
 
 class GeometriaPortaElsTramsDeclaratsTest(PatternsAPITestBase):

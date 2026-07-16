@@ -684,3 +684,100 @@ class SegmentPreference(models.Model):
 
     def __str__(self):
         return f'{self.rol} [{self.t_inici:.4f}–{self.t_fi:.4f}] {self.accio} ×{self.vegades}'
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# AUDITORIA DE MODEL — primera baula (QA-TALLER H · T2)
+# ═════════════════════════════════════════════════════════════════════════════
+
+class _AppendOnlyQuerySet(models.QuerySet):
+    """Bloqueja l'esborrat massiu. `QuerySet.delete()` no passa per `Model.delete()`, així que
+    l'append-only s'ha de garantir també aquí, o un `.filter(...).delete()` se'l saltaria."""
+
+    def delete(self):
+        raise ValueError('Append-only: esborrat no permès en aquest registre.')
+
+
+class SewToleranceAcceptance(models.Model):
+    """Un tècnic ACCEPTA (o desaccepta) un desajust de costura/pinça, amb rastre.
+
+    **És la PRIMERA BAULA del mòdul d'auditoria de model.** No és un flag d'UI: és un registre
+    APPEND-ONLY, pensat per llegir-se transversalment després (qui ha acceptat què, en aquest
+    model i en tots). Mateix patró que les acceptacions legals (`backoffice.LegalAcceptance`):
+    cap update, cap delete, ni a l'ORM ni per endpoint.
+
+    **Acceptar no toca ni la geometria ni la mesura** —la sobirania del dibuix és del patró—:
+    registra una DECISIÓ. I la registra amb el desajust CONGELAT al moment, perquè el que es va
+    acceptar era aquell desajust, jutjat contra aquell llindar. Si demà la geometria canvia i el
+    desajust n'és un altre, l'acceptació d'avui ha de seguir dient QUÈ es va acceptar —o no seria
+    una prova, seria una etiqueta que es reescriu sola.
+
+    **Desacceptar és un altre esdeveniment, no un esborrat.** L'estat viu d'una relació és
+    l'ÚLTIM esdeveniment (per data); l'històric es conserva sencer. Un registre d'auditoria que
+    s'esborra quan algú es repensa no audita res.
+    """
+
+    ACCIO_ACCEPTA = 'accepta'
+    ACCIO_DESACCEPTA = 'desaccepta'
+    ACCIO_CHOICES = [(ACCIO_ACCEPTA, 'Accepta'), (ACCIO_DESACCEPTA, 'Desaccepta')]
+
+    objects = _AppendOnlyQuerySet.as_manager()
+
+    #: El MODEL, per a la lectura transversal de l'auditoria. CASCADE: si el model desapareix,
+    #: el seu rastre se'n va amb ell (no hi ha auditoria d'un model que ja no existeix).
+    model = models.ForeignKey(
+        'models_app.Model', on_delete=models.CASCADE,
+        related_name='sew_tolerance_acceptances',
+    )
+    #: La costura/pinça viva. SET_NULL: una costura es pot esborrar, i quan es fa, l'acceptació
+    #: no ha de caure —el snapshot congelat la fa autodescriptiva—; el que es perd és només el
+    #: pont a la fila viva. `sew_relation_snapshot` en guarda l'id per si cal resseguir-la.
+    sew_relation = models.ForeignKey(
+        'patterns.SewRelation', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='tolerance_acceptances',
+    )
+    sew_relation_snapshot = models.IntegerField(
+        help_text="L'id de la costura al moment de decidir (sobreviu si s'esborra).",
+    )
+
+    accio = models.CharField(max_length=12, choices=ACCIO_CHOICES)
+
+    # ── El SNAPSHOT congelat: què es va acceptar, i contra què es va jutjar ──
+    tipus_relacio = models.CharField(
+        max_length=12, help_text='casat/frunzit/pinca al moment de decidir.')
+    mena_tolerancia = models.CharField(
+        max_length=12, help_text='La banda de llindars aplicada (muntatge/casat/pinca).')
+    desajust_cm = models.FloatField(help_text='El desviament congelat, en cm.')
+    grau = models.CharField(max_length=4, help_text='ok/warn/err al moment de decidir.')
+    llindar_verd_mm = models.FloatField(null=True, blank=True)
+    llindar_groc_mm = models.FloatField(null=True, blank=True)
+
+    nota = models.TextField(blank=True, default='', help_text='Motiu opcional de la decisió.')
+    decidit_per = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='sew_tolerance_decisions',
+    )
+    data = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Acceptació de tolerància de costura'
+        verbose_name_plural = 'Acceptacions de tolerància de costura'
+        ordering = ['-data']
+        indexes = [
+            models.Index(fields=['model', '-data']),
+            models.Index(fields=['sew_relation', '-data']),
+        ]
+
+    def __str__(self):
+        return (f'{self.accio} sew#{self.sew_relation_snapshot} '
+                f'({self.grau}, {self.desajust_cm:.2f}cm) @ {self.data:%Y-%m-%d}')
+
+    def save(self, *args, **kwargs):
+        # APPEND-ONLY: una fila existent no es pot modificar mai.
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValueError('SewToleranceAcceptance és append-only: no es pot modificar.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # APPEND-ONLY: una decisió d'auditoria no s'esborra mai; desacceptar és un esdeveniment nou.
+        raise ValueError('SewToleranceAcceptance és append-only: no es pot esborrar.')

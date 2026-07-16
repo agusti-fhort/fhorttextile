@@ -32,7 +32,7 @@ from .engine.sew import (
 from .dart_proposals import candidats_del_patro
 from .models import (
     DartProposalRejection, PatternFile, PatternPiece, PatternPOM, PatternPoint, PatternSegment,
-    SewProposalRejection, SewRelation,
+    SewProposalRejection, SewRelation, SewToleranceAcceptance,
 )
 from .seam_proposals import propostes_del_model
 from .tolerance import graduar
@@ -82,26 +82,53 @@ class PatternPOMSerializer(serializers.ModelSerializer):
         return valor
 
 
+def acceptacio_viva(rel: SewRelation) -> SewToleranceAcceptance | None:
+    """L'ÚLTIM esdeveniment d'acceptació d'una costura, si n'hi ha cap.
+
+    L'estat viu és l'últim esdeveniment per data: si és `accepta`, el desajust està acceptat; si
+    és `desaccepta` (o no n'hi ha cap), no ho està. L'històric anterior es conserva sencer —això
+    només en llegeix la punta.
+    """
+    return rel.tolerance_acceptances.order_by('-data', '-id').first()
+
+
 class SewRelationSerializer(serializers.ModelSerializer):
     estat = serializers.SerializerMethodField()
     #: És una pinça de vora? Ho decideix la geometria (v. `es_pinca_de_vora`), i el client ho
     #: necessita per pintar-la amb el seu glif i llistar-la com el que és — no com una costura
     #: qualsevol que casualment es diu 'pinca'.
     es_pinca = serializers.SerializerMethodField()
+    #: L'estat d'acceptació VIU (H/T2): si el desajust d'aquesta costura s'ha acceptat, i per qui.
+    #: Va inline amb la costura perquè la fila el pugui pintar sense una crida per costura.
+    acceptacio = serializers.SerializerMethodField()
 
     class Meta:
         model = SewRelation
         fields = [
             'id', 'model', 'segments_a', 'segments_b', 'tipus', 'diferencial_cm',
-            'nom', 'notes', 'estat', 'es_pinca', 'data_creacio',
+            'nom', 'notes', 'estat', 'es_pinca', 'acceptacio', 'data_creacio',
         ]
-        read_only_fields = ['estat', 'es_pinca', 'data_creacio']
+        read_only_fields = ['estat', 'es_pinca', 'acceptacio', 'data_creacio']
 
     def get_estat(self, obj):
         return comprovar_costura(obj)
 
     def get_es_pinca(self, obj):
         return es_pinca_de_vora(obj)
+
+    def get_acceptacio(self, obj):
+        ev = acceptacio_viva(obj)
+        if ev is None or ev.accio != SewToleranceAcceptance.ACCIO_ACCEPTA:
+            return None
+        return {
+            'acceptat': True,
+            'per': str(ev.decidit_per) if ev.decidit_per else None,
+            'data': ev.data.isoformat(),
+            'desajust_cm': round(ev.desajust_cm, 2),
+            'grau': ev.grau,
+            'mena': ev.mena_tolerancia,
+            'nota': ev.nota,
+        }
 
 
 def _mesurar(pom: PatternPOM) -> float | None:
@@ -882,6 +909,93 @@ class SewProposalRejectionViewSet(mixins.ListModelMixin, mixins.DestroyModelMixi
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['model']
+
+
+class SewToleranceAcceptanceSerializer(serializers.ModelSerializer):
+    """El registre d'auditoria, per llegir-lo. Read-only: crear és pel `create` del ViewSet, que
+    congela el snapshot; deixar escriure els camps del snapshot faria que algú pogués desar un
+    desajust que no és el que hi havia."""
+
+    decidit_per_nom = serializers.CharField(source='decidit_per', read_only=True)
+
+    class Meta:
+        model = SewToleranceAcceptance
+        fields = [
+            'id', 'model', 'sew_relation', 'sew_relation_snapshot', 'accio',
+            'tipus_relacio', 'mena_tolerancia', 'desajust_cm', 'grau',
+            'llindar_verd_mm', 'llindar_groc_mm', 'nota', 'decidit_per_nom', 'data',
+        ]
+        read_only_fields = fields
+
+
+class SewToleranceAcceptanceViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Acceptar/desacceptar desajustos, i llegir-ne l'històric (H/T2).
+
+    **Primera baula del mòdul d'auditoria.** APPEND-ONLY: no hi ha update ni destroy —desacceptar
+    és crear un esdeveniment `desaccepta`, no esborrar l'`accepta`. La llista es filtra per `model`
+    (lectura transversal de l'auditoria) o per `sew_relation` (l'històric d'una costura).
+
+    Crear NO passa pel serializer d'escriptura: el snapshot (desajust, grau, llindar) es CONGELA
+    del `comprovar_costura` d'ara, no s'accepta del client —un client que digués el desajust
+    podria acceptar un que no és el que hi ha.
+    """
+
+    queryset = SewToleranceAcceptance.objects.select_related('decidit_per').all()
+    serializer_class = SewToleranceAcceptanceSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['model', 'sew_relation']
+
+    def create(self, request, *args, **kwargs):
+        accio = request.data.get('accio')
+        if accio not in dict(SewToleranceAcceptance.ACCIO_CHOICES):
+            raise serializers.ValidationError(
+                {'accio': f"Ha de ser un de {list(dict(SewToleranceAcceptance.ACCIO_CHOICES))}."})
+
+        rel = self._costura(request.data.get('sew_relation'))
+        estat = comprovar_costura(rel)
+        viu = acceptacio_viva(rel)
+        acceptada_ara = viu is not None and viu.accio == SewToleranceAcceptance.ACCIO_ACCEPTA
+
+        if accio == SewToleranceAcceptance.ACCIO_ACCEPTA:
+            # Acceptar un desajust que no existeix no vol dir res: verd i frunzit no s'accepten.
+            if estat['grau'] not in ('warn', 'err'):
+                raise serializers.ValidationError(
+                    {'accio': 'Aquesta costura no té cap desajust a acceptar (és verda o no es '
+                              'gradua).'})
+            if acceptada_ara:
+                raise serializers.ValidationError(
+                    {'accio': 'Aquest desajust ja està acceptat.'})
+        else:  # desaccepta
+            if not acceptada_ara:
+                raise serializers.ValidationError(
+                    {'accio': 'Aquest desajust no està acceptat: no hi ha res a desacceptar.'})
+
+        llindar = estat.get('llindar') or {}
+        ev = SewToleranceAcceptance.objects.create(
+            model=rel.model,
+            sew_relation=rel,
+            sew_relation_snapshot=rel.id,
+            accio=accio,
+            tipus_relacio=rel.tipus,
+            mena_tolerancia=llindar.get('mena') or '',
+            desajust_cm=estat['desviament_cm'],
+            grau=estat['grau'],
+            llindar_verd_mm=llindar.get('verd_mm'),
+            llindar_groc_mm=llindar.get('groc_mm'),
+            nota=(request.data.get('nota') or '').strip(),
+            decidit_per=getattr(request.user, 'profile', None),
+        )
+        dades = self.get_serializer(ev).data
+        return Response(dades, status=status.HTTP_201_CREATED)
+
+    def _costura(self, sew_id) -> SewRelation:
+        if not sew_id:
+            raise serializers.ValidationError({'sew_relation': 'Cal la costura a acceptar.'})
+        try:
+            return SewRelation.objects.get(pk=sew_id)
+        except SewRelation.DoesNotExist:
+            raise serializers.ValidationError({'sew_relation': 'Aquesta costura no existeix.'})
 
 
 class PatternSegmentSerializer(serializers.ModelSerializer):
