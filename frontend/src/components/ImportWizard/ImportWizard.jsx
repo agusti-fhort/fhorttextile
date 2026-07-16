@@ -122,6 +122,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   // Pas 5 — guardar
   const [confirming, setConfirming] = useState(false)
   const [gradingConflict, setGradingConflict] = useState(null)   // P2: 409 {conflict, divergencies}
+  const [reuseConflict, setReuseConflict] = useState(null)       // R: 409 {conflict, reuse_candidates}
 
   const configuratSet = useMemo(() => new Set((configurat || []).map(norm)), [configurat])
   const teDesti = (label) => configuratSet.has(norm(label))
@@ -447,17 +448,26 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   // P2 — conflicte conscient de grading (regla importada vs retinguda al model). El backend torna
   // 409 {conflict, divergencies} si difereixen i no s'ha triat; el tècnic decideix i re-confirmem
   // amb grading_choice ('importats' | 'heretats'). Patró d'avís-i-confirma (com la Size Library).
-  const handleConfirmar = async (gradingChoice = null) => {
+  const handleConfirmar = async (gradingChoice = null, rulesetChoice = null) => {
     setConfirming(true); setError('')
+    if (gradingChoice) setGradingConflict(null)
+    if (rulesetChoice) setReuseConflict(null)
     try {
+      const body = {}
+      if (gradingChoice) body.grading_choice = gradingChoice
+      if (rulesetChoice) body.ruleset_choice = rulesetChoice
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/confirmar/`, {
         method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify(gradingChoice ? { grading_choice: gradingChoice } : {}),
+        body: JSON.stringify(body),
       })
       const data = await res.json().catch(() => ({}))
-      if (res.status === 409 && data.conflict) { setGradingConflict(data); setConfirming(false); return }
+      if (res.status === 409 && data.conflict) {
+        if (data.tipus === 'ruleset_reuse') setReuseConflict(data)
+        else setGradingConflict(data)
+        setConfirming(false); return
+      }
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setConfirming(false); return }
-      setGradingConflict(null)
+      setGradingConflict(null); setReuseConflict(null)
       onComplete && onComplete(data.model_id)
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setConfirming(false)
@@ -992,6 +1002,38 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             {t('import_wizard.mana_doc', { count: pomsActius })}
           </div>
 
+          {/* R — reutilització client-aware: el client ja té graduació per aquest size_system.
+              El tècnic tria reutilitzar-ne una (cap ruleset bessó nou) o crear-ne una de nova. */}
+          {reuseConflict && (
+            <div style={{ background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
+                          padding: '12px 14px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600,
+                            fontSize: 'var(--fs-body)', color: '#7a5a00', marginBottom: 6 }}>
+                <i className="ti ti-copy-check" aria-hidden="true" />
+                {t('import_wizard.reuse_conflict_title')}
+              </div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', marginBottom: 10 }}>
+                {t('import_wizard.reuse_conflict_help')}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(reuseConflict.reuse_candidates || []).map(c => (
+                  <button key={c.id} type="button" onClick={() => handleConfirmar(null, `reuse:${c.id}`)} disabled={confirming}
+                    style={{ padding: '8px 14px', borderRadius: 6, border: `0.5px solid ${BORDER}`, textAlign: 'left',
+                             fontSize: 'var(--fs-body)', fontWeight: 500, background: 'var(--white)',
+                             color: 'var(--text-main)', cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                    {t('import_wizard.reuse_use', { nom: c.nom, count: c.n_regles })}
+                  </button>
+                ))}
+                <button type="button" onClick={() => handleConfirmar(null, 'new')} disabled={confirming}
+                  style={{ padding: '8px 14px', borderRadius: 6, border: 'none', alignSelf: 'flex-start',
+                           fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--white)', background: GOLD,
+                           cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                  {t('import_wizard.reuse_create_new')}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* P2 — conflicte conscient: la regla del document difereix de la retinguda al model.
               El tècnic tria; la triada esdevé la regla del model (cap sobreescriptura en silenci). */}
           {gradingConflict && (
@@ -1033,10 +1075,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             <button type="button" onClick={() => setStep(4)}
               style={{ padding: '8px 16px', border: `0.5px solid ${BORDER}`, borderRadius: 6,
                        background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>← {t('app.back')}</button>
-            <button type="button" onClick={() => handleConfirmar()} disabled={confirming || !!gradingConflict}
+            <button type="button" onClick={() => handleConfirmar()} disabled={confirming || !!gradingConflict || !!reuseConflict}
               style={{ padding: '8px 24px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-h3)', fontWeight: 600,
-                       color: 'var(--white)', background: (confirming || gradingConflict) ? '#ccc' : GOLD,
-                       cursor: (confirming || gradingConflict) ? 'not-allowed' : 'pointer' }}>
+                       color: 'var(--white)', background: (confirming || gradingConflict || reuseConflict) ? '#ccc' : GOLD,
+                       cursor: (confirming || gradingConflict || reuseConflict) ? 'not-allowed' : 'pointer' }}>
               {confirming ? t('import_wizard.confirming') : t('import_wizard.confirm_save')}
             </button>
           </div>
