@@ -3222,6 +3222,7 @@
       "darts_dropped": "{{declarades}} already declared · {{rebutjades}} rejected",
       "darts_empty": "No darts proposed: the engine sees no V local enough on the edges.",
       "darts_proposed": "Proposed darts ({{n}})",
+      "err_bulk": "The bulk delete did not complete. The list has been reloaded: check what remains.",
       "err_pinca": "The dart could not be marked.",
       "err_proposal_confirm": "The proposal could not be confirmed.",
       "err_proposal_reject": "The proposal could not be rejected.",

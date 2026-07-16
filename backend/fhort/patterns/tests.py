@@ -3247,6 +3247,64 @@ class PincaAPITest(PatternsAPITestBase):
         self.assertEqual(estat['descomptes_b'], [])
         self.assertGreater(estat['longitud_a_cm'], 0)
 
+    # ── ESBORRAT EN BLOC del camí amb més risc (QA-TALLER E · T8) ───────────
+
+    def _esborra_bloc_sew(self, ids):
+        request = self.factory.post(
+            '/api/v1/patterns/sew-relations/bulk-delete/', {'ids': ids}, format='json')
+        force_authenticate(request, user=self.user)
+        return SewRelationViewSet.as_view({'post': 'bulk_delete'})(request)
+
+    def test_el_bloc_sen_emporta_la_pinca_i_els_seus_dos_costats(self):
+        """El camí amb més risc: la cascada de la pinça, dins d'un bloc.
+
+        Els costats d'una pinça no existeixen sense ella. Si el bloc els deixés enrere, el
+        patró s'ompliria de trams declarats que ningú no cus, amb nom de pinça i sense pinça
+        —i continuarien sortint a la llista del que es pot cosir.
+        """
+        self._marca_pinca()
+        rel = SewRelation.objects.get(tipus=SewRelation.TIPUS_PINCA)
+        costats = [c.id for c in list(rel.segments_a.all()) + list(rel.segments_b.all())]
+        self.assertEqual(len(costats), 2)
+
+        resp = self._esborra_bloc_sew([rel.id])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [rel.id])
+        self.assertFalse(SewRelation.objects.filter(pk=rel.id).exists())
+        self.assertFalse(PatternSegment.objects.filter(pk__in=costats).exists())
+
+    def test_un_costat_de_pinca_que_una_altra_costura_cus_es_queda(self):
+        """El PROTECT val dins del bloc igual que fora: esborrar-lo deixaria coixa una costura
+        que ningú ha tocat. La pinça cau; el costat en ús, no."""
+        self._marca_pinca()
+        rel = SewRelation.objects.get(tipus=SewRelation.TIPUS_PINCA)
+        costats = list(rel.segments_a.all()) + list(rel.segments_b.all())
+        altra = SewRelation.objects.create(model=self.model, tipus='casat')
+        altra.segments_a.add(costats[0])
+
+        resp = self._esborra_bloc_sew([rel.id])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [rel.id])
+        self.assertTrue(PatternSegment.objects.filter(pk=costats[0].id).exists())
+        self.assertFalse(PatternSegment.objects.filter(pk=costats[1].id).exists())
+
+    def test_un_id_que_rebota_al_mig_no_sen_emporta_els_anteriors(self):
+        """Èxit PARCIAL, i informe. El bloc no és «tot o res»: qui n'ha demanat tres no ha
+        demanat que el segon en salvi dos. I mai un 500 —un id fantasma és una resposta."""
+        self._marca_pinca()
+        pinca = SewRelation.objects.get(tipus=SewRelation.TIPUS_PINCA)
+        altra = SewRelation.objects.create(model=self.model, tipus='casat')
+
+        resp = self._esborra_bloc_sew([pinca.id, 999999, altra.id])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['esborrats'], [pinca.id, altra.id])
+        self.assertEqual(resp.data['retinguts'], [{'id': 999999, 'motiu': 'no_trobat'}])
+        self.assertFalse(
+            SewRelation.objects.filter(pk__in=[pinca.id, altra.id]).exists())
+
     def test_una_pinca_entre_dues_peces_no_es_una_pinca_de_vora(self):
         """`es_pinca_de_vora` es constata de la geometria, no d'un flag: una 'pinca' amb un
         costat a cada peça és una instrucció de muntatge, i no descompta tela de ningú."""

@@ -3222,6 +3222,7 @@
       "darts_dropped": "{{declarades}} ya declaradas · {{rebutjades}} rechazadas",
       "darts_empty": "Ninguna pinza propuesta: el motor no ve ninguna V lo bastante local en los bordes.",
       "darts_proposed": "Pinzas propuestas ({{n}})",
+      "err_bulk": "No se ha podido eliminar el bloque entero. La lista se ha recargado: comprueba qué ha quedado.",
       "err_pinca": "No se ha podido marcar la pinza.",
       "err_proposal_confirm": "No se ha podido confirmar la propuesta.",
       "err_proposal_reject": "No se ha podido rechazar la propuesta.",

@@ -32,8 +32,28 @@ import { useEffect, useRef, useState } from 'react'
  */
 export function useSeleccio(ids) {
   const [marcats, setMarcats] = useState(() => new Set())
+  const [vistos, setVistos] = useState('')
 
+  const clau = ids.join(' ')
   const vius = new Set(ids)
+
+  // La poda es DESA, no només es deriva. Derivar-la sola amagaria la marca mentre la fila no
+  // hi és, però no la mataria: i la clau d'una PROPOSTA torna —no és cap pk, es recalcula de
+  // la parella de trams (`clau_parella`)—, de manera que confirmar una proposta marcada i
+  // després esborrar-ne la costura la faria reaparèixer marcada, sense que ningú l'hagi
+  // tornada a triar. Un clic més i es rebutja per sempre una proposta vàlida.
+  //
+  // Ajustar l'estat DURANT el render (i no en un efecte) és el patró que React documenta per
+  // a això: així no hi ha cap render intermedi en què la paperera prometi una xifra que no és
+  // la que cauria.
+  if (clau !== vistos) {
+    setVistos(clau)
+    setMarcats(s => {
+      const net = new Set([...s].filter(i => vius.has(i)))
+      return net.size === s.size ? s : net
+    })
+  }
+
   const sel = new Set([...marcats].filter(i => vius.has(i)))
 
   return {
@@ -123,12 +143,17 @@ export function AccionsGrup({ t, n, total, onTots, onEsborra }) {
  */
 export function Informe({ t, retinguts, onTanca }) {
   if (!retinguts?.length) return null
+
+  // Aquí NOMÉS hi ha retencions: el servidor dient que no, que és una resposta. Una ERRADA
+  // (no saber què ha passat) va per `errEina`, com la resta del Taller — dues superfícies
+  // d'error voldria dir que un dia una de les dues es quedaria muda.
+  const color = 'var(--warn)'
   return (
     <div style={{
       display: 'flex', alignItems: 'flex-start', gap: '0.35rem',
-      fontSize: 'var(--fs-caption)', color: 'var(--warn)',
-      background: 'var(--warn-bg)', borderRadius: 4, padding: '3px 6px',
-      margin: '0 0 0.35rem',
+      fontSize: 'var(--fs-caption)', color,
+      background: 'var(--warn-bg)', borderRadius: 4,
+      padding: '3px 6px', margin: '0 0 0.35rem',
     }}>
       <i className="ti ti-alert-triangle" style={{ marginTop: 2, flexShrink: 0 }} />
       <span style={{ flex: 1, minWidth: 0 }}>
@@ -142,7 +167,7 @@ export function Informe({ t, retinguts, onTanca }) {
         aria-label={t('app.close')}
         style={{
           background: 'none', border: 'none', cursor: 'pointer',
-          color: 'var(--warn)', flexShrink: 0, padding: 0,
+          color, flexShrink: 0, padding: 0,
         }}
       >
         <i className="ti ti-x" />

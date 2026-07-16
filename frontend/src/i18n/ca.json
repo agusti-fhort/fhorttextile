@@ -3222,6 +3222,7 @@
       "darts_dropped": "{{declarades}} ja declarades · {{rebutjades}} rebutjades",
       "darts_empty": "Cap pinça proposada: el motor no veu cap V prou local a les vores.",
       "darts_proposed": "Pinces proposades ({{n}})",
+      "err_bulk": "No s'ha pogut esborrar el bloc sencer. La llista s'ha rellegit: comprova què hi ha quedat.",
       "err_pinca": "No s'ha pogut marcar la pinça.",
       "err_proposal_confirm": "No s'ha pogut confirmar la proposta.",
       "err_proposal_reject": "No s'ha pogut rebutjar la proposta.",

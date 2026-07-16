@@ -53,17 +53,29 @@ export default function RelationsPanel({
   /**
    * Res cau sense passar per aquí: es demana la confirmació, i només el «sí» executa.
    *
-   * L'informe es desa PER MENA i la selecció es buida només quan l'esborrat ha anat: si
-   * rebota, el que s'havia marcat continua marcat i es pot tornar a provar sense refer la
-   * tria.
+   * **El camí d'error importa tant com el d'èxit** (E/T4). L'esborrat és per ítem: quan el
+   * servidor rebota a mig bloc, els que ja han caigut han caigut de debò. Si el client es
+   * quedés callat, la columna continuaria pintant files que ja no existeixen i la selecció
+   * seguiria marcada a sobre — i el segon clic les tornaria com a «no trobat». Per això:
+   *
+   * - l'informe vell es neteja ABANS (cap informe d'un intent anterior sobre una llista nova),
+   * - qui avisa de l'error és `errEina`, com a tot el Taller (el `catch` és del cridador),
+   * - i la selecció es buida al `finally`, perquè les files que hi havia sota ja no hi són.
+   *
+   * Qui garanteix que la llista es rellegeixi passi el que passi és el `finally` dels handlers
+   * del Taller: la pantalla no pot mentir ni quan la crida peta.
    */
   const demana = (mena, ids, fn, seleccio) => setConfirma({
     mena,
     count: ids.length,
     executa: async () => {
-      const informe = await fn(ids)
-      setInformes(i => ({ ...i, [mena]: informe?.retinguts || [] }))
-      seleccio.buida()
+      setInformes(i => ({ ...i, [mena]: [] }))
+      try {
+        const informe = await fn(ids)
+        setInformes(i => ({ ...i, [mena]: informe?.retinguts || [] }))
+      } finally {
+        seleccio.buida()
+      }
     },
   })
 
@@ -258,7 +270,9 @@ export default function RelationsPanel({
           onConfirm={() => {
             const executa = confirma.executa
             setConfirma(null)
-            executa()
+            // El `catch` buit no s'empassa res: qui ho diu és `errEina`, des del Taller. El que
+            // evita és una promesa rebutjada sense amo, que no la veuria ningú.
+            executa().catch(() => {})
           }}
         />
       )}

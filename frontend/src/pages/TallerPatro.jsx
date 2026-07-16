@@ -519,6 +519,25 @@ export default function TallerPatro() {
   // Cada família té la seva crida, i totes tornen el MATEIX informe
   // `{esborrats, retinguts}`: el panell no ha de saber quina mena d'entitat acaba de tocar
   // per saber llegir què s'ha quedat.
+  //
+  // **Totes rellegeixen al `finally`, i totes avisen si peten** (E/T4). L'esborrat és atòmic
+  // PER ÍTEM —un èxit parcial és el disseny, no una avaria—, i això vol dir que quan la crida
+  // rebota a mig bloc els ítems que ja han caigut han caigut de debò. Rellegir només en cas
+  // d'èxit deixaria la columna pintant files mortes i la selecció marcada a sobre: la pantalla
+  // mentiria justament el dia que ha anat malament.
+
+  /** L'esborrat en bloc, amb la llei que val per a totes les famílies. */
+  const enBloc = async (fn) => {
+    try {
+      const { data } = await fn()
+      return data
+    } catch (e) {
+      setErrEina(t('pattern.taller.err_bulk'))
+      throw e
+    } finally {
+      await recarregarRelacions()
+    }
+  }
 
   /**
    * Rebutjar propostes en bloc.
@@ -531,38 +550,31 @@ export default function TallerPatro() {
    */
   const esborrarBlocProposta = async (props) => {
     setPropostaRessaltada(null)
-    const resultats = await Promise.allSettled(props.map(p =>
-      patterns.sew.rebutjarProposta({
-        model: modelId, segment_a: p.a.segment_id, segment_b: p.b.segment_id,
-      })))
-    await recarregarRelacions()
-    return {
-      retinguts: resultats.flatMap((r, i) => (r.status === 'rejected'
+    try {
+      const resultats = await Promise.allSettled(props.map(p =>
+        patterns.sew.rebutjarProposta({
+          model: modelId, segment_a: p.a.segment_id, segment_b: p.b.segment_id,
+        })))
+      // `allSettled`: una que rebota no se n'emporta les altres —és el mateix principi que
+      // l'atomicitat per ítem del servidor—, i les que han rebotat es diuen a l'informe.
+      const retinguts = resultats.flatMap((r, i) => (r.status === 'rejected'
         ? [{ id: props[i].clau.join('-'), motiu: 'error' }]
-        : [])),
+        : []))
+      if (retinguts.length) setErrEina(t('pattern.taller.err_bulk'))
+      return { retinguts }
+    } finally {
+      await recarregarRelacions()
     }
   }
 
-  const esborrarBlocPom = async (ids) => {
-    const { data } = await patterns.poms.bulkRemove(ids)
-    await recarregarRelacions()
-    return data
-  }
+  const esborrarBlocPom = ids => enBloc(() => patterns.poms.bulkRemove(ids))
 
   // Costures i pinces comparteixen endpoint —una pinça ÉS una SewRelation— però no
   // selecció: al panell són dos grups, perquè esborrar costures i esborrar pinces són dues
   // intencions, i el compte de la paperera ha de dir la mena que caurà.
-  const esborrarBlocSew = async (ids) => {
-    const { data } = await patterns.sew.bulkRemove(ids)
-    await recarregarRelacions()
-    return data
-  }
+  const esborrarBlocSew = ids => enBloc(() => patterns.sew.bulkRemove(ids))
 
-  const esborrarBlocTram = async (ids) => {
-    const { data } = await patterns.segments.bulkRemove(ids)
-    await recarregarRelacions()
-    return data
-  }
+  const esborrarBlocTram = ids => enBloc(() => patterns.segments.bulkRemove(ids))
 
   /** El nom que un tram proposat tindrà quan la proposta es confirmi. */
   const nomTramProposat = (costat) => t('pattern.taller.proposal_seg', {

@@ -10,7 +10,7 @@ de ser una mesura del patró per ser una xifra que algú hi ha escrit a sobre.
 """
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import serializers, status, viewsets
+from rest_framework import exceptions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -445,15 +445,24 @@ class BulkDeleteMixin:
         except (TypeError, ValueError):
             raise serializers.ValidationError({'ids': 'Els ids han de ser enters.'})
 
-        # El queryset del ViewSet, no el manager: el filtre de permisos i de tenant ha de
-        # valer aquí igual que a `destroy`. Demanar un id d'un altre patró ha de dir
-        # «no trobat», no esborrar-lo.
-        objectes = {o.id: o for o in self.get_queryset().filter(id__in=set(ids))}
+        # El MATEIX camí que `get_object()`: `filter_queryset()` sobre el queryset del ViewSet
+        # i `check_object_permissions()` per ítem. No n'hi ha prou amb `get_queryset()`: avui
+        # dona el mateix resultat, però el dia que algú posi una permission_class amb
+        # `has_object_permission` de debò, `destroy` quedaria protegit i el bloc no —i ho faria
+        # en silenci, que és exactament el que aquest endpoint existeix per evitar. El que no
+        # passa el filtre és «no trobat»: un id d'un altre patró no s'esborra i no es confirma.
+        objectes = {o.id: o for o in self.filter_queryset(self.get_queryset())
+                    .filter(id__in=set(ids))}
 
         esborrats, retinguts = [], []
         for i in dict.fromkeys(ids):          # sense repetits, i en l'ordre demanat
             obj = objectes.get(i)
             if obj is None:
+                retinguts.append({'id': i, 'motiu': 'no_trobat'})
+                continue
+            try:
+                self.check_object_permissions(request, obj)
+            except (exceptions.NotFound, exceptions.PermissionDenied):
                 retinguts.append({'id': i, 'motiu': 'no_trobat'})
                 continue
             motiu = self._esborra_un(obj)
