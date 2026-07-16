@@ -116,6 +116,28 @@ def cerca_canonic_equivalent(model):
     ).distinct().first()
 
 
+def cerca_client_equivalent(customer, size_system, exclude_ids=()):
+    """Rulesets de CLIENT existents per al mateix customer + size_system (candidats a reutilitzar).
+
+    Avís-i-confirma TOU (Peça R): NO fusiona ni reutilitza automàticament; retorna els rulesets
+    actius, `is_system_default=False`, del mateix client i sistema de talles, perquè el camí
+    d'import els OFEREIXI al tècnic abans de derivar-ne un de nou (evita la duplicació 115/116).
+
+    Trigger de "similar" = customer + size_system (decisió Agus). NO es filtra per eixos ni per
+    solapament de POM: precisament els casos on els eixos difereixen (un ruleset amb
+    construction/fit NULL i un altre amb WOVEN/REGULAR) són els que la dedup estricta de
+    `derive_grading_rule_set` (1D) no pot casar. Buit si falta customer o size_system.
+    """
+    from fhort.pom.models import GradingRuleSet
+    if not (customer and size_system):
+        return GradingRuleSet.objects.none()
+    return (GradingRuleSet.objects
+            .filter(is_system_default=False, actiu=True,
+                    customer=customer, size_system=size_system)
+            .exclude(id__in=[i for i in exclude_ids if i])
+            .order_by('id'))
+
+
 def detect_grading(valors_per_talla, run_ordenat, base_label) -> dict:
     """Detecta la lògica de grading d'un POM a partir dels seus valors per talla.
 

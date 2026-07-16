@@ -1818,6 +1818,33 @@ def import_session_confirmar_view(request, token):
         retingut_snapshot = list(model.grading_rules.select_related('pom').all())
         grading_choice = (request.data.get('grading_choice') or '').strip().lower()
 
+        # ── 3a. AVÍS-I-CONFIRMA client-aware (Peça R): si el client ja té graduació(ns) per aquest
+        # size_system, OFEREIX reutilitzar-les abans de derivar-ne una de nova (evita la duplicació
+        # 115/116: derive_grading_rule_set/1D no casa quan els eixos difereixen). TOU: el tècnic tria
+        # amb `ruleset_choice` = 'reuse:<id>' | 'new'. Reusa el patró 409 del conflicte de grading.
+        from fhort.pom.grading_utils import cerca_client_equivalent
+        ruleset_choice = (request.data.get('ruleset_choice') or '').strip().lower()
+        reuse_candidates = list(cerca_client_equivalent(
+            model.customer, model.size_system, exclude_ids=[model.grading_rule_set_id]))
+        if reuse_candidates and not ruleset_choice:
+            transaction.set_rollback(True)
+            return Response({
+                'conflict': True,
+                'tipus': 'ruleset_reuse',
+                'reuse_candidates': [
+                    {'id': c.id, 'nom': c.nom, 'n_regles': c.regles.count(),
+                     'origen': c.origen} for c in reuse_candidates],
+                'message': ('Aquest client ja té graduació per aquest sistema de talles. '
+                            'Reutilitzar-ne una o crear-ne una de nova?'),
+            }, status=409)
+        reused = None
+        if ruleset_choice.startswith('reuse:'):
+            try:
+                _reuse_id = int(ruleset_choice.split(':', 1)[1])
+            except (ValueError, IndexError):
+                _reuse_id = None
+            reused = next((c for c in reuse_candidates if c.id == _reuse_id), None)
+
         # ── 3b. Derivar la regla de grading des dels valors i re-apuntar-hi el model.
         # La derivació (detect_grading per POM + dedup + anti-proliferació 1D + crear/
         # reutilitzar el ruleset) viu a pom.grading_utils.derive_grading_rule_set (pura de
@@ -1834,21 +1861,30 @@ def import_session_confirmar_view(request, token):
         prev_grs_id = model.grading_rule_set_id  # per restaurar la FK si el desament peta
         try:
             with transaction.atomic():
-                new_rule_set = derive_grading_rule_set(
-                    size_run_model=model.size_run_model,
-                    base_size=base_size,
-                    valors=valors,
-                    confirmed_pom_ids=confirmed_pom_ids,
-                    size_system=model.size_system,
-                    garment_group=model.garment_group,
-                    target_codi=model.target,
-                    construction_codi=model.construction,
-                    fit_type_codi=model.fit_type,
-                    nom=f"Importació fitxa · {model.codi_intern}",
-                    nom_sufix_unic=sf_codi,
-                    avisos=grading_avisos,
-                    customer=model.customer,   # PROVINENÇA: eix de client del run
-                )
+                if reused is not None:
+                    # REUTILITZAR el ruleset de client existent (tria del tècnic): NO deriva → cap
+                    # bessó nou (com el 116). El re-apuntat + materialització (origen='IMPORTED') els
+                    # fa el bloc de sota, comú amb el camí derivat (new_rule_set com a punter).
+                    new_rule_set = reused
+                    grading_avisos.append(
+                        f"Grading reutilitzat per decisió del tècnic: ruleset de client existent "
+                        f"#{reused.id} '{reused.nom}' (no s'ha creat cap ruleset nou).")
+                else:
+                    new_rule_set = derive_grading_rule_set(
+                        size_run_model=model.size_run_model,
+                        base_size=base_size,
+                        valors=valors,
+                        confirmed_pom_ids=confirmed_pom_ids,
+                        size_system=model.size_system,
+                        garment_group=model.garment_group,
+                        target_codi=model.target,
+                        construction_codi=model.construction,
+                        fit_type_codi=model.fit_type,
+                        nom=f"Importació fitxa · {model.codi_intern}",
+                        nom_sufix_unic=sf_codi,
+                        avisos=grading_avisos,
+                        customer=model.customer,   # PROVINENÇA: eix de client del run
+                    )
                 # P2 — CONFLICTE conscient: regla IMPORTADA (del document) vs RETINGUDA del model.
                 # Comparació per FORMA (grading_rules_match, util pur — NO toca el motor). Si
                 # difereixen i el tècnic no ha decidit, NO sobreescriure (→ 409 + rollback a fora).
