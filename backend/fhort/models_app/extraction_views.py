@@ -1869,7 +1869,8 @@ def import_session_confirmar_view(request, token):
                         'container_id': container.id,
                         'container_nom': container.nom,
                         'divergencies': [
-                            {'pom': c['pom_codi'], 'detall': c['detall']} for c in unresolved],
+                            {'pom_id': c['pom_id'], 'pom': c['pom_codi'], 'detall': c['detall']}
+                            for c in unresolved],
                         'options': ['keep_catalog', 'update_catalog', 'model_resident'],
                         'message': ("Algunes regles de la fitxa contradiuen el catàleg del client. "
                                     "Per a cada POM: mantenir el catàleg, actualitzar-lo, o "
