@@ -53,6 +53,11 @@ export default function TallerPatro() {
   // canvia i amb ella el que encara es pot proposar.
   const [propostes, setPropostes] = useState([])
   const [descartatsProp, setDescartatsProp] = useState(null)
+  // Si algú ja ha buscat. Distingeix «encara no ho he demanat» de «ho he demanat i no n'hi ha
+  // cap»: són dues coses diferents i la pantalla no les pot dir igual.
+  const [cercades, setCercades] = useState(false)
+  const [buscant, setBuscant] = useState(false)
+  const [rebuigs, setRebuigs] = useState([])
   const [propostaRessaltada, setPropostaRessaltada] = useState(null)
   // ── A1. Les PINCES que el motor veu. Mateixa vida que les costures proposades: no es desen,
   // es recalculen, i marcar-ne una (o rebutjar-la) les refà.
@@ -134,22 +139,21 @@ export default function TallerPatro() {
         || files[0]
       if (!triat) { setActual(null); return }
 
-      const [{ data: detall }, { data: geo }, { data: sw }, { data: fn }, { data: pr },
-             { data: pp }] =
+      // Les PROPOSTES no entren aquí (F/T1): el Taller s'obre amb el grup buit i un botó.
+      // A2 no és una lectura, és un motor que opina sobre tot el patró — i córrer-lo sol, en
+      // obrir, feia que la llista aparegués sense que ningú l'hagués demanada.
+      const [{ data: detall }, { data: geo }, { data: sw }, { data: fn }, { data: pp }] =
         await Promise.all([
           patterns.get(triat.id),
           patterns.geometry(triat.id),
           patterns.sew.list(modelId),
           patterns.modelPoms(triat.id),
-          patterns.sew.propostes(modelId, triat.id),
           patterns.sew.pincesProposades(modelId, triat.id),
         ])
       setActual(detall)
       setGeometria(geo)
       setSews(sw.results || sw || [])
       setFeina(fn)
-      setPropostes(pr.propostes || [])
-      setDescartatsProp(pr.descartats || null)
       setPincesProp(pp.candidats || [])
       setDescartatsPinca(pp.descartats || null)
     } catch {
@@ -160,6 +164,25 @@ export default function TallerPatro() {
   }, [modelId, fileParam, t])
 
   useEffect(() => { carregar() }, [carregar])
+
+  /**
+   * Els «no» vius d'aquest model. És una consulta a una taula, no el motor: es pot llegir sol.
+   *
+   * Viu AQUÍ dalt, i no al costat de `desferRebuig`, perquè el seu efecte la porta a les
+   * dependències i les dependències s'avaluen DURANT el render: declarada més avall, el render
+   * petava sencer contra la seva pròpia zona morta abans que ningú la cridés.
+   */
+  const llegirRebuigs = useCallback(async () => {
+    try {
+      const { data } = await patterns.sewRejections.list(modelId)
+      setRebuigs(data.results || data || [])
+    } catch { /* la llista de rebuigs no és crítica: si no ve, no es diu res */ }
+  }, [modelId])
+
+  // Els REBUIGS sí que es llegeixen en obrir (F/T3): és una consulta a una taula, no el motor.
+  // El que T1 treu de l'arrencada és A2, que opina sobre tot el patró — no saber quants «no»
+  // hi ha vius és el que fa que un recompte de zero propostes menteixi.
+  useEffect(() => { llegirRebuigs() }, [llegirRebuigs])
 
   // ── el rellotge ──────────────────────────────────────────────────────────
   // Entrar al taller obre la tasca; sortir-ne la pausa. Arribar amb `?task_id=` (des del
@@ -392,26 +415,50 @@ export default function TallerPatro() {
   // s'ha tocat deixaria la resta mentint a la pantalla.
   const recarregarRelacions = useCallback(async () => {
     if (!actual) return
-    // Les PROPOSTES entren aquí i no en una crida a part: confirmar-ne una, esborrar una costura
-    // o marcar una pinça canvia la COBERTURA, i amb ella el que encara es pot proposar. Rellegir
-    // les relacions i deixar les propostes velles a la pantalla seria ensenyar una llista que ja
-    // no és certa —i oferir per cosir un tram que acaba de quedar cosit.
-    const [{ data: geo }, { data: sw }, { data: fn }, { data: pr }, { data: pp }] =
+    // Les PROPOSTES ja NO entren aquí (F/T1). Abans sí, amb una raó bona: confirmar-ne una o
+    // esborrar una costura canvia la cobertura, i la llista vella deixava d'estar certa. Però
+    // el remei era pitjor —cada acció recalculava A2 i la llista es reomplia sola d'amagat, i
+    // rebutjar-ne una en feia aparèixer de noves (els trams alliberats)—, i una llista que es
+    // mou quan no l'has tocada no es pot revisar.
+    //
+    // Ara qui la refà és qui la mira: «Buscar propostes». El preu és que la llista pot quedar
+    // VELLA respecte de la geometria, i es paga a posta: val més una llista que no es mou que
+    // una que es mou sola. Confirmar-ne una la treu de la llista (allà on es confirma), que és
+    // l'única part que la persona ja sap segur.
+    const [{ data: geo }, { data: sw }, { data: fn }, { data: pp }] =
       await Promise.all([
         patterns.geometry(actual.id),
         patterns.sew.list(modelId),
         patterns.modelPoms(actual.id),
-        patterns.sew.propostes(modelId, actual.id),
         patterns.sew.pincesProposades(modelId, actual.id),
       ])
     setGeometria(geo)
     setSews(sw.results || sw || [])
     setFeina(fn)
-    setPropostes(pr.propostes || [])
-    setDescartatsProp(pr.descartats || null)
     setPincesProp(pp.candidats || [])
     setDescartatsPinca(pp.descartats || null)
   }, [actual, modelId])
+
+  /**
+   * BUSCAR PROPOSTES (F/T1) — l'única porta per la qual la llista es reomple.
+   *
+   * A2 corre quan algú ho demana, i prou. Respecta els rebuigs persistents (els aplica el
+   * servidor) i no toca res del patró: proposar és una opinió, no un canvi.
+   */
+  const buscarPropostes = async () => {
+    if (!actual) return
+    setBuscant(true)
+    try {
+      const { data } = await patterns.sew.propostes(modelId, actual.id)
+      setPropostes(data.propostes || [])
+      setDescartatsProp(data.descartats || null)
+      setCercades(true)
+    } catch {
+      setErrEina(t('pattern.taller.err_proposals_search'))
+    } finally {
+      setBuscant(false)
+    }
+  }
 
   // ── A1: confirmar i rebutjar una PINÇA proposada ─────────────────────────
 
@@ -495,10 +542,20 @@ export default function TallerPatro() {
           text: textCobertura(t, a, unit), missatge: a.missatge || '',
         })),
       })
+      // Se'n va de la llista, i la llista no es recalcula (F/T1): confirmar-ne una és l'única
+      // cosa que la persona ja sap segur —aquella parella ja no és cap proposta, és una
+      // costura—, i és l'únic que la llista es permet saber sense que li ho demanin.
+      treuDeLaLlista(p)
       await recarregarRelacions()
     } catch {
       setErrEina(t('pattern.taller.err_proposal_confirm'))
     }
+  }
+
+  /** Treure una proposta de la llista mostrada. NO toca el motor: només la pantalla. */
+  const treuDeLaLlista = (p) => {
+    const clau = p.clau.join('-')
+    setPropostes(l => l.filter(x => x.clau.join('-') !== clau))
   }
 
   /** Rebutjar-ne una: que no torni a sortir. El «no» es desa; si no, no seria un «no». */
@@ -508,7 +565,8 @@ export default function TallerPatro() {
       await patterns.sew.rebutjarProposta({
         model: modelId, segment_a: p.a.segment_id, segment_b: p.b.segment_id,
       })
-      await recarregarRelacions()
+      treuDeLaLlista(p)
+      await llegirRebuigs()
     } catch {
       setErrEina(t('pattern.taller.err_proposal_reject'))
     }
@@ -539,31 +597,76 @@ export default function TallerPatro() {
     }
   }
 
+  // ── LES DUES MANERES DE TREURE UNA PROPOSTA (F/T2) ────────────────────────
+  //
+  // No són la mateixa cosa dita dues vegades: són dues intencions, i confondre-les era el
+  // defecte. El bulk d'E escrivia 27 rebuigs PERMANENTS amb un clic —una decisió que ningú
+  // no havia pres parella per parella— i s'ha retirat.
+
   /**
-   * Rebutjar propostes en bloc.
+   * NETEJAR LA LLISTA — efímer. No escriu res, enlloc.
+   *
+   * «Ja he mirat això, treu-m'ho del davant» no és «aquestes parelles no es cusen». Per això
+   * no demana confirmació i no en cal: tornar a buscar les retorna totes. La llibertat de
+   * netejar sense conseqüències és el que fa que la llista es pugui fer servir com una taula
+   * de treball en comptes d'un formulari que s'ha d'omplir bé a la primera.
+   */
+  const netejarPropostes = () => {
+    setPropostaRessaltada(null)
+    setPropostes([])
+  }
+
+  /**
+   * REBUTJAR-NE VÀRIES — persistent. El «no» de sempre, dit sobre unes quantes alhora.
    *
    * Aquí NO hi ha bulk del servidor, i és a posta: una proposta no és cap fila (es recalcula
-   * a cada crida) i «esborrar-la» és crear-ne el REBUIG. L'endpoint que ja hi ha és
-   * idempotent (`get_or_create`), i inventar-ne un segon per a un bucle hauria estat un lloc
-   * més on la llei del rebuig podria divergir. Les crides van en paral·lel, i el que rebota
-   * s'informa en comptes de fer caure les altres.
+   * a cada crida) i rebutjar-la és crear-ne el REBUIG. L'endpoint que ja hi ha és idempotent
+   * (`get_or_create`), i inventar-ne un segon per a un bucle hauria estat un lloc més on la
+   * llei del rebuig podria divergir. Les crides van en paral·lel, i el que rebota s'informa
+   * en comptes de fer caure les altres.
+   *
+   * NO recalcula la llista: només en treu les que s'han rebutjat. Recalcular-la aquí és
+   * exactament el que feia aparèixer propostes noves dels trams que el rebuig acabava
+   * d'alliberar — el motor omplint el buit que la persona acabava de fer.
    */
-  const esborrarBlocProposta = async (props) => {
+  const rebutjarBlocProposta = async (props) => {
     setPropostaRessaltada(null)
     try {
       const resultats = await Promise.allSettled(props.map(p =>
         patterns.sew.rebutjarProposta({
           model: modelId, segment_a: p.a.segment_id, segment_b: p.b.segment_id,
         })))
-      // `allSettled`: una que rebota no se n'emporta les altres —és el mateix principi que
-      // l'atomicitat per ítem del servidor—, i les que han rebotat es diuen a l'informe.
+      // `allSettled`: una que rebota no se n'emporta les altres, i les que han rebotat es
+      // diuen a l'informe en comptes de desaparèixer sense dir res.
       const retinguts = resultats.flatMap((r, i) => (r.status === 'rejected'
         ? [{ id: props[i].clau.join('-'), motiu: 'error' }]
         : []))
       if (retinguts.length) setErrEina(t('pattern.taller.err_bulk'))
+      const fallades = new Set(retinguts.map(x => x.id))
+      props.forEach(p => { if (!fallades.has(p.clau.join('-'))) treuDeLaLlista(p) })
       return { retinguts }
     } finally {
-      await recarregarRelacions()
+      await llegirRebuigs()
+    }
+  }
+
+  // ── ELS REBUIGS: DESFER-LOS (F/T3) ────────────────────────────────────────
+  // (`llegirRebuigs` viu a dalt, amb el seu efecte: v. la nota de la zona morta.)
+
+  /**
+   * Desfer un rebuig, i tornar a buscar si hi havia llista.
+   *
+   * Rebuscar aquí NO trenca T1: desfer un rebuig és una acció de la persona SOBRE la llista de
+   * propostes, i el que en demana és, exactament, «torna-me-la a ensenyar». El que T1 prohibeix
+   * és que la llista es mogui quan ningú l'ha tocada.
+   */
+  const desferRebuig = async (id) => {
+    try {
+      await patterns.sewRejections.remove(id)
+      await llegirRebuigs()
+      if (cercades) await buscarPropostes()
+    } catch {
+      setErrEina(t('pattern.taller.err_rejection_undo'))
     }
   }
 
@@ -980,6 +1083,9 @@ export default function TallerPatro() {
               poms={pomsAncorats} sews={costures} pinces={pinces} segments={trams}
               tramsPerId={tramsPerId} unit={unit}
               propostes={propostes} descartatsProp={descartatsProp}
+              cercades={cercades} buscant={buscant}
+              onBuscaPropostes={buscarPropostes} onNetejaPropostes={netejarPropostes}
+              rebuigs={rebuigs} onDesfaRebuig={desferRebuig}
               onConfirmaProposta={confirmarProposta}
               onRebutjaProposta={rebutjarProposta}
               onRessaltaProposta={setPropostaRessaltada}
@@ -993,7 +1099,7 @@ export default function TallerPatro() {
               onEsborraPinca={esborrarPinca} onReanomenaPinca={reanomenarSew}
               onReanomenaTram={reanomenarTram} onReobreTram={reobrirTram}
               onEsborraTram={esborrarTram}
-              onEsborraBlocProposta={esborrarBlocProposta}
+              onRebutjaBlocProposta={rebutjarBlocProposta}
               onEsborraBlocPom={esborrarBlocPom}
               onEsborraBlocSew={esborrarBlocSew}
               onEsborraBlocPinca={esborrarBlocSew}

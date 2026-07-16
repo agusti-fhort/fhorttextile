@@ -722,6 +722,16 @@ export const patterns = {
       client.post('/api/v1/patterns/sew-relations/rebutjar-pinca/', data),
   },
 
+  // Els REBUIGS de proposta: llegir-los i DESFER-LOS (F/T3). Crear-ne un NO és aquí, és
+  // `sew.rebutjarProposta` — la llei del rebuig (clau canònica, idempotència) té una sola
+  // porta d'entrada. Desfer-lo no torna a proposar res per ell mateix: només treu la
+  // mordassa, i el motor dirà el que vegi la propera vegada que se li demani.
+  sewRejections: {
+    list: (modelId) => client.get('/api/v1/patterns/sew-proposal-rejections/',
+      { params: { model: modelId } }),
+    remove: (id) => client.delete(`/api/v1/patterns/sew-proposal-rejections/${id}/`),
+  },
+
   // Trams DECLARATS (W1/T4). La segmentació gir→gir és una proposta del motor (origen
   // 'auto'); un tram DECLARAT és una afirmació humana: "aquest tros de vora existeix i es
   // diu així". Per això té nom i es pot reanomenar. Esborrar-ne un que una costura fa

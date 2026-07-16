@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import DartProposalsPanel from './DartProposalsPanel'
 import ProposalsPanel from './ProposalsPanel'
-import { nomCostura, textAritmetica, textCobertura, textEstat } from './sewText'
+import { CADENA, nomCostura, textAritmetica, textCobertura, textEstat } from './sewText'
 import { formatLen, titleLen } from '../../utils/format'
 import { AccionsGrup, Casella, Informe, useSeleccio } from './seleccio'
 import Modal from '../ui/Modal'
@@ -27,6 +27,8 @@ import Modal from '../ui/Modal'
 export default function RelationsPanel({
   poms, sews, pinces, segments, tramsPerId, unit = 'CM',
   propostes = [], descartatsProp = null,
+  cercades = false, buscant = false, onBuscaPropostes, onNetejaPropostes,
+  rebuigs = [], onDesfaRebuig,
   onConfirmaProposta, onRebutjaProposta, onRessaltaProposta,
   pincesProposades = [], descartatsPinca = null,
   onConfirmaPinca, onRebutjaPinca, onRessaltaPinca,
@@ -34,7 +36,7 @@ export default function RelationsPanel({
   onEsborraSew, onReobreSew, onReanomenaSew,
   onEsborraPinca, onReanomenaPinca,
   onReanomenaTram, onReobreTram, onEsborraTram,
-  onEsborraBlocProposta, onEsborraBlocPom, onEsborraBlocSew,
+  onRebutjaBlocProposta, onEsborraBlocPom, onEsborraBlocSew,
   onEsborraBlocPinca, onEsborraBlocTram,
 }) {
   const { t } = useTranslation()
@@ -90,26 +92,38 @@ export default function RelationsPanel({
       <Seccio
         titol={t('pattern.taller.proposals', { n: propostes.length })}
         accions={
-          <AccionsGrup
+          <AccionsProp
             t={t} n={selProp.sel.size} total={propostes.length}
             onTots={selProp.tots}
-            onEsborra={() => demana(
+            onNeteja={onNetejaPropostes}
+            onRebutja={() => demana(
               'proposals',
               propostes.filter(p => selProp.sel.has(p.clau.join('-'))),
-              onEsborraBlocProposta,
+              onRebutjaBlocProposta,
               selProp,
             )}
           />
         }
       >
         <Informe t={t} retinguts={informes.proposals} onTanca={() => tanca('proposals')} />
-        <ProposalsPanel
-          propostes={propostes} descartats={descartatsProp} unit={unit}
-          sel={selProp.sel} onAlterna={selProp.alterna}
-          onConfirma={onConfirmaProposta}
-          onRebutja={onRebutjaProposta}
-          onRessalta={onRessaltaProposta}
-        />
+
+        {/* EL RECOMPTE NO POT MENTIR (F/T3). El títol diu el que hi ha a la llista; si hi ha
+            «no» vius que n'amaguen candidats, es diu aquí —i es poden desfer. Un zero que en
+            realitat vol dir «zero, menys els cinc que vas amagar el mes passat» és un zero
+            que enganya. */}
+        <Rebuigs t={t} rebuigs={rebuigs} unit={unit} onDesfa={onDesfaRebuig} />
+
+        {propostes.length === 0 ? (
+          <BuscaPropostes t={t} cercades={cercades} buscant={buscant} onBusca={onBuscaPropostes} />
+        ) : (
+          <ProposalsPanel
+            propostes={propostes} descartats={descartatsProp} unit={unit}
+            sel={selProp.sel} onAlterna={selProp.alterna}
+            onConfirma={onConfirmaProposta}
+            onRebutja={onRebutjaProposta}
+            onRessalta={onRessaltaProposta}
+          />
+        )}
       </Seccio>
 
       {/* LES PINCES PROPOSADES (A1), just sota les costures proposades: les dues llistes són la
@@ -254,17 +268,28 @@ export default function RelationsPanel({
         ))}
       </Seccio>
 
-      {/* La CONFIRMACIÓ. Un esborrat en bloc és el gest que més pot destruir d'un sol clic, i
-          el diàleg diu el compte i la MENA: «Esborrar 18 trams declarats?». Sense la mena, qui
-          té cinc grups a la columna ha de recordar quina paperera ha clicat. */}
+      {/* La CONFIRMACIÓ. Un gest en bloc és el que més pot destruir d'un sol clic, i el diàleg
+          diu el compte i la MENA: «Esborrar 18 trams declarats?». Sense la mena, qui té cinc
+          grups a la columna ha de recordar quina paperera ha clicat.
+
+          Les PROPOSTES tenen el seu text (F/T2): el que passa quan es rebutgen no és que
+          s'esborrin —no hi ha res a esborrar, no són files—, és que no es tornaran a proposar.
+          Dir-ho amb la frase de l'esborrat amagaria l'única cosa que importa d'aquest botó:
+          que és permanent. */}
       {confirma && (
         <Modal
-          title={t('pattern.taller.bulk_confirm_title', {
-            count: confirma.count,
-            mena: t(`pattern.taller.bulk_kind_${confirma.mena}`, { count: confirma.count }),
-          })}
-          subtitle={t('pattern.taller.bulk_confirm_body')}
-          confirmLabel={t('pattern.taller.bulk_delete', { count: confirma.count })}
+          title={confirma.mena === 'proposals'
+            ? t('pattern.taller.prop_reject_confirm_title', { count: confirma.count })
+            : t('pattern.taller.bulk_confirm_title', {
+              count: confirma.count,
+              mena: t(`pattern.taller.bulk_kind_${confirma.mena}`, { count: confirma.count }),
+            })}
+          subtitle={confirma.mena === 'proposals'
+            ? t('pattern.taller.prop_reject_confirm_body')
+            : t('pattern.taller.bulk_confirm_body')}
+          confirmLabel={confirma.mena === 'proposals'
+            ? t('pattern.taller.prop_reject_bulk', { count: confirma.count })
+            : t('pattern.taller.bulk_delete', { count: confirma.count })}
           cancelLabel={t('app.cancel')}
           onCancel={() => setConfirma(null)}
           onConfirm={() => {
@@ -275,6 +300,174 @@ export default function RelationsPanel({
             executa().catch(() => {})
           }}
         />
+      )}
+    </div>
+  )
+}
+
+// ── LES PROPOSTES, SOTA DEMANDA (QA-TALLER F) ────────────────────────────────
+
+/**
+ * La capçalera del grup de propostes. **No és `AccionsGrup`**, i és la diferència que dona
+ * sentit a tot el sprint.
+ *
+ * Als altres grups la paperera esborra: hi ha una sola manera de treure una fila. Aquí n'hi ha
+ * DUES, i no són la mateixa cosa dita dos cops:
+ *
+ * - **Netejar** (la paperera) és efímer: treu de la vista, no escriu res, i tornar a buscar ho
+ *   retorna. Per això no demana confirmació —no hi ha res a confirmar.
+ * - **Rebutjar** (només amb selecció) és permanent: és el «no» que el motor recordarà.
+ *
+ * Posar-les totes dues sota la mateixa icona era el defecte d'E: la paperera escrivia 27
+ * rebuigs permanents amb un clic, i qui volia «treu-m'ho del davant» acabava dient «això no es
+ * cus mai més» sense saber-ho.
+ */
+function AccionsProp({ t, n, total, onTots, onNeteja, onRebutja }) {
+  if (!total) return null
+  return (
+    <>
+      {n > 0 && (
+        <button
+          onClick={onRebutja}
+          title={t('pattern.taller.prop_reject_bulk_title')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0,
+            background: 'none', border: '1px solid var(--err)', borderRadius: 4,
+            color: 'var(--err)', cursor: 'pointer', padding: '0 5px',
+            fontSize: 'var(--fs-caption)',
+          }}
+        >
+          <i className="ti ti-ban" />
+          {t('pattern.taller.prop_reject_bulk', { count: n })}
+        </button>
+      )}
+      <button
+        onClick={onNeteja}
+        title={t('pattern.taller.prop_clear_title')}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0,
+          background: 'none', border: '1px solid var(--white)', borderRadius: 4,
+          color: 'var(--white)', cursor: 'pointer', padding: '0 5px',
+          fontSize: 'var(--fs-caption)',
+        }}
+      >
+        <i className="ti ti-trash" />
+        {t('pattern.taller.prop_clear')}
+      </button>
+      <Casella
+        marcat={n > 0 && n === total}
+        indeterminat={n > 0 && n < total}
+        onChange={onTots}
+        etiqueta={t('pattern.taller.bulk_select_all')}
+      />
+    </>
+  )
+}
+
+/**
+ * El grup buit: un botó, i què vol dir el buit.
+ *
+ * «Encara no ho he demanat» i «ho he demanat i no n'hi ha cap» són dues coses diferents, i una
+ * llista buida sense dir quina de les dues és fa que ningú sàpiga si el motor no veu res o si
+ * simplement no ha mirat.
+ */
+function BuscaPropostes({ t, cercades, buscant, onBusca }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.4rem',
+      padding: '0.2rem 0',
+    }}>
+      <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0 }}>
+        {cercades
+          ? t('pattern.taller.proposals_none_found')
+          : t('pattern.taller.proposals_not_searched')}
+      </p>
+      <button
+        onClick={onBusca}
+        disabled={buscant}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '0.3rem',
+          background: 'var(--gold)', color: 'var(--white)',
+          border: '1px solid var(--gold)', borderRadius: 4,
+          padding: '0.25rem 0.6rem', fontSize: 'var(--fs-caption)',
+          cursor: buscant ? 'wait' : 'pointer', opacity: buscant ? 0.6 : 1,
+        }}
+      >
+        <i className={`ti ${buscant ? 'ti-loader' : 'ti-wand'}`} />
+        {buscant ? t('pattern.taller.proposals_searching') : t('pattern.taller.proposals_search')}
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Els «no» vius, i com desfer-los.
+ *
+ * Va plegat perquè no és la feina: és la nota al peu que evita que el recompte menteixi. Qui
+ * no hi tingui res a fer no l'ha de veure; qui es pregunti «per què no em proposa la lateral?»
+ * ha de poder respondre-s'ho sense sortir d'aquí.
+ */
+function Rebuigs({ t, rebuigs, unit, onDesfa }) {
+  const [obert, setObert] = useState(false)
+  if (!rebuigs.length) return null
+
+  return (
+    <div style={{ margin: '0 0 0.35rem' }}>
+      <button
+        onClick={() => setObert(o => !o)}
+        aria-expanded={obert}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '0.3rem', width: '100%',
+          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', textAlign: 'left',
+        }}
+      >
+        <i className="ti ti-ban" style={{ flexShrink: 0 }} />
+        <span style={{ flex: 1 }}>
+          {t('pattern.taller.rejections_hidden', { count: rebuigs.length })}
+        </span>
+        <i className={`ti ${obert ? 'ti-chevron-up' : 'ti-chevron-down'}`} />
+      </button>
+
+      {obert && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 3 }}>
+          {rebuigs.map(r => (
+            <div
+              key={r.id}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                border: '1px solid var(--border)', borderRadius: 4,
+                padding: '0.2rem 0.4rem', background: 'var(--bg-card)',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {/* La MATEIXA cara que tenia a la llista quan es va dir que no: peça i
+                    longitud. Els ids dels trams no identifiquen res per a ningú. */}
+                <div style={{
+                  fontSize: 'var(--fs-caption)', color: 'var(--text-main)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {t('pattern.taller.proposal_seg', {
+                    peca: r.peca_a, llarg: formatLen(r.longitud_a_cm, unit),
+                  })}
+                  {` ${CADENA} `}
+                  {t('pattern.taller.proposal_seg', {
+                    peca: r.peca_b, llarg: formatLen(r.longitud_b_cm, unit),
+                  })}
+                </div>
+                {r.motiu && (
+                  <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+                    {r.motiu}
+                  </div>
+                )}
+              </div>
+              <BotoIcona
+                icona="ti-arrow-back-up" etiqueta={t('pattern.taller.rejection_undo')}
+                onClick={() => onDesfa(r.id)}
+              />
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
