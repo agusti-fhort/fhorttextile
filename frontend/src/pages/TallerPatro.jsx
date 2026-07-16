@@ -1083,6 +1083,11 @@ const round2 = (v) => Math.round(v * 100) / 100
  * El repartiment és amb PES, no a parts iguals: la llista de treball és on es passa l'estona
  * i necessita ensenyar files, no dues i mitja. I la capçalera es plega: qui està col·locant
  * POMs pot tancar Peces i Relacions i quedar-se la columna sencera per a la feina.
+ *
+ * La capçalera va en FOSC (QA-TALLER E · T1). Abans era gris clar sobre card gris clar: un
+ * títol que pesa el mateix que el seu contingut no separa res, i la columna es llegia com una
+ * llista sola de 40 files. El contrast no és estètica —és el que fa que «on sóc» es respongui
+ * sense llegir.
  */
 function Contenidor({ titol, icona, pes = 1, children }) {
   const { t } = useTranslation()
@@ -1100,11 +1105,11 @@ function Contenidor({ titol, icona, pes = 1, children }) {
         aria-expanded={!plegat}
         style={{
           flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.4rem',
-          padding: '0.45rem 0.7rem', background: 'var(--bg-card)',
+          padding: '0.45rem 0.7rem', background: 'var(--charcoal)',
           border: 'none', borderBottom: '1px solid var(--border)',
           cursor: 'pointer', textAlign: 'left', width: '100%',
           fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
-          letterSpacing: '0.03em', color: 'var(--text-muted)',
+          letterSpacing: '0.03em', color: 'var(--white)',
         }}
       >
         <i className={`ti ${icona}`} />

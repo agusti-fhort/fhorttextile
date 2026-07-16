@@ -446,15 +446,33 @@ function Tram({ t, tram, unit, onReanomena, onReobre, onEsborra }) {
   )
 }
 
+/**
+ * La capçalera d'un sub-bloc de Relacions.
+ *
+ * Va en FOSC (QA-TALLER E · T1), com el contenidor de la columna: cinc famílies seguides, cada
+ * una amb les seves files, i el títol en gris clar es llegia com una fila més. El que separa un
+ * bloc del següent no pot pesar menys que el que hi ha a dins.
+ *
+ * Que sigui INSET (amb marge i cantonada) i no a sang és el que la diferencia de la capçalera
+ * del contenidor que la conté: mateix color, jerarquia diferent.
+ */
 function Seccio({ titol, children }) {
   return (
     <div>
-      <h4 style={{
-        fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '0.03em',
-        color: 'var(--text-muted)', margin: '0 0 0.35rem',
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '0.4rem',
+        background: 'var(--charcoal)', color: 'var(--white)',
+        borderRadius: 4, padding: '0.25rem 0.5rem', margin: '0 0 0.35rem',
       }}>
-        {titol}
-      </h4>
+        <h4 style={{
+          flex: 1, minWidth: 0, margin: 0,
+          fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '0.03em',
+          fontWeight: 600, color: 'var(--white)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {titol}
+        </h4>
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {children}
       </div>
