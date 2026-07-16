@@ -567,6 +567,28 @@ export default function TallerPatro() {
     }
   }
 
+  // ── ACCEPTAR/DESACCEPTAR un desajust (QA-TALLER H · T3) ───────────────────
+  // Acceptar no toca geometria ni mesura: registra una decisió auditable al servidor. Després
+  // es rellegeixen les relacions perquè la fila mostri l'estat viu (acceptat / per qui).
+
+  const acceptarTolerancia = async (sewId, nota = '') => {
+    try {
+      await patterns.tolerance.accept(sewId, nota)
+      await recarregarRelacions()
+    } catch {
+      setErrEina(t('pattern.taller.err_tol_accept'))
+    }
+  }
+
+  const desacceptarTolerancia = async (sewId, nota = '') => {
+    try {
+      await patterns.tolerance.unaccept(sewId, nota)
+      await recarregarRelacions()
+    } catch {
+      setErrEina(t('pattern.taller.err_tol_accept'))
+    }
+  }
+
   /** Treure una proposta de la llista mostrada. NO toca el motor: només la pantalla. */
   const treuDeLaLlista = (p) => {
     const clau = p.clau.join('-')
@@ -1120,6 +1142,8 @@ export default function TallerPatro() {
               onEsborraPinca={esborrarPinca} onReanomenaPinca={reanomenarSew}
               onReanomenaTram={reanomenarTram} onReobreTram={reobrirTram}
               onEsborraTram={esborrarTram}
+              onAcceptaTolerancia={acceptarTolerancia}
+              onDesacceptaTolerancia={desacceptarTolerancia}
               onRebutjaBlocProposta={rebutjarBlocProposta}
               onEsborraBlocPom={esborrarBlocPom}
               onEsborraBlocSew={esborrarBlocSew}

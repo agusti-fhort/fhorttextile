@@ -722,6 +722,18 @@ export const patterns = {
       client.post('/api/v1/patterns/sew-relations/rebutjar-pinca/', data),
   },
 
+  // ACCEPTACIÓ DE TOLERÀNCIA (H/T2): el tècnic accepta/desaccepta un desajust, amb rastre
+  // append-only. Desacceptar NO esborra: és un esdeveniment nou. `history` llegeix l'auditoria
+  // (per model = transversal; l'estat viu de cada costura ja ve inline a `estat`/`acceptacio`).
+  tolerance: {
+    accept: (sewId, nota = '') => client.post('/api/v1/patterns/sew-tolerance-acceptances/',
+      { sew_relation: sewId, accio: 'accepta', nota }),
+    unaccept: (sewId, nota = '') => client.post('/api/v1/patterns/sew-tolerance-acceptances/',
+      { sew_relation: sewId, accio: 'desaccepta', nota }),
+    history: (modelId) => client.get('/api/v1/patterns/sew-tolerance-acceptances/',
+      { params: { model: modelId } }),
+  },
+
   // Els REBUIGS de proposta: llegir-los i DESFER-LOS (F/T3). Crear-ne un NO és aquí, és
   // `sew.rebutjarProposta` — la llei del rebuig (clau canònica, idempotència) té una sola
   // porta d'entrada. Desfer-lo no torna a proposar res per ell mateix: només treu la

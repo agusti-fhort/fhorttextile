@@ -36,6 +36,7 @@ export default function RelationsPanel({
   onEsborraSew, onReobreSew, onReanomenaSew,
   onEsborraPinca, onReanomenaPinca,
   onReanomenaTram, onReobreTram, onEsborraTram,
+  onAcceptaTolerancia, onDesacceptaTolerancia,
   onRebutjaBlocProposta, onEsborraBlocPom, onEsborraBlocSew,
   onEsborraBlocPinca, onEsborraBlocTram,
 }) {
@@ -214,6 +215,7 @@ export default function RelationsPanel({
             onReobre={() => onReobreSew(s)}
             onReanomena={onReanomenaSew}
             onEsborra={() => onEsborraSew(s.id)}
+            onAccepta={onAcceptaTolerancia} onDesaccepta={onDesacceptaTolerancia}
           />
         ))}
       </Seccio>
@@ -241,6 +243,7 @@ export default function RelationsPanel({
             onMarca={() => selPinca.alterna(p.id)}
             onReanomena={onReanomenaPinca}
             onEsborra={() => onEsborraPinca(p.id)}
+            onAccepta={onAcceptaTolerancia} onDesaccepta={onDesacceptaTolerancia}
           />
         ))}
       </Seccio>
@@ -475,7 +478,77 @@ function Rebuigs({ t, rebuigs, unit, onDesfa }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Costura({ t, sew, unit, tramsPerId, marcat, onMarca, onReobre, onReanomena, onEsborra }) {
+/**
+ * ACCEPTAR un desajust (QA-TALLER H · T3).
+ *
+ * Només apareix si hi ha desajust (groc o vermell): una costura verda no té res a acceptar, i
+ * una de frunzit tampoc (el diferencial és intencional). Acceptar no arregla res —el patró
+ * mana—: diu «ho he vist i el dono per bo», i ho registra amb qui i quan (rastre auditable).
+ *
+ * Un cop acceptat, la fila ho ensenya i el qui/quan viu al `title`; es pot DESACCEPTAR, i això
+ * no esborra l'històric —al servidor és un esdeveniment nou.
+ */
+function AcceptaTolerancia({ t, sewId, estat, acceptacio, onAccepta, onDesaccepta }) {
+  const [ocupat, setOcupat] = useState(false)
+  const desajust = estat?.grau === 'warn' || estat?.grau === 'err'
+  if (!desajust && !acceptacio?.acceptat) return null
+
+  const acte = async (fn) => {
+    setOcupat(true)
+    try { await fn() } finally { setOcupat(false) }
+  }
+
+  if (acceptacio?.acceptat) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '0.35rem',
+        fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+      }}>
+        <i className="ti ti-rosette-discount-check" style={{ color: 'var(--ok)', flexShrink: 0 }} />
+        <span
+          title={t('pattern.taller.tol_accepted_by', {
+            per: acceptacio.per || '—',
+            data: (acceptacio.data || '').slice(0, 10),
+          })}
+          style={{ flex: 1, minWidth: 0 }}
+        >
+          {t('pattern.taller.tol_accepted')}
+        </span>
+        <button
+          onClick={() => acte(() => onDesaccepta(sewId))}
+          disabled={ocupat}
+          style={{
+            background: 'none', border: 'none', cursor: ocupat ? 'wait' : 'pointer',
+            color: 'var(--text-muted)', textDecoration: 'underline', padding: 0,
+            fontSize: 'var(--fs-caption)', flexShrink: 0,
+          }}
+        >
+          {t('pattern.taller.tol_unaccept')}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => acte(() => onAccepta(sewId))}
+      disabled={ocupat}
+      title={t('pattern.taller.tol_accept_title')}
+      style={{
+        alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '0.3rem',
+        background: 'none', border: '1px solid var(--border)', borderRadius: 4,
+        padding: '0.1rem 0.5rem', cursor: ocupat ? 'wait' : 'pointer',
+        color: 'var(--text-main)', fontSize: 'var(--fs-caption)',
+      }}
+    >
+      <i className="ti ti-check" />
+      {t('pattern.taller.tol_accept')}
+    </button>
+  )
+}
+
+function Costura({ t, sew, unit, tramsPerId, marcat, onMarca, onReobre, onReanomena, onEsborra,
+                   onAccepta, onDesaccepta }) {
   const e = sew.estat || {}
   const cobertura = e.cobertura || []
   const [editantNom, setEditantNom] = useState(false)
@@ -570,6 +643,11 @@ function Costura({ t, sew, unit, tramsPerId, marcat, onMarca, onReobre, onReanom
           <span>{textCobertura(t, a, unit)}</span>
         </div>
       ))}
+
+      <AcceptaTolerancia
+        t={t} sewId={sew.id} estat={e} acceptacio={sew.acceptacio}
+        onAccepta={onAccepta} onDesaccepta={onDesaccepta}
+      />
     </div>
   )
 }
@@ -581,7 +659,7 @@ function Costura({ t, sew, unit, tramsPerId, marcat, onMarca, onReobre, onReanom
  * restat a la costura que la conté. Es diu aquí perquè, quan algú vegi «− 2,3 (Pinça 1)» a la
  * costura lateral, pugui venir a comprovar d'on surt aquell 2,3.
  */
-function Pinca({ t, pinca, unit, marcat, onMarca, onReanomena, onEsborra }) {
+function Pinca({ t, pinca, unit, marcat, onMarca, onReanomena, onEsborra, onAccepta, onDesaccepta }) {
   const [editant, setEditant] = useState(false)
   const [nom, setNom] = useState(pinca.sew?.nom || '')
   const e = pinca.estat || {}
@@ -682,6 +760,11 @@ function Pinca({ t, pinca, unit, marcat, onMarca, onReanomena, onEsborra }) {
           </span>
         </div>
       )}
+
+      <AcceptaTolerancia
+        t={t} sewId={pinca.id} estat={e} acceptacio={pinca.sew?.acceptacio}
+        onAccepta={onAccepta} onDesaccepta={onDesaccepta}
+      />
     </div>
   )
 }
