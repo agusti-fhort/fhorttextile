@@ -208,10 +208,13 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
             'garment_group', 'garment_group_nom',
             'size_system', 'size_system_codi', 'size_system_nom',
             'customer', 'customer_codi', 'customer_nom',
+            'origen',
             'is_system_default', 'actiu',
             'regles_count', 'regles',
         )
-        read_only_fields = ['is_system_default', 'regles', 'regles_count']
+        # `origen` és NOMÉS lectura: el fixa el camí de creació (import-fitxa / size-map →
+        # CLIENT_RUN; seeds → CANONICAL via backfill). El CRUD no l'ha de poder canviar.
+        read_only_fields = ['is_system_default', 'regles', 'regles_count', 'origen']
 
 
 class GarmentPOMMapSerializer(serializers.ModelSerializer):
