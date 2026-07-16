@@ -198,6 +198,24 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
     def get_fit_type_codi(self, obj):
         return obj.fit_type.codi if obj.fit_type else None
 
+    def validate(self, attrs):
+        # F-5 — GUARD DUR: un seed ISO (is_system_default) NO pot canviar d'eixos. El `disabled`
+        # del front és UX; la seguretat real viu aquí (protegeix contra PATCH directes a l'API).
+        inst = self.instance
+        if inst is not None and inst.is_system_default:
+            for f in ('targets', 'construction', 'fit_type', 'garment_group'):
+                if f not in attrs:
+                    continue
+                if f == 'targets':
+                    changed = (set(t.id for t in attrs[f])
+                               != set(inst.targets.values_list('id', flat=True)))
+                else:
+                    changed = getattr(attrs[f], 'id', None) != getattr(inst, f'{f}_id')
+                if changed:
+                    raise serializers.ValidationError(
+                        {f: "No es poden canviar els eixos d'un ruleset de sistema (is_system_default)."})
+        return attrs
+
     class Meta:
         model = GradingRuleSet
         fields = (
