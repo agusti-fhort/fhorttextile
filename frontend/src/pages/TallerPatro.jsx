@@ -368,10 +368,25 @@ export default function TallerPatro() {
   // Cosir tria NOMÉS trams DECLARATS: ni del canvas ni de la llista es pot agafar una
   // proposta del motor. Un tram 'auto' és una hipòtesi de lectura del CAD; una costura és
   // una afirmació sobre la peça, i no es fa una afirmació amb una hipòtesi.
+  //
+  // El costat actiu AVANÇA A→B tot sol després del primer tram (QA-TALLER G · T1). El gest
+  // natural —clicar els dos trams d'una màniga seguits— els repartia tots dos a A perquè res
+  // no movia el focus, i el botó no s'activava mai. Ara el primer clic omple A i passa el
+  // focus a B; el segon cau a B. Cosir mateixa peça és legítim (una màniga es cus sobre si
+  // mateixa): la restricció «B tancat a la peça de l'A» és dels POMs, no d'aquí.
+  //
+  // Només avança en el PRIMER tram, i només si tot dos costats eren buits: un costat pot
+  // tenir MÉS d'un tram (una sisa = davanter + esquena), i avançar a cada clic ho faria
+  // impossible. Per afegir-ne més a A, es torna a triar el xip A a mà.
   const triarTram = (tram) => {
-    const llista = costatActiu === 'a' ? segmentsA : segmentsB
-    const set = costatActiu === 'a' ? setSegmentsA : setSegmentsB
-    set(llista.includes(tram.id) ? llista.filter(x => x !== tram.id) : [...llista, tram.id])
+    const esA = costatActiu === 'a'
+    const llista = esA ? segmentsA : segmentsB
+    const set = esA ? setSegmentsA : setSegmentsB
+    const treu = llista.includes(tram.id)
+    set(treu ? llista.filter(x => x !== tram.id) : [...llista, tram.id])
+    if (!treu && esA && segmentsA.length === 0 && segmentsB.length === 0) {
+      setCostatActiu('b')
+    }
   }
 
   const declararCostura = async () => {
