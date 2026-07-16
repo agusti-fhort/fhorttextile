@@ -101,10 +101,17 @@ class SizeDefinitionSerializer(serializers.ModelSerializer):
 
 class SizeSystemSerializer(serializers.ModelSerializer):
     talles = SizeDefinitionSerializer(many=True, read_only=True)
+    # LLEI 5 CAPES: codis de target aplicables (M2M) — read-only, additiu. Permet al pas «Talles»
+    # del wizard filtrar SizeSystems purs pel target de la peça sense un lookup codi→id extra.
+    # Llista buida = sistema universal (aplica a qualsevol target).
+    target_codis = serializers.SerializerMethodField()
 
     class Meta:
         model = SizeSystem
-        fields = ('id', 'codi', 'nom', 'descripcio', 'actiu', 'talles')
+        fields = ('id', 'codi', 'nom', 'descripcio', 'actiu', 'talles', 'target_codis', 'customer_codi')
+
+    def get_target_codis(self, obj):
+        return [tg.codi for tg in obj.targets.all()]
 
 
 class GarmentTypeSerializer(serializers.ModelSerializer):

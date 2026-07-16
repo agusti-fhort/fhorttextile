@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import GarmentTypeSelector from '../components/GarmentTypeSelector/GarmentTypeSelector'
 import CustomerSelector from '../components/CustomerSelector'
 import useAuthStore from '../store/auth'
-import { models, sizingProfiles, sizeDefinitions, customers } from '../api/endpoints'
+import { models, sizeSystems, customers } from '../api/endpoints'
 
 // Pas 5A — Wizard d'ESQUELET unificat. Un sol flux de creació (3 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles.
@@ -54,9 +54,9 @@ export default function ModelWizard() {
   const [item, setItem] = useState(null)
   const [picking, setPicking] = useState(false)
   const [construction, setConstruction] = useState(null)
-  // Bloc 3 — talles
-  const [profiles, setProfiles] = useState([])
-  const [selProfile, setSelProfile] = useState(null)
+  // Bloc 3 — talles (LLEI 5 CAPES: ESCALA PURA — SizeSystem, sense fit ni graduació)
+  const [systems, setSystems] = useState([])
+  const [selSystem, setSelSystem] = useState(null)
   const [sizeDefs, setSizeDefs] = useState([])
   const [selectedSizes, setSelectedSizes] = useState([])
   const [baseSize, setBaseSize] = useState(null)
@@ -67,23 +67,24 @@ export default function ModelWizard() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  // LLEI 5 CAPES: el pas Talles retorna NOMÉS escala (sistema/run/base). La graduació (capa 4) es
+  // tria per separat a la fitxa (RuleSetCard→update-step2). Aquí NO s'arrossega grading_rule_set_id.
   const sizingResult = useMemo(() => (
-    (selProfile && selectedSizes.length > 0 && baseSize) ? {
-      size_system_id: selProfile.size_system?.id,
+    (selSystem && selectedSizes.length > 0 && baseSize) ? {
+      size_system_id: selSystem.id,
       size_run: selectedSizes.join('·'),
       base_size: baseSize,
-      grading_rule_set_id: selProfile.grading_rule_set?.id,
-      size_system_nom: selProfile.size_system?.nom,
+      size_system_nom: selSystem.nom,
     } : null
-  ), [selProfile, selectedSizes, baseSize])
+  ), [selSystem, selectedSizes, baseSize])
 
-  const resetSizing = () => { setSelProfile(null); setSelectedSizes([]); setBaseSize(null); setSizeDefs([]) }
+  const resetSizing = () => { setSelSystem(null); setSelectedSizes([]); setBaseSize(null); setSizeDefs([]) }
 
   // Peça 4 — en edició, si el model ja tenia run i el sistema de talles del perfil triat
   // és DIFERENT del que té el model, la talla base no s'autoassigna i és obligatòria.
   const systemChanged = !!(
-    isEditMode && modelSizeRun && selProfile &&
-    modelSizeSystemId != null && modelSizeSystemId !== selProfile.size_system?.id
+    isEditMode && modelSizeRun && selSystem &&
+    modelSizeSystemId != null && modelSizeSystemId !== selSystem.id
   )
   const baseSizeInvalid = systemChanged && (!baseSize || !selectedSizes.includes(baseSize))
 
@@ -129,43 +130,36 @@ export default function ModelWizard() {
     return () => { alive = false }
   }, [customerId])
 
-  // Bloc 3 — carrega perfils quan hi ha target+construction i estem al bloc 3.
-  // Ordenats al backend: primer els del customer, després canònics. Pre-seleccionem el primer.
+  // Bloc 3 (LLEI 5 CAPES) — carrega SizeSystems PURS quan hi ha target i estem al bloc 3.
+  // Filtra pel target de la peça (target_codis, buit = universal) i descarta systems sense talles.
+  // Escala pura: SENSE fit, SENSE construcció, SENSE graduació. Pre-selecciona el primer en creació.
   useEffect(() => {
-    if (!target || !construction || block !== 3) return
+    if (!target || block !== 3) return
     let alive = true
-    sizingProfiles.list({ target, construction, customer_codi: customerCodi || undefined, page_size: 50 })
+    sizeSystems.list({ actiu: true, page_size: 100 })
       .then(r => {
         if (!alive) return
-        const rows = r.data?.results ?? r.data ?? []
-        setProfiles(rows)
-        // Pre-selecció només en CREACIÓ (en edició no toquem la selecció ni el guard de talla base).
-        if (rows.length && !selProfile && !isEditMode) setSelProfile(rows[0])
+        const rows = (r.data?.results ?? r.data ?? []).filter(s =>
+          (s.talles || []).length > 0 &&
+          (!s.target_codis || s.target_codis.length === 0 || s.target_codis.includes(target)))
+        setSystems(rows)
+        if (rows.length && !selSystem && !isEditMode) setSelSystem(rows[0])
       })
-      .catch(() => { if (alive) setProfiles([]) })
+      .catch(() => { if (alive) setSystems([]) })
     return () => { alive = false }
-  }, [target, construction, block, customerCodi])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [target, block])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Bloc 3 — carrega talles quan es tria un perfil.
+  // Bloc 3 — carrega talles del sistema triat (venen amb el propi SizeSystem, sense crida extra).
   useEffect(() => {
-    if (!selProfile) return
-    const ssId = selProfile.size_system?.id
-    if (!ssId) { setSizeDefs([]); return }
-    let alive = true
-    sizeDefinitions.list({ size_system: ssId, page_size: 50 })
-      .then(r => {
-        if (!alive) return
-        const defs = r.data?.results ?? r.data ?? []
-        setSizeDefs(defs)
-        const labels = defs.map(s => s.etiqueta || s.size_label || s.label).filter(Boolean)
-        setSelectedSizes(labels)
-        // Peça 4 — si en edició el sistema canvia respecte al model, NO autoassignis la base.
-        const changed = isEditMode && modelSizeRun && modelSizeSystemId != null && modelSizeSystemId !== ssId
-        setBaseSize(changed ? null : (labels[Math.floor(labels.length / 2)] || labels[0] || null))
-      })
-      .catch(() => { if (alive) setSizeDefs([]) })
-    return () => { alive = false }
-  }, [selProfile])
+    if (!selSystem) return
+    const defs = selSystem.talles || []
+    setSizeDefs(defs)
+    const labels = defs.map(s => s.etiqueta || s.size_label || s.label).filter(Boolean)
+    setSelectedSizes(labels)
+    // Peça 4 — si en edició el sistema canvia respecte al model, NO autoassignis la base.
+    const changed = isEditMode && modelSizeRun && modelSizeSystemId != null && modelSizeSystemId !== selSystem.id
+    setBaseSize(changed ? null : (labels[Math.floor(labels.length / 2)] || labels[0] || null))
+  }, [selSystem])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const skeletonPayload = () => ({
     target: target || undefined,
@@ -175,7 +169,7 @@ export default function ModelWizard() {
     size_system_id: sizingResult?.size_system_id || undefined,
     size_run: sizingResult?.size_run || undefined,
     base_size: sizingResult?.base_size || undefined,
-    grading_rule_set_id: sizingResult?.grading_rule_set_id || undefined,
+    // LLEI 5 CAPES: la graduació (grading_rule_set) NO es tria al pas Talles; s'assigna a part.
   })
 
   const handleCreate = async () => {
@@ -336,45 +330,40 @@ export default function ModelWizard() {
 
         {block === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {(!target || !construction) ? (
+            {(!target) ? (
               <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>
             ) : (
               <>
                 <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>
-                  {t('model_wizard.sizes_for')} {t(`model_wizard.target_${target}`)} · {t(`model_wizard.construction_${construction}`)}
+                  {t('model_wizard.sizes_for')} {t(`model_wizard.target_${target}`)}
                 </p>
-                {profiles.length === 0 && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>}
-                {profiles.map(p => {
-                  const active = selProfile?.id === p.id
-                  const sub = [
-                    p.target?.codi ? t(`model_wizard.target_${p.target.codi}`, p.target.nom_en || p.target.codi) : p.target?.nom_en,
-                    p.construction?.codi ? t(`model_wizard.construction_${p.construction.codi}`, p.construction.nom_en || p.construction.codi) : p.construction?.nom_en,
-                    p.fit_type_nom,
-                  ].filter(Boolean).join(' · ')
-                  // Peça 3 — rang d'edat (mesos) derivat de les size_definitions del perfil.
-                  const ageMins = (p.size_definitions || []).map(d => d.age_months_min).filter(v => v != null)
-                  const ageMaxs = (p.size_definitions || []).map(d => d.age_months_max).filter(v => v != null)
+                {systems.length === 0 && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>}
+                {systems.map(s => {
+                  const active = selSystem?.id === s.id
+                  // Rang d'edat (mesos) derivat de les talles del sistema (per a systems Baby/Kids).
+                  const ageMins = (s.talles || []).map(d => d.age_months_min).filter(v => v != null)
+                  const ageMaxs = (s.talles || []).map(d => d.age_months_max).filter(v => v != null)
                   const ageMin = ageMins.length ? Math.min(...ageMins) : null
                   const ageMax = ageMaxs.length ? Math.max(...ageMaxs) : null
                   return (
-                    <div key={p.id} onClick={() => setSelProfile(p)} style={{
+                    <div key={s.id} onClick={() => setSelSystem(s)} style={{
                       padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: MONO,
                       border: `0.5px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
                       background: active ? 'var(--warn-bg)' : 'var(--white)',
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 500, fontSize: 'var(--fs-h3)' }}>{p.size_system?.nom || t('model_wizard.profile_n', { id: p.id })}</span>
-                        {p.size_system_customer_codi
+                        <span style={{ fontWeight: 500, fontSize: 'var(--fs-h3)' }}>{s.nom || s.codi}</span>
+                        {s.customer_codi
                           ? <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '1px 6px', borderRadius: 999,
                                            background: 'var(--gold-pale)', color: 'var(--gold)' }}>
-                              {t('model_wizard.client_run')}: {p.size_system_customer_codi}
+                              {t('model_wizard.client_run')}: {s.customer_codi}
                             </span>
                           : <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '1px 6px', borderRadius: 999,
                                            background: 'var(--gray-l)', color: 'var(--gray)' }}>
                               {t('model_wizard.canonical')}
                             </span>}
                       </div>
-                      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{sub}</div>
+                      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{s.codi}</div>
                       {ageMin != null && ageMax != null && ageMax > 0 && (
                         <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
                           {t('model_wizard.age_months_range', { min: ageMin, max: ageMax })}
@@ -383,7 +372,7 @@ export default function ModelWizard() {
                     </div>
                   )
                 })}
-                {selProfile && (
+                {selSystem && (
                   <Field label={t('model_wizard.pick_run')}>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {sizeDefs.map(s => {
