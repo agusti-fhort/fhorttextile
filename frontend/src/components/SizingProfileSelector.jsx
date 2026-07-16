@@ -278,6 +278,11 @@ export function SizingProfileSelector({
               {loadingProfiles ? t("common.loading") : t("size_library.systems_count", { count: visibleProfiles.length })}
             </span>
           </div>
+          {/* LLEI 5 CAPES: aclarir que això és la biblioteca de PRESETS de graduació (capa 4),
+              no el selector de talles del model (escala pura, que viu al pas «Talles» del model). */}
+          <div style={{ fontSize: 'var(--fs-caption)', color: "var(--text-muted)", marginBottom: 12, textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
+            {t("size_library.sizesets_help")}
+          </div>
 
           {profilesError ? (
             <LoadError onRetry={loadProfiles} label={t("size_library.load_error_sizesets")} />
