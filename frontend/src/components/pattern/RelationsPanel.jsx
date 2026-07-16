@@ -406,10 +406,15 @@ function Tram({ t, tram, unit, onReanomena, onReobre, onEsborra }) {
           </div>
         </div>
 
+        {/* La DADA, a la MATEIXA escala que la d'un POM (QA-TALLER E · T2): un tram de 29,8 cm i
+            un POM de 29,8 cm són la mateixa mena de xifra —una longitud llegida del patró— i
+            anaven a mides diferents (caption vs body). La mida d'un número és una afirmació
+            sobre quant importa; dir-ho diferent a cada bloc és dir-ho malament en un dels dos.
+            El `title` porta el valor sense arrodonir (T7c). */}
         <span
           title={titleLen(tram.longitud_cm)}
           style={{
-            fontFamily: 'var(--mono)', fontSize: 'var(--fs-caption)',
+            fontFamily: 'var(--mono)', fontSize: 'var(--fs-body)',
             color: 'var(--text-main)', flexShrink: 0,
           }}
         >
