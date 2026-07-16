@@ -448,12 +448,10 @@ def create_model_wizard(request):
     is_multipiece = bool(request.data.get('is_multipiece', False))
     num_pieces = request.data.get('num_pieces')
 
-    # PG-3 Cas B: bloqueig a la CREACIÓ — talla base sense ruleset triat no té grading.
-    # Només aquí (no al builder compartit ni a update_model_step2, on base i ruleset poden
-    # venir per separat legítimament en edició).
-    if request.data.get('base_size') and not request.data.get('grading_rule_set_id'):
-        return Response(
-            {'error': 'Selecciona un ruleset de graduació per a la talla base.'}, status=400)
+    # LLEI 5 CAPES (2026-07-16): la talla base és ESCALA PURA (capa 3) i s'ha de poder desar SENSE
+    # graduació (capa 4). El pas «Talles» del wizard ja no arrossega ruleset; la graduació es tria
+    # per separat després (RuleSetCard → update-step2, que re-materialitza). Es retira el guard
+    # PG-3 Cas B que exigia ruleset a la creació (update_model_step2 ja no el tenia).
 
     garment_fields, gerr = _resolve_garment_def(request.data)
     if gerr:

@@ -61,7 +61,9 @@ class SizeSystemViewSet(viewsets.ModelViewSet):
     serializer_class = SizeSystemSerializer
     queryset = SizeSystem.objects.prefetch_related('talles').all()
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['actiu']
+    # LLEI 5 CAPES: el pas «Talles» del wizard llista SizeSystems PURS (escala, capa 3) filtrats
+    # pel target de la peça. `targets` (M2M) additiu al filterset → GET size-systems/?targets=<id>.
+    filterset_fields = ['actiu', 'targets']
     search_fields = ['codi', 'nom']
     ordering = ['codi']
 
