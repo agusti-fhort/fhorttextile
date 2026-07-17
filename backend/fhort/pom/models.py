@@ -538,6 +538,17 @@ class GradingRuleSet(models.Model):
         related_name='grading_rule_sets',
     )
     size_system = models.ForeignKey(SizeSystem, on_delete=models.PROTECT, null=True, blank=True, related_name='grading_rule_sets')
+    # CONTENIDOR (llei 2026-07-16) — el node fi de la identitat d'un contenidor de client:
+    # (customer + size_system + garment_type_item + fit_type). `garment_group` (sobre) és més bast i
+    # queda com a eix opcional del picker; NO és identitat. FK cap a tasks.GarmentTypeItem (cross-app,
+    # pom viu al mateix schema del tenant que tasks). Nullable i additiu: els canònics/seed el deixen
+    # NULL (no són de client). El FK invers `GarmentTypeItem.grading_rule_set` (tasks/models.py:319)
+    # apunta al MATEIX contenidor: es reconcilien al backfill. on_delete=SET_NULL: esborrar un item no
+    # destrueix el contenidor, només neteja el pointer.
+    garment_type_item = models.ForeignKey(
+        'tasks.GarmentTypeItem', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='container_rule_sets', db_constraint=False,
+        help_text="Node fi de la identitat del contenidor de client (llei CONTENIDOR). NULL = canònic/no-client.")
     actiu = models.BooleanField(default=True)
     # N1 — client propietari de la graduació (àlies de nomenclatura). FK REAL a Customer (decisió
     # CTO), nullable i additiu. Divergència ANOTADA i NO tocada: SizeSystem.customer_codi va per
@@ -594,6 +605,18 @@ class GradingRuleSet(models.Model):
     class Meta:
         verbose_name = 'Joc de regles grading'
         verbose_name_plural = 'Jocs de regles grading'
+        constraints = [
+            # CONTENIDOR ÚNIC (llei 2026-07-16): un sol contenidor de client per combinació
+            # (customer + size_system + garment_type_item + fit_type). PARCIAL a `origen='CLIENT_RUN'`:
+            # els canònics (customer NULL, origen CANONICAL/IMPORT/NULL) queden intactes. Postgres tracta
+            # NULLS DISTINCT per defecte → mentre `garment_type_item` sigui NULL no bloqueja (els client
+            # rulesets el porten un cop backfillats). Guarda dura de la unicitat, no només a l'aplicació.
+            models.UniqueConstraint(
+                fields=['customer', 'size_system', 'garment_type_item', 'fit_type'],
+                condition=models.Q(origen='CLIENT_RUN'),
+                name='uniq_client_container_identity',
+            ),
+        ]
 
     def __str__(self):
         return self.nom

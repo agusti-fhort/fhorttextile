@@ -1,20 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { garmentTypes, garmentTypeItems } from '../../api/endpoints'
+import GroupPills, { PECA_GRUPS } from './GroupPills'
 
 // Pas 5A — Selector de DOS NIVELLS: família (GarmentType) → ítem (GarmentTypeItem).
-// Sense dades mock i sense el grup ACCESSORIES (famílies desactivades). El retorn és
 // onSelect({ family, item }) → el wizard desa garment_type_id + garment_type_item_id (baula motor).
 
-// Grups amb famílies actives (ACCESSORIES exclòs a posta).
-const GRUPS = [
-  { codi: 'TOPS', en: 'Tops', ca: 'Parts superiors', es: 'Partes superiores' },
-  { codi: 'BOTTOMS', en: 'Bottoms', ca: 'Parts inferiors', es: 'Partes inferiores' },
-  { codi: 'DRESSES', en: 'Dresses', ca: 'Vestits', es: 'Vestidos' },
-  { codi: 'OUTERWEAR', en: 'Outerwear', ca: 'Abrics', es: 'Abrigos' },
-  { codi: 'UNDERWEAR', en: 'Underwear', ca: 'Interior', es: 'Interior' },
-  { codi: 'SWIMWEAR', en: 'Swimwear', ca: 'Bany', es: 'Baño' },
-]
+// WIZARD-COMPLET C.2 + rectificació pills — arbre únic: els grups (ordre + etiquetes + estil de pill)
+// viuen a GroupPills/PECA_GRUPS (font única), compartits amb Garment Types i el Navegador de POM Systems.
+const GRUPS = PECA_GRUPS
 
 const MONO = 'IBM Plex Mono, monospace'
 
@@ -23,7 +17,6 @@ function famName(f, lang) {
   if (lang === 'es') return f.nom_es || f.nom_en || f.nom_client || ''
   return f.nom_en || f.nom_client || ''
 }
-function grupLabel(g, lang) { return lang === 'ca' ? g.ca : lang === 'es' ? g.es : g.en }
 
 export default function GarmentTypeSelector({ onSelect, selectedItemId = null }) {
   const { t, i18n } = useTranslation()
@@ -63,21 +56,9 @@ export default function GarmentTypeSelector({ onSelect, selectedItemId = null })
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: MONO }}>
       {family === null ? (
         <>
-          {/* Pestanyes de grup */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '14px 16px',
-            borderBottom: '0.5px solid var(--gray-l)', background: 'var(--white)' }}>
-            {GRUPS.map(g => {
-              const active = grupActiu === g.codi
-              return (
-                <button key={g.codi} onClick={() => setGrupActiu(g.codi)} style={{
-                  padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: MONO,
-                  fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 400,
-                  background: active ? 'var(--warn-bg)' : 'var(--white)',
-                  color: active ? 'var(--warn)' : 'var(--text-main)',
-                  border: `1px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
-                }}>{grupLabel(g, lang)}</button>
-              )
-            })}
+          {/* Pestanyes de grup — patró únic compartit (GroupPills). */}
+          <div style={{ padding: '14px 16px', borderBottom: '0.5px solid var(--gray-l)', background: 'var(--white)' }}>
+            <GroupPills groups={GRUPS} value={grupActiu} onChange={setGrupActiu} />
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>

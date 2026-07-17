@@ -29,6 +29,7 @@ class ConstructionTypeSerializer(serializers.Serializer):
 
 
 class FitTypeSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
     codi = serializers.CharField()
     nom_en = serializers.CharField()
     display_order = serializers.IntegerField()

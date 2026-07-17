@@ -920,6 +920,23 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
   })
   const [saving, setSaving] = useState(false)
 
+  // F-2 — els seeds ISO (is_system_default) NO són editables als eixos (protecció; el guard dur
+  // viu al serializer). Creació nova o ruleset de client → eixos editables. Els lookups S2
+  // (targets/construction-types/fit-types) resolen codi→id per desar els FK.
+  const axesEditable = !rs?.is_system_default
+  const [lookups, setLookups] = useState({ targets: [], constructions: [], fits: [] })
+  useEffect(() => {
+    if (!axesEditable) return
+    let alive = true
+    const get = (p) => fetch(`${API}/api/v1/${p}`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : { results: [] }).then(d => d.results || [])
+    Promise.all([get('targets/'), get('construction-types/'), get('fit-types/')])
+      .then(([targets, constructions, fits]) => { if (alive) setLookups({ targets, constructions, fits }) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [axesEditable])
+  const codeToId = (list, code) => (list.find(x => x.codi === code) || {}).id ?? null
+
   const handleSubmit = async () => {
     if (!form.nom.trim()) { onError(t('grading.name_required')); return }
     setSaving(true)
@@ -933,14 +950,19 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
       nom: form.nom.trim(),
       codi_sistema: form.codi_sistema.trim(),
       actiu: form.actiu,
-      // TODO(backend): cal endpoint /api/v1/targets/, construction-types/,
-      // fit-types/ per poder convertir codi → id des del frontend en cas
-      // of a brand-new creation. Meanwhile, we only send the FKs if they come from
-      // the original object (edit/clone) or if they have not been modified.
     }
-    if (form.target != null) payload.target = form.target
-    if (form.construction != null) payload.construction = form.construction
-    if (form.fit_type != null) payload.fit_type = form.fit_type
+    if (axesEditable) {
+      // F-2 — resol codi→id amb els lookups S2 i desa els FK (target + M2M targets + construction
+      // + fit_type). Un eix sense selecció queda sense enviar (PATCH → intacte).
+      const tId = codeToId(lookups.targets, form.target_codi_form)
+      const cId = codeToId(lookups.constructions, form.construction_codi_form)
+      const fId = codeToId(lookups.fits, form.fit_type_codi_form)
+      if (tId != null) { payload.target = tId; payload.targets = [tId] }
+      if (cId != null) payload.construction = cId
+      if (fId != null) payload.fit_type = fId
+    }
+    // Seed (no editable): s'ometen els eixos → el PATCH els deixa intactes (el guard del serializer
+    // els blinda igualment). Un possible canvi de nom/actiu no els toca.
 
     try {
       const res = await fetch(url, {
@@ -1010,12 +1032,14 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
         </h2>
         <F label={t('grading.field_name')} field="nom" />
         <F label={t('grading.field_codi')} field="codi_sistema" />
-        <F label={t('grading.field_target_ref')} field="target_codi_form" options={TARGETS} disabled />
-        <F label={t('grading.field_construction_ref')} field="construction_codi_form" options={CONSTRUCTIONS} disabled />
-        <F label={t('grading.field_fit_ref')} field="fit_type_codi_form" options={FITS} disabled />
-        <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)', margin: '4px 0 12px' }}>
-          {t('grading.modal_note')}
-        </p>
+        <F label={t('grading.field_target_ref')} field="target_codi_form" options={TARGETS} disabled={!axesEditable} />
+        <F label={t('grading.field_construction_ref')} field="construction_codi_form" options={CONSTRUCTIONS} disabled={!axesEditable} />
+        <F label={t('grading.field_fit_ref')} field="fit_type_codi_form" options={FITS} disabled={!axesEditable} />
+        {!axesEditable && (
+          <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)', margin: '4px 0 12px' }}>
+            {t('grading.modal_note')}
+          </p>
+        )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
           <button
             onClick={onClose}

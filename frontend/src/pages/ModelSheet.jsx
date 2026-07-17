@@ -447,8 +447,8 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
               sizesAmbDades={sizesAmbDades}
               onUpdated={reloadModel}
             />
-            {/* P3 — ruleset CANVIABLE al model (SPEC §1.6): triar/canviar el joc de regles de grading. */}
-            {model && <RuleSetCard model={model} onChanged={reloadModel} />}
+            {/* WIZARD-COMPLET C.3 — ruleset en LECTURA enriquida; el canvi viu al wizard (pas 4). */}
+            {model && <RuleSetCard model={model} />}
           </div>
         )}
         {activeTab === 'Mesures' && (

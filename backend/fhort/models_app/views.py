@@ -448,12 +448,10 @@ def create_model_wizard(request):
     is_multipiece = bool(request.data.get('is_multipiece', False))
     num_pieces = request.data.get('num_pieces')
 
-    # PG-3 Cas B: bloqueig a la CREACIÓ — talla base sense ruleset triat no té grading.
-    # Només aquí (no al builder compartit ni a update_model_step2, on base i ruleset poden
-    # venir per separat legítimament en edició).
-    if request.data.get('base_size') and not request.data.get('grading_rule_set_id'):
-        return Response(
-            {'error': 'Selecciona un ruleset de graduació per a la talla base.'}, status=400)
+    # LLEI 5 CAPES (2026-07-16): la talla base és ESCALA PURA (capa 3) i s'ha de poder desar SENSE
+    # graduació (capa 4). El pas «Talles» del wizard ja no arrossega ruleset; la graduació es tria
+    # per separat després (RuleSetCard → update-step2, que re-materialitza). Es retira el guard
+    # PG-3 Cas B que exigia ruleset a la creació (update_model_step2 ja no el tenia).
 
     garment_fields, gerr = _resolve_garment_def(request.data)
     if gerr:
@@ -608,6 +606,14 @@ def update_model_step2(request, model_id):
         setattr(model, k, v)
     if d.get('collection') is not None:
         model.collection = d['collection'] or ''
+
+    # WIZARD pas 4 «Sense graduació» en EDICIÓ: buidatge EXPLÍCIT del ruleset. El resolutor només
+    # ASSIGNA quan grading_rule_set_id és truthy (mai neteja); aquí, si la clau ve present i buida
+    # (null), es desacobla la graduació i s'esborren les regles residents (queda estat "sense graduació",
+    # vàlid). Idempotent i acotat a la intenció explícita del pas 4 — cap efecte si la clau no ve.
+    if 'grading_rule_set_id' in d and not d.get('grading_rule_set_id') and model.grading_rule_set_id:
+        model.grading_rule_set = None
+        model.grading_rules.all().delete()
 
     model.save()
     # PG-2 Cas B: re-materialitza si hi ha ruleset (wipe-and-recreate cobreix canvi de profile).

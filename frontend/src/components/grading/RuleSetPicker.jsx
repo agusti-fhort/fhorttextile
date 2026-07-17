@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { matchingRuleSets } from './gradingAxes'
+import { matchingRuleSets, matchingRuleSetsStrict } from './gradingAxes'
 
 // RuleSetPicker — llistat de RuleSets que encaixen amb els eixos triats, amb acció final
 // PARAMETRITZADA (Sprint Llibreria d'Items, B2). A diferència de RuleSetCard de GradingRuleSets,
@@ -14,19 +14,25 @@ import { matchingRuleSets } from './gradingAxes'
 //  - actionLabel: text del botó d'acció (p.ex. "Assignar").
 //  - selectedId: id del ruleset ja triat (per ressaltar-lo). Opcional.
 //  - onEmptyAction + emptyActionLabel: acció de l'estat buit (p.ex. anar a Grading Rules). Opcional.
+//  - strict + sizeSystemId: mode WIZARD (sprint WIZARD-COMPLET). strict=true → matching ESTRICTE amb
+//    `sizeSystemId` obligatori i sense comodí NULL. Per defecte false → matching LENIENT (superfícies CRUD).
 
 export default function RuleSetPicker({
   ruleSets = [], garmentGroupCodiById = {}, axes,
   onPick, actionLabel, selectedId = null,
   onEmptyAction, emptyActionLabel,
+  strict = false, sizeSystemId = null,
 }) {
   const { t } = useTranslation()
   const matches = useMemo(
-    () => matchingRuleSets(ruleSets, axes, garmentGroupCodiById),
-    [ruleSets, axes, garmentGroupCodiById],
+    () => strict
+      ? matchingRuleSetsStrict(ruleSets, axes, garmentGroupCodiById, sizeSystemId)
+      : matchingRuleSets(ruleSets, axes, garmentGroupCodiById),
+    [ruleSets, axes, garmentGroupCodiById, strict, sizeSystemId],
   )
 
   const ready = axes && axes.target && axes.construction && axes.fit && axes.garmentGroup
+    && (!strict || sizeSystemId != null)
   if (!ready) return null
 
   if (matches.length === 0) {

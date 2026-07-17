@@ -166,3 +166,47 @@ def materialize_model_grading_rules(model, source_rules, origen):
     ]
     ModelGradingRule.objects.bulk_create(objs)
     return len(objs)
+
+
+def materialize_model_grading_rules_from_specs(model, specs, origen):
+    """Com materialize_model_grading_rules però des d'SPECS (dicts uniformes de grading_utils),
+    no objectes GradingRule. Permet barrejar regles de CONTENIDOR i residents-només-de-model
+    (conflictes resolts 'model_resident' / camí sense contenidor) en una sola sembra selectiva.
+    Wipe-and-recreate idempotent per (model): el set resultant és EXACTAMENT `specs`.
+    origen: 'IMPORTED' (W5) | 'CANONICAL' | 'MANUAL'."""
+    from fhort.models_app.models import ModelGradingRule
+    model.grading_rules.all().delete()
+    objs = [
+        ModelGradingRule(
+            model=model, pom_id=s['pom_id'],
+            logica=s['logica'], increment=s.get('increment'), valors_step=s.get('valors_step'),
+            increment_base=s.get('increment_base'), increment_break=s.get('increment_break'),
+            talla_break_label=s.get('talla_break_label'), talla_break_pos=s.get('talla_break_pos'),
+            origen=origen, actiu=True,
+        )
+        for s in specs
+    ]
+    ModelGradingRule.objects.bulk_create(objs)
+    return len(objs)
+
+
+def afegeix_regles_al_contenidor(container, specs, base_def_id):
+    """AMPLIAR (llei del contenidor): afegeix al contenidor les regles de la fitxa per a POMs que
+    encara no hi són (o, si ja existeixen, N'ACTUALITZA la forma — cas 'update_catalog'). El
+    catàleg d'un contenidor pot ser més ampli que qualsevol model: ampliar no destrueix res.
+    Retorna el nombre de regles creades/actualitzades."""
+    from fhort.pom.models import GradingRule
+    n = 0
+    for s in specs:
+        GradingRule.objects.update_or_create(
+            rule_set=container, pom_id=s['pom_id'],
+            defaults=dict(
+                talla_base_id=s['talla_base_id'], logica=s['logica'],
+                increment=s.get('increment') or 0, valors_step=s.get('valors_step'),
+                increment_base=s.get('increment_base'), increment_break=s.get('increment_break'),
+                talla_break_label=s.get('talla_break_label'), talla_break_pos=s.get('talla_break_pos'),
+                actiu=True,
+            ),
+        )
+        n += 1
+    return n

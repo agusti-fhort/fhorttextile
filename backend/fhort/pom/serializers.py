@@ -101,10 +101,17 @@ class SizeDefinitionSerializer(serializers.ModelSerializer):
 
 class SizeSystemSerializer(serializers.ModelSerializer):
     talles = SizeDefinitionSerializer(many=True, read_only=True)
+    # LLEI 5 CAPES: codis de target aplicables (M2M) — read-only, additiu. Permet al pas «Talles»
+    # del wizard filtrar SizeSystems purs pel target de la peça sense un lookup codi→id extra.
+    # Llista buida = sistema universal (aplica a qualsevol target).
+    target_codis = serializers.SerializerMethodField()
 
     class Meta:
         model = SizeSystem
-        fields = ('id', 'codi', 'nom', 'descripcio', 'actiu', 'talles')
+        fields = ('id', 'codi', 'nom', 'descripcio', 'actiu', 'talles', 'target_codis', 'customer_codi')
+
+    def get_target_codis(self, obj):
+        return [tg.codi for tg in obj.targets.all()]
 
 
 class GarmentTypeSerializer(serializers.ModelSerializer):
@@ -173,6 +180,9 @@ class GradingRuleSerializer(serializers.ModelSerializer):
 
 class GradingRuleSetSerializer(serializers.ModelSerializer):
     garment_group_nom = serializers.CharField(source='garment_group.nom', read_only=True)
+    # WIZARD-COMPLET C.2 — codi del grup (font única = model GarmentGroup). Fins ara el front havia de
+    # construir el mapa id→codi a mà (garment-groups) perquè el serializer només exposava el _nom.
+    garment_group_codi = serializers.CharField(source='garment_group.codi', read_only=True, default=None)
     size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
     size_system_nom = serializers.CharField(source='size_system.nom', read_only=True)
     customer_codi = serializers.CharField(source='customer.codi', read_only=True, default='')
@@ -198,6 +208,24 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
     def get_fit_type_codi(self, obj):
         return obj.fit_type.codi if obj.fit_type else None
 
+    def validate(self, attrs):
+        # F-5 — GUARD DUR: un seed ISO (is_system_default) NO pot canviar d'eixos. El `disabled`
+        # del front és UX; la seguretat real viu aquí (protegeix contra PATCH directes a l'API).
+        inst = self.instance
+        if inst is not None and inst.is_system_default:
+            for f in ('targets', 'construction', 'fit_type', 'garment_group'):
+                if f not in attrs:
+                    continue
+                if f == 'targets':
+                    changed = (set(t.id for t in attrs[f])
+                               != set(inst.targets.values_list('id', flat=True)))
+                else:
+                    changed = getattr(attrs[f], 'id', None) != getattr(inst, f'{f}_id')
+                if changed:
+                    raise serializers.ValidationError(
+                        {f: "No es poden canviar els eixos d'un ruleset de sistema (is_system_default)."})
+        return attrs
+
     class Meta:
         model = GradingRuleSet
         fields = (
@@ -205,13 +233,16 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
             'targets', 'targets_codis', 'target_codi',
             'construction', 'construction_codi',
             'fit_type', 'fit_type_codi',
-            'garment_group', 'garment_group_nom',
+            'garment_group', 'garment_group_nom', 'garment_group_codi',
             'size_system', 'size_system_codi', 'size_system_nom',
             'customer', 'customer_codi', 'customer_nom',
+            'origen',
             'is_system_default', 'actiu',
             'regles_count', 'regles',
         )
-        read_only_fields = ['is_system_default', 'regles', 'regles_count']
+        # `origen` és NOMÉS lectura: el fixa el camí de creació (import-fitxa / size-map →
+        # CLIENT_RUN; seeds → CANONICAL via backfill). El CRUD no l'ha de poder canviar.
+        read_only_fields = ['is_system_default', 'regles', 'regles_count', 'origen']
 
 
 class GarmentPOMMapSerializer(serializers.ModelSerializer):

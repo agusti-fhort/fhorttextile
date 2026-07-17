@@ -116,6 +116,28 @@ def cerca_canonic_equivalent(model):
     ).distinct().first()
 
 
+def cerca_client_equivalent(customer, size_system, exclude_ids=()):
+    """Rulesets de CLIENT existents per al mateix customer + size_system (candidats a reutilitzar).
+
+    Avís-i-confirma TOU (Peça R): NO fusiona ni reutilitza automàticament; retorna els rulesets
+    actius, `is_system_default=False`, del mateix client i sistema de talles, perquè el camí
+    d'import els OFEREIXI al tècnic abans de derivar-ne un de nou (evita la duplicació 115/116).
+
+    Trigger de "similar" = customer + size_system (decisió Agus). NO es filtra per eixos ni per
+    solapament de POM: precisament els casos on els eixos difereixen (un ruleset amb
+    construction/fit NULL i un altre amb WOVEN/REGULAR) són els que la dedup estricta de
+    `derive_grading_rule_set` (1D) no pot casar. Buit si falta customer o size_system.
+    """
+    from fhort.pom.models import GradingRuleSet
+    if not (customer and size_system):
+        return GradingRuleSet.objects.none()
+    return (GradingRuleSet.objects
+            .filter(is_system_default=False, actiu=True,
+                    customer=customer, size_system=size_system)
+            .exclude(id__in=[i for i in exclude_ids if i])
+            .order_by('id'))
+
+
 def detect_grading(valors_per_talla, run_ordenat, base_label) -> dict:
     """Detecta la lògica de grading d'un POM a partir dels seus valors per talla.
 
@@ -398,6 +420,152 @@ def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_
             f"Grading nou: creat ruleset #{new_rule_set.id} (graduació específica "
             f"d'aquest model; cap candidat existent coincidia).")
         return new_rule_set
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LLEI DEL CONTENIDOR (2026-07-16) — primitives del camí d'import segons la llei.
+# Un GradingRuleSet de client = CONTENIDOR ACUMULATIU únic per
+# (customer + size_system + garment_type_item + fit). L'import SEMBRA del contenidor
+# (POMs de la fitxa), AMPLIA (POMs noves → afegir al contenidor), CONFLICTE per-regla,
+# CREA només com a acte explícit. `derive_grading_rule_set` (sobre) queda JUBILAT com a
+# CREADOR automàtic; aquí es reutilitza el motor de detecció (detect_grading +
+# derive_break_fields) per derivar les regles a sembrar/afegir, sense crear cap ruleset.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _spec_from_detection(pm, res, base_def_id, run_ordenat):
+    """Converteix la sortida de detect_grading (res) en un SPEC canònic uniforme (dict).
+    Poblat sempre amb la forma aplicable (increment_base/break) via derive_break_fields, per
+    poder comparar-lo contra les regles del contenidor amb el mateix llenguatge que el motor."""
+    ib, ibrk, tlabel, tpos = derive_break_fields(
+        res['logica'], res.get('increment'), res.get('valors_step'), run_ordenat)
+    return {
+        'pom_id': pm.id, 'pom': pm, 'talla_base_id': base_def_id,
+        'logica': res['logica'], 'increment': res.get('increment') or 0,
+        'valors_step': res.get('valors_step'),
+        'increment_base': ib, 'increment_break': ibrk,
+        'talla_break_label': tlabel, 'talla_break_pos': tpos,
+    }
+
+
+def derive_rules_from_fitxa(*, size_run_model, base_size, valors, confirmed_pom_ids,
+                            size_system, avisos):
+    """DETECCIÓ pura de les regles d'una fitxa (sense persistència, sense ruleset).
+
+    Reutilitza el motor de detecció (detect_grading per POM + derive_break_fields). Retorna
+    una llista d'SPECS canònics uniformes (dicts), un per POM detectat; buida si no derivable.
+    Substitueix el paper CREADOR de derive_grading_rule_set: aquí NOMÉS es detecta la forma;
+    sembrar/afegir/materialitzar ho decideix el camí de la llei del contenidor a fora.
+    """
+    from fhort.pom.models import SizeDefinition, POMMaster
+    run_ordenat = [
+        s.strip() for s in (size_run_model or '').replace(';', '·').split('·') if s.strip()]
+    base_def = SizeDefinition.objects.filter(
+        size_system=size_system, etiqueta__iexact=base_size,
+    ).first() if (getattr(size_system, 'id', None) and base_size) else None
+    if not run_ordenat or not base_size:
+        avisos.append("Grading no derivat: manca run o talla base al model.")
+        return []
+    if base_def is None:
+        avisos.append(
+            f"Grading no derivat: talla base '{base_size}' no trobada al sistema de talles.")
+        return []
+    specs = []
+    for pid in dict.fromkeys(confirmed_pom_ids):
+        pm = POMMaster.objects.filter(id=pid).first()
+        if not pm:
+            continue
+        try:
+            res = detect_grading(valors.get(pid) or {}, run_ordenat, base_size)
+        except Exception as e:
+            avisos.append(f"POM {pm.codi_client}: detecció de grading fallida ({e}).")
+            continue
+        if res.get('warning'):
+            avisos.append(f"POM {pm.codi_client}: {res['warning']}")
+        if not res.get('logica'):
+            avisos.append(f"POM {pm.codi_client}: grading no detectat; regla omesa.")
+            continue
+        specs.append(_spec_from_detection(pm, res, base_def.id, run_ordenat))
+    if not specs:
+        avisos.append("Cap regla de grading derivada dels valors.")
+    return specs
+
+
+def cerca_contenidor_client(customer, size_system, garment_type_item, fit_type):
+    """EL contenidor de client per la IDENTITAT COMPLETA de la llei
+    (customer + size_system + garment_type_item + fit_type). Únic per la constraint parcial
+    `uniq_client_container_identity` (origen='CLIENT_RUN'). Retorna el GradingRuleSet o None
+    (None = el client estrena la combinació → acte explícit de creació a fora).
+    `customer`/`size_system` són imprescindibles; `garment_type_item`/`fit_type` poden ser None
+    (llavors casa contra contenidors amb aquells eixos també a NULL)."""
+    from fhort.pom.models import GradingRuleSet
+    if not (customer and size_system):
+        return None
+    return (GradingRuleSet.objects.filter(
+        origen=GradingRuleSet.ORIGEN_CLIENT_RUN, actiu=True,
+        customer=customer, size_system=size_system,
+        garment_type_item=garment_type_item, fit_type=fit_type,
+    ).order_by('id').first())
+
+
+def rule_to_spec(r):
+    """Normalitza una GradingRule (regla de contenidor) al mateix SPEC dict que la detecció."""
+    return {
+        'pom_id': r.pom_id, 'pom': getattr(r, 'pom', None), 'talla_base_id': r.talla_base_id,
+        'logica': r.logica, 'increment': r.increment, 'valors_step': r.valors_step,
+        'increment_base': r.increment_base, 'increment_break': r.increment_break,
+        'talla_break_label': r.talla_break_label, 'talla_break_pos': r.talla_break_pos,
+    }
+
+
+def _num_eq(a, b, tol=0.001):
+    if a is None and b is None:
+        return True
+    if (a is None) != (b is None):
+        return False
+    try:
+        return abs(float(a) - float(b)) < tol
+    except (TypeError, ValueError):
+        return False
+
+
+def spec_forms_match(a, b):
+    """Igualtat de la FORMA APLICABLE (la que aplica el motor: increment_base + increment_break
+    + talla_break_label). NO compara `increment` legacy (un contenidor curat el porta a 0 i
+    condueix per increment_base) ni la talla base (invariant al grading, com grading_rules_match).
+    Aquesta és la comparació-veritat per al CONFLICTE per-regla contenidor-vs-fitxa."""
+    return (_num_eq(a.get('increment_base'), b.get('increment_base'))
+            and _num_eq(a.get('increment_break'), b.get('increment_break'))
+            and _norm(a.get('talla_break_label')) == _norm(b.get('talla_break_label')))
+
+
+def classifica_fitxa_vs_contenidor(specs, container):
+    """Classifica els SPECS de la fitxa contra les regles del contenidor, segons la llei:
+      - SEMBRA:    POM compartit i forma idèntica → resident des del contenidor (autoritatiu).
+      - AMPLIA:    POM de la fitxa que el contenidor NO té → afegir al contenidor.
+      - CONFLICTE: POM compartit amb forma DIFERENT → tria conscient per-regla.
+    (Les POMs del contenidor absents de la fitxa NO es toquen: no se sembren, resten al catàleg.)
+    Retorna dict {'sembra': [spec], 'amplia': [spec], 'conflicte': [dict]}.
+    """
+    cont_by = {r.pom_id: r for r in container.regles.all()}
+    sembra, amplia, conflicte = [], [], []
+    for s in specs:
+        cr = cont_by.get(s['pom_id'])
+        if cr is None:
+            amplia.append(s)
+        elif spec_forms_match(s, rule_to_spec(cr)):
+            sembra.append(rule_to_spec(cr))
+        else:
+            conflicte.append({
+                'pom_id': s['pom_id'],
+                'pom_codi': getattr(s.get('pom'), 'codi_client', None) or s['pom_id'],
+                'spec_fitxa': s,
+                'spec_container': rule_to_spec(cr),
+                'regla_container_id': cr.id,
+                'detall': (f"forma difereix (contenidor ib={cr.increment_base}"
+                           f"/brk={cr.increment_break} vs fitxa ib={s['increment_base']}"
+                           f"/brk={s['increment_break']})"),
+            })
+    return {'sembra': sembra, 'amplia': amplia, 'conflicte': conflicte}
 
 
 def suggest_valors_mode(valors, base_label, run_ordenat):

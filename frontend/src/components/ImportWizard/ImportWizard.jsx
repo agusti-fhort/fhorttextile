@@ -121,7 +121,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
 
   // Pas 5 — guardar
   const [confirming, setConfirming] = useState(false)
-  const [gradingConflict, setGradingConflict] = useState(null)   // P2: 409 {conflict, divergencies}
+  // Llei del contenidor: 409 'grading_conflict' (per-regla) i 409 'container_absent' (crear?).
+  const [gradingConflict, setGradingConflict] = useState(null)   // {divergencies:[{pom_id,pom,detall}], options}
+  const [containerConflict, setContainerConflict] = useState(null) // {customer_nom, garment_type_item, size_system, fit}
+  const [conflictChoices, setConflictChoices] = useState({})     // {pom_id: keep_catalog|update_catalog|model_resident}
 
   const configuratSet = useMemo(() => new Set((configurat || []).map(norm)), [configurat])
   const teDesti = (label) => configuratSet.has(norm(label))
@@ -444,20 +447,32 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const teixitInformat = !!(teixit.fabric_main || teixit.fabric_composition ||
     teixit.shrinkage_iso_key || teixit.shrinkage_warp || teixit.shrinkage_pct)
 
-  // P2 — conflicte conscient de grading (regla importada vs retinguda al model). El backend torna
-  // 409 {conflict, divergencies} si difereixen i no s'ha triat; el tècnic decideix i re-confirmem
-  // amb grading_choice ('importats' | 'heretats'). Patró d'avís-i-confirma (com la Size Library).
-  const handleConfirmar = async (gradingChoice = null) => {
+  // Llei del contenidor — avís-i-confirma conscient. El backend torna 409:
+  //  · 'container_absent' → el client no té contenidor per la combinació: crear? (container_choice)
+  //  · 'grading_conflict' → regles de la fitxa que contradiuen el catàleg: tria per-POM
+  //    (conflict_resolutions {pom_id: keep_catalog|update_catalog|model_resident}).
+  // `bodyExtra` és el que afegim al POST en re-confirmar amb la decisió del tècnic.
+  const handleConfirmar = async (bodyExtra = {}) => {
     setConfirming(true); setError('')
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/confirmar/`, {
         method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify(gradingChoice ? { grading_choice: gradingChoice } : {}),
+        body: JSON.stringify(bodyExtra),
       })
       const data = await res.json().catch(() => ({}))
-      if (res.status === 409 && data.conflict) { setGradingConflict(data); setConfirming(false); return }
+      if (res.status === 409 && data.conflict) {
+        if (data.tipus === 'container_absent') { setContainerConflict(data); setGradingConflict(null) }
+        else if (data.tipus === 'grading_conflict') {
+          setGradingConflict(data); setContainerConflict(null)
+          // per defecte: mantenir el catàleg per a cada POM en conflicte.
+          const defaults = {}
+          for (const d of (data.divergencies || [])) defaults[d.pom_id] = 'keep_catalog'
+          setConflictChoices(defaults)
+        }
+        setConfirming(false); return
+      }
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setConfirming(false); return }
-      setGradingConflict(null)
+      setGradingConflict(null); setContainerConflict(null)
       onComplete && onComplete(data.model_id)
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setConfirming(false)
@@ -992,8 +1007,44 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             {t('import_wizard.mana_doc', { count: pomsActius })}
           </div>
 
-          {/* P2 — conflicte conscient: la regla del document difereix de la retinguda al model.
-              El tècnic tria; la triada esdevé la regla del model (cap sobreescriptura en silenci). */}
+          {/* Llei del contenidor — combinació verge: el client no té contenidor per aquesta
+              (peça + sistema de talles + fit). Crear-lo (acte explícit) o deixar el model amb
+              residents i prou (sobirania). MAI creació silenciosa. */}
+          {containerConflict && (
+            <div style={{ background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
+                          padding: '12px 14px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600,
+                            fontSize: 'var(--fs-body)', color: '#7a5a00', marginBottom: 6 }}>
+                <i className="ti ti-package" aria-hidden="true" />
+                {t('import_wizard.container_absent_title')}
+              </div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', marginBottom: 10 }}>
+                {t('import_wizard.container_absent_help', {
+                  customer: containerConflict.customer_nom || '',
+                  item: containerConflict.garment_type_item || '',
+                  size_system: containerConflict.size_system || '',
+                  fit: containerConflict.fit || '',
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => handleConfirmar({ container_choice: 'create' })} disabled={confirming}
+                  style={{ padding: '8px 14px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-body)',
+                           fontWeight: 500, color: 'var(--white)', background: GOLD,
+                           cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                  {t('import_wizard.container_create')}
+                </button>
+                <button type="button" onClick={() => handleConfirmar({ container_choice: 'no_container' })} disabled={confirming}
+                  style={{ padding: '8px 14px', borderRadius: 6, border: `0.5px solid ${BORDER}`,
+                           fontSize: 'var(--fs-body)', fontWeight: 500, background: 'var(--white)',
+                           color: 'var(--text-main)', cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                  {t('import_wizard.container_skip')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Llei del contenidor — conflicte per-regla: la fitxa contradiu el catàleg del client.
+              Per a cada POM: mantenir catàleg / actualitzar-lo / deixar-lo resident-només al model. */}
           {gradingConflict && (
             <div style={{ background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
                           padding: '12px 14px', marginBottom: 16 }}>
@@ -1005,27 +1056,55 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', marginBottom: 8 }}>
                 {t('import_wizard.grading_conflict_help')}
               </div>
-              {(gradingConflict.divergencies || []).length > 0 && (
-                <ul style={{ margin: '0 0 10px', paddingLeft: 18, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
-                  {gradingConflict.divergencies.slice(0, 6).map((d, i) => (
-                    <li key={i}>{d.pom}: {d.detall}</li>
-                  ))}
-                </ul>
-              )}
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button type="button" onClick={() => handleConfirmar('importats')} disabled={confirming}
-                  style={{ padding: '6px 14px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-body)',
-                           fontWeight: 500, color: 'var(--white)', background: GOLD,
-                           cursor: confirming ? 'not-allowed' : 'pointer' }}>
-                  {t('import_wizard.grading_apply_imported')}
-                </button>
-                <button type="button" onClick={() => handleConfirmar('heretats')} disabled={confirming}
-                  style={{ padding: '6px 14px', borderRadius: 6, border: `0.5px solid ${BORDER}`,
-                           fontSize: 'var(--fs-body)', fontWeight: 500, background: 'var(--white)',
-                           color: 'var(--text-main)', cursor: confirming ? 'not-allowed' : 'pointer' }}>
-                  {t('import_wizard.grading_keep_inherited')}
-                </button>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
+                <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+                  {t('import_wizard.conflict_apply_all')}:
+                </span>
+                {['keep_catalog', 'update_catalog', 'model_resident'].map(opt => (
+                  <button key={opt} type="button" disabled={confirming}
+                    onClick={() => {
+                      const all = {}
+                      for (const d of (gradingConflict.divergencies || [])) all[d.pom_id] = opt
+                      setConflictChoices(all)
+                    }}
+                    style={{ padding: '3px 10px', borderRadius: 12, border: `0.5px solid ${BORDER}`,
+                             background: 'var(--white)', fontSize: 'var(--fs-caption)',
+                             color: 'var(--text-main)', cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                    {t(`import_wizard.conflict_${opt}`)}
+                  </button>
+                ))}
               </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {(gradingConflict.divergencies || []).map(d => (
+                  <div key={d.pom_id} style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: 8 }}>
+                    <div style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)' }}>{d.pom}</div>
+                    <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', marginBottom: 6 }}>{d.detall}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {['keep_catalog', 'update_catalog', 'model_resident'].map(opt => {
+                        const active = conflictChoices[d.pom_id] === opt
+                        return (
+                          <button key={opt} type="button" disabled={confirming}
+                            onClick={() => setConflictChoices(prev => ({ ...prev, [d.pom_id]: opt }))}
+                            style={{ padding: '4px 10px', borderRadius: 6,
+                                     border: `${active ? '1px' : '0.5px'} solid ${active ? GOLD : BORDER}`,
+                                     background: active ? '#fffdf5' : 'var(--white)',
+                                     fontWeight: active ? 600 : 500, fontSize: 'var(--fs-caption)',
+                                     color: 'var(--text-main)', cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                            {t(`import_wizard.conflict_${opt}`)}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button type="button" disabled={confirming}
+                onClick={() => handleConfirmar({ conflict_resolutions: conflictChoices })}
+                style={{ padding: '8px 16px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-body)',
+                         fontWeight: 600, color: 'var(--white)', background: GOLD,
+                         cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                {t('import_wizard.conflict_apply')}
+              </button>
             </div>
           )}
 
@@ -1033,10 +1112,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             <button type="button" onClick={() => setStep(4)}
               style={{ padding: '8px 16px', border: `0.5px solid ${BORDER}`, borderRadius: 6,
                        background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>← {t('app.back')}</button>
-            <button type="button" onClick={() => handleConfirmar()} disabled={confirming || !!gradingConflict}
+            <button type="button" onClick={() => handleConfirmar()} disabled={confirming || !!gradingConflict || !!containerConflict}
               style={{ padding: '8px 24px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-h3)', fontWeight: 600,
-                       color: 'var(--white)', background: (confirming || gradingConflict) ? '#ccc' : GOLD,
-                       cursor: (confirming || gradingConflict) ? 'not-allowed' : 'pointer' }}>
+                       color: 'var(--white)', background: (confirming || gradingConflict || containerConflict) ? '#ccc' : GOLD,
+                       cursor: (confirming || gradingConflict || containerConflict) ? 'not-allowed' : 'pointer' }}>
               {confirming ? t('import_wizard.confirming') : t('import_wizard.confirm_save')}
             </button>
           </div>

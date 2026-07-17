@@ -181,6 +181,7 @@ export const sizeMap = {
 
 export const gradingRuleSets = {
   list: (params) => client.get('/api/v1/grading-rule-sets/', { params }),
+  get: (id) => client.get(`/api/v1/grading-rule-sets/${id}/`),
   editRule: (setId, pom, payload) =>
     client.patch(`/api/v1/grading-rule-sets/${setId}/regles/${pom}/editar/`, payload),
 }

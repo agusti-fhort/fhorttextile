@@ -9,6 +9,7 @@ import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
 import { selS, primaryBtn } from '../components/ui/buttons'
+import GroupPills from '../components/GarmentTypeSelector/GroupPills'
 
 // Fase catàlegs · Garment Types: mestre-detall. Esquerra = llista de garment types; dreta =
 // capçalera del type + GRAELLA DE CARDS d'item (porta d'entrada a la pàgina d'autoria + termòmetre
@@ -121,11 +122,12 @@ export default function GarmentTypes() {
 
   const selected = types.find(x => x.id === selectedId) || null
   const filesItem = items.find(x => x.id === filesItemId) || null
-  const groups = [...new Set(types.map(x => x.grup).filter(Boolean))].sort()
   const shown = types.filter(x => {
     const s = search.trim().toLowerCase()
+    // WIZARD-COMPLET C.1 — la CERCA salta nivells: quan hi ha text, ignora el filtre de grup (busca a
+    // totes les famílies pel codi/nom, per resoldre directament sense navegar l'arbre).
     if (s && !(x.codi_client || '').toLowerCase().includes(s) && !(x.nom_client || '').toLowerCase().includes(s)) return false
-    if (grup && x.grup !== grup) return false
+    if (!s && grup && x.grup !== grup) return false
     if (actiu === 'true' && !x.actiu) return false
     if (actiu === 'false' && x.actiu) return false
     return true
@@ -173,15 +175,17 @@ export default function GarmentTypes() {
               <div style={{ flex: '1 1 300px', minWidth: 260, maxWidth: 360 }}>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                   <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('garment_types.search')} style={{ ...selS, flex: '1 1 120px' }} />
-                  <select value={grup} onChange={e => setGrup(e.target.value)} style={selS}>
-                    <option value="">{t('garment_types.all_groups')}</option>
-                    {groups.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
                   <select value={actiu} onChange={e => setActiu(e.target.value)} style={selS}>
                     <option value="">{t('garment_types.all')}</option>
                     <option value="true">{t('garment_types.active')}</option>
                     <option value="false">{t('garment_types.inactive')}</option>
                   </select>
+                </div>
+                {/* WIZARD-COMPLET C.1 + rectificació pills — selector de GRUP amb el patró ÚNIC compartit
+                    (GroupPills), idèntic al selector de peça del wizard i al Navegador de POM Systems.
+                    «Tots els grups» és la primera pill del mateix estil. Es desactiva mentre hi ha cerca. */}
+                <div style={{ marginBottom: 10, opacity: search.trim() ? 0.45 : 1, pointerEvents: search.trim() ? 'none' : 'auto' }}>
+                  <GroupPills value={grup} onChange={setGrup} allLabel={t('garment_types.all_groups')} />
                 </div>
                 <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
                   {shown.length === 0 ? <Center>{t('garment_types.empty')}</Center>
