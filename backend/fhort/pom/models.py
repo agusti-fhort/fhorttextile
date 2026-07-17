@@ -622,6 +622,62 @@ class GradingRuleSet(models.Model):
         return self.nom
 
 
+class RuleSetScopeNode(models.Model):
+    """ÀMBIT D'APLICABILITAT (disponibilitat) d'un GradingRuleSet de client — un node de l'arbre únic
+    Grup→Família→Item al qual el contenidor «aplica» (= «està disponible per a»). MULTI-NODE: un
+    contenidor en pot tenir diversos (p.ex. grup TOPS + item Blusa).
+
+    Sprint ÀMBIT (2026-07-17, opció (c) del gate): la IDENTITAT/unicitat del contenidor SEGUEIX vivint a
+    `GradingRuleSet.garment_type_item` + la constraint parcial `uniq_client_container_identity` (migració
+    0039, INTACTES). Aquest model és NOMÉS DISPONIBILITAT per al matching (picker/cascada): additiu, cap
+    canvi a la identitat ni a la reconciliació de sembra. Un node = EXACTAMENT un dels tres FKs (validat a
+    clean() segons node_type)."""
+    NODE_GROUP = 'GROUP'
+    NODE_TYPE = 'TYPE'
+    NODE_ITEM = 'ITEM'
+    NODE_CHOICES = [(NODE_GROUP, 'Grup'), (NODE_TYPE, 'Família'), (NODE_ITEM, 'Item')]
+
+    rule_set = models.ForeignKey(GradingRuleSet, on_delete=models.CASCADE, related_name='scope_nodes')
+    node_type = models.CharField(max_length=6, choices=NODE_CHOICES)
+    garment_group = models.ForeignKey(GarmentGroup, on_delete=models.CASCADE, null=True, blank=True,
+                                      related_name='scope_nodes')
+    garment_type = models.ForeignKey(GarmentType, on_delete=models.CASCADE, null=True, blank=True,
+                                     related_name='scope_nodes')
+    # Cross-app cap a tasks (igual que GradingRuleSet.garment_type_item): FK lògic, db_constraint=False
+    # (pom viu al schema del tenant; un constraint real cap a tasks petaria a 'public').
+    garment_type_item = models.ForeignKey('tasks.GarmentTypeItem', on_delete=models.CASCADE, null=True,
+                                          blank=True, db_constraint=False, related_name='scope_nodes')
+
+    class Meta:
+        verbose_name = "Node d'àmbit de grading"
+        verbose_name_plural = "Nodes d'àmbit de grading"
+        constraints = [
+            # Un sol node de cada mena per contenidor (parcials per node_type; eviten duplicats que
+            # una UniqueConstraint composta amb NULLs DISTINCT deixaria passar).
+            models.UniqueConstraint(fields=['rule_set', 'garment_group'],
+                                    condition=models.Q(node_type='GROUP'), name='uniq_scope_group'),
+            models.UniqueConstraint(fields=['rule_set', 'garment_type'],
+                                    condition=models.Q(node_type='TYPE'), name='uniq_scope_type'),
+            models.UniqueConstraint(fields=['rule_set', 'garment_type_item'],
+                                    condition=models.Q(node_type='ITEM'), name='uniq_scope_item'),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        fks = {'GROUP': self.garment_group_id, 'TYPE': self.garment_type_id, 'ITEM': self.garment_type_item_id}
+        setats = [k for k, v in fks.items() if v is not None]
+        if setats != [self.node_type]:
+            raise ValidationError(
+                f"Un node d'àmbit ha de tenir EXACTAMENT el FK del seu node_type ({self.node_type}); "
+                f"trobat: {setats or 'cap'}.")
+
+    def __str__(self):
+        codi = (self.garment_group and self.garment_group.codi) or \
+               (self.garment_type and self.garment_type.codi_client) or \
+               (self.garment_type_item_id and f'item#{self.garment_type_item_id}') or '?'
+        return f'{self.node_type}:{codi}'
+
+
 class GradingRule(models.Model):
     LOGICA_LINEAR = 'LINEAR'
     LOGICA_STEP = 'STEP'
