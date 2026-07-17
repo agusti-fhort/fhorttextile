@@ -100,6 +100,8 @@ export function availableFits(ruleSets, target, construction) {
 }
 
 // RuleSets que encaixen amb la selecció completa (4 eixos). Buit fins que els 4 estan triats.
+// LENIENT: un eix NULL al ruleset fa de COMODÍ (casa amb qualsevol). Vàlid a les superfícies de
+// GESTIÓ (CRUD: GradingRuleSets, ItemAuthoring, RuleSetCard) on es vol veure tot el que podria aplicar.
 export function matchingRuleSets(ruleSets, axes, garmentGroupCodiById) {
   const { target, construction, fit, garmentGroup } = axes || {}
   if (!target || !construction || !fit || !garmentGroup) return []
@@ -109,4 +111,40 @@ export function matchingRuleSets(ruleSets, axes, garmentGroupCodiById) {
     (!rs.fit_type_codi || rs.fit_type_codi === fit) &&
     matchesGarmentGroup(rs, garmentGroup, garmentGroupCodiById)
   )
+}
+
+// ── Matching ESTRICTE (context WIZARD, sprint WIZARD-COMPLET) ──────────────────
+// A diferència del lenient: `size_system` és OBLIGATORI i coincident, i cap eix NULL fa de
+// comodí — un ruleset s'exclou si no declara explícitament target/construction/fit/grup/system
+// que casin amb la combinació completa. Així el wizard només ofereix la graduació que realment
+// aplica a la peça+talles triades (cap arrossegament implícit ni fals positiu).
+export function matchingRuleSetsStrict(ruleSets, axes, garmentGroupCodiById, sizeSystemId) {
+  const { target, construction, fit, garmentGroup } = axes || {}
+  if (!target || !construction || !fit || !garmentGroup || sizeSystemId == null) return []
+  return ruleSets.filter(rs =>
+    rs.actiu !== false &&
+    !!rs.targets_codis?.length && rs.targets_codis.includes(target) &&
+    rs.construction_codi === construction &&
+    rs.fit_type_codi === fit &&
+    rs.garment_group != null && garmentGroupCodiById[rs.garment_group] === garmentGroup &&
+    rs.size_system != null && rs.size_system === sizeSystemId
+  )
+}
+
+// Fits amb almenys un ruleset ESTRICTE per a la combinació fixada (target/construction/grup/system).
+// Alimenta el selector de FIT del wizard: només s'ofereixen fits que porten a una graduació real.
+export function availableFitsStrict(ruleSets, fixed, garmentGroupCodiById, sizeSystemId) {
+  const { target, construction, garmentGroup } = fixed || {}
+  if (!target || !construction || !garmentGroup || sizeSystemId == null) return []
+  const set = new Set(
+    ruleSets.filter(rs =>
+      rs.actiu !== false &&
+      !!rs.targets_codis?.length && rs.targets_codis.includes(target) &&
+      rs.construction_codi === construction &&
+      rs.garment_group != null && garmentGroupCodiById[rs.garment_group] === garmentGroup &&
+      rs.size_system === sizeSystemId &&
+      rs.fit_type_codi
+    ).map(rs => rs.fit_type_codi)
+  )
+  return FITS.filter(f => set.has(f.codi))
 }
