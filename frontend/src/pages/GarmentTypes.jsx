@@ -9,7 +9,7 @@ import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
 import { selS, primaryBtn } from '../components/ui/buttons'
-import { GARMENT_GROUPS, nomLocal } from '../components/grading/gradingAxes'
+import GroupPills from '../components/GarmentTypeSelector/GroupPills'
 
 // Fase catàlegs · Garment Types: mestre-detall. Esquerra = llista de garment types; dreta =
 // capçalera del type + GRAELLA DE CARDS d'item (porta d'entrada a la pàgina d'autoria + termòmetre
@@ -23,8 +23,7 @@ const actBtn = {
 }
 
 export default function GarmentTypes() {
-  const { t, i18n } = useTranslation()
-  const lang = (i18n.language || 'ca').slice(0, 2)
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
@@ -123,8 +122,6 @@ export default function GarmentTypes() {
 
   const selected = types.find(x => x.id === selectedId) || null
   const filesItem = items.find(x => x.id === filesItemId) || null
-  const groups = [...new Set(types.map(x => x.grup).filter(Boolean))].sort()
-  const grupLabel = (codi) => nomLocal(GARMENT_GROUPS.find(g => g.codi === codi), lang) || codi
   const shown = types.filter(x => {
     const s = search.trim().toLowerCase()
     // WIZARD-COMPLET C.1 — la CERCA salta nivells: quan hi ha text, ignora el filtre de grup (busca a
@@ -184,13 +181,11 @@ export default function GarmentTypes() {
                     <option value="false">{t('garment_types.inactive')}</option>
                   </select>
                 </div>
-                {/* WIZARD-COMPLET C.1 — selector de GRUP abans de les famílies (mateix patró de pills que
-                    el selector de peça del wizard; font única GARMENT_GROUPS). Es desactiva mentre hi ha cerca. */}
-                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', opacity: search.trim() ? 0.45 : 1, pointerEvents: search.trim() ? 'none' : 'auto' }}>
-                  <GrupPill active={!grup} onClick={() => setGrup('')}>{t('garment_types.all_groups')}</GrupPill>
-                  {groups.map(g => (
-                    <GrupPill key={g} active={grup === g} onClick={() => setGrup(grup === g ? '' : g)}>{grupLabel(g)}</GrupPill>
-                  ))}
+                {/* WIZARD-COMPLET C.1 + rectificació pills — selector de GRUP amb el patró ÚNIC compartit
+                    (GroupPills), idèntic al selector de peça del wizard i al Navegador de POM Systems.
+                    «Tots els grups» és la primera pill del mateix estil. Es desactiva mentre hi ha cerca. */}
+                <div style={{ marginBottom: 10, opacity: search.trim() ? 0.45 : 1, pointerEvents: search.trim() ? 'none' : 'auto' }}>
+                  <GroupPills value={grup} onChange={setGrup} allLabel={t('garment_types.all_groups')} />
                 </div>
                 <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
                   {shown.length === 0 ? <Center>{t('garment_types.empty')}</Center>
@@ -430,17 +425,5 @@ function StatusLine({ label, value, on }) {
         textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150,
       }}>{value}</span>
     </div>
-  )
-}
-
-// WIZARD-COMPLET C.1 — pill de grup (mateix idioma visual que les pestanyes del selector de peça).
-function GrupPill({ active, onClick, children }) {
-  return (
-    <button type="button" onClick={onClick} style={{
-      padding: '5px 12px', borderRadius: 999, fontFamily: MONO, fontSize: 'var(--fs-caption)', cursor: 'pointer',
-      border: active ? '1.5px solid var(--warn)' : '0.5px solid var(--gray-l)',
-      background: active ? 'var(--warn)' : 'transparent', color: active ? 'var(--white)' : 'var(--text-main)',
-      fontWeight: active ? 600 : 400,
-    }}>{children}</button>
   )
 }

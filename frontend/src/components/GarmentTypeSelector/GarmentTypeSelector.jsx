@@ -1,15 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { garmentTypes, garmentTypeItems } from '../../api/endpoints'
-import { GARMENT_GROUPS, nomLocal } from '../grading/gradingAxes'
+import GroupPills, { PECA_GRUPS } from './GroupPills'
 
 // Pas 5A — Selector de DOS NIVELLS: família (GarmentType) → ítem (GarmentTypeItem).
 // onSelect({ family, item }) → el wizard desa garment_type_id + garment_type_item_id (baula motor).
 
-// WIZARD-COMPLET C.2 — arbre únic: el vocabulari de grups és la font ÚNICA del frontend (GARMENT_GROUPS,
-// a grading/gradingAxes). Aquí es filtra ACCESSORIES (sense famílies actives al selector de peça); així
-// no hi ha una segona llista divergent (abans un array `GRUPS` propi = la font del desajust 6 vs 7).
-const GRUPS = GARMENT_GROUPS.filter(g => g.codi !== 'ACCESSORIES')
+// WIZARD-COMPLET C.2 + rectificació pills — arbre únic: els grups (ordre + etiquetes + estil de pill)
+// viuen a GroupPills/PECA_GRUPS (font única), compartits amb Garment Types i el Navegador de POM Systems.
+const GRUPS = PECA_GRUPS
 
 const MONO = 'IBM Plex Mono, monospace'
 
@@ -18,7 +17,6 @@ function famName(f, lang) {
   if (lang === 'es') return f.nom_es || f.nom_en || f.nom_client || ''
   return f.nom_en || f.nom_client || ''
 }
-function grupLabel(g, lang) { return nomLocal(g, lang) }
 
 export default function GarmentTypeSelector({ onSelect, selectedItemId = null }) {
   const { t, i18n } = useTranslation()
@@ -58,21 +56,9 @@ export default function GarmentTypeSelector({ onSelect, selectedItemId = null })
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: MONO }}>
       {family === null ? (
         <>
-          {/* Pestanyes de grup */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '14px 16px',
-            borderBottom: '0.5px solid var(--gray-l)', background: 'var(--white)' }}>
-            {GRUPS.map(g => {
-              const active = grupActiu === g.codi
-              return (
-                <button key={g.codi} onClick={() => setGrupActiu(g.codi)} style={{
-                  padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: MONO,
-                  fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 400,
-                  background: active ? 'var(--warn-bg)' : 'var(--white)',
-                  color: active ? 'var(--warn)' : 'var(--text-main)',
-                  border: `1px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
-                }}>{grupLabel(g, lang)}</button>
-              )
-            })}
+          {/* Pestanyes de grup — patró únic compartit (GroupPills). */}
+          <div style={{ padding: '14px 16px', borderBottom: '0.5px solid var(--gray-l)', background: 'var(--white)' }}>
+            <GroupPills groups={GRUPS} value={grupActiu} onChange={setGrupActiu} />
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
