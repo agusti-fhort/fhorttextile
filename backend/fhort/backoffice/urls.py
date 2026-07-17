@@ -9,7 +9,9 @@ from .views_contracts import ServiceCatalogViewSet, TenantContractViewSet
 from .views_contracts import generate_invoice_view
 from .views_pricing import pricing_public_view, pricing_view
 from .views_pricing_client import pricing_for_client_view
-from .views_invoices import InvoiceSerieViewSet, InvoiceViewSet, VATRateViewSet
+from .views_invoices import (
+    InvoiceSerieViewSet, InvoiceViewSet, TancamentPeriodeView, VATRateViewSet,
+)
 from .views_seeding import SeedProfileViewSet
 from .views_legal import (
     LegalActionViewSet, LegalDocumentViewSet, LegalDocumentVersionViewSet,
@@ -35,6 +37,7 @@ urlpatterns = [
     path('pricing/for-client/<str:codi_tenant>/', pricing_for_client_view, name='backoffice-pricing-for-client'),
     path('pricing/', pricing_view, name='backoffice-pricing'),
     path('facturacio/generar/', generate_invoice_view),
+    path('facturacio/tancament-periode/', TancamentPeriodeView.as_view(), name='tancament-periode'),
     path('legal/pending/', LegalActionViewSet.as_view({'get': 'pending'}), name='legal-pending'),
     path('legal/accept/', LegalActionViewSet.as_view({'post': 'accept'}), name='legal-accept'),
     path('legal/acceptances/', LegalActionViewSet.as_view({'get': 'acceptances'}), name='legal-acceptances'),

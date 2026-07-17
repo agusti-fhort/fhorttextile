@@ -12,7 +12,7 @@ ADMIN (mateix patró que ServiceCatalog/TenantContract).
 import logging
 
 from django.http import HttpResponse
-from rest_framework import viewsets
+from rest_framework import views, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from .invoice_pdf import generate_invoice_pdf
 from .invoice_service import compute_totals, create_rectificativa, emit_invoice
 from .models import Invoice, InvoiceLine, InvoiceSerie, VATRate
+from .recurring_service import generate_invoices
 from .serializers_invoices import (
     InvoiceCreateSerializer, InvoiceDetailSerializer, InvoiceLineSerializer,
     InvoiceListSerializer, InvoiceSerieSerializer, VATRateSerializer,
@@ -189,3 +190,34 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         resp = HttpResponse(pdf, content_type='application/pdf')
         resp['Content-Disposition'] = f'inline; filename="factura-{nom}.pdf"'
         return resp
+
+
+class TancamentPeriodeView(views.APIView):
+    """Tancament de període (F-RECUR): preview i generació de DRAFTs recurrents.
+
+    GET  ?period=YYYY-MM[&client=COD]  → informe per client (dry-run, no persisteix).
+    POST {period, client?}             → genera els DRAFTs (idempotent).
+    Només ADMIN pot generar; el preview el pot veure qualsevol perfil de backoffice.
+    """
+    def get_permissions(self):
+        roles = ['ADMIN'] if self.request.method == 'POST' else None
+        return [IsAuthenticated(), HasBackofficeRole(roles=roles)()]
+
+    def _run(self, request, dry_run):
+        from rest_framework.exceptions import ValidationError
+        period = request.query_params.get('period') or request.data.get('period')
+        if not period or len(period) != 7 or period[4] != '-':
+            raise ValidationError({'error': "Cal un període 'YYYY-MM'."})
+        codi = request.query_params.get('client') or request.data.get('client')
+        reports = generate_invoices(period, codi_client=codi or None, dry_run=dry_run)
+        # Els Decimal no són JSON-serialitzables directament: a text, com la resta de l'API.
+        for r in reports:
+            if 'total_sense_iva' in r:
+                r['total_sense_iva'] = str(r['total_sense_iva'])
+        return Response({'period': period, 'dry_run': dry_run, 'clients': reports})
+
+    def get(self, request):
+        return self._run(request, dry_run=True)
+
+    def post(self, request):
+        return self._run(request, dry_run=False)
