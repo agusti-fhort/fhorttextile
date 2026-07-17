@@ -301,7 +301,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
         onFeedback?.({
           type: 'err',
           text: /GradingVersion|talles/i.test(msg)
-            ? t('fitting.save.no_grading')
+            ? t('fitting.save.no_grading', { codi: model.codi_intern })
             : (msg || t('sizecheck.open_error')),
         })
       })
