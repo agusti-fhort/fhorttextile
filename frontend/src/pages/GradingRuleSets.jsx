@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import AxesSelector from '../components/grading/AxesSelector'
+import SizeAuthoringDrawer from '../components/SizeAuthoringDrawer'
 import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn } from '../components/grading/gradingAxes'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -35,6 +36,8 @@ const LOGICA_COLORS = {
 export default function GradingRuleSets() {
   const { t, i18n } = useTranslation()
   const token = useAuthStore(s => s.token) || localStorage.getItem('access_token')
+  const me = useAuthStore(s => s.user)
+  const canConfigure = !!me?.capabilities?.includes('configure')
 
   const [allRuleSets, setAllRuleSets] = useState([])
   const [loading, setLoading] = useState(true)
@@ -45,6 +48,7 @@ export default function GradingRuleSets() {
   const [selectedFamilyId, setSelectedFamilyId] = useState(null)   // pas 4 (opcional)
   const [selectedItemId, setSelectedItemId] = useState(null)       // pas 5 (opcional)
   const [showModal, setShowModal] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)   // autoria del contenidor de client (B.3)
   const [editTarget, setEditTarget] = useState(null)
   const [msg, setMsg] = useState(null)
   // Mapping id → codi de GarmentGroup, per poder filtrar per codi a partir
@@ -167,8 +171,27 @@ export default function GradingRuleSets() {
             {t('grading.summary', { sets: allRuleSets.length, rules: totalRegles })}
           </p>
         </div>
-        {/* Creació centralitzada a la Size Library; aquí només consulta/edita/esborra. */}
+        {/* Sprint ÀMBIT (B.3) — l'autoria del CONTENIDOR de client viu aquí (abans a la Size Library):
+            aquesta és la pàgina dels jocs de regles, que és el que el «Nou run de client» autora. */}
+        {canConfigure && (
+          <button type="button" onClick={() => setDrawerOpen(true)} style={{
+            padding: '8px 14px', borderRadius: 4, fontSize: 'var(--fs-body)', cursor: 'pointer',
+            background: 'var(--gold-pale, #f5e6d0)', color: 'var(--gold)', border: '1px solid var(--gold)',
+            fontFamily: 'IBM Plex Mono, monospace', whiteSpace: 'nowrap',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+            <i className="ti ti-plus" style={{ fontSize: 13 }} aria-hidden="true" /> {t('size_map_new_run')}
+          </button>
+        )}
       </div>
+
+      {/* Drawer d'autoria del contenidor de client (el mateix Wizard; abans muntat a Size Library). */}
+      <SizeAuthoringDrawer
+        open={drawerOpen}
+        prefill={null}
+        onClose={() => setDrawerOpen(false)}
+        onComplete={() => { setDrawerOpen(false); loadRuleSets() }}
+      />
 
       {/* Missatge */}
       {msg && (
