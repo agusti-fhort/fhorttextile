@@ -180,6 +180,9 @@ class GradingRuleSerializer(serializers.ModelSerializer):
 
 class GradingRuleSetSerializer(serializers.ModelSerializer):
     garment_group_nom = serializers.CharField(source='garment_group.nom', read_only=True)
+    # WIZARD-COMPLET C.2 — codi del grup (font única = model GarmentGroup). Fins ara el front havia de
+    # construir el mapa id→codi a mà (garment-groups) perquè el serializer només exposava el _nom.
+    garment_group_codi = serializers.CharField(source='garment_group.codi', read_only=True, default=None)
     size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
     size_system_nom = serializers.CharField(source='size_system.nom', read_only=True)
     customer_codi = serializers.CharField(source='customer.codi', read_only=True, default='')
@@ -230,7 +233,7 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
             'targets', 'targets_codis', 'target_codi',
             'construction', 'construction_codi',
             'fit_type', 'fit_type_codi',
-            'garment_group', 'garment_group_nom',
+            'garment_group', 'garment_group_nom', 'garment_group_codi',
             'size_system', 'size_system_codi', 'size_system_nom',
             'customer', 'customer_codi', 'customer_nom',
             'origen',

@@ -1,20 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { garmentTypes, garmentTypeItems } from '../../api/endpoints'
+import { GARMENT_GROUPS, nomLocal } from '../grading/gradingAxes'
 
 // Pas 5A — Selector de DOS NIVELLS: família (GarmentType) → ítem (GarmentTypeItem).
-// Sense dades mock i sense el grup ACCESSORIES (famílies desactivades). El retorn és
 // onSelect({ family, item }) → el wizard desa garment_type_id + garment_type_item_id (baula motor).
 
-// Grups amb famílies actives (ACCESSORIES exclòs a posta).
-const GRUPS = [
-  { codi: 'TOPS', en: 'Tops', ca: 'Parts superiors', es: 'Partes superiores' },
-  { codi: 'BOTTOMS', en: 'Bottoms', ca: 'Parts inferiors', es: 'Partes inferiores' },
-  { codi: 'DRESSES', en: 'Dresses', ca: 'Vestits', es: 'Vestidos' },
-  { codi: 'OUTERWEAR', en: 'Outerwear', ca: 'Abrics', es: 'Abrigos' },
-  { codi: 'UNDERWEAR', en: 'Underwear', ca: 'Interior', es: 'Interior' },
-  { codi: 'SWIMWEAR', en: 'Swimwear', ca: 'Bany', es: 'Baño' },
-]
+// WIZARD-COMPLET C.2 — arbre únic: el vocabulari de grups és la font ÚNICA del frontend (GARMENT_GROUPS,
+// a grading/gradingAxes). Aquí es filtra ACCESSORIES (sense famílies actives al selector de peça); així
+// no hi ha una segona llista divergent (abans un array `GRUPS` propi = la font del desajust 6 vs 7).
+const GRUPS = GARMENT_GROUPS.filter(g => g.codi !== 'ACCESSORIES')
 
 const MONO = 'IBM Plex Mono, monospace'
 
@@ -23,7 +18,7 @@ function famName(f, lang) {
   if (lang === 'es') return f.nom_es || f.nom_en || f.nom_client || ''
   return f.nom_en || f.nom_client || ''
 }
-function grupLabel(g, lang) { return lang === 'ca' ? g.ca : lang === 'es' ? g.es : g.en }
+function grupLabel(g, lang) { return nomLocal(g, lang) }
 
 export default function GarmentTypeSelector({ onSelect, selectedItemId = null }) {
   const { t, i18n } = useTranslation()
