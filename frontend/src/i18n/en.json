@@ -3507,5 +3507,24 @@
     "remove": "Remove file",
     "no_ext": "no extension",
     "bad_ext": "This file is not a {{esperat}} (you picked a {{rebut}})."
+  },
+  "size_map_f_run_hint": "Pick the size system: the run and base size come from it.",
+  "scope": {
+    "label": "Applicability scope",
+    "hint": "Which garments this grading is available for. Mark a GROUP (all its garments), a FAMILY (all its items) or an ITEM. You can mark more than one.",
+    "empty": "No node marked yet — at least one is required.",
+    "node_GROUP": "Group",
+    "node_TYPE": "Family",
+    "node_ITEM": "Item",
+    "remove": "Remove from scope",
+    "mark_group": "Mark the whole {{grup}} group",
+    "mark_family": "Mark the whole family",
+    "families": "Families",
+    "items": "Items"
+  },
+  "size_system_selector": {
+    "loading": "Loading size systems…",
+    "empty": "No size system available for this target.",
+    "canonical": "canonical"
   }
 }

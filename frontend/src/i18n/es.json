@@ -3507,5 +3507,24 @@
     "remove": "Quitar el archivo",
     "no_ext": "sin extensión",
     "bad_ext": "Este archivo no es un {{esperat}} (has elegido un {{rebut}})."
+  },
+  "size_map_f_run_hint": "Elige el sistema de tallas: el run y la talla base salen de él.",
+  "scope": {
+    "label": "Ámbito de aplicabilidad",
+    "hint": "Para qué prendas está disponible esta graduación. Marca un GRUPO (todos sus garments), una FAMILIA (todos sus ítems) o un ÍTEM. Puedes marcar más de uno.",
+    "empty": "Ningún nodo marcado todavía — se necesita al menos uno.",
+    "node_GROUP": "Grupo",
+    "node_TYPE": "Familia",
+    "node_ITEM": "Ítem",
+    "remove": "Quitar del ámbito",
+    "mark_group": "Marcar todo el grupo {{grup}}",
+    "mark_family": "Marcar toda la familia",
+    "families": "Familias",
+    "items": "Ítems"
+  },
+  "size_system_selector": {
+    "loading": "Cargando sistemas de tallas…",
+    "empty": "Ningún sistema de tallas disponible para este target.",
+    "canonical": "canónico"
   }
 }
