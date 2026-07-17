@@ -905,7 +905,14 @@
     "ph_collection": "ej: SS26 Capsule",
     "deadline_optional": "Deadline (opcional)",
     "profile_n": "Perfil #{{id}}",
-    "age_months_range": "{{min}}–{{max}} meses"
+    "age_months_range": "{{min}}–{{max}} meses",
+    "block4": "Graduación",
+    "grading_group": "Grupo",
+    "grading_system": "Sistema de tallas",
+    "no_grading": "Sin graduación (elegir más tarde)",
+    "pick_fit": "Elige el fit",
+    "grading_needs_sizes": "Define primero las tallas (paso 3) para poder elegir la graduación.",
+    "no_grading_available": "No hay ningún juego de reglas que coincida con esta combinación de prenda y tallas. Puedes continuar sin graduación y añadirla más tarde."
   },
   "models_list": {
     "title": "Modelos",

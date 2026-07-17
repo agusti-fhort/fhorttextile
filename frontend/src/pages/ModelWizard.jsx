@@ -3,12 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import GarmentTypeSelector from '../components/GarmentTypeSelector/GarmentTypeSelector'
 import CustomerSelector from '../components/CustomerSelector'
+import RuleSetPicker from '../components/grading/RuleSetPicker'
+import { availableFitsStrict } from '../components/grading/gradingAxes'
 import useAuthStore from '../store/auth'
-import { models, sizeSystems, customers } from '../api/endpoints'
+import { models, sizeSystems, customers, gradingRuleSets, garmentGroups } from '../api/endpoints'
 
-// Pas 5A — Wizard d'ESQUELET unificat. Un sol flux de creació (3 blocs) + mode edició.
-// Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles.
-// POM/sizing detallat/grading NO aquí: s'enriqueix via tasques a posteriori.
+// Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
+// Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles + GRADUACIÓ.
+// Sprint WIZARD-COMPLET: la graduació (pas 4) torna al wizard, amb matching ESTRICTE (size_system
+// obligatori, cap comodí NULL) i opció explícita «Sense graduació». POM detallat NO aquí.
 
 const MONO = 'IBM Plex Mono, monospace'
 const currentYear = new Date().getFullYear()
@@ -63,9 +66,19 @@ export default function ModelWizard() {
   // Peça 4 — sistema/run que ja tenia el model (edició), per detectar canvi de sistema de talles.
   const [modelSizeSystemId, setModelSizeSystemId] = useState(null)
   const [modelSizeRun, setModelSizeRun] = useState('')
+  // Bloc 4 — GRADUACIÓ (sprint WIZARD-COMPLET). Eixos target/construction/grup + size_system venen
+  // fixats dels passos 2-3 (arbre únic: el grup el mana l'item, no es re-tria); l'usuari només tria FIT.
+  const [gradingRuleSets_, setGradingRuleSets_] = useState([])
+  const [ggCodiById, setGgCodiById] = useState({})
+  const [fit, setFit] = useState(null)               // codi de fit triat (eix del matching)
+  const [gradingRuleSetId, setGradingRuleSetId] = useState(null)  // ruleset triat (null = cap)
+  const [noGrading, setNoGrading] = useState(false)  // «Sense graduació» explícit
+  const [modelGarmentGrup, setModelGarmentGrup] = useState(null)  // grup del model en edició (prefill)
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  const resetGrading = () => { setFit(null); setGradingRuleSetId(null); setNoGrading(false) }
 
   // LLEI 5 CAPES: el pas Talles retorna NOMÉS escala (sistema/run/base). La graduació (capa 4) es
   // tria per separat a la fitxa (RuleSetCard→update-step2). Aquí NO s'arrossega grading_rule_set_id.
@@ -114,7 +127,11 @@ export default function ModelWizard() {
       setTarget(d.target || null); setConstruction(d.construction || null)
       setModelSizeSystemId(d.size_system ?? null)
       setModelSizeRun(d.size_run_model || '')
-      if (d.garment_type) setFamily({ id: d.garment_type, nom_en: d.garment_type_nom })
+      // Bloc 4 — graduació vigent (edició): grup canònic (sempre present via garment_type.grup) i
+      // ruleset actual, perquè el pas 4 mostri la selecció i permeti canviar-la (cas Regular→Slim).
+      setModelGarmentGrup(d.garment_type_grup || null)
+      if (d.grading_rule_set) setGradingRuleSetId(d.grading_rule_set)
+      if (d.garment_type) setFamily({ id: d.garment_type, nom_en: d.garment_type_nom, grup: d.garment_type_grup })
       if (d.garment_type_item) setItem({ id: d.garment_type_item, name: d.garment_type_item_nom })
     }).catch(() => setError(t('model_wizard.conn_error')))
     return () => { alive = false }
@@ -161,16 +178,58 @@ export default function ModelWizard() {
     setBaseSize(changed ? null : (labels[Math.floor(labels.length / 2)] || labels[0] || null))
   }, [selSystem])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const skeletonPayload = () => ({
-    target: target || undefined,
-    garment_type_id: family?.id || undefined,
-    garment_type_item_id: item?.id || undefined,
-    construction: construction || undefined,
-    size_system_id: sizingResult?.size_system_id || undefined,
-    size_run: sizingResult?.size_run || undefined,
-    base_size: sizingResult?.base_size || undefined,
-    // LLEI 5 CAPES: la graduació (grading_rule_set) NO es tria al pas Talles; s'assigna a part.
-  })
+  // Bloc 4 — el grup canònic de la peça (eix fix del matching). Prové de l'ITEM (arbre únic):
+  // family.grup en creació; garment_type.grup del model en edició. Mai es re-tria a mà.
+  const garmentGroupCodi = family?.grup ?? modelGarmentGrup ?? null
+
+  // Bloc 4 — carrega rulesets + mapa grup id→codi quan s'entra al pas. En edició, deriva el fit
+  // vigent del ruleset del model perquè el picker el mostri seleccionat.
+  useEffect(() => {
+    if (block !== 4) return
+    let alive = true
+    Promise.all([gradingRuleSets.list({ page_size: 200 }), garmentGroups.list({ page_size: 200 })])
+      .then(([rsRes, ggRes]) => {
+        if (!alive) return
+        const rs = rsRes.data?.results ?? (Array.isArray(rsRes.data) ? rsRes.data : [])
+        const gg = ggRes.data?.results ?? (Array.isArray(ggRes.data) ? ggRes.data : [])
+        const map = {}; gg.forEach(g => { map[g.id] = g.codi })
+        setGradingRuleSets_(rs); setGgCodiById(map)
+        if (gradingRuleSetId && !fit) {
+          const cur = rs.find(r => r.id === gradingRuleSetId)
+          if (cur?.fit_type_codi) setFit(cur.fit_type_codi)
+        }
+      })
+      .catch(() => { if (alive) setGradingRuleSets_([]) })
+    return () => { alive = false }
+  }, [block])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fits que porten a una graduació REAL per a la combinació fixada (matching estricte).
+  const fitOptions = useMemo(
+    () => availableFitsStrict(
+      gradingRuleSets_,
+      { target, construction, garmentGroup: garmentGroupCodi },
+      ggCodiById, sizingResult?.size_system_id ?? null),
+    [gradingRuleSets_, target, construction, garmentGroupCodi, ggCodiById, sizingResult],
+  )
+
+  const gradingAxes = { target, construction, fit, garmentGroup: garmentGroupCodi }
+
+  const skeletonPayload = () => {
+    // Sprint WIZARD-COMPLET: la graduació torna al payload. `undefined` = no tocar (creació sense
+    // grading / no triat); `null` = «Sense graduació» EXPLÍCIT (buida en edició). El fit NO s'escriu
+    // a Model.fit_type (mapatge codi→choice lossy); viu al ruleset triat, que és qui el porta.
+    const grs = noGrading ? null : (gradingRuleSetId || undefined)
+    return {
+      target: target || undefined,
+      garment_type_id: family?.id || undefined,
+      garment_type_item_id: item?.id || undefined,
+      construction: construction || undefined,
+      size_system_id: sizingResult?.size_system_id || undefined,
+      size_run: sizingResult?.size_run || undefined,
+      base_size: sizingResult?.base_size || undefined,
+      grading_rule_set_id: grs,
+    }
+  }
 
   const handleCreate = async () => {
     if (!season) { setError(t('model_wizard.season_required')); setBlock(1); return }
@@ -206,7 +265,7 @@ export default function ModelWizard() {
     } finally { setSaving(false) }
   }
 
-  const BLOCKS = [t('model_wizard.block1'), t('model_wizard.block2'), t('model_wizard.block3')]
+  const BLOCKS = [t('model_wizard.block1'), t('model_wizard.block2'), t('model_wizard.block3'), t('model_wizard.block4')]
 
   // GATE entre contenidors: el client mana el prefix del codi i l'abast de la seqüència, així que
   // els passos 2 (Peça) i 3 (Talles) queden bloquejats fins que el pas 1 estigui resolt
@@ -309,7 +368,7 @@ export default function ModelWizard() {
                   <div style={{ height: 460, border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
                     <GarmentTypeSelector
                       selectedItemId={item?.id}
-                      onSelect={({ family: fam, item: it }) => { setFamily(fam); setItem(it); setPicking(false) }}
+                      onSelect={({ family: fam, item: it }) => { setFamily(fam); setItem(it); setPicking(false); resetGrading() }}
                     />
                   </div>
                 )}
@@ -320,7 +379,7 @@ export default function ModelWizard() {
               <Field label={t('model_wizard.construction')}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {CONSTRUCTIONS.map(c => (
-                    <Chip key={c} active={construction === c} onClick={() => { if (construction !== c) resetSizing(); setConstruction(c) }}>{t(`model_wizard.construction_${c}`)}</Chip>
+                    <Chip key={c} active={construction === c} onClick={() => { if (construction !== c) { resetSizing(); resetGrading() } setConstruction(c) }}>{t(`model_wizard.construction_${c}`)}</Chip>
                   ))}
                 </div>
               </Field>
@@ -399,6 +458,56 @@ export default function ModelWizard() {
             )}
           </div>
         )}
+
+        {block === 4 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Context FIX de la peça+talles (arbre únic: no es re-tria aquí; el grup el mana l'item) */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <ReadChip label={t('model_wizard.target')} value={target ? t(`model_wizard.target_${target}`) : '—'} />
+              <ReadChip label={t('model_wizard.construction')} value={construction ? t(`model_wizard.construction_${construction}`) : '—'} />
+              <ReadChip label={t('model_wizard.grading_group')} value={garmentGroupCodi || '—'} />
+              <ReadChip label={t('model_wizard.grading_system')} value={sizingResult?.size_system_nom || '—'} />
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', cursor: 'pointer', color: 'var(--text-main)' }}>
+              <input type="checkbox" checked={noGrading}
+                onChange={e => { setNoGrading(e.target.checked); if (e.target.checked) { setFit(null); setGradingRuleSetId(null) } }} />
+              {t('model_wizard.no_grading')}
+            </label>
+
+            {!noGrading && !sizingResult && (
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>{t('model_wizard.grading_needs_sizes')}</p>
+            )}
+
+            {!noGrading && sizingResult && (
+              <>
+                <Field label={t('model_wizard.pick_fit')}>
+                  {fitOptions.length === 0 ? (
+                    <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>{t('model_wizard.no_grading_available')}</p>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {fitOptions.map(f => (
+                        <Chip key={f.codi} active={fit === f.codi} onClick={() => { setFit(f.codi); setGradingRuleSetId(null) }}>{t(`model_wizard.fit_${f.codi}`, f.nom_en)}</Chip>
+                      ))}
+                    </div>
+                  )}
+                </Field>
+                {fit && (
+                  <RuleSetPicker
+                    ruleSets={gradingRuleSets_}
+                    garmentGroupCodiById={ggCodiById}
+                    axes={gradingAxes}
+                    strict
+                    sizeSystemId={sizingResult?.size_system_id ?? null}
+                    selectedId={gradingRuleSetId}
+                    actionLabel={t('model_sheet.use_ruleset')}
+                    onPick={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false) }}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Avís si no hi ha ítem */}
@@ -412,9 +521,9 @@ export default function ModelWizard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 18 }}>
         <button type="button" disabled={block === 1} onClick={() => setBlock(b => Math.max(1, b - 1))}
           style={{ ...ghostBtn, opacity: block === 1 ? 0.4 : 1 }}>← {t('model_wizard.back')}</button>
-        {block < 3 ? (
+        {block < 4 ? (
           <button type="button" disabled={block === 1 && !block1Resolved}
-            onClick={() => { if (!(block === 1 && !block1Resolved)) setBlock(b => Math.min(3, b + 1)) }}
+            onClick={() => { if (!(block === 1 && !block1Resolved)) setBlock(b => Math.min(4, b + 1)) }}
             style={primaryBtn(block === 1 && !block1Resolved)}>{t('model_wizard.next')} →</button>
         ) : (
           <button type="button" disabled={saving || baseSizeInvalid} onClick={isEditMode ? handleSaveEdit : handleCreate} style={primaryBtn(saving || baseSizeInvalid)}>
@@ -451,6 +560,14 @@ function TextInput({ label, value, onChange, placeholder }) {
     <Field label={label}>
       <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />
     </Field>
+  )
+}
+function ReadChip({ label, value }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 12px', borderRadius: 6, border: '0.5px solid var(--gray-l)', background: 'var(--bg-card)', minWidth: 90 }}>
+      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</span>
+      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontWeight: 500 }}>{value}</span>
+    </div>
   )
 }
 function Chip({ active, onClick, disabled, children }) {

@@ -905,7 +905,14 @@
     "ph_collection": "ex: SS26 Capsule",
     "deadline_optional": "Deadline (opcional)",
     "profile_n": "Perfil #{{id}}",
-    "age_months_range": "{{min}}–{{max}} mesos"
+    "age_months_range": "{{min}}–{{max}} mesos",
+    "block4": "Graduació",
+    "grading_group": "Grup",
+    "grading_system": "Sistema de talles",
+    "no_grading": "Sense graduació (triar més tard)",
+    "pick_fit": "Tria el fit",
+    "grading_needs_sizes": "Defineix primer les talles (pas 3) per poder triar la graduació.",
+    "no_grading_available": "No hi ha cap joc de regles que casi amb aquesta combinació de peça i talles. Pots continuar sense graduació i afegir-la més tard."
   },
   "models_list": {
     "title": "Models",

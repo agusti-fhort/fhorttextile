@@ -905,7 +905,14 @@
     "ph_collection": "e.g. SS26 Capsule",
     "deadline_optional": "Deadline (optional)",
     "profile_n": "Profile #{{id}}",
-    "age_months_range": "{{min}}–{{max}} months"
+    "age_months_range": "{{min}}–{{max}} months",
+    "block4": "Grading",
+    "grading_group": "Group",
+    "grading_system": "Size system",
+    "no_grading": "No grading (choose later)",
+    "pick_fit": "Pick the fit",
+    "grading_needs_sizes": "Define the sizes first (step 3) to be able to choose grading.",
+    "no_grading_available": "No rule set matches this garment and size combination. You can continue without grading and add it later."
   },
   "models_list": {
     "title": "Models",
