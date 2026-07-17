@@ -9,6 +9,7 @@ import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
 import { selS, primaryBtn } from '../components/ui/buttons'
+import { GARMENT_GROUPS, nomLocal } from '../components/grading/gradingAxes'
 
 // Fase catàlegs · Garment Types: mestre-detall. Esquerra = llista de garment types; dreta =
 // capçalera del type + GRAELLA DE CARDS d'item (porta d'entrada a la pàgina d'autoria + termòmetre
@@ -22,7 +23,8 @@ const actBtn = {
 }
 
 export default function GarmentTypes() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const lang = (i18n.language || 'ca').slice(0, 2)
   const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
@@ -122,10 +124,13 @@ export default function GarmentTypes() {
   const selected = types.find(x => x.id === selectedId) || null
   const filesItem = items.find(x => x.id === filesItemId) || null
   const groups = [...new Set(types.map(x => x.grup).filter(Boolean))].sort()
+  const grupLabel = (codi) => nomLocal(GARMENT_GROUPS.find(g => g.codi === codi), lang) || codi
   const shown = types.filter(x => {
     const s = search.trim().toLowerCase()
+    // WIZARD-COMPLET C.1 — la CERCA salta nivells: quan hi ha text, ignora el filtre de grup (busca a
+    // totes les famílies pel codi/nom, per resoldre directament sense navegar l'arbre).
     if (s && !(x.codi_client || '').toLowerCase().includes(s) && !(x.nom_client || '').toLowerCase().includes(s)) return false
-    if (grup && x.grup !== grup) return false
+    if (!s && grup && x.grup !== grup) return false
     if (actiu === 'true' && !x.actiu) return false
     if (actiu === 'false' && x.actiu) return false
     return true
@@ -173,15 +178,19 @@ export default function GarmentTypes() {
               <div style={{ flex: '1 1 300px', minWidth: 260, maxWidth: 360 }}>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                   <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('garment_types.search')} style={{ ...selS, flex: '1 1 120px' }} />
-                  <select value={grup} onChange={e => setGrup(e.target.value)} style={selS}>
-                    <option value="">{t('garment_types.all_groups')}</option>
-                    {groups.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
                   <select value={actiu} onChange={e => setActiu(e.target.value)} style={selS}>
                     <option value="">{t('garment_types.all')}</option>
                     <option value="true">{t('garment_types.active')}</option>
                     <option value="false">{t('garment_types.inactive')}</option>
                   </select>
+                </div>
+                {/* WIZARD-COMPLET C.1 — selector de GRUP abans de les famílies (mateix patró de pills que
+                    el selector de peça del wizard; font única GARMENT_GROUPS). Es desactiva mentre hi ha cerca. */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', opacity: search.trim() ? 0.45 : 1, pointerEvents: search.trim() ? 'none' : 'auto' }}>
+                  <GrupPill active={!grup} onClick={() => setGrup('')}>{t('garment_types.all_groups')}</GrupPill>
+                  {groups.map(g => (
+                    <GrupPill key={g} active={grup === g} onClick={() => setGrup(grup === g ? '' : g)}>{grupLabel(g)}</GrupPill>
+                  ))}
                 </div>
                 <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
                   {shown.length === 0 ? <Center>{t('garment_types.empty')}</Center>
@@ -421,5 +430,17 @@ function StatusLine({ label, value, on }) {
         textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150,
       }}>{value}</span>
     </div>
+  )
+}
+
+// WIZARD-COMPLET C.1 — pill de grup (mateix idioma visual que les pestanyes del selector de peça).
+function GrupPill({ active, onClick, children }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      padding: '5px 12px', borderRadius: 999, fontFamily: MONO, fontSize: 'var(--fs-caption)', cursor: 'pointer',
+      border: active ? '1.5px solid var(--warn)' : '0.5px solid var(--gray-l)',
+      background: active ? 'var(--warn)' : 'transparent', color: active ? 'var(--white)' : 'var(--text-main)',
+      fontWeight: active ? 600 : 400,
+    }}>{children}</button>
   )
 }
