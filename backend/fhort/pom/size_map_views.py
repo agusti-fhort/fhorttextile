@@ -358,40 +358,9 @@ def size_map_grading_preview_view(request):
         return Response({'error': str(e)}, status=500)
 
 
-def _parse_grading_excel(file_bytes):
-    """Parser Excel propi de la Size Library (format simple de graduació):
-    capçalera a la fila 1, A=codi, B=descripció, C endavant=talles. Retorna
-    (poms, talles): poms=[{'codi_fitxa','descripcio','values':{talla:float}}].
-    Distint de _parse_excel_poms (fitxa de model, models_app/extraction_views.py), que des del
-    FIX C de QA-S8 ancora la capçalera pel CONTINGUT i mapa les columnes per ETIQUETA, i que
-    abdica —cau a la IA— si no pot demostrar que ha entès la taula. Aquest d'aquí és el format
-    simple i tancat de la Library: si canvia, no arrossega l'altre."""
-    import openpyxl, io
-    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
-    ws = wb.active
-    rows = list(ws.iter_rows(values_only=True))
-    if not rows:
-        return [], []
-    header = rows[0]
-    size_cols = [(i, str(h).strip()) for i, h in enumerate(header)
-                 if i >= 2 and h is not None and str(h).strip()]
-    talles = [lbl for _, lbl in size_cols]
-    poms = []
-    for row in rows[1:]:
-        if not row or row[0] is None or str(row[0]).strip() == '':
-            continue
-        codi = str(row[0]).strip()
-        desc = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ''
-        values = {}
-        for ci, lbl in size_cols:
-            if ci < len(row) and row[ci] is not None:
-                try:
-                    values[lbl] = float(str(row[ci]).replace(',', '.'))
-                except (ValueError, TypeError):
-                    pass
-        if values:
-            poms.append({'codi_fitxa': codi, 'descripcio': desc, 'values': values})
-    return poms, talles
+# _parse_grading_excel (parser Excel posicional rígid de la Library) JUBILAT 2026-07-17: el camí
+# size-map ara usa _parse_excel_poms (l'extractor provat de l'ImportWizard, ancorat per contingut).
+# Fi del fork (DIAGNOSI «Nou run de client no ingereix Excel de bases»).
 
 
 def _pdf_extracted_to_poms(extracted, base_size):
@@ -437,8 +406,9 @@ def _pdf_extracted_to_poms(extracted, base_size):
 def size_map_grading_preview_file_view(request):
     """POST size-map/grading-preview-file/ — preview de grading des d'un FITXER.
 
-    Multipart: {file, size_system_id (opt), base_size}. Excel → _parse_grading_excel (parser
-    propi de la Library: A=codi, B=descripció, C+=talles); PDF/imatge → extract_from_file (Opus,
+    Multipart: {file, size_system_id (opt), base_size}. Excel → _parse_excel_poms (l'EXTRACTOR
+    PROVAT de l'ImportWizard: capçalera ancorada per contingut + porta d'abdicació; unificat aquí,
+    fi del fork amb el parser posicional rígid); PDF/imatge → extract_from_file (Opus,
     funció PURA del motor del model). Normalitza a [{codi_fitxa, descripcio, values}], resol
     find_pom_master AMB descripció (match per nom) i deriva el grading amb la MATEIXA lògica que
     el preview de paste (detect_grading + derive_break_fields). Cap persistència.
@@ -446,7 +416,7 @@ def size_map_grading_preview_file_view(request):
     """
     try:
         from fhort.pom.models import SizeDefinition, SizeSystem
-        from fhort.models_app.extraction_views import find_pom_master
+        from fhort.models_app.extraction_views import find_pom_master, _parse_excel_poms
         from fhort.models_app.extraction_service import extract_from_file
         from fhort.pom.size_labels import canonical_size_label
 
@@ -471,7 +441,10 @@ def size_map_grading_preview_file_view(request):
         # 1-2. Extracció → llista comuna [{codi_fitxa, descripcio, values}].
         poms_in = []
         if name.endswith(('.xlsx', '.xls')):
-            raw_poms, _talles = _parse_grading_excel(file_bytes)
+            # UNIFICAT (fi del fork): el mateix extractor provat que l'ImportWizard. base_hint/run_hint
+            # ja disponibles a dalt. Consumim NOMÉS {codi_fitxa, descripcio, values}; els camps de més
+            # (dim, tol_*, meta) no els arrossega aquest camí (el grading es deriva aigües avall).
+            raw_poms, _talles, _meta = _parse_excel_poms(file_bytes, base_hint=base_size, run_hint=tenant_run)
             for p in raw_poms:
                 poms_in.append({
                     'codi_fitxa': (p.get('codi_fitxa') or '').strip(),
