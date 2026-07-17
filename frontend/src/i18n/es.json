@@ -2929,7 +2929,9 @@
     "origen_CANONICAL": "Canónico FHORT",
     "origen_CLIENT_RUN": "Derivado de run de cliente",
     "origen_IMPORT": "Importado",
-    "origen_none": "No clasificado"
+    "origen_none": "No clasificado",
+    "step_family": "Familia",
+    "step_item": "Ítem"
   },
   "model_phases": {
     "Nou": "Nuevo",

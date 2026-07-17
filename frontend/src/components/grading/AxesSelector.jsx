@@ -1,26 +1,56 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   TARGETS, GARMENT_GROUPS, nomLocal,
   availableTargetCodes, availableConstructions, availableFits,
 } from './gradingAxes'
+import { garmentTypes, garmentTypeItems } from '../../api/endpoints'
 
-// AxesSelector — cascada target → construcció/fit → grup (Sprint Llibreria d'Items, B2).
-// Component PUR i reutilitzable: rep `ruleSets` (per il·luminar només els eixos disponibles) i
-// emet els 4 CODIS via onChange. Reprodueix l'idioma visual de GradingRuleSets (família) sense
-// tocar-lo (vàlvula d'escapament). value = { target, construction, fit, garmentGroup } (codis|null).
+// AxesSelector — cascada target → construcció/fit → grup → FAMÍLIA → ITEM.
+// Sprint ÀMBIT: la cascada baixa fins a l'ITEM (arbre únic Grup→Família→Item, el mateix que el
+// selector de peça i Garment Types). Família i item són OPCIONALS: parar-se al grup manté el
+// comportament d'abans (filtre ample); baixar-hi precisa la disponibilitat per àmbit multi-node.
+// value = { target, construction, fit, garmentGroup, garmentTypeId, garmentTypeItemId }.
+// Les famílies/items es carreguen aquí (dades de catàleg, com fa GarmentTypeSelector).
 
 export default function AxesSelector({ ruleSets = [], value, onChange }) {
   const { t, i18n } = useTranslation()
   const lang = (i18n.language || 'ca').slice(0, 2)
-  const { target = null, construction = null, fit = null, garmentGroup = null } = value || {}
+  const {
+    target = null, construction = null, fit = null, garmentGroup = null,
+    garmentTypeId = null, garmentTypeItemId = null,
+  } = value || {}
 
   const targetCodes = useMemo(() => availableTargetCodes(ruleSets), [ruleSets])
   const constructions = useMemo(() => availableConstructions(ruleSets, target), [ruleSets, target])
   const fits = useMemo(() => availableFits(ruleSets, target, construction), [ruleSets, target, construction])
 
-  // Cada selecció reseteja els eixos de sota (mateix comportament que GradingRuleSets).
-  const pick = (patch) => onChange?.({ target, construction, fit, garmentGroup, ...patch })
+  const [families, setFamilies] = useState([])
+  const [items, setItems] = useState([])
+
+  // Pas 4 — famílies del grup triat (arbre únic: garment-types filtrats per grup).
+  useEffect(() => {
+    if (!garmentGroup) { setFamilies([]); return }
+    let alive = true
+    garmentTypes.list({ grup: garmentGroup, actiu: 'true', page_size: 200 })
+      .then(r => { if (alive) setFamilies(r.data?.results ?? r.data ?? []) })
+      .catch(() => { if (alive) setFamilies([]) })
+    return () => { alive = false }
+  }, [garmentGroup])
+
+  // Pas 5 — items de la família triada.
+  useEffect(() => {
+    if (!garmentTypeId) { setItems([]); return }
+    let alive = true
+    garmentTypeItems.list({ garment_type: garmentTypeId, active: 'true', page_size: 200 })
+      .then(r => { if (alive) setItems(r.data?.results ?? r.data ?? []) })
+      .catch(() => { if (alive) setItems([]) })
+    return () => { alive = false }
+  }, [garmentTypeId])
+
+  // Cada selecció reseteja els eixos de sota (mateix comportament que abans).
+  const pick = (patch) => onChange?.({
+    target, construction, fit, garmentGroup, garmentTypeId, garmentTypeItemId, ...patch })
 
   return (
     <div>
@@ -33,7 +63,7 @@ export default function AxesSelector({ ruleSets = [], value, onChange }) {
               target={tg}
               selected={target === tg.codi}
               available={targetCodes.has(tg.codi)}
-              onClick={() => pick({ target: tg.codi, construction: null, fit: null, garmentGroup: null })}
+              onClick={() => pick({ target: tg.codi, construction: null, fit: null, garmentGroup: null, garmentTypeId: null, garmentTypeItemId: null })}
             />
           ))}
         </div>
@@ -51,7 +81,7 @@ export default function AxesSelector({ ruleSets = [], value, onChange }) {
                     key={c.codi}
                     label={t(`model_wizard.construction_${c.codi}`, c.nom_en)}
                     selected={construction === c.codi}
-                    onClick={() => pick({ construction: c.codi, fit: null, garmentGroup: null })}
+                    onClick={() => pick({ construction: c.codi, fit: null, garmentGroup: null, garmentTypeId: null, garmentTypeItemId: null })}
                   />
                 ))}
               </div>
@@ -65,7 +95,7 @@ export default function AxesSelector({ ruleSets = [], value, onChange }) {
                       key={f.codi}
                       label={t(`model_wizard.fit_${f.codi}`, f.nom_en)}
                       selected={fit === f.codi}
-                      onClick={() => pick({ fit: f.codi, garmentGroup: null })}
+                      onClick={() => pick({ fit: f.codi, garmentGroup: null, garmentTypeId: null, garmentTypeItemId: null })}
                     />
                   ))}
                 </div>
@@ -85,7 +115,42 @@ export default function AxesSelector({ ruleSets = [], value, onChange }) {
                 label={g.nom_en}
                 sublabel={lang !== 'en' ? nomLocal(g, lang) : null}
                 selected={garmentGroup === g.codi}
-                onClick={() => pick({ garmentGroup: g.codi })}
+                onClick={() => pick({ garmentGroup: g.codi, garmentTypeId: null, garmentTypeItemId: null })}
+              />
+            ))}
+          </div>
+        </StepSection>
+      )}
+
+      {/* Pas 4: Família (OPCIONAL) — arbre únic Grup→Família→Item. Parar-se aquí manté el filtre ample. */}
+      {garmentGroup && families.length > 0 && (
+        <StepSection number={4} title={t('grading.step_family')}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {families.map(f => (
+              <SelectionButton
+                key={f.id}
+                label={famLabel(f, lang)}
+                sublabel={f.codi_client || null}
+                selected={garmentTypeId === f.id}
+                onClick={() => pick({
+                  garmentTypeId: garmentTypeId === f.id ? null : f.id, garmentTypeItemId: null })}
+              />
+            ))}
+          </div>
+        </StepSection>
+      )}
+
+      {/* Pas 5: Item (OPCIONAL) — la unitat operativa. */}
+      {garmentTypeId && items.length > 0 && (
+        <StepSection number={5} title={t('grading.step_item')}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {items.map(it => (
+              <SelectionButton
+                key={it.id}
+                label={it.name || it.code}
+                sublabel={it.code || null}
+                selected={garmentTypeItemId === it.id}
+                onClick={() => pick({ garmentTypeItemId: garmentTypeItemId === it.id ? null : it.id })}
               />
             ))}
           </div>
@@ -93,6 +158,13 @@ export default function AxesSelector({ ruleSets = [], value, onChange }) {
       )}
     </div>
   )
+}
+
+// Nom de família segons idioma (mateix criteri que el selector de peça).
+function famLabel(f, lang) {
+  if (lang === 'ca') return f.nom_ca || f.nom_en || f.nom_client || ''
+  if (lang === 'es') return f.nom_es || f.nom_en || f.nom_client || ''
+  return f.nom_en || f.nom_client || ''
 }
 
 const labelStyle = {

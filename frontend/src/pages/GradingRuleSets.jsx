@@ -1,63 +1,17 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
+import AxesSelector from '../components/grading/AxesSelector'
+import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn } from '../components/grading/gradingAxes'
 
 const API = import.meta.env.VITE_API_URL || ''
 
 // ── Constants ────────────────────────────────────────────────────────────────
 // Enums de referència (vocabulari controlat). codi = id (mai traduït); nom_en/nom_ca/nom_es =
 // display bilingüe (anglès primari + nom localitzat per i18n.language). Convenció de sector.
-const TARGETS = [
-  { codi: 'WOMAN',         nom_en: 'Woman',         nom_ca: 'Dona',            nom_es: 'Mujer' },
-  { codi: 'MAN',           nom_en: 'Man',           nom_ca: 'Home',            nom_es: 'Hombre' },
-  { codi: 'UNISEX_ADULT',  nom_en: 'Unisex Adult',  nom_ca: 'Unisex adult',    nom_es: 'Unisex adulto' },
-  { codi: 'BABY_GIRL',     nom_en: 'Baby Girl',     nom_ca: 'Nadó nena',       nom_es: 'Bebé niña' },
-  { codi: 'BABY_BOY',      nom_en: 'Baby Boy',      nom_ca: 'Nadó nen',        nom_es: 'Bebé niño' },
-  { codi: 'BABY_UNISEX',   nom_en: 'Baby Unisex',   nom_ca: 'Nadó unisex',     nom_es: 'Bebé unisex' },
-  { codi: 'TODDLER_GIRL',  nom_en: 'Toddler Girl',  nom_ca: 'Nena toddler',    nom_es: 'Niña toddler' },
-  { codi: 'TODDLER_BOY',   nom_en: 'Toddler Boy',   nom_ca: 'Nen toddler',     nom_es: 'Niño toddler' },
-  { codi: 'GIRL',          nom_en: 'Girl',          nom_ca: 'Nena',            nom_es: 'Niña' },
-  { codi: 'BOY',           nom_en: 'Boy',           nom_ca: 'Nen',             nom_es: 'Niño' },
-  { codi: 'TEEN_GIRL',     nom_en: 'Teen Girl',     nom_ca: 'Adolescent nena', nom_es: 'Adolescente niña' },
-  { codi: 'TEEN_BOY',      nom_en: 'Teen Boy',      nom_ca: 'Adolescent nen',  nom_es: 'Adolescente niño' },
-  { codi: 'MATERNITY',     nom_en: 'Maternity',     nom_ca: 'Maternitat',      nom_es: 'Maternidad' },
-]
-
-const CONSTRUCTIONS = [
-  { codi: 'WOVEN',        nom_en: 'Woven',        nom_ca: 'Teixit pla',   nom_es: 'Tejido plano' },
-  { codi: 'KNIT',         nom_en: 'Knit',         nom_ca: 'Punt jersey',  nom_es: 'Punto jersey' },
-  { codi: 'STRETCH_KNIT', nom_en: 'Stretch Knit', nom_ca: 'Punt elàstic', nom_es: 'Punto elástico' },
-  { codi: 'TECHNICAL',    nom_en: 'Technical',    nom_ca: 'Tècnic',       nom_es: 'Técnico' },
-]
-
-const FITS = [
-  { codi: 'REGULAR',   nom_en: 'Regular',   nom_ca: 'Regular',         nom_es: 'Regular' },
-  { codi: 'SLIM',      nom_en: 'Slim',      nom_ca: 'Ajustat',         nom_es: 'Ajustado' },
-  { codi: 'RELAXED',   nom_en: 'Relaxed',   nom_ca: 'Relaxat',         nom_es: 'Relajado' },
-  { codi: 'OVERSIZED', nom_en: 'Oversized', nom_ca: 'Oversize',        nom_es: 'Oversize' },
-  { codi: 'FLARED',    nom_en: 'Flared',    nom_ca: 'Evasé',           nom_es: 'Evasé' },
-  { codi: 'BODYCON',   nom_en: 'Bodycon',   nom_ca: 'Bodycon',         nom_es: 'Bodycon' },
-  { codi: 'ATHLETIC',  nom_en: 'Athletic',  nom_ca: 'Esportiu',        nom_es: 'Deportivo' },
-  { codi: 'STRAIGHT',  nom_en: 'Straight',  nom_ca: 'Recte',           nom_es: 'Recto' },
-  { codi: 'TAPERED',   nom_en: 'Tapered',   nom_ca: 'Cònic',           nom_es: 'Cónico' },
-  { codi: 'CUSTOM',    nom_en: 'Custom',    nom_ca: 'Personalitzat',   nom_es: 'Personalizado' },
-]
-
-const GARMENT_GROUPS = [
-  { codi: 'TOPS',        nom_en: 'Tops',        nom_ca: 'Parts superiors', nom_es: 'Partes superiores' },
-  { codi: 'BOTTOMS',     nom_en: 'Bottoms',     nom_ca: 'Parts inferiors', nom_es: 'Partes inferiores' },
-  { codi: 'DRESSES',     nom_en: 'Dresses',     nom_ca: 'Vestits',         nom_es: 'Vestidos' },
-  { codi: 'OUTERWEAR',   nom_en: 'Outerwear',   nom_ca: 'Abrics',          nom_es: 'Abrigos' },
-  { codi: 'UNDERWEAR',   nom_en: 'Underwear',   nom_ca: 'Interior',        nom_es: 'Interior' },
-  { codi: 'SWIMWEAR',    nom_en: 'Swimwear',    nom_ca: 'Bany',            nom_es: 'Baño' },
-  { codi: 'ACCESSORIES', nom_en: 'Accessories', nom_ca: 'Complements',     nom_es: 'Complementos' },
-]
-
-// Nom localitzat secundari segons i18n.language (anglès es mostra com a primari a part).
-function nomLocal(obj, lang) {
-  if (!obj) return ''
-  return lang === 'es' ? (obj.nom_es || obj.nom_en) : lang === 'ca' ? (obj.nom_ca || obj.nom_en) : obj.nom_en
-}
+// Sprint ÀMBIT — FORK TANCAT: els enums (TARGETS/CONSTRUCTIONS/FITS/GARMENT_GROUPS), el matching i la
+// cascada vivien duplicats aquí. Ara es consumeixen del mòdul únic components/grading/gradingAxes.js +
+// AxesSelector (la mateixa cascada que el wizard), estesa fins a família→item.
 
 // S16-B fix: mapping grup → categories POM rellevants. La taula de regles
 // filters POMs by the selected group, showing only those belonging to
@@ -88,6 +42,8 @@ export default function GradingRuleSets() {
   const [selectedConstruction, setSelectedConstruction] = useState(null)
   const [selectedFit, setSelectedFit] = useState(null)
   const [selectedGarmentGroup, setSelectedGarmentGroup] = useState(null)
+  const [selectedFamilyId, setSelectedFamilyId] = useState(null)   // pas 4 (opcional)
+  const [selectedItemId, setSelectedItemId] = useState(null)       // pas 5 (opcional)
   const [showModal, setShowModal] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [msg, setMsg] = useState(null)
@@ -129,69 +85,23 @@ export default function GradingRuleSets() {
   // apply to multiple targets (e.g. BABY → 3) thanks to the M2M change.
   const enrichedRuleSets = allRuleSets
 
-  // Helpers per matching M2M targets (un RuleSet apareix sota cada target del array).
-  const matchesTarget = (rs, target) =>
-    !rs.targets_codis?.length || rs.targets_codis.includes(target)
+  // Eixos de la cascada (compartits amb el wizard). Família/item són OPCIONALS: parar-se al grup
+  // manté el filtre ample d'abans; baixar-hi precisa la disponibilitat per àmbit multi-node.
+  const axes = useMemo(() => ({
+    target: selectedTarget, construction: selectedConstruction, fit: selectedFit,
+    garmentGroup: selectedGarmentGroup, garmentTypeId: selectedFamilyId, garmentTypeItemId: selectedItemId,
+  }), [selectedTarget, selectedConstruction, selectedFit, selectedGarmentGroup, selectedFamilyId, selectedItemId])
 
-  // Helper per matching garment_group via id→codi map (FK del RuleSet).
-  // RuleSets without an assigned garment_group are considered compatible with any
-  // group (passes the condition) — acceptable while the current catalog does not
-  // have group-specific RuleSets.
-  const matchesGarmentGroup = (rs, groupCodi) => {
-    if (!rs.garment_group) return true
-    const rsGroupCodi = garmentGroupCodiById[rs.garment_group]
-    return rsGroupCodi === groupCodi
+  const onAxesChange = (a) => {
+    setSelectedTarget(a.target ?? null); setSelectedConstruction(a.construction ?? null)
+    setSelectedFit(a.fit ?? null); setSelectedGarmentGroup(a.garmentGroup ?? null)
+    setSelectedFamilyId(a.garmentTypeId ?? null); setSelectedItemId(a.garmentTypeItemId ?? null)
   }
 
-  // Targets that appear in the RuleSets (extracted from the targets_codis arrays).
-  const availableTargetCodes = useMemo(() => {
-    const set = new Set()
-    for (const rs of enrichedRuleSets) {
-      for (const t of (rs.targets_codis || [])) set.add(t)
-    }
-    return set
-  }, [enrichedRuleSets])
-
-  // Construccions disponibles per al target seleccionat
-  const availableConstructions = useMemo(() => {
-    if (!selectedTarget) return []
-    const set = new Set(
-      enrichedRuleSets
-        .filter(rs => matchesTarget(rs, selectedTarget))
-        .map(rs => rs.construction_codi)
-        .filter(Boolean)
-    )
-    return CONSTRUCTIONS.filter(c => set.has(c.codi))
-  }, [enrichedRuleSets, selectedTarget])
-
-  // Fits disponibles per target + construction
-  const availableFits = useMemo(() => {
-    if (!selectedTarget || !selectedConstruction) return []
-    const set = new Set(
-      enrichedRuleSets
-        .filter(rs =>
-          matchesTarget(rs, selectedTarget) &&
-          (!rs.construction_codi || rs.construction_codi === selectedConstruction)
-        )
-        .map(rs => rs.fit_type_codi)
-        .filter(Boolean)
-    )
-    return FITS.filter(f => set.has(f.codi))
-  }, [enrichedRuleSets, selectedTarget, selectedConstruction])
-
-  // RuleSets matching the full selection (4 filters).
-  // matchingRuleSets is empty until selectedGarmentGroup has a value.
-  const matchingRuleSets = useMemo(() => {
-    if (!selectedTarget || !selectedConstruction || !selectedFit || !selectedGarmentGroup) return []
-    return enrichedRuleSets.filter(rs => {
-      const tMatch = matchesTarget(rs, selectedTarget)
-      const cMatch = !rs.construction_codi || rs.construction_codi === selectedConstruction
-      const fMatch = !rs.fit_type_codi || rs.fit_type_codi === selectedFit
-      const gMatch = matchesGarmentGroup(rs, selectedGarmentGroup)
-      return tMatch && cMatch && fMatch && gMatch
-    })
-  }, [enrichedRuleSets, selectedTarget, selectedConstruction, selectedFit, selectedGarmentGroup, garmentGroupCodiById])
-
+  // RuleSets que casen amb la selecció completa — funció ÚNICA (gradingAxes), ara conscient de l'àmbit.
+  const matchingRuleSets = useMemo(
+    () => matchingRuleSetsFn(enrichedRuleSets, axes, garmentGroupCodiById),
+    [enrichedRuleSets, axes, garmentGroupCodiById])
 
   const totalRegles = useMemo(
     () => allRuleSets.reduce((s, rs) => s + (rs.regles_count ?? rs.regles?.length ?? 0), 0),
@@ -274,93 +184,8 @@ export default function GradingRuleSets() {
         </div>
       )}
 
-      {/* Pas 1: Target */}
-      <StepSection number={1} title={t('grading.step_target')}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {TARGETS.map(t => (
-            <TargetCard
-              key={t.codi}
-              target={t}
-              selected={selectedTarget === t.codi}
-              available={availableTargetCodes.has(t.codi)}
-              onClick={() => {
-                setSelectedTarget(t.codi)
-                setSelectedConstruction(null)
-                setSelectedFit(null)
-                setSelectedGarmentGroup(null)
-              }}
-            />
-          ))}
-        </div>
-      </StepSection>
-
-      {/* Pas 2: Construction + Fit al mateix nivell */}
-      {selectedTarget && (availableConstructions.length > 0 || availableFits.length > 0) && (
-        <StepSection number={2} title={t('grading.step_construction_fit')}>
-          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-            <div>
-              <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 6,
-                textTransform: 'uppercase', letterSpacing: '.06em',
-                }}>
-                {t('grading.construction_type')}
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {availableConstructions.map(c => (
-                  <SelectionButton
-                    key={c.codi}
-                    label={t(`model_wizard.construction_${c.codi}`, c.nom_en)}
-                    selected={selectedConstruction === c.codi}
-                    onClick={() => {
-                      setSelectedConstruction(c.codi)
-                      setSelectedFit(null)
-                      setSelectedGarmentGroup(null)
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-            {selectedConstruction && availableFits.length > 0 && (
-              <div>
-                <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 6,
-                  textTransform: 'uppercase', letterSpacing: '.06em',
-                  }}>
-                  {t('grading.fit_type_label')}
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {availableFits.map(f => (
-                    <SelectionButton
-                      key={f.codi}
-                      label={t(`model_wizard.fit_${f.codi}`, f.nom_en)}
-                      selected={selectedFit === f.codi}
-                      onClick={() => {
-                        setSelectedFit(f.codi)
-                        setSelectedGarmentGroup(null)
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </StepSection>
-      )}
-
-      {/* Pas 3: Garment Group */}
-      {selectedFit && (
-        <StepSection number={3} title={t('grading.step_group')}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {GARMENT_GROUPS.map(g => (
-              <SelectionButton
-                key={g.codi}
-                label={g.nom_en}
-                sublabel={lang !== 'en' ? nomLocal(g, lang) : null}
-                selected={selectedGarmentGroup === g.codi}
-                onClick={() => setSelectedGarmentGroup(g.codi)}
-              />
-            ))}
-          </div>
-        </StepSection>
-      )}
+      {/* Cascada ÚNICA (compartida amb el wizard): target → construcció/fit → grup → família → item. */}
+      <AxesSelector ruleSets={enrichedRuleSets} value={axes} onChange={onAxesChange} />
 
       {/* RuleSet cards — only with the 4 filters selected */}
       {selectedGarmentGroup && matchingRuleSets.length > 0 && (
@@ -418,87 +243,6 @@ export default function GradingRuleSets() {
   )
 }
 
-// ── StepSection ─────────────────────────────────────────────────────────────
-function StepSection({ number, title, children }) {
-  return (
-    <div style={{ marginBottom: '1.4rem' }}>
-      <p style={{
-        fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--gold)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        margin: '0 0 10px',
-      }}>
-        {number} · {title}
-      </p>
-      {children}
-    </div>
-  )
-}
-
-// ── TargetCard ──────────────────────────────────────────────────────────────
-// Same pattern as Size Library: nom_en primary (large), nom_ca secondary (small grey).
-function TargetCard({ target, selected, available, onClick }) {
-  const { t } = useTranslation()
-  return (
-    <div
-      onClick={available ? onClick : undefined}
-      style={{
-        border: `1px solid ${selected ? 'var(--gold)' : 'var(--border)'}`,
-        borderRadius: 8,
-        padding: '8px 14px',
-        cursor: available ? 'pointer' : 'not-allowed',
-        background: selected ? '#fdf6ee' : available ? 'var(--white)' : '#f8f8f8',
-        opacity: available ? 1 : 0.4,
-        minWidth: 100, textAlign: 'center',
-        transition: 'all .15s',
-      }}
-    >
-      <div style={{
-        fontSize: 'var(--fs-body)',
-        fontWeight: selected ? 600 : 400,
-        color: selected ? 'var(--gold)' : 'var(--text-main)',
-      }}>
-        {t(`model_wizard.target_${target.codi}`, target.nom_en)}
-      </div>
-    </div>
-  )
-}
-
-// ── SelectionButton ─────────────────────────────────────────────────────────
-// API S16-B: label + sublabel (en lloc d'`item={...}`). Sublabel es renderitza
-// on a second line, smaller and grey.
-function SelectionButton({ label, sublabel, selected, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        border: `1px solid ${selected ? 'var(--gold)' : 'var(--border)'}`,
-        borderRadius: 6,
-        padding: sublabel ? '5px 12px' : '6px 14px',
-        background: selected ? '#fdf6ee' : 'var(--white)',
-        color: selected ? 'var(--gold)' : 'var(--text-main)',
-        fontWeight: selected ? 600 : 400,
-        fontSize: 'var(--fs-body)',
-        cursor: 'pointer',
-        transition: 'all .15s',
-        textAlign: 'left',
-        lineHeight: 1.25,
-      }}
-    >
-      {label}
-      {sublabel && (
-        <span style={{
-          display: 'block',
-          fontSize: 'var(--fs-caption)',
-          color: selected ? '#a06622' : 'var(--text-muted)',
-          fontWeight: 400,
-          marginTop: 1,
-        }}>
-          {sublabel}
-        </span>
-      )}
-    </button>
-  )
-}
 
 // ── RuleSetCard ─────────────────────────────────────────────────────────────
 function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEdit, onDelete }) {

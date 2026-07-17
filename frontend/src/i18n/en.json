@@ -2929,7 +2929,9 @@
     "origen_CANONICAL": "FHORT canonical",
     "origen_CLIENT_RUN": "From client run",
     "origen_IMPORT": "Imported",
-    "origen_none": "Unclassified"
+    "origen_none": "Unclassified",
+    "step_family": "Family",
+    "step_item": "Item"
   },
   "model_phases": {
     "Nou": "New",
