@@ -290,12 +290,20 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     setLoading(true)
     Promise.resolve(src.load(model, { t, readOnly, onFeedback, fittingSession: sourceCtx?.fittingSession }))
       .then(r => setRaw(r))
-      // El 400 de create-piece («el model no té cap GradingVersion activa. Cal generar les talles
-      // primer.») és un diagnòstic accionable, no un error de xarxa: es MOSTRA tal com el diu el
-      // backend, com ja fa doResolve. Amb raw=null la graella surt buida i la pantalla queda viva.
+      // El 400 de create-piece («el model no té cap GradingVersion activa») és un diagnòstic
+      // accionable, no un error de xarxa: cal DIR-LO. Però el text del backend és català fix, i
+      // aquesta superfície la miren tenants EN/ES → el cas conegut passa per clau i18n; la resta
+      // d'errors mostren el text del servidor (patró de doResolve), amb el genèric de xarxa de
+      // seguretat. Amb raw=null la graella surt buida i la pantalla queda viva.
       .catch(e => {
         setRaw(null)
-        onFeedback?.({ type: 'err', text: e?.response?.data?.error || t('sizecheck.open_error') })
+        const msg = e?.response?.data?.error || ''
+        onFeedback?.({
+          type: 'err',
+          text: /GradingVersion|talles/i.test(msg)
+            ? t('fitting.save.no_grading')
+            : (msg || t('sizecheck.open_error')),
+        })
       })
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps

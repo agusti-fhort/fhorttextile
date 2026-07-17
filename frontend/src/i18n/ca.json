@@ -1962,6 +1962,7 @@
       "discard_session_error": "Error descartant la sessió.",
       "image_error": "Error pujant la imatge.",
       "measures": "Taula de mesures",
+      "no_grading": "Aquest model no té taula de talles generada. Cal generar-la abans de prendre mesures.",
       "no_measures": "Encara no hi ha mesures registrades (opcional).",
       "no_sizes": "Aquest model no té taula de talles generada. Pots gravar la revisió sense mesures.",
       "piece_error": "Error registrant mesures.",
