@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next"
 import { SizeSetDetail } from "../components/SizeSetDetail"
 import { SizingProfileSelector } from "../components/SizingProfileSelector"
 import SizeAuthoringDrawer from "../components/SizeAuthoringDrawer"
-import useAuthStore from "../store/auth"
 import { sizingProfiles } from "../api/endpoints"
 
 // 1C-3b — ?prefill= (base64 unicode-safe d'un JSON), mateix patró que SizeMapSetup.readPrefill.
@@ -16,7 +15,6 @@ function readPrefill(p) {
 export default function SizeLibrary() {
   const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
-  const canConfigure = !!useAuthStore(s => s.user)?.capabilities?.includes('configure')
 
   const [detailProfileId, setDetailProfileId] = useState(null)
   const [msg, setMsg] = useState(null)
@@ -58,19 +56,9 @@ export default function SizeLibrary() {
             {t('size_library.subtitle')}
           </div>
         </div>
-        {canConfigure && (
-          <button
-            onClick={() => { setDrawerPrefill(null); setDrawerOpen(true) }}
-            style={{
-              padding: "8px 14px", borderRadius: 4, fontSize: 'var(--fs-body)', cursor: "pointer",
-              background: "#f5e6d0", color: "var(--gold)", border: "1px solid var(--gold)",
-              fontFamily: "IBM Plex Mono, monospace", whiteSpace: "nowrap",
-              display: "inline-flex", alignItems: "center", gap: 6,
-            }}
-          >
-            <i className="ti ti-plus" style={{ fontSize: 13 }} /> {t('size_library.create_import')}
-          </button>
-        )}
+        {/* Sprint ÀMBIT (B.3) — el botó d'autoria del CONTENIDOR de client s'ha mogut a Grading Rules
+            (és allà on viuen els jocs de regles que aquest wizard autora). El drawer es queda muntat
+            aquí NOMÉS per al deep-link ?prefill= que hi porta l'ImportWizard (1C-3b). */}
       </div>
 
       {/* Missatge global */}

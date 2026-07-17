@@ -358,40 +358,9 @@ def size_map_grading_preview_view(request):
         return Response({'error': str(e)}, status=500)
 
 
-def _parse_grading_excel(file_bytes):
-    """Parser Excel propi de la Size Library (format simple de graduació):
-    capçalera a la fila 1, A=codi, B=descripció, C endavant=talles. Retorna
-    (poms, talles): poms=[{'codi_fitxa','descripcio','values':{talla:float}}].
-    Distint de _parse_excel_poms (fitxa de model, models_app/extraction_views.py), que des del
-    FIX C de QA-S8 ancora la capçalera pel CONTINGUT i mapa les columnes per ETIQUETA, i que
-    abdica —cau a la IA— si no pot demostrar que ha entès la taula. Aquest d'aquí és el format
-    simple i tancat de la Library: si canvia, no arrossega l'altre."""
-    import openpyxl, io
-    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
-    ws = wb.active
-    rows = list(ws.iter_rows(values_only=True))
-    if not rows:
-        return [], []
-    header = rows[0]
-    size_cols = [(i, str(h).strip()) for i, h in enumerate(header)
-                 if i >= 2 and h is not None and str(h).strip()]
-    talles = [lbl for _, lbl in size_cols]
-    poms = []
-    for row in rows[1:]:
-        if not row or row[0] is None or str(row[0]).strip() == '':
-            continue
-        codi = str(row[0]).strip()
-        desc = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ''
-        values = {}
-        for ci, lbl in size_cols:
-            if ci < len(row) and row[ci] is not None:
-                try:
-                    values[lbl] = float(str(row[ci]).replace(',', '.'))
-                except (ValueError, TypeError):
-                    pass
-        if values:
-            poms.append({'codi_fitxa': codi, 'descripcio': desc, 'values': values})
-    return poms, talles
+# _parse_grading_excel (parser Excel posicional rígid de la Library) JUBILAT 2026-07-17: el camí
+# size-map ara usa _parse_excel_poms (l'extractor provat de l'ImportWizard, ancorat per contingut).
+# Fi del fork (DIAGNOSI «Nou run de client no ingereix Excel de bases»).
 
 
 def _pdf_extracted_to_poms(extracted, base_size):
@@ -437,8 +406,9 @@ def _pdf_extracted_to_poms(extracted, base_size):
 def size_map_grading_preview_file_view(request):
     """POST size-map/grading-preview-file/ — preview de grading des d'un FITXER.
 
-    Multipart: {file, size_system_id (opt), base_size}. Excel → _parse_grading_excel (parser
-    propi de la Library: A=codi, B=descripció, C+=talles); PDF/imatge → extract_from_file (Opus,
+    Multipart: {file, size_system_id (opt), base_size}. Excel → _parse_excel_poms (l'EXTRACTOR
+    PROVAT de l'ImportWizard: capçalera ancorada per contingut + porta d'abdicació; unificat aquí,
+    fi del fork amb el parser posicional rígid); PDF/imatge → extract_from_file (Opus,
     funció PURA del motor del model). Normalitza a [{codi_fitxa, descripcio, values}], resol
     find_pom_master AMB descripció (match per nom) i deriva el grading amb la MATEIXA lògica que
     el preview de paste (detect_grading + derive_break_fields). Cap persistència.
@@ -446,7 +416,8 @@ def size_map_grading_preview_file_view(request):
     """
     try:
         from fhort.pom.models import SizeDefinition, SizeSystem
-        from fhort.models_app.extraction_views import find_pom_master
+        from fhort.models_app.extraction_views import (
+            find_pom_master, _parse_excel_poms, _excel_to_text, _avis_files_perdudes)
         from fhort.models_app.extraction_service import extract_from_file
         from fhort.pom.size_labels import canonical_size_label
 
@@ -468,40 +439,57 @@ def size_map_grading_preview_file_view(request):
             tenant_run = list(SizeDefinition.objects.filter(size_system_id=ssid)
                               .order_by('ordre').values_list('etiqueta', flat=True))
 
-        # 1-2. Extracció → llista comuna [{codi_fitxa, descripcio, values}].
-        poms_in = []
-        if name.endswith(('.xlsx', '.xls')):
-            raw_poms, _talles = _parse_grading_excel(file_bytes)
-            for p in raw_poms:
-                poms_in.append({
-                    'codi_fitxa': (p.get('codi_fitxa') or '').strip(),
-                    'descripcio': (p.get('descripcio') or '').strip(),
-                    'values': p.get('values') or {},
-                })
-        elif name.endswith(('.pdf', '.png', '.jpg', '.jpeg', '.webp')):
-            # Capa 1 (DIAGNOSI_ETIQUETES_TALLA): diem a l'extractor el run del tenant perquè mapi la
-            # graduació a AQUESTES talles (2XL, no XXL) i marqui size_discrepancy. El wizard ja el sap.
+        # Camí IA COMPARTIT (Capa 1, DIAGNOSI_ETIQUETES_TALLA): extract_from_file amb el run del tenant
+        # (perquè mapi la graduació a AQUESTES talles i marqui size_discrepancy). L'usen la branca
+        # PDF/imatge i l'ABDICACIÓ de l'Excel (xls→text) — el MATEIX fallback, no un de nou.
+        def _extreu_via_ia(content_bytes, content_name):
             wiz_ctx = {
                 'size_run': ', '.join(tenant_run),
                 'base_size': base_size,
                 'size_system_codi': (SizeSystem.objects.filter(pk=ssid).values_list('codi', flat=True).first() or '') if ssid else '',
             }
-            extracted = extract_from_file(file_bytes, f.name, wiz_ctx)
-            # Instrumentació K.1 (R4): registra els valors CRUS per talla tal com surten de
-            # l'extracció, ABANS de detect_grading (que fa l'alineació run↔talles). Permet
-            # re-executar un cas (p.ex. BERG) i discriminar si una regla FIXED espúria ve de
-            # l'extracció (valors ja constants a l'origen) o de l'alineació. Sense persistència.
+            extracted = extract_from_file(content_bytes, content_name, wiz_ctx)
+            # Instrumentació K.1 (R4): valors CRUS per talla ABANS de detect_grading. Sense persistència.
             for _row in (extracted.get('grading_table') or []):
                 logger.info(
                     "size_map extract [K.1]: file=%s code=%r values_by_size=%r tol=(%r,%r)",
-                    f.name, (_row.get('code') or '').strip(),
+                    content_name, (_row.get('code') or '').strip(),
                     _row.get('values_by_size') or {},
                     _row.get('tolerance_minus'), _row.get('tolerance_plus'))
-            # Capa 1: recull la discrepància de talles que el model marqui (document vs run configurat).
             discrep = extracted.get('size_discrepancy')
             if discrep:
                 avisos.append(f"Discrepància de talles document↔run: {discrep}")
-            poms_in = _pdf_extracted_to_poms(extracted, base_size)
+            return _pdf_extracted_to_poms(extracted, base_size)
+
+        # 1-2. Extracció → llista comuna [{codi_fitxa, descripcio, values}].
+        poms_in = []
+        if name.endswith(('.xlsx', '.xls')):
+            # UNIFICAT (fi del fork): el mateix extractor provat que l'ImportWizard. base_hint/run_hint
+            # ja disponibles a dalt. Consumim NOMÉS {codi_fitxa, descripcio, values}.
+            raw_poms, _talles, excel_meta = _parse_excel_poms(file_bytes, base_hint=base_size, run_hint=tenant_run)
+            if raw_poms:
+                for p in raw_poms:
+                    poms_in.append({
+                        'codi_fitxa': (p.get('codi_fitxa') or '').strip(),
+                        'descripcio': (p.get('descripcio') or '').strip(),
+                        'values': p.get('values') or {},
+                    })
+            else:
+                # ABDICACIÓ → IA (parity ImportWizard, extraction_views.py:1255-1311): capçalera no-canònica
+                # (p.ex. "POM DESCRIPTION") → el parser ràpid no l'entén → xls→text + el MATEIX camí IA de
+                # la branca PDF/imatge. Abans aquí es disparava "No s'han trobat POMs" sense caure a la IA.
+                motiu = (excel_meta.get('motiu') or '').strip()
+                avisos.append('Format Excel no reconegut pel parser ràpid; extracció via IA.'
+                              + (f' Motiu: {motiu}.' if motiu else ''))
+                poms_in = _extreu_via_ia(_excel_to_text(file_bytes).encode('utf-8'),
+                                         (f.name or 'full') + '.txt')
+                # FIX D (parity): el parser ha comptat les files encara que hagi abdicat; si la IA en
+                # torna menys, es diu (una fila del document no es perd en silenci).
+                avisos += _avis_files_perdudes(excel_meta.get('n_files_amb_codi') or 0, len(poms_in))
+                if not poms_in:
+                    avisos.append("La IA no ha retornat cap mesura llegible del document.")
+        elif name.endswith(('.pdf', '.png', '.jpg', '.jpeg', '.webp')):
+            poms_in = _extreu_via_ia(file_bytes, f.name)
             if not poms_in:
                 avisos.append("La IA no ha retornat cap mesura llegible del document.")
         else:
@@ -872,6 +860,16 @@ def size_map_create_view(request):
                     )
             if target:
                 rule_set.targets.add(target)
+            # Sprint ÀMBIT — MULTI-TARGET: el contenidor pot aplicar a diversos targets (p.ex. Dona +
+            # Adolescent nena). El model ja ho suporta (targets M2M); aquí s'hi afegeixen els del payload.
+            from fhort.pom.models import Target as _Target
+            for tc in (data.get('target_codis') or []):
+                _t = _Target.objects.filter(codi=(tc or '').strip()).first()
+                if _t:
+                    rule_set.targets.add(_t)
+            # Sprint ÀMBIT — ÀMBIT D'APLICABILITAT multi-node (disponibilitat; NO toca la identitat gti).
+            from fhort.pom.grading_utils import apply_scope_nodes
+            apply_scope_nodes(rule_set, data.get('applies_to'))
 
             # R2 — desa els codis no vinculats al ruleset (pendents de vincular).
             rule_set.pendents_vincular = discarded_codes

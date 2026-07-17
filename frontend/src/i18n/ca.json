@@ -2929,7 +2929,9 @@
     "origen_CANONICAL": "Canònic FHORT",
     "origen_CLIENT_RUN": "Derivat de run de client",
     "origen_IMPORT": "Importat",
-    "origen_none": "No classificat"
+    "origen_none": "No classificat",
+    "step_family": "Família",
+    "step_item": "Item"
   },
   "model_phases": {
     "Nou": "Nou",
@@ -3505,5 +3507,24 @@
     "remove": "Treure el fitxer",
     "no_ext": "sense extensió",
     "bad_ext": "Aquest fitxer no és un {{esperat}} (has triat un {{rebut}})."
+  },
+  "size_map_f_run_hint": "Tria el sistema de talles: el run i la talla base surten d’ell.",
+  "scope": {
+    "label": "Àmbit d’aplicabilitat",
+    "hint": "A quines peces està disponible aquesta graduació. Marca un GRUP (tots els seus garments), una FAMÍLIA (tots els seus items) o un ITEM. Pots marcar-ne més d’un.",
+    "empty": "Cap node marcat encara — cal com a mínim un.",
+    "node_GROUP": "Grup",
+    "node_TYPE": "Família",
+    "node_ITEM": "Item",
+    "remove": "Treure del àmbit",
+    "mark_group": "Marcar tot el grup {{grup}}",
+    "mark_family": "Marcar tota la família",
+    "families": "Famílies",
+    "items": "Items"
+  },
+  "size_system_selector": {
+    "loading": "Carregant sistemes de talles…",
+    "empty": "Cap sistema de talles disponible per a aquest target.",
+    "canonical": "canònic"
   }
 }

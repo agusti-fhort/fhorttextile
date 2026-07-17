@@ -490,6 +490,48 @@ def derive_rules_from_fitxa(*, size_run_model, base_size, valors, confirmed_pom_
     return specs
 
 
+def apply_scope_nodes(rule_set, nodes):
+    """Reemplaça l'ÀMBIT D'APLICABILITAT (RuleSetScopeNode) d'un contenidor, idempotent (wipe&recreate).
+    `nodes` = llista de dicts {node_type, group_codi | garment_type_id | garment_type_item_id}. Cada
+    node valida EXACTAMENT un FK segons node_type; els nodes mal formats o inexistents s'ignoren. NO
+    toca la identitat (garment_type_item de la constraint 0039); això és NOMÉS disponibilitat.
+    Retorna la llista de nodes creats."""
+    from fhort.pom.models import RuleSetScopeNode, GarmentGroup, GarmentType
+    from fhort.tasks.models import GarmentTypeItem
+    rule_set.scope_nodes.all().delete()
+    creats = []
+    vistos = set()
+    for n in (nodes or []):
+        nt = (n.get('node_type') or '').upper()
+        node = RuleSetScopeNode(rule_set=rule_set, node_type=nt)
+        if nt == RuleSetScopeNode.NODE_GROUP:
+            g = GarmentGroup.objects.filter(codi=(n.get('group_codi') or '').strip()).first()
+            if g is None:
+                continue
+            node.garment_group = g
+            clau = ('GROUP', g.id)
+        elif nt == RuleSetScopeNode.NODE_TYPE:
+            gid = n.get('garment_type_id')
+            if not gid or not GarmentType.objects.filter(pk=gid).exists():
+                continue
+            node.garment_type_id = gid
+            clau = ('TYPE', gid)
+        elif nt == RuleSetScopeNode.NODE_ITEM:
+            iid = n.get('garment_type_item_id')
+            if not iid or not GarmentTypeItem.objects.filter(pk=iid).exists():
+                continue
+            node.garment_type_item_id = iid
+            clau = ('ITEM', iid)
+        else:
+            continue
+        if clau in vistos:          # dedup dins del mateix payload (les unique parcials també ho guarden)
+            continue
+        vistos.add(clau)
+        node.save()
+        creats.append(node)
+    return creats
+
+
 def cerca_contenidor_client(customer, size_system, garment_type_item, fit_type):
     """EL contenidor de client per la IDENTITAT COMPLETA de la llei
     (customer + size_system + garment_type_item + fit_type). Únic per la constraint parcial

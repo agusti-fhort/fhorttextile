@@ -2,7 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
-import { sizeMap, poms } from '../api/endpoints'
+import { sizeMap, poms, customers } from '../api/endpoints'
+import CustomerSelector from '../components/CustomerSelector'
+import SizeSystemSelector from '../components/SizeSystem/SizeSystemSelector'
+import ScopeSelector from '../components/grading/ScopeSelector'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Table from '../components/ui/Table'
@@ -198,7 +201,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
 
   // Estat global del wizard en un sol objecte.
   const [wiz, setWiz] = useState({
-    target_codi: '', base_unit: 'ALPHA', customer_codi: '', labelsText: '', base_size: '',
+    target_codi: '', base_unit: 'ALPHA', customer_codi: '', customer_id: null, src_system_id: null, applies_to: [], labelsText: '', base_size: '',
     candidates: [], recomanacio: '', decision: '', size_system_id: null,
     talles: [],
     gradingText: '', gradingResults: [], gradingRun: [],
@@ -367,6 +370,19 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         body_height_cm: x.body_height_cm === '' ? null : Number(x.body_height_cm),
       })),
       grading, perfils,
+      // Sprint ÀMBIT — «aplica a» = «està disponible per a»: nodes multi-nivell (grup/família/item)
+      // + multi-target (el M2M targets ja existia).
+      applies_to: wiz.applies_to,
+      target_codis: wiz.perfilTargets,
+      // IDENTITAT (opció (c) del gate): si l'àmbit és EXACTAMENT un item, el contenidor conserva la
+      // identitat fina (garment_type_item) i, amb ella, la guarda d'unicitat de la constraint 0039
+      // (+ el 409 avís-i-confirma). Àmbits amples (grup/família o multi-item) → gti null: no els
+      // guarda la constraint, a posta (són contenidors amples).
+      garment_type_item_id: (() => {
+        const items = wiz.applies_to.filter(n => n.node_type === 'ITEM')
+        return (items.length === 1 && wiz.applies_to.length === 1)
+          ? items[0].garment_type_item_id : undefined
+      })(),
       // R2 — codis del document no vinculats a cap POM: viatgen perquè el backend els
       // desi al run com a "pendents de vincular" (no es perden en silenci). El window.confirm
       // de submitCreate segueix sent la primera barrera.
@@ -478,37 +494,62 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                 <option key={u} value={u}>{u}</option>)}
             </select>
           </Field>
+          {/* HIGIENE (1) — el client es TRIA, no es tecleja. El selector dona l'id; el payload va per
+              codi (contracte del backend) → es resol el codi en triar. */}
           <Field label={t('size_map_f_customer')} hint={t('size_map_f_customer_hint')}>
-            <input value={wiz.customer_codi} maxLength={3} onChange={e => set({ customer_codi: e.target.value.toUpperCase() })}
-              placeholder="ABC" style={{ ...selS, width: 120 }} />
+            <CustomerSelector value={wiz.customer_id} onError={setErr}
+              onChange={(id) => {
+                set({ customer_id: id, customer_codi: '' })
+                if (id) customers.get(id).then(r => set({ customer_codi: r.data?.codi || '' })).catch(() => {})
+              }} />
           </Field>
-          <Field label={t('size_map_f_labels')} hint={t('size_map_f_labels_hint')}>
-            <textarea value={wiz.labelsText} onChange={e => set({ labelsText: e.target.value })} rows={5}
-              style={{ ...selS, width: '100%', resize: 'vertical' }} placeholder={'XS\nS\nM\nL\nXL'} />
+          {/* HIGIENE (2) — el run es TRIA d'un SizeSystem, no es tecleja. Les etiquetes segueixen sent
+              l'estat de sota (la canonada de match/create no canvia). */}
+          <Field label={t('size_map_f_labels')} hint={t('size_map_f_run_hint')}>
+            <SizeSystemSelector value={wiz.src_system_id} targetCodi={wiz.target_codi || null}
+              onChange={(sys) => {
+                if (!sys) { set({ src_system_id: null, labelsText: '', base_size: '' }); return }
+                const labs = (sys.talles || []).map(d => d.etiqueta || d.size_label || d.label).filter(Boolean)
+                set({ src_system_id: sys.id, labelsText: labs.join('\n'),
+                      base_size: labs[Math.floor(labs.length / 2)] || labs[0] || '' })
+              }} />
           </Field>
-          <Field label={t('size_map_f_base')}>
-            <input value={wiz.base_size} onChange={e => set({ base_size: e.target.value })} placeholder="M" style={{ ...selS, width: 120 }} />
-          </Field>
-          {/* Classificació (moguda de l'antic P5): defineix el destí del grading rule + perfils. */}
+          {wiz.labelsText && (
+            <Field label={t('size_map_f_base')}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {labels().map(l => (
+                  <Pill key={l} active={wiz.base_size === l} onClick={() => set({ base_size: l })}>{l}</Pill>
+                ))}
+              </div>
+            </Field>
+          )}
+          {/* HIGIENE (3) — construcció i fit per BOTONS, no selects. */}
           <Field label={t('size_map_p_construction')}>
-            <select value={wiz.construction_id} onChange={e => set({ construction_id: e.target.value })} style={{ ...selS, width: '100%' }}>
-              <option value="">—</option>
-              {lookups.constructions.map(o => <option key={o.id} value={o.id}>{t(`model_wizard.construction_${o.codi}`, o.nom)} ({o.codi})</option>)}
-            </select>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {lookups.constructions.map(o => (
+                <Pill key={o.id} active={String(wiz.construction_id) === String(o.id)}
+                  onClick={() => set({ construction_id: String(wiz.construction_id) === String(o.id) ? '' : o.id })}>
+                  {t(`model_wizard.construction_${o.codi}`, o.nom)}
+                </Pill>
+              ))}
+            </div>
           </Field>
           <Field label={t('size_map_p_fit')}>
-            <select value={wiz.fit_type_id} onChange={e => set({ fit_type_id: e.target.value })} style={{ ...selS, width: '100%' }}>
-              <option value="">—</option>
-              {lookups.fit_types.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
-            </select>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {lookups.fit_types.map(o => (
+                <Pill key={o.id} active={String(wiz.fit_type_id) === String(o.id)}
+                  onClick={() => set({ fit_type_id: String(wiz.fit_type_id) === String(o.id) ? '' : o.id })}>
+                  {t(`model_wizard.fit_${o.codi}`, o.nom)}
+                </Pill>
+              ))}
+            </div>
           </Field>
-          <Field label={t('size_map_p_garment')}>
-            <select value={wiz.garment_type_id} onChange={e => set({ garment_type_id: e.target.value })} style={{ ...selS, width: '100%' }}>
-              <option value="">—</option>
-              {lookups.garment_types.map(o => <option key={o.id} value={o.id}>{o.nom} ({o.codi})</option>)}
-            </select>
+          {/* ÀMBIT — l'item ja no és «buit»: és l'àmbit d'aplicabilitat, multi-node i obligatori (≥1). */}
+          <Field label={t('scope.label')} hint={t('scope.hint')}>
+            <ScopeSelector value={wiz.applies_to} onChange={(nodes) => set({ applies_to: nodes })} />
           </Field>
-          <button onClick={goMatch} disabled={busy || !wiz.target_codi || labels().length === 0 || !wiz.base_size}
+          <button onClick={goMatch}
+            disabled={busy || !wiz.target_codi || labels().length === 0 || !wiz.base_size || wiz.applies_to.length === 0}
             style={{ ...primaryBtn }}>{t('size_map_next')}</button>
         </div>
       )}
@@ -618,8 +659,12 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
               style={{ display: 'block', border: '1px dashed var(--gray-l)', borderRadius: 8,
                        padding: 14, textAlign: 'center', cursor: busy ? 'wait' : 'pointer',
                        color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>
-              <i className="ti ti-upload" style={{ fontSize: 18, marginRight: 6 }} />
-              {busy ? t('size_map_g_file_busy') : t('size_map_g_file_drop')}
+              {/* HIGIENE (5) — rodeta mentre l'extracció processa: la IA triga i abans només hi havia
+                  un canvi de cursor, sense cap senyal viu que allò estava treballant. */}
+              {busy
+                ? <Spinner label={t('size_map_g_file_busy')} />
+                : <><i className="ti ti-upload" style={{ fontSize: 18, marginRight: 6 }} aria-hidden="true" />
+                    {t('size_map_g_file_drop')}</>}
               <input id="size-map-grading-file" type="file" accept=".xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp"
                 style={{ display: 'none' }} disabled={busy}
                 onChange={e => { calcGradingFromFile(e.target.files[0]); e.target.value = '' }} />
@@ -864,5 +909,33 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         </div>
       )}
     </div>
+  )
+}
+
+// ── Àtoms d'entrada (sprint ÀMBIT · higiene) ─────────────────────────────────
+// Pill: botó de tria (construcció/fit/talla base) amb el mateix llenguatge visual que la resta de
+// selectors de peça/grup (tokens, mai hex).
+function Pill({ active, onClick, children }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: MONO,
+      fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 400,
+      background: active ? 'var(--warn-bg)' : 'var(--white)',
+      color: active ? 'var(--warn)' : 'var(--text-main)',
+      border: `1px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
+    }}>{children}</button>
+  )
+}
+
+// Spinner: rodeta d'espera de l'extracció (icona Tabler outline + rotació CSS inline; sense
+// dependències ni fulls d'estil nous).
+function Spinner({ label }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--warn)' }}>
+      <style>{'@keyframes ftt-spin{to{transform:rotate(360deg)}}'}</style>
+      <i className="ti ti-loader-2" aria-hidden="true"
+         style={{ fontSize: 18, display: 'inline-block', animation: 'ftt-spin 0.9s linear infinite' }} />
+      <span role="status" aria-live="polite">{label}</span>
+    </span>
   )
 }
