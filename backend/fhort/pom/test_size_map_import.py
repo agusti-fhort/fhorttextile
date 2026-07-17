@@ -103,6 +103,27 @@ class SizeMapPreviewFileViewTest(TenantTestCase):
         self.assertIn("La IA no ha retornat cap mesura llegible del document.",
                       resp.data.get('avisos', []))
 
+    def test_excel_bases_brownie_extreu_poms_amb_extractor_unificat(self):
+        """Regressió del fork de l'extractor (DIAGNOSI «Nou run de client no ingereix Excel de bases»):
+        la branca Excel ara usa _parse_excel_poms (ancorat per contingut), no el posicional rígid. La
+        fitxa real Brownie (metadades a dalt, capçalera a la fila 8, codi a la col B) HA de donar POMs,
+        no «No s'han trobat POMs». El PDF/imatge NO es toca; el matching de diccionari és aigües avall."""
+        from pathlib import Path
+        fx = Path(__file__).resolve().parent.parent / 'models_app' / 'tests_fixtures' / 'brownie_rosalia_spec_sheet.xlsx'
+        req = APIRequestFactory().post(
+            '/api/v1/size-map/grading-preview-file/',
+            {'file': SimpleUploadedFile('POP_blusa_bases.xlsx', fx.read_bytes(),
+                                        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+             'base_size': 'S'}, format='multipart')   # sense size_system_id → run del propi fitxer
+        force_authenticate(req, user=self.user)
+        resp = size_map_grading_preview_file_view(req)
+        self.assertEqual(resp.status_code, 200)
+        results = resp.data.get('results', [])
+        self.assertTrue(results, "l'extractor unificat ha d'extreure POMs de la fitxa Brownie")
+        self.assertNotIn("No s'han trobat POMs al fitxer.", resp.data.get('avisos', []))
+        codes = {r.get('pom_codi_client') for r in results}
+        self.assertIn('A', codes)   # codi Brownie a la col B, fila 11 (no A/B/C+ posicional)
+
 
 class _FakeResp:
     def __init__(self, data): self._data = data
