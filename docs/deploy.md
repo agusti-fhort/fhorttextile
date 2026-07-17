@@ -2,6 +2,31 @@
 
 Referència factual de la configuració de desplegament del servidor de producció.
 
+## Pas 0 — abans de tocar PROD: que tot hagi VIATJAT (es corre a STAGING)
+
+PROD desplega des d'`origin/dev`. Els agents **committen en local i no pushen mai** (llei de
+`CLAUDE.md`), així que a staging hi pot haver feina **commitada però no viatjada**: existeix,
+és verda, la vas veure funcionar… i `origin/dev` no en sap res. Un deploy en aquest estat no
+falla — fa una cosa pitjor: se'n va a PROD **sense** aquella feina, en silenci, i el que arriba
+no és el que vas validar.
+
+Abans del pas 1 del runbook del sprint, a **staging** (`/var/www/ftt-staging`):
+
+```bash
+cd /var/www/ftt-staging
+git fetch origin
+git log --oneline origin/dev..dev     # ha de tornar BUIT
+```
+
+- **Buit** → tot el que hi ha commitat és a `origin/dev`. Endavant.
+- **Surt res** → això és exactament la feina que PROD **no** rebria. Push des d'SSH i repeteix
+  la comprovació abans de continuar. Revisa'n els autors (`git log --format='%h %an' origin/dev..dev`):
+  `dev` té sessions concurrents i el push s'emporta **tot** el que hi hagi al davant, no només
+  el teu sprint.
+
+> No és disciplina de push (els agents segueixen sense pushar): és la xarxa de seguretat que
+> converteix «no viatjat» en un pas que falla a staging, no en una sorpresa a PROD.
+
 ## Servidor
 
 - **IP:** 178.105.217.125

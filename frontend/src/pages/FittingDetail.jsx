@@ -8,7 +8,7 @@ import Badge from '../components/ui/Badge'
 import MeasureGrid from '../components/model/MeasureGrid'
 import EditorHeader from '../components/model/EditorHeader'
 import { buildFittingGroups, buildFittingRows, regimeLeadCol } from '../components/model/fittingGridAdapter'
-import { thStyle, SaveStatus, useDebouncedSave } from './fittingShared'
+import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from './fittingShared'
 
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
 
@@ -160,6 +160,7 @@ function hasSaveChanges(grid) {
 
 function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, onCreatePiece, creatingPiece, readOnly }) {
   const { t } = useTranslation()
+  const unit = useUnit()                       // unitat del tenant (CM|INCH) → format de presentació
   const [grids, setGrids] = useState(null)
   const [photos, setPhotos] = useState([])
   const [busy, setBusy] = useState(false)
@@ -375,7 +376,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
                                     background: s === baseLabel ? 'var(--gold-pale)' : undefined,
                                     color: mod ? 'var(--err)' : 'var(--text-main)', fontWeight: mod ? 700 : 400,
                                   }}>
-                                    {line?.valor_real == null ? '—' : line.valor_real}
+                                    {fmtMeasure(line?.valor_real, unit) ?? '—'}
                                   </td>
                                 )
                               })}
