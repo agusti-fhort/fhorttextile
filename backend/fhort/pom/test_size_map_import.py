@@ -124,6 +124,59 @@ class SizeMapPreviewFileViewTest(TenantTestCase):
         codes = {r.get('pom_codi_client') for r in results}
         self.assertIn('A', codes)   # codi Brownie a la col B, fila 11 (no A/B/C+ posicional)
 
+    @staticmethod
+    def _xlsx_no_canonic():
+        """Excel amb capçalera NO-canònica ('POM DESCRIPTION' en lloc de 'DESCRIPTION') → el parser
+        ràpid no l'ancora i abdica. Metadades a dalt, com les fitxes reals."""
+        import io, openpyxl
+        wb = openpyxl.Workbook(); ws = wb.active
+        ws.append([None, 'BRAND', 'BROWNIE'])
+        ws.append([None, 'SAMPLE SIZE', 'S'])
+        ws.append([None, None, None])
+        ws.append([None, 'CODE', 'POM DESCRIPTION', 'XXS', 'XS', 'S', 'M', 'L'])
+        ws.append([None, 'A', '1/2 chest width', 37, 37, 37, 38, 39])
+        ws.append([None, 'D', 'skirt sweep', 42, 42, 42, 43, 44])
+        buf = io.BytesIO(); wb.save(buf); return buf.getvalue()
+
+    @patch('fhort.models_app.extraction_service.extract_from_file')
+    def test_excel_capcalera_no_canonica_abdica_a_ia(self, mock_extract):
+        """Parity amb l'ImportWizard: si el parser ràpid abdica (capçalera no-canònica), la branca Excel
+        HA de caure a la IA (extract_from_file) amb l'avís d'abdicació, no disparar 'No s'han trobat POMs'."""
+        mock_extract.return_value = {
+            'poms': [{'code': 'A', 'description': 'chest width', 'base_value_cm': 37.0}],
+            'grading_table': [{'code': 'A', 'values_by_size': {'XXS': 37, 'XS': 37, 'S': 37, 'M': 38, 'L': 39}}],
+            'base_size': {'value': 'S'},
+        }
+        req = APIRequestFactory().post(
+            '/api/v1/size-map/grading-preview-file/',
+            {'file': SimpleUploadedFile('POP_noncanon.xlsx', self._xlsx_no_canonic(),
+                                        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+             'base_size': 'S'}, format='multipart')
+        force_authenticate(req, user=self.user)
+        resp = size_map_grading_preview_file_view(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(mock_extract.called, "l'abdicació ha de caure a la IA")
+        self.assertTrue(any('extracció via IA' in a for a in resp.data.get('avisos', [])),
+                        "cal l'avís explícit d'abdicació")
+        self.assertTrue(resp.data.get('results'), "la IA ha d'aportar POMs")
+
+    @patch('fhort.models_app.extraction_service.extract_from_file')
+    def test_excel_canonic_via_rapida_no_crida_ia(self, mock_extract):
+        """No-regressió de la via ràpida: capçalera canònica ('DESCRIPTION') → el parser l'entén i NO
+        es crida la IA."""
+        from pathlib import Path
+        fx = Path(__file__).resolve().parent.parent / 'models_app' / 'tests_fixtures' / 'brownie_rosalia_spec_sheet.xlsx'
+        req = APIRequestFactory().post(
+            '/api/v1/size-map/grading-preview-file/',
+            {'file': SimpleUploadedFile('canon.xlsx', fx.read_bytes(),
+                                        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+             'base_size': 'S'}, format='multipart')
+        force_authenticate(req, user=self.user)
+        resp = size_map_grading_preview_file_view(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(mock_extract.called, "la via ràpida no ha de cridar la IA")
+        self.assertTrue(resp.data.get('results'))
+
 
 class _FakeResp:
     def __init__(self, data): self._data = data
