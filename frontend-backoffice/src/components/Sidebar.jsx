@@ -33,6 +33,7 @@ const SECTIONS = [
       { to: '/perfils-sembra', label: 'Perfils de sembra', icon: 'ti-seeding' },
       { to: '/documents-legals', label: 'Documents legals', icon: 'ti-gavel' },
       { to: '/contractes', label: 'Contractes', icon: 'ti-file-invoice' },
+      { to: '/facturacio', label: 'Facturació', icon: 'ti-receipt' },
     ],
   },
   {
