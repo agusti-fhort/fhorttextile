@@ -194,6 +194,18 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
     target_codi = serializers.SerializerMethodField()
     construction_codi = serializers.SerializerMethodField()
     fit_type_codi = serializers.SerializerMethodField()
+    # Sprint ÀMBIT — àmbit d'aplicabilitat multi-node (disponibilitat). Llista de nodes (grup/família/
+    # item) al qual el contenidor «aplica». El matching hi baixa fins a item; buit = fallback a garment_group.
+    applies_to = serializers.SerializerMethodField()
+
+    def get_applies_to(self, obj):
+        return [
+            {'node_type': s.node_type,
+             'group_codi': s.garment_group.codi if s.garment_group_id else None,
+             'garment_type_id': s.garment_type_id,
+             'garment_type_item_id': s.garment_type_item_id}
+            for s in obj.scope_nodes.all()
+        ]
 
     def get_targets_codis(self, obj):
         return list(obj.targets.values_list('codi', flat=True))
@@ -234,6 +246,7 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
             'construction', 'construction_codi',
             'fit_type', 'fit_type_codi',
             'garment_group', 'garment_group_nom', 'garment_group_codi',
+            'garment_type_item', 'applies_to',
             'size_system', 'size_system_codi', 'size_system_nom',
             'customer', 'customer_codi', 'customer_nom',
             'origen',

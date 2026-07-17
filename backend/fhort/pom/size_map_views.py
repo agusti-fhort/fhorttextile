@@ -860,6 +860,16 @@ def size_map_create_view(request):
                     )
             if target:
                 rule_set.targets.add(target)
+            # Sprint ÀMBIT — MULTI-TARGET: el contenidor pot aplicar a diversos targets (p.ex. Dona +
+            # Adolescent nena). El model ja ho suporta (targets M2M); aquí s'hi afegeixen els del payload.
+            from fhort.pom.models import Target as _Target
+            for tc in (data.get('target_codis') or []):
+                _t = _Target.objects.filter(codi=(tc or '').strip()).first()
+                if _t:
+                    rule_set.targets.add(_t)
+            # Sprint ÀMBIT — ÀMBIT D'APLICABILITAT multi-node (disponibilitat; NO toca la identitat gti).
+            from fhort.pom.grading_utils import apply_scope_nodes
+            apply_scope_nodes(rule_set, data.get('applies_to'))
 
             # R2 — desa els codis no vinculats al ruleset (pendents de vincular).
             rule_set.pendents_vincular = discarded_codes
