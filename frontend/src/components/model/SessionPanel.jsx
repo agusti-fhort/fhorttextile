@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fittingSessions, fittingPhotos } from '../../api/endpoints'
-import { thStyle, useDebouncedSave, SaveStatus } from '../../pages/fittingShared'
+import { thStyle, useDebouncedSave, SaveStatus, fmtMeasure, useUnit } from '../../pages/fittingShared'
 
 // Sprint Y — Panell de la SESSIÓ de fitting dins la superfície Mesures (mode sessió). Migra de
 // FittingDetail: la franja de context (estat/data/responsable/lloc/persona) + el panell plegable
@@ -58,6 +58,7 @@ const muted = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyl
 
 export default function SessionPanel({ session, pieceFittingId, grid }) {
   const { t } = useTranslation()
+  const unit = useUnit()                       // unitat del tenant (CM|INCH) → format de presentació
   const [open, setOpen] = useState(false)
   const [notes, setNotes] = useState(session?.notes ?? '')
   const [photos, setPhotos] = useState([])
@@ -146,7 +147,7 @@ export default function SessionPanel({ session, pieceFittingId, grid }) {
                               fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
                               background: s === changes.baseLabel ? 'var(--gold-pale)' : undefined,
                               color: mod ? 'var(--err)' : 'var(--text-main)', fontWeight: mod ? 700 : 400 }}>
-                              {line?.valor_real == null ? '—' : line.valor_real}
+                              {fmtMeasure(line?.valor_real, unit) ?? '—'}
                             </td>
                           )
                         })}

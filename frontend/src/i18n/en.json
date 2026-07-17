@@ -1962,6 +1962,7 @@
       "discard_session_error": "Error discarding the session.",
       "image_error": "Error uploading the image.",
       "measures": "Measurements table",
+      "no_grading": "Model {{codi}} has no size table generated. Generate it before taking measurements.",
       "no_measures": "No measurements recorded yet (optional).",
       "no_sizes": "This model has no size table generated. You can save the review without measurements.",
       "piece_error": "Error recording measurements.",

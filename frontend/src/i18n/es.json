@@ -1962,6 +1962,7 @@
       "discard_session_error": "Error al descartar la sesión.",
       "image_error": "Error al subir la imagen.",
       "measures": "Tabla de medidas",
+      "no_grading": "El modelo {{codi}} no tiene tabla de tallas generada. Genérala antes de tomar medidas.",
       "no_measures": "Aún no hay medidas registradas (opcional).",
       "no_sizes": "Este modelo no tiene tabla de tallas generada. Puedes guardar la revisión sin medidas.",
       "piece_error": "Error al registrar medidas.",
