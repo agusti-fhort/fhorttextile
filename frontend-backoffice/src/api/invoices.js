@@ -32,6 +32,10 @@ const periodeParams = (period, codi) => ({ params: { period, ...(codi ? { client
 export const previewPeriode = (period, codi) => client.get(`${BASE}/tancament-periode/`, periodeParams(period, codi));
 export const generarPeriode = (period, codi) => client.post(`${BASE}/tancament-periode/`, { period, ...(codi ? { client: codi } : {}) });
 
+// Consum d'un client per període, amb estat facturat/pendent (fitxa de client).
+export const clientConsum = (codiTenant, period) => client.get(
+  `${BASE}/consum/${codiTenant}/`, { params: period ? { period } : {} });
+
 // El PDF s'obre en una pestanya nova amb el token: és una GET autenticada, no un <a href>.
 export const pdfFacturaUrl = (id) => `${client.defaults.baseURL}${BASE}/factures/${id}/pdf/`;
 export const fetchPdf = (id) => client.get(`${BASE}/factures/${id}/pdf/`, { responseType: 'blob' });

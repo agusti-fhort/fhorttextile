@@ -19,7 +19,9 @@ from rest_framework.response import Response
 
 from .invoice_pdf import generate_invoice_pdf
 from .invoice_service import compute_totals, create_rectificativa, emit_invoice
-from .models import Invoice, InvoiceLine, InvoiceSerie, VATRate
+from .models import (
+    Invoice, InvoiceLine, InvoiceSerie, ModelConsumptionEvent, VATRate,
+)
 from .recurring_service import generate_invoices
 from .serializers_invoices import (
     InvoiceCreateSerializer, InvoiceDetailSerializer, InvoiceLineSerializer,
@@ -221,3 +223,28 @@ class TancamentPeriodeView(views.APIView):
 
     def post(self, request):
         return self._run(request, dry_run=False)
+
+
+class ClientConsumView(views.APIView):
+    """Consum d'un client per període, amb estat facturat/pendent (F-RECUR, fitxa client).
+
+    GET facturacio/consum/<codi_tenant>/[?period=YYYY-MM] → recompte d'events agrupats
+    per període, i per cadascun quants ja estan facturats (invoice_line no NULL), pendents
+    i exclosos. Lectura per a qualsevol perfil de backoffice.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, codi_tenant):
+        from django.db.models import Count, Q
+        qs = ModelConsumptionEvent.objects.filter(codi_client=codi_tenant)
+        period = request.query_params.get('period')
+        if period:
+            qs = qs.filter(period=period)
+        rows = (qs.values('period')
+                .annotate(
+                    total=Count('id'),
+                    facturats=Count('id', filter=Q(invoice_line__isnull=False)),
+                    exclosos=Count('id', filter=Q(exclos=True)),
+                    pendents=Count('id', filter=Q(invoice_line__isnull=True, exclos=False)))
+                .order_by('-period'))
+        return Response({'codi_tenant': codi_tenant, 'periodes': list(rows)})
