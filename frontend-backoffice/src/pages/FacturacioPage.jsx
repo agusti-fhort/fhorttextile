@@ -4,6 +4,7 @@ import {
   getTipusIva, createTipusIva, updateTipusIva, deleteTipusIva,
   getFactures, getFactura, createFactura, deleteFactura, previewFactura,
   emetreFactura, rectificarFactura, addLinia, deleteLinia, fetchPdf,
+  previewPeriode, generarPeriode,
 } from '../api/invoices';
 import { getTenants } from '../api/tenants';
 
@@ -14,6 +15,7 @@ import { getTenants } from '../api/tenants';
 const MONO = "'IBM Plex Mono', monospace";
 const TABS = [
   { key: 'factures', label: 'Factures', icon: 'ti-file-invoice' },
+  { key: 'tancament', label: 'Tancament de període', icon: 'ti-calendar-stats' },
   { key: 'series', label: 'Sèries', icon: 'ti-list-numbers' },
   { key: 'iva', label: "Tipus d'IVA", icon: 'ti-receipt-tax' },
 ];
@@ -65,6 +67,7 @@ export default function FacturacioPage() {
         ))}
       </div>
       {tab === 'factures' && <Factures />}
+      {tab === 'tancament' && <Tancament />}
       {tab === 'series' && <Series />}
       {tab === 'iva' && <TipusIva />}
     </div>
@@ -450,6 +453,77 @@ function FacturaDetall({ id, onBack }) {
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+// ───────────────────────────── Tancament de període ─────────────────────────────
+function Tancament() {
+  const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
+  const [rows, setRows] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [generat, setGenerat] = useState(false);
+  const [e, setE] = useState(null);
+
+  const preview = () => {
+    setBusy(true); setE(null); setGenerat(false);
+    previewPeriode(period).then(r => setRows(r.data.clients)).catch(x => setE(err(x))).finally(() => setBusy(false));
+  };
+  const generar = () => {
+    if (!confirm(`Generar els esborranys de ${period}? És idempotent: re-executar no duplica.`)) return;
+    setBusy(true); setE(null);
+    generarPeriode(period).then(r => { setRows(r.data.clients); setGenerat(true); })
+      .catch(x => setE(err(x))).finally(() => setBusy(false));
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 }}>
+        <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Període</span>
+        <input style={{ ...inp, width: 120 }} value={period} onChange={ev => setPeriod(ev.target.value)} placeholder="YYYY-MM" />
+        <button style={btn('ghost')} onClick={preview} disabled={busy}>
+          <i className="ti ti-eye" style={{ marginRight: 5 }} />Previsualitzar
+        </button>
+        <button style={btn()} onClick={generar} disabled={busy || !rows}>
+          <i className="ti ti-file-plus" style={{ marginRight: 5 }} />Generar esborranys
+        </button>
+        {e && <span style={{ color: '#a33', fontSize: 12 }}>{e}</span>}
+      </div>
+      {generat && <div style={{ background: '#f0f7f0', border: '1px solid #3d7a3d', color: '#3d7a3d',
+        borderRadius: 6, padding: '8px 12px', fontSize: 12, marginBottom: 12 }}>
+        Esborranys generats. Revisa'ls a la pestanya Factures i emet-los quan estiguin llestos.</div>}
+      {rows && (rows.length === 0 ? (
+        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          Cap client facturable en aquest període (viu, no gratuït i amb contracte vigent).
+        </p>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr>{['Client', 'Quota', 'Consum', 'Exclosos', 'Total (s/IVA)', 'Estat', 'Avisos'].map(h =>
+            <th key={h} style={th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.codi_client}>
+                <td style={{ ...td, color: 'var(--gold)' }}>{r.codi_client}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{r.quota ? money(r.quota, '') : '—'}</td>
+                <td style={td}>{r.consum
+                  ? `${r.consum.events} events · ${r.consum.facturats}×${Number(r.consum.tarifa)}`
+                  : '—'}</td>
+                <td style={{ ...td, textAlign: 'right', color: 'var(--text-muted)' }}>{r.exclosos || '—'}</td>
+                <td style={{ ...td, textAlign: 'right', fontWeight: 500 }}>{money(r.total_sense_iva, '')}</td>
+                <td style={td}>{r.invoice_id
+                  ? <span style={{ color: '#3d7a3d' }}>DRAFT #{r.invoice_id}{r.creada ? '' : ' (reaprofitat)'}</span>
+                  : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                <td style={{ ...td, fontSize: 11, color: 'var(--text-muted)' }}>
+                  {(r.avisos || []).join(' · ') || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ))}
+      {!rows && <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+        Tria un període i previsualitza: veuràs, per client, la quota i el consum que es facturarien.
+        La previsualització no toca res; només «Generar esborranys» els crea (en DRAFT, mai emesos).
+      </p>}
     </div>
   );
 }

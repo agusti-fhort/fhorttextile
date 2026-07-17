@@ -27,6 +27,11 @@ export const addLinia    = (id, data) => client.post(`${BASE}/factures/${id}/lin
 export const updateLinia = (id, data) => client.patch(`${BASE}/factures/${id}/linia/`, data);
 export const deleteLinia = (id, liniaId) => client.delete(`${BASE}/factures/${id}/linia/`, { data: { id: liniaId } });
 
+// Tancament de període: preview (dry-run) i generació dels DRAFTs recurrents.
+const periodeParams = (period, codi) => ({ params: { period, ...(codi ? { client: codi } : {}) } });
+export const previewPeriode = (period, codi) => client.get(`${BASE}/tancament-periode/`, periodeParams(period, codi));
+export const generarPeriode = (period, codi) => client.post(`${BASE}/tancament-periode/`, { period, ...(codi ? { client: codi } : {}) });
+
 // El PDF s'obre en una pestanya nova amb el token: és una GET autenticada, no un <a href>.
 export const pdfFacturaUrl = (id) => `${client.defaults.baseURL}${BASE}/factures/${id}/pdf/`;
 export const fetchPdf = (id) => client.get(`${BASE}/factures/${id}/pdf/`, { responseType: 'blob' });
