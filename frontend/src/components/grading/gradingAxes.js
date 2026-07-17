@@ -71,6 +71,29 @@ export const matchesGarmentGroup = (rs, groupCodi, garmentGroupCodiById) => {
   return garmentGroupCodiById[rs.garment_group] === groupCodi
 }
 
+// ── ÀMBIT D'APLICABILITAT multi-node (sprint ÀMBIT) ───────────────────────────
+// LLEI: «aplica a» = «està disponible per a». Un contenidor amb àmbit aplica a un node si el seu
+// àmbit conté AQUELL node o un ANCESTRE seu (item → la seva família → el seu grup). Així, marcar un
+// GRUP el fa disponible per a tots els seus garments; baixar a ITEM el limita a aquell item.
+// El node del model/selecció viatja als eixos: garmentGroup (codi) · garmentTypeId · garmentTypeItemId.
+// FALLBACK: un ruleset SENSE àmbit (applies_to buit — canònics i contenidors encara no backfillats)
+// es casa pel seu garment_group, exactament com fins ara → cap regressió.
+export function scopeApplies(rs, axes, garmentGroupCodiById, { strict = false } = {}) {
+  const scope = rs.applies_to || []
+  if (!scope.length) {
+    return strict
+      ? (rs.garment_group != null && garmentGroupCodiById[rs.garment_group] === axes.garmentGroup)
+      : matchesGarmentGroup(rs, axes.garmentGroup, garmentGroupCodiById)
+  }
+  return scope.some(n => (
+    (n.node_type === 'ITEM' && axes.garmentTypeItemId != null
+      && n.garment_type_item_id === axes.garmentTypeItemId) ||
+    (n.node_type === 'TYPE' && axes.garmentTypeId != null
+      && n.garment_type_id === axes.garmentTypeId) ||
+    (n.node_type === 'GROUP' && !!axes.garmentGroup && n.group_codi === axes.garmentGroup)
+  ))
+}
+
 // Targets presents als RuleSets (per il·luminar només els disponibles).
 export function availableTargetCodes(ruleSets) {
   const set = new Set()
@@ -109,7 +132,7 @@ export function matchingRuleSets(ruleSets, axes, garmentGroupCodiById) {
     matchesTarget(rs, target) &&
     (!rs.construction_codi || rs.construction_codi === construction) &&
     (!rs.fit_type_codi || rs.fit_type_codi === fit) &&
-    matchesGarmentGroup(rs, garmentGroup, garmentGroupCodiById)
+    scopeApplies(rs, axes, garmentGroupCodiById)
   )
 }
 
@@ -126,7 +149,7 @@ export function matchingRuleSetsStrict(ruleSets, axes, garmentGroupCodiById, siz
     !!rs.targets_codis?.length && rs.targets_codis.includes(target) &&
     rs.construction_codi === construction &&
     rs.fit_type_codi === fit &&
-    rs.garment_group != null && garmentGroupCodiById[rs.garment_group] === garmentGroup &&
+    scopeApplies(rs, axes, garmentGroupCodiById, { strict: true }) &&
     rs.size_system != null && rs.size_system === sizeSystemId
   )
 }
@@ -141,7 +164,7 @@ export function availableFitsStrict(ruleSets, fixed, garmentGroupCodiById, sizeS
       rs.actiu !== false &&
       !!rs.targets_codis?.length && rs.targets_codis.includes(target) &&
       rs.construction_codi === construction &&
-      rs.garment_group != null && garmentGroupCodiById[rs.garment_group] === garmentGroup &&
+      scopeApplies(rs, fixed, garmentGroupCodiById, { strict: true }) &&
       rs.size_system === sizeSystemId &&
       rs.fit_type_codi
     ).map(rs => rs.fit_type_codi)

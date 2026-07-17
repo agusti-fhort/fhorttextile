@@ -205,16 +205,23 @@ export default function ModelWizard() {
     return () => { alive = false }
   }, [block])  // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sprint ÀMBIT — el node de la peça (item → família → grup) viatja als eixos: un contenidor amb
+  // àmbit aplica si el conté a ell o a un ancestre seu. Sense àmbit → fallback al garment_group.
+  const nodeAxes = {
+    target, construction, garmentGroup: garmentGroupCodi,
+    garmentTypeId: family?.id ?? null,
+    garmentTypeItemId: item?.id ?? null,
+  }
+
   // Fits que porten a una graduació REAL per a la combinació fixada (matching estricte).
   const fitOptions = useMemo(
     () => availableFitsStrict(
-      gradingRuleSets_,
-      { target, construction, garmentGroup: garmentGroupCodi },
-      ggCodiById, sizingResult?.size_system_id ?? null),
-    [gradingRuleSets_, target, construction, garmentGroupCodi, ggCodiById, sizingResult],
+      gradingRuleSets_, nodeAxes, ggCodiById, sizingResult?.size_system_id ?? null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gradingRuleSets_, target, construction, garmentGroupCodi, family?.id, item?.id, ggCodiById, sizingResult],
   )
 
-  const gradingAxes = { target, construction, fit, garmentGroup: garmentGroupCodi }
+  const gradingAxes = { ...nodeAxes, fit }
 
   const skeletonPayload = () => {
     // Sprint WIZARD-COMPLET: la graduació torna al payload. `undefined` = no tocar (creació sense
