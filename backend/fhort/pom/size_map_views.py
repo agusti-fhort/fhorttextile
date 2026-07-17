@@ -416,7 +416,8 @@ def size_map_grading_preview_file_view(request):
     """
     try:
         from fhort.pom.models import SizeDefinition, SizeSystem
-        from fhort.models_app.extraction_views import find_pom_master, _parse_excel_poms
+        from fhort.models_app.extraction_views import (
+            find_pom_master, _parse_excel_poms, _excel_to_text, _avis_files_perdudes)
         from fhort.models_app.extraction_service import extract_from_file
         from fhort.pom.size_labels import canonical_size_label
 
@@ -438,43 +439,57 @@ def size_map_grading_preview_file_view(request):
             tenant_run = list(SizeDefinition.objects.filter(size_system_id=ssid)
                               .order_by('ordre').values_list('etiqueta', flat=True))
 
-        # 1-2. Extracció → llista comuna [{codi_fitxa, descripcio, values}].
-        poms_in = []
-        if name.endswith(('.xlsx', '.xls')):
-            # UNIFICAT (fi del fork): el mateix extractor provat que l'ImportWizard. base_hint/run_hint
-            # ja disponibles a dalt. Consumim NOMÉS {codi_fitxa, descripcio, values}; els camps de més
-            # (dim, tol_*, meta) no els arrossega aquest camí (el grading es deriva aigües avall).
-            raw_poms, _talles, _meta = _parse_excel_poms(file_bytes, base_hint=base_size, run_hint=tenant_run)
-            for p in raw_poms:
-                poms_in.append({
-                    'codi_fitxa': (p.get('codi_fitxa') or '').strip(),
-                    'descripcio': (p.get('descripcio') or '').strip(),
-                    'values': p.get('values') or {},
-                })
-        elif name.endswith(('.pdf', '.png', '.jpg', '.jpeg', '.webp')):
-            # Capa 1 (DIAGNOSI_ETIQUETES_TALLA): diem a l'extractor el run del tenant perquè mapi la
-            # graduació a AQUESTES talles (2XL, no XXL) i marqui size_discrepancy. El wizard ja el sap.
+        # Camí IA COMPARTIT (Capa 1, DIAGNOSI_ETIQUETES_TALLA): extract_from_file amb el run del tenant
+        # (perquè mapi la graduació a AQUESTES talles i marqui size_discrepancy). L'usen la branca
+        # PDF/imatge i l'ABDICACIÓ de l'Excel (xls→text) — el MATEIX fallback, no un de nou.
+        def _extreu_via_ia(content_bytes, content_name):
             wiz_ctx = {
                 'size_run': ', '.join(tenant_run),
                 'base_size': base_size,
                 'size_system_codi': (SizeSystem.objects.filter(pk=ssid).values_list('codi', flat=True).first() or '') if ssid else '',
             }
-            extracted = extract_from_file(file_bytes, f.name, wiz_ctx)
-            # Instrumentació K.1 (R4): registra els valors CRUS per talla tal com surten de
-            # l'extracció, ABANS de detect_grading (que fa l'alineació run↔talles). Permet
-            # re-executar un cas (p.ex. BERG) i discriminar si una regla FIXED espúria ve de
-            # l'extracció (valors ja constants a l'origen) o de l'alineació. Sense persistència.
+            extracted = extract_from_file(content_bytes, content_name, wiz_ctx)
+            # Instrumentació K.1 (R4): valors CRUS per talla ABANS de detect_grading. Sense persistència.
             for _row in (extracted.get('grading_table') or []):
                 logger.info(
                     "size_map extract [K.1]: file=%s code=%r values_by_size=%r tol=(%r,%r)",
-                    f.name, (_row.get('code') or '').strip(),
+                    content_name, (_row.get('code') or '').strip(),
                     _row.get('values_by_size') or {},
                     _row.get('tolerance_minus'), _row.get('tolerance_plus'))
-            # Capa 1: recull la discrepància de talles que el model marqui (document vs run configurat).
             discrep = extracted.get('size_discrepancy')
             if discrep:
                 avisos.append(f"Discrepància de talles document↔run: {discrep}")
-            poms_in = _pdf_extracted_to_poms(extracted, base_size)
+            return _pdf_extracted_to_poms(extracted, base_size)
+
+        # 1-2. Extracció → llista comuna [{codi_fitxa, descripcio, values}].
+        poms_in = []
+        if name.endswith(('.xlsx', '.xls')):
+            # UNIFICAT (fi del fork): el mateix extractor provat que l'ImportWizard. base_hint/run_hint
+            # ja disponibles a dalt. Consumim NOMÉS {codi_fitxa, descripcio, values}.
+            raw_poms, _talles, excel_meta = _parse_excel_poms(file_bytes, base_hint=base_size, run_hint=tenant_run)
+            if raw_poms:
+                for p in raw_poms:
+                    poms_in.append({
+                        'codi_fitxa': (p.get('codi_fitxa') or '').strip(),
+                        'descripcio': (p.get('descripcio') or '').strip(),
+                        'values': p.get('values') or {},
+                    })
+            else:
+                # ABDICACIÓ → IA (parity ImportWizard, extraction_views.py:1255-1311): capçalera no-canònica
+                # (p.ex. "POM DESCRIPTION") → el parser ràpid no l'entén → xls→text + el MATEIX camí IA de
+                # la branca PDF/imatge. Abans aquí es disparava "No s'han trobat POMs" sense caure a la IA.
+                motiu = (excel_meta.get('motiu') or '').strip()
+                avisos.append('Format Excel no reconegut pel parser ràpid; extracció via IA.'
+                              + (f' Motiu: {motiu}.' if motiu else ''))
+                poms_in = _extreu_via_ia(_excel_to_text(file_bytes).encode('utf-8'),
+                                         (f.name or 'full') + '.txt')
+                # FIX D (parity): el parser ha comptat les files encara que hagi abdicat; si la IA en
+                # torna menys, es diu (una fila del document no es perd en silenci).
+                avisos += _avis_files_perdudes(excel_meta.get('n_files_amb_codi') or 0, len(poms_in))
+                if not poms_in:
+                    avisos.append("La IA no ha retornat cap mesura llegible del document.")
+        elif name.endswith(('.pdf', '.png', '.jpg', '.jpeg', '.webp')):
+            poms_in = _extreu_via_ia(file_bytes, f.name)
             if not poms_in:
                 avisos.append("La IA no ha retornat cap mesura llegible del document.")
         else:
