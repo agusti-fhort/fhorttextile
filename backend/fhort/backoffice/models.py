@@ -260,30 +260,81 @@ class ContractLine(models.Model):
         return f'{self.contract} · {self.service.code} · {self.preu}'
 
 
+class InvoiceQuerySet(models.QuerySet):
+    """Bloqueja l'esborrat massiu si el conjunt conté cap factura ja emesa.
+    QuerySet.delete() no passa per Model.delete(), així que el guard ha de viure
+    també aquí (mateix motiu que NoDeleteQuerySet a F4-legal)."""
+    def delete(self):
+        if self.exclude(estat=Invoice.ESTAT_ESBORRANY).exists():
+            raise ValueError(
+                'Una factura emesa és immutable: no es pot esborrar. '
+                'La correcció d\'una factura emesa és una RECTIFICATIVA.')
+        return super().delete()
+
+
 class Invoice(models.Model):
-    """Factura generada pel motor de facturació (Sprint 6 · Capa 4).
+    """Factura generada pel motor de facturació (Sprint 6 · Capa 4; fiscal a F-FACT B1).
     tipus=auto: generada pel motor mensual (tier_fee + model_count).
     tipus=manual: creada per un humà (setup, formació, etc.).
+    tipus=rectificativa: corregeix una factura EMESA (FK `rectifica`).
     Idempotència: unique_together (client, period, tipus) per a auto.
-    Sprint 7 mourà estat esborrany→emesa→pagada via Stripe."""
-    TIPUS = [('auto', 'Automàtica'), ('manual', 'Manual')]
-    ESTAT = [
-        ('esborrany', 'Esborrany'),
-        ('emesa',     'Emesa'),
-        ('pagada',    'Pagada'),
-        ('cancel·lada', 'Cancel·lada'),
+
+    CICLE DE VIDA (F-FACT B1): esborrany (editable, SENSE número) → emesa (congelada,
+    amb número reservat de la sèrie). Una emesa no s'edita ni s'esborra: es rectifica.
+    """
+    ESTAT_ESBORRANY = 'esborrany'
+    ESTAT_EMESA = 'emesa'
+    ESTAT_PAGADA = 'pagada'
+    ESTAT_CANCELADA = 'cancel·lada'
+    TIPUS_AUTO = 'auto'
+    TIPUS_MANUAL = 'manual'
+    TIPUS_RECTIFICATIVA = 'rectificativa'
+    TIPUS = [
+        (TIPUS_AUTO, 'Automàtica'),
+        (TIPUS_MANUAL, 'Manual'),
+        (TIPUS_RECTIFICATIVA, 'Rectificativa'),
     ]
+    ESTAT = [
+        (ESTAT_ESBORRANY, 'Esborrany'),
+        (ESTAT_EMESA,     'Emesa'),
+        (ESTAT_PAGADA,    'Pagada'),
+        (ESTAT_CANCELADA, 'Cancel·lada'),
+    ]
+    # Un cop la factura surt d'esborrany, aquests camps són el document fiscal i no
+    # es toquen mai més. `estat` i `nota` en queden fora a posta: una emesa encara ha
+    # de poder passar a pagada/cancel·lada i admetre una anotació interna.
+    CAMPS_CONGELATS = (
+        'client_id', 'period', 'tipus', 'serie_id', 'numero', 'num_seq',
+        'base_imposable', 'quota_iva', 'total', 'moneda', 'emesa_at', 'rectifica_id',
+    )
+
     client     = models.ForeignKey(
         'tenants.Client', on_delete=models.PROTECT, related_name='invoices'
     )
     period     = models.CharField(max_length=7)          # 'YYYY-MM'
-    tipus      = models.CharField(max_length=10, choices=TIPUS, default='auto')
-    estat      = models.CharField(max_length=15, choices=ESTAT, default='esborrany')
+    tipus      = models.CharField(max_length=15, choices=TIPUS, default=TIPUS_AUTO)
+    estat      = models.CharField(max_length=15, choices=ESTAT, default=ESTAT_ESBORRANY)
+    # Numeració (F-FACT B1). Buits en esborrany: el número es reserva EN EMETRE, mai
+    # abans — un esborrany descartat no ha de foradar la sèrie.
+    serie      = models.ForeignKey(
+        InvoiceSerie, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='invoices')
+    numero     = models.CharField(max_length=40, blank=True, default='')
+    num_seq    = models.IntegerField(null=True, blank=True)   # correlatiu cru (auditoria)
+    # Rectificativa: apunta a la factura EMESA que corregeix.
+    rectifica  = models.ForeignKey(
+        'self', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='rectificatives')
+    # Fiscal. base_imposable + quota_iva = total (el que paga el client).
+    base_imposable = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    quota_iva      = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total      = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     moneda     = models.CharField(max_length=3, default='EUR')
     created_at = models.DateTimeField(auto_now_add=True)
     emesa_at   = models.DateTimeField(null=True, blank=True)
     nota       = models.TextField(blank=True, default='')
+
+    objects = InvoiceQuerySet.as_manager()
 
     class Meta:
         ordering = ['-period', '-created_at']
@@ -292,11 +343,45 @@ class Invoice(models.Model):
                 fields=['client', 'period', 'tipus'],
                 condition=models.Q(tipus='auto'),
                 name='unique_auto_invoice_per_client_period',
-            )
+            ),
+            # El número és únic dins la seva sèrie. Guarda dura: la carrera que el
+            # select_for_update ja evita, la BD la torna a barrar.
+            models.UniqueConstraint(
+                fields=['serie', 'numero'],
+                condition=~models.Q(numero=''),
+                name='uniq_numero_per_serie',
+            ),
         ]
 
     def __str__(self):
-        return f'{self.client.codi_tenant} · {self.period} · {self.tipus}'
+        return f'{self.numero or "(esborrany)"} · {self.client.codi_tenant} · {self.tipus}'
+
+    @property
+    def emesa(self):
+        return self.estat != self.ESTAT_ESBORRANY
+
+    def save(self, *args, **kwargs):
+        # IMMUTABILITAT (patró F4-legal, models.py:368-380): es llegeix l'estat REAL a
+        # la BD, no el de la instància, que podria haver-se mutat en memòria.
+        if self.pk:
+            anterior = (type(self).objects.filter(pk=self.pk)
+                        .only(*self.CAMPS_CONGELATS, 'estat').first())
+            if anterior and anterior.estat != self.ESTAT_ESBORRANY:
+                canviats = [c for c in self.CAMPS_CONGELATS
+                            if getattr(anterior, c) != getattr(self, c)]
+                if canviats:
+                    raise ValueError(
+                        f'Factura {anterior.numero or self.pk} està {anterior.estat} i és '
+                        f'immutable: no es poden canviar {", ".join(canviats)}. '
+                        f'La correcció d\'una factura emesa és una RECTIFICATIVA.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.estat != self.ESTAT_ESBORRANY:
+            raise ValueError(
+                f'Factura {self.numero or self.pk} està {self.estat} i és immutable: '
+                f'no es pot esborrar. Emet-ne una RECTIFICATIVA.')
+        return super().delete(*args, **kwargs)
 
 
 class SeedProfile(models.Model):
@@ -361,9 +446,25 @@ class SeedProfile(models.Model):
         return list(val.get('blocks', []) if isinstance(val, dict) else [])
 
 
+class InvoiceLineQuerySet(models.QuerySet):
+    """Les línies d'una factura emesa són part del document fiscal: no s'esborren."""
+    def delete(self):
+        if self.exclude(invoice__estat=Invoice.ESTAT_ESBORRANY).exists():
+            raise ValueError(
+                'No es poden esborrar línies d\'una factura emesa (immutable).')
+        return super().delete()
+
+
 class InvoiceLine(models.Model):
-    """Línia d'una factura (Sprint 6 · Capa 4).
-    service pot ser null per a línies manuals lliures sense servei del catàleg."""
+    """Línia d'una factura (Sprint 6 · Capa 4; fiscal a F-FACT B1).
+    service pot ser null per a línies manuals lliures sense servei del catàleg.
+
+    `total` = base imposable de la línia (quantitat × preu_unit), SENSE IVA — la
+    semàntica que ja tenia i que el motor auto escriu. L'IVA viu als seus camps:
+    `vat_rate` (override per línia; NULL = el del règim del client, resolt en emetre),
+    i `pct_iva`/`quota_iva`, que són SNAPSHOT del moment d'emissió: si demà el tipus
+    canvia de fila, la factura ja emesa segueix dient el que deia.
+    """
     invoice    = models.ForeignKey(
         Invoice, on_delete=models.CASCADE, related_name='lines'
     )
@@ -376,12 +477,37 @@ class InvoiceLine(models.Model):
     preu_unit  = models.DecimalField(max_digits=10, decimal_places=4)
     total      = models.DecimalField(max_digits=10, decimal_places=2)
     moneda     = models.CharField(max_length=3, default='EUR')
+    # IVA de la línia. vat_rate = override explícit; si és NULL, mana el règim del client.
+    vat_rate   = models.ForeignKey(
+        VATRate, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='invoice_lines')
+    pct_iva    = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    quota_iva  = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    objects = InvoiceLineQuerySet.as_manager()
 
     class Meta:
         ordering = ['id']
 
     def __str__(self):
         return f'{self.invoice} · {self.descripcio} · {self.total}'
+
+    def save(self, *args, **kwargs):
+        # Una línia no es pot afegir ni tocar si la factura ja no és esborrany.
+        estat = (Invoice.objects.filter(pk=self.invoice_id)
+                 .values_list('estat', flat=True).first())
+        if estat and estat != Invoice.ESTAT_ESBORRANY:
+            # L'emissió escriu pct_iva/quota_iva just ABANS de moure l'estat, així que
+            # aquí ja no hi ha cap escriptura legítima possible.
+            raise ValueError(
+                f'La factura està {estat} i és immutable: no se\'n poden tocar les línies.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.invoice.estat != Invoice.ESTAT_ESBORRANY:
+            raise ValueError(
+                'No es poden esborrar línies d\'una factura emesa (immutable).')
+        return super().delete(*args, **kwargs)
 
 
 # ---------------------------------------------------------------------------
