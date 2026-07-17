@@ -184,6 +184,8 @@ class TenantConfigSerializer(serializers.Serializer):
     country = serializers.CharField(allow_blank=True, required=False)
     email = serializers.EmailField(allow_blank=True, required=False)
     phone = serializers.CharField(allow_blank=True, required=False)
+    # F-FACT B1 — peu legal dels documents fiscals (editable, mai constant).
+    legal_footer = serializers.CharField(allow_blank=True, required=False)
 
     def get_logo_file(self, obj):
         f = getattr(obj, 'logo_file', None)

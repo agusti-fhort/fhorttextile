@@ -62,6 +62,12 @@ class TenantConfig(models.Model):
     country          = models.CharField(max_length=2, default='ES', help_text="ISO 3166-1 alpha-2.")
     email            = models.EmailField(blank=True)
     phone            = models.CharField(max_length=40, blank=True)
+    # F-FACT B1 — peu legal de l'emissor per als documents fiscals (registre mercantil,
+    # protecció de dades, el que la llei o l'assessoria demanin). Text lliure i editable:
+    # el redactat legal canvia sense avisar i no ha de ser mai un deploy.
+    legal_footer     = models.TextField(
+        blank=True, default='',
+        help_text='Peu legal dels documents (registre mercantil, LOPD…).')
     creat_at         = models.DateTimeField(auto_now_add=True)
     actualitzat_at   = models.DateTimeField(auto_now=True)
 
