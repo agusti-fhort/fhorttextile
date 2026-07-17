@@ -85,6 +85,17 @@ class ModelConsumptionEvent(models.Model):
     period = models.CharField(max_length=7)         # 'YYYY-MM'
     opaque_ref = models.UUIDField(unique=True)      # SENSE default: el valor ve del tenant
     merited_at = models.DateTimeField()
+    # F-RECUR — anti-doble-cobrament PER BD, no per disciplina. Un event facturat apunta a
+    # la seva línia; un event apuntat no re-entra mai a cap generació (el motor filtra
+    # invoice_line__isnull=True). SET_NULL: si s'esborra un DRAFT no emès, els seus events
+    # tornen a ser facturables (el vincle es desfà, no es perd l'event).
+    invoice_line = models.ForeignKey(
+        'InvoiceLine', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='consumption_events')
+    # Capacitat (no decisió d'ara): un event exclòs no es factura mai. Per als orfes de
+    # tenants morts i qualsevol event que l'operador vulgui arxivar.
+    exclos = models.BooleanField(default=False)
+    exclos_motiu = models.CharField(max_length=200, blank=True, default='')
 
     class Meta:
         ordering = ['-merited_at']
@@ -221,17 +232,43 @@ class TenantContract(models.Model):
     Múltiples contractes possibles per tenant (historial). El vigent és
     actiu=True i data_fi=null o futura. El motor de facturació (Sprint 6)
     llegirà les ContractLine, no el Plan.preu_model_extra."""
+    # F-RECUR — periodicitat de la QUOTA. El consum (model_count) sempre és del període
+    # que es factura; la quota, en canvi, pot ser mensual/trimestral/anual. Dada
+    # configurable, mai un supòsit al codi. 'mensual' és el default de LOSAN i la resta.
+    PERIODICITAT = [
+        ('mensual', 'Mensual'),
+        ('trimestral', 'Trimestral'),
+        ('anual', 'Anual'),
+    ]
     client      = models.ForeignKey(
         'tenants.Client', on_delete=models.PROTECT, related_name='contracts'
     )
     data_inici  = models.DateField()
     data_fi     = models.DateField(null=True, blank=True)
+    periodicitat = models.CharField(max_length=12, choices=PERIODICITAT, default='mensual')
     actiu       = models.BooleanField(default=True)
     nota        = models.TextField(blank=True, default='')
     created_at  = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-data_inici']
+
+    def quota_toca_al_periode(self, period):
+        """La quota d'aquesta periodicitat es cobra al mes `period` ('YYYY-MM')?
+
+        Àncora = el mes de `data_inici`. Mensual: sempre. Trimestral: cada 3 mesos des de
+        l'inici. Anual: el mateix mes de l'inici. Així una quota trimestral iniciada al
+        febrer toca al febrer/maig/agost/novembre, no en un trimestre natural arbitrari.
+        """
+        y, m = int(period[:4]), int(period[5:7])
+        if self.periodicitat == 'mensual':
+            return True
+        delta = (y - self.data_inici.year) * 12 + (m - self.data_inici.month)
+        if delta < 0:
+            return False
+        if self.periodicitat == 'trimestral':
+            return delta % 3 == 0
+        return delta % 12 == 0   # anual
 
     def __str__(self):
         return f'{self.client.codi_tenant} · {self.data_inici}'
