@@ -607,6 +607,14 @@ def update_model_step2(request, model_id):
     if d.get('collection') is not None:
         model.collection = d['collection'] or ''
 
+    # WIZARD pas 4 «Sense graduació» en EDICIÓ: buidatge EXPLÍCIT del ruleset. El resolutor només
+    # ASSIGNA quan grading_rule_set_id és truthy (mai neteja); aquí, si la clau ve present i buida
+    # (null), es desacobla la graduació i s'esborren les regles residents (queda estat "sense graduació",
+    # vàlid). Idempotent i acotat a la intenció explícita del pas 4 — cap efecte si la clau no ve.
+    if 'grading_rule_set_id' in d and not d.get('grading_rule_set_id') and model.grading_rule_set_id:
+        model.grading_rule_set = None
+        model.grading_rules.all().delete()
+
     model.save()
     # PG-2 Cas B: re-materialitza si hi ha ruleset (wipe-and-recreate cobreix canvi de profile).
     # L'atomic embolcalla només la materialització → si peta, el model queda sense MGR i gradua

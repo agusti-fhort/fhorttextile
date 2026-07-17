@@ -170,6 +170,10 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     fitxers = ModelFitxerSerializer(many=True, read_only=True)
     garment_type_nom = serializers.CharField(source='garment_type.nom_client', read_only=True)
     garment_group_nom = serializers.CharField(source='garment_group.nom', read_only=True)
+    # Codi de grup CANÒNIC de la peça (arbre únic Grup→Família→Item). Font: garment_type.grup, que
+    # SEMPRE és present (a diferència de garment_group FK, buit als models importats). El wizard (pas 4)
+    # el fa servir per pre-sembrar l'eix de grup del matching estricte fins i tot en edició/models buits.
+    garment_type_grup = serializers.CharField(source='garment_type.grup', read_only=True)
     responsable_nom = serializers.CharField(source='responsable.nom_complet', read_only=True)
     created_by_nom = serializers.CharField(source='created_by.nom_complet', read_only=True)
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
