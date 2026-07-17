@@ -826,7 +826,13 @@
     "launch_ai": "Launch AI analysis",
     "files_analyzed": "{{count}} file(s) analyzed",
     "no_discrepancies": "No discrepancy detected.",
-    "compare_values": "Table: {{table}} → Pattern: {{pattern}}"
+    "compare_values": "Table: {{table}} → Pattern: {{pattern}}",
+    "change_grading": "Change grading",
+    "define_grading": "Set grading",
+    "no_grading_yet": "This model has no grading assigned yet.",
+    "grading_pending": "— pending",
+    "grading_origin": "Origin",
+    "grading_rules_label": "Rules"
   },
   "model_wizard": {
     "customer": "Customer",
@@ -2919,7 +2925,11 @@
       "delta_break": "Δ break",
       "base_size": "Base size",
       "base_value": "Base value"
-    }
+    },
+    "origen_CANONICAL": "FHORT canonical",
+    "origen_CLIENT_RUN": "From client run",
+    "origen_IMPORT": "Imported",
+    "origen_none": "Unclassified"
   },
   "model_phases": {
     "Nou": "New",

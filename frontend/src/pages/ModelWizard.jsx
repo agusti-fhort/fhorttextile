@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import GarmentTypeSelector from '../components/GarmentTypeSelector/GarmentTypeSelector'
 import CustomerSelector from '../components/CustomerSelector'
@@ -34,10 +34,12 @@ export default function ModelWizard() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const isEditMode = !!id
+  const [searchParams] = useSearchParams()
   const me = useAuthStore(s => s.user)
   const canConfigure = !!me?.capabilities?.includes('configure')
 
-  const [block, setBlock] = useState(1)
+  // WIZARD-COMPLET C.3 — «Canviar graduació» des de la fitxa obre el wizard directament al pas 4.
+  const [block, setBlock] = useState(isEditMode && searchParams.get('block') === '4' ? 4 : 1)
   // Bloc 1 — identificació
   const [year, setYear] = useState(currentYear)
   const [season, setSeason] = useState(null)

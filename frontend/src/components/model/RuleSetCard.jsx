@@ -1,73 +1,78 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { gradingRuleSets, garmentGroups, models } from '../../api/endpoints'
-import AxesSelector from '../grading/AxesSelector'
-import RuleSetPicker from '../grading/RuleSetPicker'
+import { gradingRuleSets } from '../../api/endpoints'
 
-// P3 — Picker de ruleset AL MODEL (SPEC §1.6: ruleset visible (P8) + CANVIABLE). Reusa AxesSelector +
-// RuleSetPicker (els mateixos de la plantilla d'ítem; no es dupliquen). En triar, PATCH update-step2
-// {grading_rule_set_id}: el backend re-materialitza les ModelGradingRule (config) — NO toca el motor
-// de propagació (generate_graded_specs). Eixos inicials derivats del ruleset vigent del model.
-export default function RuleSetCard({ model, onChanged }) {
+// Sprint WIZARD-COMPLET (C.3) — la targeta de graduació del model passa a LECTURA ENRIQUIDA: resum
+// complet de la selecció (nom, target, construcció, fit, sistema, nº regles, provinença). El CANVI ja
+// NO es fa aquí a un sol clic (re-materialitzava les regles residents en silenci): viu al WIZARD.
+// L'enllaç «Canviar graduació» obre el wizard d'edició al pas 4, on el canvi és explícit i re-materialitza
+// pel camí existent (update-step2). Tolera el buit: model sense graduació → «— pendent» + enllaç per definir-la.
+export default function RuleSetCard({ model }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [ruleSets, setRuleSets] = useState([])
-  const [ggCodiById, setGgCodiById] = useState({})
-  const [axes, setAxes] = useState({ target: model?.target ?? null, construction: model?.construction ?? null, fit: null, garmentGroup: null })
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState(null)
+  const [rs, setRs] = useState(null)
+  const grsId = model?.grading_rule_set ?? null
 
   useEffect(() => {
+    if (!grsId) { setRs(null); return }
     let alive = true
-    Promise.all([gradingRuleSets.list({ page_size: 200 }), garmentGroups.list({ page_size: 200 })])
-      .then(([rsRes, ggRes]) => {
-        if (!alive) return
-        const rs = rsRes.data?.results ?? (Array.isArray(rsRes.data) ? rsRes.data : [])
-        const gg = ggRes.data?.results ?? (Array.isArray(ggRes.data) ? ggRes.data : [])
-        const map = {}; gg.forEach(g => { map[g.id] = g.codi })
-        setRuleSets(rs); setGgCodiById(map)
-        const rsObj = rs.find(r => r.id === model?.grading_rule_set)
-        if (rsObj) setAxes({
-          target: rsObj.targets_codis?.[0] ?? model?.target ?? null,
-          construction: rsObj.construction_codi ?? model?.construction ?? null,
-          fit: rsObj.fit_type_codi ?? null,
-          garmentGroup: rsObj.garment_group ? (map[rsObj.garment_group] ?? null) : null,
-        })
-      }).catch(() => {})
+    gradingRuleSets.get(grsId)
+      .then(res => { if (alive) setRs(res.data || null) })
+      .catch(() => { if (alive) setRs(null) })
     return () => { alive = false }
-  }, [model?.id, model?.grading_rule_set, model?.target, model?.construction])
+  }, [grsId])
 
-  const onPick = (rs) => {
-    if (!rs || rs.id === model?.grading_rule_set) return
-    setSaving(true); setMsg(null)
-    models.updateStep2(model.id, { grading_rule_set_id: rs.id })
-      .then(() => { setMsg({ type: 'ok', text: t('model_sheet.ruleset_changed') }); onChanged?.() })
-      .catch(() => setMsg({ type: 'err', text: t('model_sheet.ruleset_err') }))
-      .finally(() => setSaving(false))
-  }
+  const goEditGrading = () => navigate(`/models/${model.id}/editar?block=4`)
+
+  const pending = <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{t('model_sheet.grading_pending')}</span>
+  const origenLabel = rs?.origen ? t(`grading.origen_${rs.origen}`, rs.origen) : (rs ? t('grading.origen_none') : null)
 
   return (
     <div style={{ border: '0.5px solid var(--border)', borderRadius: 8, padding: '12px 16px', marginBottom: 16, background: 'var(--bg-card)' }}>
-      <div style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)', marginBottom: 8 }}>
-        {t('dependency.ruleset')}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)' }}>
+          {t('dependency.ruleset')}
+        </div>
+        <button type="button" onClick={goEditGrading}
+          style={{ background: 'none', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 6,
+                   padding: '5px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer', fontWeight: 600 }}>
+          <i className="ti ti-edit" style={{ fontSize: 14 }} aria-hidden="true" /> {grsId ? t('model_sheet.change_grading') : t('model_sheet.define_grading')}
+        </button>
       </div>
-      <AxesSelector ruleSets={ruleSets} value={axes} onChange={setAxes} />
-      <div style={{ marginTop: 8, opacity: saving ? 0.6 : 1, pointerEvents: saving ? 'none' : 'auto' }}>
-        <RuleSetPicker
-          ruleSets={ruleSets}
-          garmentGroupCodiById={ggCodiById}
-          axes={axes}
-          selectedId={model?.grading_rule_set ?? null}
-          actionLabel={t('model_sheet.use_ruleset')}
-          onPick={onPick}
-          onEmptyAction={() => navigate('/poms/grading')}
-          emptyActionLabel={t('item_authoring.create_ruleset')}
-        />
-      </div>
-      {msg && (
-        <div style={{ marginTop: 8, fontSize: 'var(--fs-body)', color: msg.type === 'ok' ? 'var(--ok)' : 'var(--err)' }}>{msg.text}</div>
+
+      {!grsId ? (
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_sheet.no_grading_yet')}</div>
+      ) : (
+        <div>
+          <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, color: 'var(--text-main)', marginBottom: 8 }}>
+            {rs?.nom ?? (model.grading_rule_set_nom || pending)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+            <ReadItem label={t('grading.target_label').replace(/[:：]\s*$/, '')}
+              value={rs?.targets_codis?.length ? rs.targets_codis.map(tc => t(`model_wizard.target_${tc}`, tc)).join(' · ') : pending} />
+            <ReadItem label={t('model_wizard.construction')}
+              value={rs?.construction_codi ? t(`model_wizard.construction_${rs.construction_codi}`, rs.construction_codi) : pending} />
+            <ReadItem label={t('grading.fit_type_label')}
+              value={rs?.fit_type_codi ? t(`model_wizard.fit_${rs.fit_type_codi}`, rs.fit_type_codi) : pending} />
+            <ReadItem label={t('model_wizard.grading_system')} value={rs?.size_system_nom || pending} />
+            <ReadItem label={t('grading.step_group')} value={rs?.garment_group_nom || pending} />
+            <ReadItem label={t('model_sheet.grading_rules_label')} value={String(rs?.regles_count ?? 0)} />
+            <ReadItem label={t('model_sheet.grading_origin')} value={origenLabel || pending} />
+          </div>
+        </div>
       )}
+    </div>
+  )
+}
+
+function ReadItem({ label, value, hideLabel }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {!hideLabel && (
+        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</span>
+      )}
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontWeight: 500 }}>{value}</span>
     </div>
   )
 }

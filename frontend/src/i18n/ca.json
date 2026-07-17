@@ -826,7 +826,13 @@
     "launch_ai": "Llançar anàlisi IA",
     "files_analyzed": "{{count}} fitxer(s) analitzat(s)",
     "no_discrepancies": "Cap discrepància detectada.",
-    "compare_values": "Taula: {{table}} → Patró: {{pattern}}"
+    "compare_values": "Taula: {{table}} → Patró: {{pattern}}",
+    "change_grading": "Canviar graduació",
+    "define_grading": "Definir graduació",
+    "no_grading_yet": "Aquest model encara no té graduació assignada.",
+    "grading_pending": "— pendent",
+    "grading_origin": "Provinença",
+    "grading_rules_label": "Regles"
   },
   "model_wizard": {
     "customer": "Client",
@@ -2919,7 +2925,11 @@
       "delta_break": "Δ break",
       "base_size": "Talla base",
       "base_value": "Valor base"
-    }
+    },
+    "origen_CANONICAL": "Canònic FHORT",
+    "origen_CLIENT_RUN": "Derivat de run de client",
+    "origen_IMPORT": "Importat",
+    "origen_none": "No classificat"
   },
   "model_phases": {
     "Nou": "Nou",

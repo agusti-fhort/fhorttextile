@@ -826,7 +826,13 @@
     "launch_ai": "Lanzar análisis IA",
     "files_analyzed": "{{count}} archivo(s) analizado(s)",
     "no_discrepancies": "Ninguna discrepancia detectada.",
-    "compare_values": "Tabla: {{table}} → Patrón: {{pattern}}"
+    "compare_values": "Tabla: {{table}} → Patrón: {{pattern}}",
+    "change_grading": "Cambiar graduación",
+    "define_grading": "Definir graduación",
+    "no_grading_yet": "Este modelo aún no tiene graduación asignada.",
+    "grading_pending": "— pendiente",
+    "grading_origin": "Procedencia",
+    "grading_rules_label": "Reglas"
   },
   "model_wizard": {
     "customer": "Cliente",
@@ -2919,7 +2925,11 @@
       "delta_break": "Δ break",
       "base_size": "Talla base",
       "base_value": "Valor base"
-    }
+    },
+    "origen_CANONICAL": "Canónico FHORT",
+    "origen_CLIENT_RUN": "Derivado de run de cliente",
+    "origen_IMPORT": "Importado",
+    "origen_none": "No clasificado"
   },
   "model_phases": {
     "Nou": "Nuevo",
