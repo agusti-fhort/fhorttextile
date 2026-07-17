@@ -9,6 +9,7 @@ from .views_contracts import ServiceCatalogViewSet, TenantContractViewSet
 from .views_contracts import generate_invoice_view
 from .views_pricing import pricing_public_view, pricing_view
 from .views_pricing_client import pricing_for_client_view
+from .views_invoices import InvoiceSerieViewSet, InvoiceViewSet, VATRateViewSet
 from .views_seeding import SeedProfileViewSet
 from .views_legal import (
     LegalActionViewSet, LegalDocumentViewSet, LegalDocumentVersionViewSet,
@@ -20,6 +21,9 @@ router.register('plans', PlanViewSet, basename='plan')
 router.register('serveis', ServiceCatalogViewSet, basename='servei')
 router.register('contractes', TenantContractViewSet, basename='contracte')
 router.register('perfils-sembra', SeedProfileViewSet, basename='perfil-sembra')
+router.register('facturacio/series', InvoiceSerieViewSet, basename='invoice-serie')
+router.register('facturacio/tipus-iva', VATRateViewSet, basename='vat-rate')
+router.register('facturacio/factures', InvoiceViewSet, basename='invoice')
 router.register('legal/documents', LegalDocumentViewSet, basename='legal-document')
 router.register('legal/versions', LegalDocumentVersionViewSet, basename='legal-version')
 
