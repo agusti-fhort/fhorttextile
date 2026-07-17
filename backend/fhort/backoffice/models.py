@@ -3,6 +3,7 @@
 # RBAC pròpia del backoffice (separada dels usuaris de tenant) i el log d'accions
 # del personal FHORT. Mai referencien models de tenant.
 import hashlib
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -90,6 +91,106 @@ class ModelConsumptionEvent(models.Model):
 
     def __str__(self):
         return f'{self.codi_client} · {self.period} · {self.opaque_ref}'
+
+
+class InvoiceSerie(models.Model):
+    """Sèrie de numeració de factures (F-FACT B1).
+
+    Una sèrie és DADA, no una constant del codi: l'operador crea les que necessiti
+    (automàtiques de plataforma, manuals de serveis, rectificatives...) i cada una
+    porta el seu correlatiu independent. El codi no en sembra cap ni en coneix cap:
+    si algun dia calen tres sèries més, es creen per la UI, no per un deploy.
+
+    `format` és una plantilla amb claus anomenades. Disponibles:
+      {codi}  codi de la sèrie          {any}   any a 4 xifres (2026)
+      {any2}  any a 2 xifres (26)       {num}   correlatiu (accepta format spec)
+    Exemples: '{codi}-{any}-{num:04d}' → 'FT-2026-0001'
+              '{codi}{any2}-{num:06d}' → 'APP26-000001'
+
+    `reinici_anual`: el correlatiu torna a 1 en canviar d'any (norma habitual a ES).
+    Amb False, el comptador no es reinicia mai i {any} és només decoratiu.
+    """
+    codi          = models.CharField(max_length=10, unique=True)
+    nom           = models.CharField(max_length=100)
+    format        = models.CharField(
+        max_length=60, default='{codi}-{any}-{num:04d}',
+        help_text="Plantilla del número. Claus: {codi} {any} {any2} {num}.")
+    reinici_anual = models.BooleanField(default=True)
+    # Estat viu del correlatiu. NO s'edita a mà: el mou reserve_invoice_number().
+    any_actual    = models.IntegerField(null=True, blank=True)
+    comptador     = models.IntegerField(default=0)
+    activa        = models.BooleanField(default=True)
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['codi']
+        verbose_name = 'Sèrie de factures'
+        verbose_name_plural = 'Sèries de factures'
+
+    def __str__(self):
+        return f'{self.codi} · {self.nom}'
+
+    def render(self, num, any_=None):
+        """El número formatat per a `num`. Valida la plantilla; mai executa res de l'usuari."""
+        any_ = any_ or (self.any_actual or 0)
+        try:
+            return self.format.format(
+                codi=self.codi, any=any_, any2=any_ % 100, num=num,
+            )
+        except (KeyError, IndexError, ValueError) as e:
+            raise ValueError(
+                f"Format de sèrie invàlid ({self.format!r}): {e}. "
+                f"Claus permeses: {{codi}} {{any}} {{any2}} {{num}}."
+            )
+
+    def exemple(self):
+        """Mostra com quedaria el pròxim número (per a la UI). No reserva res."""
+        from django.utils import timezone
+        any_ = timezone.now().year
+        seg = 1 if (self.reinici_anual and self.any_actual != any_) else self.comptador + 1
+        try:
+            return self.render(seg, any_)
+        except ValueError as e:
+            return f'⚠ {e}'
+
+
+class VATRate(models.Model):
+    """Tipus d'IVA aplicable (F-FACT B1).
+
+    El percentatge i la menció legal són DADA, no literals al codi: un canvi de tipus
+    o de redactat legal és una fila, no un deploy. `regim_default` lliga el tipus al
+    règim del client (Client.regim_vat, que ja es deriva sol de país+VAT): en emetre,
+    cada línia sense override agafa el tipus per defecte del règim del client.
+    """
+    codi           = models.CharField(max_length=20, unique=True)
+    nom            = models.CharField(max_length=100)
+    percentatge    = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('0.00'),
+        help_text='0 per als règims exempts o d\'inversió del subjecte passiu.')
+    # Si té valor, aquest és el tipus per DEFECTE del règim (un de sol per règim).
+    regim_default  = models.CharField(max_length=30, blank=True, default='')
+    mencio_legal   = models.TextField(
+        blank=True, default='',
+        help_text="Text obligatori al PDF (p.ex. inversió del subjecte passiu, exempció).")
+    actiu          = models.BooleanField(default=True)
+    created_at     = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-percentatge', 'codi']
+        verbose_name = "Tipus d'IVA"
+        verbose_name_plural = "Tipus d'IVA"
+        constraints = [
+            # Un sol tipus per defecte per règim. Parcial: els que no en tenen (blank)
+            # no competeixen entre ells.
+            models.UniqueConstraint(
+                fields=['regim_default'],
+                condition=~models.Q(regim_default=''),
+                name='uniq_vat_default_per_regim',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.codi} · {self.percentatge}%'
 
 
 class ServiceCatalog(models.Model):
