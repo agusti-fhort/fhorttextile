@@ -29,8 +29,10 @@ export function buildFittingGroups(baseLabel, versionNumbers, t) {
 // rows = files POM amb nomenclatura 2 línies + règim (per al leadCol) + la cel·la de la talla base.
 // cell.history[`v${vn}`] = valor de la versió; cell.active = la cel·la editable "Fit actual"
 // (lineId + valor_real + baseValue = Base, per al marcatge vermell difereix-de-base).
+// Sense pomRows (font no carregada / resposta incompleta) → cap fila, no una excepció: la graella
+// té un estat buit i és el que ha de sortir. Mirall de buildEscalatRows, que ja ho fa des de sempre.
 export function buildFittingRows(pomRows, baseLabel, versionNumbers) {
-  return pomRows.map(row => {
+  return (pomRows || []).map(row => {
     const cells = {}
     if (baseLabel) {
       const line = row.cells[baseLabel]
