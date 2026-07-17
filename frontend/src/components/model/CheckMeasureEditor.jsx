@@ -290,7 +290,13 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     setLoading(true)
     Promise.resolve(src.load(model, { t, readOnly, onFeedback, fittingSession: sourceCtx?.fittingSession }))
       .then(r => setRaw(r))
-      .catch(() => { setRaw(null); onFeedback?.({ type: 'err', text: t('sizecheck.open_error') }) })
+      // El 400 de create-piece («el model no té cap GradingVersion activa. Cal generar les talles
+      // primer.») és un diagnòstic accionable, no un error de xarxa: es MOSTRA tal com el diu el
+      // backend, com ja fa doResolve. Amb raw=null la graella surt buida i la pantalla queda viva.
+      .catch(e => {
+        setRaw(null)
+        onFeedback?.({ type: 'err', text: e?.response?.data?.error || t('sizecheck.open_error') })
+      })
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model.id, readOnly, src, sourceCtx?.fittingSession])
