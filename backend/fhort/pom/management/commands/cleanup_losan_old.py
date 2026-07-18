@@ -53,19 +53,26 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--no-dry-run', action='store_true')
+        parser.add_argument('--only-clean', action='store_true',
+                            help='OPCIÓ 2: esborra NOMÉS el net (ruleset 111 + GIRL_LOS_02); '
+                                 '104/GIRL_LOS_03 queden com a deute. Re-verifica refs; nova ref → STOP.')
         parser.add_argument('--schema', default=CFG.TENANT)
 
     def handle(self, *args, **opts):
         dry = not opts['no_dry_run']
+        only_clean = opts['only_clean']
         schema = opts['schema']
+        rulesets_nom = CFG.ONLY_CLEAN_RULESETS_BY_NOM if only_clean else CFG.DELETE_RULESETS_BY_NOM
+        systems_codi = CFG.ONLY_CLEAN_SIZE_SYSTEMS_BY_CODI if only_clean else CFG.DELETE_SIZE_SYSTEMS_BY_CODI
         head = 'DRY-RUN (cap esborrat)' if dry else 'ESBORRANT'
-        self.stdout.write(self.style.WARNING(f'=== cleanup_losan_old · schema={schema} · {head} ==='))
+        scope = ' · ONLY-CLEAN (net)' if only_clean else ''
+        self.stdout.write(self.style.WARNING(f'=== cleanup_losan_old · schema={schema} · {head}{scope} ==='))
         deleted = []
 
         try:
             with schema_context(schema), transaction.atomic():
                 # ── 1. Rulesets (primer) ──
-                for nom in CFG.DELETE_RULESETS_BY_NOM:
+                for nom in rulesets_nom:
                     qs = GradingRuleSet.objects.filter(nom=nom, customer__codi=CFG.CUSTOMER_CODI)
                     if not qs.exists():
                         self.stdout.write(f'  [ruleset] "{nom}": no trobat (customer LOS) — skip')
@@ -89,7 +96,7 @@ class Command(BaseCommand):
                             rs.delete()
 
                 # ── 2. Size systems (després) ──
-                for codi in CFG.DELETE_SIZE_SYSTEMS_BY_CODI:
+                for codi in systems_codi:
                     ss = SizeSystem.objects.filter(codi=codi).first()
                     if not ss:
                         self.stdout.write(f'  [system] {codi}: no trobat — skip')

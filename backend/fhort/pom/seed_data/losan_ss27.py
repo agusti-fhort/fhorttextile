@@ -157,3 +157,10 @@ DELETE_RULESETS_BY_NOM = [
 # Size systems germans duplicats de GIRL_LOS_01 — per codi. Esborrar DESPRÉS dels rulesets
 # (104 penja de GIRL_LOS_03 amb FK PROTECT).
 DELETE_SIZE_SYSTEMS_BY_CODI = ['GIRL_LOS_02', 'GIRL_LOS_03']
+
+# OPCIÓ 2 (Agus 2026-07-18): "esborrar només el net". Subconjunt sense cap ref viva al cens:
+# ruleset 111 + system GIRL_LOS_02. 104 + GIRL_LOS_03 (sostenen 4 SizingProfile default del
+# tenant) queden com a DEUTE, es resolen al domini SizingProfile en el futur. El flag
+# --only-clean del command usa aquestes llistes i re-verifica refs (nova ref → STOP).
+ONLY_CLEAN_RULESETS_BY_NOM = ['EU ALPHA LOS TOP KNIT REGULAR V01']
+ONLY_CLEAN_SIZE_SYSTEMS_BY_CODI = ['GIRL_LOS_02']
