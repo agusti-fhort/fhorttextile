@@ -537,10 +537,128 @@ function buildFieldChipPrims(obj) {
   return { prims, totalW: w, totalH: h }
 }
 
-// Capçalera del model → {prims, totalW, totalH}. Dues bandes (20mm + 12mm), 277mm d'ample.
+// pt → px (via mm: 1pt=0.3528mm, MM_TO_PX px/mm). El header v2 dosifica cossos en pt reals
+// (petits i densos) a diferència del legacy, que mesurava en mm.
+const _ptPx = pt => Math.round(pt * 0.3528 * MM_TO_PX)
+
+// Amples per defecte dels 4 blocs del header v2 (percentatges de 277mm). Sobreescriptibles
+// per la config de la plantilla (per customer, sense hardcodejar cap client al codi).
+const HDR_V2_BLOCKS = [24, 24, 32, 20]
+const HDR_V2_HEIGHT_MM = 31
+const HDR_V2_LOGO_MAX_MM = 10
+
+// Rectangle del logo del customer al header v2: contingut dins el BLOC 4 (dalt-dreta),
+// alçada màxima ~10mm i amplada acotada a l'ample del bloc, preservant la relació d'aspecte.
+// Compartit per la vista viva (Konva React) i l'export offscreen perquè no derivin.
+export function headerV2LogoRect(natW, natH, totalW, config) {
+  const widths = (config && config.blocks) || HDR_V2_BLOCKS
+  const maxH = ((config && config.logoMaxMm) || HDR_V2_LOGO_MAX_MM) * MM_TO_PX
+  const PAD = 1.6 * MM_TO_PX
+  const ratio = (natW && natH) ? natW / natH : 2.4
+  let h = maxH, w = maxH * ratio
+  const b4start = totalW * (widths.slice(0, 3).reduce((a, b) => a + b, 0) / 100)
+  const b4w = totalW * (widths[3] / 100)
+  const maxW = b4w - 2 * PAD
+  if (w > maxW) { w = maxW; h = w / ratio }
+  return { x: b4start + b4w - PAD - w, y: PAD, w, h }
+}
+
+// Header v2 → {prims, totalW, totalH}. Una sola caixa (fons blanc, vora 0.75pt) de 277mm
+// dividida en 4 blocs per 3 filets verticals (0.5pt). Etiquetes regular gris + valors negre;
+// bold només a la ref del client i al nom. Anglès (excepció i18n conscient, com l'original
+// LOSAN: és una capçalera de document tècnic, no crom d'app). El logo el pinta el caller.
+// El mapping de camps és EL disseny pactat; els amples/mides viuen a `config` (per customer).
+function buildHeaderV2Primitives(m, versio, placeholderMode, config) {
+  const C = config || {}
+  const W = 277 * MM_TO_PX
+  const H = (C.heightMm || HDR_V2_HEIGHT_MM) * MM_TO_PX
+  const widths = C.blocks || HDR_V2_BLOCKS
+  const PAD = 1.6 * MM_TO_PX
+  const SZ = { head: _ptPx(9), body: _ptPx(8), small: _ptPx(7) }
+  const LABEL = KONVA_COL.textMuted, VALUE = KONVA_COL.textMain
+  const OUTER_SW = 0.75 * 0.3528 * MM_TO_PX, FILET_SW = 0.5 * 0.3528 * MM_TO_PX
+  const bx = []; let acc = 0
+  for (const w of widths) { bx.push(acc); acc += (w / 100) * W }
+  const bw = i => (widths[i] / 100) * W
+  const prims = []
+  // Caixa: fons blanc (sense color, i alhora àrea de clic per seleccionar/moure) + vora fina.
+  prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: LABEL, sw: OUTER_SW })
+  for (let i = 1; i < widths.length; i++) prims.push({ t: 'l', points: [bx[i], 0, bx[i], H], stroke: LABEL, sw: FILET_SW })
+
+  // Apila línies dins un bloc; label gris + valor negre (monospace → amplada de label determinista).
+  const draw = (bi, lines) => {
+    const x0 = bx[bi] + PAD, maxW = bw(bi) - 2 * PAD
+    let y = PAD
+    for (const ln of lines) {
+      if (!ln) continue
+      const size = ln.size || SZ.body, lh = Math.round(size * 1.5)
+      if (ln.label) {
+        const lw = ln.label.length * size * 0.62
+        prims.push({ t: 't', x: x0, y, w: lw + 2, h: lh, text: ln.label, fill: LABEL, size, mid: false })
+        prims.push({ t: 't', x: x0 + lw, y, w: maxW - lw, h: lh, text: ln.value, fill: VALUE, size, bold: !!ln.bold, mid: false })
+      } else {
+        prims.push({ t: 't', x: x0, y, w: maxW, h: lh, text: ln.value, fill: VALUE, size, bold: !!ln.bold, align: ln.align, mid: false })
+      }
+      y += lh
+    }
+  }
+  const V = (real, ph) => placeholderMode ? ph : (real || '')
+  const kv = (label, value, size) => value ? { label, value, size } : null
+
+  // BLOC 1 — Identitat (ref client + nom en bold; FTT ref petit)
+  draw(0, [
+    V(m?.codi_client, '{ref client}') ? { value: V(m?.codi_client, '{ref client}'), bold: true, size: SZ.head } : null,
+    V(m?.nom_prenda, '{nom}') ? { value: V(m?.nom_prenda, '{nom}'), bold: true, size: SZ.body } : null,
+    kv('FTT ref: ', V(m?.codi_intern, '{codi FTT}'), SZ.small),
+  ])
+  // BLOC 2 — Context
+  draw(1, [
+    kv('Collection: ', V(m?.collection, '{collection}'), SZ.body),
+    kv('Season: ', V(m?.temporada, '{season}'), SZ.body),
+    kv('Customer: ', V(m?.customer_nom, '{customer}'), SZ.body),
+    kv('Target: ', V(m?.target, '{target}'), SZ.body),
+  ])
+  // BLOC 3 — Definició tècnica (run sencer d'etiquetes + base; grading o "pending")
+  const run = _headerSizeRun(m, placeholderMode)
+  const grading = placeholderMode ? '{grading}' : (m?.grading_rule_set_nom || 'pending')
+  draw(2, [
+    kv('Garment: ', V(m?.garment_type_nom, '{garment}'), SZ.body),
+    kv('Item: ', V(m?.garment_type_item_nom, '{item}'), SZ.body),
+    kv('Sizes: ', run, SZ.small),
+    kv('Grading: ', grading, SZ.small),
+  ])
+  // BLOC 4 — Marca i estat (logo el pinta el caller a dalt; text sota, alineat dreta)
+  const b4x = bx[3] + PAD, b4w2 = bw(3) - 2 * PAD
+  let y4 = ((C.logoMaxMm || HDR_V2_LOGO_MAX_MM) * MM_TO_PX) + 2 * PAD
+  const today = placeholderMode ? '{date}' : new Date().toISOString().slice(0, 10)
+  for (const s of [today, V(m?.fase_actual, '{phase}'), V(m?.responsable_nom, '{owner}'), `v${versio ?? 1}`]) {
+    if (!s) continue
+    prims.push({ t: 't', x: b4x, y: y4, w: b4w2, h: Math.round(SZ.small * 1.5), text: s, fill: VALUE, size: SZ.small, align: 'right', mid: false })
+    y4 += Math.round(SZ.small * 1.5)
+  }
+  return { prims, totalW: W, totalH: H }
+}
+
+// Run de talles del model per a la línia "Sizes": totes les etiquetes de size_run_model
+// (separades per ·/;/,) unides per " · ", amb " — base {talla}" si el model té talla base.
+function _headerSizeRun(m, placeholderMode) {
+  if (placeholderMode) return '{sizes}'
+  const raw = (m?.size_run_model || '').trim()
+  if (!raw) return ''
+  const labels = raw.split(/[·;,]/).map(s => s.trim()).filter(Boolean)
+  let s = labels.join(' · ')
+  const base = (m?.base_size_label || '').trim()
+  if (base) s += `  — base ${base}`
+  return s
+}
+
+// Capçalera del model → {prims, totalW, totalH}. Amb `config.layout==='blocks4'` dibuixa el
+// disseny v2 (4 blocs, per customer via config); sense config manté el header LEGACY intacte
+// (dues bandes, 20mm+12mm) perquè els documents/plantilles existents no canviïn.
 // placeholderMode=true (editor de plantilla): mostra `{model.codi}` etc. en lloc de valors
 // reals (no hi ha model), excepte customer_nom que SÍ és real (la plantilla és per client).
-export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLogo = false) {
+export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLogo = false, config = null) {
+  if (config && config.layout === 'blocks4') return buildHeaderV2Primitives(m, versio, placeholderMode, config)
   const W = 277 * MM_TO_PX
   const B1 = 20 * MM_TO_PX, B2 = 12 * MM_TO_PX
   const totalH = B1 + B2
@@ -636,16 +754,21 @@ function FieldChipNode({ obj, groupProps, isSelected }) {
 
 // Capçalera del model — Konva natiu. Resol els camps en render. Si hi ha logoUrl,
 // es pinta el logo real (cantonada superior dreta) en lloc del placeholder "(logo)".
-function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, groupProps, isSelected }) {
+function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, config, groupProps, isSelected }) {
   const logoImg = useImage(logoUrl || '')
   const hasLogo = !!logoImg
+  const isV2 = !!(config && config.layout === 'blocks4')
   const { prims, totalW, totalH } = useMemo(
-    () => buildHeaderPrimitives(modelData, versio, placeholderMode, hasLogo),
-    [modelData, versio, placeholderMode, hasLogo])
+    () => buildHeaderPrimitives(modelData, versio, placeholderMode, hasLogo, config),
+    [modelData, versio, placeholderMode, hasLogo, config])
+  // v2: logo contingut al BLOC 4 (dalt-dreta, alçada acotada); legacy: caixa fixa 40×16mm.
+  const logoR = (hasLogo && isV2)
+    ? headerV2LogoRect(logoImg.width, logoImg.height, totalW, config)
+    : { x: totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, w: 40 * MM_TO_PX, h: 16 * MM_TO_PX }
   return (
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
-      {hasLogo && <KonvaImage image={logoImg} x={totalW - 45 * MM_TO_PX} y={2 * MM_TO_PX} width={40 * MM_TO_PX} height={16 * MM_TO_PX} listening={false} />}
+      {hasLogo && <KonvaImage image={logoImg} x={logoR.x} y={logoR.y} width={logoR.w} height={logoR.h} listening={false} />}
       {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={KONVA_COL.gold} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
   )
@@ -951,7 +1074,7 @@ async function addObjectToLayer(layer, obj, ctx) {
     let logoEl = null
     if (obj.kind === 'header') {
       if (ctx?.customerLogoUrl) { try { logoEl = await loadImageEl(ctx.customerLogoUrl) } catch { logoEl = null } }
-      built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl)
+      built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl, obj.config)
     } else if (obj.kind === 'graded_table') {
       const data = ctx?.tableData?.[obj.id]
       // Desvinculada (BIB S0): no hi ha dades ni n'hi haurà fins que el tècnic la torni a
@@ -963,7 +1086,13 @@ async function addObjectToLayer(layer, obj, ctx) {
     if (built) {
       const g = new Konva.Group(dataBlockGroupProps(obj))
       addPrimsToGroup(g, built.prims)
-      if (logoEl) g.add(new Konva.Image({ image: logoEl, x: built.totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, width: 40 * MM_TO_PX, height: 16 * MM_TO_PX }))
+      if (logoEl) {
+        const isV2 = !!(obj.config && obj.config.layout === 'blocks4')
+        const r = isV2
+          ? headerV2LogoRect(logoEl.naturalWidth || logoEl.width, logoEl.naturalHeight || logoEl.height, built.totalW, obj.config)
+          : { x: built.totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, w: 40 * MM_TO_PX, h: 16 * MM_TO_PX }
+        g.add(new Konva.Image({ image: logoEl, x: r.x, y: r.y, width: r.w, height: r.h }))
+      }
       layer.add(g)
     }
     return
@@ -1149,7 +1278,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   if (obj.type === 'data_block') {
     const dataCommon = { ...common, ...dataBlockGroupProps(obj) }
     if (obj.kind === 'header') {
-      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} groupProps={dataCommon} isSelected={selected} />
+      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} config={obj.config} groupProps={dataCommon} isSelected={selected} />
     }
     // Desvinculada (BIB S0): mateixos prims que el PDF. Sense això queia al «Carregant
     // taula…» de sota i s'hi quedava per sempre — una taula desvinculada no carrega mai.
