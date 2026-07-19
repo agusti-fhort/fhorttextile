@@ -1385,7 +1385,7 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, onEndpointDrag }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, onEndpointDrag }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -1400,7 +1400,11 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   if (obj.type === 'data_block') {
     const dataCommon = { ...common, ...dataBlockGroupProps(obj) }
     if (obj.kind === 'header') {
-      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} config={obj.config} pageCtx={pageCtx} groupProps={dataCommon} isSelected={selected} />
+      // Bloc ancorat (Template FTT): menú contextual (right-click) per Delete-on-page / Detach.
+      const hdrProps = onHeaderContextMenu
+        ? { ...dataCommon, onContextMenu: (e) => onHeaderContextMenu(e, obj) }
+        : dataCommon
+      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} config={obj.config} pageCtx={pageCtx} groupProps={hdrProps} isSelected={selected} />
     }
     // Desvinculada (BIB S0): mateixos prims que el PDF. Sense això queia al «Carregant
     // taula…» de sota i s'hi quedava per sempre — una taula desvinculada no carrega mai.
@@ -1718,6 +1722,8 @@ export default function TechSheetEditor() {
   // S3: picker de variant de taula (T1a/T1b/T2/custom) — null | { variant?: 't1a'|'t1b'|'t2'|'custom' }.
   // Obert des del ribbon (botó "Taula", commit 4).
   const [tablePicker, setTablePicker] = useState(null)
+  // B3 — menú contextual del bloc capçalera mestra ancorat: {x, y} en coords de pantalla.
+  const [headerMenu, setHeaderMenu] = useState(null)
   // S4: modal "Desar com a plantilla" — null | { nom, descripcio }
   const [saveAsTpl, setSaveAsTpl] = useState(null)
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
@@ -3427,10 +3433,39 @@ export default function TechSheetEditor() {
   }
 
   // ── Pàgines ────────────────────────────────────────────────────────────────
+  // Instància fresca de la capçalera mestra (Template FTT) per a una pàgina nova: el mateix
+  // bloc ANCORAT (locked, layer template, config masterFtt) amb un id nou. Font: la primera
+  // capçalera mestra que trobi al document. Si no n'hi ha cap (document en blanc o esborrada
+  // a totes les pàgines), la pàgina nova neix buida.
+  const masterHeaderInstance = () => {
+    for (const pg of pages) {
+      const h = (pg.objects || []).find(o => o.type === 'data_block' && o.kind === 'header' && o.config?.layout === 'masterFtt' && !o.detached)
+      if (h) return { ...h, id: uid() }
+    }
+    return null
+  }
   const addPage = () => {
     if (!locked) return
-    setPages(ps => [...ps, { id: uid(), objects: [] }])
+    const hdr = masterHeaderInstance()
+    setPages(ps => [...ps, { id: uid(), objects: hdr ? [hdr] : [] }])
     setCurrentPage(pages.length)
+  }
+  // B3 — "Delete on this page": treu la instància de la capçalera mestra NOMÉS d'aquesta
+  // pàgina (les altres intactes; les pàgines noves la tornen a portar via masterHeaderInstance).
+  const deleteHeaderOnPage = (pageIdx) => {
+    if (!locked) return
+    updatePageObjects(pageIdx, objs => objs.filter(o => !(o.type === 'data_block' && o.kind === 'header')))
+  }
+  // B3 — "Detach & edit": converteix la capçalera ancorada en un bloc EDITABLE d'aquesta pàgina
+  // (perd la sincronia amb la plantilla: deixa de ser locked/template i ja no es re-instancia).
+  const detachHeaderOnPage = (pageIdx) => {
+    if (!locked) return
+    updatePageObjects(pageIdx, objs => objs.map(o => (
+      (o.type === 'data_block' && o.kind === 'header')
+        ? { ...o, layer: 'data', locked: false, detached: true }
+        : o
+    )))
+    flash(t('tech_sheet.header_detached'))
   }
   const removePage = (index) => {
     if (!locked || pages.length <= 1) return
@@ -4225,6 +4260,7 @@ export default function TechSheetEditor() {
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
                     pageCtx={{ index: currentPage, total: pages.length }}
+                    onHeaderContextMenu={locked ? ((e, ho) => { e.evt.preventDefault(); setHeaderMenu(ho.detached ? null : { x: e.evt.clientX, y: e.evt.clientY }) }) : undefined}
                     selected={selectedIds.includes(o.id)}
                     selectable={locked && o.layer !== 'template' && !o.locked}
                     draggable={locked && tool === 'select' && !panActive && o.layer !== 'template' && !o.locked && activeGroup !== o.id}
@@ -4773,6 +4809,23 @@ export default function TechSheetEditor() {
           <button onClick={addPage} title={t('tech_sheet.add_page')} style={{ flexShrink: 0, width: 56, height: 40, border: `1px dashed ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>+</button>
         )}
       </div>
+
+      {/* ── Menú contextual del bloc capçalera mestra ancorat (B3) ── */}
+      {headerMenu && (<>
+        <div onClick={() => setHeaderMenu(null)} onContextMenu={(e) => { e.preventDefault(); setHeaderMenu(null) }} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+        <div style={{ position: 'fixed', left: headerMenu.x, top: headerMenu.y, zIndex: 999, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', padding: 4, minWidth: 190, fontFamily: FONT }}>
+          {[{ ic: 'ti-square-off', tk: 'header_delete_on_page', fn: () => deleteHeaderOnPage(currentPage) },
+            { ic: 'ti-unlink', tk: 'header_detach', fn: () => detachHeaderOnPage(currentPage) }].map(mi => (
+            <button key={mi.tk} type="button" onClick={() => { mi.fn(); setHeaderMenu(null) }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', border: 'none', background: 'transparent', color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', textAlign: 'left', cursor: 'pointer', borderRadius: 4 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = COL.bg }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
+              <i className={`ti ${mi.ic}`} style={{ fontSize: 14, color: COL.gold, flexShrink: 0 }} />
+              <span>{t('tech_sheet.' + mi.tk)}</span>
+            </button>
+          ))}
+        </div>
+      </>)}
 
       {/* ── Barra d'estat inferior (C3) ── */}
       <footer style={{ flexShrink: 0, background: COL.sidebar, borderTop: `1px solid ${COL.border}`, display: 'flex', alignItems: 'center', gap: 12, padding: '4px 12px', color: COL.textMuted, fontSize: 'var(--fs-label)' }}>
