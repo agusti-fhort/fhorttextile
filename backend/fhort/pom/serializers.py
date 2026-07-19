@@ -196,16 +196,44 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
     fit_type_codi = serializers.SerializerMethodField()
     # Sprint ÀMBIT — àmbit d'aplicabilitat multi-node (disponibilitat). Llista de nodes (grup/família/
     # item) al qual el contenidor «aplica». El matching hi baixa fins a item; buit = fallback a garment_group.
-    applies_to = serializers.SerializerMethodField()
+    # ESCRIVIBLE (edició = reclassificació, paritat amb la creació size-map): write_only per no xocar amb
+    # la lectura, que la posa `to_representation` des de scope_nodes. En escriure → apply_scope_nodes +
+    # garment_group=None (D1: convergència per atrició, una sola font d'abast per ruleset).
+    applies_to = serializers.ListField(
+        child=serializers.DictField(), required=False, write_only=True)
 
-    def get_applies_to(self, obj):
-        return [
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['applies_to'] = [
             {'node_type': s.node_type,
              'group_codi': s.garment_group.codi if s.garment_group_id else None,
              'garment_type_id': s.garment_type_id,
              'garment_type_item_id': s.garment_type_item_id}
-            for s in obj.scope_nodes.all()
+            for s in instance.scope_nodes.all()
         ]
+        return data
+
+    def _write_scope(self, inst, applies):
+        # D1 — en tocar l'abast: reemplaça scope_nodes i BUIDA garment_group (una sola font).
+        from fhort.pom.grading_utils import apply_scope_nodes
+        apply_scope_nodes(inst, applies)
+        if inst.garment_group_id is not None:
+            inst.garment_group = None
+            inst.save(update_fields=['garment_group'])
+
+    def create(self, validated_data):
+        applies = validated_data.pop('applies_to', None)
+        inst = super().create(validated_data)
+        if applies is not None:
+            self._write_scope(inst, applies)
+        return inst
+
+    def update(self, instance, validated_data):
+        applies = validated_data.pop('applies_to', None)
+        inst = super().update(instance, validated_data)
+        if applies is not None:
+            self._write_scope(inst, applies)
+        return inst
 
     def get_targets_codis(self, obj):
         return list(obj.targets.values_list('codi', flat=True))
@@ -225,6 +253,9 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
         # del front és UX; la seguretat real viu aquí (protegeix contra PATCH directes a l'API).
         inst = self.instance
         if inst is not None and inst.is_system_default:
+            if 'applies_to' in attrs:
+                raise serializers.ValidationError(
+                    {'applies_to': "No es pot canviar l'abast d'un ruleset de sistema (is_system_default)."})
             for f in ('targets', 'construction', 'fit_type', 'garment_group'):
                 if f not in attrs:
                     continue
