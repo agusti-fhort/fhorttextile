@@ -637,11 +637,9 @@ def import_session_talles_view(request, token):
         s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()
     ]
 
-    # 'alinear' → adopta el run seleccionat (del document) com a run del model.
-    if accio == 'alinear' and talles_sel:
-        model.size_run_model = '·'.join(talles_sel)
-        model.save(update_fields=['size_run_model'])
-        configurat = list(talles_sel)
+    # `alinear` RETIRAT (brief APARELLAMENT, punt b): el run del model parla SEMPRE en etiquetes
+    # tenant (SizeDefinition); mai s'hi aboquen les del document. La traducció document→model viu
+    # a `talla_mapping`, no al model. (Es preserva l'acció al contracte per compat, però és no-op.)
 
     # Labels disponibles com a destí: run configurat + talles del SizeSystem + mapeig.
     system_labels = []
