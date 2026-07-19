@@ -533,7 +533,12 @@ def apply_scope_nodes(rule_set, nodes):
 
 
 def cerca_contenidor_client(customer, size_system, garment_type_item, fit_type):
-    """EL contenidor de client per la IDENTITAT COMPLETA de la llei
+    """DEPRECADA (G5, sprint MATCHER UNIFICAT) — cobreix NOMÉS la identitat dura (NIVELL 1) i
+    ignora els contenidors AMPLI (item NULL) i la guarda d'ambigüitat. El camí d'import ja usa
+    `resolve_grading_container` (M1). Queda viva perquè `size_map_views.py:731` encara la crida;
+    G5 = migrar aquell caller i esborrar-la. NO afegir cap caller nou.
+
+    EL contenidor de client per la IDENTITAT COMPLETA de la llei
     (customer + size_system + garment_type_item + fit_type). Únic per la constraint parcial
     `uniq_client_container_identity` (origen='CLIENT_RUN'). Retorna el GradingRuleSet o None
     (None = el client estrena la combinació → acte explícit de creació a fora).

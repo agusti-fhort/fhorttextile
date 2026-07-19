@@ -1819,7 +1819,7 @@ def import_session_confirmar_view(request, token):
         # CREA el contenidor només com a ACTE EXPLÍCIT (combinació verge). derive_grading_rule_set
         # (creador automàtic) queda JUBILAT; es reutilitza el motor de detecció.
         from fhort.pom.grading_utils import (
-            derive_rules_from_fitxa, cerca_contenidor_client, classifica_fitxa_vs_contenidor)
+            derive_rules_from_fitxa, resolve_grading_container, classifica_fitxa_vs_contenidor)
         from fhort.pom.models import FitType, Target, ConstructionType, GradingRuleSet
         from fhort.models_app.services import (
             materialize_model_grading_rules_from_specs, afegeix_regles_al_contenidor)
@@ -1831,10 +1831,16 @@ def import_session_confirmar_view(request, token):
             confirmed_pom_ids=confirmed_pom_ids, size_system=model.size_system, avisos=grading_avisos)
         base_def_id = fitxa_specs[0]['talla_base_id'] if fitxa_specs else None
 
-        # (b) IDENTITAT del contenidor del client: resol fit (codi→FK) i cerca EL contenidor únic.
+        # (b) MATCHER ÚNIC (M1): resol fit (codi→FK) i resol EL contenidor per la llei del contenidor
+        # (N1 identitat exacta · N2 ampli item-NULL del mateix client · N3 cap). Substitueix
+        # cerca_contenidor_client (deprecada, G5). `motiu`='ambiguous' → tria conscient a fora.
         rs_fit = FitType.objects.filter(codi__iexact=model.fit_type).first() if model.fit_type else None
         gti = model.garment_type_item
-        container = cerca_contenidor_client(model.customer, model.size_system, gti, rs_fit)
+        grp_codi = model.garment_group.codi if model.garment_group_id else None
+        res_cont = resolve_grading_container(
+            model.customer, model.size_system, model.target, model.construction,
+            rs_fit, grp_codi, garment_type_item=gti)
+        container = res_cont['container']
 
         # Tries del tècnic (re-confirmació del wizard):
         container_choice = (request.data.get('container_choice') or '').strip().lower()   # 'create' | 'no_container'
@@ -1844,6 +1850,17 @@ def import_session_confirmar_view(request, token):
         cls = None
         if fitxa_specs:
             # (c) DECISIONS que exigeixen tria conscient → 409 + rollback (cap escriptura encara).
+            # AMBIGÜITAT (M1): >1 contenidor candidat → NO resoldre automàticament; el tècnic ha de
+            # desambiguar (mai s'agafa el primer). Es reporten els candidats amb id+nom.
+            if res_cont['motiu'] == 'ambiguous':
+                transaction.set_rollback(True)
+                return Response({
+                    'conflict': True,
+                    'tipus': 'container_ambigu',
+                    'candidats': [{'id': c.id, 'nom': c.nom} for c in res_cont['candidats']],
+                    'message': ("Hi ha més d'un contenidor de graduació possible per a aquesta "
+                                "combinació. Cal triar-ne un abans de continuar."),
+                }, status=409)
             if container is None and container_choice not in ('create', 'no_container'):
                 transaction.set_rollback(True)
                 return Response({
