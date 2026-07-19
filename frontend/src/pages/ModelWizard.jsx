@@ -376,6 +376,7 @@ export default function ModelWizard() {
                 ) : (
                   <div style={{ height: 460, border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
                     <GarmentTypeSelector
+                      target={target}
                       selectedItemId={item?.id}
                       onSelect={({ family: fam, item: it }) => { setFamily(fam); setItem(it); setPicking(false); resetGrading() }}
                     />
