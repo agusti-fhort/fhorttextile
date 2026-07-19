@@ -631,6 +631,7 @@ def import_session_talles_view(request, token):
 
     talles_sel = [str(t).strip() for t in (request.data.get('talles_seleccionades') or []) if str(t).strip()]
     mapping_in = request.data.get('talla_mapping')   # [{document, model}] editat per l'humà (opcional)
+    base_in = request.data.get('base_size_label')    # B5: canvi de talla base (etiqueta model)
 
     # Run configurat actual del model (etiquetes tenant; només informatiu).
     configurat = [
@@ -682,6 +683,44 @@ def import_session_talles_view(request, token):
     else:
         talla_mapping, no_aparellades = _propose(talles_sel)
 
+    # ── B5 · TALLA BASE. Canvi opcional (limitat a les SizeDefinition del system) → escriu al model.
+    if base_in is not None:
+        base_in = str(base_in).strip()
+        if base_in and base_in in set(system_labels) and base_in != (model.base_size_label or ''):
+            model.base_size_label = base_in
+            model.save(update_fields=['base_size_label'])
+        elif base_in and base_in not in set(system_labels):
+            errors.append(f"La talla base «{base_in}» no és del sistema de talles del model.")
+    base_label = (model.base_size_label or '').strip()
+
+    # Guard BLOQUEJANT: la talla base ha de tenir una columna del document aparellada (si no, l'import
+    # no pot escriure el valor base → seria el 422 del confirm). Es bloqueja ja al pas 1.
+    base_paired = any(p.get('model') == base_label for p in talla_mapping)
+    base_avisos = []
+    if base_label and not base_paired:
+        errors.append(f"La talla base «{base_label}» no té cap columna del document aparellada.")
+
+    # Avís NO bloquejant: base divergent de la convenció (mínima del run · S/38 dona · M/42 home)
+    # o de l'àncora del ruleset del model.
+    def _conventional_base():
+        tgt = (model.target or '').upper()
+        if any(k in tgt for k in ('WOMAN', 'WOMEN')):
+            for c in ('S', '38'):
+                if c in system_labels:
+                    return c
+        if 'MAN' in tgt or 'MEN' in tgt:
+            for c in ('M', '42'):
+                if c in system_labels:
+                    return c
+        return system_labels[0] if system_labels else None   # mínima del run
+    conv = _conventional_base()
+    if base_label and conv and base_label != conv:
+        base_avisos.append(f"La talla base «{base_label}» divergeix de la convenció del segment (esperada «{conv}»).")
+    if base_label and model.grading_rule_set_id:
+        anchor = (model.grading_rule_set.regles.values_list('talla_base__etiqueta', flat=True).first())
+        if anchor and anchor != base_label:
+            base_avisos.append(f"La talla base «{base_label}» divergeix de l'àncora del ruleset «{anchor}».")
+
     ready = bool(talla_mapping) and not errors
 
     rc = dict(session.run_conciliat or {})
@@ -722,7 +761,10 @@ def import_session_talles_view(request, token):
         'talla_mapping': talla_mapping,
         'no_aparellades': no_aparellades,
         'system_labels': system_labels,       # etiquetes REALS del model (selectors + panell dret).
-        'base_size_label': model.base_size_label,
+        'base_size_label': base_label,
+        'base_paired': base_paired,
+        'base_avisos': base_avisos,           # B5: divergències no bloquejants de la talla base.
+        'conventional_base': conv,
         'size_run_model': model.size_run_model,
         'errors': errors,
         'size_map_prefill': size_map_prefill,
