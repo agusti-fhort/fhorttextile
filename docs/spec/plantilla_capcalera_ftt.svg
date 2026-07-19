@@ -35,10 +35,11 @@
   <line class="frame" x1="491.8" y1="39" x2="491.8" y2="129.2"/>
 
   <!-- ── CAIXA 1 ── Logo (files 1-2) · DATE+PAGE (fila 3) · TECHNICIAN (fila 4) -->
-  <!-- ZONA LOGO: x 34.6→164.3 (w=129.7) · y 45→85 (h=40). Aspect preservat,
-       encaixat per la dimensió que primer toqui, alineat a l'esquerra i centrat
-       verticalment dins la zona. El logo és captura del customer. -->
-  <rect class="zone" x="34.6" y="45" width="129.7" height="40"/>
+  <!-- ZONA LOGO: x 34.6→164.3 (w=129.7) · y 42.7→81.8 (h=39.1) [alçada de les files 1-2
+       de la caixa 2: top etiqueta fila1 = 47.5−0.8*6 = 42.7 · bottom valor fila2 = 80+0.2*9
+       = 81.8]. Contain aspect preservat SENSE tope (upscale permès fins que una dimensió
+       toqui), alineat a l'esquerra i centrat verticalment. El logo és captura del customer. -->
+  <rect class="zone" x="34.6" y="42.7" width="129.7" height="39.1"/>
   <text class="label" x="34.6" y="92.5">DATE</text>
   <text class="value" x="34.6" y="102.5">19-07-2026</text>
   <text class="label" x="105.45" y="92.5">PAGE</text>

@@ -671,16 +671,22 @@ const HDR_M = {
 }
 const _hdrP = () => 0.3528 * MM_TO_PX
 
-// Logo del customer: zona x 34.6→164.3 (w 129.7) · y 45→85 (h 40) [files 1-2 de caixa 1].
-// Contain (encaixa per la dimensió que primer topi), alineat a l'esquerra, centrat verticalment.
+// Logo del customer: zona x 34.6→164.3 (w 129.7) · y 42.7→81.8 (h 39.1) [alçada de les files
+// 1-2 de la caixa 2: top etiqueta fila1 = 47.5−0.8·6 = 42.7 · bottom valor fila2 = 80+0.2·9 = 81.8].
+// Contain amb aspecte preservat SENSE tope a la mida natural (pot fer UPSCALE fins que la primera
+// dimensió topi): s = min(ZW/w_logo, ZH/h_logo). Alineat a l'ESQUERRA (x=34.6) i centrat vertical.
+const HDR_LOGO = { X: 34.6, Y: 42.7, W: 129.7, H: 39.1 }
 export function headerMasterLogoRect(natW, natH, _config) {
   const P = _hdrP()
-  const zx = (34.6 - HDR_M.OX) * P, zy = (45 - HDR_M.OY) * P
-  const zw = 129.7 * P, zh = 40 * P
-  const ratio = (natW && natH) ? natW / natH : 2.4
-  let w = zw, h = zw / ratio
-  if (h > zh) { h = zh; w = zh * ratio }
-  return { x: zx, y: zy + (zh - h) / 2, w, h }
+  const { X, Y, W, H } = HDR_LOGO
+  let wPt, hPt
+  if (natW > 0 && natH > 0) {
+    const s = Math.min(W / natW, H / natH)     // contain sense clamp s<=1 (creix fins a tocar)
+    wPt = natW * s; hPt = natH * s
+  } else {
+    hPt = H; wPt = Math.min(W, H * 2.4)        // fallback aspecte 2.4 si no hi ha mida natural
+  }
+  return { x: (X - HDR_M.OX) * P, y: (Y - HDR_M.OY) * P + (H - hPt) * P / 2, w: wPt * P, h: hPt * P }
 }
 
 function _hdrDate(d) {
