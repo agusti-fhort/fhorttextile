@@ -182,7 +182,30 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
     size_system_nom = serializers.CharField(source='size_system.nom', read_only=True)
     grading_rule_set_nom = serializers.CharField(source='grading_rule_set.nom', read_only=True)  # P8: ruleset vigent (lectura)
+    # S12 · realineació 5 capes: target/fit/construction de la capçalera vénen del GradingRuleSet
+    # triat (la capa de graduació), NO del run ni dels camps legacy del Model. En anglès (nom_en)
+    # per coherència amb les etiquetes fixes angleses de la Template FTT. Model sense ruleset → None.
+    grading_target_nom = serializers.SerializerMethodField()
+    grading_fit_nom = serializers.SerializerMethodField()
+    grading_construction_nom = serializers.SerializerMethodField()
     customer_logo = serializers.SerializerMethodField()   # TS-4c: logo del client (URL)
+
+    def get_grading_target_nom(self, obj):
+        rs = obj.grading_rule_set if obj.grading_rule_set_id else None
+        if not rs:
+            return None
+        noms = [t.nom_en for t in rs.targets.all()]
+        if noms:
+            return ' / '.join(noms)
+        return rs.target.nom_en if rs.target_id else None
+
+    def get_grading_fit_nom(self, obj):
+        rs = obj.grading_rule_set if obj.grading_rule_set_id else None
+        return rs.fit_type.nom_en if rs and rs.fit_type_id else None
+
+    def get_grading_construction_nom(self, obj):
+        rs = obj.grading_rule_set if obj.grading_rule_set_id else None
+        return rs.construction.nom_en if rs and rs.construction_id else None
 
     def get_customer_logo(self, obj):
         if obj.customer_id and obj.customer.logo:
