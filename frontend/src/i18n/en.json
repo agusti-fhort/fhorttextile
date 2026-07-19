@@ -918,7 +918,8 @@
     "no_grading": "No grading (choose later)",
     "pick_fit": "Pick the fit",
     "grading_needs_sizes": "Define the sizes first (step 3) to be able to choose grading.",
-    "no_grading_available": "No rule set matches this garment and size combination. You can continue without grading and add it later."
+    "no_grading_available": "No rule set matches this garment and size combination. You can continue without grading and add it later.",
+    "grading_auto_proposed": "Proposed automatically (single match). You can change it or choose “No grading”."
   },
   "models_list": {
     "title": "Models",

@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
+import { IconBulb } from '@tabler/icons-react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import GarmentTypeSelector from '../components/GarmentTypeSelector/GarmentTypeSelector'
 import CustomerSelector from '../components/CustomerSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
-import { availableFitsStrict, TARGETS, CONSTRUCTIONS } from '../components/grading/gradingAxes'
+import { availableFitsStrict, matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS } from '../components/grading/gradingAxes'
 import useAuthStore from '../store/auth'
 import { models, sizeSystems, customers, gradingRuleSets, garmentGroups, garmentTypes } from '../api/endpoints'
 
@@ -69,12 +70,13 @@ export default function ModelWizard() {
   const [fit, setFit] = useState(null)               // codi de fit triat (eix del matching)
   const [gradingRuleSetId, setGradingRuleSetId] = useState(null)  // ruleset triat (null = cap)
   const [noGrading, setNoGrading] = useState(false)  // «Sense graduació» explícit
+  const [autoProposed, setAutoProposed] = useState(false)  // B1: ruleset preseleccionat per única coincidència
   const [modelGarmentGrup, setModelGarmentGrup] = useState(null)  // grup del model en edició (prefill)
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const resetGrading = () => { setFit(null); setGradingRuleSetId(null); setNoGrading(false) }
+  const resetGrading = () => { setFit(null); setGradingRuleSetId(null); setNoGrading(false); setAutoProposed(false) }
 
   // LLEI 5 CAPES: el pas Talles retorna NOMÉS escala (sistema/run/base). La graduació (capa 4) es
   // tria per separat a la fitxa (RuleSetCard→update-step2). Aquí NO s'arrossega grading_rule_set_id.
@@ -232,6 +234,27 @@ export default function ModelWizard() {
   )
 
   const gradingAxes = { ...nodeAxes, fit }
+
+  // B1 — coincidències estrictes per als eixos FIXATS (incloent el fit triat). Consumeix el matcher
+  // canònic de gradingAxes.js (no es duplica cap lògica aquí).
+  const strictMatches = useMemo(
+    () => matchingRuleSetsStrict(
+      gradingRuleSets_, gradingAxes, ggCodiById, sizingResult?.size_system_id ?? null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gradingRuleSets_, target, construction, garmentGroupCodi, family?.id, item?.id, fit, ggCodiById, sizingResult],
+  )
+
+  // B1 — autoselecció quan la coincidència és ÚNICA: preselecciona l'únic ruleset possible. Visible
+  // (bàner «proposat automàticament») i REVOCABLE (canviar de card, «Sense graduació» o canviar fit).
+  // No dispara si ja hi ha tria (manual o hidratada en edició) ni amb 0/>1 candidats.
+  useEffect(() => {
+    if (noGrading || !fit || !sizingResult) return
+    if (gradingRuleSetId != null) return
+    if (strictMatches.length === 1) {
+      setGradingRuleSetId(strictMatches[0].id)
+      setAutoProposed(true)
+    }
+  }, [strictMatches, fit, noGrading, sizingResult, gradingRuleSetId])
 
   const skeletonPayload = () => {
     // Sprint WIZARD-COMPLET: la graduació torna al payload. `undefined` = no tocar (creació sense
@@ -491,7 +514,7 @@ export default function ModelWizard() {
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', cursor: 'pointer', color: 'var(--text-main)' }}>
               <input type="checkbox" checked={noGrading}
-                onChange={e => { setNoGrading(e.target.checked); if (e.target.checked) { setFit(null); setGradingRuleSetId(null) } }} />
+                onChange={e => { setNoGrading(e.target.checked); setAutoProposed(false); if (e.target.checked) { setFit(null); setGradingRuleSetId(null) } }} />
               {t('model_wizard.no_grading')}
             </label>
 
@@ -507,11 +530,17 @@ export default function ModelWizard() {
                   ) : (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {fitOptions.map(f => (
-                        <Chip key={f.codi} active={fit === f.codi} onClick={() => { setFit(f.codi); setGradingRuleSetId(null) }}>{t(`model_wizard.fit_${f.codi}`, f.nom_en)}</Chip>
+                        <Chip key={f.codi} active={fit === f.codi} onClick={() => { setFit(f.codi); setGradingRuleSetId(null); setAutoProposed(false) }}>{t(`model_wizard.fit_${f.codi}`, f.nom_en)}</Chip>
                       ))}
                     </div>
                   )}
                 </Field>
+                {fit && autoProposed && gradingRuleSetId != null && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gold)', background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 6, padding: '8px 12px' }}>
+                    <IconBulb size={16} stroke={1.5} />
+                    {t('model_wizard.grading_auto_proposed')}
+                  </div>
+                )}
                 {fit && (
                   <RuleSetPicker
                     ruleSets={gradingRuleSets_}
@@ -521,7 +550,7 @@ export default function ModelWizard() {
                     sizeSystemId={sizingResult?.size_system_id ?? null}
                     selectedId={gradingRuleSetId}
                     actionLabel={t('model_sheet.use_ruleset')}
-                    onPick={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false) }}
+                    onPick={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false); setAutoProposed(false) }}
                   />
                 )}
               </>
