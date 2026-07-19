@@ -4,7 +4,7 @@ import useAuthStore from '../store/auth'
 import AxesSelector from '../components/grading/AxesSelector'
 import ScopeSelector from '../components/grading/ScopeSelector'
 import SizeAuthoringDrawer from '../components/SizeAuthoringDrawer'
-import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn } from '../components/grading/gradingAxes'
+import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn, matchingRuleSetsStrict } from '../components/grading/gradingAxes'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -143,13 +143,32 @@ export default function GradingRuleSets() {
   }
 
   const handleSaved = (saved) => {
+    let newList = allRuleSets
     setAllRuleSets(prev => {
       const idx = prev.findIndex(r => r.id === saved.id)
-      if (idx >= 0) { const n = [...prev]; n[idx] = saved; return n }
-      return [...prev, saved]
+      newList = idx >= 0 ? prev.map(r => (r.id === saved.id ? saved : r)) : [...prev, saved]
+      return newList
     })
     setShowModal(false)
-    setMsg({ type: 'ok', text: editTarget?.id ? t('grading.updated') : t('grading.created') })
+    // GUARD DE COHERÈNCIA no bloquejant («prova del cotó» lleugera): després de reclassificar, si el
+    // cas target×construcció×fit×grup+system del ruleset casa amb ≠1 rulesets, avisa (el tècnic decideix).
+    const grp = saved.garment_group_codi
+      || (saved.applies_to || []).find(n => n.node_type === 'GROUP')?.group_codi || null
+    const axes = {
+      target: saved.targets_codis?.[0] || null, construction: saved.construction_codi || null,
+      fit: saved.fit_type_codi || null, garmentGroup: grp,
+    }
+    const hits = (axes.target && axes.construction && axes.fit && axes.garmentGroup && saved.size_system != null)
+      ? matchingRuleSetsStrict(newList, axes, garmentGroupCodiById, saved.size_system) : null
+    if (hits && hits.length !== 1) {
+      setMsg({ type: 'warn', text: t('grading.coherence_warn', {
+        count: hits.length,
+        axes: `${axes.target}·${axes.construction}·${axes.fit}·${axes.garmentGroup}`,
+        names: hits.map(h => h.nom).join(', ') || '—',
+      }) })
+    } else {
+      setMsg({ type: 'ok', text: editTarget?.id ? t('grading.updated') : t('grading.created') })
+    }
   }
 
   if (loading) return (
@@ -198,9 +217,9 @@ export default function GradingRuleSets() {
       {msg && (
         <div style={{
           padding: '8px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', marginBottom: 12,
-          background: msg.type === 'ok' ? '#f0f9f0' : '#fff0f0',
-          border: `0.5px solid ${msg.type === 'ok' ? '#c0dd97' : '#f09595'}`,
-          color: msg.type === 'ok' ? '#3b6d11' : '#a32d2d',
+          background: msg.type === 'ok' ? '#f0f9f0' : msg.type === 'warn' ? 'var(--warn-bg)' : '#fff0f0',
+          border: `0.5px solid ${msg.type === 'ok' ? '#c0dd97' : msg.type === 'warn' ? 'var(--warn)' : '#f09595'}`,
+          color: msg.type === 'ok' ? '#3b6d11' : msg.type === 'warn' ? 'var(--warn)' : '#a32d2d',
           display: 'flex', justifyContent: 'space-between',
         }}>
           <span>{msg.text}</span>

@@ -2922,6 +2922,7 @@
     "field_construction_ref": "Construction",
     "field_fit_ref": "Fit Type",
     "field_size_system": "Size System",
+    "coherence_warn": "Saved. ⚠️ The case {{axes}} now matches {{count}} rule set(s) ({{names}}). Review coherence.",
     "modal_note": "System (ISO) seeds don't allow editing the axes.",
     "col": {
       "code": "Code",

@@ -2922,6 +2922,7 @@
     "field_construction_ref": "Construction",
     "field_fit_ref": "Fit Type",
     "field_size_system": "Size System",
+    "coherence_warn": "Guardado. ⚠️ El caso {{axes}} ahora coincide con {{count}} juego(s) de reglas ({{names}}). Revisa la coherencia.",
     "modal_note": "Los seeds del sistema (ISO) no permiten editar los ejes.",
     "col": {
       "code": "Código",
