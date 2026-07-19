@@ -2456,6 +2456,8 @@
     "menu_duplicate": "Duplicate",
     "menu_lock_sel": "Lock selection",
     "menu_hide_sel": "Hide selection",
+    "menu_delete_header_page": "Delete header on this page",
+    "menu_detach_header": "Detach & edit header",
     "align_left": "Align left",
     "align_center": "Align center",
     "align_right": "Align right",

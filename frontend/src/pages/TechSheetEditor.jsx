@@ -3490,13 +3490,14 @@ export default function TechSheetEditor() {
     if (!locked) return
     updatePageObjects(pageIdx, objs => objs.filter(o => !(o.type === 'data_block' && o.kind === 'header')))
   }
-  // B3 — "Detach & edit": converteix la capçalera ancorada en un bloc EDITABLE d'aquesta pàgina
+  // B3 — "Detach & edit": converteix la capçalera ancorada en un OBJECTE LLIURE d'aquesta pàgina
   // (perd la sincronia amb la plantilla: deixa de ser locked/template i ja no es re-instancia).
+  // layer 'free' → seleccionable, arrossegable i esborrable pel camí normal (Delete/selecció).
   const detachHeaderOnPage = (pageIdx) => {
     if (!locked) return
     updatePageObjects(pageIdx, objs => objs.map(o => (
       (o.type === 'data_block' && o.kind === 'header')
-        ? { ...o, layer: 'data', locked: false, detached: true }
+        ? { ...o, layer: 'free', locked: false, detached: true }
         : o
     )))
     flash(t('tech_sheet.header_detached'))
@@ -4040,6 +4041,12 @@ export default function TechSheetEditor() {
     menuItem('mf-save-tpl', { label: t('tech_sheet.save_as_template'), onClick: () => setSaveAsTpl({ nom: '', descripcio: '' }), disabled: !locked }),
     menuItem('mf-import', { label: t('tech_sheet.flat_import'), onClick: () => openImport('garment'), disabled: !locked }),
   ]
+  // S12-QA1-B: estat de la capçalera de la pàgina actual per a les accions del menú "Objecte".
+  // El guard de màx 1 header/pàgina fa que no calgui selecció prèvia. `detached` (post-detach)
+  // → només accionable pel camí normal d'objectes lliures. Menú i clic dret criden els MATEIXOS
+  // handlers (deleteHeaderOnPage / detachHeaderOnPage): cap tercer camí.
+  const pageHeaderObj = objectsOf(currentPage).find(o => o.type === 'data_block' && o.kind === 'header')
+  const headerAnchored = !!pageHeaderObj && !pageHeaderObj.detached
   const menuEditItems = [
     menuItem('me-undo', { label: t('tech_sheet.menu_undo'), shortcut: '⌘Z', onClick: undo }),
     menuItem('me-redo', { label: t('tech_sheet.menu_redo'), shortcut: '⇧⌘Z', onClick: redo }),
@@ -4077,6 +4084,11 @@ export default function TechSheetEditor() {
     menuSep('mo-sep5'),
     menuItem('mo-lock-sel', { label: t('tech_sheet.menu_lock_sel'), onClick: () => selectedIds.forEach(toggleLock), disabled: objDisabled(selectedIds.length === 0) }),
     menuItem('mo-hide-sel', { label: t('tech_sheet.menu_hide_sel'), onClick: () => selectedIds.forEach(toggleVisible), disabled: objDisabled(selectedIds.length === 0) }),
+    menuSep('mo-sep6'),
+    // Capçalera ancorada (Template FTT): mateixos handlers que el clic dret. Habilitades només
+    // amb un header ANCORAT a la pàgina; un cop desancorat, l'esborrat va pel camí normal.
+    menuItem('mo-hdr-delete', { label: t('tech_sheet.menu_delete_header_page'), onClick: () => deleteHeaderOnPage(currentPage), disabled: objDisabled(!headerAnchored) }),
+    menuItem('mo-hdr-detach', { label: t('tech_sheet.menu_detach_header'), onClick: () => detachHeaderOnPage(currentPage), disabled: objDisabled(!headerAnchored) }),
   ]
   const menuViewItems = [
     menuItem('mv-in', { label: t('tech_sheet.zoom_in'), onClick: () => setZoomClamped(z => z + ZOOM_STEP) }),
