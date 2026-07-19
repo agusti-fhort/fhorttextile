@@ -1,0 +1,16 @@
+{
+  "layer": "document_templates",
+  "count": 1,
+  "rows": [
+    {
+      "nom": "Template FTT",
+      "descripcio": "Plantilla mestra de capçalera de fitxa tècnica (3 caixes: document · identificació · definició tècnica). Etiquetes angleses fixes; valors del model + logo del client al render. Consciència de pàgina (PAGE i/n). Sembrada a cada tenant per bootstrap_tenant.",
+      "fitxer_template": "document_templates/2026/07/template_ftt.fttpt",
+      "fitxer_asset": "assets/template_ftt.fttpt",
+      "metadata_schema": {},
+      "is_sample": true,
+      "origen": "sistema",
+      "actiu": true
+    }
+  ]
+}

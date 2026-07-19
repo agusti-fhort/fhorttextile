@@ -1,0 +1,84 @@
+{
+  "package": "losan",
+  "source_schema": "fhort",
+  "commit": "c57c609",
+  "customer_codi": "LOS",
+  "design": {
+    "pom_natural_key": "pom_global.codi | codi_client (R2)",
+    "rulesets_scope": "customer=LOS excloent origen IS NULL (grs 104 legacy, R6)",
+    "pom_masters_scope": "unió self-consistent: aliases ∪ rules ∪ ALL garment_pom_maps ∪ item_base_measurements"
+  },
+  "gate_qa_targets": {
+    "aliases": 196,
+    "lospom_globals": 149,
+    "pom_masters_gate_estimate": 197,
+    "garment_type_items": 62,
+    "garment_types_active": 17,
+    "garment_groups": 12,
+    "garment_pom_maps": 1748,
+    "item_base_measurements": 37,
+    "size_systems": 11,
+    "size_definitions": 86,
+    "rulesets": 18,
+    "rules": 390,
+    "profiles": 18,
+    "rules_on_inactive_pom": 0
+  },
+  "layers": [
+    {
+      "file": "01_customer.json",
+      "count": 1,
+      "sha256": "9360eb21c1f2b6d205a66c973471b807d5b6b4a5bde80b8bb6bab3c020ba9b86"
+    },
+    {
+      "file": "02_pom_globals.json",
+      "count": 245,
+      "sha256": "18ff55587a090aae3840ab9ec759b11e6d6e908135ac29532aa203d96e7c2b49"
+    },
+    {
+      "file": "03_pom_masters.json",
+      "count": 246,
+      "sha256": "efd24d09b3001090f925fed079fd61c013b3facbd150bfb2004af113c673ec05"
+    },
+    {
+      "file": "04_pom_aliases.json",
+      "count": 196,
+      "sha256": "2588a11f365ccfe6f820f85ce51e1a6cb48c3718ef92d1703aee4a7e37942994"
+    },
+    {
+      "file": "05_garment_catalog.json",
+      "count": 95,
+      "sha256": "c6eb1fc8ec056c22a733db99cf9606193a0d6c662aa5630b4bf5c85d2e2b4e48"
+    },
+    {
+      "file": "06_pom_maps.json",
+      "count": 1785,
+      "sha256": "56251f6181b8cb6c65f337dd659a8a9a89acdc3dfcd947c4af4543c9103a1385"
+    },
+    {
+      "file": "07_size_systems.json",
+      "count": 97,
+      "sha256": "b14b21a027e0e1a469d678b07cc08e02b765ca9ac2eb4d59d39bfadb24fb0944"
+    },
+    {
+      "file": "08_rulesets.json",
+      "count": 27,
+      "sha256": "10df3267a97a9cbde634f447c89cc7e8fd0a9d55a434c1f7079bc81ae73b09ad"
+    },
+    {
+      "file": "09_rules.json",
+      "count": 390,
+      "sha256": "a8bb7531d5970a43a5f50aced4b71c53e8e435c126eb1c9af44bae7fb50d8774"
+    },
+    {
+      "file": "10_profiles.json",
+      "count": 18,
+      "sha256": "ec59f4d5c6fbba252a72a906c1312de2e28a9e870043718f7ff9452aa8eea111"
+    },
+    {
+      "file": "11_document_templates.json",
+      "count": 1,
+      "sha256": "ed6b1c93ce3d5af950582cc5d75fec177b2746d371f8ba31693a3e0ae5b75c8e"
+    }
+  ]
+}

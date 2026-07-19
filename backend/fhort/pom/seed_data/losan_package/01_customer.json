@@ -1,0 +1,30 @@
+{
+  "layer": "customer",
+  "count": 1,
+  "rows": [
+    {
+      "codi": "LOS",
+      "nom": "LOSAN IBERIA SA",
+      "active": true,
+      "is_self": true,
+      "codi_global": null,
+      "logo": "customer_logos/2026/07/losan-logo.svg",
+      "logo_asset": "assets/losan-logo.svg",
+      "rao_social": "",
+      "nif": "",
+      "adreca_linia1": "",
+      "adreca_linia2": "",
+      "ciutat": "",
+      "codi_postal": "",
+      "pais": "ES",
+      "email_facturacio": "",
+      "condicions_pagament": "",
+      "descompte_pct": "0.00",
+      "persona_contacte": "",
+      "telefon_contacte": "",
+      "tax_regime": "DOMESTIC",
+      "vat_number": "",
+      "payment_method": "TRANSFER"
+    }
+  ]
+}

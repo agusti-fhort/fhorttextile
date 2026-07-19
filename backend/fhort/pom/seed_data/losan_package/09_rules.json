@@ -1,0 +1,7026 @@
+{
+  "layer": "rules",
+  "count": 390,
+  "rows": [
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-020",
+        "codi_client": "SL"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "POM-025",
+        "codi_client": "SL OP"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-512",
+        "codi_client": "U"
+      },
+      "talla_base": {
+        "size_system": "BABY_LOS_01",
+        "etiqueta": "03/06"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": "1.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": "1.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-006",
+        "codi_client": "AC SH"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": "2.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "1.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "1.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.70",
+      "valors_step": null,
+      "increment_base": "0.70",
+      "increment_break": "1.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.70",
+      "valors_step": null,
+      "increment_base": "0.70",
+      "increment_break": "1.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "2.20",
+      "valors_step": null,
+      "increment_base": "2.20",
+      "increment_break": "3.30",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": "0.40",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": "0.80",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": "0.40",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.70",
+      "valors_step": null,
+      "increment_base": "0.70",
+      "increment_break": "1.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-025",
+        "codi_client": "SL OP"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.20",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-003",
+        "codi_client": "WA"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.70",
+      "valors_step": null,
+      "increment_base": "0.70",
+      "increment_break": "1.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-524",
+        "codi_client": "C1"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "1.20",
+      "valors_step": null,
+      "increment_base": "1.20",
+      "increment_break": "2.40",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-617",
+        "codi_client": "C12"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-669",
+        "codi_client": "C.13"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-523",
+        "codi_client": "C4"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": "1.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-386",
+        "codi_client": "D.11-M79"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": "0.80",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-529",
+        "codi_client": "D22"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "2.50",
+      "valors_step": null,
+      "increment_base": "2.50",
+      "increment_break": "4.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "1.20",
+      "valors_step": null,
+      "increment_base": "1.20",
+      "increment_break": "2.40",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-042",
+        "codi_client": "KNE"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": "0.80",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-043",
+        "codi_client": "LEG OP"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": "0.40",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "5.00",
+      "valors_step": null,
+      "increment_base": "5.00",
+      "increment_break": "5.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-593",
+        "codi_client": "O19"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": "0.40",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-390",
+        "codi_client": "O.21-M79"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": "0.80",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-603",
+        "codi_client": "O29"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-604",
+        "codi_client": "O30"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-395",
+        "codi_client": "O.32-M79"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-543",
+        "codi_client": "R10"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-056",
+        "codi_client": "RI BK"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": "1.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-055",
+        "codi_client": "RI FR"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "1.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-564",
+        "codi_client": "S13"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.10",
+      "valors_step": null,
+      "increment_base": "0.10",
+      "increment_break": "0.20",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-565",
+        "codi_client": "S25"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-392",
+        "codi_client": "S.R1-M79"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-670",
+        "codi_client": "S.R6"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-671",
+        "codi_client": "S.R7"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-041",
+        "codi_client": "THI"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.70",
+      "valors_step": null,
+      "increment_base": "0.70",
+      "increment_break": "1.40",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-052",
+        "codi_client": "WB H"
+      },
+      "talla_base": {
+        "size_system": "BOY_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.90",
+      "valors_step": null,
+      "increment_base": "0.90",
+      "increment_break": "1.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.90",
+      "valors_step": null,
+      "increment_base": "0.90",
+      "increment_break": "1.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-006",
+        "codi_client": "AC SH"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": "1.20",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "1.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": "0.80",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": "0.40",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "1.10",
+      "valors_step": null,
+      "increment_base": "1.10",
+      "increment_break": "2.20",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "LOSPOM-568",
+        "codi_client": "M4"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": "3.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "3.50",
+      "valors_step": null,
+      "increment_base": "3.50",
+      "increment_break": "6.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": "0.40",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": "0.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "1.10",
+      "valors_step": null,
+      "increment_base": "1.10",
+      "increment_break": "2.20",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-020",
+        "codi_client": "SL"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "2.50",
+      "valors_step": null,
+      "increment_base": "2.50",
+      "increment_break": "4.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "POM-025",
+        "codi_client": "SL OP"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": "0.30",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl — Dresses",
+      "pom": {
+        "pom_global": "LOSPOM-513",
+        "codi_client": "U1"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": "1.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": "1.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-006",
+        "codi_client": "AC SH"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": "2.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "1.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "1.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.70",
+      "valors_step": null,
+      "increment_base": "0.70",
+      "increment_break": "1.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.70",
+      "valors_step": null,
+      "increment_base": "0.70",
+      "increment_break": "1.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "2.20",
+      "valors_step": null,
+      "increment_base": "2.20",
+      "increment_break": "3.30",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": "0.40",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.60",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": "0.80",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": "0.40",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.70",
+      "valors_step": null,
+      "increment_base": "0.70",
+      "increment_break": "1.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-025",
+        "codi_client": "SL OP"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.20",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Kids Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-003",
+        "codi_client": "WA"
+      },
+      "talla_base": {
+        "size_system": "GIRL_LOS_01",
+        "etiqueta": "2"
+      },
+      "logica": "LINEAR",
+      "increment": "0.70",
+      "valors_step": null,
+      "increment_base": "0.70",
+      "increment_break": "1.50",
+      "talla_break_label": "9/10",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "3.00",
+      "valors_step": null,
+      "increment_base": "3.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-027",
+        "codi_client": "CUF H"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-683",
+        "codi_client": "E.9"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-680",
+        "codi_client": "G.3"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-550",
+        "codi_client": "GA"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.10",
+      "valors_step": null,
+      "increment_base": "0.10",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-681",
+        "codi_client": "H.12"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-556",
+        "codi_client": "H16"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-154",
+        "codi_client": "HM L"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-508",
+        "codi_client": "J2"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-576",
+        "codi_client": "N4"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-586",
+        "codi_client": "O11"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-587",
+        "codi_client": "O12"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-589",
+        "codi_client": "O14"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-682",
+        "codi_client": "O.8"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-585",
+        "codi_client": "O9"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-092",
+        "codi_client": "PLCK W"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-382",
+        "codi_client": "S1-M76"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-577",
+        "codi_client": "S3"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-668",
+        "codi_client": "S.35"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-582",
+        "codi_client": "S37"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-684",
+        "codi_client": "S.42"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "3.00",
+      "valors_step": null,
+      "increment_base": "3.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-512",
+        "codi_client": "U"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-513",
+        "codi_client": "U1"
+      },
+      "talla_base": {
+        "size_system": "MAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-487",
+        "codi_client": "BR"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-386",
+        "codi_client": "D.11-M79"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-529",
+        "codi_client": "D22"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-042",
+        "codi_client": "KNE"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.70",
+      "valors_step": null,
+      "increment_base": "0.70",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-043",
+        "codi_client": "LEG OP"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.60",
+      "valors_step": null,
+      "increment_base": "0.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-594",
+        "codi_client": "O20"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-390",
+        "codi_client": "O.21-M79"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-596",
+        "codi_client": "O25"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-603",
+        "codi_client": "O29"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-604",
+        "codi_client": "O30"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-395",
+        "codi_client": "O.32-M79"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-542",
+        "codi_client": "R9"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-056",
+        "codi_client": "RI BK"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "1.30",
+      "valors_step": null,
+      "increment_base": "1.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-055",
+        "codi_client": "RI FR"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-564",
+        "codi_client": "S13"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.10",
+      "valors_step": null,
+      "increment_base": "0.10",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-565",
+        "codi_client": "S25"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-670",
+        "codi_client": "S.R6"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-671",
+        "codi_client": "S.R7"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-041",
+        "codi_client": "THI"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "1.20",
+      "valors_step": null,
+      "increment_base": "1.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-003",
+        "codi_client": "WA"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Man Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-052",
+        "codi_client": "WB H"
+      },
+      "talla_base": {
+        "size_system": "MAN_NUM_LOS_01",
+        "etiqueta": "42"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-524",
+        "codi_client": "C1"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-617",
+        "codi_client": "C12"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-669",
+        "codi_client": "C.13"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-523",
+        "codi_client": "C4"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-386",
+        "codi_client": "D.11-M79"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-529",
+        "codi_client": "D22"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.70",
+      "valors_step": null,
+      "increment_base": "1.70",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "POM-152",
+        "codi_client": "EL EXT"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "POM-151",
+        "codi_client": "EL RLX"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-674",
+        "codi_client": "EV"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-556",
+        "codi_client": "H16"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "POM-042",
+        "codi_client": "KNE"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "POM-056",
+        "codi_client": "RI BK"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "POM-055",
+        "codi_client": "RI FR"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-392",
+        "codi_client": "S.R1-M79"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "POM-041",
+        "codi_client": "THI"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-580",
+        "codi_client": "V12"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-672",
+        "codi_client": "V.9"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "pom": {
+        "pom_global": "POM-052",
+        "codi_client": "WB H"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.90",
+      "valors_step": null,
+      "increment_base": "0.90",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.90",
+      "valors_step": null,
+      "increment_base": "0.90",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.90",
+      "valors_step": null,
+      "increment_base": "0.90",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.45",
+      "valors_step": null,
+      "increment_base": "0.45",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-150",
+        "codi_client": "CR L"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-027",
+        "codi_client": "CUF H"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-386",
+        "codi_client": "D.11-M79"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.90",
+      "valors_step": null,
+      "increment_base": "1.90",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-555",
+        "codi_client": "H15"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-556",
+        "codi_client": "H16"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-096",
+        "codi_client": "HD W"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "4.20",
+      "valors_step": null,
+      "increment_base": "4.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.25",
+      "valors_step": null,
+      "increment_base": "0.25",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-590",
+        "codi_client": "O16"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-594",
+        "codi_client": "O20"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-390",
+        "codi_client": "O.21-M79"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-595",
+        "codi_client": "O23"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-055",
+        "codi_client": "RI FR"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-425",
+        "codi_client": "S.10"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-648",
+        "codi_client": "S.19"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-649",
+        "codi_client": "S.20"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-577",
+        "codi_client": "S3"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-668",
+        "codi_client": "S.35"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-650",
+        "codi_client": "S.39"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-651",
+        "codi_client": "S.40"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-614",
+        "codi_client": "S53"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-426",
+        "codi_client": "S.56"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-020",
+        "codi_client": "SL"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.60",
+      "valors_step": null,
+      "increment_base": "1.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-025",
+        "codi_client": "SL OP"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-087",
+        "codi_client": "STRAP W SW"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "POM-041",
+        "codi_client": "THI"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.60",
+      "valors_step": null,
+      "increment_base": "0.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "pom": {
+        "pom_global": "LOSPOM-580",
+        "codi_client": "V12"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-673",
+        "codi_client": "CB"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-027",
+        "codi_client": "CUF H"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-538",
+        "codi_client": "D18"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-540",
+        "codi_client": "D19"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-539",
+        "codi_client": "D6"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-541",
+        "codi_client": "D7"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-555",
+        "codi_client": "H15"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-556",
+        "codi_client": "H16"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-548",
+        "codi_client": "H8"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-549",
+        "codi_client": "H9"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-096",
+        "codi_client": "HD W"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-154",
+        "codi_client": "HM L"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-544",
+        "codi_client": "M19"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-545",
+        "codi_client": "M20"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-457",
+        "codi_client": "S"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-425",
+        "codi_client": "S.10"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-668",
+        "codi_client": "S.35"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-614",
+        "codi_client": "S53"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-020",
+        "codi_client": "SL"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-025",
+        "codi_client": "SL OP"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "POM-011",
+        "codi_client": "SS"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-512",
+        "codi_client": "U"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-513",
+        "codi_client": "U1"
+      },
+      "talla_base": {
+        "size_system": "NEWBORN_LOS_01",
+        "etiqueta": "00/01"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.80",
+      "valors_step": null,
+      "increment_base": "1.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.80",
+      "valors_step": null,
+      "increment_base": "1.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "2.40",
+      "valors_step": null,
+      "increment_base": "2.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "3.40",
+      "valors_step": null,
+      "increment_base": "3.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.60",
+      "valors_step": null,
+      "increment_base": "0.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-590",
+        "codi_client": "O16"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-592",
+        "codi_client": "O18"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-382",
+        "codi_client": "S1-M76"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "2.40",
+      "valors_step": null,
+      "increment_base": "2.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "POM-020",
+        "codi_client": "SL"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "3.00",
+      "valors_step": null,
+      "increment_base": "3.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-513",
+        "codi_client": "U1"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-524",
+        "codi_client": "C1"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "2.20",
+      "valors_step": null,
+      "increment_base": "2.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-617",
+        "codi_client": "C12"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-669",
+        "codi_client": "C.13"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-523",
+        "codi_client": "C4"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.60",
+      "valors_step": null,
+      "increment_base": "1.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-027",
+        "codi_client": "CUF H"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-386",
+        "codi_client": "D.11-M79"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-529",
+        "codi_client": "D22"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "4.50",
+      "valors_step": null,
+      "increment_base": "4.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-532",
+        "codi_client": "F5"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-533",
+        "codi_client": "F6"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "2.20",
+      "valors_step": null,
+      "increment_base": "2.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-042",
+        "codi_client": "KNE"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "5.00",
+      "valors_step": null,
+      "increment_base": "5.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-590",
+        "codi_client": "O16"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-595",
+        "codi_client": "O23"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-056",
+        "codi_client": "RI BK"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.60",
+      "valors_step": null,
+      "increment_base": "1.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-055",
+        "codi_client": "RI FR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-392",
+        "codi_client": "S.R1-M79"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-041",
+        "codi_client": "THI"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-052",
+        "codi_client": "WB H"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "2.20",
+      "valors_step": null,
+      "increment_base": "2.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "2.20",
+      "valors_step": null,
+      "increment_base": "2.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "2.40",
+      "valors_step": null,
+      "increment_base": "2.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-027",
+        "codi_client": "CUF H"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "LOSPOM-430",
+        "codi_client": "E.8"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "LOSPOM-557",
+        "codi_client": "H17"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "LOSPOM-508",
+        "codi_client": "J2"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "LOSPOM-510",
+        "codi_client": "L1"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.60",
+      "valors_step": null,
+      "increment_base": "1.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "3.40",
+      "valors_step": null,
+      "increment_base": "3.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-092",
+        "codi_client": "PLCK W"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "LOSPOM-382",
+        "codi_client": "S1-M76"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "LOSPOM-583",
+        "codi_client": "S2"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "LOSPOM-582",
+        "codi_client": "S37"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "2.40",
+      "valors_step": null,
+      "increment_base": "2.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Boy Woven — Shirts",
+      "pom": {
+        "pom_global": "POM-020",
+        "codi_client": "SL"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_BOY_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "3.70",
+      "valors_step": null,
+      "increment_base": "3.70",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-524",
+        "codi_client": "C1"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": "2.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-523",
+        "codi_client": "C4"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": "2.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-386",
+        "codi_client": "D.11-M79"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": "1.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-529",
+        "codi_client": "D22"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "2.50",
+      "valors_step": null,
+      "increment_base": "2.50",
+      "increment_break": "2.50",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": "2.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "POM-042",
+        "codi_client": "KNE"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "0.70",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "POM-043",
+        "codi_client": "LEG OP"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "0.70",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "5.00",
+      "valors_step": null,
+      "increment_base": "5.00",
+      "increment_break": "5.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "POM-056",
+        "codi_client": "RI BK"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.30",
+      "valors_step": null,
+      "increment_base": "1.30",
+      "increment_break": "1.50",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "POM-055",
+        "codi_client": "RI FR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.30",
+      "valors_step": null,
+      "increment_base": "1.30",
+      "increment_break": "1.30",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "POM-041",
+        "codi_client": "THI"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": "1.40",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-492",
+        "codi_client": "V"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": "1.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": "1.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-006",
+        "codi_client": "AC SH"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.10",
+      "valors_step": null,
+      "increment_base": "1.10",
+      "increment_break": "1.10",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "1.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "1.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.50",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-521",
+        "codi_client": "C3"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": "2.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": "2.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-386",
+        "codi_client": "D.11-M79"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": "1.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-680",
+        "codi_client": "G.3"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": "1.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-681",
+        "codi_client": "H.12"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "1.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": "2.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "3.00",
+      "valors_step": null,
+      "increment_base": "3.00",
+      "increment_break": "3.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": "0.50",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "0.50",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "0.50",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": "0.40",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": "0.30",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": "2.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-020",
+        "codi_client": "SL"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "3.40",
+      "valors_step": null,
+      "increment_base": "3.40",
+      "increment_break": "1.30",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-025",
+        "codi_client": "SL OP"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": "0.50",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Knit — Tops",
+      "pom": {
+        "pom_global": "POM-003",
+        "codi_client": "WA"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.50",
+      "valors_step": null,
+      "increment_base": "1.50",
+      "increment_break": "2.00",
+      "talla_break_label": "14",
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Stretch — Swimwear",
+      "pom": {
+        "pom_global": "LOSPOM-515",
+        "codi_client": "A"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Stretch — Swimwear",
+      "pom": {
+        "pom_global": "LOSPOM-516",
+        "codi_client": "A3"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.60",
+      "valors_step": null,
+      "increment_base": "0.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Stretch — Swimwear",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Stretch — Swimwear",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Stretch — Swimwear",
+      "pom": {
+        "pom_global": "LOSPOM-520",
+        "codi_client": "B3"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.60",
+      "valors_step": null,
+      "increment_base": "1.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Stretch — Swimwear",
+      "pom": {
+        "pom_global": "LOSPOM-548",
+        "codi_client": "H8"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.60",
+      "valors_step": null,
+      "increment_base": "0.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Stretch — Swimwear",
+      "pom": {
+        "pom_global": "LOSPOM-544",
+        "codi_client": "M19"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Stretch — Swimwear",
+      "pom": {
+        "pom_global": "POM-056",
+        "codi_client": "RI BK"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Stretch — Swimwear",
+      "pom": {
+        "pom_global": "POM-055",
+        "codi_client": "RI FR"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Stretch — Swimwear",
+      "pom": {
+        "pom_global": "POM-011",
+        "codi_client": "SS"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "0.40",
+      "valors_step": null,
+      "increment_base": "0.40",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Teen Girl Stretch — Swimwear",
+      "pom": {
+        "pom_global": "POM-003",
+        "codi_client": "WA"
+      },
+      "talla_base": {
+        "size_system": "YOUTH_GIRL_LOS_01",
+        "etiqueta": "8"
+      },
+      "logica": "LINEAR",
+      "increment": "1.60",
+      "valors_step": null,
+      "increment_base": "1.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "1.60",
+      "valors_step": null,
+      "increment_base": "1.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "1.60",
+      "valors_step": null,
+      "increment_base": "1.60",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-006",
+        "codi_client": "AC SH"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "3.00",
+      "valors_step": null,
+      "increment_base": "3.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "1.30",
+      "valors_step": null,
+      "increment_base": "1.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "LOSPOM-382",
+        "codi_client": "S1-M76"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "3.00",
+      "valors_step": null,
+      "increment_base": "3.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-020",
+        "codi_client": "SL"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Knit — Tops",
+      "pom": {
+        "pom_global": "POM-025",
+        "codi_client": "SL OP"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "S"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-487",
+        "codi_client": "BR"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-522",
+        "codi_client": "CL"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-386",
+        "codi_client": "D.11-M79"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-529",
+        "codi_client": "D22"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-042",
+        "codi_client": "KNE"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.70",
+      "valors_step": null,
+      "increment_base": "0.70",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-043",
+        "codi_client": "LEG OP"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.50",
+      "valors_step": null,
+      "increment_base": "0.50",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-594",
+        "codi_client": "O20"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-390",
+        "codi_client": "O.21-M79"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-596",
+        "codi_client": "O25"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-603",
+        "codi_client": "O29"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-604",
+        "codi_client": "O30"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-395",
+        "codi_client": "O.32-M79"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.20",
+      "valors_step": null,
+      "increment_base": "0.20",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-542",
+        "codi_client": "R9"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.30",
+      "valors_step": null,
+      "increment_base": "0.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-056",
+        "codi_client": "RI BK"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "1.30",
+      "valors_step": null,
+      "increment_base": "1.30",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-055",
+        "codi_client": "RI FR"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.80",
+      "valors_step": null,
+      "increment_base": "0.80",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-564",
+        "codi_client": "S13"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-565",
+        "codi_client": "S25"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-670",
+        "codi_client": "S.R6"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "LOSPOM-671",
+        "codi_client": "S.R7"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-041",
+        "codi_client": "THI"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "1.00",
+      "valors_step": null,
+      "increment_base": "1.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-003",
+        "codi_client": "WA"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "2.00",
+      "valors_step": null,
+      "increment_base": "2.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    },
+    {
+      "rule_set": "LOS Woman Woven — Bottoms",
+      "pom": {
+        "pom_global": "POM-052",
+        "codi_client": "WB H"
+      },
+      "talla_base": {
+        "size_system": "WOMAN_NUM_LOS_01",
+        "etiqueta": "38"
+      },
+      "logica": "LINEAR",
+      "increment": "0.00",
+      "valors_step": null,
+      "increment_base": "0.00",
+      "increment_break": null,
+      "talla_break_label": null,
+      "actiu": true
+    }
+  ]
+}
