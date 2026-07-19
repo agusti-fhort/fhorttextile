@@ -63,3 +63,23 @@ export function useGarmentCatalog(target) {
 
   return { groups, familiesOf, families, loading }
 }
+
+// useGarmentGroups — TOTS els grups actius de la BD (registre normalitzat + ordenat pel vocabulari),
+// SENSE filtre de target ni de famílies. Per a superfícies d'ADMINISTRACIÓ del catàleg (Garment Types
+// CRUD) que gestionen tots els grups, també els encara buits. Mateixa font (/garment-groups/) i mateixa
+// normalització d'etiquetes que la cascada.
+export function useGarmentGroups() {
+  const [registry, setRegistry] = useState([])
+  useEffect(() => {
+    let alive = true
+    garmentGroups.list({ page_size: 200 })
+      .then(r => { if (alive) setRegistry(r.data?.results ?? r.data ?? []) })
+      .catch(() => { if (alive) setRegistry([]) })
+    return () => { alive = false }
+  }, [])
+  return useMemo(() => registry
+    .filter(g => g.actiu !== false)
+    .map(g => normGroup(g.codi, g.nom))
+    .sort((a, b) => (ORDER.indexOf(a.codi) + 1 || 999) - (ORDER.indexOf(b.codi) + 1 || 999)),
+    [registry])
+}
