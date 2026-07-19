@@ -796,10 +796,10 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
       if (tIds.length) { payload.targets = tIds; payload.target = tIds[0] }
       if (cId != null) payload.construction = cId
       if (fId != null) payload.fit_type = fId
-      // D1 — abast NOMÉS si l'usuari l'ha tocat (llavors backend: apply_scope_nodes + garment_group=None).
-      // Si no, no s'envia → PATCH parcial deixa l'abast (scope_nodes o garment_group) intacte.
-      if (scopeTouched) payload.applies_to = scope.map(({ label, ...n }) => n)
-      if (sizeSystemTouched && sizeSystemId) payload.size_system = Number(sizeSystemId)
+      // Abast: en EDICIÓ (PATCH) només si l'usuari l'ha tocat (D1: no tocar → intacte). En CREACIÓ/CLON
+      // sempre s'envia el prefill sencer (D3: el clon HEREDA l'abast + targets del ruleset original).
+      if (scopeTouched || !isEdit) payload.applies_to = scope.map(({ label, ...n }) => n)
+      if ((sizeSystemTouched || !isEdit) && sizeSystemId) payload.size_system = Number(sizeSystemId)
     }
     // Seed (no editable): s'ometen els eixos → el PATCH els deixa intactes (el guard del serializer
     // els blinda igualment). Un possible canvi de nom/actiu no els toca.
