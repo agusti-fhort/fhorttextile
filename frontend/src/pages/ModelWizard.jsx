@@ -6,7 +6,7 @@ import CustomerSelector from '../components/CustomerSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
 import { availableFitsStrict, TARGETS, CONSTRUCTIONS } from '../components/grading/gradingAxes'
 import useAuthStore from '../store/auth'
-import { models, sizeSystems, customers, gradingRuleSets, garmentGroups } from '../api/endpoints'
+import { models, sizeSystems, customers, gradingRuleSets, garmentGroups, garmentTypes } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles + GRADUACIÓ.
@@ -88,6 +88,22 @@ export default function ModelWizard() {
   ), [selSystem, selectedSizes, baseSize])
 
   const resetSizing = () => { setSelSystem(null); setSelectedSizes([]); setBaseSize(null); setSizeDefs([]) }
+
+  // Coherència Onada 1+2: en CANVIAR el target, si la família seleccionada ja no és al catàleg filtrat
+  // pel nou target, es neteja família+item (+graduació, que en depèn del garment). Si SÍ hi és, es
+  // conserva (no molestar l'usuari). Comprovació amb el MATEIX endpoint que la cascada compartida
+  // (garment-types/?target=) i NOMÉS en acció d'usuari — el prefill d'edició no passa per aquí.
+  const onPickTarget = (codi) => {
+    if (codi === target) return
+    setTarget(codi)
+    if (!family) return
+    garmentTypes.list({ target: codi, actiu: 'true', page_size: 500 })
+      .then(r => {
+        const fams = r.data?.results ?? r.data ?? []
+        if (!fams.some(f => f.id === family.id)) { setFamily(null); setItem(null); resetGrading() }
+      })
+      .catch(() => {})
+  }
 
   // Peça 4 — en edició, si el model ja tenia run i el sistema de talles del perfil triat
   // és DIFERENT del que té el model, la talla base no s'autoassigna i és obligatòria.
@@ -350,7 +366,7 @@ export default function ModelWizard() {
             <Field label={t('model_wizard.target')}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {TARGETS.map(tg => (
-                  <Chip key={tg.codi} active={target === tg.codi} onClick={() => setTarget(tg.codi)}>{t(`model_wizard.target_${tg.codi}`)}</Chip>
+                  <Chip key={tg.codi} active={target === tg.codi} onClick={() => onPickTarget(tg.codi)}>{t(`model_wizard.target_${tg.codi}`)}</Chip>
                 ))}
               </div>
             </Field>
