@@ -339,3 +339,26 @@ lectors** de `codi_client`, no en el matcher. Res irreversible.
 - **Atribució customer** dels `codi_client` sense `origen_import` net: PENDENT DE VERIFICAR per model.
 - No s'ha auditat si el camí Library (`extraction_views.py:1121`) i l'acció xat (`views.py:1307`)
   necessiten àlies o els basta el codi canònic — revisar en fase matcher.
+
+---
+
+## Watchpoints master_delta (2026-07-19 · sembra 4 cel·les Knit Tops)
+
+Detectats en sembrar el delta (resolutor àlies-preferent + candidats enfosquits). Deute de catàleg, no bloquejant:
+
+- **a) ⭐ PRIORITARI — parell duplicat ACTIU-ACTIU `BJ`:** DOS `POMMaster` actius amb `codi_client='BJ'` i
+  el mateix nom (`FRONT & BACK WIDTH LOCATION`). Consolidate no els va fusionar. Pitjor que un orfe: pot
+  rebre escriptures per les dues bandes. Cal fusionar/desambiguar.
+- **b) `AJ → S1-M76 'Collar Width (Neck Tie Length)'`:** a OVIEDO/AVILA `AJ`=COLLAR WIDTH amb base 6 cm;
+  "neck tie length" suggereix una altra mesura. Increment 0 → sense efecte a la graduació, però el concepte
+  s'ha de revisar.
+- **c) Noms canònics que despisten en context de tops:** `E → SK SW 'Skirt sweep'` i `D → HI PA 'Hip width
+  (pants)'`. Coherents amb els 14 v3 (NO tocar el codi), però mereixen `descripcio_local` (ca) que no
+  confongui el tècnic.
+- **d) Col·lisions de `codi_client` (candidats enfosquits del seeder):** `U1` (pom 513 JETTING WIDTH via
+  àlies vs 440 'Height sequins piece (CF)') · `A.1`/`A.2` (prims inactius + orfes vs canònics AC FR/AC BK) ·
+  `T.5` (orfe 'EARS MEASUREMENT' vs HM L) · `D` ('1/2 bottom width relaxed' + inactiu) · `H` (2 prims
+  inactius) · `H11` (inactiu) · `K.2` (inactiu) · `U` ('Width sequins piece' vs RIB WIDTH).
+- **e) COBERTURA (no nomenclatura): `LOS Man Knit — Tops` sense regla de `G` (màniga llarga).** Les 6 fitxes
+  d'home són de màniga curta. Afecta 1 model SWEATSHIRT dels 48 → resoldre amb `ModelGradingOverride` o una
+  fitxa de dessuadora quan arribi.
