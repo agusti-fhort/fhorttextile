@@ -549,6 +549,103 @@ def cerca_contenidor_client(customer, size_system, garment_type_item, fit_type):
     ).order_by('id').first())
 
 
+def _scope_matches(rs, garment_group_codi, garment_type_id, garment_type_item_id):
+    """Mirall EXACTE de scopeApplies(strict) del frontend (gradingAxes.js:88-102): sense
+    scope_nodes → fallback al garment_group FK (per CODI); amb scope_nodes → casa si algun node
+    ITEM/TYPE/GROUP coincideix amb l'eix corresponent. Mateixes laxituds (eixos NULL no casen)."""
+    nodes = list(rs.scope_nodes.all())
+    if not nodes:
+        return rs.garment_group_id is not None and rs.garment_group.codi == garment_group_codi
+    for n in nodes:
+        if (n.node_type == 'ITEM' and garment_type_item_id is not None
+                and n.garment_type_item_id == garment_type_item_id):
+            return True
+        if (n.node_type == 'TYPE' and garment_type_id is not None
+                and n.garment_type_id == garment_type_id):
+            return True
+        if (n.node_type == 'GROUP' and garment_group_codi
+                and n.garment_group_id is not None and n.garment_group.codi == garment_group_codi):
+            return True
+    return False
+
+
+def resolve_grading_container(customer, size_system, target, construction, fit_type,
+                             garment_group, garment_type_item=None):
+    """MATCHER ÚNIC de contenidor de grading per al camí d'import (M1, sprint MATCHER UNIFICAT).
+
+    La semàntica de MATCHING d'eixos és IDÈNTICA a matchingRuleSetsStrict del frontend
+    (gradingAxes.js:151-162): mateixos eixos i laxituds — `targets` no-buit i inclou `target`,
+    `construction`/`fit_type`/`size_system` coincidents i no-NULL, i abast per les DUES formes
+    (garment_group FK o scope_nodes ITEM/TYPE/GROUP, via `_scope_matches`). Sobre aquest predicat,
+    la LLEI DEL CONTENIDOR imposa prioritat i confidencialitat:
+
+      NIVELL 1 (identitat dura, EXCEPCIÓ): contenidor CLIENT_RUN actiu amb `garment_type_item`
+               EXACTE — la identitat de `cerca_contenidor_client`
+               (customer + size_system + garment_type_item + fit_type). NO passa pel predicat
+               d'eixos/abast (és identitat, no disponibilitat). Només s'avalua si hi ha item.
+      NIVELL 2 (ampli): si el nivell 1 no en té, contenidor AMPLI (`garment_type_item` IS NULL)
+               del MATEIX client (RUN-CLIENT: MAI d'un altre client) que casi el predicat d'eixos
+               + abast.
+      NIVELL 3: cap → None.
+
+    GUARDA D'AMBIGÜITAT: si un nivell retorna >1 candidat, NO es resol (mai el primer
+    arbitràriament): motiu='ambiguous' amb la llista de candidats.
+
+    Paràmetres: `customer`/`size_system` = instàncies imprescindibles. `fit_type` = instància
+    FitType (o None) — s'usa com a FK a la identitat i com a `.codi` al predicat. `target`,
+    `construction`, `garment_group` = CODIS (str), igual que els eixos del frontend.
+    `garment_type` (per als nodes TYPE) es DERIVA de `garment_type_item`.
+
+    Retorna un dict {'container': GradingRuleSet|None, 'motiu': str, 'candidats': list}
+    amb motiu ∈ {'exact','ampli','none','ambiguous'}.
+    """
+    from fhort.pom.models import GradingRuleSet
+    if not (customer and size_system):
+        return {'container': None, 'motiu': 'none', 'candidats': []}
+
+    gti_id = getattr(garment_type_item, 'id', None)
+    gt_id = getattr(garment_type_item, 'garment_type_id', None)
+
+    # ── NIVELL 1 — identitat dura (només amb item). Mateix filtre que cerca_contenidor_client.
+    if gti_id is not None:
+        nivell1 = list(GradingRuleSet.objects.filter(
+            origen=GradingRuleSet.ORIGEN_CLIENT_RUN, actiu=True,
+            customer=customer, size_system=size_system,
+            garment_type_item=garment_type_item, fit_type=fit_type,
+        ).order_by('id'))
+        if len(nivell1) > 1:
+            return {'container': None, 'motiu': 'ambiguous', 'candidats': nivell1}
+        if len(nivell1) == 1:
+            return {'container': nivell1[0], 'motiu': 'exact', 'candidats': nivell1}
+
+    # ── NIVELL 2 — ampli (item NULL) del MATEIX client amb el predicat d'eixos + abast.
+    fit_codi = getattr(fit_type, 'codi', None)
+    base_qs = GradingRuleSet.objects.filter(
+        origen=GradingRuleSet.ORIGEN_CLIENT_RUN, actiu=True,
+        customer=customer, size_system=size_system,
+        garment_type_item__isnull=True,
+    )
+    if target:
+        base_qs = base_qs.filter(targets__codi=target)      # no-buit + inclou target (paritat frontend)
+    else:
+        return {'container': None, 'motiu': 'none', 'candidats': []}
+    if construction:
+        base_qs = base_qs.filter(construction__codi=construction)
+    else:
+        return {'container': None, 'motiu': 'none', 'candidats': []}
+    if fit_codi:
+        base_qs = base_qs.filter(fit_type__codi=fit_codi)
+    else:
+        return {'container': None, 'motiu': 'none', 'candidats': []}
+    candidats = [rs for rs in base_qs.distinct().prefetch_related('scope_nodes', 'targets')
+                 if _scope_matches(rs, garment_group, gt_id, gti_id)]
+    if len(candidats) > 1:
+        return {'container': None, 'motiu': 'ambiguous', 'candidats': candidats}
+    if len(candidats) == 1:
+        return {'container': candidats[0], 'motiu': 'ampli', 'candidats': candidats}
+    return {'container': None, 'motiu': 'none', 'candidats': []}
+
+
 def rule_to_spec(r):
     """Normalitza una GradingRule (regla de contenidor) al mateix SPEC dict que la detecció."""
     return {
