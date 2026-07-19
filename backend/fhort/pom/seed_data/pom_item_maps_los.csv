@@ -11,7 +11,7 @@ U.1,"t_shirt,vest_top,top_sleeveless,dress_simple,baby_top,baby_bodysuit",SOFT/B
 AJ,"shirt_woven,blouse,overshirt,uniform_shirt,vest_top,t_shirt,polo",ALONSO collar · VEST · DANIELA
 S.2,"shirt_woven,blouse,overshirt,uniform_shirt",ALONSO collar band
 S.37,"shirt_woven,blouse,overshirt,uniform_shirt",ALONSO collar peak
-S.35,"baby_top,baby_sleepsuit",RIZO/MIMOSO collar piece
+S.35,"baby_top,baby_sleepsuit",RIZO/MIMOSO collar piece [gap]
 S.4,"shirt_woven,blouse,overshirt,uniform_shirt",ALONSO placket width
 S.3,baby_sleepsuit,MIMOSO placket length
 S.5,"shirt_woven,blouse,overshirt,trousers,jeans,shorts,tracksuit_pant,baby_top,baby_sleepsuit",ALONSO/JEREMY/RIZO/MIMOSO cuff height
@@ -24,7 +24,7 @@ C.1,"trousers,jeans,shorts,tracksuit_pant,baby_leggings",JEREMY/TARRAGONA/RIZO/Z
 C.4,"trousers,jeans,shorts,tracksuit_pant,baby_leggings",id. waist relaxed
 C.11,"trousers,jeans,shorts,tracksuit_pant,baby_leggings",waistband height
 C.12,"trousers,jeans,shorts,tracksuit_pant,baby_leggings",JEREMY/SAFARI inner elastic
-C.13,"trousers,jeans,shorts,tracksuit_pant,baby_leggings",JEREMY/TARRAGONA/ZEBRA buttonhole
+C.13,"trousers,jeans,shorts,tracksuit_pant,baby_leggings",JEREMY/TARRAGONA/ZEBRA buttonhole [gap]
 CL,trousers,BUDAPEST waist join
 D.1,"trousers,jeans,shorts,tracksuit_pant,baby_leggings,baby_sleepsuit",thigh width (totes bottoms + MIMOSO)
 D.2,"trousers,jeans,shorts,tracksuit_pant,baby_leggings",knee width
@@ -43,8 +43,8 @@ R.9,"trousers,jeans",ENRIC/BUDAPEST fly opening
 R.10,jeans,TARRAGONA false fly
 R2,"baby_sleepsuit,bikini,swimsuit",MIMOSO strap · bany
 S.R1,"trousers,tracksuit_pant,shorts,baby_leggings",JEREMY/TARRAGONA/SAFARI cord
-S.R6,"trousers,jeans",ENRIC/TARRAGONA/BUDAPEST loop length
-S.R7,"trousers,jeans",id. loop width
+S.R6,"trousers,jeans",ENRIC/TARRAGONA/BUDAPEST loop length [gap]
+S.R7,"trousers,jeans",id. loop width [gap]
 O.16,"trousers,jeans,shorts,tracksuit_pant,vest_top,baby_sleepsuit",JEREMY/VEST/MIMOSO pocket opening
 O.18,vest_top,VEST pocket flap
 O.19,jeans,TARRAGONA pocket width extended
@@ -68,12 +68,12 @@ S.40,baby_sleepsuit,id. front foot length [POM NOU]
 S.44,baby_bodysuit,LUZ front motive location
 AW,baby_top,GLACIAR chest motive location
 V,trousers,GALA stitching width
-V.9,baby_leggings,RIZO elastic location
+V.9,baby_leggings,RIZO elastic location [gap]
 V.10,baby_leggings,id. elastic relaxed
 V.11,baby_leggings,id. elastic extended
 V.12,"baby_leggings,baby_sleepsuit",RIZO/PINGU fold
-CB,baby_top,RIZO/ZEBRA front cut location
-EV,baby_leggings,RIZO waist height stitching
+CB,baby_top,RIZO/ZEBRA front cut location [gap]
+EV,baby_leggings,RIZO waist height stitching [gap]
 GA,"t_shirt,blouse",DANIELA sleeve inseam
 B3,"bikini,swimsuit",CRUZADO front chest [POM NOU si no existeix]
 B4,"bikini,swimsuit",CRUZADO back chest [gap diccionari]

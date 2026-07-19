@@ -139,11 +139,12 @@ class Command(BaseCommand):
         for r in rows:
             code = r['codi'].strip()
             prim = self._prim_by_alias_or_codi(code)
-            # només prims LOS traduïbles: sense pom_global o amb el nostre LOSPOM-
+            # només prims LOS traduïbles: LOS-aliased i NO ja canònic (pom_global no-LOSPOM).
+            # (No es filtra per garment_maps: un prim LOS pot tenir maps de la fase maps i encara
+            # necessitar traducció — els canònics ja els exclou la condició de pom_global.)
             if (not prim or prim.id in seen
                     or not CustomerPOMAlias.objects.filter(customer=self.los, pom=prim).exists()
-                    or (prim.pom_global_id and not prim.pom_global.codi.startswith('LOSPOM-'))
-                    or prim.garment_maps.count() > 0):
+                    or (prim.pom_global_id and not prim.pom_global.codi.startswith('LOSPOM-'))):
                 no_prim.append(code)
                 continue
             seen.add(prim.id)
@@ -162,8 +163,7 @@ class Command(BaseCommand):
         # prims COMPLETAR sense traducció
         fus_ids = self._fusion_prim_ids()
         prims = [m for m in POMMaster.objects.filter(pom_global__isnull=True)
-                 if m.garment_maps.count() == 0
-                 and CustomerPOMAlias.objects.filter(customer=self.los, pom=m).exists()]
+                 if CustomerPOMAlias.objects.filter(customer=self.los, pom=m).exists()]
         completar = [m for m in prims if m.id not in fus_ids]
         sense = [f'{m.codi_client}(id{m.id})' for m in completar if m.id not in seen]
         self.stdout.write(f'\n  RESUM translate: {done} traduïts · {len(no_prim)} files CSV sense prim · '
