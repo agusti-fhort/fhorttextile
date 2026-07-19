@@ -1,0 +1,87 @@
+codi,descripcio_en_fitxa,traduccio_ca
+BJ,FRONT & BACK WIDTH LOCATION,Posició d'amples davant i esquena
+M-M79,TOTAL LENGTH,Llargada total
+M.4,CUT LOCATION,Posició del tall
+M.8,SIDE LENGTH,Llargada lateral
+M.19,FRONT LENGTH,Llargada davant
+M.20,BACK LENGTH,Llargada esquena
+L.1,NECK TOTAL,Coll total
+U,RIB WIDTH,Ample de canaló
+U.1,JETTING WIDTH,Ample de viu
+AJ,COLLAR WIDTH,Ample de coll
+S.2,COLLAR BAND HEIGHT AT CENTER,Alçada de tira de coll al centre
+S.37,COLLAR PEAK,Punta de coll
+S.35,COLLAR PIECE WIDTH,Ample de peça de coll
+S.4,PLACKET WIDTH,Ample de tapeta
+S.3,PLACKET LENGTH,Llargada de tapeta
+S.5,CUFF HEIGHT,Alçada de puny
+H.17,CUFF LENGTH,Llargada de puny
+H.16,CUFF/LEG OPENING,Obertura de puny o camal
+H.15,WIDTH BEFORE CUFF EXTENDED,Ample abans del puny estès
+J.2,SHOULDER MOVE FORWARD,Avançament d'espatlla
+E.8,BOTTOM DIFERENCE,Diferència de baixos
+C.1,WAIST WIDTH EXTENDED,Cintura estesa
+C.4,WAIST WIDTH RELAXED,Cintura relaxada
+C.11,WAISTBAND HEIGHT,Alçada de cinturilla
+C.12,INNER ELASTIC WAIST LOCATION,Posició elàstic interior de cintura
+C.13,BUTTONHOLE LOCATION,Posició del trau
+CL,WAIST JOIN,Unió de cintura
+D.1,THIGH WIDTH,Ample de cuixa
+D.2,KNEE WIDTH,Ample de genoll
+D.22,KNEE LOCATION,Posició de genoll
+D.11,HIP LOCATION,Posició de maluc
+D.18,FRONT CROTCH WIDTH LOCATION,Posició ample entrecames davant
+D.19,BACK CROTCH WIDTH LOCATION,Posició ample entrecames esquena
+D.6,FRONT CROTCH WIDTH,Ample entrecames davant
+D.7,BACK CROTCH WIDTH,Ample entrecames esquena
+D.20,CROTCH LENGTH,Llargada d'entrecames
+F.5,LEG OPENING RELAXED,Camal relaxat
+F.6,LEG OPENING EXTENDED,Camal estès
+T.5,HALF MOON / EARS,Mitja lluna / orelles
+R.8,FLY WIDTH,Ample de bragueta
+R.9,FLY OPENING,Obertura de bragueta
+R.10,FALSE FLY,Bragueta falsa
+R2,STRAP WIDTH,Ample de tirant
+S.R1,CORD LENGTH IN OUTSIDE,Llargada de cordó exterior
+S.R6,LOOP LENGTH,Llargada de trava
+S.R7,LOOP WIDTH,Ample de trava
+O.16,FRONT POCKET OPENING,Obertura butxaca davant
+O.18,FRONT POCKET FLAP WIDTH,Ample de tapa de butxaca davant
+O.19,FRONT POCKET WIDTH EXTENDED,Ample butxaca davant estesa
+O.20,FRONT POCKET WIDTH,Ample butxaca davant
+O.21,FRONT POCKET LENGTH,Llargada butxaca davant
+O.23,FRONT POCKET LOCATION,Posició butxaca davant
+O.25,FRONT POCKET LINING LENGTH,Llargada folre butxaca davant
+O.29,BACK POCKET WIDTH,Ample butxaca esquena
+O.30,BACK POCKET LENGTH,Llargada butxaca esquena
+O.32,BACK POCKET LOCATION,Posició butxaca esquena
+S.13,BACK YOKE CENTER LENGTH,Llargada canesú esquena al centre
+S.25,SIDE YOKE,Canesú lateral
+S.10,HOOD LENGTH,Llargada de caputxa
+S.11,HOOD WIDTH,Ample de caputxa
+S.53,HOOD WIDTH LOCATION,Posició ample de caputxa
+S.56,HOOD PIECE WIDTH,Ample de peça de caputxa
+S.19,FOOT LENGTH,Llargada de peu
+S.20,FOOT WIDTH,Ample de peu
+S.39,FOOT WIDTH LOCATION,Posició ample de peu
+S.40,FRONT FOOT LENGTH,Llargada de peu davant
+S.44,FRONT MOTIVE LOCATION,Posició de motiu davant
+AW,CHEST MOTIVE LOCATION,Posició de motiu al pit
+V,STITCHING WIDTH,Ample de pespunt
+V.9,ELASTIC LOCATION,Posició d'elàstic
+V.10,ELASTIC RELAXED,Elàstic relaxat
+V.11,ELASTIC EXTENDED,Elàstic estès
+V.12,FOLD,Doblec
+CB,FRONT CUT LOCATION,Posició de tall davant
+EV,WAIST HEIGHT STITCHING,Pespunt d'alçada de cintura
+GA,SLEEVE INSEAM LENGTH,Llargada interior de màniga
+B3,FRONT CHEST WIDTH,Ample de pit davant
+B4,BACK CHEST WIDTH,Ample de pit esquena
+E.1,FRONT BOTTOM WIDTH,Ample de baixos davant
+E.2,BACK BOTTOM WIDTH,Ample de baixos esquena
+M.1,FRONT LENGTH CENTER,Llargada davant al centre
+R.1,STRAP LENGTH,Llargada de tirant
+R.3,STRAP LOCATION,Posició de tirant
+Z,FRILL LENGTH,Llargada de volant
+SR9,BOW WIDTH,Ample de llaç
+SR10,BOW LENGTH,Llargada de llaç
