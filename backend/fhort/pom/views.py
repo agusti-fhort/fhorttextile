@@ -114,6 +114,20 @@ class GarmentTypeViewSet(viewsets.ModelViewSet):
     search_fields = ['codi_client', 'nom_client']
     ordering = ['codi_client']
 
+    def get_queryset(self):
+        # `?target=<codi>` — cascada del wizard: només les famílies COMPATIBLES amb el target.
+        # La compatibilitat target↔família viu a SizingProfile (target + garment_type poblats a
+        # staging); `GarmentType.targets_recomanats` és buit i NO és la font (vegeu
+        # docs/diagnosis/DIAGNOSI_WIZARD_CASCADA_TARGET.md). Sense `target` → catàleg complet.
+        qs = super().get_queryset()
+        target = self.request.query_params.get('target')
+        if target:
+            from fhort.pom.models import SizingProfile
+            qs = qs.filter(id__in=SizingProfile.objects
+                           .filter(target__codi=target)
+                           .values('garment_type'))
+        return qs
+
     def get_permissions(self):
         # Lectura: autenticat. Escriptura: configure (alineat amb GarmentTypeItem/TaskTimeEstimate).
         if self.action in ('list', 'retrieve'):
