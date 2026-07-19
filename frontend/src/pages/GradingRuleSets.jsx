@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import AxesSelector from '../components/grading/AxesSelector'
+import ScopeSelector from '../components/grading/ScopeSelector'
 import SizeAuthoringDrawer from '../components/SizeAuthoringDrawer'
 import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn } from '../components/grading/gradingAxes'
 
@@ -717,6 +718,21 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
   })
   const [saving, setSaving] = useState(false)
 
+  // ABAST (D1 · convergència per atrició): l'editor LLEGEIX les dues formes — scope_nodes (applies_to)
+  // o, si buit, el garment_group FK convertit a un node GROUP — i les presenta unificades al
+  // ScopeSelector. Només s'envia si l'usuari el TOCA (scopeTouched); llavors el backend reemplaça
+  // scope_nodes i buida garment_group (una sola font). Size system: igual, només si es toca.
+  const nodeLabel = (n) => n.group_codi
+    || (n.garment_type_item_id ? `#${n.garment_type_item_id}` : n.garment_type_id ? `#${n.garment_type_id}` : '?')
+  const initialScope = rs?.applies_to?.length
+    ? rs.applies_to.map(n => ({ ...n, label: nodeLabel(n) }))
+    : (rs?.garment_group_codi ? [{ node_type: 'GROUP', group_codi: rs.garment_group_codi, label: rs.garment_group_codi }] : [])
+  const [scope, setScope] = useState(initialScope)
+  const [scopeTouched, setScopeTouched] = useState(false)
+  const [sizeSystemId, setSizeSystemId] = useState(rs?.size_system ?? '')
+  const [sizeSystemTouched, setSizeSystemTouched] = useState(false)
+  const [sizeSystemsList, setSizeSystemsList] = useState([])
+
   // F-2 — els seeds ISO (is_system_default) NO són editables als eixos (protecció; el guard dur
   // viu al serializer). Creació nova o ruleset de client → eixos editables. Els lookups S2
   // (targets/construction-types/fit-types) resolen codi→id per desar els FK.
@@ -727,8 +743,10 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
     let alive = true
     const get = (p) => fetch(`${API}/api/v1/${p}`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : { results: [] }).then(d => d.results || [])
-    Promise.all([get('targets/'), get('construction-types/'), get('fit-types/')])
-      .then(([targets, constructions, fits]) => { if (alive) setLookups({ targets, constructions, fits }) })
+    Promise.all([get('targets/'), get('construction-types/'), get('fit-types/'), get('size-systems/?page_size=200')])
+      .then(([targets, constructions, fits, systems]) => {
+        if (alive) { setLookups({ targets, constructions, fits }); setSizeSystemsList(systems) }
+      })
       .catch(() => {})
     return () => { alive = false }
   }, [axesEditable])
@@ -759,6 +777,10 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
       if (tIds.length) { payload.targets = tIds; payload.target = tIds[0] }
       if (cId != null) payload.construction = cId
       if (fId != null) payload.fit_type = fId
+      // D1 — abast NOMÉS si l'usuari l'ha tocat (llavors backend: apply_scope_nodes + garment_group=None).
+      // Si no, no s'envia → PATCH parcial deixa l'abast (scope_nodes o garment_group) intacte.
+      if (scopeTouched) payload.applies_to = scope.map(({ label, ...n }) => n)
+      if (sizeSystemTouched && sizeSystemId) payload.size_system = Number(sizeSystemId)
     }
     // Seed (no editable): s'ometen els eixos → el PATCH els deixa intactes (el guard del serializer
     // els blinda igualment). Un possible canvi de nom/actiu no els toca.
@@ -822,7 +844,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
         onClick={e => e.stopPropagation()}
         style={{
           background: 'var(--white)', borderRadius: 12, padding: 24,
-          width: '100%', maxWidth: 480,
+          width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto',
           boxShadow: '0 10px 40px rgba(0,0,0,0.18)',
         }}
       >
@@ -843,6 +865,27 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
         />
         <F label={t('grading.field_construction_ref')} field="construction_codi_form" options={CONSTRUCTIONS} disabled={!axesEditable} />
         <F label={t('grading.field_fit_ref')} field="fit_type_codi_form" options={FITS} disabled={!axesEditable} />
+        {axesEditable && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+              {t('scope.label')}
+            </label>
+            <ScopeSelector value={scope} onChange={nodes => { setScope(nodes); setScopeTouched(true) }} />
+          </div>
+        )}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+            {t('grading.field_size_system')}
+          </label>
+          <select
+            value={sizeSystemId || ''} disabled={!axesEditable}
+            onChange={e => { setSizeSystemId(e.target.value); setSizeSystemTouched(true) }}
+            style={modalInput}
+          >
+            <option value="">{t('grading.select_placeholder')}</option>
+            {sizeSystemsList.map(s => <option key={s.id} value={s.id}>{s.codi} · {s.nom}</option>)}
+          </select>
+        </div>
         {!axesEditable && (
           <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)', margin: '4px 0 12px' }}>
             {t('grading.modal_note')}

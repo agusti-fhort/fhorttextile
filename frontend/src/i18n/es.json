@@ -2921,6 +2921,7 @@
     "field_target_ref": "Target",
     "field_construction_ref": "Construction",
     "field_fit_ref": "Fit Type",
+    "field_size_system": "Size System",
     "modal_note": "Los seeds del sistema (ISO) no permiten editar los ejes.",
     "col": {
       "code": "Código",
