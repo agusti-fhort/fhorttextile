@@ -1,0 +1,3942 @@
+{
+  "layer": "pom_masters",
+  "count": 246,
+  "rows": [
+    {
+      "key": {
+        "pom_global": "LOSPOM-515",
+        "codi_client": "A"
+      },
+      "pom_global": "LOSPOM-515",
+      "codi_client": "A",
+      "nom_client": "FRONT WIDTH LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-516",
+        "codi_client": "A3"
+      },
+      "pom_global": "LOSPOM-516",
+      "codi_client": "A3",
+      "nom_client": "BACK WIDTH LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-584",
+        "codi_client": "AB"
+      },
+      "pom_global": "LOSPOM-584",
+      "codi_client": "AB",
+      "nom_client": "CONTOUR COLLAR TOTAL",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "pom_global": "POM-008",
+      "codi_client": "AC BK",
+      "nom_client": "Across back",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "pom_global": "POM-007",
+      "codi_client": "AC FR",
+      "nom_client": "Across front",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-006",
+        "codi_client": "AC SH"
+      },
+      "pom_global": "POM-006",
+      "codi_client": "AC SH",
+      "nom_client": "Across shoulder (back)",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-013",
+        "codi_client": "AH CIRC"
+      },
+      "pom_global": "POM-013",
+      "codi_client": "AH CIRC",
+      "nom_client": "Armhole circumference",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "pom_global": "POM-012",
+      "codi_client": "AH DEP",
+      "nom_client": "Armhole depth",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": null,
+        "codi_client": "AW"
+      },
+      "pom_global": null,
+      "codi_client": "AW",
+      "nom_client": "ARTWORK POSITION",
+      "categoria": "CAT-UB",
+      "notes": "Creat automàticament per import, fitxa 28fb6e93-6c16-46b9-8ac6-67772dfb9cbd",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "28fb6e93-6c16-46b9-8ac6-67772dfb9cbd",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-520",
+        "codi_client": "B3"
+      },
+      "pom_global": "LOSPOM-520",
+      "codi_client": "B3",
+      "nom_client": "FRONT CHEST WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-652",
+        "codi_client": "B4"
+      },
+      "pom_global": "LOSPOM-652",
+      "codi_client": "B4",
+      "nom_client": "BACK CHEST WIDTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-123",
+        "codi_client": "BELT L"
+      },
+      "pom_global": "POM-123",
+      "codi_client": "BELT L",
+      "nom_client": "Belt length",
+      "categoria": "Accessories",
+      "notes": "Accessory belt. BELT group.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "pom_global": "POM-023",
+      "codi_client": "BIC",
+      "nom_client": "Sleeve width at bicep",
+      "categoria": "Sleeve",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "pom_global": "LOSPOM-514",
+      "codi_client": "BJ",
+      "nom_client": "FRONT&BACK WIDTH LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-010",
+        "codi_client": "BL CB"
+      },
+      "pom_global": "POM-010",
+      "codi_client": "BL CB",
+      "nom_client": "Body length (CB)",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-009",
+        "codi_client": "BL HPS"
+      },
+      "pom_global": "POM-009",
+      "codi_client": "BL HPS",
+      "nom_client": "Body length (HPS front)",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-082",
+        "codi_client": "BL KN RLX"
+      },
+      "pom_global": "POM-082",
+      "codi_client": "BL KN RLX",
+      "nom_client": "Body length (knitwear, relaxed)",
+      "categoria": "Knitwear-specific",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-487",
+        "codi_client": "BR"
+      },
+      "pom_global": "LOSPOM-487",
+      "codi_client": "BR",
+      "nom_client": "FLY WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client BRW (2026-07-13).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:BRW:2026-07-13",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-091",
+        "codi_client": "BTN SP"
+      },
+      "pom_global": "POM-091",
+      "codi_client": "BTN SP",
+      "nom_client": "Button spacing",
+      "categoria": "Closure / Detail",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-524",
+        "codi_client": "C1"
+      },
+      "pom_global": "LOSPOM-524",
+      "codi_client": "C1",
+      "nom_client": "WAIST WIDTH EXTENDED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-617",
+        "codi_client": "C12"
+      },
+      "pom_global": "LOSPOM-617",
+      "codi_client": "C12",
+      "nom_client": "INNER ELASTIC WAIST LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-669",
+        "codi_client": "C.13"
+      },
+      "pom_global": "LOSPOM-669",
+      "codi_client": "C.13",
+      "nom_client": "BUTTONHOLE LOCATION",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-385",
+        "codi_client": "C.14-M79"
+      },
+      "pom_global": "LOSPOM-385",
+      "codi_client": "C.14-M79",
+      "nom_client": "EYELET LOCATION",
+      "categoria": null,
+      "notes": "Creat automàticament des d'importació. Codi original: C.14. Requereix revisió.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "SS26 TROUSERS TWILL (14-26-SS-0002)",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-525",
+        "codi_client": "C2"
+      },
+      "pom_global": "LOSPOM-525",
+      "codi_client": "C2",
+      "nom_client": "FRONT WAIST WIDTH RELAXED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-521",
+        "codi_client": "C3"
+      },
+      "pom_global": "LOSPOM-521",
+      "codi_client": "C3",
+      "nom_client": "WAIST LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-523",
+        "codi_client": "C4"
+      },
+      "pom_global": "LOSPOM-523",
+      "codi_client": "C4",
+      "nom_client": "WAIST WIDTH RELAXED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-526",
+        "codi_client": "C5"
+      },
+      "pom_global": "LOSPOM-526",
+      "codi_client": "C5",
+      "nom_client": "BACK WAIST WIDTH RELAXED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-527",
+        "codi_client": "C6"
+      },
+      "pom_global": "LOSPOM-527",
+      "codi_client": "C6",
+      "nom_client": "BACK WAIST EXTENDED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-673",
+        "codi_client": "CB"
+      },
+      "pom_global": "LOSPOM-673",
+      "codi_client": "CB",
+      "nom_client": "FRONT CUT LOCATION",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "pom_global": "POM-001",
+      "codi_client": "CH",
+      "nom_client": "Chest width",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-002",
+        "codi_client": "CH CIRC"
+      },
+      "pom_global": "POM-002",
+      "codi_client": "CH CIRC",
+      "nom_client": "Chest circumference",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-103",
+        "codi_client": "CH PKT POS"
+      },
+      "pom_global": "POM-103",
+      "codi_client": "CH PKT POS",
+      "nom_client": "Chest pocket position",
+      "categoria": "Jacket / Coat",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-080",
+        "codi_client": "CH RLX"
+      },
+      "pom_global": "POM-080",
+      "codi_client": "CH RLX",
+      "nom_client": "Chest width (relaxed)",
+      "categoria": "Knitwear-specific",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-081",
+        "codi_client": "CH STR"
+      },
+      "pom_global": "POM-081",
+      "codi_client": "CH STR",
+      "nom_client": "Chest width (stretched)",
+      "categoria": "Knitwear-specific",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-522",
+        "codi_client": "CL"
+      },
+      "pom_global": "LOSPOM-522",
+      "codi_client": "CL",
+      "nom_client": "WAIST JOIN",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-034",
+        "codi_client": "COL H CB"
+      },
+      "pom_global": "POM-034",
+      "codi_client": "COL H CB",
+      "nom_client": "Collar height (CB stand)",
+      "categoria": "Collar / Neckline",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-035",
+        "codi_client": "COL H CF"
+      },
+      "pom_global": "POM-035",
+      "codi_client": "COL H CF",
+      "nom_client": "Collar height (CF)",
+      "categoria": "Collar / Neckline",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-033",
+        "codi_client": "COL L"
+      },
+      "pom_global": "POM-033",
+      "codi_client": "COL L",
+      "nom_client": "Collar length",
+      "categoria": "Collar / Neckline",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-150",
+        "codi_client": "CR L"
+      },
+      "pom_global": "POM-150",
+      "codi_client": "CR L",
+      "nom_client": "Crotch length",
+      "categoria": "Rise",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-027",
+        "codi_client": "CUF H"
+      },
+      "pom_global": "POM-027",
+      "codi_client": "CUF H",
+      "nom_client": "Cuff height",
+      "categoria": "Sleeve",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-084",
+        "codi_client": "CUP"
+      },
+      "pom_global": "POM-084",
+      "codi_client": "CUP",
+      "nom_client": "Bust cup depth (calculated)",
+      "categoria": "Upper body",
+      "notes": "Add: ISO §5.7.7. Bra/swimwear development.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-086",
+        "codi_client": "CUP H"
+      },
+      "pom_global": "POM-086",
+      "codi_client": "CUP H",
+      "nom_client": "Bikini top / Bra cup height",
+      "categoria": "Swimwear-specific",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-085",
+        "codi_client": "CUP W"
+      },
+      "pom_global": "POM-085",
+      "codi_client": "CUP W",
+      "nom_client": "Bikini top / Bra cup width",
+      "categoria": "Swimwear-specific",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-386",
+        "codi_client": "D.11-M79"
+      },
+      "pom_global": "LOSPOM-386",
+      "codi_client": "D.11-M79",
+      "nom_client": "HIP LOCATION",
+      "categoria": null,
+      "notes": "Creat automàticament des d'importació. Codi original: D.11. Requereix revisió.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "SS26 TROUSERS TWILL (14-26-SS-0002)",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-538",
+        "codi_client": "D18"
+      },
+      "pom_global": "LOSPOM-538",
+      "codi_client": "D18",
+      "nom_client": "FRONT CROTCH WIDTH LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-540",
+        "codi_client": "D19"
+      },
+      "pom_global": "LOSPOM-540",
+      "codi_client": "D19",
+      "nom_client": "BACK CROTCH WIDTH LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-529",
+        "codi_client": "D22"
+      },
+      "pom_global": "LOSPOM-529",
+      "codi_client": "D22",
+      "nom_client": "KNEE LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-539",
+        "codi_client": "D6"
+      },
+      "pom_global": "LOSPOM-539",
+      "codi_client": "D6",
+      "nom_client": "FRONT CROTCH WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-541",
+        "codi_client": "D7"
+      },
+      "pom_global": "LOSPOM-541",
+      "codi_client": "D7",
+      "nom_client": "BACK CROTCH WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-061",
+        "codi_client": "DR L HPS"
+      },
+      "pom_global": "POM-061",
+      "codi_client": "DR L HPS",
+      "nom_client": "Dress length (HPS)",
+      "categoria": "Skirt / Dress",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-653",
+        "codi_client": "E.1"
+      },
+      "pom_global": "LOSPOM-653",
+      "codi_client": "E.1",
+      "nom_client": "FRONT BOTTOM WIDTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-654",
+        "codi_client": "E.2"
+      },
+      "pom_global": "LOSPOM-654",
+      "codi_client": "E.2",
+      "nom_client": "BACK BOTTOM WIDTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-534",
+        "codi_client": "E3"
+      },
+      "pom_global": "LOSPOM-534",
+      "codi_client": "E3",
+      "nom_client": "BOTTOM WIDTH RELAXED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-535",
+        "codi_client": "E4"
+      },
+      "pom_global": "LOSPOM-535",
+      "codi_client": "E4",
+      "nom_client": "BOTTOM WIDTH EXTENDED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-536",
+        "codi_client": "E5"
+      },
+      "pom_global": "LOSPOM-536",
+      "codi_client": "E5",
+      "nom_client": "FRONT BOTTOM WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-537",
+        "codi_client": "E7"
+      },
+      "pom_global": "LOSPOM-537",
+      "codi_client": "E7",
+      "nom_client": "BOTTOM HEIGHT",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-430",
+        "codi_client": "E.8"
+      },
+      "pom_global": "LOSPOM-430",
+      "codi_client": "E.8",
+      "nom_client": "BOTTOM DIFFERENCE",
+      "categoria": "CAT-UB",
+      "notes": "Creat automàticament per import, fitxa 28fb6e93-6c16-46b9-8ac6-67772dfb9cbd",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "28fb6e93-6c16-46b9-8ac6-67772dfb9cbd",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-683",
+        "codi_client": "E.9"
+      },
+      "pom_global": "LOSPOM-683",
+      "codi_client": "E.9",
+      "nom_client": "BOTTOM MOTIVE LOCATION",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS màster delta v1",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-024",
+        "codi_client": "ELB"
+      },
+      "pom_global": "POM-024",
+      "codi_client": "ELB",
+      "nom_client": "Sleeve width at elbow",
+      "categoria": "Sleeve",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-152",
+        "codi_client": "EL EXT"
+      },
+      "pom_global": "POM-152",
+      "codi_client": "EL EXT",
+      "nom_client": "Elastic extended",
+      "categoria": "Waistband",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-153",
+        "codi_client": "EL POS"
+      },
+      "pom_global": "POM-153",
+      "codi_client": "EL POS",
+      "nom_client": "Elastic location",
+      "categoria": "Waistband",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-151",
+        "codi_client": "EL RLX"
+      },
+      "pom_global": "POM-151",
+      "codi_client": "EL RLX",
+      "nom_client": "Elastic relaxed",
+      "categoria": "Waistband",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-099",
+        "codi_client": "EL WA RLX"
+      },
+      "pom_global": "POM-099",
+      "codi_client": "EL WA RLX",
+      "nom_client": "Elastic waist width (relaxed)",
+      "categoria": "Closure / Detail",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-674",
+        "codi_client": "EV"
+      },
+      "pom_global": "LOSPOM-674",
+      "codi_client": "EV",
+      "nom_client": "WAIST HEIGHT STITCHING",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-530",
+        "codi_client": "F1"
+      },
+      "pom_global": "LOSPOM-530",
+      "codi_client": "F1",
+      "nom_client": "FRONT LEG OPENING",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-531",
+        "codi_client": "F2"
+      },
+      "pom_global": "LOSPOM-531",
+      "codi_client": "F2",
+      "nom_client": "BACK LEG OPENING",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-532",
+        "codi_client": "F5"
+      },
+      "pom_global": "LOSPOM-532",
+      "codi_client": "F5",
+      "nom_client": "LEG OPENING RELAXED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-533",
+        "codi_client": "F6"
+      },
+      "pom_global": "LOSPOM-533",
+      "codi_client": "F6",
+      "nom_client": "LEG OPENING EXTENDED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-075",
+        "codi_client": "FLO EXT"
+      },
+      "pom_global": "POM-075",
+      "codi_client": "FLO EXT",
+      "nom_client": "Flounce extended",
+      "categoria": "Hem / Finish",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-076",
+        "codi_client": "FLO POS"
+      },
+      "pom_global": "POM-076",
+      "codi_client": "FLO POS",
+      "nom_client": "Flounce location",
+      "categoria": "Placement",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-074",
+        "codi_client": "FLO W"
+      },
+      "pom_global": "POM-074",
+      "codi_client": "FLO W",
+      "nom_client": "Flounce width",
+      "categoria": "Hem / Finish",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-509",
+        "codi_client": "FP"
+      },
+      "pom_global": "LOSPOM-509",
+      "codi_client": "FP",
+      "nom_client": "SHOULDER PIECE WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-146",
+        "codi_client": "FT FR L"
+      },
+      "pom_global": "POM-146",
+      "codi_client": "FT FR L",
+      "nom_client": "Front foot length",
+      "categoria": "Lower body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-147",
+        "codi_client": "FT L"
+      },
+      "pom_global": "POM-147",
+      "codi_client": "FT L",
+      "nom_client": "Foot length",
+      "categoria": "Lower body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-148",
+        "codi_client": "FT W"
+      },
+      "pom_global": "POM-148",
+      "codi_client": "FT W",
+      "nom_client": "Foot width",
+      "categoria": "Lower body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-149",
+        "codi_client": "FT W POS"
+      },
+      "pom_global": "POM-149",
+      "codi_client": "FT W POS",
+      "nom_client": "Foot width location",
+      "categoria": "Lower body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-680",
+        "codi_client": "G.3"
+      },
+      "pom_global": "LOSPOM-680",
+      "codi_client": "G.3",
+      "nom_client": "SLEEVE SHORT LENGTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS màster delta v1",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-552",
+        "codi_client": "G5"
+      },
+      "pom_global": "LOSPOM-552",
+      "codi_client": "G5",
+      "nom_client": "ELBOW LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-550",
+        "codi_client": "GA"
+      },
+      "pom_global": "LOSPOM-550",
+      "codi_client": "GA",
+      "nom_client": "SLEEVE INSEAM LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-558",
+        "codi_client": "GL"
+      },
+      "pom_global": "LOSPOM-558",
+      "codi_client": "GL",
+      "nom_client": "CUFF OPENING INNER",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-560",
+        "codi_client": "GM"
+      },
+      "pom_global": "LOSPOM-560",
+      "codi_client": "GM",
+      "nom_client": "CUFF DIFFERENCE",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-559",
+        "codi_client": "GN"
+      },
+      "pom_global": "LOSPOM-559",
+      "codi_client": "GN",
+      "nom_client": "CUFF HEIGHT INNER",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-102",
+        "codi_client": "GORGE"
+      },
+      "pom_global": "POM-102",
+      "codi_client": "GORGE",
+      "nom_client": "Gorge line position",
+      "categoria": "Jacket / Coat",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-681",
+        "codi_client": "H.12"
+      },
+      "pom_global": "LOSPOM-681",
+      "codi_client": "H.12",
+      "nom_client": "SLEEVE SHORT OPENING",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS màster delta v1",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-554",
+        "codi_client": "H14"
+      },
+      "pom_global": "LOSPOM-554",
+      "codi_client": "H14",
+      "nom_client": "SLEEVE OPENING EXTENDED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-555",
+        "codi_client": "H15"
+      },
+      "pom_global": "LOSPOM-555",
+      "codi_client": "H15",
+      "nom_client": "WIDTH BEFORE CUFF EXTENDED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-556",
+        "codi_client": "H16"
+      },
+      "pom_global": "LOSPOM-556",
+      "codi_client": "H16",
+      "nom_client": "CUFF OPENING",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-557",
+        "codi_client": "H17"
+      },
+      "pom_global": "LOSPOM-557",
+      "codi_client": "H17",
+      "nom_client": "CUFF LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-547",
+        "codi_client": "H7"
+      },
+      "pom_global": "LOSPOM-547",
+      "codi_client": "H7",
+      "nom_client": "ARMHOLE POINT LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-548",
+        "codi_client": "H8"
+      },
+      "pom_global": "LOSPOM-548",
+      "codi_client": "H8",
+      "nom_client": "FRONT ARMHOLE",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-549",
+        "codi_client": "H9"
+      },
+      "pom_global": "LOSPOM-549",
+      "codi_client": "H9",
+      "nom_client": "BACK ARMHOLE",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-095",
+        "codi_client": "HD H"
+      },
+      "pom_global": "POM-095",
+      "codi_client": "HD H",
+      "nom_client": "Hood height",
+      "categoria": "Closure / Detail",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-096",
+        "codi_client": "HD W"
+      },
+      "pom_global": "POM-096",
+      "codi_client": "HD W",
+      "nom_client": "Hood width",
+      "categoria": "Closure / Detail",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-071",
+        "codi_client": "HEM ALL"
+      },
+      "pom_global": "POM-071",
+      "codi_client": "HEM ALL",
+      "nom_client": "Hem allowance",
+      "categoria": "Hem / Finish",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-070",
+        "codi_client": "HEM W"
+      },
+      "pom_global": "POM-070",
+      "codi_client": "HEM W",
+      "nom_client": "Bottom hem width",
+      "categoria": "Hem / Finish",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-004",
+        "codi_client": "HI"
+      },
+      "pom_global": "POM-004",
+      "codi_client": "HI",
+      "nom_client": "Hip width (top)",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "pom_global": "POM-040",
+      "codi_client": "HI PA",
+      "nom_client": "Hip width (pants)",
+      "categoria": "Lower body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-154",
+        "codi_client": "HM L"
+      },
+      "pom_global": "POM-154",
+      "codi_client": "HM L",
+      "nom_client": "Half moon length",
+      "categoria": "Closure / Detail",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-497",
+        "codi_client": "IC2"
+      },
+      "pom_global": "LOSPOM-497",
+      "codi_client": "IC2",
+      "nom_client": "ELBOW LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client BRW (2026-07-13).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:BRW:2026-07-13",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-044",
+        "codi_client": "INS"
+      },
+      "pom_global": "POM-044",
+      "codi_client": "INS",
+      "nom_client": "Inseam length",
+      "categoria": "Lower body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-460",
+        "codi_client": "J1"
+      },
+      "pom_global": "LOSPOM-460",
+      "codi_client": "J1",
+      "nom_client": "Sleeve opening relaxed",
+      "categoria": "CAT-UB",
+      "notes": "Creat automàticament per import, fitxa 6de5fe49-1f42-426e-a577-ba2916d82f42",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "6de5fe49-1f42-426e-a577-ba2916d82f42",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-507",
+        "codi_client": "J1"
+      },
+      "pom_global": "LOSPOM-507",
+      "codi_client": "J1",
+      "nom_client": "SHOULDER DROP LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-508",
+        "codi_client": "J2"
+      },
+      "pom_global": "LOSPOM-508",
+      "codi_client": "J2",
+      "nom_client": "SHOULDER MOVE FORWARD",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-574",
+        "codi_client": "JC"
+      },
+      "pom_global": "LOSPOM-574",
+      "codi_client": "JC",
+      "nom_client": "TAPE WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-100",
+        "codi_client": "JK L HPS"
+      },
+      "pom_global": "POM-100",
+      "codi_client": "JK L HPS",
+      "nom_client": "Jacket length (HPS front)",
+      "categoria": "Jacket / Coat",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-047",
+        "codi_client": "KG"
+      },
+      "pom_global": "POM-047",
+      "codi_client": "KG",
+      "nom_client": "Knee girth",
+      "categoria": "Lower body",
+      "notes": "Add: ISO §5.3.22. Skinny trousers/leggings.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-042",
+        "codi_client": "KNE"
+      },
+      "pom_global": "POM-042",
+      "codi_client": "KNE",
+      "nom_client": "Knee width",
+      "categoria": "Lower body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-510",
+        "codi_client": "L1"
+      },
+      "pom_global": "LOSPOM-510",
+      "codi_client": "L1",
+      "nom_client": "NECK TOTAL",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-101",
+        "codi_client": "LAP W"
+      },
+      "pom_global": "POM-101",
+      "codi_client": "LAP W",
+      "nom_client": "Lapel width",
+      "categoria": "Jacket / Coat",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-110",
+        "codi_client": "LBL CF"
+      },
+      "pom_global": "POM-110",
+      "codi_client": "LBL CF",
+      "nom_client": "Label placement (CF distance)",
+      "categoria": "Placement",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-043",
+        "codi_client": "LEG OP"
+      },
+      "pom_global": "POM-043",
+      "codi_client": "LEG OP",
+      "nom_client": "Leg opening",
+      "categoria": "Lower body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-121",
+        "codi_client": "LOB"
+      },
+      "pom_global": "POM-121",
+      "codi_client": "LOB",
+      "nom_client": "Leg opening (bodysuit, relaxed)",
+      "categoria": "Lower body",
+      "notes": "Add: Baby/swimwear. Bodysuits, leotards.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-111",
+        "codi_client": "LOGO HPS"
+      },
+      "pom_global": "POM-111",
+      "codi_client": "LOGO HPS",
+      "nom_client": "Logo / print placement (from HPS)",
+      "categoria": "Placement",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-655",
+        "codi_client": "M.1"
+      },
+      "pom_global": "LOSPOM-655",
+      "codi_client": "M.1",
+      "nom_client": "FRONT LENGTH CENTER",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-544",
+        "codi_client": "M19"
+      },
+      "pom_global": "LOSPOM-544",
+      "codi_client": "M19",
+      "nom_client": "FRONT LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-545",
+        "codi_client": "M20"
+      },
+      "pom_global": "LOSPOM-545",
+      "codi_client": "M20",
+      "nom_client": "BACK LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-568",
+        "codi_client": "M4"
+      },
+      "pom_global": "LOSPOM-568",
+      "codi_client": "M4",
+      "nom_client": "CUT LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-546",
+        "codi_client": "MF"
+      },
+      "pom_global": "LOSPOM-546",
+      "codi_client": "MF",
+      "nom_client": "SIDE SEAM MOVED FORWARD",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "pom_global": "LOSPOM-389",
+      "codi_client": "M-M79",
+      "nom_client": "TOTAL LENGTH",
+      "categoria": null,
+      "notes": "Creat automàticament des d'importació. Codi original: M. Requereix revisió.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "SS26 TROUSERS TWILL (14-26-SS-0002)",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-576",
+        "codi_client": "N4"
+      },
+      "pom_global": "LOSPOM-576",
+      "codi_client": "N4",
+      "nom_client": "SIDE OPENING",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-015",
+        "codi_client": "NC"
+      },
+      "pom_global": "POM-015",
+      "codi_client": "NC",
+      "nom_client": "Neck base girth",
+      "categoria": "Collar / Neckline",
+      "notes": "Add: ISO 8559-1 §5.3.3.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-036",
+        "codi_client": "NK CIRC RLX"
+      },
+      "pom_global": "POM-036",
+      "codi_client": "NK CIRC RLX",
+      "nom_client": "Neckband circumference (relaxed)",
+      "categoria": "Collar / Neckline",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "pom_global": "POM-032",
+      "codi_client": "NK DR BK",
+      "nom_client": "Neck drop back",
+      "categoria": "Collar / Neckline",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "pom_global": "POM-031",
+      "codi_client": "NK DR FR",
+      "nom_client": "Neck drop front",
+      "categoria": "Collar / Neckline",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "pom_global": "POM-030",
+      "codi_client": "NK W",
+      "nom_client": "Neck width",
+      "categoria": "Collar / Neckline",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-586",
+        "codi_client": "O11"
+      },
+      "pom_global": "LOSPOM-586",
+      "codi_client": "O11",
+      "nom_client": "CHEST POCKET WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-587",
+        "codi_client": "O12"
+      },
+      "pom_global": "LOSPOM-587",
+      "codi_client": "O12",
+      "nom_client": "CHEST POCKET LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-588",
+        "codi_client": "O13"
+      },
+      "pom_global": "LOSPOM-588",
+      "codi_client": "O13",
+      "nom_client": "CHEST POCKET LENGTH W/FLAP",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-589",
+        "codi_client": "O14"
+      },
+      "pom_global": "LOSPOM-589",
+      "codi_client": "O14",
+      "nom_client": "CHEST POCKET LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-590",
+        "codi_client": "O16"
+      },
+      "pom_global": "LOSPOM-590",
+      "codi_client": "O16",
+      "nom_client": "FRONT POCKET OPENING",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-591",
+        "codi_client": "O17"
+      },
+      "pom_global": "LOSPOM-591",
+      "codi_client": "O17",
+      "nom_client": "FRONT POCKET FLAP HEIGHT",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-592",
+        "codi_client": "O18"
+      },
+      "pom_global": "LOSPOM-592",
+      "codi_client": "O18",
+      "nom_client": "FRONT POCKET FLAP WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-593",
+        "codi_client": "O19"
+      },
+      "pom_global": "LOSPOM-593",
+      "codi_client": "O19",
+      "nom_client": "FRONT POCKET LENGTH W/FLAP",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-594",
+        "codi_client": "O20"
+      },
+      "pom_global": "LOSPOM-594",
+      "codi_client": "O20",
+      "nom_client": "FRONT POCKET WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-390",
+        "codi_client": "O.21-M79"
+      },
+      "pom_global": "LOSPOM-390",
+      "codi_client": "O.21-M79",
+      "nom_client": "FRONT POCKET LENGTH",
+      "categoria": null,
+      "notes": "Creat automàticament des d'importació. Codi original: O.21. Requereix revisió.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "SS26 TROUSERS TWILL (14-26-SS-0002)",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-595",
+        "codi_client": "O23"
+      },
+      "pom_global": "LOSPOM-595",
+      "codi_client": "O23",
+      "nom_client": "FRONT POCKET LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-596",
+        "codi_client": "O25"
+      },
+      "pom_global": "LOSPOM-596",
+      "codi_client": "O25",
+      "nom_client": "FRONT LINING LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-393",
+        "codi_client": "O.26-M79"
+      },
+      "pom_global": "LOSPOM-393",
+      "codi_client": "O.26-M79",
+      "nom_client": "BACK POCKET OPENING",
+      "categoria": null,
+      "notes": "Creat automàticament des d'importació. Codi original: O.26. Requereix revisió.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "SS26 TROUSERS TWILL (14-26-SS-0002)",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-394",
+        "codi_client": "O.27-M79"
+      },
+      "pom_global": "LOSPOM-394",
+      "codi_client": "O.27-M79",
+      "nom_client": "BACK POCKET FLAP HEIGHT",
+      "categoria": null,
+      "notes": "Creat automàticament des d'importació. Codi original: O.27. Requereix revisió.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "SS26 TROUSERS TWILL (14-26-SS-0002)",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-597",
+        "codi_client": "O28"
+      },
+      "pom_global": "LOSPOM-597",
+      "codi_client": "O28",
+      "nom_client": "BACK POCKET FLAP WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-603",
+        "codi_client": "O29"
+      },
+      "pom_global": "LOSPOM-603",
+      "codi_client": "O29",
+      "nom_client": "BACK POCKET WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-604",
+        "codi_client": "O30"
+      },
+      "pom_global": "LOSPOM-604",
+      "codi_client": "O30",
+      "nom_client": "BACK POCKET LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-395",
+        "codi_client": "O.32-M79"
+      },
+      "pom_global": "LOSPOM-395",
+      "codi_client": "O.32-M79",
+      "nom_client": "BACK POCKET LOCATION",
+      "categoria": null,
+      "notes": "Creat automàticament des d'importació. Codi original: O.32. Requereix revisió.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "SS26 TROUSERS TWILL (14-26-SS-0002)",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-605",
+        "codi_client": "O33"
+      },
+      "pom_global": "LOSPOM-605",
+      "codi_client": "O33",
+      "nom_client": "COIN POCKET WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-606",
+        "codi_client": "O34"
+      },
+      "pom_global": "LOSPOM-606",
+      "codi_client": "O34",
+      "nom_client": "COIN POCKET LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-598",
+        "codi_client": "O36"
+      },
+      "pom_global": "LOSPOM-598",
+      "codi_client": "O36",
+      "nom_client": "SIDE POCKET FLAP HEIGHT",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-599",
+        "codi_client": "O38"
+      },
+      "pom_global": "LOSPOM-599",
+      "codi_client": "O38",
+      "nom_client": "SIDE POCKET WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-600",
+        "codi_client": "O39"
+      },
+      "pom_global": "LOSPOM-600",
+      "codi_client": "O39",
+      "nom_client": "SIDE POCKET LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-601",
+        "codi_client": "O40"
+      },
+      "pom_global": "LOSPOM-601",
+      "codi_client": "O40",
+      "nom_client": "SIDE POCKET W/FLAP",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-602",
+        "codi_client": "O41"
+      },
+      "pom_global": "LOSPOM-602",
+      "codi_client": "O41",
+      "nom_client": "SIDE POCKET LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-682",
+        "codi_client": "O.8"
+      },
+      "pom_global": "LOSPOM-682",
+      "codi_client": "O.8",
+      "nom_client": "CHEST POCKET OPENING",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS màster delta v1",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-585",
+        "codi_client": "O9"
+      },
+      "pom_global": "LOSPOM-585",
+      "codi_client": "O9",
+      "nom_client": "CHEST POCKET FLAP HEIGHT",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-045",
+        "codi_client": "OUTS"
+      },
+      "pom_global": "POM-045",
+      "codi_client": "OUTS",
+      "nom_client": "Outseam length",
+      "categoria": "Lower body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-097",
+        "codi_client": "PKT OP"
+      },
+      "pom_global": "POM-097",
+      "codi_client": "PKT OP",
+      "nom_client": "Side pocket opening",
+      "categoria": "Closure / Detail",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-098",
+        "codi_client": "PKT W"
+      },
+      "pom_global": "POM-098",
+      "codi_client": "PKT W",
+      "nom_client": "Pocket width",
+      "categoria": "Closure / Detail",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-112",
+        "codi_client": "PKT WB"
+      },
+      "pom_global": "POM-112",
+      "codi_client": "PKT WB",
+      "nom_client": "Pocket placement from waistband",
+      "categoria": "Placement",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-092",
+        "codi_client": "PLCK W"
+      },
+      "pom_global": "POM-092",
+      "codi_client": "PLCK W",
+      "nom_client": "Placket width",
+      "categoria": "Closure / Detail",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-094",
+        "codi_client": "PLT DEP"
+      },
+      "pom_global": "POM-094",
+      "codi_client": "PLT DEP",
+      "nom_client": "Pleat depth",
+      "categoria": "Closure / Detail",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-656",
+        "codi_client": "R.1"
+      },
+      "pom_global": "LOSPOM-656",
+      "codi_client": "R.1",
+      "nom_client": "STRAP LENGTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-543",
+        "codi_client": "R10"
+      },
+      "pom_global": "LOSPOM-543",
+      "codi_client": "R10",
+      "nom_client": "FALSE FLY",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-657",
+        "codi_client": "R.3"
+      },
+      "pom_global": "LOSPOM-657",
+      "codi_client": "R.3",
+      "nom_client": "STRAP LOCATION",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-542",
+        "codi_client": "R9"
+      },
+      "pom_global": "LOSPOM-542",
+      "codi_client": "R9",
+      "nom_client": "FLY OPENING",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-028",
+        "codi_client": "RIB CUF"
+      },
+      "pom_global": "POM-028",
+      "codi_client": "RIB CUF",
+      "nom_client": "Rib cuff height",
+      "categoria": "Sleeve",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-072",
+        "codi_client": "RIB HEM H"
+      },
+      "pom_global": "POM-072",
+      "codi_client": "RIB HEM H",
+      "nom_client": "Rib hem height",
+      "categoria": "Hem / Finish",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-056",
+        "codi_client": "RI BK"
+      },
+      "pom_global": "POM-056",
+      "codi_client": "RI BK",
+      "nom_client": "Rise (back)",
+      "categoria": "Rise",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-055",
+        "codi_client": "RI FR"
+      },
+      "pom_global": "POM-055",
+      "codi_client": "RI FR",
+      "nom_client": "Rise (front)",
+      "categoria": "Rise",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-057",
+        "codi_client": "RI TOT"
+      },
+      "pom_global": "POM-057",
+      "codi_client": "RI TOT",
+      "nom_client": "Rise (total)",
+      "categoria": "Rise",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-457",
+        "codi_client": "S"
+      },
+      "pom_global": "LOSPOM-457",
+      "codi_client": "S",
+      "nom_client": "Front armhole along seam",
+      "categoria": "CAT-UB",
+      "notes": "Creat automàticament per import, fitxa 6de5fe49-1f42-426e-a577-ba2916d82f42",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "6de5fe49-1f42-426e-a577-ba2916d82f42",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-581",
+        "codi_client": "S"
+      },
+      "pom_global": "LOSPOM-581",
+      "codi_client": "S",
+      "nom_client": "COLLAR HEIGHT ON TOP",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-425",
+        "codi_client": "S.10"
+      },
+      "pom_global": "LOSPOM-425",
+      "codi_client": "S.10",
+      "nom_client": "HOOD LENGTH",
+      "categoria": "CAT-UB",
+      "notes": "Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "d4f50ff5-286a-4017-bfd8-5d43de67b301",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-564",
+        "codi_client": "S13"
+      },
+      "pom_global": "LOSPOM-564",
+      "codi_client": "S13",
+      "nom_client": "BACK YOKE CENTER LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-648",
+        "codi_client": "S.19"
+      },
+      "pom_global": "LOSPOM-648",
+      "codi_client": "S.19",
+      "nom_client": "FOOT LENGTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-382",
+        "codi_client": "S1-M76"
+      },
+      "pom_global": "LOSPOM-382",
+      "codi_client": "S1-M76",
+      "nom_client": "Collar Width (Neck Tie Length)",
+      "categoria": null,
+      "notes": "Creat automàticament des d'importació. Codi original: S1. Requereix revisió.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "Olivia Dress (REPRIS-26-SS-0001)",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-583",
+        "codi_client": "S2"
+      },
+      "pom_global": "LOSPOM-583",
+      "codi_client": "S2",
+      "nom_client": "COLLAR BAND HEIGHT",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-649",
+        "codi_client": "S.20"
+      },
+      "pom_global": "LOSPOM-649",
+      "codi_client": "S.20",
+      "nom_client": "FOOT WIDTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-565",
+        "codi_client": "S25"
+      },
+      "pom_global": "LOSPOM-565",
+      "codi_client": "S25",
+      "nom_client": "SIDE YOKE LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-561",
+        "codi_client": "S27"
+      },
+      "pom_global": "LOSPOM-561",
+      "codi_client": "S27",
+      "nom_client": "FRONT YOKE CENTER LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-562",
+        "codi_client": "S28"
+      },
+      "pom_global": "LOSPOM-562",
+      "codi_client": "S28",
+      "nom_client": "FRONT YOKE LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-577",
+        "codi_client": "S3"
+      },
+      "pom_global": "LOSPOM-577",
+      "codi_client": "S3",
+      "nom_client": "PLACKET LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-563",
+        "codi_client": "S30"
+      },
+      "pom_global": "LOSPOM-563",
+      "codi_client": "S30",
+      "nom_client": "BACK YOKE LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-573",
+        "codi_client": "S34"
+      },
+      "pom_global": "LOSPOM-573",
+      "codi_client": "S34",
+      "nom_client": "FRONT COVER WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-668",
+        "codi_client": "S.35"
+      },
+      "pom_global": "LOSPOM-668",
+      "codi_client": "S.35",
+      "nom_client": "COLLAR PIECE WIDTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-582",
+        "codi_client": "S37"
+      },
+      "pom_global": "LOSPOM-582",
+      "codi_client": "S37",
+      "nom_client": "COLLAR PEAK",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-650",
+        "codi_client": "S.39"
+      },
+      "pom_global": "LOSPOM-650",
+      "codi_client": "S.39",
+      "nom_client": "FOOT WIDTH LOCATION",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-651",
+        "codi_client": "S.40"
+      },
+      "pom_global": "LOSPOM-651",
+      "codi_client": "S.40",
+      "nom_client": "FRONT FOOT LENGTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-684",
+        "codi_client": "S.42"
+      },
+      "pom_global": "LOSPOM-684",
+      "codi_client": "S.42",
+      "nom_client": "FRONT VENT WIDTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS màster delta v1",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-575",
+        "codi_client": "S45"
+      },
+      "pom_global": "LOSPOM-575",
+      "codi_client": "S45",
+      "nom_client": "BACK OPENING",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-614",
+        "codi_client": "S53"
+      },
+      "pom_global": "LOSPOM-614",
+      "codi_client": "S53",
+      "nom_client": "HOOD WIDTH LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-612",
+        "codi_client": "S54"
+      },
+      "pom_global": "LOSPOM-612",
+      "codi_client": "S54",
+      "nom_client": "HOOD LENGTH RELAXED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-613",
+        "codi_client": "S55"
+      },
+      "pom_global": "LOSPOM-613",
+      "codi_client": "S55",
+      "nom_client": "HOOD LENGTH EXTENDED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-426",
+        "codi_client": "S.56"
+      },
+      "pom_global": "LOSPOM-426",
+      "codi_client": "S.56",
+      "nom_client": "HOOD PIECE WIDTH",
+      "categoria": "CAT-UB",
+      "notes": "Creat automàticament per import, fitxa d4f50ff5-286a-4017-bfd8-5d43de67b301",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "d4f50ff5-286a-4017-bfd8-5d43de67b301",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-511",
+        "codi_client": "S8"
+      },
+      "pom_global": "LOSPOM-511",
+      "codi_client": "S8",
+      "nom_client": "COLLAR OPENING EXTENDED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "pom_global": "POM-005",
+      "codi_client": "SH",
+      "nom_client": "Shoulder width",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "pom_global": "POM-014",
+      "codi_client": "SH DR",
+      "nom_client": "Shoulder drop",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-060",
+        "codi_client": "SK L"
+      },
+      "pom_global": "POM-060",
+      "codi_client": "SK L",
+      "nom_client": "Skirt length",
+      "categoria": "Skirt / Dress",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "pom_global": "POM-062",
+      "codi_client": "SK SW",
+      "nom_client": "Skirt sweep (bottom width)",
+      "categoria": "Skirt / Dress",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-020",
+        "codi_client": "SL"
+      },
+      "pom_global": "POM-020",
+      "codi_client": "SL",
+      "nom_client": "Sleeve length",
+      "categoria": "Sleeve",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-022",
+        "codi_client": "SL CB"
+      },
+      "pom_global": "POM-022",
+      "codi_client": "SL CB",
+      "nom_client": "Sleeve length (CB)",
+      "categoria": "Sleeve",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-025",
+        "codi_client": "SL OP"
+      },
+      "pom_global": "POM-025",
+      "codi_client": "SL OP",
+      "nom_client": "Sleeve opening / Cuff width",
+      "categoria": "Sleeve",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-026",
+        "codi_client": "SL OP STR"
+      },
+      "pom_global": "POM-026",
+      "codi_client": "SL OP STR",
+      "nom_client": "Sleeve opening stretched",
+      "categoria": "Sleeve",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-021",
+        "codi_client": "SL UA"
+      },
+      "pom_global": "POM-021",
+      "codi_client": "SL UA",
+      "nom_client": "Sleeve length (underarm)",
+      "categoria": "Sleeve",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-120",
+        "codi_client": "SNP"
+      },
+      "pom_global": "POM-120",
+      "codi_client": "SNP",
+      "nom_client": "Snap / popper placement",
+      "categoria": "Closure / Detail",
+      "notes": "Add: Baby/childrenswear. Bodysuits, rompers.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-122",
+        "codi_client": "SOW"
+      },
+      "pom_global": "POM-122",
+      "codi_client": "SOW",
+      "nom_client": "Shoulder opening width",
+      "categoria": "Closure / Detail",
+      "notes": "Add: Baby/childrenswear envelope neck styles.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-660",
+        "codi_client": "SR10"
+      },
+      "pom_global": "LOSPOM-660",
+      "codi_client": "SR10",
+      "nom_client": "BOW LENGTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-392",
+        "codi_client": "S.R1-M79"
+      },
+      "pom_global": "LOSPOM-392",
+      "codi_client": "S.R1-M79",
+      "nom_client": "CORD LENGTH IN OUTSIDE",
+      "categoria": null,
+      "notes": "Creat automàticament des d'importació. Codi original: S.R1. Requereix revisió.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "SS26 TROUSERS TWILL (14-26-SS-0002)",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-615",
+        "codi_client": "SR2"
+      },
+      "pom_global": "LOSPOM-615",
+      "codi_client": "SR2",
+      "nom_client": "DRAWSTRING LENGTH MEASURED AT POINT WHERE TIES",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-616",
+        "codi_client": "SR3"
+      },
+      "pom_global": "LOSPOM-616",
+      "codi_client": "SR3",
+      "nom_client": "DRAWSTRING CHANNEL",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-670",
+        "codi_client": "S.R6"
+      },
+      "pom_global": "LOSPOM-670",
+      "codi_client": "S.R6",
+      "nom_client": "LOOP LENGTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-671",
+        "codi_client": "S.R7"
+      },
+      "pom_global": "LOSPOM-671",
+      "codi_client": "S.R7",
+      "nom_client": "LOOP WIDTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-659",
+        "codi_client": "SR9"
+      },
+      "pom_global": "LOSPOM-659",
+      "codi_client": "SR9",
+      "nom_client": "BOW WIDTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-011",
+        "codi_client": "SS"
+      },
+      "pom_global": "POM-011",
+      "codi_client": "SS",
+      "nom_client": "Side seam length",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-126",
+        "codi_client": "STRAP LF"
+      },
+      "pom_global": "POM-126",
+      "codi_client": "STRAP LF",
+      "nom_client": "Strap length (front)",
+      "categoria": "Closure / Detail",
+      "notes": "Tirants per a vestits, bodysuits, salopetes.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-087",
+        "codi_client": "STRAP W SW"
+      },
+      "pom_global": "POM-087",
+      "codi_client": "STRAP W SW",
+      "nom_client": "Strap width (swimwear)",
+      "categoria": "Swimwear-specific",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-088",
+        "codi_client": "SW CROT W"
+      },
+      "pom_global": "POM-088",
+      "codi_client": "SW CROT W",
+      "nom_client": "Swimwear crotch width",
+      "categoria": "Swimwear-specific",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-089",
+        "codi_client": "SW LEG OP"
+      },
+      "pom_global": "POM-089",
+      "codi_client": "SW LEG OP",
+      "nom_client": "Swimwear leg opening",
+      "categoria": "Swimwear-specific",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-566",
+        "codi_client": "T13"
+      },
+      "pom_global": "LOSPOM-566",
+      "codi_client": "T13",
+      "nom_client": "PLEAT LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-567",
+        "codi_client": "T14"
+      },
+      "pom_global": "LOSPOM-567",
+      "codi_client": "T14",
+      "nom_client": "PLEAT",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-046",
+        "codi_client": "TH"
+      },
+      "pom_global": "POM-046",
+      "codi_client": "TH",
+      "nom_client": "Thigh girth",
+      "categoria": "Lower body",
+      "notes": "Add: ISO §5.3.20. Key for fitted trousers/leggings.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-041",
+        "codi_client": "THI"
+      },
+      "pom_global": "POM-041",
+      "codi_client": "THI",
+      "nom_client": "Thigh width",
+      "categoria": "Lower body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-512",
+        "codi_client": "U"
+      },
+      "pom_global": "LOSPOM-512",
+      "codi_client": "U",
+      "nom_client": "RIB WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-513",
+        "codi_client": "U1"
+      },
+      "pom_global": "LOSPOM-513",
+      "codi_client": "U1",
+      "nom_client": "JETTING WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-578",
+        "codi_client": "U4"
+      },
+      "pom_global": "LOSPOM-578",
+      "codi_client": "U4",
+      "nom_client": "FLOUNCE HEIGHT",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-579",
+        "codi_client": "U7"
+      },
+      "pom_global": "LOSPOM-579",
+      "codi_client": "U7",
+      "nom_client": "FRILL HEIGHT",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-016",
+        "codi_client": "UA"
+      },
+      "pom_global": "POM-016",
+      "codi_client": "UA",
+      "nom_client": "Upper arm girth",
+      "categoria": "Sleeve",
+      "notes": "Add: ISO §5.3.16. Critical for fitted sleeves.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-083",
+        "codi_client": "UB"
+      },
+      "pom_global": "POM-083",
+      "codi_client": "UB",
+      "nom_client": "Underbust girth",
+      "categoria": "Upper body",
+      "notes": "Add: ISO §5.3.8. Essential for bra/swimwear.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-492",
+        "codi_client": "V"
+      },
+      "pom_global": "LOSPOM-492",
+      "codi_client": "V",
+      "nom_client": "RUFFLE HEIGHT",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client BRW (2026-07-13).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:BRW:2026-07-13",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-580",
+        "codi_client": "V12"
+      },
+      "pom_global": "LOSPOM-580",
+      "codi_client": "V12",
+      "nom_client": "FOLD",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-397",
+        "codi_client": "V.13-M79"
+      },
+      "pom_global": "LOSPOM-397",
+      "codi_client": "V.13-M79",
+      "nom_client": "DART LENGTH",
+      "categoria": null,
+      "notes": "Creat automàticament des d'importació. Codi original: V.13. Requereix revisió.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "SS26 TROUSERS TWILL (14-26-SS-0002)",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-396",
+        "codi_client": "V.14-M79"
+      },
+      "pom_global": "LOSPOM-396",
+      "codi_client": "V.14-M79",
+      "nom_client": "DART LOCATION",
+      "categoria": null,
+      "notes": "Creat automàticament des d'importació. Codi original: V.14. Requereix revisió.",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "SS26 TROUSERS TWILL (14-26-SS-0002)",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-569",
+        "codi_client": "V4"
+      },
+      "pom_global": "LOSPOM-569",
+      "codi_client": "V4",
+      "nom_client": "PIECE WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-570",
+        "codi_client": "V5"
+      },
+      "pom_global": "LOSPOM-570",
+      "codi_client": "V5",
+      "nom_client": "PIECE WIDTH EXTENDED",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-571",
+        "codi_client": "V6"
+      },
+      "pom_global": "LOSPOM-571",
+      "codi_client": "V6",
+      "nom_client": "PIECE LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-572",
+        "codi_client": "V7"
+      },
+      "pom_global": "LOSPOM-572",
+      "codi_client": "V7",
+      "nom_client": "PIECE LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-672",
+        "codi_client": "V.9"
+      },
+      "pom_global": "LOSPOM-672",
+      "codi_client": "V.9",
+      "nom_client": "ELASTIC LOCATION",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-093",
+        "codi_client": "VNT L"
+      },
+      "pom_global": "POM-093",
+      "codi_client": "VNT L",
+      "nom_client": "Vent length",
+      "categoria": "Closure / Detail",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-607",
+        "codi_client": "W4"
+      },
+      "pom_global": "LOSPOM-607",
+      "codi_client": "W4",
+      "nom_client": "INNER POCKET OPENING",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-608",
+        "codi_client": "W5"
+      },
+      "pom_global": "LOSPOM-608",
+      "codi_client": "W5",
+      "nom_client": "INNER POCKET FLAP HEIGHT",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-609",
+        "codi_client": "W6"
+      },
+      "pom_global": "LOSPOM-609",
+      "codi_client": "W6",
+      "nom_client": "INNER POCKET WIDTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-610",
+        "codi_client": "W7"
+      },
+      "pom_global": "LOSPOM-610",
+      "codi_client": "W7",
+      "nom_client": "INNER POCKET LENGTH",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-611",
+        "codi_client": "W9"
+      },
+      "pom_global": "LOSPOM-611",
+      "codi_client": "W9",
+      "nom_client": "INNER POCKET LOCATION",
+      "categoria": null,
+      "notes": "Creat des del diccionari del client LOS (2026-07-18).",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "diccionari:LOS:2026-07-18",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-003",
+        "codi_client": "WA"
+      },
+      "pom_global": "POM-003",
+      "codi_client": "WA",
+      "nom_client": "Waist width",
+      "categoria": "Upper body",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-052",
+        "codi_client": "WB H"
+      },
+      "pom_global": "POM-052",
+      "codi_client": "WB H",
+      "nom_client": "Waistband height",
+      "categoria": "Waistband",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-050",
+        "codi_client": "WB RLX"
+      },
+      "pom_global": "POM-050",
+      "codi_client": "WB RLX",
+      "nom_client": "Waistband width (relaxed)",
+      "categoria": "Waistband",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-051",
+        "codi_client": "WB STR"
+      },
+      "pom_global": "POM-051",
+      "codi_client": "WB STR",
+      "nom_client": "Waistband width (stretched)",
+      "categoria": "Waistband",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "LOSPOM-658",
+        "codi_client": "Z"
+      },
+      "pom_global": "LOSPOM-658",
+      "codi_client": "Z",
+      "nom_client": "FRILL LENGTH",
+      "categoria": null,
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": true,
+      "origen_import": "LOS diccionari 4B-bis",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    },
+    {
+      "key": {
+        "pom_global": "POM-090",
+        "codi_client": "ZIP L"
+      },
+      "pom_global": "POM-090",
+      "codi_client": "ZIP L",
+      "nom_client": "Zipper length",
+      "categoria": "Closure / Detail",
+      "notes": "",
+      "actiu": true,
+      "pendent_revisio": false,
+      "origen_import": "",
+      "tolerancia_default_minus": "0.60",
+      "tolerancia_default_plus": "0.60"
+    }
+  ]
+}

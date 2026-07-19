@@ -1,0 +1,431 @@
+{
+  "layer": "rulesets",
+  "count": 27,
+  "rulesets_count": 18,
+  "scope_nodes_count": 9,
+  "rulesets": [
+    {
+      "nom": "LOS Baby Knit — Tops",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "BABY_LOS_01",
+      "garment_group": null,
+      "garment_type_item": null,
+      "construction": "KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "TODDLER_GIRL",
+      "targets": [
+        "TODDLER_BOY",
+        "TODDLER_GIRL"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Kids Boy Knit — Tops",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "BOY_LOS_01",
+      "garment_group": "TOPS",
+      "garment_type_item": null,
+      "construction": "KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "BOY",
+      "targets": [
+        "BOY"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Kids Boy Woven — Bottoms",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "BOY_LOS_01",
+      "garment_group": "BOTTOMS",
+      "garment_type_item": null,
+      "construction": "WOVEN",
+      "fit_type": "REGULAR",
+      "target_legacy": "BOY",
+      "targets": [
+        "BOY"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Kids Girl — Dresses",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "GIRL_LOS_01",
+      "garment_group": "DRESSES",
+      "garment_type_item": null,
+      "construction": "KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "GIRL",
+      "targets": [
+        "GIRL"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Kids Girl Knit — Tops",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "GIRL_LOS_01",
+      "garment_group": "TOPS",
+      "garment_type_item": null,
+      "construction": "KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "GIRL",
+      "targets": [
+        "GIRL"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Man Knit — Tops",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "MAN_LOS_01",
+      "garment_group": "TOPS",
+      "garment_type_item": null,
+      "construction": "KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "MAN",
+      "targets": [
+        "MAN"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Man Woven — Bottoms",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "MAN_NUM_LOS_01",
+      "garment_group": "BOTTOMS",
+      "garment_type_item": null,
+      "construction": "WOVEN",
+      "fit_type": "REGULAR",
+      "target_legacy": "MAN",
+      "targets": [
+        "MAN"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS New Born Knit — Bottoms",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "NEWBORN_LOS_01",
+      "garment_group": null,
+      "garment_type_item": null,
+      "construction": "KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "BABY_GIRL",
+      "targets": [
+        "BABY_BOY",
+        "BABY_GIRL",
+        "BABY_UNISEX"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS New Born Knit — Onepieces",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "NEWBORN_LOS_01",
+      "garment_group": null,
+      "garment_type_item": null,
+      "construction": "KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "BABY_GIRL",
+      "targets": [
+        "BABY_BOY",
+        "BABY_GIRL",
+        "BABY_UNISEX"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS New Born Knit — Tops",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "NEWBORN_LOS_01",
+      "garment_group": null,
+      "garment_type_item": null,
+      "construction": "KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "BABY_GIRL",
+      "targets": [
+        "BABY_BOY",
+        "BABY_GIRL",
+        "BABY_UNISEX"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Teen Boy Knit — Tops",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "YOUTH_BOY_LOS_01",
+      "garment_group": "TOPS",
+      "garment_type_item": null,
+      "construction": "KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "TEEN_BOY",
+      "targets": [
+        "TEEN_BOY"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Teen Boy Woven — Bottoms",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "YOUTH_BOY_LOS_01",
+      "garment_group": "BOTTOMS",
+      "garment_type_item": null,
+      "construction": "WOVEN",
+      "fit_type": "REGULAR",
+      "target_legacy": "TEEN_BOY",
+      "targets": [
+        "TEEN_BOY"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Teen Boy Woven — Shirts",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "YOUTH_BOY_LOS_01",
+      "garment_group": "TOPS",
+      "garment_type_item": null,
+      "construction": "WOVEN",
+      "fit_type": "REGULAR",
+      "target_legacy": "TEEN_BOY",
+      "targets": [
+        "TEEN_BOY"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Teen Girl — Bottoms",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "YOUTH_GIRL_LOS_01",
+      "garment_group": "BOTTOMS",
+      "garment_type_item": null,
+      "construction": "WOVEN",
+      "fit_type": "REGULAR",
+      "target_legacy": "TEEN_GIRL",
+      "targets": [
+        "TEEN_GIRL"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Teen Girl Knit — Tops",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "YOUTH_GIRL_LOS_01",
+      "garment_group": "TOPS",
+      "garment_type_item": null,
+      "construction": "KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "TEEN_GIRL",
+      "targets": [
+        "TEEN_GIRL"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Teen Girl Stretch — Swimwear",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "YOUTH_GIRL_LOS_01",
+      "garment_group": "SWIMWEAR",
+      "garment_type_item": null,
+      "construction": "STRETCH_KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "TEEN_GIRL",
+      "targets": [
+        "TEEN_GIRL"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Woman Knit — Tops",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "WOMAN_LOS_01",
+      "garment_group": "TOPS",
+      "garment_type_item": null,
+      "construction": "KNIT",
+      "fit_type": "REGULAR",
+      "target_legacy": "WOMAN",
+      "targets": [
+        "WOMAN"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    },
+    {
+      "nom": "LOS Woman Woven — Bottoms",
+      "origen": "CLIENT_RUN",
+      "actiu": true,
+      "customer": "LOS",
+      "size_system": "WOMAN_NUM_LOS_01",
+      "garment_group": "BOTTOMS",
+      "garment_type_item": null,
+      "construction": "WOVEN",
+      "fit_type": "REGULAR",
+      "target_legacy": "WOMAN",
+      "targets": [
+        "WOMAN"
+      ],
+      "version_number": 1,
+      "codi_sistema": "",
+      "pendents_vincular": []
+    }
+  ],
+  "scope_nodes": [
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "node_type": "ITEM",
+      "garment_group": null,
+      "garment_type": null,
+      "garment_type_item": {
+        "garment_type": "NEWBORN",
+        "code": "baby_top"
+      }
+    },
+    {
+      "rule_set": "LOS Baby Knit — Tops",
+      "node_type": "ITEM",
+      "garment_group": null,
+      "garment_type": null,
+      "garment_type_item": {
+        "garment_type": "NEWBORN",
+        "code": "baby_bodysuit"
+      }
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "node_type": "ITEM",
+      "garment_group": null,
+      "garment_type": null,
+      "garment_type_item": {
+        "garment_type": "NEWBORN",
+        "code": "baby_leggings"
+      }
+    },
+    {
+      "rule_set": "LOS New Born Knit — Bottoms",
+      "node_type": "ITEM",
+      "garment_group": null,
+      "garment_type": null,
+      "garment_type_item": {
+        "garment_type": "NEWBORN",
+        "code": "baby_bloomers"
+      }
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "node_type": "ITEM",
+      "garment_group": null,
+      "garment_type": null,
+      "garment_type_item": {
+        "garment_type": "NEWBORN",
+        "code": "baby_sleepsuit"
+      }
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "node_type": "ITEM",
+      "garment_group": null,
+      "garment_type": null,
+      "garment_type_item": {
+        "garment_type": "NEWBORN",
+        "code": "baby_sleepbag"
+      }
+    },
+    {
+      "rule_set": "LOS New Born Knit — Onepieces",
+      "node_type": "ITEM",
+      "garment_group": null,
+      "garment_type": null,
+      "garment_type_item": {
+        "garment_type": "NEWBORN",
+        "code": "booties"
+      }
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "node_type": "ITEM",
+      "garment_group": null,
+      "garment_type": null,
+      "garment_type_item": {
+        "garment_type": "NEWBORN",
+        "code": "baby_top"
+      }
+    },
+    {
+      "rule_set": "LOS New Born Knit — Tops",
+      "node_type": "ITEM",
+      "garment_group": null,
+      "garment_type": null,
+      "garment_type_item": {
+        "garment_type": "NEWBORN",
+        "code": "baby_bodysuit"
+      }
+    }
+  ]
+}

@@ -1,0 +1,2750 @@
+{
+  "layer": "pom_aliases",
+  "count": 196,
+  "rows": [
+    {
+      "customer": "LOS",
+      "client_code": "A",
+      "pom": {
+        "pom_global": "LOSPOM-515",
+        "codi_client": "A"
+      },
+      "client_description": "",
+      "description_en": "FRONT WIDTH LOCATION",
+      "description_local": "POSICIÓN ANCHO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "A1",
+      "pom": {
+        "pom_global": "POM-007",
+        "codi_client": "AC FR"
+      },
+      "client_description": "",
+      "description_en": "FRONT WIDTH",
+      "description_local": "ANCHO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "A2",
+      "pom": {
+        "pom_global": "POM-008",
+        "codi_client": "AC BK"
+      },
+      "client_description": "",
+      "description_en": "BACK WIDTH",
+      "description_local": "ANCHO ESPALDA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "A3",
+      "pom": {
+        "pom_global": "LOSPOM-516",
+        "codi_client": "A3"
+      },
+      "client_description": "",
+      "description_en": "BACK WIDTH LOCATION",
+      "description_local": "POSICIÓN ANCHO ESPALDA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "AB",
+      "pom": {
+        "pom_global": "LOSPOM-584",
+        "codi_client": "AB"
+      },
+      "client_description": "",
+      "description_en": "CONTOUR COLLAR TOTAL",
+      "description_local": "CONTORNO CUELLO TOTAL",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "AJ",
+      "pom": {
+        "pom_global": "LOSPOM-382",
+        "codi_client": "S1-M76"
+      },
+      "client_description": "",
+      "description_en": "COLLAR WIDTH",
+      "description_local": "ANCHO CUELLO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "B",
+      "pom": {
+        "pom_global": "POM-001",
+        "codi_client": "CH"
+      },
+      "client_description": "",
+      "description_en": "CHEST WIDTH",
+      "description_local": "ANCHO PECHO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "B1",
+      "pom": {
+        "pom_global": "POM-080",
+        "codi_client": "CH RLX"
+      },
+      "client_description": "",
+      "description_en": "CHEST WIDTH RELAXED",
+      "description_local": "ANCHO PECHO RELAJADO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "B2",
+      "pom": {
+        "pom_global": "POM-081",
+        "codi_client": "CH STR"
+      },
+      "client_description": "",
+      "description_en": "CHEST WIDTH EXTENDED",
+      "description_local": "ANCHO PECHO EXTENDIDO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "B3",
+      "pom": {
+        "pom_global": "LOSPOM-520",
+        "codi_client": "B3"
+      },
+      "client_description": "",
+      "description_en": "FRONT CHEST WIDTH",
+      "description_local": "ANCHO PECHO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "B4",
+      "pom": {
+        "pom_global": "LOSPOM-652",
+        "codi_client": "B4"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "BJ",
+      "pom": {
+        "pom_global": "LOSPOM-514",
+        "codi_client": "BJ"
+      },
+      "client_description": "",
+      "description_en": "FRONT&BACK WIDTH LOCATION",
+      "description_local": "POSICIÓN ANCHO DELANTERO Y TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "C",
+      "pom": {
+        "pom_global": "POM-003",
+        "codi_client": "WA"
+      },
+      "client_description": "",
+      "description_en": "WAIST WIDTH",
+      "description_local": "ANCHO CINTURA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "C1",
+      "pom": {
+        "pom_global": "LOSPOM-524",
+        "codi_client": "C1"
+      },
+      "client_description": "",
+      "description_en": "WAIST WIDTH EXTENDED",
+      "description_local": "ANCHO CINTURA EXTENDIDO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "C11",
+      "pom": {
+        "pom_global": "POM-052",
+        "codi_client": "WB H"
+      },
+      "client_description": "",
+      "description_en": "WAISTBAND HEIGHT",
+      "description_local": "ALTURA CINTURILLA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "C12",
+      "pom": {
+        "pom_global": "LOSPOM-617",
+        "codi_client": "C12"
+      },
+      "client_description": "",
+      "description_en": "INNER ELASTIC WAIST LOCATION",
+      "description_local": "POSICIÓN ELÁSTICO INTERIOR CINTURA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "C.13",
+      "pom": {
+        "pom_global": "LOSPOM-669",
+        "codi_client": "C.13"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "C14",
+      "pom": {
+        "pom_global": "LOSPOM-385",
+        "codi_client": "C.14-M79"
+      },
+      "client_description": "",
+      "description_en": "EYELET LOCATION",
+      "description_local": "POSICIÓN OLLAO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "C2",
+      "pom": {
+        "pom_global": "LOSPOM-525",
+        "codi_client": "C2"
+      },
+      "client_description": "",
+      "description_en": "FRONT WAIST WIDTH RELAXED",
+      "description_local": "ANCHO CINTURA DELANTERO RELAJADO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "C3",
+      "pom": {
+        "pom_global": "LOSPOM-521",
+        "codi_client": "C3"
+      },
+      "client_description": "",
+      "description_en": "WAIST LOCATION",
+      "description_local": "POSICIÓN CINTURA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "C4",
+      "pom": {
+        "pom_global": "LOSPOM-523",
+        "codi_client": "C4"
+      },
+      "client_description": "",
+      "description_en": "WAIST WIDTH RELAXED",
+      "description_local": "ANCHO CINTURA RELAJADO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "C5",
+      "pom": {
+        "pom_global": "LOSPOM-526",
+        "codi_client": "C5"
+      },
+      "client_description": "",
+      "description_en": "BACK WAIST WIDTH RELAXED",
+      "description_local": "ANCHO CINTURA TRASERO RELAJADO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "C6",
+      "pom": {
+        "pom_global": "LOSPOM-527",
+        "codi_client": "C6"
+      },
+      "client_description": "",
+      "description_en": "BACK WAIST EXTENDED",
+      "description_local": "CINTURA TRASERA EXTENDIDA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "CB",
+      "pom": {
+        "pom_global": "LOSPOM-673",
+        "codi_client": "CB"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "CL",
+      "pom": {
+        "pom_global": "LOSPOM-522",
+        "codi_client": "CL"
+      },
+      "client_description": "",
+      "description_en": "WAIST JOIN",
+      "description_local": "UNIÓN CINTURA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "D",
+      "pom": {
+        "pom_global": "POM-040",
+        "codi_client": "HI PA"
+      },
+      "client_description": "",
+      "description_en": "HIP WIDTH",
+      "description_local": "ANCHO CADERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "D1",
+      "pom": {
+        "pom_global": "POM-041",
+        "codi_client": "THI"
+      },
+      "client_description": "",
+      "description_en": "THIGH WIDTH",
+      "description_local": "ANCHO MUSLO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "D11",
+      "pom": {
+        "pom_global": "LOSPOM-386",
+        "codi_client": "D.11-M79"
+      },
+      "client_description": "",
+      "description_en": "HIP LOCATION",
+      "description_local": "POSICIÓN CADERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "D18",
+      "pom": {
+        "pom_global": "LOSPOM-538",
+        "codi_client": "D18"
+      },
+      "client_description": "",
+      "description_en": "FRONT CROTCH WIDTH LOCATION",
+      "description_local": "POSICIÓN ANCHO ENTREPIERNA DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "D19",
+      "pom": {
+        "pom_global": "LOSPOM-540",
+        "codi_client": "D19"
+      },
+      "client_description": "",
+      "description_en": "BACK CROTCH WIDTH LOCATION",
+      "description_local": "POSICIÓN ANCHO ENTREPIERNA TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "D2",
+      "pom": {
+        "pom_global": "POM-042",
+        "codi_client": "KNE"
+      },
+      "client_description": "",
+      "description_en": "KNEE WIDTH",
+      "description_local": "ANCHO RODILLA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "D20",
+      "pom": {
+        "pom_global": "POM-150",
+        "codi_client": "CR L"
+      },
+      "client_description": "",
+      "description_en": "CROTCH LENGTH",
+      "description_local": "LARGO ENTREPIERNA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "D22",
+      "pom": {
+        "pom_global": "LOSPOM-529",
+        "codi_client": "D22"
+      },
+      "client_description": "",
+      "description_en": "KNEE LOCATION",
+      "description_local": "POSICIÓN RODILLA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "D6",
+      "pom": {
+        "pom_global": "LOSPOM-539",
+        "codi_client": "D6"
+      },
+      "client_description": "",
+      "description_en": "FRONT CROTCH WIDTH",
+      "description_local": "ANCHO ENTREPIERNA DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "D7",
+      "pom": {
+        "pom_global": "LOSPOM-541",
+        "codi_client": "D7"
+      },
+      "client_description": "",
+      "description_en": "BACK CROTCH WIDTH",
+      "description_local": "ANCHO ENTREPIERNA TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "E",
+      "pom": {
+        "pom_global": "POM-062",
+        "codi_client": "SK SW"
+      },
+      "client_description": "",
+      "description_en": "BOTTOM WIDTH",
+      "description_local": "ANCHO BAJO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "E.1",
+      "pom": {
+        "pom_global": "LOSPOM-653",
+        "codi_client": "E.1"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "E.2",
+      "pom": {
+        "pom_global": "LOSPOM-654",
+        "codi_client": "E.2"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "E3",
+      "pom": {
+        "pom_global": "LOSPOM-534",
+        "codi_client": "E3"
+      },
+      "client_description": "",
+      "description_en": "BOTTOM WIDTH RELAXED",
+      "description_local": "ANCHO BAJO RELAJADO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "E4",
+      "pom": {
+        "pom_global": "LOSPOM-535",
+        "codi_client": "E4"
+      },
+      "client_description": "",
+      "description_en": "BOTTOM WIDTH EXTENDED",
+      "description_local": "ANCHO BAJO EXTENDIDO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "E5",
+      "pom": {
+        "pom_global": "LOSPOM-536",
+        "codi_client": "E5"
+      },
+      "client_description": "",
+      "description_en": "FRONT BOTTOM WIDTH",
+      "description_local": "ANCHO BAJO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "E7",
+      "pom": {
+        "pom_global": "LOSPOM-537",
+        "codi_client": "E7"
+      },
+      "client_description": "",
+      "description_en": "BOTTOM HEIGHT",
+      "description_local": "ALTURA BAJO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "E8",
+      "pom": {
+        "pom_global": "LOSPOM-430",
+        "codi_client": "E.8"
+      },
+      "client_description": "",
+      "description_en": "BOTTOM DIFFERENCE",
+      "description_local": "DIFERENCIA BAJO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "E.9",
+      "pom": {
+        "pom_global": "LOSPOM-683",
+        "codi_client": "E.9"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "EV",
+      "pom": {
+        "pom_global": "LOSPOM-674",
+        "codi_client": "EV"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "F",
+      "pom": {
+        "pom_global": "POM-043",
+        "codi_client": "LEG OP"
+      },
+      "client_description": "",
+      "description_en": "LEG OPENING",
+      "description_local": "BOCA DE PIERNA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "F1",
+      "pom": {
+        "pom_global": "LOSPOM-530",
+        "codi_client": "F1"
+      },
+      "client_description": "",
+      "description_en": "FRONT LEG OPENING",
+      "description_local": "BOCA DE PIERNA DELANTERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "F2",
+      "pom": {
+        "pom_global": "LOSPOM-531",
+        "codi_client": "F2"
+      },
+      "client_description": "",
+      "description_en": "BACK LEG OPENING",
+      "description_local": "BOCA DE PIERNA TRASERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "F5",
+      "pom": {
+        "pom_global": "LOSPOM-532",
+        "codi_client": "F5"
+      },
+      "client_description": "",
+      "description_en": "LEG OPENING RELAXED",
+      "description_local": "BOCA DE PIERNA RELAJADA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "F6",
+      "pom": {
+        "pom_global": "LOSPOM-533",
+        "codi_client": "F6"
+      },
+      "client_description": "",
+      "description_en": "LEG OPENING EXTENDED",
+      "description_local": "BOCA DE PIERNA EXTENDIDA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "FP",
+      "pom": {
+        "pom_global": "LOSPOM-509",
+        "codi_client": "FP"
+      },
+      "client_description": "",
+      "description_en": "SHOULDER PIECE WIDTH",
+      "description_local": "ANCHO PIEZA HOMBRO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "G",
+      "pom": {
+        "pom_global": "POM-020",
+        "codi_client": "SL"
+      },
+      "client_description": "",
+      "description_en": "SLEEVE LENGTH",
+      "description_local": "LARGO MANGA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "G.3",
+      "pom": {
+        "pom_global": "LOSPOM-680",
+        "codi_client": "G.3"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "G5",
+      "pom": {
+        "pom_global": "LOSPOM-552",
+        "codi_client": "G5"
+      },
+      "client_description": "",
+      "description_en": "ELBOW LOCATION",
+      "description_local": "POSICIÓN CODO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "GA",
+      "pom": {
+        "pom_global": "LOSPOM-550",
+        "codi_client": "GA"
+      },
+      "client_description": "",
+      "description_en": "SLEEVE INSEAM LENGTH",
+      "description_local": "LARGO INTERIOR MANGA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "GL",
+      "pom": {
+        "pom_global": "LOSPOM-558",
+        "codi_client": "GL"
+      },
+      "client_description": "",
+      "description_en": "CUFF OPENING INNER",
+      "description_local": "ABERTURA PUÑO INTERIOR",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "GM",
+      "pom": {
+        "pom_global": "LOSPOM-560",
+        "codi_client": "GM"
+      },
+      "client_description": "",
+      "description_en": "CUFF DIFFERENCE",
+      "description_local": "DIFERENCIA PUÑO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "GN",
+      "pom": {
+        "pom_global": "LOSPOM-559",
+        "codi_client": "GN"
+      },
+      "client_description": "",
+      "description_en": "CUFF HEIGHT INNER",
+      "description_local": "ALTURA PUÑO INTERIOR",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "client_description": "",
+      "description_en": "SLEEVE MUSCLE",
+      "description_local": "ANCHO BÍCEPS",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H11",
+      "pom": {
+        "pom_global": "POM-025",
+        "codi_client": "SL OP"
+      },
+      "client_description": "",
+      "description_en": "SLEEVE OPENING",
+      "description_local": "BOCAMANGA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H.12",
+      "pom": {
+        "pom_global": "LOSPOM-681",
+        "codi_client": "H.12"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H12",
+      "pom": {
+        "pom_global": "LOSPOM-681",
+        "codi_client": "H.12"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H13",
+      "pom": {
+        "pom_global": "LOSPOM-460",
+        "codi_client": "J1"
+      },
+      "client_description": "",
+      "description_en": "SLEEVE OPENING RELAXED",
+      "description_local": "BOCAMANGA RELAJADA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H14",
+      "pom": {
+        "pom_global": "LOSPOM-554",
+        "codi_client": "H14"
+      },
+      "client_description": "",
+      "description_en": "SLEEVE OPENING EXTENDED",
+      "description_local": "BOCAMANGA EXTENDIDA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H15",
+      "pom": {
+        "pom_global": "LOSPOM-555",
+        "codi_client": "H15"
+      },
+      "client_description": "",
+      "description_en": "WIDTH BEFORE CUFF EXTENDED",
+      "description_local": "ANCHO ANTES DEL PUÑO EXTENDIDO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H16",
+      "pom": {
+        "pom_global": "LOSPOM-556",
+        "codi_client": "H16"
+      },
+      "client_description": "",
+      "description_en": "CUFF OPENING",
+      "description_local": "ABERTURA PUÑO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H17",
+      "pom": {
+        "pom_global": "LOSPOM-557",
+        "codi_client": "H17"
+      },
+      "client_description": "",
+      "description_en": "CUFF LENGTH",
+      "description_local": "LARGO PUÑO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H19",
+      "pom": {
+        "pom_global": "POM-023",
+        "codi_client": "BIC"
+      },
+      "client_description": "",
+      "description_en": "SLEEVE MOTIVE LOCATION",
+      "description_local": "POSICIÓN MOTIVO MANGA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H4",
+      "pom": {
+        "pom_global": "POM-024",
+        "codi_client": "ELB"
+      },
+      "client_description": "",
+      "description_en": "ELBOW WIDTH",
+      "description_local": "ANCHO CODO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H6",
+      "pom": {
+        "pom_global": "POM-012",
+        "codi_client": "AH DEP"
+      },
+      "client_description": "",
+      "description_en": "ARMHOLE",
+      "description_local": "SISA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H7",
+      "pom": {
+        "pom_global": "LOSPOM-547",
+        "codi_client": "H7"
+      },
+      "client_description": "",
+      "description_en": "ARMHOLE POINT LOCATION",
+      "description_local": "POSICIÓN PUNTO SISA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H8",
+      "pom": {
+        "pom_global": "LOSPOM-548",
+        "codi_client": "H8"
+      },
+      "client_description": "",
+      "description_en": "FRONT ARMHOLE",
+      "description_local": "SISA DELANTERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "H9",
+      "pom": {
+        "pom_global": "LOSPOM-549",
+        "codi_client": "H9"
+      },
+      "client_description": "",
+      "description_en": "BACK ARMHOLE",
+      "description_local": "SISA TRASERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "J1",
+      "pom": {
+        "pom_global": "LOSPOM-507",
+        "codi_client": "J1"
+      },
+      "client_description": "",
+      "description_en": "SHOULDER DROP LOCATION",
+      "description_local": "POSICIÓN CAÍDA DE HOMBRO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "J2",
+      "pom": {
+        "pom_global": "LOSPOM-508",
+        "codi_client": "J2"
+      },
+      "client_description": "",
+      "description_en": "SHOULDER MOVE FORWARD",
+      "description_local": "HOMBRO ADELANTADO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "JC",
+      "pom": {
+        "pom_global": "LOSPOM-574",
+        "codi_client": "JC"
+      },
+      "client_description": "",
+      "description_en": "TAPE WIDTH",
+      "description_local": "ANCHO CINTA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "K",
+      "pom": {
+        "pom_global": "POM-005",
+        "codi_client": "SH"
+      },
+      "client_description": "",
+      "description_en": "SHOULDER",
+      "description_local": "HOMBRO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "K1",
+      "pom": {
+        "pom_global": "POM-014",
+        "codi_client": "SH DR"
+      },
+      "client_description": "",
+      "description_en": "SHOULDER DROP",
+      "description_local": "CAÍDA DE HOMBRO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "K2",
+      "pom": {
+        "pom_global": "POM-006",
+        "codi_client": "AC SH"
+      },
+      "client_description": "",
+      "description_en": "SHOULDER TO SHOULDER",
+      "description_local": "HOMBRO A HOMBRO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "L1",
+      "pom": {
+        "pom_global": "LOSPOM-510",
+        "codi_client": "L1"
+      },
+      "client_description": "",
+      "description_en": "NECK TOTAL",
+      "description_local": "CUELLO TOTAL",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "L3",
+      "pom": {
+        "pom_global": "POM-030",
+        "codi_client": "NK W"
+      },
+      "client_description": "",
+      "description_en": "NECK WIDTH (SEAM TO SEAM)",
+      "description_local": "ANCHO CUELLO (COSTURA A COSTURA)",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "L4",
+      "pom": {
+        "pom_global": "POM-031",
+        "codi_client": "NK DR FR"
+      },
+      "client_description": "",
+      "description_en": "FRONT NECK DROP",
+      "description_local": "CAÍDA ESCOTE DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "L5",
+      "pom": {
+        "pom_global": "POM-032",
+        "codi_client": "NK DR BK"
+      },
+      "client_description": "",
+      "description_en": "BACK NECK DROP",
+      "description_local": "CAÍDA ESCOTE TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "M",
+      "pom": {
+        "pom_global": "LOSPOM-389",
+        "codi_client": "M-M79"
+      },
+      "client_description": "",
+      "description_en": "TOTAL LENGTH",
+      "description_local": "LARGO TOTAL",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "M.1",
+      "pom": {
+        "pom_global": "LOSPOM-655",
+        "codi_client": "M.1"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "M19",
+      "pom": {
+        "pom_global": "LOSPOM-544",
+        "codi_client": "M19"
+      },
+      "client_description": "",
+      "description_en": "FRONT LENGTH",
+      "description_local": "LARGO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "M20",
+      "pom": {
+        "pom_global": "LOSPOM-545",
+        "codi_client": "M20"
+      },
+      "client_description": "",
+      "description_en": "BACK LENGTH",
+      "description_local": "LARGO TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "M4",
+      "pom": {
+        "pom_global": "LOSPOM-568",
+        "codi_client": "M4"
+      },
+      "client_description": "",
+      "description_en": "CUT LOCATION",
+      "description_local": "POSICIÓN CORTE",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "M8",
+      "pom": {
+        "pom_global": "POM-011",
+        "codi_client": "SS"
+      },
+      "client_description": "",
+      "description_en": "SIDE LENGTH",
+      "description_local": "LARGO LATERAL",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "MF",
+      "pom": {
+        "pom_global": "LOSPOM-546",
+        "codi_client": "MF"
+      },
+      "client_description": "",
+      "description_en": "SIDE SEAM MOVED FORWARD",
+      "description_local": "COSTURA LATERAL ADELANTADA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "N4",
+      "pom": {
+        "pom_global": "LOSPOM-576",
+        "codi_client": "N4"
+      },
+      "client_description": "",
+      "description_en": "SIDE OPENING",
+      "description_local": "ABERTURA LATERAL",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O11",
+      "pom": {
+        "pom_global": "LOSPOM-586",
+        "codi_client": "O11"
+      },
+      "client_description": "",
+      "description_en": "CHEST POCKET WIDTH",
+      "description_local": "ANCHO BOLSILLO PECHO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O12",
+      "pom": {
+        "pom_global": "LOSPOM-587",
+        "codi_client": "O12"
+      },
+      "client_description": "",
+      "description_en": "CHEST POCKET LENGTH",
+      "description_local": "LARGO BOLSILLO PECHO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O13",
+      "pom": {
+        "pom_global": "LOSPOM-588",
+        "codi_client": "O13"
+      },
+      "client_description": "",
+      "description_en": "CHEST POCKET LENGTH W/FLAP",
+      "description_local": "LARGO BOLSILLO PECHO CON CARTERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O14",
+      "pom": {
+        "pom_global": "LOSPOM-589",
+        "codi_client": "O14"
+      },
+      "client_description": "",
+      "description_en": "CHEST POCKET LOCATION",
+      "description_local": "POSICIÓN BOLSILLO PECHO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O16",
+      "pom": {
+        "pom_global": "LOSPOM-590",
+        "codi_client": "O16"
+      },
+      "client_description": "",
+      "description_en": "FRONT POCKET OPENING",
+      "description_local": "ABERTURA BOLSILLO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O17",
+      "pom": {
+        "pom_global": "LOSPOM-591",
+        "codi_client": "O17"
+      },
+      "client_description": "",
+      "description_en": "FRONT POCKET FLAP HEIGHT",
+      "description_local": "ALTURA CARTERA BOLSILLO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O18",
+      "pom": {
+        "pom_global": "LOSPOM-592",
+        "codi_client": "O18"
+      },
+      "client_description": "",
+      "description_en": "FRONT POCKET FLAP WIDTH",
+      "description_local": "ANCHO CARTERA BOLSILLO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O19",
+      "pom": {
+        "pom_global": "LOSPOM-593",
+        "codi_client": "O19"
+      },
+      "client_description": "",
+      "description_en": "FRONT POCKET LENGTH W/FLAP",
+      "description_local": "LARGO BOLSILLO DELANTERO CON CARTERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O20",
+      "pom": {
+        "pom_global": "LOSPOM-594",
+        "codi_client": "O20"
+      },
+      "client_description": "",
+      "description_en": "FRONT POCKET WIDTH",
+      "description_local": "ANCHO BOLSILLO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O21",
+      "pom": {
+        "pom_global": "LOSPOM-390",
+        "codi_client": "O.21-M79"
+      },
+      "client_description": "",
+      "description_en": "FRONT POCKET LENGTH",
+      "description_local": "LARGO BOLSILLO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O23",
+      "pom": {
+        "pom_global": "LOSPOM-595",
+        "codi_client": "O23"
+      },
+      "client_description": "",
+      "description_en": "FRONT POCKET LOCATION",
+      "description_local": "POSICIÓN BOLSILLO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O25",
+      "pom": {
+        "pom_global": "LOSPOM-596",
+        "codi_client": "O25"
+      },
+      "client_description": "",
+      "description_en": "FRONT LINING LENGTH",
+      "description_local": "LARGO FORRO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O26",
+      "pom": {
+        "pom_global": "LOSPOM-393",
+        "codi_client": "O.26-M79"
+      },
+      "client_description": "",
+      "description_en": "BACK POCKET OPENING",
+      "description_local": "ABERTURA BOLSILLO TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O27",
+      "pom": {
+        "pom_global": "LOSPOM-394",
+        "codi_client": "O.27-M79"
+      },
+      "client_description": "",
+      "description_en": "BACK POCKET FLAP HEIGHT",
+      "description_local": "ALTURA CARTERA BOLSILLO TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O28",
+      "pom": {
+        "pom_global": "LOSPOM-597",
+        "codi_client": "O28"
+      },
+      "client_description": "",
+      "description_en": "BACK POCKET FLAP WIDTH",
+      "description_local": "ANCHO CARTERA BOLSILLO TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O29",
+      "pom": {
+        "pom_global": "LOSPOM-603",
+        "codi_client": "O29"
+      },
+      "client_description": "",
+      "description_en": "BACK POCKET WIDTH",
+      "description_local": "ANCHO BOLSILLO TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O30",
+      "pom": {
+        "pom_global": "LOSPOM-604",
+        "codi_client": "O30"
+      },
+      "client_description": "",
+      "description_en": "BACK POCKET LENGTH",
+      "description_local": "LARGO BOLSILLO TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O32",
+      "pom": {
+        "pom_global": "LOSPOM-395",
+        "codi_client": "O.32-M79"
+      },
+      "client_description": "",
+      "description_en": "BACK POCKET LOCATION",
+      "description_local": "POSICIÓN BOLSILLO TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O33",
+      "pom": {
+        "pom_global": "LOSPOM-605",
+        "codi_client": "O33"
+      },
+      "client_description": "",
+      "description_en": "COIN POCKET WIDTH",
+      "description_local": "ANCHO BOLSILLO RELOJERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O34",
+      "pom": {
+        "pom_global": "LOSPOM-606",
+        "codi_client": "O34"
+      },
+      "client_description": "",
+      "description_en": "COIN POCKET LENGTH",
+      "description_local": "LARGO BOLSILLO RELOJERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O35",
+      "pom": {
+        "pom_global": "POM-097",
+        "codi_client": "PKT OP"
+      },
+      "client_description": "",
+      "description_en": "SIDE POCKET OPENING",
+      "description_local": "ABERTURA BOLSILLO LATERAL",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O36",
+      "pom": {
+        "pom_global": "LOSPOM-598",
+        "codi_client": "O36"
+      },
+      "client_description": "",
+      "description_en": "SIDE POCKET FLAP HEIGHT",
+      "description_local": "ALTURA CARTERA BOLSILLO LATERAL",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O38",
+      "pom": {
+        "pom_global": "LOSPOM-599",
+        "codi_client": "O38"
+      },
+      "client_description": "",
+      "description_en": "SIDE POCKET WIDTH",
+      "description_local": "ANCHO BOLSILLO LATERAL",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O39",
+      "pom": {
+        "pom_global": "LOSPOM-600",
+        "codi_client": "O39"
+      },
+      "client_description": "",
+      "description_en": "SIDE POCKET LENGTH",
+      "description_local": "LARGO BOLSILLO LATERAL",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O40",
+      "pom": {
+        "pom_global": "LOSPOM-601",
+        "codi_client": "O40"
+      },
+      "client_description": "",
+      "description_en": "SIDE POCKET W/FLAP",
+      "description_local": "BOLSILLO LATERAL CON CARTERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O41",
+      "pom": {
+        "pom_global": "LOSPOM-602",
+        "codi_client": "O41"
+      },
+      "client_description": "",
+      "description_en": "SIDE POCKET LOCATION",
+      "description_local": "POSICIÓN BOLSILLO LATERAL",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O.8",
+      "pom": {
+        "pom_global": "LOSPOM-682",
+        "codi_client": "O.8"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "O9",
+      "pom": {
+        "pom_global": "LOSPOM-585",
+        "codi_client": "O9"
+      },
+      "client_description": "",
+      "description_en": "CHEST POCKET FLAP HEIGHT",
+      "description_local": "ALTURA CARTERA BOLSILLO PECHO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "R",
+      "pom": {
+        "pom_global": "POM-090",
+        "codi_client": "ZIP L"
+      },
+      "client_description": "",
+      "description_en": "ZIPPER LENGTH",
+      "description_local": "LARGO CREMALLERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "R.1",
+      "pom": {
+        "pom_global": "LOSPOM-656",
+        "codi_client": "R.1"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "R1",
+      "pom": {
+        "pom_global": "POM-126",
+        "codi_client": "STRAP LF"
+      },
+      "client_description": "",
+      "description_en": "STRAP LENGTH",
+      "description_local": "LARGO TIRANTE",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "R10",
+      "pom": {
+        "pom_global": "LOSPOM-543",
+        "codi_client": "R10"
+      },
+      "client_description": "",
+      "description_en": "FALSE FLY",
+      "description_local": "BRAGUETA FALSA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "R2",
+      "pom": {
+        "pom_global": "POM-087",
+        "codi_client": "STRAP W SW"
+      },
+      "client_description": "",
+      "description_en": "STRAP WIDTH",
+      "description_local": "ANCHO TIRANTE",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "R.3",
+      "pom": {
+        "pom_global": "LOSPOM-657",
+        "codi_client": "R.3"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "R8",
+      "pom": {
+        "pom_global": "LOSPOM-487",
+        "codi_client": "BR"
+      },
+      "client_description": "",
+      "description_en": "FLY WIDTH",
+      "description_local": "ANCHO BRAGUETA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "R9",
+      "pom": {
+        "pom_global": "LOSPOM-542",
+        "codi_client": "R9"
+      },
+      "client_description": "",
+      "description_en": "FLY OPENING",
+      "description_local": "ABERTURA BRAGUETA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S",
+      "pom": {
+        "pom_global": "LOSPOM-581",
+        "codi_client": "S"
+      },
+      "client_description": "",
+      "description_en": "COLLAR HEIGHT ON TOP",
+      "description_local": "ALTURA CUELLO SUPERIOR",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S10",
+      "pom": {
+        "pom_global": "LOSPOM-425",
+        "codi_client": "S.10"
+      },
+      "client_description": "",
+      "description_en": "HOOD LENGTH",
+      "description_local": "LARGO CAPUCHA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S11",
+      "pom": {
+        "pom_global": "POM-096",
+        "codi_client": "HD W"
+      },
+      "client_description": "",
+      "description_en": "HOOD WIDTH",
+      "description_local": "ANCHO CAPUCHA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S13",
+      "pom": {
+        "pom_global": "LOSPOM-564",
+        "codi_client": "S13"
+      },
+      "client_description": "",
+      "description_en": "BACK YOKE CENTER LENGTH",
+      "description_local": "LARGO CANESÚ TRASERO CENTRO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S.19",
+      "pom": {
+        "pom_global": "LOSPOM-648",
+        "codi_client": "S.19"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S2",
+      "pom": {
+        "pom_global": "LOSPOM-583",
+        "codi_client": "S2"
+      },
+      "client_description": "",
+      "description_en": "COLLAR BAND HEIGHT",
+      "description_local": "ALTURA PIE DE CUELLO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S.20",
+      "pom": {
+        "pom_global": "LOSPOM-649",
+        "codi_client": "S.20"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S21",
+      "pom": {
+        "pom_global": "POM-123",
+        "codi_client": "BELT L"
+      },
+      "client_description": "",
+      "description_en": "BELT LENGTH",
+      "description_local": "LARGO CINTURÓN",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S22",
+      "pom": {
+        "pom_global": "LOSPOM-457",
+        "codi_client": "S"
+      },
+      "client_description": "",
+      "description_en": "BELT HEIGHT",
+      "description_local": "ALTURA CINTURÓN",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S25",
+      "pom": {
+        "pom_global": "LOSPOM-565",
+        "codi_client": "S25"
+      },
+      "client_description": "",
+      "description_en": "SIDE YOKE LENGTH",
+      "description_local": "LARGO CANESÚ LATERAL",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S27",
+      "pom": {
+        "pom_global": "LOSPOM-561",
+        "codi_client": "S27"
+      },
+      "client_description": "",
+      "description_en": "FRONT YOKE CENTER LENGTH",
+      "description_local": "LARGO CANESÚ DELANTERO CENTRO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S28",
+      "pom": {
+        "pom_global": "LOSPOM-562",
+        "codi_client": "S28"
+      },
+      "client_description": "",
+      "description_en": "FRONT YOKE LENGTH",
+      "description_local": "LARGO CANESÚ DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S3",
+      "pom": {
+        "pom_global": "LOSPOM-577",
+        "codi_client": "S3"
+      },
+      "client_description": "",
+      "description_en": "PLACKET LENGTH",
+      "description_local": "LARGO TAPETA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S30",
+      "pom": {
+        "pom_global": "LOSPOM-563",
+        "codi_client": "S30"
+      },
+      "client_description": "",
+      "description_en": "BACK YOKE LENGTH",
+      "description_local": "LARGO CANESÚ TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S34",
+      "pom": {
+        "pom_global": "LOSPOM-573",
+        "codi_client": "S34"
+      },
+      "client_description": "",
+      "description_en": "FRONT COVER WIDTH",
+      "description_local": "ANCHO TAPA DELANTERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S.35",
+      "pom": {
+        "pom_global": "LOSPOM-668",
+        "codi_client": "S.35"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S37",
+      "pom": {
+        "pom_global": "LOSPOM-582",
+        "codi_client": "S37"
+      },
+      "client_description": "",
+      "description_en": "COLLAR PEAK",
+      "description_local": "PUNTA CUELLO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S.39",
+      "pom": {
+        "pom_global": "LOSPOM-650",
+        "codi_client": "S.39"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S4",
+      "pom": {
+        "pom_global": "POM-092",
+        "codi_client": "PLCK W"
+      },
+      "client_description": "",
+      "description_en": "PLACKET WIDTH",
+      "description_local": "ANCHO TAPETA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S.40",
+      "pom": {
+        "pom_global": "LOSPOM-651",
+        "codi_client": "S.40"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S.42",
+      "pom": {
+        "pom_global": "LOSPOM-684",
+        "codi_client": "S.42"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S44",
+      "pom": {
+        "pom_global": "LOSPOM-457",
+        "codi_client": "S"
+      },
+      "client_description": "",
+      "description_en": "FRONT MOTIVE LOCATION",
+      "description_local": "POSICIÓN MOTIVO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S45",
+      "pom": {
+        "pom_global": "LOSPOM-575",
+        "codi_client": "S45"
+      },
+      "client_description": "",
+      "description_en": "BACK OPENING",
+      "description_local": "ABERTURA TRASERA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S5",
+      "pom": {
+        "pom_global": "POM-027",
+        "codi_client": "CUF H"
+      },
+      "client_description": "",
+      "description_en": "CUFF HEIGHT",
+      "description_local": "ALTURA PUÑO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S53",
+      "pom": {
+        "pom_global": "LOSPOM-614",
+        "codi_client": "S53"
+      },
+      "client_description": "",
+      "description_en": "HOOD WIDTH LOCATION",
+      "description_local": "POSICIÓN ANCHO CAPUCHA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S54",
+      "pom": {
+        "pom_global": "LOSPOM-612",
+        "codi_client": "S54"
+      },
+      "client_description": "",
+      "description_en": "HOOD LENGTH RELAXED",
+      "description_local": "LARGO CAPUCHA RELAJADO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S55",
+      "pom": {
+        "pom_global": "LOSPOM-613",
+        "codi_client": "S55"
+      },
+      "client_description": "",
+      "description_en": "HOOD LENGTH EXTENDED",
+      "description_local": "LARGO CAPUCHA EXTENDIDO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S56",
+      "pom": {
+        "pom_global": "LOSPOM-426",
+        "codi_client": "S.56"
+      },
+      "client_description": "",
+      "description_en": "HOOD PIECE WIDTH",
+      "description_local": "ANCHO PIEZA CAPUCHA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S8",
+      "pom": {
+        "pom_global": "LOSPOM-511",
+        "codi_client": "S8"
+      },
+      "client_description": "",
+      "description_en": "COLLAR OPENING EXTENDED",
+      "description_local": "ABERTURA CUELLO EXTENDIDA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "SR1",
+      "pom": {
+        "pom_global": "LOSPOM-392",
+        "codi_client": "S.R1-M79"
+      },
+      "client_description": "",
+      "description_en": "CORD LENGTH IN OUTSIDE",
+      "description_local": "LARGO CORDÓN EXTERIOR",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "SR10",
+      "pom": {
+        "pom_global": "LOSPOM-497",
+        "codi_client": "IC2"
+      },
+      "client_description": "",
+      "description_en": "BOW LENGTH",
+      "description_local": "LARGO LAZO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "SR2",
+      "pom": {
+        "pom_global": "LOSPOM-615",
+        "codi_client": "SR2"
+      },
+      "client_description": "",
+      "description_en": "DRAWSTRING LENGTH MEASURED AT POINT WHERE TIES",
+      "description_local": "LARGO CORDÓN MEDIDO EN PUNTO DE ATADO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "SR3",
+      "pom": {
+        "pom_global": "LOSPOM-616",
+        "codi_client": "SR3"
+      },
+      "client_description": "",
+      "description_en": "DRAWSTRING CHANNEL",
+      "description_local": "JARETA CORDÓN",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S.R6",
+      "pom": {
+        "pom_global": "LOSPOM-670",
+        "codi_client": "S.R6"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "S.R7",
+      "pom": {
+        "pom_global": "LOSPOM-671",
+        "codi_client": "S.R7"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "SR9",
+      "pom": {
+        "pom_global": "POM-024",
+        "codi_client": "ELB"
+      },
+      "client_description": "",
+      "description_en": "BOW WIDTH",
+      "description_local": "ANCHO LAZO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "T1",
+      "pom": {
+        "pom_global": "POM-055",
+        "codi_client": "RI FR"
+      },
+      "client_description": "",
+      "description_en": "FRONT RISE",
+      "description_local": "TIRO DELANTERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "T13",
+      "pom": {
+        "pom_global": "LOSPOM-566",
+        "codi_client": "T13"
+      },
+      "client_description": "",
+      "description_en": "PLEAT LOCATION",
+      "description_local": "POSICIÓN PLIEGUE",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "T14",
+      "pom": {
+        "pom_global": "LOSPOM-567",
+        "codi_client": "T14"
+      },
+      "client_description": "",
+      "description_en": "PLEAT",
+      "description_local": "PLIEGUE",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "T2",
+      "pom": {
+        "pom_global": "POM-056",
+        "codi_client": "RI BK"
+      },
+      "client_description": "",
+      "description_en": "BACK RISE",
+      "description_local": "TIRO TRASERO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "T5",
+      "pom": {
+        "pom_global": "POM-154",
+        "codi_client": "HM L"
+      },
+      "client_description": "",
+      "description_en": "HALF MOON LENGTH",
+      "description_local": "LARGO MEDIA LUNA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "U",
+      "pom": {
+        "pom_global": "LOSPOM-512",
+        "codi_client": "U"
+      },
+      "client_description": "",
+      "description_en": "RIB WIDTH",
+      "description_local": "ANCHO CANALÉ",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "U.1",
+      "pom": {
+        "pom_global": "LOSPOM-513",
+        "codi_client": "U1"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "U1",
+      "pom": {
+        "pom_global": "LOSPOM-513",
+        "codi_client": "U1"
+      },
+      "client_description": "",
+      "description_en": "JETTING WIDTH",
+      "description_local": "ANCHO VIVO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "U3",
+      "pom": {
+        "pom_global": "POM-074",
+        "codi_client": "FLO W"
+      },
+      "client_description": "",
+      "description_en": "FLOUNCE WIDTH",
+      "description_local": "ANCHO VOLANTE",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "U4",
+      "pom": {
+        "pom_global": "LOSPOM-578",
+        "codi_client": "U4"
+      },
+      "client_description": "",
+      "description_en": "FLOUNCE HEIGHT",
+      "description_local": "ALTURA VOLANTE",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "U5",
+      "pom": {
+        "pom_global": "POM-076",
+        "codi_client": "FLO POS"
+      },
+      "client_description": "",
+      "description_en": "FLOUNCE LOCATION",
+      "description_local": "POSICIÓN VOLANTE",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "U6",
+      "pom": {
+        "pom_global": "POM-075",
+        "codi_client": "FLO EXT"
+      },
+      "client_description": "",
+      "description_en": "FLOUNCE EXTENDED",
+      "description_local": "VOLANTE EXTENDIDO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "U7",
+      "pom": {
+        "pom_global": "LOSPOM-579",
+        "codi_client": "U7"
+      },
+      "client_description": "",
+      "description_en": "FRILL HEIGHT",
+      "description_local": "ALTURA VOLANTE FRUNCIDO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V",
+      "pom": {
+        "pom_global": "LOSPOM-492",
+        "codi_client": "V"
+      },
+      "client_description": "",
+      "description_en": "STITCHING WIDTH",
+      "description_local": "ANCHO PESPUNTE",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V10",
+      "pom": {
+        "pom_global": "POM-151",
+        "codi_client": "EL RLX"
+      },
+      "client_description": "",
+      "description_en": "ELASTIC RELAXED",
+      "description_local": "ELÁSTICO RELAJADO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V11",
+      "pom": {
+        "pom_global": "POM-152",
+        "codi_client": "EL EXT"
+      },
+      "client_description": "",
+      "description_en": "ELASTIC EXTENDED",
+      "description_local": "ELÁSTICO EXTENDIDO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V12",
+      "pom": {
+        "pom_global": "LOSPOM-580",
+        "codi_client": "V12"
+      },
+      "client_description": "",
+      "description_en": "FOLD",
+      "description_local": "DOBLEZ",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V13",
+      "pom": {
+        "pom_global": "LOSPOM-397",
+        "codi_client": "V.13-M79"
+      },
+      "client_description": "",
+      "description_en": "DART LENGTH",
+      "description_local": "LARGO PINZA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V14",
+      "pom": {
+        "pom_global": "LOSPOM-396",
+        "codi_client": "V.14-M79"
+      },
+      "client_description": "",
+      "description_en": "DART LOCATION",
+      "description_local": "POSICIÓN PINZA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V18",
+      "pom": {
+        "pom_global": "LOSPOM-492",
+        "codi_client": "V"
+      },
+      "client_description": "",
+      "description_en": "BUTTON LOCATION",
+      "description_local": "POSICIÓN BOTÓN",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V.2",
+      "pom": {
+        "pom_global": "LOSPOM-668",
+        "codi_client": "S.35"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V3",
+      "pom": {
+        "pom_global": "LOSPOM-492",
+        "codi_client": "V"
+      },
+      "client_description": "",
+      "description_en": "STITCHING LOCATION",
+      "description_local": "POSICIÓN PESPUNTE",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V4",
+      "pom": {
+        "pom_global": "LOSPOM-569",
+        "codi_client": "V4"
+      },
+      "client_description": "",
+      "description_en": "PIECE WIDTH",
+      "description_local": "ANCHO PIEZA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V5",
+      "pom": {
+        "pom_global": "LOSPOM-570",
+        "codi_client": "V5"
+      },
+      "client_description": "",
+      "description_en": "PIECE WIDTH EXTENDED",
+      "description_local": "ANCHO PIEZA EXTENDIDO",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V6",
+      "pom": {
+        "pom_global": "LOSPOM-571",
+        "codi_client": "V6"
+      },
+      "client_description": "",
+      "description_en": "PIECE LENGTH",
+      "description_local": "LARGO PIEZA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V7",
+      "pom": {
+        "pom_global": "LOSPOM-572",
+        "codi_client": "V7"
+      },
+      "client_description": "",
+      "description_en": "PIECE LOCATION",
+      "description_local": "POSICIÓN PIEZA",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "V.9",
+      "pom": {
+        "pom_global": "LOSPOM-672",
+        "codi_client": "V.9"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "W4",
+      "pom": {
+        "pom_global": "LOSPOM-607",
+        "codi_client": "W4"
+      },
+      "client_description": "",
+      "description_en": "INNER POCKET OPENING",
+      "description_local": "ABERTURA BOLSILLO INTERIOR",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "W5",
+      "pom": {
+        "pom_global": "LOSPOM-608",
+        "codi_client": "W5"
+      },
+      "client_description": "",
+      "description_en": "INNER POCKET FLAP HEIGHT",
+      "description_local": "ALTURA CARTERA BOLSILLO INTERIOR",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "W6",
+      "pom": {
+        "pom_global": "LOSPOM-609",
+        "codi_client": "W6"
+      },
+      "client_description": "",
+      "description_en": "INNER POCKET WIDTH",
+      "description_local": "ANCHO BOLSILLO INTERIOR",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "W7",
+      "pom": {
+        "pom_global": "LOSPOM-610",
+        "codi_client": "W7"
+      },
+      "client_description": "",
+      "description_en": "INNER POCKET LENGTH",
+      "description_local": "LARGO BOLSILLO INTERIOR",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "W9",
+      "pom": {
+        "pom_global": "LOSPOM-611",
+        "codi_client": "W9"
+      },
+      "client_description": "",
+      "description_en": "INNER POCKET LOCATION",
+      "description_local": "POSICIÓN BOLSILLO INTERIOR",
+      "language": "es",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    },
+    {
+      "customer": "LOS",
+      "client_code": "Z",
+      "pom": {
+        "pom_global": "LOSPOM-658",
+        "codi_client": "Z"
+      },
+      "client_description": "",
+      "description_en": "",
+      "description_local": "",
+      "language": "",
+      "origen": "DICCIONARI",
+      "pendent_revisio": false
+    }
+  ]
+}

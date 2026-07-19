@@ -1,0 +1,786 @@
+{
+  "layer": "garment_catalog",
+  "count": 95,
+  "groups_count": 12,
+  "types_count": 21,
+  "items_count": 62,
+  "groups": [
+    {
+      "codi": "ACCESSORIES",
+      "nom": "Accessories",
+      "actiu": true
+    },
+    {
+      "codi": "BOTTOMS",
+      "nom": "Bottoms",
+      "actiu": true
+    },
+    {
+      "codi": "DRESSES",
+      "nom": "Dresses & Jumpsuits",
+      "actiu": true
+    },
+    {
+      "codi": "DRESSES-FULL",
+      "nom": "Dresses & Full Length",
+      "actiu": true
+    },
+    {
+      "codi": "KNITWEAR",
+      "nom": "Knitwear",
+      "actiu": true
+    },
+    {
+      "codi": "NEWBORN",
+      "nom": "Newborn",
+      "actiu": true
+    },
+    {
+      "codi": "OUTERWEAR",
+      "nom": "Outerwear",
+      "actiu": true
+    },
+    {
+      "codi": "SWIMWEAR",
+      "nom": "Swimwear",
+      "actiu": true
+    },
+    {
+      "codi": "TOPS",
+      "nom": "Tops",
+      "actiu": true
+    },
+    {
+      "codi": "TOPS-KNIT",
+      "nom": "Tops — Knitwear",
+      "actiu": true
+    },
+    {
+      "codi": "TOPS-WOVEN",
+      "nom": "Tops — Woven",
+      "actiu": true
+    },
+    {
+      "codi": "UNDERWEAR",
+      "nom": "Underwear & Lingerie",
+      "actiu": true
+    }
+  ],
+  "types": [
+    {
+      "codi_client": "ACCESSORIES",
+      "nom_client": "Accessories",
+      "grup": "ACCESSORIES",
+      "actiu": true,
+      "nom_en": "Accessories",
+      "nom_ca": "",
+      "nom_es": "",
+      "is_system": false,
+      "construccio_habitual": "",
+      "descripcio": "",
+      "garment_type_global": null
+    },
+    {
+      "codi_client": "ADULT_JUMPSUITS",
+      "nom_client": "Adult Jumpsuits & Overalls",
+      "grup": "DRESSES",
+      "actiu": true,
+      "nom_en": "Adult Jumpsuits & Overalls",
+      "nom_ca": "Monos i petos d'adult",
+      "nom_es": "Monos y petos de adulto",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Unió de cos superior i pantaló per a adults. Control crític de la línia de tir total per a la flexió del tronc en seure.",
+      "garment_type_global": "ADULT_JUMPSUITS"
+    },
+    {
+      "codi_client": "BABY_ONEPIECES",
+      "nom_client": "Baby & Kids One-Pieces",
+      "grup": "DRESSES",
+      "actiu": false,
+      "nom_en": "Baby & Kids One-Pieces",
+      "nom_ca": "Integrals nadó i infantil",
+      "nom_es": "Enterizos bebé e infantil",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Peces de cos sencer amb patronatge adaptat a l'ergonomia infantil: sobredimensionat de tir per encabir el bolquer i obertures inferiors amb gafets.",
+      "garment_type_global": "BABY_ONEPIECES"
+    },
+    {
+      "codi_client": "BABY_SEPARATES",
+      "nom_client": "Baby & Kids Separates",
+      "grup": "TOPS",
+      "actiu": false,
+      "nom_en": "Baby & Kids Separates",
+      "nom_ca": "Nadó i infantil — peces separades",
+      "nom_es": "Bebé e infantil — piezas separadas",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Peces de nadó i infantil de tall separat (no integrals). Patronatge ergonòmic infantil amb obertures amplies i teixits suaus de punt.",
+      "garment_type_global": "BABY_SEPARATES"
+    },
+    {
+      "codi_client": "BRA_SHAPEWEAR",
+      "nom_client": "Bra & Shapewear",
+      "grup": "UNDERWEAR",
+      "actiu": true,
+      "nom_en": "Bra & Shapewear",
+      "nom_ca": "Corseteria i suport",
+      "nom_es": "Corsetería y soporte",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Patronatge d'alta precisió mil·limètrica basat en contorn i copa del pit o modelatge d'alta compressió. Allotjament per a cèrcols (aros) o escumes preformades.",
+      "garment_type_global": "BRA_SHAPEWEAR"
+    },
+    {
+      "codi_client": "BUTTONED_TOPS",
+      "nom_client": "Buttoned Tops",
+      "grup": "TOPS",
+      "actiu": true,
+      "nom_en": "Buttoned Tops",
+      "nom_ca": "Tops de botonadura",
+      "nom_es": "Tops abotonados",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Teixit pla (woven). Obertura frontal completa amb vista/tapeta, canesú a l'esquena, pinces d'ajust i màniga sastre o de puny construït amb clapa.",
+      "garment_type_global": "BUTTONED_TOPS"
+    },
+    {
+      "codi_client": "DRESS",
+      "nom_client": "Dress",
+      "grup": "DRESSES",
+      "actiu": false,
+      "nom_en": "Dress",
+      "nom_ca": "Vestit",
+      "nom_es": "Vestido",
+      "is_system": true,
+      "construccio_habitual": "WOVEN+KNIT",
+      "descripcio": "",
+      "garment_type_global": "DRESS"
+    },
+    {
+      "codi_client": "DRESSES",
+      "nom_client": "Dresses",
+      "grup": "DRESSES",
+      "actiu": true,
+      "nom_en": "Dresses",
+      "nom_ca": "Vestits",
+      "nom_es": "Vestidos",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Unió estructural de cos superior i faldilla en una sola línia d'aplom vertical, amb tancaments llargs posteriors o laterals.",
+      "garment_type_global": "DRESSES"
+    },
+    {
+      "codi_client": "HEAVY_OUTERWEAR",
+      "nom_client": "Heavy Outerwear",
+      "grup": "OUTERWEAR",
+      "actiu": true,
+      "nom_en": "Heavy Outerwear",
+      "nom_ca": "Abrics i parques",
+      "nom_es": "Abrigos y parkas",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Terceres capes de gran volum amb índexs de folgança elevats, llargs per sota del maluc, per a teixits pesants o encoixinats.",
+      "garment_type_global": "HEAVY_OUTERWEAR"
+    },
+    {
+      "codi_client": "JERSEY_TOPS",
+      "nom_client": "Jersey Tops",
+      "grup": "TOPS",
+      "actiu": true,
+      "nom_en": "Jersey Tops",
+      "nom_ca": "Tops de punt",
+      "nom_es": "Tops de punto",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Gènere de punt circular (knit jersey). Patró geomètric simple de tronc tancat (sense pinces de pit) i màniga de corona baixa muntada en pla.",
+      "garment_type_global": "JERSEY_TOPS"
+    },
+    {
+      "codi_client": "KNIT_CARDIGANS",
+      "nom_client": "Knit Cardigans",
+      "grup": "TOPS",
+      "actiu": true,
+      "nom_en": "Knit Cardigans",
+      "nom_ca": "Càrdigans i punts oberts",
+      "nom_es": "Cárdigans y puntos abiertos",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Punt rectilini. Peces obertes davanteres amb tapeta de botonadura teixida integrada i remats en canalé.",
+      "garment_type_global": "KNIT_CARDIGANS"
+    },
+    {
+      "codi_client": "KNIT_SWEATERS",
+      "nom_client": "Knit Sweaters",
+      "grup": "TOPS",
+      "actiu": true,
+      "nom_en": "Knit Sweaters",
+      "nom_ca": "Jerseis i punts tancats",
+      "nom_es": "Jerséis y puntos cerrados",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Punt rectilini (fully fashioned). Peces tancades teixides malla a malla amb menguats a les cises i colls per evitar tallar el teixit.",
+      "garment_type_global": "KNIT_SWEATERS"
+    },
+    {
+      "codi_client": "LEGGINGS_TIGHTS",
+      "nom_client": "Leggings & Tights",
+      "grup": "BOTTOMS",
+      "actiu": true,
+      "nom_en": "Leggings & Tights",
+      "nom_ca": "Malles i leggings",
+      "nom_es": "Mallas y leggings",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Teixit elàstic bidireccional. Sovint elimina la costura lateral exterior. Ajust anatòmic per pressió amb pretina alta elàstica, sense cremalleres.",
+      "garment_type_global": "LEGGINGS_TIGHTS"
+    },
+    {
+      "codi_client": "NEWBORN",
+      "nom_client": "Newborn",
+      "grup": "NEWBORN",
+      "actiu": true,
+      "nom_en": "Newborn",
+      "nom_ca": "",
+      "nom_es": "",
+      "is_system": false,
+      "construccio_habitual": "",
+      "descripcio": "",
+      "garment_type_global": null
+    },
+    {
+      "codi_client": "SKIRTS",
+      "nom_client": "Skirts",
+      "grup": "BOTTOMS",
+      "actiu": true,
+      "nom_en": "Skirts",
+      "nom_ca": "Faldilles",
+      "nom_es": "Faldas",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Estructures buides que cobreixen des de la cintura sense separació de cames, definides pel buidat de pinces de maluc o línies de capa.",
+      "garment_type_global": "SKIRTS"
+    },
+    {
+      "codi_client": "STRUCTURED_JACKETS",
+      "nom_client": "Structured Jackets",
+      "grup": "OUTERWEAR",
+      "actiu": true,
+      "nom_en": "Structured Jackets",
+      "nom_ca": "Sastreria i caçadores",
+      "nom_es": "Sastrería y cazadoras",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Terceres capes estructurades. Costadillos verticals (sense costura lateral), màniga sastre de dues peces, entreteixits (fusing) i espatlleres.",
+      "garment_type_global": "STRUCTURED_JACKETS"
+    },
+    {
+      "codi_client": "SWEATSHIRTS_MIDLAYERS",
+      "nom_client": "Sweatshirts & Midlayers",
+      "grup": "TOPS",
+      "actiu": true,
+      "nom_en": "Sweatshirts & Midlayers",
+      "nom_ca": "Dessuadores i segones capes",
+      "nom_es": "Sudaderas y capas medias",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Volum folgat en pelfa o polar. Ús prioritari de màniga ranglan per treure la costura de l'espatlla i millorar el confort tèrmic.",
+      "garment_type_global": "SWEATSHIRTS_MIDLAYERS"
+    },
+    {
+      "codi_client": "SWIMWEAR",
+      "nom_client": "Swimwear",
+      "grup": "SWIMWEAR",
+      "actiu": true,
+      "nom_en": "Swimwear",
+      "nom_ca": "Roba de bany",
+      "nom_es": "Ropa de baño",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Patrons sense folgances per a teixits de licra que absorbeixen aigua sense deformar-se. Goma elàstica d'alta resistència al clor a totes les obertures.",
+      "garment_type_global": "SWIMWEAR"
+    },
+    {
+      "codi_client": "TAILORED_PANTS",
+      "nom_client": "Tailored & Rigid Pants",
+      "grup": "BOTTOMS",
+      "actiu": true,
+      "nom_en": "Tailored & Rigid Pants",
+      "nom_ca": "Pantalons estructurats",
+      "nom_es": "Pantalones estructurados",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Arquitectura de quatre peces (dos davants amb línia d'aplom i dos darreres amb fons d'assentament). Requereix pretina postissa, bragueta construïda i fons de butxaca.",
+      "garment_type_global": "TAILORED_PANTS"
+    },
+    {
+      "codi_client": "T_SHIRT",
+      "nom_client": "T-shirt",
+      "grup": "TOPS",
+      "actiu": false,
+      "nom_en": "T-shirt",
+      "nom_ca": "Samarreta",
+      "nom_es": "Camiseta",
+      "is_system": true,
+      "construccio_habitual": "KNIT",
+      "descripcio": "",
+      "garment_type_global": "T_SHIRT"
+    },
+    {
+      "codi_client": "UNDERWEAR",
+      "nom_client": "Underwear",
+      "grup": "UNDERWEAR",
+      "actiu": true,
+      "nom_en": "Underwear",
+      "nom_ca": "Roba interior",
+      "nom_es": "Ropa interior",
+      "is_system": true,
+      "construccio_habitual": "",
+      "descripcio": "Peces de mínim teixit i màxima elasticitat. Patrons anatòmics d'ajust a l'engonal amb gomes interiors i costures planes (flatlock).",
+      "garment_type_global": "UNDERWEAR"
+    }
+  ],
+  "items": [
+    {
+      "garment_type": "ACCESSORIES",
+      "code": "bag",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "ACCESSORIES",
+      "code": "hat_cap",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "ACCESSORIES",
+      "code": "scarf",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "ADULT_JUMPSUITS",
+      "code": "dungarees",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "ADULT_JUMPSUITS",
+      "code": "jumpsuit",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "ADULT_JUMPSUITS",
+      "code": "playsuit",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "BRA_SHAPEWEAR",
+      "code": "bra",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "BRA_SHAPEWEAR",
+      "code": "corset",
+      "complexity_order": 3,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "BRA_SHAPEWEAR",
+      "code": "shapewear",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "BUTTONED_TOPS",
+      "code": "blouse",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": "BRW · Blusa · ALPHA_EU_W"
+    },
+    {
+      "garment_type": "BUTTONED_TOPS",
+      "code": "overshirt",
+      "complexity_order": 3,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "BUTTONED_TOPS",
+      "code": "shirt_woven",
+      "complexity_order": 1,
+      "base_size_definition": {
+        "size_system": "ALPHA_EU_M",
+        "etiqueta": "L"
+      },
+      "grading_rule_set": "EU Woven Man Regular"
+    },
+    {
+      "garment_type": "BUTTONED_TOPS",
+      "code": "uniform_shirt",
+      "complexity_order": 4,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "DRESSES",
+      "code": "dress_fancy",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "DRESSES",
+      "code": "dress_simple",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "DRESSES",
+      "code": "dress_structured",
+      "complexity_order": 3,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "DRESSES",
+      "code": "shirt_dress",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "HEAVY_OUTERWEAR",
+      "code": "coat",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "HEAVY_OUTERWEAR",
+      "code": "leather_garment",
+      "complexity_order": 3,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "HEAVY_OUTERWEAR",
+      "code": "parka",
+      "complexity_order": 3,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "HEAVY_OUTERWEAR",
+      "code": "trench",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "JERSEY_TOPS",
+      "code": "polo",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "JERSEY_TOPS",
+      "code": "top_sleeveless",
+      "complexity_order": 3,
+      "base_size_definition": {
+        "size_system": "WOMAN_LOS_01",
+        "etiqueta": "M"
+      },
+      "grading_rule_set": "LOS Woman Knit — Tops"
+    },
+    {
+      "garment_type": "JERSEY_TOPS",
+      "code": "t_shirt",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "JERSEY_TOPS",
+      "code": "vest_top",
+      "complexity_order": 3,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "KNIT_CARDIGANS",
+      "code": "cardigan",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "KNIT_CARDIGANS",
+      "code": "knit_gilet",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "KNIT_SWEATERS",
+      "code": "sweater",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "KNIT_SWEATERS",
+      "code": "twinset",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "LEGGINGS_TIGHTS",
+      "code": "culotte_cycling",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "LEGGINGS_TIGHTS",
+      "code": "leggings",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "NEWBORN",
+      "code": "baby_bloomers",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "NEWBORN",
+      "code": "baby_bodysuit",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "NEWBORN",
+      "code": "baby_dress",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "NEWBORN",
+      "code": "baby_leggings",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "NEWBORN",
+      "code": "baby_sleepbag",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "NEWBORN",
+      "code": "baby_sleepsuit",
+      "complexity_order": 3,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "NEWBORN",
+      "code": "baby_swimwear",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "NEWBORN",
+      "code": "baby_top",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "NEWBORN",
+      "code": "booties",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "SKIRTS",
+      "code": "skirt_straight",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "SKIRTS",
+      "code": "skirt_volume",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "STRUCTURED_JACKETS",
+      "code": "blazer",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "STRUCTURED_JACKETS",
+      "code": "casual_jacket",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "STRUCTURED_JACKETS",
+      "code": "gilet",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "SWEATSHIRTS_MIDLAYERS",
+      "code": "fleece_jacket",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "SWEATSHIRTS_MIDLAYERS",
+      "code": "hoodie",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "SWIMWEAR",
+      "code": "bikini",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "SWIMWEAR",
+      "code": "swim_shorts",
+      "complexity_order": 3,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "SWIMWEAR",
+      "code": "swimsuit",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "TAILORED_PANTS",
+      "code": "chino",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "TAILORED_PANTS",
+      "code": "jeans",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "TAILORED_PANTS",
+      "code": "shorts",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "TAILORED_PANTS",
+      "code": "tracksuit_pant",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "TAILORED_PANTS",
+      "code": "trousers",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "TAILORED_PANTS",
+      "code": "workwear_pant",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "UNDERWEAR",
+      "code": "bodysuit",
+      "complexity_order": 3,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "UNDERWEAR",
+      "code": "briefs_man",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "UNDERWEAR",
+      "code": "briefs_woman",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "UNDERWEAR",
+      "code": "pyjama_set",
+      "complexity_order": 2,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "UNDERWEAR",
+      "code": "socks",
+      "complexity_order": 1,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    },
+    {
+      "garment_type": "UNDERWEAR",
+      "code": "thermal_top",
+      "complexity_order": 4,
+      "base_size_definition": null,
+      "grading_rule_set": null
+    }
+  ]
+}
