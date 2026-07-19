@@ -23,8 +23,14 @@ from fhort.pom.seed_data import consolidate_pom_los as CFG
 
 ORIGEN = 'LOS màster delta v1'
 
-# (client_code, codi_client del POM existent) — només àlies, cap POM nou.
-ALIES_A_EXISTENT = [('V.2', 'S.35')]
+# (client_code, codi_client del POM existent, nom_guard|None) — només àlies, cap POM nou.
+# U.1: hi ha DOS POMMaster amb codi_client 'U1' (pom 'JETTING WIDTH' via àlies LOS · pom 'Height
+# sequins piece (CF)' per codi directe). El guard de nom desambigua cap al correcte (deute latent de
+# nomenclatura del catàleg anotat: qualsevol resolució que caigui a codi_client 'U1' hi tornarà a topar).
+ALIES_A_EXISTENT = [
+    ('V.2', 'S.35', None),
+    ('U.1', 'U1', 'JETTING WIDTH'),
+]
 
 # (codi_pom, nom_client EN literal de la fitxa, [àlies a crear])
 POMS_NOUS = [
@@ -54,10 +60,14 @@ class Command(BaseCommand):
                 raise CommandError('Customer LOS no existeix.')
 
             # ── C.1 àlies a POM existent ──
-            for client_code, pom_codi in ALIES_A_EXISTENT:
-                pom = POMMaster.objects.filter(codi_client=pom_codi).first()
-                if not pom:
-                    raise CommandError(f'POM existent {pom_codi!r} no trobat (per àlies {client_code}).')
+            for client_code, pom_codi, nom_guard in ALIES_A_EXISTENT:
+                qs = POMMaster.objects.filter(codi_client=pom_codi)
+                if nom_guard:
+                    qs = qs.filter(nom_client=nom_guard)
+                if qs.count() != 1:
+                    raise CommandError(f'POM {pom_codi!r} (guard nom={nom_guard!r}) ambigu/inexistent '
+                                       f'(n={qs.count()}) per àlies {client_code}.')
+                pom = qs.first()
                 a, created = CustomerPOMAlias.objects.get_or_create(
                     customer=los, client_code=client_code, defaults={'pom': pom, 'origen': 'DICCIONARI'})
                 self.stdout.write(f'  [ÀLIES] {client_code} → {pom.codi_client!r} '
