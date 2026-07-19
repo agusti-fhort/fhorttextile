@@ -37,17 +37,10 @@ FUSIO_LEAVE_RELS = ['regles_grading']           # s'esborren al PAS 3; PROTECT �
 # ── COMPLETAR (traduccions) ──────────────────────────────────────────────────
 CSV_TRAD = 'traduccions_pom_los.csv'            # al mateix dir seed_data
 
-# ── MAPS explícits (vault GRADING_SOURCES_LOSAN.md ABSENT en aquest host) ─────
-# Només els exemples explícits i anatòmicament inequívocs del brief on el POM i l'item
-# existeixen. La resta de GarmentPOMMap queda PENDENT del vault (es llisten a l'informe).
-# (codi_o_alias, [item_codes])
-MAPS_EXPLICIT = [
-    ('D6',   ['baby_bodysuit']),                 # FRONT CROTCH WIDTH
-    ('D7',   ['baby_bodysuit']),                 # BACK CROTCH WIDTH
-    ('S.10', ['hoodie', 'baby_sleepsuit']),      # HOOD LENGTH
-    ('S.56', ['hoodie', 'baby_sleepsuit']),      # HOOD PIECE WIDTH
-    ('S53',  ['hoodie', 'baby_sleepsuit']),      # HOOD WIDTH LOCATION
-]
+# ── MAPS (PAS 4B-bis) — CSV pom_item_maps_los.csv (equivalent del vault, lliurat al gate) ─
+# Files amb evidencia [POM NOU]/[gap]: si el POM no existeix, es CREA (LOS-local, traducció del
+# CSV de traduccions, àlies LOS) i després es mapa. POM o item no resolt → llistar, no inventar.
+MAPS_CSV = 'pom_item_maps_los.csv'
 
 CUSTOMER_CODI = 'LOS'
 TENANT = 'fhort'

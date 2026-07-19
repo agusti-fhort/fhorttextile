@@ -40,7 +40,7 @@ class Command(BaseCommand):
     help = 'Consolida el catàleg POM LOSAN (fusio/translate/maps).'
 
     def add_arguments(self, parser):
-        parser.add_argument('--phase', required=True, choices=['fusio', 'translate', 'maps'])
+        parser.add_argument('--phase', required=True, choices=['fusio', 'translate', 'maps', 'fixcoll'])
         parser.add_argument('--no-dry-run', action='store_true')
         parser.add_argument('--schema', default=CFG.TENANT)
 
@@ -52,7 +52,8 @@ class Command(BaseCommand):
         try:
             with schema_context(opts['schema']), transaction.atomic():
                 self.los = Customer.objects.get(codi=CFG.CUSTOMER_CODI)
-                {'fusio': self._fusio, 'translate': self._translate, 'maps': self._maps}[phase]()
+                {'fusio': self._fusio, 'translate': self._translate, 'maps': self._maps,
+                 'fixcoll': self._fixcoll}[phase]()
                 if self.dry:
                     transaction.set_rollback(True)
         except Exception as e:
@@ -60,12 +61,19 @@ class Command(BaseCommand):
             raise
         self.stdout.write(self.style.SUCCESS(f'=== FET ({head}) ==='))
 
-    def _prim_by_alias_or_codi(self, code):
-        """Resol un prim LOS a partir d'un codi CSV: àlies LOS primer, després codi del prim."""
+    def _prim_by_alias(self, code):
+        """Resol NOMÉS per àlies LOS (interfície client)."""
         for v in variants(code):
             a = CustomerPOMAlias.objects.filter(customer=self.los, client_code=v, pom__isnull=False).first()
             if a:
                 return a.pom
+        return None
+
+    def _prim_by_alias_or_codi(self, code):
+        """Resol un prim LOS: àlies LOS primer, després codi del prim (fallback)."""
+        p = self._prim_by_alias(code)
+        if p:
+            return p
         for v in variants(code):
             m = POMMaster.objects.filter(codi_client=v).first()
             if m:
@@ -171,31 +179,77 @@ class Command(BaseCommand):
                     ids.add(m.id)
         return ids
 
-    # ── FASE MAPS ────────────────────────────────────────────────────────────
+    # ── FASE MAPS (CSV pom_item_maps_los.csv) ────────────────────────────────
     def _maps(self):
-        self.stdout.write('  ⚠ vault GRADING_SOURCES_LOSAN.md ABSENT en aquest host → només '
-                          'els exemples explícits del brief; la resta queda PENDENT.')
-        created = 0
-        for code, items in CFG.MAPS_EXPLICIT:
-            prim = self._prim_by_alias_or_codi(code)
-            if not prim:
-                self.stdout.write(f'  [{code}] prim inexistent — skip')
-                continue
-            for it_code in items:
-                it = GarmentTypeItem.objects.filter(code=it_code).first()
-                if not it:
-                    self.stdout.write(f'  [{code}] item {it_code} inexistent — skip')
+        rows = list(csv.DictReader(open(SEED_DIR / CFG.MAPS_CSV, encoding='utf-8')))
+        trad = {r['codi'].strip(): r for r in csv.DictReader(open(SEED_DIR / CFG.CSV_TRAD, encoding='utf-8'))}
+        created_maps = 0
+        new_poms = []
+        no_pom = []
+        no_item = []
+        for row in rows:
+            code = row['codi_pom'].strip()
+            ev = row.get('evidencia_fitxa', '')
+            is_new = ('[POM NOU' in ev) or ('[gap' in ev)
+            if is_new:
+                # reuse NOMÉS per codi EXACTE (sense variants) per no casar amb POMs coincidents
+                # (p.ex. 'E.1'→'E1'=Shoulder seam, o àlies 'SR9' preexistent→JJ); si no → crear.
+                pom = POMMaster.objects.filter(codi_client=code).first()
+                if not pom:
+                    pom = self._create_los_pom(code, trad)
+                    new_poms.append(f'{code}(id{pom.id})')
+            else:
+                pom = self._prim_by_alias_or_codi(code)
+                if not pom:
+                    no_pom.append(code)
                     continue
-                if not self.dry:
-                    _, c = GarmentPOMMap.objects.get_or_create(
-                        garment_type_item=it, pom=prim,
-                        defaults={'obligatori': False, 'is_key': False, 'nivell': 'O',
-                                  'pendent_revisio': True})
-                else:
-                    c = not GarmentPOMMap.objects.filter(garment_type_item=it, pom=prim).exists()
-                created += int(bool(c))
-                self.stdout.write(f'  [{code}] id{prim.id} {prim.codi_client!r} → {it_code} '
-                                  f'· {"CREAT" if c else "ja existeix"}')
-        # pendents (tots els COMPLETAR no mapats aquí)
-        self.stdout.write(f'\n  RESUM maps: {created} GarmentPOMMap creats (exemples explícits). '
-                          f'La resta de COMPLETAR queda PENDENT del vault (informe).')
+            items = [s.strip() for s in row['items'].split(',') if s.strip()]
+            for itc in items:
+                it = GarmentTypeItem.objects.filter(code=itc).first()
+                if not it:
+                    no_item.append(f'{code}->{itc}')
+                    continue
+                _, c = GarmentPOMMap.objects.get_or_create(
+                    garment_type_item=it, pom=pom,
+                    defaults={'obligatori': False, 'is_key': False, 'nivell': 'O', 'pendent_revisio': True})
+                created_maps += int(c)
+        self.stdout.write(f'  POMs NOUS creats (LOS-local + traducció + àlies): {len(new_poms)} {new_poms}')
+        self.stdout.write(f'  GarmentPOMMap creats: {created_maps}')
+        self.stdout.write(f'  POM no resolt (no [nou], skip): {no_pom}')
+        self.stdout.write(f'  item no resolt: {no_item}')
+        self.stdout.write(f'\n  RESUM maps: {created_maps} maps · {len(new_poms)} POMs nous · '
+                          f'{len(no_pom)} POM no resolts · {len(no_item)} items no resolts')
+
+    def _create_los_pom(self, code, trad):
+        tr = None
+        for v in variants(code):
+            if v in trad:
+                tr = trad[v]
+                break
+        en = (tr['descripcio_en_fitxa'].strip() if tr else code)
+        ca = (tr['traduccio_ca'].strip() if tr else '')
+        pom = POMMaster.objects.create(codi_client=code, nom_client=en, actiu=True,
+                                       pendent_revisio=True, origen_import='LOS diccionari 4B-bis')
+        pg = POMGlobal.objects.create(codi=f'LOSPOM-{pom.id}', nom_en=en, nom_ca=ca, categoria='LOSAN')
+        pom.pom_global = pg
+        pom.save(update_fields=['pom_global'])
+        CustomerPOMAlias.objects.get_or_create(
+            customer=self.los, client_code=code,
+            defaults={'pom': pom, 'origen': 'DICCIONARI'})
+        self.stdout.write(f'  [+POM] {code!r} id{pom.id} · ca="{ca}"')
+        return pom
+
+    # ── FASE FIXCOLL (mesures òrfenes de col·lisió als prims fusionats) ───────
+    def _fixcoll(self):
+        deleted = 0
+        for codi, _dest, nomg in CFG.FUSIONS:
+            for m in POMMaster.objects.filter(codi_client=codi, actiu=False):
+                if nomg not in m.nom_client.upper():
+                    continue
+                for rel in CFG.FUSIO_MOVE_RELS:
+                    n = getattr(m, rel).count()
+                    if n:
+                        getattr(m, rel).all().delete()
+                        deleted += n
+                        self.stdout.write(f'  [id{m.id} {m.codi_client!r}] esborrat òrfena {rel}×{n}')
+        self.stdout.write(f'\n  RESUM fixcoll: {deleted} mesures òrfenes esborrades dels prims fusionats')
