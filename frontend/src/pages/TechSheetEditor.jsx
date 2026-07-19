@@ -700,6 +700,7 @@ function PrimNode({ p }) {
   }
   return <Text x={p.x} y={p.y} width={p.w} height={p.h} text={p.text} fill={p.fill}
     fontSize={p.size} fontFamily={FONT} fontStyle={p.bold ? 'bold' : p.italic ? 'italic' : 'normal'}
+    textDecoration={p.underline ? 'underline' : ''}
     align={p.align || 'left'} verticalAlign={p.mid ? 'middle' : 'top'}
     ellipsis wrap="none" listening={false} />
 }
@@ -709,7 +710,7 @@ function addPrimsToGroup(group, prims) {
   for (const p of prims) {
     if (p.t === 'r') group.add(new Konva.Rect({ x: p.x, y: p.y, width: p.w, height: p.h, fill: p.fill, stroke: p.stroke, strokeWidth: p.sw, dash: p.dash }))
     else if (p.t === 'l') group.add(new Konva.Line({ points: p.points, stroke: p.stroke, strokeWidth: p.sw }))
-    else group.add(new Konva.Text({ x: p.x, y: p.y, width: p.w, height: p.h, text: p.text, fill: p.fill, fontSize: p.size, fontFamily: FONT, fontStyle: p.bold ? 'bold' : p.italic ? 'italic' : 'normal', align: p.align || 'left', verticalAlign: p.mid ? 'middle' : 'top', ellipsis: true, wrap: 'none' }))
+    else group.add(new Konva.Text({ x: p.x, y: p.y, width: p.w, height: p.h, text: p.text, fill: p.fill, fontSize: p.size, fontFamily: FONT, fontStyle: p.bold ? 'bold' : p.italic ? 'italic' : 'normal', textDecoration: p.underline ? 'underline' : '', align: p.align || 'left', verticalAlign: p.mid ? 'middle' : 'top', ellipsis: true, wrap: 'none' }))
   }
 }
 
