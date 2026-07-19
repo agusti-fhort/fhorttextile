@@ -1690,10 +1690,10 @@ def import_session_confirmar_view(request, token):
         valors.setdefault(pid, {})[m['talla_label']] = m['valor']
 
     with transaction.atomic():
-        # ── 0c. Reconciliació size_system/base/run des de l'extracció (tanca Capa 0).
-        # Deriva el sistema NET del run detectat de la fitxa via match_size_system, en
-        # comptes de confiar en la classificació del wizard (que pot haver triat un sistema
-        # incorrecte). Estricte: només re-apunta amb match perfecte (afecta grading i DXF).
+        # ── 0c. Reconciliació size_system/base/run des de l'extracció (tanca Capa 0). Deriva el
+        # sistema NET del run detectat via match_size_system. El SAVE del model es DIFEREIX al bloc
+        # d'escriptura: cap 409/422 del pre-flight ha de persistir res (D1 — sobirania de mesures).
+        meta_update_fields = []
         extraccio = (session.resultat or {}).get('extraccio') or {}
         run_detectat = extraccio.get('sizes') or []
         base_detectada = extraccio.get('base_size')
@@ -1705,25 +1705,9 @@ def import_session_confirmar_view(request, token):
         if run_detectat and base_detectada and target_codi:
             mr = match_size_system(target_codi, run_detectat, base_detectada)
             if mr.ok and mr.score == 1.0 and mr.base_ok:
-                # B1: el match és canònic (XXL≡2XL) però el model ha de parlar SEMPRE la llengua
-                # del tenant → traduïm cada etiqueta del document a la SizeDefinition del sistema,
-                # i remapem les claus de `valors` en el mateix moviment perquè el run, la base i
-                # els valors quedin alineats (grading llegeix el run internament).
-                from fhort.pom.models import SizeDefinition
-                _tenant_labels = list(SizeDefinition.objects.filter(size_system=mr.size_system)
-                                      .values_list('etiqueta', flat=True))
-                _canon_to_tenant = {canonical_size_label(e): e for e in _tenant_labels}
-
-                def _to_tenant(lbl):
-                    return _canon_to_tenant.get(canonical_size_label(lbl), lbl)
-
-                run_tenant = [_to_tenant(l) for l in run_detectat]
-                base_detectada = _to_tenant(base_detectada)
-                valors = {pid: {_to_tenant(k): v for k, v in d.items()} for pid, d in valors.items()}
+                # Match canònic perfecte: re-apunta el model al system net (en memòria).
                 model.size_system = mr.size_system
-                model.base_size_label = base_detectada
-                model.size_run_model = '·'.join(run_tenant)
-                model.save(update_fields=['size_system', 'base_size_label', 'size_run_model'])
+                meta_update_fields = ['size_system', 'base_size_label', 'size_run_model']
             else:
                 session.avisos = (session.avisos or []) + [
                     f"Size system no reconciliat automàticament (match {mr.score:.0%} per target "
@@ -1733,8 +1717,49 @@ def import_session_confirmar_view(request, token):
             session.avisos = (session.avisos or []) + [
                 "Reconciliació de talles omesa: manca run detectat, base o target a la sessió."]
 
-        # base_size reflecteix el valor (possiblement) reconciliat.
+        # ── C1b (D2). Remap etiquetes-document → etiquetes-tenant SEMPRE (independent de l'score):
+        # cada etiqueta que resol UNÍVOCAMENT a una SizeDefinition del system per forma canònica
+        # (zero-padding inclòs, '3/6'≡'03/06') es tradueix; la que no resol o resol a 2 es reporta
+        # (avís dur) i NO s'inventa. Així la base i els valors parlen la llengua del tenant.
+        _to_tenant = None
+        if model.size_system_id:
+            from fhort.pom.models import SizeDefinition
+            _tenant_labels = list(SizeDefinition.objects.filter(size_system=model.size_system)
+                                  .values_list('etiqueta', flat=True))
+            _canon_to_tenant, _canon_ambig = {}, set()
+            for _e in _tenant_labels:
+                _c = canonical_size_label(_e)
+                if _c in _canon_to_tenant and _canon_to_tenant[_c] != _e:
+                    _canon_ambig.add(_c)
+                _canon_to_tenant[_c] = _e
+            _no_resol = set()
+
+            def _to_tenant(lbl):
+                _c = canonical_size_label(lbl)
+                if _c in _canon_ambig:
+                    _no_resol.add(lbl)
+                    return lbl                             # resol a 2 → no inventar
+                _t = _canon_to_tenant.get(_c)
+                if _t is None:
+                    _no_resol.add(lbl)
+                    return lbl                             # no resol al system
+                return _t
+
+            valors = {pid: {_to_tenant(k): v for k, v in d.items()} for pid, d in valors.items()}
+            if base_detectada:
+                base_detectada = _to_tenant(base_detectada)
+            if meta_update_fields:
+                model.base_size_label = base_detectada or model.base_size_label
+                model.size_run_model = '·'.join(_to_tenant(l) for l in run_detectat)
+            if _no_resol:
+                session.avisos = (session.avisos or []) + [
+                    "Etiquetes del document sense equivalència única al sistema "
+                    f"'{model.size_system.codi}': {', '.join(sorted(_no_resol))} (no traduïdes)."]
+
+        # base_size reflecteix el valor reconciliat i remapejat (forma-tenant).
         base_size = (model.base_size_label or '').strip()
+        if _to_tenant is not None and base_size:
+            base_size = _to_tenant(base_size)
 
         # ── 1C-2a. Si la fitxa portava INCREMENTS (deltes) en comptes de mesures absolutes,
         # convertir-los a absoluts AQUÍ — abans dels TRES consumidors de `valors`
@@ -1750,79 +1775,44 @@ def import_session_confirmar_view(request, token):
             ]
             valors = deltes_a_absoluts(valors, base_size, run_ordenat_conv)
 
-        # ── 1. Mana el document: neteja files buides de plantilla i crea NOMÉS els confirmats.
-        BaseMeasurement.objects.filter(model=model, base_value_cm__isnull=True).delete()
+        # ── C1c (D2, guard DUR). La talla base del model ha de tenir valor a la fitxa (després del
+        # remap). Si no hi és entre les etiquetes dels valors → 422 ABANS de cap escriptura: mai més
+        # base_value_cm=None silenciós. set_rollback per desfer el save de metadata diferit (si n'hi
+        # hagués). Els valors ja parlen la llengua-tenant per C1b.
+        _val_labels = set()
+        for _d in valors.values():
+            _val_labels |= {k for k, v in _d.items() if v is not None}
+        if base_size and base_size not in _val_labels:
+            transaction.set_rollback(True)
+            return Response({
+                'error': ("La talla base «%s» no té valor a la fitxa (etiquetes disponibles: %s)."
+                          % (base_size, ', '.join(sorted(_val_labels)) or '—')),
+                'tipus': 'base_size_absent',
+                'base_size': base_size,
+                'etiquetes': sorted(_val_labels),
+            }, status=422)
 
-        n_bm = 0
+        # ── POMs confirmats resolts (pur, sense escriure): necessari per a la detecció de grading.
+        resolved = []
         confirmed_pom_ids = []
-        from fhort.pom.services import maybe_learn_customer_alias
         for i, p in enumerate(poms):
-            pid = int(p['pom_master_id'])
-            pm = POMMaster.objects.filter(id=pid).first()
+            pm = POMMaster.objects.filter(id=int(p['pom_master_id'])).first()
             if not pm:
                 continue
-            base_val = valors.get(pid, {}).get(base_size)
-            _defaults = {
-                'base_value_cm': base_val,
-                'nom_fitxa': p.get('codi_fitxa') or '',
-                'origen': 'IMPORTED',
-                'is_active': True,
-                'ordre': i,
-                'notes': p.get('descripcio') or '',
-            }
-            # B2: només escrivim tolerància si el document en porta (asimètrica, contracte de
-            # Size Check). Si no en porta, NO incloem les claus → null → fallback al catàleg.
-            if p.get('tol_minus') is not None:
-                _defaults['tolerancia_minus'] = p['tol_minus']
-            if p.get('tol_plus') is not None:
-                _defaults['tolerancia_plus'] = p['tol_plus']
-            BaseMeasurement.objects.update_or_create(
-                model=model, pom=pm, defaults=_defaults,
-            )
-            confirmed_pom_ids.append(pid)
-            n_bm += 1
+            resolved.append((i, p, pm))
+            confirmed_pom_ids.append(int(p['pom_master_id']))
 
-            # Biblioteca del client (QA-S8-R1). S'aprèn de TOT vincle ferm que arriba aquí,
-            # no només de les resolucions manuals (`nomes_si_manual=False`).
-            #
-            # El que arriba aquí ja ha passat DUES portes (llindar + guard many-to-one: només
-            # són `actiu` els vincles ferms) i una PERSONA l'ha confirmat al pas 2. Per tant
-            # no és una endevinalla del matcher: és nomenclatura d'aquest client, donada per
-            # bona. Aprendre-la fa que el registre del client es completi sol a cada
-            # importació, i que la propera resolgui per àlies —determinista— en comptes de
-            # tornar a jugar-se-la a l'heurística de descripcions.
-            #
-            # El guard d'aprenentatge de pom/services.py hi continua aplicant: si el POM ja el
-            # reclama un ALTRE codi d'aquest client, l'àlies neix `pendent_revisio=True` i el
-            # matcher (find_pom_master) NO l'auto-vincularà.
-            #
-            # Idempotent: re-confirmar la mateixa sessió no duplica ni reescriu res.
-            maybe_learn_customer_alias(
-                model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
-                origen='IMPORT', nomes_si_manual=False)
-
-        # ── 2. Identificador del contenidor SF (NO es crea encara: si hi ha conflicte de grading
-        # sense decisió, retornem 409 + rollback i NO volem deixar cap SizeFitting orfe).
-        next_num = 1
-        while SizeFitting.objects.filter(model=model, numero=next_num).exists():
-            next_num += 1
-        sf_codi = f"IMP-{model.id}-{next_num}"
-        while SizeFitting.objects.filter(codi=sf_codi).exists():
-            next_num += 1
-            sf_codi = f"IMP-{model.id}-{next_num}"
-
-        # ══ 3. GRADING segons la LLEI DEL CONTENIDOR (2026-07-16) ═══════════════════════════
-        # El contenidor de client (GradingRuleSet origen=CLIENT_RUN) és ÚNIC per
-        # (customer + size_system + garment_type_item + fit). L'import: SEMBRA del contenidor
-        # (POMs de la fitxa, descarta la resta), AMPLIA (POMs noves → al contenidor, avís tou),
-        # CONFLICTE per-regla (409 conscient: mantenir/actualitzar catàleg o resident-només), i
-        # CREA el contenidor només com a ACTE EXPLÍCIT (combinació verge). derive_grading_rule_set
-        # (creador automàtic) queda JUBILAT; es reutilitza el motor de detecció.
+        # ══ PRE-FLIGHT GRADING (D1) — detecció (pura) + matcher + GATES 409, TOT abans d'escriure.
+        # El contenidor de client (GradingRuleSet origen=CLIENT_RUN) és ÚNIC per (customer +
+        # size_system + garment_type_item + fit). Les decisions que exigeixen tria del tècnic surten
+        # amb 409 SENSE haver tocat cap fila → les mesures (sobirania del model) ja no es fan
+        # rollback per una decisió de grading. derive_rules_from_fitxa és pur (no persisteix).
         from fhort.pom.grading_utils import (
             derive_rules_from_fitxa, resolve_grading_container, classifica_fitxa_vs_contenidor)
         from fhort.pom.models import FitType, Target, ConstructionType, GradingRuleSet
         from fhort.models_app.services import (
             materialize_model_grading_rules_from_specs, afegeix_regles_al_contenidor)
+        from fhort.pom.services import maybe_learn_customer_alias
 
         grading_avisos = []
         # (a) DETECCIÓ de les regles de la fitxa (pur, sense persistència; reusa detect_grading).
@@ -1831,9 +1821,8 @@ def import_session_confirmar_view(request, token):
             confirmed_pom_ids=confirmed_pom_ids, size_system=model.size_system, avisos=grading_avisos)
         base_def_id = fitxa_specs[0]['talla_base_id'] if fitxa_specs else None
 
-        # (b) MATCHER ÚNIC (M1): resol fit (codi→FK) i resol EL contenidor per la llei del contenidor
-        # (N1 identitat exacta · N2 ampli item-NULL del mateix client · N3 cap). Substitueix
-        # cerca_contenidor_client (deprecada, G5). `motiu`='ambiguous' → tria conscient a fora.
+        # (b) MATCHER ÚNIC (M1): resol fit (codi→FK) i EL contenidor per la llei del contenidor
+        # (N1 identitat exacta · N2 ampli item-NULL del mateix client · N3 cap).
         rs_fit = FitType.objects.filter(codi__iexact=model.fit_type).first() if model.fit_type else None
         gti = model.garment_type_item
         grp_codi = model.garment_group.codi if model.garment_group_id else None
@@ -1841,19 +1830,13 @@ def import_session_confirmar_view(request, token):
             model.customer, model.size_system, model.target, model.construction,
             rs_fit, grp_codi, garment_type_item=gti)
         container = res_cont['container']
-
-        # Tria del tècnic (re-confirmació del wizard). M3 DEROGA la negociació per-regla
-        # (conflict_resolutions/conflict_choice): amb el contenidor intocable ja no hi ha tria de
-        # catàleg, només 'create' | 'no_container' quan el client estrena la combinació.
-        container_choice = (request.data.get('container_choice') or '').strip().lower()   # 'create' | 'no_container'
+        container_choice = (request.data.get('container_choice') or '').strip().lower()  # 'create'|'no_container'
 
         cls = None
         if fitxa_specs:
-            # (c) DECISIONS que exigeixen tria conscient → 409 + rollback (cap escriptura encara).
-            # AMBIGÜITAT (M1): >1 contenidor candidat → NO resoldre automàticament; el tècnic ha de
-            # desambiguar (mai s'agafa el primer). Es reporten els candidats amb id+nom.
+            # (c) DECISIONS que exigeixen tria conscient → 409 SENSE cap escriptura (cap set_rollback:
+            # res s'ha tocat encara; la metadata reconciliada tampoc, es desa al bloc d'escriptura).
             if res_cont['motiu'] == 'ambiguous':
-                transaction.set_rollback(True)
                 return Response({
                     'conflict': True,
                     'tipus': 'container_ambigu',
@@ -1862,7 +1845,6 @@ def import_session_confirmar_view(request, token):
                                 "combinació. Cal triar-ne un abans de continuar."),
                 }, status=409)
             if container is None and container_choice not in ('create', 'no_container'):
-                transaction.set_rollback(True)
                 return Response({
                     'conflict': True,
                     'tipus': 'container_absent',
@@ -1875,10 +1857,54 @@ def import_session_confirmar_view(request, token):
                                 "(peça + sistema de talles + fit). Vols crear-ne el contenidor?"),
                 }, status=409)
             if container is not None:
-                # M3 — llei del contenidor INTOCABLE: el catàleg amb regles no es toca ni es negocia
-                # per-regla (SEMBRA/AMPLIA i el 409 grading_conflict queden DEROGATS). La divergència
-                # es resol sola (override per-talla al model + watchpoint) al bloc d'aplicació.
+                # M3 — llei del contenidor INTOCABLE (classificació pura; s'aplica a l'escriptura).
                 cls = classifica_fitxa_vs_contenidor(fitxa_specs, container)
+
+        # ════════════════════════════════ ESCRIPTURA ════════════════════════════════
+        # Totes les decisions que podien retornar 409/422 ja s'han pres. Persistim la metadata
+        # reconciliada del model (diferida del pre-flight) i escrivim les mesures (sobirania).
+        if meta_update_fields:
+            model.save(update_fields=meta_update_fields)
+
+        # ── 1. Mana el document: neteja files buides de plantilla i crea NOMÉS els confirmats.
+        BaseMeasurement.objects.filter(model=model, base_value_cm__isnull=True).delete()
+
+        n_bm = 0
+        n_bm_valors = 0
+        for i, p, pm in resolved:
+            base_val = valors.get(int(p['pom_master_id']), {}).get(base_size)
+            _defaults = {
+                'base_value_cm': base_val,
+                'nom_fitxa': p.get('codi_fitxa') or '',
+                'origen': 'IMPORTED',
+                'is_active': True,
+                'ordre': i,
+                'notes': p.get('descripcio') or '',
+            }
+            # B2: només escrivim tolerància si el document en porta (asimètrica, contracte Size Check).
+            if p.get('tol_minus') is not None:
+                _defaults['tolerancia_minus'] = p['tol_minus']
+            if p.get('tol_plus') is not None:
+                _defaults['tolerancia_plus'] = p['tol_plus']
+            BaseMeasurement.objects.update_or_create(model=model, pom=pm, defaults=_defaults)
+            n_bm += 1
+            if base_val is not None:
+                n_bm_valors += 1
+            # Biblioteca del client (QA-S8-R1): aprèn de tot vincle ferm confirmat (idempotent). El
+            # guard de pom/services.py aplica: si un ALTRE codi ja reclama el POM, l'àlies neix
+            # pendent_revisio=True i find_pom_master no l'auto-vincula.
+            maybe_learn_customer_alias(
+                model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
+                origen='IMPORT', nomes_si_manual=False)
+
+        # ── 2. Identificador del contenidor SF.
+        next_num = 1
+        while SizeFitting.objects.filter(model=model, numero=next_num).exists():
+            next_num += 1
+        sf_codi = f"IMP-{model.id}-{next_num}"
+        while SizeFitting.objects.filter(codi=sf_codi).exists():
+            next_num += 1
+            sf_codi = f"IMP-{model.id}-{next_num}"
 
         # (d) APLICAR (escriptures) — savepoint intern amb degradació amb gràcia.
         new_rule_set = model.grading_rule_set
@@ -2004,6 +2030,13 @@ def import_session_confirmar_view(request, token):
         )
         n_specs = 0   # cap valor propagat persistit a l'import
 
+        # ── C3 (D3, defensa en profunditat). Amb el guard C1c això no hauria de passar; si tot i
+        # així cap POM ha rebut valor de talla base, avís destacat (mai un "OK" enganyós amb 0 valors).
+        if n_bm and not n_bm_valors:
+            grading_avisos.append(
+                f"⚠️ S'han desat {n_bm} POM(s) SENSE cap valor de talla base "
+                f"(base '{base_size}'): revisa l'alineació d'etiquetes de la fitxa.")
+
         if grading_avisos:
             session.avisos = (session.avisos or []) + grading_avisos
 
@@ -2053,6 +2086,7 @@ def import_session_confirmar_view(request, token):
         'model_id': model.id,
         'model_codi': model.codi_intern,
         'base_measurements': n_bm,
+        'base_measurements_amb_valor': n_bm_valors,
         'graded_specs': n_specs,
         'size_fitting': size_fitting.codi,
         'document_fitxer': (doc_fitxer.nom_fitxer if doc_fitxer else None),
@@ -2060,6 +2094,6 @@ def import_session_confirmar_view(request, token):
         'grading_rule_set': (new_rule_set.nom if new_rule_set else None),
         'grading_rules': n_rules,
         'grading_avisos': grading_avisos,
-        'message': f'Importació confirmada: {n_bm} POMs, regla (deltes+breaks) retinguda al model; '
-                   f'grading propagat pendent de projecció conscient.',
+        'message': f'Importació confirmada: {n_bm} POMs ({n_bm_valors} amb valor de base), regla '
+                   f'(deltes+breaks) retinguda al model; grading propagat pendent de projecció conscient.',
     }, status=201)
