@@ -3034,6 +3034,7 @@
       "save": "Guardar"
     },
     "err_status": "Error {{status}}",
+    "err_base_size_absent": "La talla base «{{base_size}}» no tiene valor en la ficha (etiquetas disponibles: {{etiquetes}}). Revisa la alineación de etiquetas o la talla base del modelo.",
     "err_connection": "Error de conexión: {{detail}}",
     "err_catalog": "Error al cargar el catálogo: {{detail}}",
     "sizes_no_dest": "Todavía hay tallas sin destino: {{sizes}}",

@@ -3034,6 +3034,7 @@
       "save": "Save"
     },
     "err_status": "Error {{status}}",
+    "err_base_size_absent": "The base size «{{base_size}}» has no value in the sheet (available labels: {{etiquetes}}). Check the label alignment or the model's base size.",
     "err_connection": "Connection error: {{detail}}",
     "err_catalog": "Error loading the catalogue: {{detail}}",
     "sizes_no_dest": "There are still sizes without a destination: {{sizes}}",

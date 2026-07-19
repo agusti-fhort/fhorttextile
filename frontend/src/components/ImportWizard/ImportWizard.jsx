@@ -471,6 +471,11 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         }
         setConfirming(false); return
       }
+      if (res.status === 422 && data.tipus === 'base_size_absent') {
+        setError(t('import_wizard.err_base_size_absent', {
+          base_size: data.base_size, etiquetes: (data.etiquetes || []).join(', ') || '—' }))
+        setConfirming(false); return
+      }
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setConfirming(false); return }
       setGradingConflict(null); setContainerConflict(null)
       onComplete && onComplete(data.model_id)

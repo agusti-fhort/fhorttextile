@@ -3034,6 +3034,7 @@
       "save": "Guardar"
     },
     "err_status": "Error {{status}}",
+    "err_base_size_absent": "La talla base «{{base_size}}» no té valor a la fitxa (etiquetes disponibles: {{etiquetes}}). Revisa l'alineació d'etiquetes o la talla base del model.",
     "err_connection": "Error de connexió: {{detail}}",
     "err_catalog": "Error carregant el catàleg: {{detail}}",
     "sizes_no_dest": "Encara hi ha talles sense destí: {{sizes}}",
