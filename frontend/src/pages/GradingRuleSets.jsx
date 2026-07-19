@@ -666,6 +666,40 @@ function ActionBtn({ onClick, label, danger = false }) {
   )
 }
 
+// TargetPills — selecció MULTI de targets (M2M del ruleset). Vocabulari únic TARGETS (gradingAxes).
+function TargetPills({ value, onToggle, disabled }) {
+  const { t } = useTranslation()
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <label style={{
+        fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)',
+        display: 'block', marginBottom: 4,
+      }}>{t('grading.field_target_ref')}</label>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {TARGETS.map(tg => {
+          const on = value.includes(tg.codi)
+          return (
+            <button
+              key={tg.codi} type="button" disabled={disabled}
+              onClick={() => onToggle(tg.codi)}
+              style={{
+                padding: '5px 12px', borderRadius: 999, cursor: disabled ? 'default' : 'pointer',
+                fontSize: 'var(--fs-body)', fontWeight: on ? 600 : 400,
+                background: on ? 'var(--warn-bg)' : 'var(--white)',
+                color: on ? 'var(--warn)' : 'var(--text-main)',
+                border: `1px solid ${on ? 'var(--warn)' : 'var(--border)'}`,
+                opacity: disabled && !on ? 0.5 : 1,
+              }}
+            >
+              {t(`model_wizard.target_${tg.codi}`, tg.nom_en)}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── RuleSetModal ────────────────────────────────────────────────────────────
 function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, authHeaders, onSave, onError, onClose }) {
   const { t } = useTranslation()
@@ -673,14 +707,10 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
   const [form, setForm] = useState({
     nom:          rs?.nom          || '',
     codi_sistema: rs?.codi_sistema || '',
-    // Target/Construction/Fit cannot be sent directly as a code
-    // because the backend expects IDs. We keep the codes in the form for the UI
-    // i (TODO) caldria endpoint per resoldre codi→id. De moment, els enviem
-    // only if the RuleSet being edited already has them (we pass the original ID).
-    target:       rs?.target       ?? null,
-    construction: rs?.construction ?? null,
-    fit_type:     rs?.fit_type     ?? null,
-    target_codi_form:       rs?.target_codi       || defaultTarget       || '',
+    // FIX BUG targets M2M: es preomple amb TOTS els targets del ruleset (pills MULTI) i en desar
+    // s'envia el conjunt sencer. Abans un sol select feia que el PATCH col·lapsés el M2M a 1 target
+    // (pèrdua silenciosa en qualsevol edició, fins i tot només-de-nom). Els lookups S2 resolen codi→id.
+    target_codis: rs?.targets_codis?.length ? [...rs.targets_codis] : (defaultTarget ? [defaultTarget] : []),
     construction_codi_form: rs?.construction_codi || defaultConstruction || '',
     fit_type_codi_form:     rs?.fit_type_codi     || defaultFit          || '',
     actiu: rs?.actiu ?? true,
@@ -721,10 +751,12 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
     if (axesEditable) {
       // F-2 — resol codi→id amb els lookups S2 i desa els FK (target + M2M targets + construction
       // + fit_type). Un eix sense selecció queda sense enviar (PATCH → intacte).
-      const tId = codeToId(lookups.targets, form.target_codi_form)
+      const tIds = form.target_codis.map(c => codeToId(lookups.targets, c)).filter(v => v != null)
       const cId = codeToId(lookups.constructions, form.construction_codi_form)
       const fId = codeToId(lookups.fits, form.fit_type_codi_form)
-      if (tId != null) { payload.target = tId; payload.targets = [tId] }
+      // Envia el CONJUNT SENCER de targets (M2M) + el FK `target` legacy sincronitzat al primer,
+      // igual que el camí de creació. Sense selecció → no s'envia (PATCH deixa el M2M intacte).
+      if (tIds.length) { payload.targets = tIds; payload.target = tIds[0] }
       if (cId != null) payload.construction = cId
       if (fId != null) payload.fit_type = fId
     }
@@ -799,7 +831,16 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
         </h2>
         <F label={t('grading.field_name')} field="nom" />
         <F label={t('grading.field_codi')} field="codi_sistema" />
-        <F label={t('grading.field_target_ref')} field="target_codi_form" options={TARGETS} disabled={!axesEditable} />
+        <TargetPills
+          value={form.target_codis}
+          disabled={!axesEditable}
+          onToggle={codi => setForm(f => ({
+            ...f,
+            target_codis: f.target_codis.includes(codi)
+              ? f.target_codis.filter(c => c !== codi)
+              : [...f.target_codis, codi],
+          }))}
+        />
         <F label={t('grading.field_construction_ref')} field="construction_codi_form" options={CONSTRUCTIONS} disabled={!axesEditable} />
         <F label={t('grading.field_fit_ref')} field="fit_type_codi_form" options={FITS} disabled={!axesEditable} />
         {!axesEditable && (
