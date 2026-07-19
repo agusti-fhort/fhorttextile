@@ -59,10 +59,12 @@ class Command(BaseCommand):
         self.stdout.write(self.style.WARNING(f'=== seed_losan_master_delta · {head} ==='))
 
         data = json.loads(JSON_PATH.read_text(encoding='utf-8'))
-        self.audit = []       # (cel·la, codi_json, pom_codi, pom_nom, via)
-        self.unresolved = []  # (cel·la, codi_json)
-        self.ambiguous = []   # (cel·la, codi_json, [candidats])
-        self.summary = []     # (nom, n_rs_created, n_rules_created, n_prof_created)
+        self.audit = []        # (cel·la, codi_json, pom_codi, pom_nom, via)
+        self.unresolved = []   # (cel·la, codi_json)
+        self.inactiu_only = [] # (cel·la, codi_json, detall) — únic candidat inactiu (catàleg brut)
+        self.ambiguous = []    # (cel·la, codi_json, detall)
+        self.obscured = []     # (cel·la, codi_json, winner, [candidats enfosquits])
+        self.summary = []      # (nom, n_rs_created, n_rules_created, n_prof_created)
 
         with schema_context(opts['schema']), transaction.atomic():
             los = Customer.objects.filter(codi=CFG.CUSTOMER_CODI).first()
@@ -82,28 +84,53 @@ class Command(BaseCommand):
 
         self._report(dry)
 
+    def _lvl_candidates(self, code, kind):
+        """Candidats d'un NIVELL. kind ∈ {alias-ex, alias-var, codi-ex, codi-var}. Retorna
+        (actius, inactius) com a llistes úniques per ordre (separa actiu/inactiu per a la LLEI b)."""
+        act, ina = [], []
+        codes = [code] if kind.endswith('-ex') else variants(code)
+        for c in codes:
+            if kind.startswith('alias'):
+                poms = [x.pom for x in CustomerPOMAlias.objects.filter(
+                    customer=self.los, client_code=c, pom__isnull=False).select_related('pom')]
+            else:
+                poms = list(POMMaster.objects.filter(codi_client=c))
+            for p in poms:
+                if p not in act and p not in ina:
+                    (act if p.actiu else ina).append(p)
+        return act, ina
+
     def _resolve_pom(self, code):
-        """àlies LOS → codi directe → variants (guarda d'ambigüitat). Retorna (pom, via) o (None, motiu)."""
-        a = CustomerPOMAlias.objects.filter(customer=self.los, client_code=code, pom__isnull=False).first()
-        if a:
-            return (a.pom, 'exacte')
-        m = POMMaster.objects.filter(codi_client=code).first()
-        if m:
-            return (m, 'exacte')
-        cand = []
-        for v in variants(code):
-            a = CustomerPOMAlias.objects.filter(customer=self.los, client_code=v, pom__isnull=False).first()
-            if a and a.pom not in cand:
-                cand.append(a.pom)
-        for v in variants(code):
-            m = POMMaster.objects.filter(codi_client=v).first()
-            if m and m not in cand:
-                cand.append(m)
-        if len(cand) == 1:
-            return (cand[0], 'variant')
-        if len(cand) > 1:
-            return (None, 'AMBIGU:' + ','.join(p.codi_client for p in cand))
-        return (None, 'NO_RESOLT')
+        """LLEI DE RESOLUCIÓ DE POM (Agus 19/07):
+          (a) ordre: àlies-exacte → àlies-variant → codi-exacte → codi-variant.
+          (b) actiu=True a TOTES; si l'únic candidat és inactiu → NO resoldre i REPORTAR (catàleg brut).
+          (c) guarda d'ambigüitat PER NIVELL (>1 actiu dins d'un nivell → AMBIGU).
+          (d) candidats ENFOSQUITS: si un nivell inferior hauria casat amb un POM ACTIU diferent del
+              guanyador → informar-ho (no bloqueja). També s'anoten els inactius trobats.
+        Retorna (pom|None, via, obscured[list str], detall|None)."""
+        order = [('àlies-exacte', 'alias-ex'), ('àlies-variant', 'alias-var'),
+                 ('codi-exacte', 'codi-ex'), ('codi-variant', 'codi-var')]
+        levels = [(name, self._lvl_candidates(code, kind)) for name, kind in order]
+        winner = via = None
+        obscured, inactives = [], []
+        for name, (act, ina) in levels:
+            if ina:
+                inactives.append(f'{name}=[{",".join(p.codi_client for p in ina)}]')
+            if winner is None:
+                if len(act) > 1:
+                    return (None, 'AMBIGU', [], f'{name}: {[p.codi_client for p in act]}')
+                if len(act) == 1:
+                    winner, via = act[0], name
+            else:
+                for p in act:
+                    if p.id != winner.id:
+                        obscured.append(f'{name}:{p.codi_client}/{p.nom_client}')
+        if winner is None:
+            return ((None, 'INACTIU_ONLY', [], '; '.join(inactives)) if inactives
+                    else (None, 'NO_RESOLT', [], None))
+        if inactives:
+            obscured += [f'inactiu@{s}' for s in inactives]
+        return (winner, via, obscured, None)
 
     def _seed_rule_set(self, spec, dry):
         nom = spec['nom']
@@ -135,10 +162,14 @@ class Command(BaseCommand):
         nrules = 0
         for r in spec['regles']:
             code = r['codi_client']
-            pom, via = self._resolve_pom(code)
+            pom, via, obscured, detail = self._resolve_pom(code)
+            if obscured:
+                self.obscured.append((nom, code, pom.codi_client if pom else '—', obscured))
             if pom is None:
-                if via.startswith('AMBIGU'):
-                    self.ambiguous.append((nom, code, via.split(':', 1)[1]))
+                if via == 'AMBIGU':
+                    self.ambiguous.append((nom, code, detail))
+                elif via == 'INACTIU_ONLY':
+                    self.inactiu_only.append((nom, code, detail))
                 else:
                     self.unresolved.append((nom, code))
                 continue
@@ -178,12 +209,22 @@ class Command(BaseCommand):
                               f'{nr} regles creades · profile {"CREAT" if npr else "ja existia"}')
         self.stdout.write(f'\n  TOTALS: rulesets creats={trs} · regles creades={trr} · profiles creats={tpr}')
         self.stdout.write(f'  codis resolts (a la taula)={len(self.audit)} · NO resolts={len(self.unresolved)} · '
-                          f'AMBIGUS={len(self.ambiguous)}')
+                          f'INACTIU_ONLY={len(self.inactiu_only)} · AMBIGUS={len(self.ambiguous)}')
         for nom, code in self.unresolved:
             self.stdout.write(self.style.ERROR(f'    NO RESOLT: {nom} · {code}'))
-        for nom, code, cand in self.ambiguous:
-            self.stdout.write(self.style.ERROR(f'    AMBIGU: {nom} · {code} → {cand}'))
-        ok = (len(self.audit) == 90 and not self.unresolved and not self.ambiguous)
+        for nom, code, det in self.inactiu_only:
+            self.stdout.write(self.style.ERROR(f'    INACTIU_ONLY (catàleg brut): {nom} · {code} → {det}'))
+        for nom, code, det in self.ambiguous:
+            self.stdout.write(self.style.ERROR(f'    AMBIGU: {nom} · {code} → {det}'))
+
+        self.stdout.write(f'\n── CANDIDATS ENFOSQUITS (informatiu, la precedència ha amagat aquests) ──')
+        if not self.obscured:
+            self.stdout.write('  (cap)')
+        for nom, code, winner, cands in self.obscured:
+            self.stdout.write(f'  {nom} · {code} (→ {winner}) enfosqueix: {cands}')
+
+        ok = (len(self.audit) == 90 and not self.unresolved
+              and not self.ambiguous and not self.inactiu_only)
         self.stdout.write(self.style.SUCCESS('\n  INVARIANT 90/90 codis resolts: OK ✅')
                           if ok else self.style.ERROR('\n  ⚠️ INVARIANT NO complert (≠90 o no-resolts/ambigus) → ATURAR'))
         self.stdout.write(self.style.SUCCESS(f'=== FET ({head_of(dry)}) ==='))
