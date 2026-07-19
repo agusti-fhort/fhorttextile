@@ -751,6 +751,9 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
   const [sizeSystemId, setSizeSystemId] = useState(rs?.size_system ?? '')
   const [sizeSystemTouched, setSizeSystemTouched] = useState(false)
   const [sizeSystemsList, setSizeSystemsList] = useState([])
+  // Blindatge: un conjunt AMB regles no pot canviar de sistema (les talla_base hi pertanyen). Sortida:
+  // clonar-lo al sistema correcte. El guard dur real viu al serializer; això és l'UX.
+  const systemLocked = (rs?.regles_count || 0) > 0
 
   // F-2 — els seeds ISO (is_system_default) NO són editables als eixos (protecció; el guard dur
   // viu al serializer). Creació nova o ruleset de client → eixos editables. Els lookups S2
@@ -897,13 +900,18 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
             {t('grading.field_size_system')}
           </label>
           <select
-            value={sizeSystemId || ''} disabled={!axesEditable}
+            value={sizeSystemId || ''} disabled={!axesEditable || systemLocked}
             onChange={e => { setSizeSystemId(e.target.value); setSizeSystemTouched(true) }}
             style={modalInput}
           >
             <option value="">{t('grading.select_placeholder')}</option>
             {sizeSystemsList.map(s => <option key={s.id} value={s.id}>{s.codi} · {s.nom}</option>)}
           </select>
+          {systemLocked && (
+            <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+              {t('grading.size_system_locked', { count: rs.regles_count })}
+            </p>
+          )}
         </div>
         {!axesEditable && (
           <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)', margin: '4px 0 12px' }}>

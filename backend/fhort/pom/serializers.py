@@ -249,9 +249,20 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
         return obj.fit_type.codi if obj.fit_type else None
 
     def validate(self, attrs):
+        inst = self.instance
+        # GUARD DUR: si el conjunt té regles, el `size_system` és IMMUTABLE — les talla_base de les
+        # regles hi pertanyen. El front el desactiva (UX); la seguretat real viu aquí. Sortida: clonar
+        # el conjunt al sistema correcte (el clon ja hereta targets + abast) o buidar-ne les regles.
+        if inst is not None and 'size_system' in attrs:
+            new_id = getattr(attrs['size_system'], 'id', None)
+            if new_id != inst.size_system_id and inst.regles.exists():
+                actual = inst.size_system.codi if inst.size_system_id else '—'
+                raise serializers.ValidationError({'size_system': (
+                    f"No es pot canviar el sistema de talles d'un conjunt amb regles: les talles base "
+                    f"de les {inst.regles.count()} regles pertanyen a {actual}. Clona el conjunt al "
+                    f"sistema correcte o buida'n les regles.")})
         # F-5 — GUARD DUR: un seed ISO (is_system_default) NO pot canviar d'eixos. El `disabled`
         # del front és UX; la seguretat real viu aquí (protegeix contra PATCH directes a l'API).
-        inst = self.instance
         if inst is not None and inst.is_system_default:
             if 'applies_to' in attrs:
                 raise serializers.ValidationError(
